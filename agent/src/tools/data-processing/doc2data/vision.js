@@ -5,9 +5,14 @@
  */
 import { readFile, stat } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { DEFAULT_MIME_TYPE, IMAGE_EXTENSION_TO_MIME, IMAGE_EXTENSIONS, TEXT_EXTENSIONS } from "../file-extension-constants.js";
+import {
+  DEFAULT_MIME_TYPE,
+  IMAGE_EXTENSION_TO_MIME,
+  IMAGE_EXTENSIONS,
+  TEXT_EXTENSIONS,
+} from "../file-extension-constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { DOC2DATA_PARSE_ENGINE, normalizeDoc2DataParseEngine } from "../../../config/core/enums.js";
+import { DOC2DATA_PARSE_ENGINE, normalizeDoc2DataParseEngine } from "@noobot/agent-config-protocol";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { resolveCanonicalUserSourceAttachment } from "../../../artifacts/index.js";
@@ -20,10 +25,7 @@ export function resolveMimeTypeByPath(filePath = "", preferredMediaType = "") {
   const extension = path.extname(String(filePath || "")).toLowerCase();
   void preferredMediaType;
   if (!IMAGE_EXTENSIONS.has(extension)) return DEFAULT_MIME_TYPE;
-  return (
-    IMAGE_EXTENSION_TO_MIME[extension] ||
-    DEFAULT_MIME_TYPE
-  );
+  return IMAGE_EXTENSION_TO_MIME[extension] || DEFAULT_MIME_TYPE;
 }
 
 async function toDataUrl(filePath = "", preferredMediaType = "") {
@@ -32,11 +34,7 @@ async function toDataUrl(filePath = "", preferredMediaType = "") {
   return `data:${mimeType};base64,${contentBase64}`;
 }
 
-export function resolveAttachmentAliasByType({
-  globalConfig,
-  userConfig,
-  mediaType = "image",
-}) {
+export function resolveAttachmentAliasByType({ globalConfig, userConfig, mediaType = "image" }) {
   const normalizedMediaType = String(mediaType || "image").trim() || "image";
   return (
     userConfig?.attachments?.attachment_models?.[normalizedMediaType] ||

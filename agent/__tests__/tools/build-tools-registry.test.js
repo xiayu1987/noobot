@@ -12,14 +12,15 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} } = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
-        globalConfig,
-        userConfig,
-        systemRuntime: {
-          sessionId: "s-1",
-          rootSessionId: "s-1",
-          config: { allowUserInteraction: true },
-        },
-        ...runtimePatch,
+      basePath: "/tmp/noobot-test-workspace",
+      globalConfig,
+      userConfig,
+      systemRuntime: {
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        config: { allowUserInteraction: true },
+      },
+      ...runtimePatch,
     }),
   };
 }
@@ -33,6 +34,9 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "write_file",
     "call_service",
     "call_mcp_task",
+    "doc_to_data",
+    "media_to_data",
+    "web_to_data",
     "process_content_task",
     "process_connector_tool",
     "switch_model",
@@ -73,6 +77,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
           service: { enabled: false },
           model: { enabled: false },
           process_content_task: { enabled: false },
+          media_to_data: { enabled: false },
           process_connector_tool: { enabled: false },
           request_help: { enabled: false },
           web_search: { enabled: false },
@@ -88,6 +93,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
     "call_service",
     "switch_model",
     "process_content_task",
+    "media_to_data",
     "process_connector_tool",
     "request_help",
     "web_search",
@@ -131,7 +137,7 @@ test("buildTools: runtime toolPolicy.denyToolNames 可按统一字段禁用工�
   assert.equal(names.has("process_content_task"), true);
 });
 
-test("buildTools: coding 场景应强制保留编程基础工具", async () => {
+test("buildTools: coding 场景不能绕过 denyToolNames", async () => {
   const tools = await buildTools(
     createContext({
       globalConfig: {
@@ -149,22 +155,16 @@ test("buildTools: coding 场景应强制保留编程基础工具", async () => {
         runConfig: {
           scenario: "coding",
           toolPolicy: {
-            denyToolNames: [
-              "read_file",
-              "write_file",
-              "search",
-              "patch_file",
-              "execute_script",
-            ],
+            denyToolNames: ["read_file", "write_file", "search", "patch_file", "execute_script"],
           },
         },
       },
     }),
   );
   const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
-  assert.equal(names.has("read_file"), true);
-  assert.equal(names.has("write_file"), true);
-  assert.equal(names.has("search"), true);
-  assert.equal(names.has("patch_file"), true);
-  assert.equal(names.has("execute_script"), true);
+  assert.equal(names.has("read_file"), false);
+  assert.equal(names.has("write_file"), false);
+  assert.equal(names.has("search"), false);
+  assert.equal(names.has("patch_file"), false);
+  assert.equal(names.has("execute_script"), false);
 });

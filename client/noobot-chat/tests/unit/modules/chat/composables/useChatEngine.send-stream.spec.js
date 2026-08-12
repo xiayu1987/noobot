@@ -15,11 +15,11 @@ import {
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
-import { BackendChannelState, FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
-  RoleEnum,
-  StreamEventEnum,
-} from "../../../../../src/modules/chat/model/chatConstants.js";
+  BackendChannelState,
+  FrontendRunState,
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
@@ -40,13 +40,17 @@ describe("useChatEngine.send-stream", () => {
 
     await engine.send();
 
-    const userMessage = activeSession.value.messages.find((message) => message.role === RoleEnum.USER);
-    expect(userMessage).toEqual(expect.objectContaining({
-      id: expect.stringMatching(/^msg_/),
-      messageId: expect.stringMatching(/^msg_/),
-      sessionId: "s-user-message-identity",
-      turnScopeId: capturedPayload.identity.turnScopeId,
-    }));
+    const userMessage = activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.USER,
+    );
+    expect(userMessage).toEqual(
+      expect.objectContaining({
+        id: expect.stringMatching(/^msg_/),
+        messageId: expect.stringMatching(/^msg_/),
+        sessionId: "s-user-message-identity",
+        turnScopeId: capturedPayload.identity.turnScopeId,
+      }),
+    );
     expect(userMessage.id).toBe(userMessage.messageId);
     expect(capturedPayload.presentation.userMessageId).toBe(userMessage.messageId);
     expect(capturedPayload.concurrency.expectedTurnRevision).toBe(0);
@@ -75,7 +79,7 @@ describe("useChatEngine.send-stream", () => {
   it("refreshes a stale session version without replaying the failed Turn", async () => {
     const conflict = new Error("session version conflict");
     conflict.data = {
-      errorCode: "SESSION_VERSION_CONFLICT",
+      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
       currentVersion: 2,
     };
     const stream = vi.fn(async () => {
@@ -95,13 +99,19 @@ describe("useChatEngine.send-stream", () => {
     await expect(engine.send()).resolves.toBe(false);
 
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(fetchSessionDetail).toHaveBeenCalledWith("s-version-conflict", expect.objectContaining({
-      source: "sendVersionConflict",
-      force: true,
-    }));
-    expect(applySessionDetail).toHaveBeenCalledWith(expect.any(Object), expect.objectContaining({
-      scrollToBottom: false,
-    }));
+    expect(fetchSessionDetail).toHaveBeenCalledWith(
+      "s-version-conflict",
+      expect.objectContaining({
+        source: "sendVersionConflict",
+        force: true,
+      }),
+    );
+    expect(applySessionDetail).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        scrollToBottom: false,
+      }),
+    );
   });
 
   it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {
@@ -195,14 +205,21 @@ describe("useChatEngine.send-stream", () => {
     await engine.send();
 
     const assistant = assistantMessage(activeSession);
-    expect(capturedPayload).toEqual(expect.objectContaining({
-      identity: { sessionId: "local-client-turn", turnScopeId: expect.stringMatching(/^client-turn:/) },
-    }));
+    expect(capturedPayload).toEqual(
+      expect.objectContaining({
+        identity: {
+          sessionId: "local-client-turn",
+          turnScopeId: expect.stringMatching(/^client-turn:/),
+        },
+      }),
+    );
     expect(assistant?.turnScopeId).toBe(capturedPayload.identity.turnScopeId);
-    expect(activeTurnRuntime.value).toEqual(expect.objectContaining({
-      state: FrontendRunState.PROCESSING,
-      backendState: BackendChannelState.SENDING,
-    }));
+    expect(activeTurnRuntime.value).toEqual(
+      expect.objectContaining({
+        state: FrontendRunState.PROCESSING,
+        backendState: BackendChannelState.SENDING,
+      }),
+    );
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(activeTurnRuntime.value.turnScopeId).toBeTruthy();
     expect(sending.value).toBe(true);
@@ -296,9 +313,11 @@ describe("useChatEngine.send-stream", () => {
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
     expect(stream).toHaveBeenCalledTimes(1);
-    expect(deps.notify).not.toHaveBeenCalledWith(expect.objectContaining({
-      message: "chat.sessionStateOutOfSync",
-    }));
+    expect(deps.notify).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "chat.sessionStateOutOfSync",
+      }),
+    );
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
@@ -475,30 +494,33 @@ describe("useChatEngine.send-stream", () => {
       emitAuthorityProcessing(onEvent, payload);
       emitAuthorityTerminal(onEvent, payload);
     });
-    const { engine, deps, activeSession, activeSessionId, sending, activeTurnRuntime } = createHarness({
-      sessionId: "local-1",
-      stream,
-      deps: {
-        fetchSessionDetail: vi.fn(async () => {
-          throw new Error("ignore detail fetch in this unit test");
-        }),
-      },
-    });
+    const { engine, deps, activeSession, activeSessionId, sending, activeTurnRuntime } =
+      createHarness({
+        sessionId: "local-1",
+        stream,
+        deps: {
+          fetchSessionDetail: vi.fn(async () => {
+            throw new Error("ignore detail fetch in this unit test");
+          }),
+        },
+      });
 
     await engine.send();
 
     const reductionLog = deps.sessionLogWebSocketClient.log.mock.calls
       .map(([entry]) => entry)
       .find((entry) => entry?.event === "frontend.messageEvent.reduced");
-    expect(reductionLog).toEqual(expect.objectContaining({
-      sessionId: "local-1",
-      data: expect.objectContaining({
-        messageId: "model-output-final-answer",
-        presentationMessageId: expect.any(String),
-        result: "applied",
-        errors: [],
+    expect(reductionLog).toEqual(
+      expect.objectContaining({
+        sessionId: "local-1",
+        data: expect.objectContaining({
+          messageId: "model-output-final-answer",
+          presentationMessageId: expect.any(String),
+          result: "applied",
+          errors: [],
+        }),
       }),
-    }));
+    );
 
     expect(activeSession.value.sessionId).toBe("local-1");
     expect(activeSessionId.value).toBe("local-1");
@@ -575,15 +597,19 @@ describe("useChatEngine.send-stream", () => {
 
     expect(sending.value).toBe(true);
     const assistant = assistantMessage(activeSession);
-    expect(assistant?.channelState).not.toMatchObject({ state: FrontendRunState.FRONTEND_COMPLETED });
+    expect(assistant?.channelState).not.toMatchObject({
+      state: FrontendRunState.FRONTEND_COMPLETED,
+    });
     expect(assistant?.channelState?.createdAt).toBeUndefined();
     expect(assistant?.channelState?.createdAtMs).toBeUndefined();
     expect(assistant?.thinkingStartedAt).toBeUndefined();
     expect(assistant?.thinkingFinishedAt).toBeUndefined();
-    expect(selectTurnMessageRuntime(turnRuntimeRegistry.value, {
-      sessionId: "local-time",
-      turnScopeId: assistant?.turnScopeId,
-    })).toMatchObject({
+    expect(
+      selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+        sessionId: "local-time",
+        turnScopeId: assistant?.turnScopeId,
+      }),
+    ).toMatchObject({
       startedAt: messageStartedAt,
       finishedAt: "",
     });
@@ -848,7 +874,13 @@ describe("useChatEngine.send-stream", () => {
     harness.deps.fetchSessionDetail = fetchSessionDetail;
     harness.deps.applySessionDetail = applySessionDetail;
     harness.activeSession.value.messages = [
-      { id: "msg-user-fresh", messageId: "msg-user-fresh", role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" },
+      {
+        id: "msg-user-fresh",
+        messageId: "msg-user-fresh",
+        role: RoleEnum.USER,
+        content: "edited question",
+        turnScopeId: "client-turn:fresh",
+      },
     ];
 
     await harness.engine.send({
@@ -861,9 +893,15 @@ describe("useChatEngine.send-stream", () => {
     const messages = harness.activeSession.value.messages;
     expect(replacementTurnScopeId).toBe("client-turn:fresh");
     expect(messages.some((message) => message.turnScopeId === staleStoppedTurnScopeId)).toBe(false);
-    expect(messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: RoleEnum.USER, content: "edited question", turnScopeId: "client-turn:fresh" }),
-      expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: "client-turn:fresh" }),
-    ]));
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: RoleEnum.USER,
+          content: "edited question",
+          turnScopeId: "client-turn:fresh",
+        }),
+        expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: "client-turn:fresh" }),
+      ]),
+    );
   });
 });

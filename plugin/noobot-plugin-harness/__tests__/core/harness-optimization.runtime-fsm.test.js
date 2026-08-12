@@ -5,7 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ensureTestAgentExecutionScope } from "../helpers/public-runtime-fixtures.js";
+import {
+  createTestHookContext,
+  ensureTestAgentExecutionScope,
+} from "../helpers/public-runtime-fixtures.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -16,29 +19,12 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  relaySeparateModelOutputAsUserMessage,
-} from "../../src/capabilities/handlers/shared.js";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  createGuidanceHandler,
+  createPlanningHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
+import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 
 test("pending states are auto-cleaned by hook turns without timers", async () => {
   const runtime = createCapabilityRuntime({
@@ -110,9 +96,13 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);
-  assert.equal(ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending, false);
   assert.equal(
-    "acceptanceSemanticValidationCaptureReportIndex" in ctx.agentContext.payload.harness.state.flags,
+    ctx.agentContext.payload.harness.state.flags.acceptanceSemanticValidationCapturePending,
+    false,
+  );
+  assert.equal(
+    "acceptanceSemanticValidationCaptureReportIndex" in
+      ctx.agentContext.payload.harness.state.flags,
     false,
   );
   assert.equal(ctx.agentContext.payload.harness.state.counters.hookTurns, 4);
@@ -128,13 +118,23 @@ test("takeover priority pipeline keeps higher priority takeover effective", asyn
       planning: async ({ point }) =>
         point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
           ? {
-              messageTakeover: { content: "planning", id: "planning", mode: "prepend", priority: 5 },
+              messageTakeover: {
+                content: "planning",
+                id: "planning",
+                mode: "prepend",
+                priority: 5,
+              },
             }
           : null,
       guidance: async ({ point }) =>
         point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
           ? {
-              messageTakeover: { content: "guidance", id: "guidance", mode: "prepend", priority: 20 },
+              messageTakeover: {
+                content: "guidance",
+                id: "guidance",
+                mode: "prepend",
+                priority: 20,
+              },
             }
           : null,
     },
@@ -176,9 +176,12 @@ test("capability runtime skips disabled planning guidance and acceptance handler
     },
   });
 
-  const ctx = createTestHookContext({ toolPolicy: {} }, {
-    messages: [{ role: "user", content: "hello" }],
-  });
+  const ctx = createTestHookContext(
+    { toolPolicy: {} },
+    {
+      messages: [{ role: "user", content: "hello" }],
+    },
+  );
   const hooksWithDisabledCapabilities = [
     HOOK_POINT.AGENT.BEFORE_TURN,
     HOOK_POINT.AGENT.BEFORE_LLM_CALL,
@@ -193,9 +196,21 @@ test("capability runtime skips disabled planning guidance and acceptance handler
 
   for (const hook of hooksWithDisabledCapabilities) {
     const capabilities = runtime.resolveByHook(hook);
-    assert.equal(capabilities.includes("planning"), false, `${hook} should not include disabled planning`);
-    assert.equal(capabilities.includes("guidance"), false, `${hook} should not include disabled guidance`);
-    assert.equal(capabilities.includes("acceptance"), false, `${hook} should not include disabled acceptance`);
+    assert.equal(
+      capabilities.includes("planning"),
+      false,
+      `${hook} should not include disabled planning`,
+    );
+    assert.equal(
+      capabilities.includes("guidance"),
+      false,
+      `${hook} should not include disabled guidance`,
+    );
+    assert.equal(
+      capabilities.includes("acceptance"),
+      false,
+      `${hook} should not include disabled acceptance`,
+    );
   }
   assert.deepEqual(runtime.resolveByHook(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT), ["review"]);
 

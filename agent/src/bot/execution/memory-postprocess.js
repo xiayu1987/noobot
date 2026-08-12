@@ -5,12 +5,8 @@
  */
 
 import { emitEvent } from "../../events/index.js";
-import { mergeConfig } from "../../config/index.js";
-import { normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
-import {
-  BOT_MANAGE_LOG_EVENT,
-  BOT_MANAGE_LOG_SOURCE,
-} from "../config/constants.js";
+import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
+import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_MEMORY_SUMMARY_TIMEOUT_MS = TIME_THRESHOLDS.memory.summaryTimeoutMs;
@@ -29,11 +25,7 @@ function isAbortLikeError(error = {}) {
 }
 
 export class MemoryPostProcessService {
-  constructor({
-    globalConfig = {},
-    memory = null,
-    errorLogger = null,
-  } = {}) {
+  constructor({ globalConfig = {}, memory = null, errorLogger = null } = {}) {
     this.globalConfig = globalConfig;
     this.memory = memory;
     this.errorLogger = errorLogger;
@@ -162,8 +154,7 @@ export class MemoryPostProcessService {
   scheduleMemorySummarizeFlow(payload = {}) {
     Promise.resolve()
       .then(() => this.runMemorySummarizeFlow(payload))
-      .catch(() => {
-      });
+      .catch(() => {});
   }
 
   async runMemoryPostProcessFlow({

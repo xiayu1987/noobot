@@ -14,14 +14,18 @@ const globalConfig = {
   providers: {
     scenario_default: {
       enabled: true,
-      type: "openai_compatible",
+      format: "openai_compatible",
+      providerId: "scenario_default",
+      adapterId: "openai-compatible",
       model: "scenario-default-model",
       apiKey: "test-key",
       baseUrl: "http://localhost/scenario",
     },
     selected_alias: {
       enabled: true,
-      type: "openai_compatible",
+      format: "openai_compatible",
+      providerId: "selected_alias",
+      adapterId: "openai-compatible",
       model: "selected-model",
       apiKey: "test-key",
       baseUrl: "http://localhost/selected",
@@ -79,14 +83,18 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
       providers: {
         scenario_model_alias: {
           enabled: true,
-          type: "openai_compatible",
+          format: "openai_compatible",
+          providerId: "scenario_model_alias",
+          adapterId: "openai-compatible",
           model: "scenario-model",
           apiKey: "test-key",
           baseUrl: "http://localhost/scenario-model",
         },
         system_default: {
           enabled: true,
-          type: "openai_compatible",
+          format: "openai_compatible",
+          providerId: "system_default",
+          adapterId: "openai-compatible",
           model: "system-default-model",
           apiKey: "test-key",
           baseUrl: "http://localhost/system",
@@ -113,7 +121,6 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
 function buildStateWithRunConfig(runConfig) {
   let received = null;
   const builder = createStateBuilder({
-    createChatModelFn: () => ({}),
     mergeConfigFn: (a, b) => ({ ...a, ...b }),
     emitEventFn: () => {},
     buildContextMessageBlocksFn: () => ({ system: [], history: [], incremental: [], messages: [] }),
@@ -131,15 +138,15 @@ function buildStateWithRunConfig(runConfig) {
 
   builder({
     agentContext: createTestAgentExecutionScope({
-        globalConfig,
-        userConfig: {},
-        runConfig,
-        systemRuntime: {
-          sessionId: "s1",
-          dialogProcessId: "dialog-model-selection",
-          turnScopeId: "turn-model-selection",
-        },
-      }),
+      globalConfig,
+      userConfig: {},
+      runConfig,
+      systemRuntime: {
+        sessionId: "s1",
+        dialogProcessId: "dialog-model-selection",
+        turnScopeId: "turn-model-selection",
+      },
+    }),
     currentUserMessage: {
       messageUid: "sm_model_selection",
       role: "user",

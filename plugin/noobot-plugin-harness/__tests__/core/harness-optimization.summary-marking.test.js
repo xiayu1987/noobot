@@ -20,10 +20,7 @@ import {
   captureGuidanceSummaryCheckpoint,
   markGuidanceSummarizedMessages,
 } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
-import {
-  relaySeparateModelOutputAsUserMessage,
-} from "../../src/capabilities/handlers/shared.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
@@ -34,29 +31,37 @@ function stampRoundIdentity(messages = [], dialogProcessId = "dp-1", turnScopeId
 
 test("relayed injections keep one identity across context and current-turn persistence", () => {
   const persisted = [];
-  const ctx = createTestHookContext({
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    agentContext: {
-      execution: {
-        controllers: {
-          runtime: {
-            currentTurnMessages: {
-              push(message) { persisted.push(message); },
+  const ctx = createTestHookContext(
+    {
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      agentContext: {
+        execution: {
+          controllers: {
+            runtime: {
+              currentTurnMessages: {
+                push(message) {
+                  persisted.push(message);
+                },
+              },
             },
           },
         },
       },
     },
-  }, {
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-    messageBlocks: { system: [], history: [], incremental: [] },
-  });
+    {
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+      messageBlocks: { system: [], history: [], incremental: [] },
+    },
+  );
 
-  assert.equal(relaySeparateModelOutputAsUserMessage(ctx, {
-    purpose: "summary",
-    content: "summary",
-  }), true);
+  assert.equal(
+    relaySeparateModelOutputAsUserMessage(ctx, {
+      purpose: "summary",
+      content: "summary",
+    }),
+    true,
+  );
 
   const [injected] = ctx.modelContext.messageBlocks.incremental;
   assert.match(injected.messageUid, /^sm_/);
@@ -86,33 +91,36 @@ test("summary checkpoint requests restored incremental messages missing from the
   };
   stampRoundIdentity([restoredCall, restoredResult, resumedCall]);
   const state = { pending: {} };
-  const ctx = createTestHookContext({
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state,
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+  const ctx = createTestHookContext(
+    {
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state,
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [],
-      history: [],
-      incremental: [restoredCall, restoredResult, resumedCall],
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [restoredCall, restoredResult, resumedCall],
+      },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+  );
   replaceMessageProjection(ctx, [resumedCall]);
 
   const ids = captureGuidanceSummaryCheckpoint(ctx, state);
@@ -124,8 +132,8 @@ test("summary checkpoint requests restored incremental messages missing from the
   assert.equal(ctx.modelContext.messageBlocks.incremental[1].summarized, undefined);
   assert.equal(ctx.modelContext.messageBlocks.incremental[2].summarized, undefined);
   assert.deepEqual(
-    ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds,
+    ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+      .summarizedMessageIds,
     ids,
   );
   assert.equal(state.pending.summaryCheckpointMessageIds, null);
@@ -157,27 +165,30 @@ test("summary checkpoint owns incremental messages only", async () => {
   };
   stampRoundIdentity([incrementalCall, incrementalResult]);
   const state = { pending: {} };
-  const ctx = createTestHookContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state,
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [],
-      history: [historyUser, historyAnswer],
-      incremental: [incrementalCall, incrementalResult],
+    {
+      messageBlocks: {
+        system: [],
+        history: [historyUser, historyAnswer],
+        incremental: [incrementalCall, incrementalResult],
+      },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+  );
 
   const ids = captureGuidanceSummaryCheckpoint(ctx, state);
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
@@ -185,8 +196,8 @@ test("summary checkpoint owns incremental messages only", async () => {
   assert.deepEqual(ids, ["incremental-call", "incremental-result"]);
   assert.equal(markedCount, 2);
   assert.deepEqual(
-    ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds,
+    ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+      .summarizedMessageIds,
     ids,
   );
 });
@@ -206,27 +217,33 @@ test("summary checkpoint rejects compressible messages left in history", () => {
   };
   stampRoundIdentity([historyCall, historyResult], "dp-history", "turn-history");
   const state = { pending: {} };
-  const ctx = createTestHookContext({
-    agentContext: {
-      payload: {
-        harness: {
-          state,
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        payload: {
+          harness: {
+            state,
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [],
-      history: [historyCall, historyResult],
-      incremental: [],
+    {
+      messageBlocks: {
+        system: [],
+        history: [historyCall, historyResult],
+        incremental: [],
+      },
     },
-  });
+  );
 
   assert.throws(
     () => captureGuidanceSummaryCheckpoint(ctx, state),
     (error) => {
-      assert.equal(error.message, "summary checkpoint history contains messages pending summarization");
+      assert.equal(
+        error.message,
+        "summary checkpoint history contains messages pending summarization",
+      );
       assert.deepEqual(error.pendingHistoryMessageIds, [
         "history-call-message",
         "history-result-message",
@@ -263,29 +280,36 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
   };
   stampRoundIdentity([oldGuidance, latestGuidance, oldSummary]);
   const state = { pending: {} };
-  const ctx = createTestHookContext({
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state,
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+  const ctx = createTestHookContext(
+    {
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state,
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
         },
       },
     },
-  }, {
-    messageBlocks: { system: [], history: [], incremental: [oldGuidance, latestGuidance, oldSummary] },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [oldGuidance, latestGuidance, oldSummary],
+      },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+    },
+  );
   captureGuidanceSummaryCheckpoint(ctx, state);
   const completedSummary = {
     role: "user",
@@ -304,46 +328,13 @@ test("summary checkpoint keeps one guidance and the newly completed summary inje
   assert.equal(oldSummary.summarized, undefined);
   assert.equal(completedSummary.summarized, undefined);
   assert.deepEqual(
-    new Set(ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set(
+      ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+        .summarizedMessageIds,
+    ),
     new Set(["old-guidance", "old-summary"]),
   );
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 test("guidance summary selects checkpoint identities without mutating canonical messages", async () => {
   let injectedCalled = 0;
@@ -358,28 +349,31 @@ test("guidance summary selects checkpoint identities without mutating canonical 
     tool_call_id: "c1",
   };
   stampRoundIdentity([toolCall, toolResult]);
-  const ctx = createTestHookContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state: {
-            flags: {},
-            counters: {},
-            signals: {},
-            pending: {},
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state: {
+              flags: {},
+              counters: {},
+              signals: {},
+              pending: {},
+            },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
-  }, {
-    messageBlocks: { system: [], history: [], incremental: [toolCall, toolResult] },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+    {
+      messageBlocks: { system: [], history: [], incremental: [toolCall, toolResult] },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+    },
+  );
   captureGuidanceSummaryCheckpoint(ctx, ctx.agentContext.payload.harness.state);
   const meta = {
     harness: {
@@ -423,32 +417,35 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
   };
   const messages = [oldToolCall, oldToolResult, newToolCall, newToolResult];
   stampRoundIdentity(messages);
-  const ctx = createTestHookContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state: {
-            counters: {},
-            flags: {},
-            signals: {},
-            pending: {},
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state: {
+              counters: {},
+              flags: {},
+              signals: {},
+              pending: {},
+            },
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
-  }, {
-    messages,
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+    {
+      messages,
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+    },
+  );
   ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds = [
     oldToolCall.additional_kwargs.noobotMessageId,
     oldToolResult.additional_kwargs.noobotMessageId,
@@ -461,8 +458,10 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
   assert.equal(newToolResult.summarized, undefined);
   assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds, null);
   assert.deepEqual(
-    new Set(ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set(
+      ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+        .summarizedMessageIds,
+    ),
     new Set([
       oldToolCall.additional_kwargs.noobotMessageId,
       oldToolResult.additional_kwargs.noobotMessageId,
@@ -511,45 +510,48 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
     summaryRelay,
   ];
   stampRoundIdentity(messages);
-  const ctx = createTestHookContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
-      },
-      payload: {
-        harness: {
-          state: {
-            counters: {},
-            flags: {},
-            signals: {},
-            pending: {},
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state: {
+              counters: {},
+              flags: {},
+              signals: {},
+              pending: {},
+            },
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [
-        { role: "system", content: "base system 1" },
-        { role: "system", content: "base system 2" },
-      ],
-      history: [],
-      incremental: [
-        { role: "user", content: "task", dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-        oldToolCall,
-        oldToolResult,
-        nextToolCall,
-        nextToolResult,
-      ],
+    {
+      messageBlocks: {
+        system: [
+          { role: "system", content: "base system 1" },
+          { role: "system", content: "base system 2" },
+        ],
+        history: [],
+        incremental: [
+          { role: "user", content: "task", dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+          oldToolCall,
+          oldToolResult,
+          nextToolCall,
+          nextToolResult,
+        ],
+      },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+  );
   replaceMessageProjection(ctx, messages);
   assert.equal(ctx.modelContext.messageBlocks.incremental[1], oldToolCall);
   assert.equal(ctx.modelContext.messageBlocks.incremental[2], oldToolResult);
@@ -564,8 +566,10 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
   assert.equal(nextToolCall.summarized, undefined);
   assert.equal(nextToolResult.summarized, undefined);
   assert.deepEqual(
-    new Set(ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set(
+      ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+        .summarizedMessageIds,
+    ),
     new Set([
       oldToolCall.additional_kwargs.noobotMessageId,
       oldToolResult.additional_kwargs.noobotMessageId,
@@ -573,7 +577,10 @@ test("guidance summary checkpoint selects matching messageBlocks instead of flat
       nextToolResult.additional_kwargs.noobotMessageId,
     ]),
   );
-  assert.equal(ctx.modelContext.messageBlocks.system.some((message) => message.summarized === true), false);
+  assert.equal(
+    ctx.modelContext.messageBlocks.system.some((message) => message.summarized === true),
+    false,
+  );
   assert.equal(summaryRelay.summarized, undefined);
 });
 
@@ -602,51 +609,54 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
     content: '{"toolName":"read_file","ok":true}',
   };
   stampRoundIdentity([oldToolCall, oldToolResult, newToolCall, newToolResult]);
-  const ctx = createTestHookContext({
-    agentContext: {
-      execution: {
-        dialogProcessId: "dp-1",
-        controllers: {
-          runtime: {
-            systemRuntime: { turnScopeId: "turn-1" },
-            async notifySummaryCompleted() {
-              directCheckpointCalls += 1;
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: {
+            runtime: {
+              systemRuntime: { turnScopeId: "turn-1" },
+              async notifySummaryCompleted() {
+                directCheckpointCalls += 1;
+              },
             },
           },
         },
-      },
-      payload: {
-        harness: {
-          state: {
-            counters: {},
-            flags: {},
-            signals: {},
-            pending: {
-              summaryCheckpointMessageIds: [],
+        payload: {
+          harness: {
+            state: {
+              counters: {},
+              flags: {},
+              signals: {},
+              pending: {
+                summaryCheckpointMessageIds: [],
+              },
             },
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
           },
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [],
-      history: [],
-      incremental: [
-        { role: "user", content: "task", dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-        oldToolCall,
-        oldToolResult,
-        newToolCall,
-        newToolResult,
-      ],
+    {
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          { role: "user", content: "task", dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+          oldToolCall,
+          oldToolResult,
+          newToolCall,
+          newToolResult,
+        ],
+      },
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
     },
-    activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-  });
+  );
   ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds = [
     oldToolCall.additional_kwargs.noobotMessageId,
     oldToolResult.additional_kwargs.noobotMessageId,
@@ -666,16 +676,18 @@ test("guidance summary checkpoint uses canonical message ids only", async () => 
   assert.equal(ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds, null);
   assert.equal(directCheckpointCalls, 0);
   assert.deepEqual(
-    new Set(ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].summarizedMessageIds),
+    new Set(
+      ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+        .summarizedMessageIds,
+    ),
     new Set([
       oldToolCall.additional_kwargs.noobotMessageId,
       oldToolResult.additional_kwargs.noobotMessageId,
     ]),
   );
   assert.equal(
-    ctx.agentContext.execution.controllers.runtime.systemRuntime
-      .mainFlowControlInstructions[0].action,
+    ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
+      .action,
     "summary_checkpoint",
   );
 });

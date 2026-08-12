@@ -13,19 +13,19 @@ import { readAttachIndex, withAttachIndexLock, writeAttachIndex } from "../index
 import { resolveBasePath } from "./attachment-scope-resolver.js";
 import { buildPublicRecord } from "./record-builder.js";
 import { buildSessionDisplaySummary } from "../../session/session-summary-builders.js";
-import {
-  readSessionArtifact,
-  writeSessionArtifact,
-} from "../../session/session-artifact-store.js";
+import { readSessionArtifact, writeSessionArtifact } from "../../session/session-artifact-store.js";
 
-export async function linkParsedResultToAttachment(service, {
-  userId,
-  sourceAttachmentId = "",
-  parsedAttachmentMeta = {},
-  toolName = "",
-  sourceSessionId = "",
-  sourceAttachmentSource = "",
-} = {}) {
+export async function linkParsedResultToAttachment(
+  service,
+  {
+    userId,
+    sourceAttachmentId = "",
+    parsedAttachmentMeta = {},
+    toolName = "",
+    sourceSessionId = "",
+    sourceAttachmentSource = "",
+  } = {},
+) {
   const sourceId = safeStr(sourceAttachmentId);
   const parsedId = safeStr(parsedAttachmentMeta?.attachmentId);
   if (!userId || !sourceId || !parsedId) return null;
@@ -40,7 +40,7 @@ export async function linkParsedResultToAttachment(service, {
     attachmentSource: normalizedAttachmentSource,
   });
 
-  let updatedRecord = await linkParsedResultInScopes({
+  const updatedRecord = await linkParsedResultInScopes({
     basePath,
     scopes: scopedCandidates,
     sourceAttachmentId: sourceId,
@@ -93,10 +93,21 @@ export async function linkParsedResultInScopes({
   const normalizedSourceId = safeStr(sourceAttachmentId);
   const normalizedSessionId = safeStr(sourceSessionId);
   const normalizedAttachmentSource = safeStr(sourceAttachmentSource).toLowerCase();
-  if (!normalizedSourceId || !normalizedSessionId || !normalizedAttachmentSource || !Array.isArray(scopes) || !scopes.length) return null;
+  if (
+    !normalizedSourceId ||
+    !normalizedSessionId ||
+    !normalizedAttachmentSource ||
+    !Array.isArray(scopes) ||
+    !scopes.length
+  )
+    return null;
 
   for (const scope of scopes) {
-    if (scope?.sessionId !== normalizedSessionId || scope?.attachmentSource !== normalizedAttachmentSource) continue;
+    if (
+      scope?.sessionId !== normalizedSessionId ||
+      scope?.attachmentSource !== normalizedAttachmentSource
+    )
+      continue;
     const result = await withAttachIndexLock(basePath, scope, async () => {
       const index = await readAttachIndex(basePath, scope);
       const sourceRecord = index?.attachments?.[normalizedSourceId];
@@ -142,14 +153,18 @@ export async function syncParsedResultToSessionSnapshots({
   if (!normalizedAttachmentId || !normalizedSessionId || !normalizedAttachmentSource) return;
 
   const resolvedSessionRoot = safeStr(sessionRoot) || path.join(basePath, "runtime/session");
-  const sessionJsonFiles = await collectSessionJsonFiles({ sessionRoot: resolvedSessionRoot, sessionId: normalizedSessionId });
+  const sessionJsonFiles = await collectSessionJsonFiles({
+    sessionRoot: resolvedSessionRoot,
+    sessionId: normalizedSessionId,
+  });
   if (!sessionJsonFiles.length) return;
 
-  const nextParsedResult = updatedSourceAttachment?.parsedResult &&
+  const nextParsedResult =
+    updatedSourceAttachment?.parsedResult &&
     typeof updatedSourceAttachment.parsedResult === "object" &&
     !Array.isArray(updatedSourceAttachment.parsedResult)
-    ? updatedSourceAttachment.parsedResult
-    : {};
+      ? updatedSourceAttachment.parsedResult
+      : {};
 
   for (const sessionJsonFile of sessionJsonFiles) {
     const sessionDir = path.dirname(sessionJsonFile);
@@ -164,7 +179,8 @@ export async function syncParsedResultToSessionSnapshots({
       let bucketChanged = false;
       const nextItems = attachmentItems.map((attachmentItem) => {
         const attachmentId = safeStr(attachmentItem?.attachmentId);
-        const sameAttachmentId = attachmentId === normalizedAttachmentId &&
+        const sameAttachmentId =
+          attachmentId === normalizedAttachmentId &&
           safeStr(attachmentItem?.sessionId) === normalizedSessionId &&
           safeStr(attachmentItem?.attachmentSource).toLowerCase() === normalizedAttachmentSource;
         const isMatchedAttachment = sameAttachmentId;
@@ -178,9 +194,7 @@ export async function syncParsedResultToSessionSnapshots({
       return { items: nextItems, changed: bucketChanged };
     };
     const nextMessages = messages.map((messageItem) => {
-      const attachments = Array.isArray(messageItem?.attachments)
-        ? messageItem.attachments
-        : [];
+      const attachments = Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
       const syncedAttachments = syncAttachmentBucket(attachments);
       if (!syncedAttachments.changed) return messageItem;
       changed = true;
@@ -195,8 +209,7 @@ export async function syncParsedResultToSessionSnapshots({
     try {
       await writeSessionArtifact({ sessionDir, sessionPayload: nextSessionPayload });
       await syncSessionSummaryForSessionFile(sessionJsonFile, nextSessionPayload);
-    } catch {
-    }
+    } catch {}
   }
 }
 

@@ -5,14 +5,37 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
-import { mkdir, open, readFile, readdir, rename, rm, stat, truncate, writeFile } from "node:fs/promises";
-import { buildSessionDisplaySummary, isSessionDisplaySummaryPayload } from "./session-summary-builders.js";
-import { assertSessionMessageIdentityInvariants, normalizeSessionEntity } from "./entities/session-entity.js";
+import {
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
+import {
+  buildSessionDisplaySummary,
+  isSessionDisplaySummaryPayload,
+} from "./session-summary-builders.js";
+import {
+  assertSessionMessageIdentityInvariants,
+  normalizeSessionEntity,
+} from "./entities/session-entity.js";
 import { resolveMessageDialogProcessId } from "../context/session/dialog-process-id-resolver.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
-import { buildSessionArtifactFileMap, SESSION_ARTIFACT_FILE_NAMES, assertArtifactSessionWritable, readJsonArtifactFile, writeJsonArtifactFile } from "./session-artifact-files.js";
+import {
+  buildSessionArtifactFileMap,
+  SESSION_ARTIFACT_FILE_NAMES,
+  assertArtifactSessionWritable,
+  readJsonArtifactFile,
+  writeJsonArtifactFile,
+} from "./session-artifact-files.js";
 import { appendRollingJsonlArtifactLog } from "./session-artifact-execution-logs.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { readSessionForProtocolRepair } from "@noobot/session-repair";
 
 function splitSessionMessages(messages = [], dialogOrder = []) {
   const source = Array.isArray(messages) ? messages : [];
@@ -27,7 +50,9 @@ function splitSessionMessages(messages = [], dialogOrder = []) {
     const dialogProcessId = resolveMessageDialogProcessId(message);
     const turnScopeId = String(message?.turnScopeId || "").trim();
     if (!turnScopeId || !dialogProcessId) {
-      const error = new TypeError(`session message is missing Turn identity at index ${sourceIndex}`);
+      const error = new TypeError(
+        `session message is missing Turn identity at index ${sourceIndex}`,
+      );
       error.code = "SESSION_TURN_IDENTITY_REQUIRED";
       throw error;
     }
@@ -40,7 +65,9 @@ function splitSessionMessages(messages = [], dialogOrder = []) {
       sourceIndices: [],
     };
     if (bucket.dialogProcessId !== dialogProcessId) {
-      const error = new TypeError(`turnScopeId ${turnScopeId} maps to multiple dialogProcessId values`);
+      const error = new TypeError(
+        `turnScopeId ${turnScopeId} maps to multiple dialogProcessId values`,
+      );
       error.code = "SESSION_TURN_IDENTITY_CONFLICT";
       throw error;
     }
@@ -51,8 +78,10 @@ function splitSessionMessages(messages = [], dialogOrder = []) {
   const ordered = [...buckets.values()].sort((left, right) => {
     const leftDialogOrdinal = logicalOrder.get(left.dialogProcessId);
     const rightDialogOrdinal = logicalOrder.get(right.dialogProcessId);
-    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal)) return leftDialogOrdinal - rightDialogOrdinal;
-    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal)) return Number.isFinite(leftDialogOrdinal) ? -1 : 1;
+    if (Number.isFinite(leftDialogOrdinal) && Number.isFinite(rightDialogOrdinal))
+      return leftDialogOrdinal - rightDialogOrdinal;
+    if (Number.isFinite(leftDialogOrdinal) !== Number.isFinite(rightDialogOrdinal))
+      return Number.isFinite(leftDialogOrdinal) ? -1 : 1;
     return left.firstSourceIndex - right.firstSourceIndex;
   });
   const turns = ordered.map((bucket, index) => {
@@ -87,10 +116,15 @@ export function resolveTurnArtifactPath(sessionDir = "", file = "") {
   const normalized = path.normalize(reference);
   const turnsRoot = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnsDir);
   const resolved = path.resolve(sessionDir, normalized);
-  if (!reference || path.isAbsolute(reference) || reference.includes("\0")
-    || normalized === "." || normalized.startsWith(`..${path.sep}`)
-    || (resolved !== turnsRoot && !resolved.startsWith(`${turnsRoot}${path.sep}`))
-    || ![".json", ".jsonl"].includes(path.extname(resolved))) {
+  if (
+    !reference ||
+    path.isAbsolute(reference) ||
+    reference.includes("\0") ||
+    normalized === "." ||
+    normalized.startsWith(`..${path.sep}`) ||
+    (resolved !== turnsRoot && !resolved.startsWith(`${turnsRoot}${path.sep}`)) ||
+    ![".json", ".jsonl"].includes(path.extname(resolved))
+  ) {
     const error = new Error(`invalid session turn artifact reference: ${reference}`);
     error.code = "SESSION_TURN_ARTIFACT_PATH_INVALID";
     throw error;
@@ -109,10 +143,15 @@ function resolveSummarySnapshotPath(sessionDir = "", file = "") {
   const normalized = path.normalize(reference);
   const snapshotsRoot = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir);
   const resolved = path.resolve(sessionDir, normalized);
-  if (!reference || path.isAbsolute(reference) || reference.includes("\0")
-    || normalized === "." || normalized.startsWith(`..${path.sep}`)
-    || (resolved !== snapshotsRoot && !resolved.startsWith(`${snapshotsRoot}${path.sep}`))
-    || path.extname(resolved) !== ".json") {
+  if (
+    !reference ||
+    path.isAbsolute(reference) ||
+    reference.includes("\0") ||
+    normalized === "." ||
+    normalized.startsWith(`..${path.sep}`) ||
+    (resolved !== snapshotsRoot && !resolved.startsWith(`${snapshotsRoot}${path.sep}`)) ||
+    path.extname(resolved) !== ".json"
+  ) {
     const error = new Error(`invalid session summary snapshot reference: ${reference}`);
     error.code = "SESSION_SUMMARY_SNAPSHOT_PATH_INVALID";
     throw error;
@@ -125,10 +164,15 @@ function resolveSummaryDetailPath(sessionDir = "", file = "") {
   const normalized = path.normalize(reference);
   const root = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir);
   const resolved = path.resolve(sessionDir, normalized);
-  if (!reference || path.isAbsolute(reference) || reference.includes("\0") || normalized === "."
-    || normalized.startsWith(`..${path.sep}`)
-    || (resolved !== root && !resolved.startsWith(`${root}${path.sep}`))
-    || path.extname(resolved) !== ".json") {
+  if (
+    !reference ||
+    path.isAbsolute(reference) ||
+    reference.includes("\0") ||
+    normalized === "." ||
+    normalized.startsWith(`..${path.sep}`) ||
+    (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) ||
+    path.extname(resolved) !== ".json"
+  ) {
     const error = new Error(`invalid session summary detail reference: ${reference}`);
     error.code = "SESSION_SUMMARY_DETAIL_PATH_INVALID";
     throw error;
@@ -145,18 +189,31 @@ async function writeSessionSummaryDetails({ storageService, sessionDir, summaryP
   await mkdir(detailsDir, { recursive: true });
   const referenced = new Set();
   const messages = [];
-  for (const message of (Array.isArray(summaryPayload?.messages) ? summaryPayload.messages : [])) {
+  for (const message of Array.isArray(summaryPayload?.messages) ? summaryPayload.messages : []) {
     const toolTimeline = Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
-    const activityTimeline = Array.isArray(message?.activityTimeline) ? message.activityTimeline : [];
-    if (!toolTimeline.length && !activityTimeline.length) { messages.push(message); continue; }
-    const presentationMessageId = String(message?.presentationMessageId || message?.messageId || message?.id || "").trim();
-    if (!presentationMessageId) throw new TypeError("summary detail requires presentation message identity");
+    const activityTimeline = Array.isArray(message?.activityTimeline)
+      ? message.activityTimeline
+      : [];
+    if (!toolTimeline.length && !activityTimeline.length) {
+      messages.push(message);
+      continue;
+    }
+    const presentationMessageId = String(
+      message?.presentationMessageId || message?.messageId || message?.id || "",
+    ).trim();
+    if (!presentationMessageId)
+      throw new TypeError("summary detail requires presentation message identity");
     const detail = { schemaVersion: 1, presentationMessageId, toolTimeline, activityTimeline };
     const filename = `${encodeURIComponent(presentationMessageId)}.json`;
     const relative = `${SESSION_ARTIFACT_FILE_NAMES.sessionSummaryDetailsDir}/${filename}`;
     referenced.add(relative);
     const detailPath = resolveSummaryDetailPath(sessionDir, relative);
-    await writeJsonWithStorage({ storageService, artifactPath: detailPath, payload: detail, atomic: true });
+    await writeJsonWithStorage({
+      storageService,
+      artifactPath: detailPath,
+      payload: detail,
+      atomic: true,
+    });
     const { toolTimeline: _tool, activityTimeline: _activity, ...light } = message;
     const thinkingDetailCount = toolTimeline.length + activityTimeline.length;
     messages.push({
@@ -177,25 +234,58 @@ async function writeSessionSummaryDetails({ storageService, sessionDir, summaryP
 }
 
 async function hydrateSessionSummaryDetails({ storageService, sessionDir, payload }) {
-  const messages = (Array.isArray(payload?.messages) ? payload.messages : []).map(async (message) => {
-    const ref = message?.thinkingDetailRef;
-    if (!ref || typeof ref !== "object") return message;
-    const detailPath = resolveSummaryDetailPath(sessionDir, ref.file);
-    const detail = await readJsonWithStorage({ storageService, artifactPath: detailPath, fallback: null });
-    if (!detail || detail.presentationMessageId !== String(message?.presentationMessageId || message?.messageId || message?.id || "")
-      || summaryDetailHash(detail) !== ref.contentHash) {
-      const error = new Error(`session summary detail does not match its reference: ${ref.file}`);
-      error.code = "SESSION_SUMMARY_DETAIL_REFERENCE_MISMATCH";
-      throw error;
-    }
-    return { ...message, toolTimeline: detail.toolTimeline, activityTimeline: detail.activityTimeline };
-  });
+  const messages = (Array.isArray(payload?.messages) ? payload.messages : []).map(
+    async (message) => {
+      const ref = message?.thinkingDetailRef;
+      if (!ref || typeof ref !== "object") return message;
+      const detailPath = resolveSummaryDetailPath(sessionDir, ref.file);
+      const detail = await readJsonWithStorage({
+        storageService,
+        artifactPath: detailPath,
+        fallback: null,
+      });
+      if (
+        !detail ||
+        detail.presentationMessageId !==
+          String(message?.presentationMessageId || message?.messageId || message?.id || "") ||
+        summaryDetailHash(detail) !== ref.contentHash
+      ) {
+        const error = new Error(`session summary detail does not match its reference: ${ref.file}`);
+        error.code = "SESSION_SUMMARY_DETAIL_REFERENCE_MISMATCH";
+        throw error;
+      }
+      return {
+        ...message,
+        toolTimeline: detail.toolTimeline,
+        activityTimeline: detail.activityTimeline,
+      };
+    },
+  );
   return { ...payload, messages: await Promise.all(messages) };
 }
 
 function messageHash(message) {
   const canonical = JSON.stringify(message);
   return `sha256:${createHash("sha256").update(canonical).digest("hex")}`;
+}
+
+function assertIncrementalJournalRecords(records, file) {
+  for (const record of records) {
+    const uid = String(record?.messageUid || "").trim();
+    const validRemove = record?.op === "remove" && uid;
+    const validUpsert =
+      record?.op === "upsert" &&
+      uid &&
+      record.message &&
+      typeof record.message === "object" &&
+      String(record.message.messageUid || "").trim() === uid &&
+      record.hash === messageHash(record.message);
+    if (!validRemove && !validUpsert) {
+      const error = new Error(`summary snapshot contains an invalid incremental record: ${file}`);
+      error.code = "SESSION_SUMMARY_SNAPSHOT_RECORD_INVALID";
+      throw error;
+    }
+  }
 }
 
 function turnKey(turn = {}) {
@@ -211,9 +301,18 @@ function isTerminalTurn(session, turn) {
   const scope = String(turn?.turnScopeId || "").trim();
   const dialog = String(turn?.dialogProcessId || "").trim();
   const statuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
-  return statuses.some((item) => String(item?.turnScopeId || "").trim() === scope
-    && (!dialog || !String(item?.dialogProcessId || "").trim() || String(item.dialogProcessId).trim() === dialog)
-    && ["completed", "user_stopped", "timeout", "failed", "error"].includes(String(item?.status || "").trim().toLowerCase()));
+  return statuses.some(
+    (item) =>
+      String(item?.turnScopeId || "").trim() === scope &&
+      (!dialog ||
+        !String(item?.dialogProcessId || "").trim() ||
+        String(item.dialogProcessId).trim() === dialog) &&
+      ["completed", "user_stopped", "timeout", "failed", "error"].includes(
+        String(item?.status || "")
+          .trim()
+          .toLowerCase(),
+      ),
+  );
 }
 
 function resolveTurnSummaryReceipts(session = {}, turn = {}) {
@@ -246,11 +345,20 @@ async function writeSummarySnapshot(file, payload) {
 
 async function readSummarySnapshots(sessionDir, records = []) {
   const snapshots = [];
+  let previousCheckpointHash = "";
   for (const record of collectSummarySnapshotRecords(records)) {
     const file = String(record?.file || "").trim();
     const snapshotPathname = resolveSummarySnapshotPath(sessionDir, file);
     const payload = await readJsonArtifactFile(snapshotPathname, null);
-    if (!payload || payload.checkpointId !== record.checkpointId || payload.checkpointRevision !== record.checkpointRevision) {
+    if (
+      !payload ||
+      Number(payload.schemaVersion) !== 2 ||
+      !Array.isArray(payload.records) ||
+      Object.hasOwn(payload, "messages") ||
+      payload.previousCheckpointHash !== previousCheckpointHash ||
+      payload.checkpointId !== record.checkpointId ||
+      payload.checkpointRevision !== record.checkpointRevision
+    ) {
       const error = new Error(`summary snapshot does not match its journal index: ${file}`);
       error.code = "SESSION_SUMMARY_SNAPSHOT_INDEX_MISMATCH";
       throw error;
@@ -262,14 +370,18 @@ async function readSummarySnapshots(sessionDir, records = []) {
       error.code = "SESSION_SUMMARY_SNAPSHOT_HASH_MISMATCH";
       throw error;
     }
+    assertIncrementalJournalRecords(payload.records, file);
     snapshots.push({ ...record, payload });
+    previousCheckpointHash = record.contentHash;
   }
   return snapshots;
 }
 
 async function readJournalRecords(file, committedBytes) {
   let raw;
-  try { raw = await readFile(file); } catch (error) {
+  try {
+    raw = await readFile(file);
+  } catch (error) {
     if (error?.code === "ENOENT" && Number(committedBytes || 0) === 0) return [];
     if (error?.code === "ENOENT") {
       const failure = new Error(`session turn journal is missing: ${file}`);
@@ -283,39 +395,63 @@ async function readJournalRecords(file, committedBytes) {
   const records = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
-    try { records.push(JSON.parse(line)); } catch (error) {
+    try {
+      records.push(JSON.parse(line));
+    } catch (error) {
       const failure = new Error(`turn journal is corrupted: ${file}`);
       failure.code = "ARTIFACT_JSON_CORRUPTED";
       failure.cause = error;
       throw failure;
     }
   }
+  assertIncrementalJournalRecords(
+    records.filter((record) => record?.op !== "summary_snapshot"),
+    file,
+  );
   return records;
 }
 
 function materializeJournal(records, order = [], baseMessages = []) {
-  const byUid = new Map((Array.isArray(baseMessages) ? baseMessages : [])
-    .map((message) => [String(message?.messageUid || "").trim(), message])
-    .filter(([uid]) => uid));
+  const byUid = new Map(
+    (Array.isArray(baseMessages) ? baseMessages : [])
+      .map((message) => [String(message?.messageUid || "").trim(), message])
+      .filter(([uid]) => uid),
+  );
   for (const record of records) {
     const uid = String(record?.messageUid || "").trim();
     if (!uid) continue;
     if (record.op === "remove") byUid.delete(uid);
-    else if (record.op === "upsert" && record.message && typeof record.message === "object") byUid.set(uid, record.message);
+    else if (record.op === "upsert" && record.message && typeof record.message === "object")
+      byUid.set(uid, record.message);
   }
-  const ordered = (Array.isArray(order) ? order : []).map((uid) => byUid.get(String(uid || "").trim())).filter(Boolean);
-  const remaining = [...byUid.entries()].filter(([uid]) => !order.includes(uid)).map(([, message]) => message);
+  const ordered = (Array.isArray(order) ? order : [])
+    .map((uid) => byUid.get(String(uid || "").trim()))
+    .filter(Boolean);
+  const remaining = [...byUid.entries()]
+    .filter(([uid]) => !order.includes(uid))
+    .map(([, message]) => message);
   return [...ordered, ...remaining];
 }
 
+function materializeTurnJournal(records, order, summarySnapshots) {
+  const checkpointRecords = summarySnapshots.flatMap((snapshot) => snapshot.payload.records);
+  return materializeJournal([...checkpointRecords, ...records], order);
+}
+
 function collectSummarySnapshotRecords(records = []) {
-  return (Array.isArray(records) ? records : []).filter((record) => record?.op === "summary_snapshot");
+  return (Array.isArray(records) ? records : []).filter(
+    (record) => record?.op === "summary_snapshot",
+  );
 }
 
 async function appendJournal(file, records, committedBytes = 0) {
   await mkdir(path.dirname(file), { recursive: true });
   let currentSize = 0;
-  try { currentSize = (await stat(file)).size; } catch (error) { if (error?.code !== "ENOENT") throw error; }
+  try {
+    currentSize = (await stat(file)).size;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
   const committed = Math.max(0, Math.min(currentSize, Number(committedBytes) || 0));
   if (currentSize !== committed) await truncate(file, committed);
   if (!records.length) return committed;
@@ -346,7 +482,12 @@ async function replaceJournalRecords(file, records) {
 
 async function replaceJournal(file, messages, summaryRecords = []) {
   const temp = `${file}.tmp-${process.pid}-${Date.now()}`;
-  const records = messages.map((message) => ({ op: "upsert", messageUid: message.messageUid, message, hash: messageHash(message) }));
+  const records = messages.map((message) => ({
+    op: "upsert",
+    messageUid: message.messageUid,
+    message,
+    hash: messageHash(message),
+  }));
   records.push(...summaryRecords);
   const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
   const handle = await open(temp, "w");
@@ -360,7 +501,11 @@ async function replaceJournal(file, messages, summaryRecords = []) {
   return Buffer.byteLength(payload, "utf8");
 }
 
-export async function readRecentSessionTurns({ sessionDir = "", limit = 10, fallback = null } = {}) {
+export async function readRecentSessionTurns({
+  sessionDir = "",
+  limit = 10,
+  fallback = null,
+} = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
   const session = await readJsonArtifactFile(files.session, fallback);
   if (!session || typeof session !== "object") return [];
@@ -372,14 +517,17 @@ export async function readRecentSessionTurns({ sessionDir = "", limit = 10, fall
   }
   const turns = [];
   for (const item of (Array.isArray(session.turnOrder) ? session.turnOrder : []).slice(-count)) {
-    const records = await readJournalRecords(journalPath(sessionDir, item.turnId), item.committedBytes);
+    const records = await readJournalRecords(
+      journalPath(sessionDir, item.turnId),
+      item.committedBytes,
+    );
     const summarySnapshots = await readSummarySnapshots(sessionDir, records);
     turns.push({
       turnId: item.turnId,
       artifactOrdinal: item.artifactOrdinal,
       turnScopeId: item.turnScopeId,
       dialogProcessId: item.dialogProcessId,
-      messages: materializeJournal(records, item.messageOrder, summarySnapshots.at(-1)?.payload?.messages),
+      messages: materializeTurnJournal(records, item.messageOrder, summarySnapshots),
       summarySnapshots,
     });
   }
@@ -407,8 +555,13 @@ export async function readSessionTurn({
     throw error;
   }
   const matches = (Array.isArray(session.turnOrder) ? session.turnOrder : []).filter((item) => {
-    if (normalizedTurnScopeId && String(item?.turnScopeId || "").trim() !== normalizedTurnScopeId) return false;
-    if (normalizedDialogProcessId && String(item?.dialogProcessId || "").trim() !== normalizedDialogProcessId) return false;
+    if (normalizedTurnScopeId && String(item?.turnScopeId || "").trim() !== normalizedTurnScopeId)
+      return false;
+    if (
+      normalizedDialogProcessId &&
+      String(item?.dialogProcessId || "").trim() !== normalizedDialogProcessId
+    )
+      return false;
     return true;
   });
   if (matches.length > 1) {
@@ -429,7 +582,7 @@ export async function readSessionTurn({
     artifactOrdinal: Number(item.artifactOrdinal || 0),
     turnScopeId: String(item.turnScopeId || "").trim(),
     dialogProcessId: String(item.dialogProcessId || "").trim(),
-    messages: materializeJournal(records, item.messageOrder, summarySnapshots.at(-1)?.payload?.messages),
+    messages: materializeTurnJournal(records, item.messageOrder, summarySnapshots),
     summarySnapshots,
   };
 }
@@ -464,7 +617,11 @@ export async function readSessionArtifact({
   fallback = null,
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback });
+  const session = await readJsonWithStorage({
+    storageService,
+    artifactPath: files.session,
+    fallback,
+  });
   if (!session || typeof session !== "object") return fallback;
   if (Number(session.schemaVersion) !== TURN_JOURNAL_SCHEMA_VERSION) {
     const error = new Error("Session artifact requires the canonical turn journal schema");
@@ -473,12 +630,17 @@ export async function readSessionArtifact({
   }
   const messagesByUid = new Map();
   for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
-    const records = await readJournalRecords(journalPath(sessionDir, item.turnId), item.committedBytes);
+    const records = await readJournalRecords(
+      journalPath(sessionDir, item.turnId),
+      item.committedBytes,
+    );
     const summarySnapshots = await readSummarySnapshots(sessionDir, records);
-    for (const message of materializeJournal(records, item.messageOrder, summarySnapshots.at(-1)?.payload?.messages)) messagesByUid.set(message.messageUid, message);
+    for (const message of materializeTurnJournal(records, item.messageOrder, summarySnapshots))
+      messagesByUid.set(message.messageUid, message);
   }
   const restoredMessages = (Array.isArray(session.messageOrder) ? session.messageOrder : [])
-    .map((reference) => messagesByUid.get(String(reference?.messageUid || "").trim())).filter(Boolean);
+    .map((reference) => messagesByUid.get(String(reference?.messageUid || "").trim()))
+    .filter(Boolean);
   return { ...session, messages: restoredMessages };
 }
 
@@ -488,39 +650,16 @@ export async function readSessionArtifactForRepair({
   fallback = null,
 } = {}) {
   const files = buildSessionArtifactFileMap(sessionDir);
-  const session = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback });
+  const session = await readJsonWithStorage({
+    storageService,
+    artifactPath: files.session,
+    fallback,
+  });
   if (!session || typeof session !== "object") return fallback;
   if (Number(session.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION) {
     return readSessionArtifact({ storageService, sessionDir, fallback });
   }
-  if (Array.isArray(session.messages)) return session;
-  const messages = [];
-  const messagesByTurnId = new Map();
-  for (const item of Array.isArray(session.turnOrder) ? session.turnOrder : []) {
-    const file = typeof item === "string" ? item : item?.file;
-    if (!file) continue;
-    const turn = await readJsonWithStorage({
-      storageService,
-      artifactPath: resolveTurnArtifactPath(sessionDir, file),
-      fallback: null,
-    });
-    if (!turn || !Array.isArray(turn.messages)) {
-      const error = new Error(`session turn artifact is missing or invalid: ${file}`);
-      error.code = "SESSION_TURN_ARTIFACT_MISSING";
-      throw error;
-    }
-    const turnId = String(item?.turnId || turn?.turnId || "").trim();
-    if (turnId) messagesByTurnId.set(turnId, turn.messages);
-    messages.push(...turn.messages);
-  }
-  const order = Array.isArray(session.messageOrder) ? session.messageOrder : [];
-  return {
-    ...session,
-    messages: order.length
-      ? order.map((reference) => messagesByTurnId
-        .get(String(reference?.turnId || "").trim())?.[Number(reference?.messageIndex)]).filter(Boolean)
-      : messages,
-  };
+  return readSessionForProtocolRepair({ sessionDir, session });
 }
 
 async function writeJsonWithStorage({
@@ -572,8 +711,15 @@ export async function writeSessionArtifact({
     normalizedSessionPayload.messages,
     normalizedSessionPayload.dialogOrder,
   );
-  const previousManifest = await readJsonWithStorage({ storageService, artifactPath: files.session, fallback: null });
-  const previousV5 = Number(previousManifest?.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION ? previousManifest : null;
+  const previousManifest = await readJsonWithStorage({
+    storageService,
+    artifactPath: files.session,
+    fallback: null,
+  });
+  const previousV5 =
+    Number(previousManifest?.schemaVersion) === TURN_JOURNAL_SCHEMA_VERSION
+      ? previousManifest
+      : null;
   const previousTurns = Array.isArray(previousV5?.turnOrder) ? previousV5.turnOrder : [];
   const previousByKey = new Map();
   for (const item of previousTurns) {
@@ -603,12 +749,20 @@ export async function writeSessionArtifact({
   for (const turn of artifactTurns) {
     const previous = previousV5?.turnOrder?.find((item) => item.turnId === turn.turnId);
     const file = journalPath(sessionDir, turn.turnId);
-    const previousHashes = previous?.messageHashes && typeof previous.messageHashes === "object"
-      ? previous.messageHashes
-      : {};
+    const previousHashes =
+      previous?.messageHashes && typeof previous.messageHashes === "object"
+        ? previous.messageHashes
+        : {};
     const previousRecords = previous ? await readJournalRecords(file, previous.committedBytes) : [];
     const previousSummaryRecords = collectSummarySnapshotRecords(previousRecords);
-    const previousCheckpointIds = new Set(previousSummaryRecords.map((record) => String(record?.checkpointId || "").trim()).filter(Boolean));
+    const previousTailRecords = previousRecords.filter(
+      (record) => record?.op !== "summary_snapshot",
+    );
+    const previousCheckpointIds = new Set(
+      previousSummaryRecords
+        .map((record) => String(record?.checkpointId || "").trim())
+        .filter(Boolean),
+    );
     let snapshotCompactedJournal = false;
     const nextByUid = new Map(turn.messages.map((message) => [message.messageUid, message]));
     const nextHashes = {};
@@ -616,31 +770,48 @@ export async function writeSessionArtifact({
     for (const message of turn.messages) {
       const hash = messageHash(message);
       nextHashes[message.messageUid] = hash;
-      if (previousHashes[message.messageUid] !== hash) records.push({ op: "upsert", messageUid: message.messageUid, message, hash });
+      if (previousHashes[message.messageUid] !== hash)
+        records.push({ op: "upsert", messageUid: message.messageUid, message, hash });
     }
-    for (const uid of Object.keys(previousHashes)) if (!nextByUid.has(uid)) records.push({ op: "remove", messageUid: uid });
+    for (const uid of Object.keys(previousHashes))
+      if (!nextByUid.has(uid)) records.push({ op: "remove", messageUid: uid });
     const summaryRecords = [...previousSummaryRecords];
+    let checkpointRecords = [...previousTailRecords, ...records];
+    let previousCheckpointHash = previousSummaryRecords.at(-1)?.contentHash || "";
     for (const receipt of resolveTurnSummaryReceipts(normalizedSessionPayload, turn)) {
       const checkpointId = String(receipt?.checkpointId || "").trim();
       const checkpointRevision = Number(receipt?.checkpointRevision || 0);
-      if (!checkpointId || !Number.isInteger(checkpointRevision) || checkpointRevision < 1 || previousCheckpointIds.has(checkpointId)) continue;
-      const relativeSnapshotFile = path.join(
-        SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir,
-        turn.turnId,
-        `checkpoint-${String(checkpointRevision).padStart(6, "0")}.json`,
-      ).replaceAll("\\", "/");
+      if (
+        !checkpointId ||
+        !Number.isInteger(checkpointRevision) ||
+        checkpointRevision < 1 ||
+        previousCheckpointIds.has(checkpointId)
+      )
+        continue;
+      const relativeSnapshotFile = path
+        .join(
+          SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir,
+          turn.turnId,
+          `checkpoint-${String(checkpointRevision).padStart(6, "0")}.json`,
+        )
+        .replaceAll("\\", "/");
       const snapshotPayload = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         checkpointId,
         checkpointRevision,
         sessionId: String(normalizedSessionPayload.sessionId || "").trim(),
         turnId: turn.turnId,
         turnScopeId: turn.turnScopeId,
         dialogProcessId: turn.dialogProcessId,
-        persistedMessageUids: Array.isArray(receipt?.persistedMessageUids) ? receipt.persistedMessageUids : [],
-        summarizedMessageUids: Array.isArray(receipt?.summarizedMessageUids) ? receipt.summarizedMessageUids : [],
+        persistedMessageUids: Array.isArray(receipt?.persistedMessageUids)
+          ? receipt.persistedMessageUids
+          : [],
+        summarizedMessageUids: Array.isArray(receipt?.summarizedMessageUids)
+          ? receipt.summarizedMessageUids
+          : [],
         committedAt: String(receipt?.committedAt || "").trim(),
-        messages: turn.messages,
+        previousCheckpointHash,
+        records: checkpointRecords,
       };
       const canonicalSnapshot = JSON.stringify(snapshotPayload);
       const contentHash = `sha256:${createHash("sha256").update(canonicalSnapshot).digest("hex")}`;
@@ -650,12 +821,18 @@ export async function writeSessionArtifact({
       records.push(indexRecord);
       summaryRecords.push(indexRecord);
       previousCheckpointIds.add(checkpointId);
+      previousCheckpointHash = contentHash;
+      checkpointRecords = [];
       snapshotCompactedJournal = true;
     }
     let committedBytes;
-    const compact = isTerminalTurn(normalizedSessionPayload, turn) && previous?.compacted !== true;
+    const compact =
+      isTerminalTurn(normalizedSessionPayload, turn) &&
+      previous?.compacted !== true &&
+      summaryRecords.length === 0;
     if (compact) committedBytes = await replaceJournal(file, turn.messages, summaryRecords);
-    else if (snapshotCompactedJournal) committedBytes = await replaceJournalRecords(file, summaryRecords);
+    else if (snapshotCompactedJournal)
+      committedBytes = await replaceJournalRecords(file, summaryRecords);
     else committedBytes = await appendJournal(file, records, previous?.committedBytes || 0);
     turnOrder.push({
       turnId: turn.turnId,
@@ -681,7 +858,9 @@ export async function writeSessionArtifact({
     messageIdentityVersion: 1,
     turnArtifactSequence,
     turnOrder,
-    messageOrder: normalizedSessionPayload.messages.map((message) => ({ messageUid: message.messageUid })),
+    messageOrder: normalizedSessionPayload.messages.map((message) => ({
+      messageUid: message.messageUid,
+    })),
   };
   delete manifest.messages;
   const [sessionArtifact] = await Promise.all([
@@ -701,7 +880,11 @@ export async function writeSessionArtifact({
   const referenced = new Set(artifactTurns.map((turn) => `${turn.turnId}.jsonl`));
   try {
     for (const entry of await readdir(files.turnsDir, { withFileTypes: true })) {
-      if (entry.isFile() && (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl")) && !referenced.has(entry.name)) {
+      if (
+        entry.isFile() &&
+        (entry.name.endsWith(".json") || entry.name.endsWith(".jsonl")) &&
+        !referenced.has(entry.name)
+      ) {
         await rm(path.join(files.turnsDir, entry.name), { force: true });
       }
     }
@@ -710,7 +893,10 @@ export async function writeSessionArtifact({
   }
   const referencedSnapshots = new Set();
   for (const turn of turnOrder) {
-    const journalRecords = await readJournalRecords(journalPath(sessionDir, turn.turnId), turn.committedBytes);
+    const journalRecords = await readJournalRecords(
+      journalPath(sessionDir, turn.turnId),
+      turn.committedBytes,
+    );
     for (const record of collectSummarySnapshotRecords(journalRecords)) {
       referencedSnapshots.add(String(record?.file || "").replaceAll("\\", "/"));
     }
@@ -721,8 +907,11 @@ export async function writeSessionArtifact({
       const turnDir = path.join(files.turnSnapshotsDir, turnEntry.name);
       for (const entry of await readdir(turnDir, { withFileTypes: true })) {
         if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
-        const relative = path.join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name).replaceAll("\\", "/");
-        if (!referencedSnapshots.has(relative)) await rm(path.join(turnDir, entry.name), { force: true });
+        const relative = path
+          .join(SESSION_ARTIFACT_FILE_NAMES.turnSnapshotsDir, turnEntry.name, entry.name)
+          .replaceAll("\\", "/");
+        if (!referencedSnapshots.has(relative))
+          await rm(path.join(turnDir, entry.name), { force: true });
       }
     }
   } catch (error) {

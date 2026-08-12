@@ -70,10 +70,10 @@ test("AgentRuntimeFacade runTurn forwards payload to turn runner", async () => {
   });
   const result = await facade.runTurn({
     agentContext: { id: "ctx" },
-    userMessage: "hello",
+    currentUserMessage: { content: "hello" },
     errorLogger: { log() {} },
   });
   assert.equal(result?.ok, true);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0]?.userMessage, "hello");
+  assert.equal(calls[0]?.currentUserMessage?.content, "hello");
 });

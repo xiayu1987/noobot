@@ -17,7 +17,10 @@ import {
   summarizeStateMachineTurn,
 } from "../../debug/loggers/stateMachineLogger.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { resolveSessionTurnRuntime, selectSessionTurnRuntime } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  resolveSessionTurnRuntime,
+  selectSessionTurnRuntime,
+} from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 
@@ -92,11 +95,15 @@ export function useChatEngine({
   const applyAuthoritativeTerminalResolution = (response) => {
     const sessionId = String(response?.sessionId || "").trim();
     const turnScopeId = String(response?.turnScopeId || "").trim();
-    const terminalStatus = response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
+    const terminalStatus =
+      response?.turn?.terminalStatus || response?.materialization?.terminalStatus;
     if (!sessionId || !turnScopeId || !terminalStatus || typeof terminalStatus !== "object") {
       logTerminalResolutionDebug("frontend.terminalResolution.rejected", () => ({
-        sessionId, turnScopeId, reason: "invalid_terminal_status",
-        responseResolved: response?.resolved, hasTerminalStatus: Boolean(terminalStatus),
+        sessionId,
+        turnScopeId,
+        reason: "invalid_terminal_status",
+        responseResolved: response?.resolved,
+        hasTerminalStatus: Boolean(terminalStatus),
       }));
       return { applied: false, reason: "invalid_terminal_status" };
     }
@@ -106,17 +113,26 @@ export function useChatEngine({
         reason: "terminal_resolution_commit_unavailable",
       };
       if (result?.applied !== true) {
-        const current = result?.current || selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+        const current =
+          result?.current ||
+          selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
         logTerminalResolutionDebug("frontend.terminalResolution.reducerRejected", () => ({
-          sessionId, turnScopeId, reason: result?.reason || "unknown",
-          currentRevision: Number(current?.revision || 0), currentSequence: Number(current?.seq || 0),
+          sessionId,
+          turnScopeId,
+          reason: result?.reason || "unknown",
+          currentRevision: Number(current?.revision || 0),
+          currentSequence: Number(current?.seq || 0),
           terminalResolved: current?.terminalResolved === true,
           responseRevision: Number(response?.turn?.revision || response?.revision || 0),
           responseSequence: Number(response?.turn?.sequence || response?.sequence || 0),
         }));
       }
       if (result?.applied) {
-        const projected = selectSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId, turnScopeId);
+        const projected = selectSessionTurnRuntime(
+          turnRuntimeRegistry?.value,
+          sessionId,
+          turnScopeId,
+        );
         logTerminalResolutionDebug("frontend.terminalResolution.applied", () => ({
           sessionId,
           turnScopeId,
@@ -129,31 +145,39 @@ export function useChatEngine({
           projectedState: projected?.displayState || projected?.state || "",
           projectedSending: projected?.sending === true,
           projectedTerminal: projected?.terminal || null,
-          activeTurnScopeId: turnRuntimeRegistry?.value?.sessions?.[sessionId]?.activeTurnScopeId || "",
+          activeTurnScopeId:
+            turnRuntimeRegistry?.value?.sessions?.[sessionId]?.activeTurnScopeId || "",
         }));
       }
       return result;
     } catch (error) {
-      return { applied: false, retryable: true, reason: "terminal_materialization_apply_failed", error };
+      return {
+        applied: false,
+        retryable: true,
+        reason: "terminal_materialization_apply_failed",
+        error,
+      };
     }
   };
   const terminalResolutionCoordinator = createTerminalResolutionCoordinator({
     userId,
     fetcher: terminalResolutionFetcher || authFetch,
     applyTurnTerminalResolution: applyAuthoritativeTerminalResolution,
-    onDiscovery: (details = {}) => logTerminalResolutionDebug(
-      "frontend.terminalResolution.discovery", details,
-    ),
-    onUnresolved: (details = {}) => logTerminalResolutionDebug(
-      "frontend.terminalResolution.unresolved", () => ({
+    onDiscovery: (details = {}) =>
+      logTerminalResolutionDebug("frontend.terminalResolution.discovery", details),
+    onUnresolved: (details = {}) =>
+      logTerminalResolutionDebug("frontend.terminalResolution.unresolved", () => ({
         ...details,
         responseResolved: details?.response?.resolved === true,
         responseRetryable: details?.response?.retryable === true,
         responseReason: details?.response?.reason || "",
-        responseRevision: Number(details?.response?.turn?.revision || details?.response?.revision || 0),
-        responseSequence: Number(details?.response?.turn?.sequence || details?.response?.sequence || 0),
-      }),
-    ),
+        responseRevision: Number(
+          details?.response?.turn?.revision || details?.response?.revision || 0,
+        ),
+        responseSequence: Number(
+          details?.response?.turn?.sequence || details?.response?.sequence || 0,
+        ),
+      })),
     onTrace: (event, details = {}) => logStateMachineDebug(event, details),
   });
   const applyRunStateEvent = (event) => {
@@ -199,7 +223,9 @@ export function useChatEngine({
       requestedSessionId: turnResult?.requestedSessionId || "",
       canonicalSessionId: turnResult?.canonicalSessionId || "",
       identityMatched: !String(turnResult?.reason || "").includes("identity_conflict"),
-      stateChanged: String(before?.displayState || before?.state || "") !== String(runtime?.displayState || runtime?.state || ""),
+      stateChanged:
+        String(before?.displayState || before?.state || "") !==
+        String(runtime?.displayState || runtime?.state || ""),
       before: summarizeStateMachineTurn(beforeTurn, before),
       after: summarizeStateMachineTurn(turnResult?.turn, runtime),
     }));
@@ -220,7 +246,9 @@ export function useChatEngine({
       toState: runtime.displayState,
       sending: runtime.sending,
       canStop: runtime.canStop,
-      messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
+      messageCount: Array.isArray(activeSession?.value?.messages)
+        ? activeSession.value.messages.length
+        : 0,
     }));
     sessionLogWebSocketClient?.log?.({
       category: "state",
@@ -233,15 +261,14 @@ export function useChatEngine({
         toState: runtime.displayState,
         sending: runtime.sending,
         canStop: runtime.canStop,
-        messageCount: Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages.length : 0,
+        messageCount: Array.isArray(activeSession?.value?.messages)
+          ? activeSession.value.messages.length
+          : 0,
       },
     });
     return turnResult;
   };
-  const {
-    applyAssistantFailureState,
-    mergeAssistantAttachments,
-  } = createAssistantMessageHelpers({
+  const { applyAssistantFailureState, mergeAssistantAttachments } = createAssistantMessageHelpers({
     translate,
     makeViewMessage,
   });
@@ -283,12 +310,15 @@ export function useChatEngine({
     });
   }
 
-  let monotonicMessageActions;
   const messageOperationStore = createPendingMessageOperationStore();
-  const send = createChatEngineSender({
+  const senderSessionDeps = {
     activeSession,
     activeSessionId,
-    allowUserInteraction,
+    userId,
+    turnRuntimeRegistry,
+    ensureConnected,
+  };
+  const senderConversationDeps = {
     applyConversationState,
     applyConversationStateFromEvent,
     applyAssistantFailureState,
@@ -297,56 +327,76 @@ export function useChatEngine({
     findCanonicalMessageById,
     findCanonicalMessagesById,
     upsertCanonicalAssistantMessage,
-    botScenario,
-    chatWebSocketClient,
-    sessionLogWebSocketClient,
-    applyWorkflowRuntimeEvent,
-    classifyRealtimeLog,
-    clearMissingInteractionPayloadTimer,
-    clearPendingInteraction,
-    clearPendingInteractionIfObsolete,
-    clearUploads,
-    connectorTypeSet,
-    upsertConnectedConnectorInPanelState,
-    ensureConnected,
-    fetchSessionDetail,
     foldMessagesForView,
-    safeConfirmLevel,
-    sanitizeOutput,
-    input,
-    interactionSubmitting,
-    isImageMime,
-    locale,
-    locateSendingStartedMessage,
-    locateDoneMessage,
     makeViewMessage,
     mergeAssistantAttachments,
-    notify,
+  };
+  const senderInteractionDeps = {
     pendingInteractionRequest,
+    interactionSubmitting,
+    clearPendingInteraction,
+    clearPendingInteractionIfObsolete,
+    clearMissingInteractionPayloadTimer,
+    setPendingInteractionRequest,
+    tryAutoResolveInteraction,
+  };
+  const senderComposerDeps = {
+    allowUserInteraction,
+    safeConfirmLevel,
+    sanitizeOutput,
+    streamOutput,
+    input,
+    uploadFiles,
+    clearUploads,
+    serializeAttachments,
+    isImageMime,
+  };
+  const senderModelDeps = {
+    botScenario,
+    selectedModel,
+    memoryModel,
     pluginModelConfig,
     frontendThresholdsEnabled,
     summaryPolicy,
-    refreshSessionConnectorsAsync,
-    navigateToLastMessage,
-    memoryModel,
-    selectedModel,
     selectedPlugins,
-    turnRuntimeRegistry,
+    locale,
+  };
+  const senderTransportDeps = {
+    chatWebSocketClient,
+    sessionLogWebSocketClient,
+    applyWorkflowRuntimeEvent,
     applyRunStateEvent,
     applyTurnLifecycleEnvelope,
-    serializeAttachments,
-    streamOutput,
+    classifyRealtimeLog,
+  };
+  const senderUiDeps = {
+    locateSendingStartedMessage,
+    locateDoneMessage,
+    navigateToLastMessage,
+    notify,
     translate,
-    tryAutoResolveInteraction,
-    setPendingInteractionRequest,
-    uploadFiles,
-    userId,
+  };
+  const senderConnectorDeps = {
+    connectorTypeSet,
+    upsertConnectedConnectorInPanelState,
+    refreshSessionConnectorsAsync,
+    fetchSessionDetail,
     processStore,
-    finalizePendingResendOperation: (...args) => monotonicMessageActions?.finalizePendingResendOperation?.(...args),
+  };
+  const send = createChatEngineSender({
+    ...senderSessionDeps,
+    ...senderConversationDeps,
+    ...senderInteractionDeps,
+    ...senderComposerDeps,
+    ...senderModelDeps,
+    ...senderTransportDeps,
+    ...senderUiDeps,
+    ...senderConnectorDeps,
+    finalizePendingResendOperation: (...args) =>
+      monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });
 
-
-  monotonicMessageActions = createMonotonicMessageActions({
+  const monotonicMessageActions = createMonotonicMessageActions({
     activeSession,
     activeSessionId,
     authFetch,

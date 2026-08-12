@@ -31,7 +31,6 @@
     "./task-summary-protocol": "./src/task-summary-protocol.js",
     "./task-check-protocol": "./src/task-check-protocol.js",
     "./task-check-receipt": "./src/task-check-receipt.js",
-    "./model-invocation-policy": "./src/model-invocation-policy.js",
     "./context-scope": "./src/context-scope.js",
     "./context-source": "./src/context-source.js",
     "./context-build-receipt": "./src/context-build-receipt.js"

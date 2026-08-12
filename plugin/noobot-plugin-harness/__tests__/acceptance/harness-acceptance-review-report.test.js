@@ -12,11 +12,13 @@ import path from "node:path";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
-import { TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  createAcceptanceHandler,
+  createGuidanceHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -24,45 +26,54 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
 
-
 test("harness summary selection does not mutate canonical messages before commit", async () => {
-  const ctx = createTestHookContext({
-    agentContext: {
-      payload: {
-        harness: {
-          state: { flags: {}, counters: {}, signals: {}, pending: {} },
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        payload: {
+          harness: {
+            state: { flags: {}, counters: {}, signals: {}, pending: {} },
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
         },
       },
     },
-  }, {
-    messages: [
-      { role: "user", content: "用户当前输入" },
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "call-exec", function: { name: "execute_script", arguments: "{}" } }],
-      },
-      { role: "tool", content: "{\"toolName\":\"execute_script\",\"ok\":true}", tool_call_id: "call-exec" },
-      {
-        role: "assistant",
-        content: "",
-        tool_calls: [{ id: "call-summary", function: { name: "task_summary", arguments: "{}" } }],
-      },
-      {
-        role: "tool",
-        content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
-        tool_call_id: "call-summary",
-      },
-    ],
-  });
+    {
+      messages: [
+        { role: "user", content: "用户当前输入" },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "call-exec", function: { name: "execute_script", arguments: "{}" } }],
+        },
+        {
+          role: "tool",
+          content: '{"toolName":"execute_script","ok":true}',
+          tool_call_id: "call-exec",
+        },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "call-summary", function: { name: "task_summary", arguments: "{}" } }],
+        },
+        {
+          role: "tool",
+          content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
+          tool_call_id: "call-summary",
+        },
+      ],
+    },
+  );
 
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
@@ -72,7 +83,6 @@ test("harness summary selection does not mutate canonical messages before commit
   assert.equal(ctx.modelContext.messages[3]?.summarized, undefined);
   assert.equal(ctx.modelContext.messages[4]?.summarized, undefined);
 });
-
 
 test("harness review reports failed or inconsistent semantic acceptance", async () => {
   const hookManager = createAgentHookManager();
@@ -104,5 +114,8 @@ test("harness review reports failed or inconsistent semantic acceptance", async 
   const report = agentContext.payload.harness.lastReviewReport;
   assert.equal(report.summary.semanticValidationStatus, null);
   assert.equal(report.summary.semanticValidationConsistent, null);
-  assert.equal(report.summary.issues.includes("acceptance_semantic_validation_failed_or_inconsistent"), false);
+  assert.equal(
+    report.summary.issues.includes("acceptance_semantic_validation_failed_or_inconsistent"),
+    false,
+  );
 });

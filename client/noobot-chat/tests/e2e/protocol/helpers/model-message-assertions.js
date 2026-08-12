@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   expect(record.event).toBe("model_context_trace");
@@ -16,21 +16,29 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   );
   expect(record.data?.invocationId).toBeTruthy();
   expect(record.data?.modelInstanceId).toBeTruthy();
+  expect(Number.isInteger(record.data?.attempt)).toBe(true);
+  expect(record.data.attempt).toBeGreaterThan(0);
   expect(Number.isInteger(record.data?.invocationSequence)).toBe(true);
   expect(record.userId).toBeTruthy();
   expect(record.sessionId).toBeTruthy();
   expect(record.dialogProcessId).toBeTruthy();
   expect(record.turnScopeId).toBeTruthy();
   if (rootSessionId) {
-    expect(record.sessionId === rootSessionId || record.parentSessionId === rootSessionId).toBe(true);
+    expect(record.sessionId === rootSessionId || record.parentSessionId === rootSessionId).toBe(
+      true,
+    );
   }
 
   const messages = record.data.messages;
   expect(Number.isInteger(messages?.count)).toBe(true);
   expect(messages.count).toBeGreaterThan(0);
-  expect(Object.values(messages.roles || {}).reduce((sum, count) => sum + count, 0)).toBe(messages.count);
-  expect((messages.dialogGroups || []).reduce((sum, group) => sum + group.count, 0)
-    + messages.missingDialogIdCount).toBe(messages.count);
+  expect(Object.values(messages.roles || {}).reduce((sum, count) => sum + count, 0)).toBe(
+    messages.count,
+  );
+  expect(
+    (messages.dialogGroups || []).reduce((sum, group) => sum + group.count, 0) +
+      messages.missingDialogIdCount,
+  ).toBe(messages.count);
   expect(Array.isArray(messages.preview)).toBe(true);
   expect(messages.preview.length + Number(messages.truncated || 0)).toBe(messages.count);
   expect(Number.isInteger(messages.missingMessageIdCount)).toBe(true);
@@ -73,8 +81,9 @@ function modelFlowKey(record = {}) {
 }
 
 function isPrefix(previous = [], current = []) {
-  return previous.length <= current.length && previous.every(
-    (fingerprint, index) => current[index] === fingerprint,
+  return (
+    previous.length <= current.length &&
+    previous.every((fingerprint, index) => current[index] === fingerprint)
   );
 }
 
@@ -97,18 +106,28 @@ export function auditModelPrefixStability(records = []) {
   let stableComparisonCount = 0;
   let checkpointRewriteCount = 0;
   for (const [key, entries] of flows) {
-    entries.sort((left, right) =>
-      traceTime(left.record) - traceTime(right.record) || left.sourceIndex - right.sourceIndex);
+    entries.sort(
+      (left, right) =>
+        traceTime(left.record) - traceTime(right.record) || left.sourceIndex - right.sourceIndex,
+    );
     let stableComparisons = 0;
     let checkpointRewrites = 0;
-    const policies = new Set(entries.map(
-      ({ record }) => String(record.data?.invocation?.contextSequencePolicy || "").trim(),
-    ));
+    const policies = new Set(
+      entries.map(({ record }) =>
+        String(record.data?.invocation?.contextSequencePolicy || "").trim(),
+      ),
+    );
     const contextSequencePolicy = [...policies][0] || "";
-    if (policies.size !== 1 || !Object.values(MODEL_CONTEXT_SEQUENCE_POLICY).includes(contextSequencePolicy)) {
+    if (
+      policies.size !== 1 ||
+      !Object.values(MODEL_CONTEXT_SEQUENCE_POLICY).includes(contextSequencePolicy)
+    ) {
       violations.push({
         flow: key,
-        type: policies.size !== 1 ? "context_sequence_policy_changed" : "invalid_context_sequence_policy",
+        type:
+          policies.size !== 1
+            ? "context_sequence_policy_changed"
+            : "invalid_context_sequence_policy",
         policies: [...policies],
       });
     }
@@ -155,9 +174,10 @@ export function auditModelPrefixStability(records = []) {
       if (isPrefix(previousFingerprints, currentFingerprints)) continue;
       violations.push({
         flow: key,
-        type: currentFingerprints.length < previousFingerprints.length
-          ? "message_count_decreased_without_checkpoint"
-          : "provider_prefix_changed_without_checkpoint",
+        type:
+          currentFingerprints.length < previousFingerprints.length
+            ? "message_count_decreased_without_checkpoint"
+            : "provider_prefix_changed_without_checkpoint",
         previousInvocationId: previous.data?.invocationId,
         currentInvocationId: current.data?.invocationId,
         checkpointRevision: currentRevision,
@@ -173,23 +193,25 @@ export function auditModelPrefixStability(records = []) {
       invocation: first.data?.invocation || {},
       contextSequencePolicy,
       sampleCount: entries.length,
-      status: entries.length < 2
-        ? "insufficient_samples"
-        : violations.some((violation) => violation.flow === key)
-          ? "failed"
-          : "stable",
+      status:
+        entries.length < 2
+          ? "insufficient_samples"
+          : violations.some((violation) => violation.flow === key)
+            ? "failed"
+            : "stable",
       stableComparisons,
       checkpointRewrites,
     });
   }
   return {
-    checkedFlowCount: flowAudits.filter((flow) =>
-      flow.contextSequencePolicy === MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY &&
-      flow.sampleCount >= 2).length,
-    stableFlowCount: flowAudits.filter((flow) => flow.status === "stable").length,
-    insufficientSampleFlowCount: flowAudits.filter(
-      (flow) => flow.status === "insufficient_samples",
+    checkedFlowCount: flowAudits.filter(
+      (flow) =>
+        flow.contextSequencePolicy === MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY &&
+        flow.sampleCount >= 2,
     ).length,
+    stableFlowCount: flowAudits.filter((flow) => flow.status === "stable").length,
+    insufficientSampleFlowCount: flowAudits.filter((flow) => flow.status === "insufficient_samples")
+      .length,
     independentFlowCount: flowAudits.filter((flow) => flow.status === "independent").length,
     stableComparisonCount,
     checkpointRewriteCount,
@@ -214,7 +236,8 @@ export function assertWorkflowChildModelInvocation(record, rootSessionId) {
 }
 
 export function isMainAgentModelInvocation(record) {
-  return record.data?.invocation?.purpose === "main_agent";
+  const invocation = record.data?.invocation || {};
+  return invocation.flow === "agent.main" && invocation.domain === "primary";
 }
 
 export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
@@ -222,8 +245,22 @@ export function assertModelInvocationTraceSet(records, { rootSessionId } = {}) {
   expect(traces.length).toBeGreaterThan(0);
   traces.forEach((record) => assertModelInvocationTrace(record, { rootSessionId }));
 
-  const invocationIds = traces.map((record) => record.data.invocationId);
-  expect(new Set(invocationIds).size).toBe(invocationIds.length);
+  const attempts = traces.map(
+    (record) => `${record.data.invocationId}:${record.data.attempt}`,
+  );
+  expect(new Set(attempts).size).toBe(attempts.length);
+
+  const attemptsByInvocation = new Map();
+  for (const record of traces) {
+    const attemptsForInvocation = attemptsByInvocation.get(record.data.invocationId) || [];
+    attemptsForInvocation.push(record.data.attempt);
+    attemptsByInvocation.set(record.data.invocationId, attemptsForInvocation);
+  }
+  for (const invocationAttempts of attemptsByInvocation.values()) {
+    expect(invocationAttempts).toEqual(
+      invocationAttempts.map((_, index) => index + 1),
+    );
+  }
 
   const sequencesByModel = new Map();
   for (const record of traces) {

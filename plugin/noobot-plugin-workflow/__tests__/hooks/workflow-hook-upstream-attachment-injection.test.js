@@ -35,7 +35,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
   const semanticTransferCalls = [];
-  let artifactCounter = 0;
+  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,
@@ -45,7 +45,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -69,13 +69,19 @@ test("workflow hook injects upstream node result attachments into downstream sub
           "EDGE from=d to=end",
           "EDGE from=e to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {
@@ -133,21 +139,16 @@ test("workflow hook injects upstream node result attachments into downstream sub
   assert.match(nodeESystem, /节点C/);
   assert.doesNotMatch(nodeESystem, /节点A \/ workflow-node-1-节点A-result\.md/);
   assert.equal(
-    semanticTransferCalls.some(
-      (item = {}) => String(item?.strategy || "") === "workflow_subagent",
-    ),
+    semanticTransferCalls.some((item = {}) => String(item?.strategy || "") === "workflow_subagent"),
     true,
   );
 });
-
-
-
 
 test("workflow hook injects one upstream action attachments into multiple direct downstream action nodes", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const subSessionCalls = [];
-  let artifactCounter = 0;
+  const artifactCounter = 0;
 
   registerWorkflowHooks({
     hookManager,
@@ -157,7 +158,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=a type=action name="节点A" task="执行A"',
@@ -170,13 +171,19 @@ test("workflow hook injects one upstream action attachments into multiple direct
           "EDGE from=b to=end",
           "EDGE from=c to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: `session-${nodeName}`,
           dialogProcessId: `dialog-${nodeName}`,
           result: {

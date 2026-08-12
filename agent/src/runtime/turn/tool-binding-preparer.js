@@ -3,22 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  adaptToolsForBinding,
-  appendToolCompatibilityLog,
-  resolveInvokeLlm,
-} from "../../models/index.js";
+import { adaptToolsForBinding, appendToolCompatibilityLog } from "../../models/index.js";
 import { emitEvent } from "../../events/index.js";
-import { resolveLlmForRequiredToolChoice } from "./tool-choice-strategy.js";
 
 export function prepareToolBinding({ tools, modelState, runtime, eventListener, turn }) {
   const adaptedBinding = adaptToolsForBinding(tools, modelState);
   const configuredToolChoice = String(adaptedBinding?.bindOptions?.tool_choice || "").trim();
-  const invokeLlm =
-    configuredToolChoice === "required"
-      ? resolveLlmForRequiredToolChoice({ modelState, eventListener, turn })
-      : resolveInvokeLlm(modelState, "with_tools");
-
   if (configuredToolChoice === "required") {
     emitEvent(eventListener, "tool_choice_required_forced_non_thinking_model", {
       turn,
@@ -61,7 +51,6 @@ export function prepareToolBinding({ tools, modelState, runtime, eventListener, 
   return {
     adaptedBinding,
     configuredToolChoice,
-    invokeLlm,
     boundTools,
     toolMap,
   };

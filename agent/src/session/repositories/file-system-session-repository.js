@@ -8,7 +8,14 @@ import { filePath as path } from "@noobot/path-resolver";
 import { randomUUID } from "node:crypto";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { fsMkdir, fsReadFile, fsReaddir, fsRm, fsStat, fsWriteFile } from "../../shared/storage/fs-adapter.js";
+import {
+  fsMkdir,
+  fsReadFile,
+  fsReaddir,
+  fsRm,
+  fsStat,
+  fsWriteFile,
+} from "../../shared/storage/fs-adapter.js";
 import { sessionMutationCoordinator } from "../session-mutation-coordinator.js";
 import { normalizeSessionEntity } from "../entities/session-entity.js";
 import {
@@ -31,9 +38,11 @@ import {
   repairSessionArtifacts,
 } from "../session-artifact-store.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 import {
   migrateSessionDocument,
   reconcileCompletedTurnSummaryMarks,
+  resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
 } from "@noobot/session-repair";
 
@@ -84,8 +93,13 @@ export class FileSystemSessionRepository {
   }
 
   async _writeSessionLifecycleRecord(userId = "", sessionId = "", record = {}) {
-    await fsMkdir(path.dirname(this._sessionLifecycleRecordFile(userId, sessionId)), { recursive: true });
-    await this.storageService.writeJsonAtomic(this._sessionLifecycleRecordFile(userId, sessionId), record);
+    await fsMkdir(path.dirname(this._sessionLifecycleRecordFile(userId, sessionId)), {
+      recursive: true,
+    });
+    await this.storageService.writeJsonAtomic(
+      this._sessionLifecycleRecordFile(userId, sessionId),
+      record,
+    );
     return record;
   }
 
@@ -118,9 +132,13 @@ export class FileSystemSessionRepository {
   }
 
   async withSessionLifecycleMutations(userId, sessionIds = [], operation) {
-    const ids = [...new Set((Array.isArray(sessionIds) ? sessionIds : [sessionIds])
-      .map((item) => String(item || "").trim())
-      .filter(Boolean))].sort();
+    const ids = [
+      ...new Set(
+        (Array.isArray(sessionIds) ? sessionIds : [sessionIds])
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      ),
+    ].sort();
     const runAt = async (index) => {
       if (index >= ids.length) return operation();
       return this.withSessionLifecycleMutation(userId, ids[index], () => runAt(index + 1));
@@ -128,10 +146,21 @@ export class FileSystemSessionRepository {
     return runAt(0);
   }
 
-  async withSessionMutation(userId, sessionId, parentSessionId = "", operation, persistenceContext = null) {
+  async withSessionMutation(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    operation,
+    persistenceContext = null,
+  ) {
     return this.withSessionLifecycleMutation(userId, sessionId, async () => {
       await this.assertSessionWritable(userId, sessionId, persistenceContext);
-      const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
+      const scope = await this.resolveSessionScope(
+        userId,
+        sessionId,
+        parentSessionId,
+        persistenceContext,
+      );
       const result = await operation();
       if (typeof persistenceContext?.metadataContributor === "function") {
         const metadata = await persistenceContext.metadataContributor({
@@ -189,9 +218,12 @@ export class FileSystemSessionRepository {
         await new Promise((resolve) => setTimeout(resolve, this.mutationLockPollMs));
       }
     }
-    const heartbeat = setInterval(() => {
-      void fsWriteFile(ownerFile, ownerToken, "utf8").catch(() => {});
-    }, Math.max(1000, Math.floor(this.mutationLockStaleMs / 3)));
+    const heartbeat = setInterval(
+      () => {
+        void fsWriteFile(ownerFile, ownerToken, "utf8").catch(() => {});
+      },
+      Math.max(1000, Math.floor(this.mutationLockStaleMs / 3)),
+    );
     heartbeat.unref?.();
     this._heldMutationLocks.set(lockDir, { depth: 1 });
     try {
@@ -242,7 +274,8 @@ export class FileSystemSessionRepository {
 
   _withSummaryDepth(session = {}, sessionTree = null) {
     const sessionId = String(session?.sessionId || "").trim();
-    if (!sessionId || !sessionTree?.nodes?.[sessionId]) return buildSessionSummary(session, { depth: 0 });
+    if (!sessionId || !sessionTree?.nodes?.[sessionId])
+      return buildSessionSummary(session, { depth: 0 });
     return buildSessionSummary(session, { depth: this._getSummaryDepth(sessionId, sessionTree) });
   }
 
@@ -267,10 +300,7 @@ export class FileSystemSessionRepository {
       { sessions: this._sortSummaries(sessions), updatedAt: this.now() },
       this.now,
     );
-    await this.storageService.writeJsonAtomic(
-      this._sessionsSummaryFile(normalizedUserId),
-      payload,
-    );
+    await this.storageService.writeJsonAtomic(this._sessionsSummaryFile(normalizedUserId), payload);
     return payload;
   }
 
@@ -320,17 +350,19 @@ export class FileSystemSessionRepository {
         summaries.push(this._withSummaryDepth(session, tree));
       } catch (error) {
         const metadata = await this._readSessionSummaryMetadata(userId, sessionId, parentSessionId);
-        summaries.push(buildUnavailableSessionSummary({
-          sessionId,
-          parentSessionId,
-          title: metadata.title,
-          caller: metadata.caller,
-          createdAt: metadata.createdAt,
-          updatedAt: metadata.updatedAt,
-          depth: this._getSummaryDepth(sessionId, tree),
-          errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
-          reason: error?.message || "Session uses an unsupported protocol",
-        }));
+        summaries.push(
+          buildUnavailableSessionSummary({
+            sessionId,
+            parentSessionId,
+            title: metadata.title,
+            caller: metadata.caller,
+            createdAt: metadata.createdAt,
+            updatedAt: metadata.updatedAt,
+            depth: this._getSummaryDepth(sessionId, tree),
+            errorCode: error?.code || error?.errorCode || "SESSION_PROTOCOL_INVALID",
+            reason: error?.message || "Session uses an unsupported protocol",
+          }),
+        );
       }
     }
     return this.writeSessionsSummary(userId, summaries);
@@ -406,9 +438,7 @@ export class FileSystemSessionRepository {
     const markerFile = this._deletedSessionMarkerFile(normalizedUserId);
     const payload = {
       sessions:
-        sessions && typeof sessions === "object" && !Array.isArray(sessions)
-          ? sessions
-          : {},
+        sessions && typeof sessions === "object" && !Array.isArray(sessions) ? sessions : {},
       updatedAt: this.now(),
     };
     await this.storageService.writeJsonAtomic(markerFile, payload);
@@ -469,7 +499,12 @@ export class FileSystemSessionRepository {
     return error;
   }
 
-  createSessionGenerationStaleError(userId = "", sessionId = "", expectedGeneration = 0, currentGeneration = 0) {
+  createSessionGenerationStaleError(
+    userId = "",
+    sessionId = "",
+    expectedGeneration = 0,
+    currentGeneration = 0,
+  ) {
     const error = new Error(`stale session generation: ${String(sessionId || "").trim()}`);
     error.statusCode = 409;
     error.errorCode = "SESSION_GENERATION_STALE";
@@ -496,40 +531,47 @@ export class FileSystemSessionRepository {
   }
 
   async resolveParentSessionId(userId, sessionId, parentSessionId = "") {
-    return this.sessionPathResolver.resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
+    return this.sessionPathResolver.resolveParentSessionId(userId, sessionId, parentSessionId);
   }
 
   async resolveSessionDir(userId, sessionId, parentSessionId = "") {
-    return this.sessionPathResolver.resolveSessionDir(
-      userId,
-      sessionId,
-      parentSessionId,
-    );
+    return this.sessionPathResolver.resolveSessionDir(userId, sessionId, parentSessionId);
   }
 
   async resolveSessionScope(userId, sessionId, parentSessionId = "", persistenceContext = null) {
     const resolver = persistenceContext?.locationResolver || this.sessionPathResolver;
-    return resolver.resolveSessionScope(
+    return resolver.resolveSessionScope(userId, sessionId, parentSessionId);
+  }
+
+  async _sessionDisplaySummaryFile(
+    userId,
+    sessionId,
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
+    const { sessionDir } = await this.resolveSessionScope(
       userId,
       sessionId,
       parentSessionId,
+      persistenceContext,
     );
-  }
-
-
-  async _sessionDisplaySummaryFile(userId, sessionId, parentSessionId = "", persistenceContext = null) {
-    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
     return buildSessionArtifactFileMap(sessionDir).sessionSummary;
   }
 
-  async readSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
+  async readSessionDisplaySummary(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(userId, normalizedSessionId, parentSessionId, persistenceContext);
+    const { sessionDir } = await this.resolveSessionScope(
+      userId,
+      normalizedSessionId,
+      parentSessionId,
+      persistenceContext,
+    );
     return readSessionDisplaySummaryArtifact({
       storageService: this.storageService,
       sessionDir,
@@ -540,7 +582,12 @@ export class FileSystemSessionRepository {
   async writeSessionDisplaySummary(userId = "", session = {}, { persistenceContext = null } = {}) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) return null;
-    const { sessionDir } = await this.resolveSessionScope(userId, sessionId, session?.parentSessionId || "", persistenceContext);
+    const { sessionDir } = await this.resolveSessionScope(
+      userId,
+      sessionId,
+      session?.parentSessionId || "",
+      persistenceContext,
+    );
     return rebuildSessionDisplaySummaryArtifact({
       storageService: this.storageService,
       sessionDir,
@@ -548,15 +595,24 @@ export class FileSystemSessionRepository {
     });
   }
 
-  async rebuildSessionDisplaySummary(userId = "", sessionId = "", parentSessionId = "", { persistenceContext = null } = {}) {
+  async rebuildSessionDisplaySummary(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    { persistenceContext = null } = {},
+  ) {
     const session = await this.findById(userId, sessionId, parentSessionId, persistenceContext);
     if (!session) return null;
     const turns = await readRecentSessionTurns({
-      sessionDir: (await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext)).sessionDir,
+      sessionDir: (
+        await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext)
+      ).sessionDir,
       limit: Number.MAX_SAFE_INTEGER,
       fallback: null,
     });
-    const messages = turns.flatMap((turn = {}) => Array.isArray(turn.messages) ? turn.messages : []);
+    const messages = turns.flatMap((turn = {}) =>
+      Array.isArray(turn.messages) ? turn.messages : [],
+    );
     if (Array.isArray(session.turnOrder) && session.turnOrder.length > 0 && messages.length === 0) {
       const error = new Error("canonical session turn artifacts contain no messages");
       error.code = "SESSION_TURN_ARTIFACT_EMPTY";
@@ -571,12 +627,16 @@ export class FileSystemSessionRepository {
     );
   }
 
-  async readSessionTurn(userId = "", sessionId = "", {
-    parentSessionId = "",
-    turnScopeId = "",
-    dialogProcessId = "",
-    persistenceContext = null,
-  } = {}) {
+  async readSessionTurn(
+    userId = "",
+    sessionId = "",
+    {
+      parentSessionId = "",
+      turnScopeId = "",
+      dialogProcessId = "",
+      persistenceContext = null,
+    } = {},
+  ) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return null;
     const { sessionDir } = await this.resolveSessionScope(
@@ -622,75 +682,103 @@ export class FileSystemSessionRepository {
     parentSessionId = "",
     persistenceContext = null,
   ) {
-    return this.withSessionMutation(userId, sessionId, parentSessionId, async () => {
-      const scope = await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
-      const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
-      if (lifecycle?.repair?.status === "failed") {
-        const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
-        error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
-        error.repairSkipped = true;
-        throw error;
-      }
-      let requiresRepair = false;
-      try {
-        await this._readNormalizedSession(scope, sessionId, parentSessionId);
-      } catch {
-        requiresRepair = true;
-      }
-      if (!requiresRepair) return { migrated: false, migrations: [], repaired: [] };
-      try {
-        return await runAtomicSessionRepair({
-          sessionDir: scope.sessionDir,
-          repair: async (stagingDir) => {
-          const source = await readSessionArtifactForRepair({ sessionDir: stagingDir, fallback: null });
-          if (!source) {
-            const error = new Error("Canonical session artifact is missing");
-            error.code = "SESSION_ARTIFACT_MISSING";
-            throw error;
-          }
-          const migration = migrateSessionDocument(source);
-          const normalized = normalizeSessionEntity(migration.document, {
-            now: this.now,
-            sessionId,
-            parentSessionId,
+    return this.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const scope = await this.resolveSessionScope(
+          userId,
+          sessionId,
+          parentSessionId,
+          persistenceContext,
+        );
+        const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
+        if (lifecycle?.repair?.status === "failed") {
+          const error = new Error(
+            String(lifecycle.repair.message || "Session repair previously failed"),
+          );
+          error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
+          error.repairSkipped = true;
+          throw error;
+        }
+        let requiresRepair = false;
+        try {
+          await this._readNormalizedSession(scope, sessionId, parentSessionId);
+        } catch {
+          requiresRepair = true;
+        }
+        if (!requiresRepair) return { migrated: false, migrations: [], repaired: [] };
+        try {
+          return await runAtomicSessionRepair({
+            sessionDir: scope.sessionDir,
+            repair: async (stagingDir) => {
+              const source = await readSessionArtifactForRepair({
+                sessionDir: stagingDir,
+                fallback: null,
+              });
+              if (!source) {
+                const error = new Error("Canonical session artifact is missing");
+                error.code = "SESSION_ARTIFACT_MISSING";
+                throw error;
+              }
+              const migration = migrateSessionDocument(source);
+              const normalized = normalizeSessionEntity(migration.document, {
+                now: this.now,
+                sessionId,
+                parentSessionId,
+              });
+              await writeSessionArtifact({
+                sessionDir: stagingDir,
+                sessionPayload: normalized,
+                now: this.now,
+              });
+              await resegmentMigratedCheckpointBaselines({ sessionDir: stagingDir });
+              const artifactRepair = await repairSessionArtifacts({
+                sessionDir: stagingDir,
+                sessionId,
+                mutationCoordinator: null,
+              });
+              return {
+                migrated:
+                  migration.changed ||
+                  Number(source.schemaVersion) !==
+                    Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion),
+                migrations: migration.migrations,
+                repaired: artifactRepair.repaired,
+              };
+            },
+            validate: async (stagingDir) => {
+              const repairedScope = {
+                ...scope,
+                sessionDir: stagingDir,
+                sessionFile: path.join(stagingDir, "session.json"),
+              };
+              await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
+            },
           });
-          await writeSessionArtifact({ sessionDir: stagingDir, sessionPayload: normalized, now: this.now });
-          const artifactRepair = await repairSessionArtifacts({
-            sessionDir: stagingDir,
-            sessionId,
-            mutationCoordinator: null,
+        } catch (error) {
+          await this._writeSessionLifecycleRecord(userId, sessionId, {
+            ...(lifecycle || {
+              schemaVersion: 1,
+              sessionId,
+              state: "active",
+              generation: 1,
+              createdAt: this.now(),
+            }),
+            repair: {
+              status: "failed",
+              errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
+              message: String(error?.message || "Session repair failed"),
+              failedAt: this.now(),
+            },
+            updatedAt: this.now(),
           });
-          return {
-            migrated: migration.changed || Number(source.schemaVersion) !== Number(TURN_THRESHOLDS.session.turnJournalSchemaVersion),
-            migrations: migration.migrations,
-            repaired: artifactRepair.repaired,
-          };
-          },
-          validate: async (stagingDir) => {
-            const repairedScope = { ...scope, sessionDir: stagingDir, sessionFile: path.join(stagingDir, "session.json") };
-            await this._readNormalizedSession(repairedScope, sessionId, parentSessionId);
-          },
-        });
-      } catch (error) {
-        await this._writeSessionLifecycleRecord(userId, sessionId, {
-          ...(lifecycle || {
-            schemaVersion: 1,
-            sessionId,
-            state: "active",
-            generation: 1,
-            createdAt: this.now(),
-          }),
-          repair: {
-            status: "failed",
-            errorCode: String(error?.code || error?.errorCode || "SESSION_REPAIR_FAILED"),
-            message: String(error?.message || "Session repair failed"),
-            failedAt: this.now(),
-          },
-          updatedAt: this.now(),
-        });
-        throw error;
-      }
-    }, persistenceContext);
+          throw error;
+        }
+      },
+      persistenceContext,
+    );
   }
 
   async _readNormalizedSession(scope, sessionId = "", parentSessionId = "") {
@@ -699,15 +787,18 @@ export class FileSystemSessionRepository {
       sessionDir: scope.sessionDir,
       fallback: {},
     });
-    const normalized = normalizeSessionEntity({
-      ...session,
-      sessionId: String(session.sessionId || sessionId || "").trim(),
-      parentSessionId: String(session.parentSessionId || parentSessionId || "").trim(),
-      caller: String(session.caller || "user").trim() || "user",
-      modelAlias: String(session.modelAlias || ""),
-      messages: this.normalizeMessages(session.messages || [], { sessionId }),
-      selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
-    }, { now: this.now, sessionId, parentSessionId });
+    const normalized = normalizeSessionEntity(
+      {
+        ...session,
+        sessionId: String(session.sessionId || sessionId || "").trim(),
+        parentSessionId: String(session.parentSessionId || parentSessionId || "").trim(),
+        caller: String(session.caller || "user").trim() || "user",
+        modelAlias: String(session.modelAlias || ""),
+        messages: this.normalizeMessages(session.messages || [], { sessionId }),
+        selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
+      },
+      { now: this.now, sessionId, parentSessionId },
+    );
     const summaryRepair = reconcileCompletedTurnSummaryMarks(normalized);
     if (summaryRepair.changed) {
       const error = new Error("completed turn summary marks require canonical Session repair");
@@ -718,7 +809,12 @@ export class FileSystemSessionRepository {
     return normalized;
   }
 
-  async getTurnMessageCount(userId = "", sessionId = "", parentSessionId = "", persistenceContext = null) {
+  async getTurnMessageCount(
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  ) {
     const { sessionDir } = await this.resolveSessionScope(
       userId,
       sessionId,
@@ -737,8 +833,7 @@ export class FileSystemSessionRepository {
       try {
         await fsRm(await this._sessionDisplaySummaryFile(userId, sessionId, ""), { force: true });
         removed += 1;
-      } catch {
-      }
+      } catch {}
     }
     return removed;
   }
@@ -756,12 +851,17 @@ export class FileSystemSessionRepository {
     const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
     const sessionIds = [];
     const visit = async (directory, relativeSegments = []) => {
-      const directoryEntries = directory === this._sessionRoot(userId)
-        ? entries
-        : await fsReaddir(directory, { withFileTypes: true });
+      const directoryEntries =
+        directory === this._sessionRoot(userId)
+          ? entries
+          : await fsReaddir(directory, { withFileTypes: true });
       for (const entry of directoryEntries) {
         if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
-        if (String(entry.name || "").includes(".repair-") || String(entry.name || "").endsWith(".mutation-lock")) continue;
+        if (
+          String(entry.name || "").includes(".repair-") ||
+          String(entry.name || "").endsWith(".mutation-lock")
+        )
+          continue;
         const childDir = path.join(directory, entry.name);
         const childSegments = [...relativeSegments, entry.name];
         if (await this.storageService.exists(path.join(childDir, "session.json"))) {
@@ -775,55 +875,74 @@ export class FileSystemSessionRepository {
     return [...new Set(sessionIds)];
   }
 
-  async ensureSession({ userId, sessionId, parentSessionId = "", meta = {}, persistenceContext = null }) {
+  async ensureSession({
+    userId,
+    sessionId,
+    parentSessionId = "",
+    meta = {},
+    persistenceContext = null,
+  }) {
     if (await this.isSessionDeleted(userId, sessionId)) return false;
-    return this.withSessionMutation(userId, sessionId, parentSessionId, async () => {
-      const basePath = this._basePath(userId);
-      await this.storageService.ensureRuntimeDirsByBasePath(basePath);
-      const { resolvedParentSessionId, sessionDir, sessionFile } =
-        await this.resolveSessionScope(userId, sessionId, parentSessionId, persistenceContext);
-
-      await fsMkdir(sessionDir, { recursive: true });
-
-      if (!(await this.storageService.exists(sessionFile))) {
-        const payload = normalizeSessionEntity(
-          {
-            sessionId,
-            parentSessionId: resolvedParentSessionId || "",
-            caller: meta?.caller || "user",
-            modelAlias: meta?.modelAlias || "",
-            currentTaskId: "",
-            shortMemoryCheckpoint: 0,
-            messages: [],
-            selectedConnectors: {},
-          },
-          { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
+    return this.withSessionMutation(
+      userId,
+      sessionId,
+      parentSessionId,
+      async () => {
+        const basePath = this._basePath(userId);
+        await this.storageService.ensureRuntimeDirsByBasePath(basePath);
+        const { resolvedParentSessionId, sessionDir, sessionFile } = await this.resolveSessionScope(
+          userId,
+          sessionId,
+          parentSessionId,
+          persistenceContext,
         );
-        await writeSessionArtifact({
-          storageService: this.storageService,
-          sessionDir,
-          sessionPayload: payload,
-          atomic: true,
-        });
-        if (!persistenceContext) {
-          await this.upsertSessionSummary(userId, payload);
+
+        await fsMkdir(sessionDir, { recursive: true });
+
+        if (!(await this.storageService.exists(sessionFile))) {
+          const payload = normalizeSessionEntity(
+            {
+              sessionId,
+              parentSessionId: resolvedParentSessionId || "",
+              caller: meta?.caller || "user",
+              modelAlias: meta?.modelAlias || "",
+              currentTaskId: "",
+              shortMemoryCheckpoint: 0,
+              messages: [],
+              selectedConnectors: {},
+            },
+            { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
+          );
+          await writeSessionArtifact({
+            storageService: this.storageService,
+            sessionDir,
+            sessionPayload: payload,
+            atomic: true,
+          });
+          if (!persistenceContext) {
+            await this.upsertSessionSummary(userId, payload);
+          }
         }
-      }
-      return true;
-    }, persistenceContext);
+        return true;
+      },
+      persistenceContext,
+    );
   }
 
   createInitialSession({ sessionId, parentSessionId = "", meta = {} } = {}) {
-    return normalizeSessionEntity({
-      sessionId,
-      parentSessionId,
-      caller: meta?.caller || "user",
-      modelAlias: meta?.modelAlias || "",
-      currentTaskId: "",
-      shortMemoryCheckpoint: 0,
-      messages: [],
-      selectedConnectors: {},
-    }, { now: this.now, sessionId, parentSessionId });
+    return normalizeSessionEntity(
+      {
+        sessionId,
+        parentSessionId,
+        caller: meta?.caller || "user",
+        modelAlias: meta?.modelAlias || "",
+        currentTaskId: "",
+        shortMemoryCheckpoint: 0,
+        messages: [],
+        selectedConnectors: {},
+      },
+      { now: this.now, sessionId, parentSessionId },
+    );
   }
 
   async findById(userId, sessionId, parentSessionId = "", persistenceContext = null) {
@@ -838,7 +957,9 @@ export class FileSystemSessionRepository {
 
     const lifecycle = await this._readSessionLifecycleRecord(userId, sessionId);
     if (lifecycle?.repair?.status === "failed") {
-      const error = new Error(String(lifecycle.repair.message || "Session repair previously failed"));
+      const error = new Error(
+        String(lifecycle.repair.message || "Session repair previously failed"),
+      );
       error.code = String(lifecycle.repair.errorCode || "SESSION_REPAIR_PREVIOUSLY_FAILED");
       error.repairSkipped = true;
       throw error;
@@ -858,7 +979,12 @@ export class FileSystemSessionRepository {
     }
   }
 
-  async save(userId, session = {}, parentSessionId = "", { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {}) {
+  async save(
+    userId,
+    session = {},
+    parentSessionId = "",
+    { expectedAggregateVersion, createOnly = false, persistenceContext = null } = {},
+  ) {
     const sessionId = String(session?.sessionId || "").trim();
     if (!sessionId) {
       throw fatalSystemError(tSystem("common.sessionIdRequired"), {
@@ -878,7 +1004,8 @@ export class FileSystemSessionRepository {
           persistenceContext,
         );
         const persistedForChecks =
-          createOnly || expectedAggregateVersion !== undefined && expectedAggregateVersion !== null
+          createOnly ||
+          (expectedAggregateVersion !== undefined && expectedAggregateVersion !== null)
             ? await this.findById(userId, sessionId, resolvedParentSessionId, persistenceContext)
             : null;
         if (createOnly && persistedForChecks) {
@@ -892,7 +1019,7 @@ export class FileSystemSessionRepository {
           if (actualVersion !== Number(expectedAggregateVersion)) {
             const error = new Error("session aggregate version conflict");
             error.statusCode = 409;
-            error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
+            error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
             error.currentVersion = actualVersion;
             throw error;
           }

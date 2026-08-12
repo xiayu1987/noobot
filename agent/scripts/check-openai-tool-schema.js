@@ -8,14 +8,16 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline/promises";
-import { ChatOpenAI } from "@langchain/openai";
-import { HumanMessage } from "@langchain/core/messages";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
+import { createModelRequestExecutor } from "@noobot/model-runtime";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { buildTools } from "noobot-agent/tools";
 import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
 import { sanitizeUserConfig } from "noobot-agent/config";
 import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
-import { resolveConfigSecrets } from "../src/config/core/template-resolver.js";
+import { resolveConfigSecrets } from "../src/config/core/config-secret-resolver.js";
+import { createAgentContextEnvelope, createModelContext } from "@noobot/context-protocol";
+import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
 
 function parseArgs(argv = []) {
@@ -35,6 +37,7 @@ function parseArgs(argv = []) {
     const hasValueFlag = [
       "--userId",
       "--model",
+      "--config",
       "--global-config",
       "--globalConfigPath",
       "--workspace-root",
@@ -44,7 +47,7 @@ function parseArgs(argv = []) {
     const value = String(argv[argIndex + 1] || "").trim();
     if (arg === "--userId") out.userId = value || out.userId;
     else if (arg === "--model") out.model = value;
-    else if (arg === "--global-config" || arg === "--globalConfigPath") {
+    else if (arg === "--config" || arg === "--global-config" || arg === "--globalConfigPath") {
       out.globalConfigPath = value;
     } else if (arg === "--workspace-root" || arg === "--workspaceRoot") {
       out.workspaceRoot = value;
@@ -72,7 +75,8 @@ function resolveScriptPaths({ globalConfigPath = "", workspaceRoot = "" } = {}) 
     candidates.push(path.resolve(agentRoot, "config/global.config.json"));
     candidates.push(path.resolve(repoRoot, "service/config/global.config.json"));
   }
-  const resolvedGlobalConfigPath = candidates.find((filePath) => existsSync(filePath)) || candidates[0];
+  const resolvedGlobalConfigPath =
+    candidates.find((filePath) => existsSync(filePath)) || candidates[0];
 
   return {
     resolvedWorkspaceRoot,
@@ -90,12 +94,13 @@ async function readJsonSafe(filePath = "", fallback = {}) {
 }
 
 function normalizeConfigParams(input = {}) {
-  const rawValues =
-    input?.values && typeof input.values === "object" ? input.values : {};
+  const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
   return Object.fromEntries(
     Object.entries(rawValues)
       .map(([paramKey, paramValue]) => [
-        String(paramKey || "").trim().toUpperCase(),
+        String(paramKey || "")
+          .trim()
+          .toUpperCase(),
         String(paramValue ?? "").trim(),
       ])
       .filter(([paramKey]) => Boolean(paramKey)),
@@ -108,7 +113,9 @@ function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
   };
   const userSource = userParams && typeof userParams === "object" ? userParams : {};
   for (const [paramKey, rawValue] of Object.entries(userSource)) {
-    const normalizedKey = String(paramKey || "").trim().toUpperCase();
+    const normalizedKey = String(paramKey || "")
+      .trim()
+      .toUpperCase();
     if (!normalizedKey) continue;
     const normalizedValue = String(rawValue ?? "").trim();
     if (!normalizedValue) continue;
@@ -120,10 +127,7 @@ function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
 function dedupeToolsByName(tools = []) {
   return Array.from(
     new Map(
-      (Array.isArray(tools) ? tools : []).map((tool) => [
-        String(tool?.name || "").trim(),
-        tool,
-      ]),
+      (Array.isArray(tools) ? tools : []).map((tool) => [String(tool?.name || "").trim(), tool]),
     ).values(),
   ).filter((tool) => String(tool?.name || "").trim());
 }
@@ -131,33 +135,50 @@ function dedupeToolsByName(tools = []) {
 function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig = {} } = {}) {
   const sessionId = "11111111-1111-4111-8111-111111111111";
   const dialogProcessId = "22222222-2222-4222-8222-222222222222";
-  return {
+  const turnScopeId = "schema-check:turn";
+  const messageId = "33333333-3333-4333-8333-333333333333";
+  const runtime = {
     userId,
-    runtime: {
+    globalConfig,
+    userConfig,
+    sharedTools: {},
+    systemRuntime: {
       userId,
-      globalConfig,
-      userConfig,
-      sharedTools: {},
-      systemRuntime: {
-        userId,
-        sessionId,
-        rootSessionId: sessionId,
-        parentSessionId: "",
-        caller: "user",
-        dialogProcessId,
-        config: {
-          allowUserInteraction: true,
-          selectedConnectors: {},
-          maxToolLoopTurns: 4,
-        },
-      },
-    },
-    payload: {
-      tools: {
-        registry: [],
+      sessionId,
+      rootSessionId: sessionId,
+      parentSessionId: "",
+      caller: "user",
+      dialogProcessId,
+      config: {
+        allowUserInteraction: true,
+        selectedConnectors: {},
+        maxToolLoopTurns: 4,
       },
     },
   };
+  const modelContext = createModelContext({
+    messageBlocks: { system: [], history: [], incremental: [] },
+    activeTurnIdentity: { dialogProcessId, turnScopeId },
+  });
+  const context = createAgentContextEnvelope({
+    identity: {
+      userId,
+      sessionId,
+      rootSessionId: sessionId,
+      parentSessionId: "",
+      dialogProcessId,
+      turnScopeId,
+      runId: "schema-check:run",
+      messageId,
+    },
+    environment: {},
+    execution: {},
+    modelContext,
+  });
+  return createAgentExecutionScope({
+    context,
+    bindings: { runtime, tools: [] },
+  });
 }
 
 function resolveModelSpecAllowDisabled({
@@ -172,9 +193,7 @@ function resolveModelSpecAllowDisabled({
       ? globalConfig.providers
       : {};
   const userProviders =
-    userConfig?.providers && typeof userConfig.providers === "object"
-      ? userConfig.providers
-      : {};
+    userConfig?.providers && typeof userConfig.providers === "object" ? userConfig.providers : {};
   const mergedProviders = { ...globalProviders };
   for (const [alias, spec] of Object.entries(userProviders)) {
     mergedProviders[alias] = {
@@ -209,9 +228,7 @@ async function selectToolsInteractive(tools = []) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const answer = String(
-      await rl.question(
-        "输入要测试的工具编号/名称（逗号分隔，直接回车=全部）：",
-      ),
+      await rl.question("输入要测试的工具编号/名称（逗号分隔，直接回车=全部）："),
     )
       .trim()
       .toLowerCase();
@@ -361,29 +378,45 @@ async function main() {
     return;
   }
 
-  const llm = new ChatOpenAI({
-    model: String(modelSpec.model || ""),
-    temperature: Number(modelSpec?.temperature ?? 0),
-    streaming: false,
-    apiKey: resolvedApiKey,
-    ...(resolvedBaseUrl ? { configuration: { baseURL: resolvedBaseUrl } } : {}),
+  const modelPort = createModelRequestExecutor({
+    credentialPort: {
+      resolve: async () => resolvedApiKey,
+    },
   });
   const liveErrors = [];
   for (const item of targetTools) {
     try {
       const toolName = String(item?.name || "").trim();
-      const result = await llm
-        .bindTools([item], { tool_choice: "auto" })
-        .invoke([
-          new HumanMessage(
-            [
+      const result = await modelPort.invoke({
+        model: modelSpec,
+        messages: [
+          {
+            role: "user",
+            content: [
               "请调用工具完成测试。",
               `工具名：${toolName}`,
               "要求：必须发起一次 tool call；参数可使用最小可行占位值。",
             ].join("\n"),
-          ),
-        ]);
-      const toolCalls = Array.isArray(result?.tool_calls) ? result.tool_calls : [];
+          },
+        ],
+        tools: [item],
+        options: {
+          streaming: false,
+          toolBinding: { tool_choice: "auto" },
+        },
+        invocation: {
+          sessionId: "tool-schema-check",
+          parentSessionId: "",
+          dialogProcessId: "tool-schema-check",
+          turnScopeId: `tool-schema-check:${toolName}`,
+          runId: `tool-schema-check:${toolName}`,
+          flow: "diagnostic.tool_schema",
+          purpose: "live_tool_schema_validation",
+          domain: "diagnostic",
+          contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+      });
+      const toolCalls = result.output.toolCalls;
       const hasExpectedToolCall = toolCalls.some(
         (call) => String(call?.name || "").trim() === toolName,
       );
@@ -394,9 +427,7 @@ async function main() {
     } catch (error) {
       const message = String(error?.message || error || "");
       liveErrors.push({ name: String(item?.name || ""), error: message });
-      console.error(
-        `[tool-schema-check] live fail: ${String(item?.name || "")} -> ${message}`,
-      );
+      console.error(`[tool-schema-check] live fail: ${String(item?.name || "")} -> ${message}`);
     }
   }
 

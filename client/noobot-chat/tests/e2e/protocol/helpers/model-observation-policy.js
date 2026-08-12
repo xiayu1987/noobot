@@ -12,23 +12,20 @@ export const MODEL_CALL_EXPECTATION = Object.freeze({
 });
 
 const requiredCases = [
-  2,
-  6, 7, 8, 13, 14, 15, 16, 17,
-  21, 22, 23, 24, 25,
-  27, 28, 29,
-  31,
-  32,
-  34, 35, 36, 37, 38,
+  2, 6, 7, 8, 13, 14, 15, 16, 17, 21, 22, 23, 24, 25, 27, 28, 29, 31, 32, 34, 35, 36, 37, 38, 39,
+  40, 41,
 ];
 
-export const MODEL_OBSERVATION_POLICY = Object.freeze(Object.fromEntries([
-  ...requiredCases.map((number) => [
-    `PBE-${String(number).padStart(3, "0")}`,
-    MODEL_CALL_EXPECTATION.REQUIRED,
+export const MODEL_OBSERVATION_POLICY = Object.freeze(
+  Object.fromEntries([
+    ...requiredCases.map((number) => [
+      `PBE-${String(number).padStart(3, "0")}`,
+      MODEL_CALL_EXPECTATION.REQUIRED,
+    ]),
+    ["PBE-026", MODEL_CALL_EXPECTATION.FORBIDDEN],
+    ["PBE-030", MODEL_CALL_EXPECTATION.FORBIDDEN],
   ]),
-  ["PBE-026", MODEL_CALL_EXPECTATION.FORBIDDEN],
-  ["PBE-030", MODEL_CALL_EXPECTATION.FORBIDDEN],
-]));
+);
 
 function pbeIds(text) {
   return [...String(text).matchAll(/\bPBE-\d{3}\b/g)].map((match) => match[0]);
@@ -63,15 +60,26 @@ export function validateModelObservationPolicyCoverage(specsDirectory) {
   const duplicateCases = [...discovered.entries()]
     .filter(([, files]) => files.length !== 1)
     .map(([caseId, files]) => `${caseId} (${files.join(", ")})`);
-  const missingPolicies = [...discovered.keys()].filter((caseId) => !MODEL_OBSERVATION_POLICY[caseId]);
-  const stalePolicies = Object.keys(MODEL_OBSERVATION_POLICY).filter((caseId) => !discovered.has(caseId));
-  if (filesWithoutUnifiedFixture.length || duplicateCases.length || missingPolicies.length || stalePolicies.length) {
-    throw new Error([
-      "model observation policy coverage is not closed",
-      `specs outside unified fixture: ${filesWithoutUnifiedFixture.join(", ") || "none"}`,
-      `duplicate PBE ids: ${duplicateCases.join("; ") || "none"}`,
-      `missing policies: ${missingPolicies.join(", ") || "none"}`,
-      `stale policies: ${stalePolicies.join(", ") || "none"}`,
-    ].join("\n"));
+  const missingPolicies = [...discovered.keys()].filter(
+    (caseId) => !MODEL_OBSERVATION_POLICY[caseId],
+  );
+  const stalePolicies = Object.keys(MODEL_OBSERVATION_POLICY).filter(
+    (caseId) => !discovered.has(caseId),
+  );
+  if (
+    filesWithoutUnifiedFixture.length ||
+    duplicateCases.length ||
+    missingPolicies.length ||
+    stalePolicies.length
+  ) {
+    throw new Error(
+      [
+        "model observation policy coverage is not closed",
+        `specs outside unified fixture: ${filesWithoutUnifiedFixture.join(", ") || "none"}`,
+        `duplicate PBE ids: ${duplicateCases.join("; ") || "none"}`,
+        `missing policies: ${missingPolicies.join(", ") || "none"}`,
+        `stale policies: ${stalePolicies.join(", ") || "none"}`,
+      ].join("\n"),
+    );
   }
 }

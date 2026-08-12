@@ -11,6 +11,7 @@ import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../s
 import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
+  createTestModelPort,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 
@@ -81,7 +82,7 @@ function createModelState(llm, defaultModelSpec = null) {
       ? defaultModelSpec
       : { alias: "test_alias", model: "test-model" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     eventListener: null,
@@ -260,16 +261,16 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
     "split synthetic batches should no longer inject tool-batch-limit prompts",
   );
   const assistantToolCallCounts = secondInvocationMessages
-    .filter((message) => String(message?._getType?.() || "") === "ai")
-    .map((message) => (Array.isArray(message.tool_calls) ? message.tool_calls.length : 0));
+    .map((message) => message?.tool_calls || message?.lc_kwargs?.tool_calls)
+    .filter(Array.isArray)
+    .map((toolCalls) => toolCalls.length);
   assert.equal(assistantToolCallCounts.at(-1), 3);
   const incrementalToolCallIds = loopState.modelContext.messageBlocks.incremental
     .filter((message) => Array.isArray(message?.tool_calls))
     .flatMap((message) => message.tool_calls.map((call) => call.id).filter(Boolean));
   assert.deepEqual(incrementalToolCallIds.slice(-3), ["call_1", "call_2", "call_3"]);
   const incrementalToolResultIds = loopState.modelContext.messageBlocks.incremental
-    .filter((message) => String(message?._getType?.() || "") === "tool")
-    .map((message) => message.tool_call_id)
+    .map((message) => message?.tool_call_id || message?.lc_kwargs?.tool_call_id)
     .filter(Boolean);
   assert.deepEqual(incrementalToolResultIds.slice(-3), ["call_1", "call_2", "call_3"]);
   assert.ok(

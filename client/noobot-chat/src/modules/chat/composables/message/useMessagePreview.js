@@ -33,14 +33,8 @@ import {
   resolveFileItemName,
   resolveFileItemRelativePath,
 } from "./useMessagePreview/path-utils.js";
-import {
-  logFileAccess,
-  triggerBlobDownload,
-} from "./useMessagePreview/file-access-log.js";
-import {
-  buildNoCopyableSet,
-  handleCopyMarkdown,
-} from "./useMessagePreview/markdown-copy.js";
+import { logFileAccess, triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
+import { buildNoCopyableSet, handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
 
 export function useMessagePreview({
   userId = "",
@@ -115,6 +109,35 @@ export function useMessagePreview({
     }).url;
   }
 
+  function resolveHostAccessChannel({ useHostChannel = false, desktopHostApi = null } = {}) {
+    if (!useHostChannel) return "workspace-api";
+    return desktopHostApi ? "desktop-host-ipc" : "backend-host-api";
+  }
+
+  function buildWorkspaceFileAccessLogPayload({
+    traceId = "",
+    isSandbox = undefined,
+    useHostChannel = false,
+    desktopHostApi = null,
+    normalizedUserId = "",
+    fileItem = {},
+    relativePath = "",
+    hostPath = "",
+  } = {}) {
+    return {
+      traceId,
+      isSandbox,
+      channel: resolveHostAccessChannel({ useHostChannel, desktopHostApi }),
+      hasUserId: Boolean(normalizedUserId),
+      hasRelativePath: Boolean(fileItem?.relativePath),
+      hasHostPath: Boolean(hostPath),
+      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
+      hasResolvedPath: Boolean(fileItem?.resolvedPath),
+      relativePath: maskWorkspacePath(relativePath),
+      hostPath: maskHostPath(hostPath),
+    };
+  }
+
   async function runDownloadFromUrl({
     url = "",
     fileName = "download",
@@ -154,7 +177,6 @@ export function useMessagePreview({
     });
   }
 
-
   async function onDownloadFile(fileItem = {}) {
     const traceId = createFileAccessTraceId("download");
     const normalizedUserId = String(userId || "").trim();
@@ -163,47 +185,86 @@ export function useMessagePreview({
     const isSandbox = fileItem?.isSandbox;
     const useHostChannel = isSandbox === false && Boolean(hostPath);
     const missingSandboxFlag = typeof isSandbox !== "boolean";
-    logFileAccess("download.click", {
-      traceId,
-      isSandbox,
-      channel: useHostChannel ? (window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api") : "workspace-api",
-      hasUserId: Boolean(normalizedUserId),
-      hasRelativePath: Boolean(fileItem?.relativePath),
-      hasHostPath: Boolean(hostPath),
-      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
-      hasResolvedPath: Boolean(fileItem?.resolvedPath),
-      relativePath: maskWorkspacePath(relativePath),
-      hostPath: maskHostPath(hostPath),
-    });
+    logFileAccess(
+      "download.click",
+      buildWorkspaceFileAccessLogPayload({
+        traceId,
+        isSandbox,
+        useHostChannel,
+        desktopHostApi: window?.noobotDesktop?.downloadHostFile,
+        normalizedUserId,
+        fileItem,
+        relativePath,
+        hostPath,
+      }),
+    );
     if (useHostChannel) {
       try {
-        logFileAccess("download.request", { traceId, channel: window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api", isSandbox, hostPath: maskHostPath(hostPath) });
+        logFileAccess("download.request", {
+          traceId,
+          channel: window?.noobotDesktop?.downloadHostFile
+            ? "desktop-host-ipc"
+            : "backend-host-api",
+          isSandbox,
+          hostPath: maskHostPath(hostPath),
+        });
         let res;
         if (window?.noobotDesktop?.downloadHostFile) {
           res = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
           if (res?.cancelled) {
-            logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: false, cancelled: true });
+            logFileAccess("download.response", {
+              traceId,
+              channel: "desktop-host-ipc",
+              ok: false,
+              cancelled: true,
+            });
             return;
           }
           if (!res?.ok) throw new Error(res?.error || translate("message.downloadFailed"));
-          logFileAccess("download.response", { traceId, channel: "desktop-host-ipc", ok: true, hasSavedPath: Boolean(res?.savedPath) });
+          logFileAccess("download.response", {
+            traceId,
+            channel: "desktop-host-ipc",
+            ok: true,
+            hasSavedPath: Boolean(res?.savedPath),
+          });
           return;
         }
         res = await attachmentService.downloadHostFile({ path: hostPath, traceId, isSandbox });
-        logFileAccess("download.response", { traceId, channel: "backend-host-api", ok: Boolean(res?.ok), status: Number(res?.status || 0) });
-        if (!res.ok) throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
+        logFileAccess("download.response", {
+          traceId,
+          channel: "backend-host-api",
+          ok: Boolean(res?.ok),
+          status: Number(res?.status || 0),
+        });
+        if (!res.ok)
+          throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
         const blob = await res.blob();
-        const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, hostPath) || "download";
+        const fileName =
+          parseContentDisposition(res.headers?.get("content-disposition") || "") ||
+          resolveFileItemName(fileItem, hostPath) ||
+          "download";
         await triggerBlobDownload(blob, fileName);
         return;
       } catch (error) {
-        logFileAccess("download.failed", { traceId, channel: window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api", error: String(error?.message || error || "") });
+        logFileAccess("download.failed", {
+          traceId,
+          channel: window?.noobotDesktop?.downloadHostFile
+            ? "desktop-host-ipc"
+            : "backend-host-api",
+          error: String(error?.message || error || ""),
+        });
         notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
         return;
       }
     }
     if (missingSandboxFlag && hostPath && !relativePath) {
-      logFileAccess("download.invalidMetadata", { traceId, reason: "rejectedMissingSandboxFlag", isSandbox, hasHostPath: true, hostPath: maskHostPath(hostPath) });
+      logFileAccess("download.invalidMetadata", {
+        traceId,
+        reason: "rejectedMissingSandboxFlag",
+        isSandbox,
+        hasHostPath: true,
+        hostPath: maskHostPath(hostPath),
+      });
       notify({ type: "error", message: translate("message.downloadFailed") });
       return;
     }
@@ -221,8 +282,17 @@ export function useMessagePreview({
       return;
     }
     try {
-      logFileAccess("download.request", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
-      const res = await attachmentService.downloadWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
+      logFileAccess("download.request", {
+        traceId,
+        channel: "workspace-api",
+        isSandbox,
+        relativePath: maskWorkspacePath(relativePath),
+      });
+      const res = await attachmentService.downloadWorkspaceFile({
+        userId: normalizedUserId,
+        path: relativePath,
+        traceId,
+      });
       logFileAccess("download.response", {
         traceId,
         ok: Boolean(res?.ok),
@@ -239,7 +309,10 @@ export function useMessagePreview({
         throw new Error(errorText);
       }
       const blob = await res.blob();
-      const fileName = parseContentDisposition(res.headers?.get("content-disposition") || "") || resolveFileItemName(fileItem, relativePath) || "download";
+      const fileName =
+        parseContentDisposition(res.headers?.get("content-disposition") || "") ||
+        resolveFileItemName(fileItem, relativePath) ||
+        "download";
       await triggerBlobDownload(blob, fileName);
     } catch (error) {
       logFileAccess("download.failed", { traceId, error: String(error?.message || error || "") });
@@ -267,7 +340,6 @@ export function useMessagePreview({
     });
   }
 
-
   async function openFilePreview(fileItem = {}) {
     const traceId = createFileAccessTraceId("preview");
     const normalizedUserId = String(userId || "").trim();
@@ -289,20 +361,27 @@ export function useMessagePreview({
       notify({ type: "warning", message: translate("message.previewFileTooLarge") });
       return;
     }
-    logFileAccess("preview.click", {
-      traceId,
-      isSandbox,
-      channel: useHostChannel ? (window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api") : "workspace-api",
-      hasUserId: Boolean(normalizedUserId),
-      hasRelativePath: Boolean(fileItem?.relativePath),
-      hasHostPath: Boolean(hostPath),
-      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
-      hasResolvedPath: Boolean(fileItem?.resolvedPath),
-      relativePath: maskWorkspacePath(relativePath),
-      hostPath: maskHostPath(hostPath),
-    });
+    logFileAccess(
+      "preview.click",
+      buildWorkspaceFileAccessLogPayload({
+        traceId,
+        isSandbox,
+        useHostChannel,
+        desktopHostApi: window?.noobotDesktop?.readHostFile,
+        normalizedUserId,
+        fileItem,
+        relativePath,
+        hostPath,
+      }),
+    );
     if (missingSandboxFlag && hostPath && !relativePath) {
-      logFileAccess("preview.invalidMetadata", { traceId, reason: "rejectedMissingSandboxFlag", isSandbox, hasHostPath: true, hostPath: maskHostPath(hostPath) });
+      logFileAccess("preview.invalidMetadata", {
+        traceId,
+        reason: "rejectedMissingSandboxFlag",
+        isSandbox,
+        hasHostPath: true,
+        hostPath: maskHostPath(hostPath),
+      });
       notify({ type: "error", message: translate("message.previewFailed") });
       return;
     }
@@ -315,40 +394,72 @@ export function useMessagePreview({
       filePreview.textContent.value = "";
       cleanupPreviewImageUrl();
       try {
-        const channel = window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api";
+        const channel = window?.noobotDesktop?.readHostFile
+          ? "desktop-host-ipc"
+          : "backend-host-api";
         if (isImageFile(fileName)) {
-          const imageChannel = window?.noobotDesktop?.downloadHostFile ? "desktop-host-ipc" : "backend-host-api";
-          logFileAccess("preview.imageRequest", { traceId, channel: imageChannel, isSandbox, hostPath: maskHostPath(hostPath) });
+          const imageChannel = window?.noobotDesktop?.downloadHostFile
+            ? "desktop-host-ipc"
+            : "backend-host-api";
+          logFileAccess("preview.imageRequest", {
+            traceId,
+            channel: imageChannel,
+            isSandbox,
+            hostPath: maskHostPath(hostPath),
+          });
           if (window?.noobotDesktop?.downloadHostFile) {
             const result = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
             if (!result?.ok) throw new Error(result?.error || translate("message.previewFailed"));
             filePreview.imageUrl.value = result.url;
           } else {
-            const res = await attachmentService.downloadHostFile({ path: hostPath, traceId, isSandbox });
-            if (!res.ok) throw new Error(translate("message.previewFailedHttp", { status: res.status }));
+            const res = await attachmentService.downloadHostFile({
+              path: hostPath,
+              traceId,
+              isSandbox,
+            });
+            if (!res.ok)
+              throw new Error(translate("message.previewFailedHttp", { status: res.status }));
             filePreview.imageUrl.value = URL.createObjectURL(await res.blob());
           }
           filePreview.mode.value = "image";
           logFileAccess("preview.imageResponse", { traceId, channel: imageChannel, ok: true });
           return;
         }
-        logFileAccess("preview.textRequest", { traceId, channel, isSandbox, hostPath: maskHostPath(hostPath) });
+        logFileAccess("preview.textRequest", {
+          traceId,
+          channel,
+          isSandbox,
+          hostPath: maskHostPath(hostPath),
+        });
         let data;
         if (window?.noobotDesktop?.readHostFile) {
           data = await window.noobotDesktop.readHostFile({ path: hostPath, traceId });
         } else {
           const res = await attachmentService.getHostFile({ path: hostPath, traceId, isSandbox });
           data = await res.json();
-          if (!res.ok) data = { ok: false, error: data?.error || translate("message.previewFailedHttp", { status: res.status }) };
+          if (!res.ok)
+            data = {
+              ok: false,
+              error: data?.error || translate("message.previewFailedHttp", { status: res.status }),
+            };
         }
-        logFileAccess("preview.textResponse", { traceId, channel, ok: Boolean(data?.ok), isText: data?.isText });
+        logFileAccess("preview.textResponse", {
+          traceId,
+          channel,
+          ok: Boolean(data?.ok),
+          isText: data?.isText,
+        });
         if (!data?.ok) throw new Error(data?.error || translate("message.previewFailed"));
         if (data.isText === false) throw new Error(translate("message.fileTypeNotSupported"));
         filePreview.textContent.value = String(data.content || "");
         filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
         return;
       } catch (error) {
-        logFileAccess("preview.failed", { traceId, channel: window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api", error: String(error?.message || error || "") });
+        logFileAccess("preview.failed", {
+          traceId,
+          channel: window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api",
+          error: String(error?.message || error || ""),
+        });
         filePreview.error.value = error?.message || translate("message.previewFailed");
         return;
       } finally {
@@ -379,8 +490,17 @@ export function useMessagePreview({
 
     try {
       if (isImageFile(fileName)) {
-        logFileAccess("preview.imageRequest", { traceId, channel: "workspace-api", isSandbox, relativePath: maskWorkspacePath(relativePath) });
-        const downloadRes = await attachmentService.downloadWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
+        logFileAccess("preview.imageRequest", {
+          traceId,
+          channel: "workspace-api",
+          isSandbox,
+          relativePath: maskWorkspacePath(relativePath),
+        });
+        const downloadRes = await attachmentService.downloadWorkspaceFile({
+          userId: normalizedUserId,
+          path: relativePath,
+          traceId,
+        });
         logFileAccess("preview.imageResponse", {
           traceId,
           ok: Boolean(downloadRes?.ok),
@@ -401,7 +521,11 @@ export function useMessagePreview({
         return;
       }
 
-      const res = await attachmentService.getWorkspaceFile({ userId: normalizedUserId, path: relativePath, traceId });
+      const res = await attachmentService.getWorkspaceFile({
+        userId: normalizedUserId,
+        path: relativePath,
+        traceId,
+      });
       logFileAccess("preview.textResponse", {
         traceId,
         ok: Boolean(res?.ok),
@@ -439,7 +563,6 @@ export function useMessagePreview({
   function closePreviewDialog() {
     resetPreviewState();
   }
-
 
   function canPreviewAttachment(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
@@ -491,7 +614,9 @@ export function useMessagePreview({
     const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
     const fileName = resolveFileItemName(fileItem, relativePath);
     const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
-    const hasPreviewPath = Boolean(relativePath || resolveFileItemHostPath(fileItem) || fileItem?.resolvedPath || fileItem?.path);
+    const hasPreviewPath = Boolean(
+      relativePath || resolveFileItemHostPath(fileItem) || fileItem?.resolvedPath || fileItem?.path,
+    );
     if (!hasPreviewPath) return false;
     return !isNonImagePreviewOverSizeLimit({
       fileItem,
@@ -531,21 +656,22 @@ export function useMessagePreview({
       try {
         const response = await attachmentService.fetchUrl(targetUrl);
         if (!response?.ok) {
-          throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
+          throw new Error(
+            translate("message.previewFailedHttp", { status: response?.status || 500 }),
+          );
         }
         const blob = await response.blob();
         attachmentObjectUrl = URL.createObjectURL(blob);
         attachmentPreview.url.value = attachmentObjectUrl;
       } catch (error) {
-        attachmentPreview.error.value = error?.message || translate("message.attachmentPreviewFailed");
+        attachmentPreview.error.value =
+          error?.message || translate("message.attachmentPreviewFailed");
       } finally {
         attachmentPreview.loading.value = false;
       }
       return;
     }
-    const markdownMode = officeLike
-      ? true
-      : isMarkdownMime(mimeType, name);
+    const markdownMode = officeLike ? true : isMarkdownMime(mimeType, name);
     if (!markdownMode && !isTextPreviewMime(mimeType) && !isTextPreviewFile(name)) return;
 
     attachmentPreview.visible.value = true;
@@ -560,11 +686,14 @@ export function useMessagePreview({
     try {
       const response = await attachmentService.fetchUrl(targetUrl);
       if (!response?.ok) {
-        throw new Error(translate("message.previewFailedHttp", { status: response?.status || 500 }));
+        throw new Error(
+          translate("message.previewFailedHttp", { status: response?.status || 500 }),
+        );
       }
       attachmentPreview.textContent.value = String(await response.text());
     } catch (error) {
-      attachmentPreview.error.value = error?.message || translate("message.attachmentPreviewFailed");
+      attachmentPreview.error.value =
+        error?.message || translate("message.attachmentPreviewFailed");
     } finally {
       attachmentPreview.loading.value = false;
     }
@@ -608,7 +737,6 @@ export function useMessagePreview({
     resetAttachmentPreviewState();
   }
 
-
   async function onCopyMarkdownRich(renderedPreviewHtml = "") {
     await copyMarkdownFromText({
       textContent: filePreview.textContent.value,
@@ -639,10 +767,7 @@ export function useMessagePreview({
     });
   }
 
-  async function onCopyMessageMarkdownRich({
-    textContent = "",
-    renderedPreviewHtml = "",
-  } = {}) {
+  async function onCopyMessageMarkdownRich({ textContent = "", renderedPreviewHtml = "" } = {}) {
     await copyMarkdownFromText({
       textContent,
       renderedPreviewHtml,

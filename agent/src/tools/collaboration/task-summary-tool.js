@@ -107,7 +107,6 @@ export function createTaskSummaryTool(ctx = {}) {
       }
 
       systemRuntime.needsPhaseSummary = false;
-      systemRuntime.toolLoopExecutionCount = 0;
       systemRuntime.phaseSummaryLoopCount = 0;
       return toToolJsonResult(
         TASK_SUMMARY_TOOL_NAME,

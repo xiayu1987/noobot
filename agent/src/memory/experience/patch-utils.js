@@ -3,8 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { parseIdPatchCommands, parseKvPayload } from "../parsers/id-patch-parser.js";
-import { parseListField } from "../parsers/id-patch-parser.js";
+import {
+  parseIdPatchCommands,
+  parseKvPayload,
+  parseListField,
+} from "../parsers/id-patch-parser.js";
 import { dedupeTextList, sanitizeFileName } from "../utils/text.js";
 
 function reportPatchParseError({
@@ -69,7 +72,9 @@ function pickFieldValue(kv = {}, aliases = []) {
 
 function resolveMappedField(kv = {}, descriptor = null) {
   if (!descriptor || typeof descriptor !== "object") return "";
-  const type = String(descriptor.type || "text").trim().toLowerCase();
+  const type = String(descriptor.type || "text")
+    .trim()
+    .toLowerCase();
   const aliases = Array.isArray(descriptor.aliases) ? descriptor.aliases : [];
   const fallback = String(descriptor.fallback || "").trim();
   const rawValue = pickFieldValue(kv, aliases);

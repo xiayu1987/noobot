@@ -8,9 +8,7 @@ import { emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
-import {
-  normalizeTrimmedStringList,
-} from "./session-execution-engine-utils.js";
+import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 
 async function transferCanonicalAttachmentsToSubSession({
   attachmentService = null,
@@ -44,7 +42,9 @@ async function transferCanonicalAttachmentsToSubSession({
       typeof attachmentService.readAttachmentContent !== "function" ||
       typeof attachmentService.ingest !== "function"
     ) {
-      throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
+      throw new Error(
+        "detached sub-session canonical attachment transfer requires AttachmentService",
+      );
     }
     const attachmentSource = String(attachment?.attachmentSource || "user").trim() || "user";
     const parentRecord = await attachmentService.getAttachmentById({
@@ -54,7 +54,9 @@ async function transferCanonicalAttachmentsToSubSession({
       attachmentSource,
     });
     if (!parentRecord) {
-      throw new Error("detached sub-session source attachment does not exist in its parent session");
+      throw new Error(
+        "detached sub-session source attachment does not exist in its parent session",
+      );
     }
     const sourceContent = await attachmentService.readAttachmentContent({
       userId,
@@ -69,14 +71,23 @@ async function transferCanonicalAttachmentsToSubSession({
       userId,
       sessionId: subSessionId,
       attachmentSource: "user",
-      attachmentPolicy: attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
-      attachments: [{
-        clientAttachmentId: String(attachment?.clientAttachmentId || `session-transfer:${attachmentId}`).trim(),
-        name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
-        mimeType: String(parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream").trim(),
-        contentBase64: sourceContent.content.toString("base64"),
-        ...(typeof attachment?.isSandbox === "boolean" ? { isSandbox: attachment.isSandbox } : {}),
-      }],
+      attachmentPolicy:
+        attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
+      attachments: [
+        {
+          clientAttachmentId: String(
+            attachment?.clientAttachmentId || `session-transfer:${attachmentId}`,
+          ).trim(),
+          name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
+          mimeType: String(
+            parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",
+          ).trim(),
+          contentBase64: sourceContent.content.toString("base64"),
+          ...(typeof attachment?.isSandbox === "boolean"
+            ? { isSandbox: attachment.isSandbox }
+            : {}),
+        },
+      ],
     });
     if (!transferred || String(transferred?.sessionId || "").trim() !== subSessionId) {
       throw new Error("detached sub-session attachment transfer did not create child ownership");
@@ -84,6 +95,22 @@ async function transferCanonicalAttachmentsToSubSession({
     output.push(transferred);
   }
   return output;
+}
+
+function assertDetachedSubSessionStrategy(strategy = {}) {
+  const required = [
+    "sessionId",
+    "dialogProcessId",
+    "turnScopeId",
+    "executionId",
+    "relativeDir",
+    "allowedRoot",
+  ];
+  if (required.some((key) => !String(strategy?.[key] || "").trim())) {
+    throw new TypeError(
+      "detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot",
+    );
+  }
 }
 
 export function createDetachedSubSessionRunner({
@@ -129,14 +156,20 @@ export function createDetachedSubSessionRunner({
       });
       throw error;
     }
-    const inheritedAbortSignal = abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
-    const inheritedUserInteractionBridge = sourceContext?.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
+    const inheritedAbortSignal =
+      abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
+    const inheritedUserInteractionBridge =
+      sourceContext?.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
     const throwIfSubSessionAborted = createAbortGuard(inheritedAbortSignal);
     throwIfSubSessionAborted();
 
     const userId = String(strategy?.userId || sourceContext?.userId || "").trim();
-    const parentSessionId = String(strategy?.parentSessionId || sourceContext?.sessionId || "").trim();
-    const parentDialogProcessId = String(strategy?.parentDialogProcessId || sourceContext?.dialogProcessId || "").trim();
+    const parentSessionId = String(
+      strategy?.parentSessionId || sourceContext?.sessionId || "",
+    ).trim();
+    const parentDialogProcessId = String(
+      strategy?.parentDialogProcessId || sourceContext?.dialogProcessId || "",
+    ).trim();
     if (!userId || !parentSessionId) {
       throw new Error("sub-session runner requires userId and parentSessionId");
     }
@@ -147,18 +180,7 @@ export function createDetachedSubSessionRunner({
     const executionId = String(strategy?.executionId || "").trim();
     const relativeDir = String(strategy?.relativeDir || "").trim();
     const allowedRoot = String(strategy?.allowedRoot || "").trim();
-    if (
-      !subSessionId ||
-      !subDialogProcessId ||
-      !turnScopeId ||
-      !executionId ||
-      !relativeDir ||
-      !allowedRoot
-    ) {
-      throw new TypeError(
-        "detached sub-session strategy requires sessionId, dialogProcessId, turnScopeId, executionId, relativeDir and allowedRoot",
-      );
-    }
+    assertDetachedSubSessionStrategy(strategy);
     const scopedEventListener = createScopedSubSessionEventListener(eventListener, {
       userId,
       sessionId: subSessionId,
@@ -181,7 +203,9 @@ export function createDetachedSubSessionRunner({
     });
     mergedRunConfig.executionId = executionId;
     mergedRunConfig.executionKind = "agent";
-    mergedRunConfig.parentExecutionId = String(strategy?.parentExecutionId || metadata?.parentExecutionId || "").trim();
+    mergedRunConfig.parentExecutionId = String(
+      strategy?.parentExecutionId || metadata?.parentExecutionId || "",
+    ).trim();
     mergedRunConfig.rootExecutionId = String(
       strategy?.rootExecutionId || metadata?.rootExecutionId || mergedRunConfig.executionId,
     ).trim();
@@ -201,9 +225,21 @@ export function createDetachedSubSessionRunner({
     delete mergedRunConfig.botHookManager;
     delete mergedRunConfig.botHooks;
 
-    const subSessionUserConfig = await loadSubSessionUserConfig({ workspaceService, configService, userId });
-    const effectiveRunConfig = prepareRunConfig({ userId, runConfig: mergedRunConfig, userConfig: subSessionUserConfig });
-    if (!effectiveRunConfig || typeof effectiveRunConfig !== "object" || Array.isArray(effectiveRunConfig)) {
+    const subSessionUserConfig = await loadSubSessionUserConfig({
+      workspaceService,
+      configService,
+      userId,
+    });
+    const effectiveRunConfig = prepareRunConfig({
+      userId,
+      runConfig: mergedRunConfig,
+      userConfig: subSessionUserConfig,
+    });
+    if (
+      !effectiveRunConfig ||
+      typeof effectiveRunConfig !== "object" ||
+      Array.isArray(effectiveRunConfig)
+    ) {
       throw new Error("detached sub-session prepareRunConfig must return a run config object");
     }
     effectiveRunConfig.presentationMessageId = childPresentationMessageId;
@@ -238,9 +274,10 @@ export function createDetachedSubSessionRunner({
     });
     emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
 
-    const lifecycle = typeof session.getSessionLifecycle === "function"
-      ? await session.getSessionLifecycle({ userId, sessionId: subSessionId })
-      : null;
+    const lifecycle =
+      typeof session.getSessionLifecycle === "function"
+        ? await session.getSessionLifecycle({ userId, sessionId: subSessionId })
+        : null;
     const persistenceContext = session.createScopedPersistenceContext({
       userId,
       sessionId: subSessionId,
@@ -415,22 +452,24 @@ export function createDetachedSubSessionRunner({
           failed: !stopped,
         });
       }
-      emitEvent(eventListener, stopped
-        ? "detached_sub_session_stop_committed"
-        : "detached_sub_session_failure_committed", {
-        userId,
-        sessionId: subSessionId,
-        parentSessionId,
-        dialogProcessId: subDialogProcessId,
-        turnScopeId,
-        executionId: mergedRunConfig.executionId,
-        ...(stopped
-          ? { reason: "user_stop" }
-          : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
-        state: String(terminalLifecycle?.turn?.state || "").trim(),
-        revision: Number(terminalLifecycle?.turn?.revision || 0),
-        sequence: Number(terminalLifecycle?.turn?.sequence || 0),
-      });
+      emitEvent(
+        eventListener,
+        stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
+        {
+          userId,
+          sessionId: subSessionId,
+          parentSessionId,
+          dialogProcessId: subDialogProcessId,
+          turnScopeId,
+          executionId: mergedRunConfig.executionId,
+          ...(stopped
+            ? { reason: "user_stop" }
+            : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
+          state: String(terminalLifecycle?.turn?.state || "").trim(),
+          revision: Number(terminalLifecycle?.turn?.revision || 0),
+          sequence: Number(terminalLifecycle?.turn?.sequence || 0),
+        },
+      );
       throw error;
     }
 
@@ -453,11 +492,15 @@ export function createDetachedSubSessionRunner({
       finishedAt: String(now()).trim(),
     });
 
-    const dialogProcessId = String(result?.dialogProcessId || subDialogProcessId || subSessionId).trim();
+    const dialogProcessId = String(
+      result?.dialogProcessId || subDialogProcessId || subSessionId,
+    ).trim();
     const transferEnvelopes = Array.from(
       new Map(
         (Array.isArray(result?.turnMessages) ? result.turnMessages : [])
-          .flatMap((message = {}) => Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [])
+          .flatMap((message = {}) =>
+            Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [],
+          )
           .map((envelope) => [String(envelope?.transferId || ""), envelope])
           .filter(([transferId]) => transferId),
       ).values(),
@@ -503,16 +546,23 @@ function clearParentTurnTransactionIdentity(runConfig = {}) {
   return runConfig;
 }
 
-export function createDetachedTerminalReceipt({ lifecycle = null, executionId = "", failed = false } = {}) {
+export function createDetachedTerminalReceipt({
+  lifecycle = null,
+  executionId = "",
+  failed = false,
+} = {}) {
   if (!lifecycle || typeof lifecycle !== "object" || Array.isArray(lifecycle)) return null;
-  const sourceState = String(lifecycle?.state || lifecycle?.branchState || "").trim().toLowerCase();
-  const state = sourceState === "completed"
-    ? "completed"
-    : sourceState === "user_stopped"
-      ? "stop_completed"
-      : failed || ["failed", "interrupted"].includes(sourceState)
-        ? "processing_failed"
-        : sourceState;
+  const sourceState = String(lifecycle?.state || lifecycle?.branchState || "")
+    .trim()
+    .toLowerCase();
+  const state =
+    sourceState === "completed"
+      ? "completed"
+      : sourceState === "user_stopped"
+        ? "stop_completed"
+        : failed || ["failed", "interrupted"].includes(sourceState)
+          ? "processing_failed"
+          : sourceState;
   return {
     ...lifecycle,
     executionId: String(lifecycle?.executionId || executionId || "").trim(),
@@ -522,8 +572,12 @@ export function createDetachedTerminalReceipt({ lifecycle = null, executionId = 
     sequence: Number(lifecycle?.sequence || 0),
     failure: failed
       ? {
-          code: String(lifecycle?.code || lifecycle?.failure?.code || "CHILD_EXECUTION_FAILED").trim(),
-          message: String(lifecycle?.error || lifecycle?.failure?.message || "child execution failed").trim(),
+          code: String(
+            lifecycle?.code || lifecycle?.failure?.code || "CHILD_EXECUTION_FAILED",
+          ).trim(),
+          message: String(
+            lifecycle?.error || lifecycle?.failure?.message || "child execution failed",
+          ).trim(),
         }
       : lifecycle?.failure || null,
   };
@@ -533,7 +587,9 @@ export function createScopedSubSessionEventListener(eventListener = null, identi
   const target = resolveObjectEventListener(eventListener);
   if (!target) return null;
   if (typeof target.forwardEvent !== "function") {
-    throw new TypeError("detached sub-session requires an execution event listener forwardEvent port");
+    throw new TypeError(
+      "detached sub-session requires an execution event listener forwardEvent port",
+    );
   }
   return {
     onEvent(event = {}) {
@@ -564,7 +620,11 @@ function createAbortGuard(abortSignal = null) {
   };
 }
 
-async function loadSubSessionUserConfig({ workspaceService = null, configService = null, userId = "" } = {}) {
+async function loadSubSessionUserConfig({
+  workspaceService = null,
+  configService = null,
+  userId = "",
+} = {}) {
   try {
     const workspacePath = workspaceService.getWorkspacePath(userId);
     return await configService.loadUserConfig(workspacePath);
@@ -575,23 +635,35 @@ async function loadSubSessionUserConfig({ workspaceService = null, configService
 
 function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = [] } = {}) {
   const selectedPlugins = normalizeTrimmedStringList(effectiveRunConfig?.selectedPlugins);
-  const plugins = effectiveRunConfig?.plugins && typeof effectiveRunConfig.plugins === "object"
-    ? effectiveRunConfig.plugins
-    : {};
+  const plugins =
+    effectiveRunConfig?.plugins && typeof effectiveRunConfig.plugins === "object"
+      ? effectiveRunConfig.plugins
+      : {};
   return {
     selectedPlugins,
-    plugins: Object.fromEntries(selectedPlugins.map((pluginId) => [pluginId, {
-      enabled: plugins?.[pluginId]?.enabled === true,
-      mode: String(plugins?.[pluginId]?.mode || "").trim().toLowerCase(),
-    }])),
-    hookManagersReady: Boolean(effectiveRunConfig?.hookManager && effectiveRunConfig?.botHookManager),
+    plugins: Object.fromEntries(
+      selectedPlugins.map((pluginId) => [
+        pluginId,
+        {
+          enabled: plugins?.[pluginId]?.enabled === true,
+          mode: String(plugins?.[pluginId]?.mode || "")
+            .trim()
+            .toLowerCase(),
+        },
+      ]),
+    ),
+    hookManagersReady: Boolean(
+      effectiveRunConfig?.hookManager && effectiveRunConfig?.botHookManager,
+    ),
     disabledPlugins: normalizeTrimmedStringList(disabledPlugins),
     scope: "detached_sub_session",
   };
 }
 
 function resolveObjectEventListener(eventListener = null) {
-  return eventListener && typeof eventListener === "object" && typeof eventListener.onEvent === "function"
+  return eventListener &&
+    typeof eventListener === "object" &&
+    typeof eventListener.onEvent === "function"
     ? eventListener
     : null;
 }

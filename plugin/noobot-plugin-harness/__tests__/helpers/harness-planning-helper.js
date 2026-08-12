@@ -11,6 +11,7 @@ import path from "node:path";
 
 import {
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   createTestResolveModelMessages,
 } from "./public-runtime-fixtures.js";
 import { registerHarnessCore as registerHarnessCoreImpl } from "../../src/index.js";
@@ -20,7 +21,10 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
@@ -38,6 +42,7 @@ export {
   assert,
   assertFlatCapabilityMessages,
   createAgentHookManager,
+  createTestModelResponse,
   exists,
   fs,
   os,

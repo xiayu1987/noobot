@@ -16,7 +16,9 @@ describe("buildSessionDetailProjection", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-1",
-        messages: [{ role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dialog-1" }],
+        messages: [
+          { role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
+        ],
         turnStatuses: [{ turnScopeId: "turn-1", dialogProcessId: "dialog-1", status: "thinking" }],
         turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
       },
@@ -29,7 +31,11 @@ describe("buildSessionDetailProjection", () => {
     expect(projection.turnStatuses[0].status).toBe("thinking");
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
     expect(projection.messages.some((item) => item.role === "user")).toBe(true);
-    expect(projection.messages.some((item) => item.placeholder === true || item.statusTurnScopeId === "turn-1")).toBe(true);
+    expect(
+      projection.messages.some(
+        (item) => item.placeholder === true || item.statusTurnScopeId === "turn-1",
+      ),
+    ).toBe(true);
   });
 
   it("does not create a mutable timing store from a sparse projection", () => {
@@ -49,17 +55,21 @@ describe("buildSessionDetailProjection", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-stopped",
-        messages: [{
-          role: "user",
-          content: "stop this",
-          turnScopeId: "turn-stopped",
-          dialogProcessId: "dialog-stopped",
-        }],
-        turnStatuses: [{
-          status: "user_stopped",
-          turnScopeId: "turn-stopped",
-          dialogProcessId: "dialog-stopped",
-        }],
+        messages: [
+          {
+            role: "user",
+            content: "stop this",
+            turnScopeId: "turn-stopped",
+            dialogProcessId: "dialog-stopped",
+          },
+        ],
+        turnStatuses: [
+          {
+            status: "user_stopped",
+            turnScopeId: "turn-stopped",
+            dialogProcessId: "dialog-stopped",
+          },
+        ],
       },
       makeViewMessage: identity,
     });
@@ -77,18 +87,22 @@ describe("buildSessionDetailProjection", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-1",
-        messages: [{
-          role: "assistant",
-          content: "child agent done",
-          turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
-          dialogProcessId: "dialog-child-1",
-        }],
-        turnTimings: [{
-          turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
-          dialogProcessId: "dialog-child-1",
-          thinkingStartedAt: "2026-07-21T08:29:00.000Z",
-          thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
-        }],
+        messages: [
+          {
+            role: "assistant",
+            content: "child agent done",
+            turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
+            dialogProcessId: "dialog-child-1",
+          },
+        ],
+        turnTimings: [
+          {
+            turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1",
+            dialogProcessId: "dialog-child-1",
+            thinkingStartedAt: "2026-07-21T08:29:00.000Z",
+            thinkingFinishedAt: "2026-07-21T08:30:00.000Z",
+          },
+        ],
       },
       makeViewMessage: identity,
       foldMessagesForView: (messages) => messages.map(identity),
@@ -117,16 +131,18 @@ describe("buildSessionDetailProjection", () => {
             content: "inspect first",
             turnScopeId: "client-turn:resend",
             tool_calls: [{ id: "call-1", name: "read_file" }],
-            activityTimeline: [{
-              eventId: "activity-1",
-              event: "main_model_content",
-              type: "main_model_content",
-              text: "inspect first",
-              sequence: 1,
-              sequenceScopeId: "model-tool-call-1",
-              sequenceDomain: "message-event",
-              authority: "authoritative",
-            }],
+            activityTimeline: [
+              {
+                eventId: "activity-1",
+                event: "main_model_content",
+                type: "main_model_content",
+                text: "inspect first",
+                sequence: 1,
+                sequenceScopeId: "model-tool-call-1",
+                sequenceDomain: "message-event",
+                authority: "authoritative",
+              },
+            ],
           },
           {
             messageId: "model-tool-call-2",
@@ -143,9 +159,17 @@ describe("buildSessionDetailProjection", () => {
             presentationMessageId: "assistant-resend",
             role: "assistant",
             type: "message",
+            chatPresentation: true,
             content: "final answer",
             turnScopeId: "client-turn:resend",
-            attachments: [{ attachmentId: "result-1", sessionId: "session-resend", attachmentSource: "test", name: "result.md" }],
+            attachments: [
+              {
+                attachmentId: "result-1",
+                sessionId: "session-resend",
+                attachmentSource: "test",
+                name: "result.md",
+              },
+            ],
           },
         ],
       },
@@ -173,29 +197,40 @@ describe("buildSessionDetailProjection", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-artifacts",
-        messages: [{
-          id: "assistant-artifacts",
-          role: "assistant",
-          content: "done",
-          turnScopeId: "turn-artifacts",
-          dialogProcessId: "dialog-artifacts",
-          toolTimeline: [{
-            key: "call:call-artifacts",
-            toolCallId: "call-artifacts",
-            tool: "write_file",
-            status: "completed",
-            resultEvent: {
-              eventId: "event-artifacts",
-              attachments: [{ attachmentId: "attachment-artifacts", sessionId: "session-artifacts", attachmentSource: "test", name: "stdout.txt" }],
-              log: {
-                event: "tool_result",
-                type: "tool_result",
+        messages: [
+          {
+            id: "assistant-artifacts",
+            role: "assistant",
+            content: "done",
+            turnScopeId: "turn-artifacts",
+            dialogProcessId: "dialog-artifacts",
+            toolTimeline: [
+              {
+                key: "call:call-artifacts",
                 toolCallId: "call-artifacts",
-                turnScopeId: "turn-artifacts",
+                tool: "write_file",
+                status: "completed",
+                resultEvent: {
+                  eventId: "event-artifacts",
+                  attachments: [
+                    {
+                      attachmentId: "attachment-artifacts",
+                      sessionId: "session-artifacts",
+                      attachmentSource: "test",
+                      name: "stdout.txt",
+                    },
+                  ],
+                  log: {
+                    event: "tool_result",
+                    type: "tool_result",
+                    toolCallId: "call-artifacts",
+                    turnScopeId: "turn-artifacts",
+                  },
+                },
               },
-            },
-          }],
-        }],
+            ],
+          },
+        ],
       },
       makeViewMessage: identity,
     });

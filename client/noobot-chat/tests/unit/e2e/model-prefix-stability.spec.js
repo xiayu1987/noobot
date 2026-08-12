@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import { auditModelPrefixStability } from "../../e2e/protocol/helpers/model-message-assertions.js";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 function trace({
   id,
@@ -50,7 +50,12 @@ describe("model prefix stability audit", () => {
   it("does not compare independent complete requests as one prefix stream", () => {
     const policy = MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST;
     const audit = auditModelPrefixStability([
-      trace({ id: "i1", fingerprints: ["a", "b"], purpose: "memory", contextSequencePolicy: policy }),
+      trace({
+        id: "i1",
+        fingerprints: ["a", "b"],
+        purpose: "memory",
+        contextSequencePolicy: policy,
+      }),
       trace({ id: "i2", fingerprints: ["x"], purpose: "memory", contextSequencePolicy: policy }),
     ]);
 
@@ -98,7 +103,12 @@ describe("model prefix stability audit", () => {
     const audit = auditModelPrefixStability([
       trace({ id: "p1", fingerprints: ["a"], purpose: "planning", ts: "2026-01-01T00:00:01.000Z" }),
       trace({ id: "g1", fingerprints: ["b"], purpose: "guidance", ts: "2026-01-01T00:00:02.000Z" }),
-      trace({ id: "g2", fingerprints: ["b", "c"], purpose: "guidance", ts: "2026-01-01T00:00:03.000Z" }),
+      trace({
+        id: "g2",
+        fingerprints: ["b", "c"],
+        purpose: "guidance",
+        ts: "2026-01-01T00:00:03.000Z",
+      }),
     ]);
 
     expect(audit.violations).toEqual([]);

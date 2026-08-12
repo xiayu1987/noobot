@@ -32,22 +32,23 @@
     "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "@noobot/agent-transport-protocol": "file:../../agent-transport-protocol",
     "@noobot/attachment-protocol": "file:../../attachment-protocol",
     "@noobot/client-shared": "file:../shared",
     "@noobot/context-protocol": "file:../../context-protocol",
-    "@noobot/plugin-runtime": "file:../../plugin-runtime",
+    "@noobot/event-protocol": "file:../../event-protocol",
+    "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
+    "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
-    "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.3",
     "markdown-it": "^14.3.0",
     "mermaid": "^11.16.0",
-    "pinia": "^4.0.2",
-    "vue": "^3.5.40",
     "noobot-i18n": "file:../../i18n",
-    "@noobot/event-protocol": "file:../../event-protocol"
+    "pinia": "^4.0.2",
+    "vue": "^3.5.40"
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
@@ -55,6 +56,7 @@
     "@vue/test-utils": "^2.4.11",
     "es-module-lexer": "^2.1.0",
     "jsdom": "^29.1.1",
+    "noobot-agent": "file:../../agent",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
   },

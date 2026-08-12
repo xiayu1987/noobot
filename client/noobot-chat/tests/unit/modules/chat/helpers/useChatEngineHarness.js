@@ -5,15 +5,14 @@
  */
 import { computed, ref } from "vue";
 import { vi } from "vitest";
-import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
-import { createTurnReplacementCommit } from "@noobot/session-protocol";
+import { createTurnLifecycleEnvelope, createTurnReplacementCommit } from "@noobot/session-protocol";
 import { useChatEngine } from "../../../../../src/modules/chat/composables/useChatEngine.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
+import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
-  RoleEnum,
-  StreamEventEnum,
-} from "../../../../../src/modules/chat/model/chatConstants.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnLifecycleEnvelope,
   applyTurnRuntimeEvent,
@@ -51,7 +50,7 @@ const terminalResolutionFromUrl = (
       sessionId,
       turnScopeId,
       state,
-      phase: state === "stop_completed" ? "stop" : (failure?.stage || "completion"),
+      phase: state === "stop_completed" ? "stop" : failure?.stage || "completion",
       revision,
       sequence,
       completionCommitId,
@@ -102,13 +101,13 @@ export function makeTurnReplacementResponse({
   messages = [replacementUser],
   session = {},
 }) {
-  const replacementDialogProcessId = replacementUser.dialogProcessId
-    || `dialog:${replacementUser.turnScopeId}`;
-  const committedMessages = messages.map((message) => (
+  const replacementDialogProcessId =
+    replacementUser.dialogProcessId || `dialog:${replacementUser.turnScopeId}`;
+  const committedMessages = messages.map((message) =>
     message === replacementUser
       ? { ...message, dialogProcessId: replacementDialogProcessId }
-      : message
-  ));
+      : message,
+  );
   const committedSession = {
     ...session,
     sessionId,
@@ -158,17 +157,22 @@ export const createHarness = ({
   const activeSessionId = ref(sessionId);
   const sessions = ref([makeSession(sessionId)]);
   const activeSession = computed({
-    get: () => sessions.value.find((item) =>
-      [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value)) || null,
+    get: () =>
+      sessions.value.find((item) =>
+        [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value),
+      ) || null,
     set: (value) => {
       const index = sessions.value.findIndex((item) =>
-        [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value));
+        [item?.id, item?.sessionId, item?.sessionId].includes(activeSessionId.value),
+      );
       if (index < 0) sessions.value.push(value);
       else sessions.value[index] = value;
     },
   });
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
-  const runtimeView = computed(() => selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value));
+  const runtimeView = computed(() =>
+    selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value),
+  );
   const sending = computed(() => runtimeView.value.sending);
   const canStop = computed(() => runtimeView.value.canStop);
   const activeTurnRuntime = computed(() => {
@@ -227,9 +231,9 @@ export const createHarness = ({
   const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
     const normalizedMessageId = String(messageId || "").trim();
     if (!normalizedMessageId) return null;
-    const existing = activeSession.value.messages.find((message) => (
-      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
-    ));
+    const existing = activeSession.value.messages.find(
+      (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
+    );
     if (existing) return existing;
     const message = appendMessage(RoleEnum.ASSISTANT, "", [], {
       ...identity,
@@ -247,14 +251,16 @@ export const createHarness = ({
     const normalizedSessionId = String(targetSessionId || "").trim();
     const normalizedMessageId = String(messageId || "").trim();
     if (!normalizedSessionId || !normalizedMessageId) return null;
-    const targetSession = sessions.value.find((sessionItem) => [
-      sessionItem?.id,
-      sessionItem?.sessionId,
-      sessionItem?.sessionId,
-    ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
-    return targetSession?.messages?.find((message) => (
-      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
-    )) || null;
+    const targetSession = sessions.value.find((sessionItem) =>
+      [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
+        (candidate) => String(candidate || "").trim() === normalizedSessionId,
+      ),
+    );
+    return (
+      targetSession?.messages?.find(
+        (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
+      ) || null
+    );
   });
 
   const defaultDeps = {
@@ -300,9 +306,10 @@ export const createHarness = ({
         ? vi.fn(async (payload, onEvent) => {
             currentStreamTurnScopeId = String(payload?.identity?.turnScopeId || "").trim();
             const wrappedOnEvent = (envelope = {}) => {
-              const data = envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
-                ? envelope.data
-                : null;
+              const data =
+                envelope?.data && typeof envelope.data === "object" && !Array.isArray(envelope.data)
+                  ? envelope.data
+                  : null;
               if (
                 autoPatchStreamTurnScopeId &&
                 data &&
@@ -330,15 +337,16 @@ export const createHarness = ({
     notify: vi.fn(),
     terminalResolutionFetcher: vi.fn(async (url) => ({
       ok: true,
-      json: async () => terminalResolutionFromUrl(
-        url,
-        terminalResolutionState,
-        JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
-        {
-          revision: terminalResolutionRevision,
-          sequence: terminalResolutionSequence,
-        },
-      ),
+      json: async () =>
+        terminalResolutionFromUrl(
+          url,
+          terminalResolutionState,
+          JSON.parse(JSON.stringify(activeSession.value?.rawMessages || [])),
+          {
+            revision: terminalResolutionRevision,
+            sequence: terminalResolutionSequence,
+          },
+        ),
     })),
   };
 
@@ -381,42 +389,48 @@ export const activateRuntimeTurn = ({
     sessionId,
     turnScopeId,
   });
-  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
-    eventType: "turn.action_accepted",
-    eventId: `accepted:${sessionId}:${turnScopeId}:${revision}`,
-    commandId,
-    userId,
-    sessionId,
-    turnScopeId,
-    messageId,
-    presentationMessageId,
-    dialogProcessId,
-    revision,
-    sequence,
-    phase: "action",
-    state: "action_requesting",
-    action: "send",
-    executionState: "accepted",
-    capabilities: { actionLocked: true, canStop: false },
-  }));
-  applyTurnLifecycleEnvelope(registry, createTurnLifecycleEnvelope({
-    eventType: "turn.processing_started",
-    eventId: `processing:${sessionId}:${turnScopeId}:${revision + 1}`,
-    commandId,
-    userId,
-    sessionId,
-    turnScopeId,
-    messageId,
-    presentationMessageId,
-    dialogProcessId,
-    revision: revision + 1,
-    sequence: sequence + 1,
-    phase: "processing",
-    state: "processing",
-    action: "send",
-    executionState: "sending",
-    capabilities: { actionLocked: true, canStop: true },
-  }));
+  applyTurnLifecycleEnvelope(
+    registry,
+    createTurnLifecycleEnvelope({
+      eventType: "turn.action_accepted",
+      eventId: `accepted:${sessionId}:${turnScopeId}:${revision}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision,
+      sequence,
+      phase: "action",
+      state: "action_requesting",
+      action: "send",
+      executionState: "accepted",
+      capabilities: { actionLocked: true, canStop: false },
+    }),
+  );
+  applyTurnLifecycleEnvelope(
+    registry,
+    createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started",
+      eventId: `processing:${sessionId}:${turnScopeId}:${revision + 1}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision: revision + 1,
+      sequence: sequence + 1,
+      phase: "processing",
+      state: "processing",
+      action: "send",
+      executionState: "sending",
+      capabilities: { actionLocked: true, canStop: true },
+    }),
+  );
   turnRuntimeRegistry.value = { ...registry };
 };
 
@@ -447,62 +461,66 @@ function authorityEventInput(source = {}) {
 
 export const emitAuthorityProcessing = (onEvent, source = {}) => {
   const {
-  sessionId,
-  turnScopeId,
-  dialogProcessId = "",
-  userId = "u-1",
-  commandId = `send:${turnScopeId}`,
-  messageId = `event-message:${turnScopeId}`,
-  presentationMessageId = `message:${turnScopeId}`,
+    sessionId,
+    turnScopeId,
+    dialogProcessId = "",
+    userId = "u-1",
+    commandId = `send:${turnScopeId}`,
+    messageId = `event-message:${turnScopeId}`,
+    presentationMessageId = `message:${turnScopeId}`,
   } = authorityEventInput(source);
   const emit = (data) => onEvent({ event: StreamEventEnum.TURN_LIFECYCLE, data });
-  emit(createTurnLifecycleEnvelope({
-    eventType: "turn.action_accepted",
-    eventId: `accepted:${sessionId}:${turnScopeId}`,
-    commandId,
-    userId,
-    sessionId,
-    turnScopeId,
-    messageId,
-    presentationMessageId,
-    dialogProcessId,
-    revision: 1,
-    sequence: 1,
-    phase: "action",
-    state: "action_requesting",
-    action: "send",
-    executionState: "accepted",
-    capabilities: { actionLocked: true, canStop: false },
-  }));
-  emit(createTurnLifecycleEnvelope({
-    eventType: "turn.processing_started",
-    eventId: `processing:${sessionId}:${turnScopeId}`,
-    commandId,
-    userId,
-    sessionId,
-    turnScopeId,
-    messageId,
-    presentationMessageId,
-    dialogProcessId,
-    revision: 2,
-    sequence: 2,
-    phase: "processing",
-    state: "processing",
-    action: "send",
-    executionState: "sending",
-    capabilities: { actionLocked: true, canStop: true },
-  }));
+  emit(
+    createTurnLifecycleEnvelope({
+      eventType: "turn.action_accepted",
+      eventId: `accepted:${sessionId}:${turnScopeId}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision: 1,
+      sequence: 1,
+      phase: "action",
+      state: "action_requesting",
+      action: "send",
+      executionState: "accepted",
+      capabilities: { actionLocked: true, canStop: false },
+    }),
+  );
+  emit(
+    createTurnLifecycleEnvelope({
+      eventType: "turn.processing_started",
+      eventId: `processing:${sessionId}:${turnScopeId}`,
+      commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      messageId,
+      presentationMessageId,
+      dialogProcessId,
+      revision: 2,
+      sequence: 2,
+      phase: "processing",
+      state: "processing",
+      action: "send",
+      executionState: "sending",
+      capabilities: { actionLocked: true, canStop: true },
+    }),
+  );
 };
 
 export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
   const {
-  sessionId,
-  turnScopeId,
-  dialogProcessId = "",
-  userId = "u-1",
-  commandId = `send:${turnScopeId}`,
-  messageId = `event-message:${turnScopeId}`,
-  presentationMessageId = `message:${turnScopeId}`,
+    sessionId,
+    turnScopeId,
+    dialogProcessId = "",
+    userId = "u-1",
+    commandId = `send:${turnScopeId}`,
+    messageId = `event-message:${turnScopeId}`,
+    presentationMessageId = `message:${turnScopeId}`,
   } = authorityEventInput(source);
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
@@ -529,24 +547,27 @@ export const emitAuthorityCompletionRequested = (onEvent, source = {}) => {
 
 export const emitAuthorityTerminal = (onEvent, source = {}) => {
   const {
-  sessionId,
-  turnScopeId,
-  dialogProcessId = "",
-  userId = "u-1",
-  commandId = `send:${turnScopeId}`,
-  messageId = `event-message:${turnScopeId}`,
-  presentationMessageId = `message:${turnScopeId}`,
-  state = "completed",
-  sequence = 3,
-  revision = 3,
-  failure = null,
+    sessionId,
+    turnScopeId,
+    dialogProcessId = "",
+    userId = "u-1",
+    commandId = `send:${turnScopeId}`,
+    messageId = `event-message:${turnScopeId}`,
+    presentationMessageId = `message:${turnScopeId}`,
+    state = "completed",
+    sequence = 3,
+    revision = 3,
+    failure = null,
   } = authorityEventInput(source);
   onEvent({
     event: StreamEventEnum.TURN_LIFECYCLE,
     data: createTurnLifecycleEnvelope({
-      eventType: state === "stop_completed" ? "turn.stop_completed" : (
-        failure ? "turn.failed" : "turn.completed"
-      ),
+      eventType:
+        state === "stop_completed"
+          ? "turn.stop_completed"
+          : failure
+            ? "turn.failed"
+            : "turn.completed",
       eventId: `terminal:${sessionId}:${turnScopeId}:${sequence}`,
       commandId,
       userId,

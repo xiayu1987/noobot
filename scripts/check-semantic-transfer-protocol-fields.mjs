@@ -20,7 +20,8 @@ function resolveRepoRoot() {
   const cwd = process.cwd();
   if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts"))) return parent;
+  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts")))
+    return parent;
   return cwd;
 }
 
@@ -56,17 +57,17 @@ const ATTACHMENT_LEGACY_FIELDS = [
   { field: "attachment_metas", regex: /\battachment_metas\b/ },
   { field: "AttachmentMetas", regex: /\bAttachmentMetas\b/ },
 ];
-const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = [
-  "agent/src/artifacts/",
-];
+const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = ["agent/src/artifacts/"];
 const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
   "agent/src/artifacts/runtime/artifact-service.js",
   "agent/src/runtime/facade/agent-runtime-facade.js",
 ]);
 
 function isAttachmentLegacyAllowed(relPath = "") {
-  return ATTACHMENT_LEGACY_ALLOWED_FILES.has(relPath)
-    || ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix));
+  return (
+    ATTACHMENT_LEGACY_ALLOWED_FILES.has(relPath) ||
+    ATTACHMENT_LEGACY_ALLOWED_PREFIXES.some((prefix) => relPath.startsWith(prefix))
+  );
 }
 
 function toPosix(filePath) {
@@ -90,6 +91,19 @@ function walk(dir, out = []) {
   return out;
 }
 
+function collectLineViolations(line, items, file, lineNumber, violations) {
+  for (const item of items) {
+    if (item.regex.test(line)) {
+      violations.push({
+        field: item.field,
+        file,
+        line: lineNumber,
+        text: line.trim(),
+      });
+    }
+  }
+}
+
 const violations = [];
 for (const relDir of TARGET_DIRS) {
   const dir = path.join(ROOT, relDir);
@@ -98,25 +112,9 @@ for (const relDir of TARGET_DIRS) {
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
-      for (const item of FORBIDDEN_FIELDS) {
-        if (!item.regex.test(line)) continue;
-        violations.push({
-          field: item.field,
-          file: rel,
-          line: index + 1,
-          text: line.trim(),
-        });
-      }
+      collectLineViolations(line, FORBIDDEN_FIELDS, rel, index + 1, violations);
       if (!isAttachmentLegacyAllowed(rel)) {
-        for (const item of ATTACHMENT_LEGACY_FIELDS) {
-          if (!item.regex.test(line)) continue;
-          violations.push({
-            field: item.field,
-            file: rel,
-            line: index + 1,
-            text: line.trim(),
-          });
-        }
+        collectLineViolations(line, ATTACHMENT_LEGACY_FIELDS, rel, index + 1, violations);
       }
     }
   }
@@ -125,8 +123,12 @@ for (const relDir of TARGET_DIRS) {
 if (violations.length) {
   console.error("[check-semantic-transfer-protocol-fields] failed");
   console.error("semantic-transfer protocol fields must use transferEnvelopes only.");
-  console.error("Remove legacy transferResult/nodeResultTransferResult and attachmentMetas compatibility from source chains.");
-  console.error("attachmentMetas/inputAttachmentMetas may only exist inside attach/semantic-transfer adapter boundaries.");
+  console.error(
+    "Remove legacy transferResult/nodeResultTransferResult and attachmentMetas compatibility from source chains.",
+  );
+  console.error(
+    "attachmentMetas/inputAttachmentMetas may only exist inside attach/semantic-transfer adapter boundaries.",
+  );
   for (const violation of violations.slice(0, 80)) {
     console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
   }

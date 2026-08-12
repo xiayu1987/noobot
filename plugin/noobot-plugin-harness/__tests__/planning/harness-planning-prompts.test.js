@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import {
   assert,
   assertFlatCapabilityMessages,
@@ -29,7 +30,11 @@ test("harness planning prompt includes current tool names and descriptions", asy
         tools: {
           registry: [
             { name: "read_file", description: "读取文件内容", invoke: async () => ({ ok: true }) },
-            { name: "web_to_data", description: "抓取网页并提取结构化信息", invoke: async () => ({ ok: true }) },
+            {
+              name: "web_to_data",
+              description: "抓取网页并提取结构化信息",
+              invoke: async () => ({ ok: true }),
+            },
           ],
         },
         messages: { system: [], history: [] },
@@ -97,8 +102,14 @@ test("harness initial planning keeps scenario policy out of text protocol and re
   assert.equal(policyIndex, -1);
   assert.equal(responsibilityIndex > planningIndex, true);
   assert.equal(messages[responsibilityIndex].role, "user");
-  assert.doesNotMatch(String(messages[planningIndex].content || ""), /Dynamic test scenario policy/);
-  assert.doesNotMatch(String(messages[responsibilityIndex].content || ""), /Dynamic test scenario policy/);
+  assert.doesNotMatch(
+    String(messages[planningIndex].content || ""),
+    /Dynamic test scenario policy/,
+  );
+  assert.doesNotMatch(
+    String(messages[responsibilityIndex].content || ""),
+    /Dynamic test scenario policy/,
+  );
 });
 
 test("harness planning followup uses text deliverable-batch policy in text scenario", async () => {
@@ -109,7 +120,8 @@ test("harness planning followup uses text deliverable-batch policy in text scena
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({ content: "1. 批量抽取资料\n2. 撰写阶段产物" }),
+      capabilityModelInvoker: async () =>
+        createTestModelResponse("1. 批量抽取资料\n2. 撰写阶段产物"),
     },
   );
 
@@ -151,18 +163,19 @@ test("harness planning captures dynamic policy prompt protocol from separate mod
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({
-        content: [
-          "1. 消费资料并形成阶段产物",
-          "2. 检查来源与格式",
-          "[HARNESS_DYNAMIC_POLICY_PROMPT]",
-          "scenario = text",
-          "reason = use task-specific output policy",
-          "prompt:",
-          "Dynamic policy: produce deliverable text batches, preserve source paths, and avoid tiny execution slices.",
-          "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
-        ].join("\n"),
-      }),
+      capabilityModelInvoker: async () =>
+        createTestModelResponse(
+          [
+            "1. 消费资料并形成阶段产物",
+            "2. 检查来源与格式",
+            "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+            "scenario = text",
+            "reason = use task-specific output policy",
+            "prompt:",
+            "Dynamic policy: produce deliverable text batches, preserve source paths, and avoid tiny execution slices.",
+            "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+          ].join("\n"),
+        ),
     },
   );
 
@@ -203,18 +216,19 @@ test("harness planning followup uses dynamic programming scenario over initial t
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({
-        content: [
-          "1. 检查仓库",
-          "2. 修改代码并运行测试",
-          "[HARNESS_DYNAMIC_POLICY_PROMPT]",
-          "scenario = programming",
-          "reason = actual user intent is code change",
-          "prompt:",
-          "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
-          "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
-        ].join("\n"),
-      }),
+      capabilityModelInvoker: async () =>
+        createTestModelResponse(
+          [
+            "1. 检查仓库",
+            "2. 修改代码并运行测试",
+            "[HARNESS_DYNAMIC_POLICY_PROMPT]",
+            "scenario = programming",
+            "reason = actual user intent is code change",
+            "prompt:",
+            "Dynamic policy: perform smallest-slice reversible code changes and verify after each step.",
+            "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
+          ].join("\n"),
+        ),
     },
   );
 
@@ -247,7 +261,10 @@ test("harness planning followup uses dynamic programming scenario over initial t
   );
   const followupText = String(followupMessage?.content || "");
   assert.doesNotMatch(followupText, /文本场景策略/);
-  assert.doesNotMatch(followupText, /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/);
+  assert.doesNotMatch(
+    followupText,
+    /Dynamic policy: perform smallest-slice reversible code changes and verify after each step/,
+  );
   assert.doesNotMatch(followupText, /建议外部文本拿到就保真消费/);
 });
 
@@ -262,10 +279,9 @@ test("harness planning separate model keeps latest user goal in planning context
       planningGuidanceMode: "separate_model",
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content:
-            '{"totalGoal":"完成用户请求","taskOwner":"AI Agent","nextPhase":{"objective":"推进首步","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"分析用户目标","owner":"AI Agent","subOwners":[],"input":"用户诉求与上下文","output":"可执行任务分解","files":{"create":[],"modify":[],"delete":[]}}]}',
-        };
+        return createTestModelResponse(
+          '{"totalGoal":"完成用户请求","taskOwner":"AI Agent","nextPhase":{"objective":"推进首步","checklistIndexes":[1]},"taskChecklist":[{"index":1,"task":"分析用户目标","owner":"AI Agent","subOwners":[],"input":"用户诉求与上下文","output":"可执行任务分解","files":{"create":[],"modify":[],"delete":[]}}]}',
+        );
       },
     },
   );
@@ -290,7 +306,9 @@ test("harness planning separate model keeps latest user goal in planning context
 
   await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(invocations.length >= 1, true);
-  const allMessagesText = invocations[0].messages.map((item = {}) => String(item?.content || "")).join("\n");
+  const allMessagesText = invocations[0].messages
+    .map((item = {}) => String(item?.content || ""))
+    .join("\n");
   assert.match(allMessagesText, /查找最适合组织的人/);
   assert.doesNotMatch(allMessagesText, /重新查找最适合AI开发的人/);
 });
@@ -310,7 +328,11 @@ test("harness planning operation directory uses sandbox view without losing host
         staticInfo: { defaultWorkdir: `${sandboxBasePath}/runtime/ops_workdir` },
       },
       payload: {
-        tools: { registry: [{ name: "read_file", description: "读取文件", invoke: async () => ({ ok: true }) }] },
+        tools: {
+          registry: [
+            { name: "read_file", description: "读取文件", invoke: async () => ({ ok: true }) },
+          ],
+        },
         messages: { system: [], history: [] },
         harness: {},
       },
@@ -363,7 +385,7 @@ test("harness separate-model plan relay includes operation directory for main ag
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({ content: "1. 解析附件\n2. 执行核心任务" }),
+      capabilityModelInvoker: async () => createTestModelResponse("1. 解析附件\n2. 执行核心任务"),
     },
   );
 
@@ -401,5 +423,8 @@ test("harness separate-model plan relay includes operation directory for main ag
   assert.match(relayText, /Use \(non-sandbox\): \/host\/user-b\/runtime\/ops_workdir/);
   assert.doesNotMatch(relayText, /Sandbox:/);
   assert.match(relayText, /1\. 解析附件/);
-  assert.equal(ctx.agentContext.payload.harness.operationDirectory.absolutePath, `${basePath}/runtime/ops_workdir`);
+  assert.equal(
+    ctx.agentContext.payload.harness.operationDirectory.absolutePath,
+    `${basePath}/runtime/ops_workdir`,
+  );
 });

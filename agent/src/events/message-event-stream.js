@@ -140,11 +140,18 @@ export function currentAssistantModelMessageId(runtime = {}) {
 export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   const id = text(messageId);
   if (!message || typeof message !== "object" || !id) return message;
-  message.id = id;
-  message.messageId = id;
-  if (!message.additional_kwargs || typeof message.additional_kwargs !== "object") message.additional_kwargs = {};
-  message.additional_kwargs.noobotMessageId = id;
-  return message;
+  // Model values are immutable protocol snapshots. Adding the authoritative
+  // message identity is therefore a value transformation, never mutation.
+  const target = { ...message };
+  target.id = id;
+  target.messageId = id;
+  const additionalKwargs =
+    target.additional_kwargs && typeof target.additional_kwargs === "object"
+      ? { ...target.additional_kwargs }
+      : {};
+  additionalKwargs.noobotMessageId = id;
+  target.additional_kwargs = additionalKwargs;
+  return target;
 }
 
 export function createMessageEvent(runtime = {}, eventType = "", data = {}) {

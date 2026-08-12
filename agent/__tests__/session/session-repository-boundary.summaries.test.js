@@ -11,18 +11,18 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import {
   buildSessionDisplaySummary,
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
   SESSIONS_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(
-    path.join(os.tmpdir(), "noobot-session-boundary-"),
-  );
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
   try {
     return await fn(workspaceRoot);
   } finally {
@@ -51,18 +51,6 @@ function canonicalMessages(messages = [], namespace = "summary") {
   });
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 test("session summaries should be maintained and rebuilt for list API", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -83,11 +71,14 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     await runtime.sessionCrudService.ensureSession(userId, "B", "A");
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
-    sessionB.messages = canonicalMessages([
-      { role: "system", content: "ignored" },
-      { role: "user", content: "1234567890123456789012345" },
-      { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
-    ], "list_b");
+    sessionB.messages = canonicalMessages(
+      [
+        { role: "system", content: "ignored" },
+        { role: "user", content: "1234567890123456789012345" },
+        { role: "assistant", content: "done", attachmentMetas: [{ id: "big" }] },
+      ],
+      "list_b",
+    );
     sessionB.currentTaskId = "task-b";
     sessionB.aggregateVersion = 4;
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
@@ -111,7 +102,10 @@ test("session summaries should be maintained and rebuilt for list API", async ()
     assert.equal("messages" in listedB, false);
 
     summary = JSON.parse(
-      await readFile(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"), "utf8"),
+      await readFile(
+        path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"),
+        "utf8",
+      ),
     );
     assert.equal(summary.sessions.find((item) => item.sessionId === "B").depth, 2);
   });
@@ -126,7 +120,10 @@ test("session list excludes orphan session-tree nodes without Session artifacts"
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "orphan" });
 
     const summaries = await runtime.sessionCrudService.getAllSessionSummaries({ userId });
-    assert.deepEqual(summaries.map((item) => item.sessionId), ["materialized"]);
+    assert.deepEqual(
+      summaries.map((item) => item.sessionId),
+      ["materialized"],
+    );
   });
 });
 
@@ -161,7 +158,10 @@ test("session summary rebuild isolates an unreadable session as an unavailable p
     assert.equal(unavailable.messageCount, 0);
     assert.equal(unavailable.lastMessage, null);
     assert.equal(unavailable.unavailableReason.code, "INVALID_TRANSFER_ENVELOPE");
-    assert.equal(unavailable.unavailableReason.message, "invalid_transfer_envelope:forbidden_path_field");
+    assert.equal(
+      unavailable.unavailableReason.message,
+      "invalid_transfer_envelope:forbidden_path_field",
+    );
 
     const persisted = await repository.readSessionsSummary(userId);
     assert.equal(
@@ -183,13 +183,10 @@ test("failed Session repair is marked and skipped on subsequent reads", async ()
 
     const repository = runtime.repositories.sessionRepository;
     let firstErrorCode = "";
-    await assert.rejects(
-      repository.findById(userId, sessionId, ""),
-      (error) => {
-        firstErrorCode = error.code;
-        return Boolean(firstErrorCode);
-      },
-    );
+    await assert.rejects(repository.findById(userId, sessionId, ""), (error) => {
+      firstErrorCode = error.code;
+      return Boolean(firstErrorCode);
+    });
     const lifecycleFile = path.join(
       workspaceRoot,
       userId,
@@ -221,19 +218,21 @@ test("display maintenance migrates repairable artifacts through the Session repa
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
 
     const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
-    session.messages = [{
-      messageUid: "sm-legacy-user",
-      role: "user",
-      content: "legacy message",
-      turnScopeId: "turn-legacy",
-      dialogProcessId: "dialog-legacy",
-    }];
+    session.messages = [
+      {
+        messageUid: "sm-legacy-user",
+        role: "user",
+        content: "legacy message",
+        turnScopeId: "turn-legacy",
+        dialogProcessId: "dialog-legacy",
+      },
+    ];
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
     const sessionDir = path.join(workspaceRoot, userId, "runtime", "session", sessionId);
     await writeFile(
       path.join(sessionDir, "session.json"),
-      JSON.stringify({ ...session, schemaVersion: 4 }),
+      JSON.stringify({ ...session, schemaVersion: 5 }),
       "utf8",
     );
     await writeFile(
@@ -242,13 +241,15 @@ test("display maintenance migrates repairable artifacts through the Session repa
       "utf8",
     );
 
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
+      userId,
+    });
     assert.deepEqual(maintenance.failures, []);
     assert.deepEqual(maintenance.migratedSessionIds, [sessionId]);
     assert.deepEqual(maintenance.rebuiltSessionIds, []);
 
     const manifest = JSON.parse(await readFile(path.join(sessionDir, "session.json"), "utf8"));
-    assert.equal(manifest.schemaVersion, 5);
+    assert.equal(manifest.schemaVersion, 6);
     assert.equal("messages" in manifest, false);
   });
 });
@@ -264,13 +265,15 @@ test("deleting one session does not invalidate another session display summary",
     }
 
     const kept = await runtime.repositories.sessionRepository.findById(userId, "kept", "");
-    kept.messages = [{
-      messageUid: "sm-kept-user",
-      role: "user",
-      content: "keep me",
-      turnScopeId: "turn-kept",
-      dialogProcessId: "dialog-kept",
-    }];
+    kept.messages = [
+      {
+        messageUid: "sm-kept-user",
+        role: "user",
+        content: "keep me",
+        turnScopeId: "turn-kept",
+        dialogProcessId: "dialog-kept",
+      },
+    ];
     await runtime.repositories.sessionRepository.save(userId, kept, "");
     const keptSummaryFile = path.join(
       workspaceRoot,
@@ -284,7 +287,10 @@ test("deleting one session does not invalidate another session display summary",
     assert.equal("depth" in persistedSummary, false);
 
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId: "deleted" });
-    const display = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "kept" });
+    const display = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "kept",
+    });
     assert.equal(display.exists, true);
     assert.equal(display.sessions[0].depth, 1);
     assert.equal(display.sessions[0].messages[0].content, "keep me");
@@ -300,25 +306,36 @@ test("session save refreshes the display projection with live activity timeline"
     await runtime.sessionCrudService.ensureSession(userId, "live", "");
 
     const session = await runtime.repositories.sessionRepository.findById(userId, "live", "");
-    session.messages = canonicalMessages([{
-      role: "assistant",
-      type: "tool_call",
-      chatPresentation: false,
-      presentationMessageId: "presentation-live",
-      turnScopeId: "turn-live",
-      activityTimeline: [{
-        eventId: "guidance-analysis:live",
-        activityKind: "guidance_analysis",
-        sequence: 1,
-        sequenceDomain: "activity",
-        sequenceScopeId: "presentation-live",
-        authority: "authoritative",
-        text: "analysis in progress",
-      }],
-    }], "live");
+    session.messages = canonicalMessages(
+      [
+        {
+          role: "assistant",
+          type: "tool_call",
+          chatPresentation: false,
+          presentationMessageId: "presentation-live",
+          turnScopeId: "turn-live",
+          activityTimeline: [
+            {
+              eventId: "guidance-analysis:live",
+              activityKind: "guidance_analysis",
+              sequence: 1,
+              sequenceDomain: "activity",
+              sequenceScopeId: "presentation-live",
+              authority: "authoritative",
+              text: "analysis in progress",
+            },
+          ],
+        },
+      ],
+      "live",
+    );
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
-    const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "live", "");
+    const display = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
+      userId,
+      "live",
+      "",
+    );
     assert.equal(display.messages.length, 1);
     assert.equal(display.messages[0].presentationMessageId, "presentation-live");
     assert.equal(display.messages[0].thinkingDetailCount, 1);
@@ -332,18 +349,26 @@ test("session save writes the display summary once", async () => {
     const userId = "u1";
     await mkdir(path.join(workspaceRoot, userId), { recursive: true });
     const runtime = createSessionServices({ workspaceRoot });
-    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "single-summary-write" });
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: "single-summary-write",
+    });
     await runtime.sessionCrudService.ensureSession(userId, "single-summary-write", "");
 
     const repository = runtime.repositories.sessionRepository;
-    const originalWriteJsonAtomic = repository.storageService.writeJsonAtomic.bind(repository.storageService);
+    const originalWriteJsonAtomic = repository.storageService.writeJsonAtomic.bind(
+      repository.storageService,
+    );
     let displaySummaryWrites = 0;
     repository.storageService.writeJsonAtomic = async (filePath, payload) => {
       if (String(filePath).endsWith(`${path.sep}session-summary.json`)) displaySummaryWrites += 1;
       return originalWriteJsonAtomic(filePath, payload);
     };
     const session = await repository.findById(userId, "single-summary-write", "");
-    session.messages = canonicalMessages([{ role: "user", content: "one durable update" }], "single_write");
+    session.messages = canonicalMessages(
+      [{ role: "user", content: "one durable update" }],
+      "single_write",
+    );
 
     await repository.save(userId, session, "");
 
@@ -463,17 +488,21 @@ test("concurrent saves for different sessions preserve every sessions summary en
 test("session display summary projects persisted messageUid as canonical message identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "identity-session",
-    messages: [{
-      role: "user",
-      content: "persisted user",
-      messageUid: "sm-persisted-user",
-      frontendUserMessage: true,
-      turnScopeId: "turn-identity",
-    }],
+    messages: [
+      {
+        role: "user",
+        content: "persisted user",
+        messageUid: "sm-persisted-user",
+        frontendUserMessage: true,
+        turnScopeId: "turn-identity",
+      },
+    ],
   });
 
   assert.deepEqual(
-    (({ id, messageId, messageUid, role }) => ({ id, messageId, messageUid, role }))(summary.messages[0]),
+    (({ id, messageId, messageUid, role }) => ({ id, messageId, messageUid, role }))(
+      summary.messages[0],
+    ),
     {
       id: "sm-persisted-user",
       messageId: "sm-persisted-user",
@@ -486,37 +515,38 @@ test("session display summary projects persisted messageUid as canonical message
 test("session display summary preserves the canonical internal control message type", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "internal-control-session",
-    messages: [{
-      role: "user",
-      type: "context_control",
-      content: "task check prompt",
-      messageUid: "sm-task-check-prompt",
-      turnScopeId: "turn-task-check",
-      dialogProcessId: "dialog-task-check",
-      noobotInternalMessageType: "noobot.task_check_prompt",
-    }],
+    messages: [
+      {
+        role: "user",
+        type: "context_control",
+        content: "task check prompt",
+        messageUid: "sm-task-check-prompt",
+        turnScopeId: "turn-task-check",
+        dialogProcessId: "dialog-task-check",
+        noobotInternalMessageType: "noobot.task_check_prompt",
+      },
+    ],
   });
 
   assert.equal(summary.messages.length, 1);
-  assert.equal(
-    summary.messages[0]?.noobotInternalMessageType,
-    "noobot.task_check_prompt",
-  );
+  assert.equal(summary.messages[0]?.noobotInternalMessageType, "noobot.task_check_prompt");
 });
 
 test("session display summary retains a workflow final assistant with stable presentation identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "workflow-final-session",
-    messages: [{
-      role: "assistant",
-      type: "workflow",
-      content: "final workflow body\n\n/workspace/result.md",
-      messageUid: "sm-workflow-final",
-      messageId: "sm-workflow-final",
-      presentationMessageId: "assistant-presentation-workflow",
-      chatPresentation: true,
-      turnScopeId: "turn-workflow",
-    }],
+    messages: [
+      {
+        role: "assistant",
+        type: "workflow",
+        content: "final workflow body\n\n/workspace/result.md",
+        messageUid: "sm-workflow-final",
+        messageId: "sm-workflow-final",
+        presentationMessageId: "assistant-presentation-workflow",
+        chatPresentation: true,
+        turnScopeId: "turn-workflow",
+      },
+    ],
   });
 
   assert.equal(summary.messages.length, 1);
@@ -528,15 +558,17 @@ test("session display summary retains a workflow final assistant with stable pre
 test("session display summary does not synthesize a missing workflow presentation identity", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "workflow-lifecycle-session",
-    messages: [{
-      role: "assistant",
-      type: "workflow",
-      content: "persisted workflow final",
-      messageUid: "sm-workflow-lifecycle",
-      messageId: "sm-workflow-lifecycle",
-      chatPresentation: true,
-      turnScopeId: "turn-workflow-lifecycle",
-    }],
+    messages: [
+      {
+        role: "assistant",
+        type: "workflow",
+        content: "persisted workflow final",
+        messageUid: "sm-workflow-lifecycle",
+        messageId: "sm-workflow-lifecycle",
+        chatPresentation: true,
+        turnScopeId: "turn-workflow-lifecycle",
+      },
+    ],
     turnLifecycle: {
       turns: {
         "turn-workflow-lifecycle": {
@@ -554,15 +586,17 @@ test("session display summary does not synthesize a missing workflow presentatio
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "active-turn-session",
-    messages: [{
-      role: "user",
-      type: "message",
-      content: "resend request",
-      messageUid: "sm-active-user",
-      messageId: "sm-active-user",
-      frontendUserMessage: true,
-      turnScopeId: "turn-active",
-    }],
+    messages: [
+      {
+        role: "user",
+        type: "message",
+        content: "resend request",
+        messageUid: "sm-active-user",
+        messageId: "sm-active-user",
+        frontendUserMessage: true,
+        turnScopeId: "turn-active",
+      },
+    ],
     turnLifecycle: {
       activeTurnScopeId: "turn-active",
       turns: {
@@ -577,25 +611,28 @@ test("session display summary materializes the active Turn presentation in the z
     },
   });
 
-  assert.deepEqual(summary.messages.map((message) => ({
-    role: message.role,
-    messageId: message.messageId,
-    presentationMessageId: message.presentationMessageId || "",
-    turnScopeId: message.turnScopeId,
-  })), [
-    {
-      role: "user",
-      messageId: "sm-active-user",
-      presentationMessageId: "",
-      turnScopeId: "turn-active",
-    },
-    {
-      role: "assistant",
-      messageId: "presentation-active",
-      presentationMessageId: "presentation-active",
-      turnScopeId: "turn-active",
-    },
-  ]);
+  assert.deepEqual(
+    summary.messages.map((message) => ({
+      role: message.role,
+      messageId: message.messageId,
+      presentationMessageId: message.presentationMessageId || "",
+      turnScopeId: message.turnScopeId,
+    })),
+    [
+      {
+        role: "user",
+        messageId: "sm-active-user",
+        presentationMessageId: "",
+        turnScopeId: "turn-active",
+      },
+      {
+        role: "assistant",
+        messageId: "presentation-active",
+        presentationMessageId: "presentation-active",
+        turnScopeId: "turn-active",
+      },
+    ],
+  );
   assert.equal(summary.messages[1].turnPlaceholder, true);
   assert.equal(summary.messages[1].chatPresentation, true);
 });
@@ -610,15 +647,20 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     await runtime.sessionCrudService.ensureSession(userId, sessionId, "");
 
     const session = await runtime.repositories.sessionRepository.findById(userId, sessionId, "");
-    session.messages = canonicalMessages([{
-      id: "user-active-full",
-      messageId: "user-active-full",
-      messageUid: "user-active-full",
-      role: "user",
-      type: "message",
-      content: "resend request",
-      turnScopeId: "turn-active-full",
-    }], "active_full");
+    session.messages = canonicalMessages(
+      [
+        {
+          id: "user-active-full",
+          messageId: "user-active-full",
+          messageUid: "user-active-full",
+          role: "user",
+          type: "message",
+          content: "resend request",
+          turnScopeId: "turn-active-full",
+        },
+      ],
+      "active_full",
+    );
     session.turnLifecycle = {
       activeTurnScopeId: "turn-active-full",
       sequence: 1,
@@ -636,7 +678,10 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     await runtime.repositories.sessionRepository.save(userId, session, "");
     await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
 
-    const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId });
+    const summaryDetail = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId,
+    });
     const fullDetail = await runtime.sessionCrudService.getSessionData({ userId, sessionId });
     const summarySession = summaryDetail.sessions[0];
     const fullSession = fullDetail.sessions[0];
@@ -645,61 +690,76 @@ test("full and summary Session Detail expose the same canonical active Turn mess
     assert.equal(fullDetail.messageProjection, "canonical-presentation");
     assert.equal(summaryDetail.messageProjection, fullDetail.messageProjection);
     assert.deepEqual(fullSession.messages, summarySession.messages);
-    assert.deepEqual(fullSession.messages.map((message) => message.messageId), [
-      "user-active-full",
-      "presentation-active-full",
-    ]);
+    assert.deepEqual(
+      fullSession.messages.map((message) => message.messageId),
+      ["user-active-full", "presentation-active-full"],
+    );
     assert.equal(fullSession.messages[1].turnPlaceholder, true);
-    assert.deepEqual(fullSession.rawMessages.map((message) => message.messageId), ["user-active-full"]);
+    assert.deepEqual(
+      fullSession.rawMessages.map((message) => message.messageId),
+      ["user-active-full"],
+    );
   });
 });
 
 test("session display summary rejects an active Turn without canonical presentation identity", () => {
-  assert.throws(() => buildSessionDisplaySummary({
-    sessionId: "invalid-active-turn-session",
-    messages: [],
-    turnLifecycle: {
-      activeTurnScopeId: "turn-active",
-      turns: { "turn-active": { turnScopeId: "turn-active", state: "processing" } },
-    },
-  }), /presentation_message_id_missing/);
+  assert.throws(
+    () =>
+      buildSessionDisplaySummary({
+        sessionId: "invalid-active-turn-session",
+        messages: [],
+        turnLifecycle: {
+          activeTurnScopeId: "turn-active",
+          turns: { "turn-active": { turnScopeId: "turn-active", state: "processing" } },
+        },
+      }),
+    /presentation_message_id_missing/,
+  );
 });
 
 test("session display summary rejects an active Turn presentation identity owned by another role", () => {
-  assert.throws(() => buildSessionDisplaySummary({
-    sessionId: "conflicting-active-turn-session",
-    messages: [{
-      role: "user",
-      content: "conflicting identity",
-      messageId: "presentation-active",
-      turnScopeId: "turn-active",
-    }],
-    turnLifecycle: {
-      activeTurnScopeId: "turn-active",
-      turns: {
-        "turn-active": {
-          turnScopeId: "turn-active",
-          presentationMessageId: "presentation-active",
-          state: "processing",
+  assert.throws(
+    () =>
+      buildSessionDisplaySummary({
+        sessionId: "conflicting-active-turn-session",
+        messages: [
+          {
+            role: "user",
+            content: "conflicting identity",
+            messageId: "presentation-active",
+            turnScopeId: "turn-active",
+          },
+        ],
+        turnLifecycle: {
+          activeTurnScopeId: "turn-active",
+          turns: {
+            "turn-active": {
+              turnScopeId: "turn-active",
+              presentationMessageId: "presentation-active",
+              state: "processing",
+            },
+          },
         },
-      },
-    },
-  }), /presentation_role_conflict/);
+      }),
+    /presentation_role_conflict/,
+  );
 });
 
 test("session display summary does not duplicate an active Turn with persisted assistant facts", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "active-turn-with-facts",
-    messages: [{
-      role: "assistant",
-      type: "tool_call",
-      content: "",
-      messageId: "model-tool-call",
-      presentationMessageId: "presentation-active",
-      chatPresentation: false,
-      turnScopeId: "turn-active",
-      activityTimeline: [{ eventId: "thinking-1", type: "thinking", text: "working" }],
-    }],
+    messages: [
+      {
+        role: "assistant",
+        type: "tool_call",
+        content: "",
+        messageId: "model-tool-call",
+        presentationMessageId: "presentation-active",
+        chatPresentation: false,
+        turnScopeId: "turn-active",
+        activityTimeline: [{ eventId: "thinking-1", type: "thinking", text: "working" }],
+      },
+    ],
     turnLifecycle: {
       activeTurnScopeId: "turn-active",
       turns: {
@@ -732,21 +792,25 @@ test("session display summary projects one explicit assistant presentation from 
         presentationMessageId: "presentation-1",
         chatPresentation: false,
         turnScopeId: "turn-1",
-        activityTimeline: [{
-          eventId: "thinking-1",
-          event: "thinking",
-          type: "thinking",
-          text: "working",
-          sequence: 1,
-          sequenceScopeId: "model-tool-call",
-          sequenceDomain: "message-event",
-          authority: "authoritative",
-        }],
-        toolTimeline: [{
-          key: "call:tool-1",
-          toolCallId: "tool-1",
-          status: "completed",
-        }],
+        activityTimeline: [
+          {
+            eventId: "thinking-1",
+            event: "thinking",
+            type: "thinking",
+            text: "working",
+            sequence: 1,
+            sequenceScopeId: "model-tool-call",
+            sequenceDomain: "message-event",
+            authority: "authoritative",
+          },
+        ],
+        toolTimeline: [
+          {
+            key: "call:tool-1",
+            toolCallId: "tool-1",
+            status: "completed",
+          },
+        ],
       },
       {
         role: "assistant",
@@ -767,7 +831,12 @@ test("session display summary projects one explicit assistant presentation from 
   assert.equal(summary.messages[0].toolTimeline.length, 1);
   assert.deepEqual(
     (({ id, messageId, messageUid, sourceMessageId, sourceMessageUid, content }) => ({
-      id, messageId, messageUid, sourceMessageId, sourceMessageUid, content,
+      id,
+      messageId,
+      messageUid,
+      sourceMessageId,
+      sourceMessageUid,
+      content,
     }))(summary.messages[0]),
     {
       id: "presentation-1",
@@ -785,35 +854,42 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
   const presentationMessageId = "presentation-active-timeline";
   const summary = buildSessionDisplaySummary({
     sessionId: "active-timeline-session",
-    messages: [{
-      role: "assistant",
-      type: "tool_call",
-      chatPresentation: false,
-      messageId: "source-tool-message",
-      presentationMessageId,
-      turnScopeId,
-      toolTimeline: [{
-        key: "call:active-tool",
-        toolCallId: "active-tool",
-        tool: "read_file",
-        call: { eventId: "tool-start" },
-      }],
-      activityTimeline: [{ eventId: "thinking-active", event: "thinking" }],
-    }, {
-      role: "assistant",
-      type: "tool_call",
-      chatPresentation: false,
-      messageId: "source-tool-message-2",
-      presentationMessageId,
-      turnScopeId,
-      toolTimeline: [{
-        key: "call:active-tool-2",
-        toolCallId: "active-tool-2",
-        tool: "search",
-        call: { eventId: "tool-start-2" },
-      }],
-      activityTimeline: [{ eventId: "thinking-active-2", event: "thinking" }],
-    }],
+    messages: [
+      {
+        role: "assistant",
+        type: "tool_call",
+        chatPresentation: false,
+        messageId: "source-tool-message",
+        presentationMessageId,
+        turnScopeId,
+        toolTimeline: [
+          {
+            key: "call:active-tool",
+            toolCallId: "active-tool",
+            tool: "read_file",
+            call: { eventId: "tool-start" },
+          },
+        ],
+        activityTimeline: [{ eventId: "thinking-active", event: "thinking" }],
+      },
+      {
+        role: "assistant",
+        type: "tool_call",
+        chatPresentation: false,
+        messageId: "source-tool-message-2",
+        presentationMessageId,
+        turnScopeId,
+        toolTimeline: [
+          {
+            key: "call:active-tool-2",
+            toolCallId: "active-tool-2",
+            tool: "search",
+            call: { eventId: "tool-start-2" },
+          },
+        ],
+        activityTimeline: [{ eventId: "thinking-active-2", event: "thinking" }],
+      },
+    ],
     turnLifecycle: {
       activeTurnScopeId: turnScopeId,
       sequence: 1,
@@ -828,18 +904,14 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
       },
     },
   });
-  const activePresentation = summary.messages.find((message) =>
-    message.presentationMessageId === presentationMessageId,
+  const activePresentation = summary.messages.find(
+    (message) => message.presentationMessageId === presentationMessageId,
   );
   assert.equal(activePresentation.toolTimeline.length, 2);
   assert.equal(activePresentation.activityTimeline.length, 2);
   assert.equal(activePresentation.hasThinkingDetails, true);
   assert.equal(activePresentation.thinkingDetailCount, 4);
 });
-
-
-
-
 
 test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -880,206 +952,251 @@ test("session display summary should keep chat view lightweight and rebuild stal
       direction: "output",
       payload: {
         mode: "attachment",
-        attachments: [{
-          identity: { attachmentId: "att-workflow-1", sessionId: "B", attachmentSource: "model" },
-          role: "primary",
-          name: "workflow-result.md",
-          mimeType: "text/markdown",
-          size: 321,
-        }],
+        attachments: [
+          {
+            identity: { attachmentId: "att-workflow-1", sessionId: "B", attachmentSource: "model" },
+            role: "primary",
+            name: "workflow-result.md",
+            mimeType: "text/markdown",
+            size: 321,
+          },
+        ],
       },
-      intent: { source: "plugin", reason: "workflow_result", scenario: "harness", strategy: "harness_summary" },
+      intent: {
+        source: "plugin",
+        reason: "workflow_result",
+        scenario: "harness",
+        strategy: "harness_summary",
+      },
       meta: { persisted: true },
     };
 
     const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
-    sessionB.messages = canonicalMessages([
-      {
-        id: "u1",
-        messageId: "u1",
-        messageUid: "sm-u1",
-        role: "user",
-        turnScopeId: "turn-scope-u1",
-        dialogProcessId: "dp-u1",
-        content: longUserContent,
-        attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
-      },
-      {
-        id: "i1",
-        role: "system",
-        injectedMessage: true,
-        content: "injected secret should not be in summary",
-      },
-      {
-        id: "a1",
-        role: "assistant",
-        turnScopeId: "turn-scope-u1",
-        dialogProcessId: "dp-u1",
-        content: longAssistantContent,
-        activityTimeline: [{
-          eventId: "activity-1", event: "thinking", sequence: 1,
-          sequenceDomain: "message-event", sequenceScopeId: "a1", authority: "authoritative",
-          text: "full thinking",
-        }],
-        toolTimeline: [{
-          key: "call:call-1", toolCallId: "call-1", status: "completed",
-          call: { eventId: "tool-call-1" },
-          resultEvent: {
-            eventId: "tool-result-1",
-            transferEnvelopes: [],
-          },
-        }],
-        tool_calls: [{ id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } }],
-        rawMessages: [{ role: "assistant", content: "raw" }],
-      },
-      {
-        id: "plugin-attachment-assistant",
-        role: "assistant",
-        turnScopeId: "turn-scope-plugin",
-        content: "plugin attachment result",
-        attachments: [
-          {
-            attachmentId: "att-plugin-1",
-            sessionId: "B",
-            attachmentSource: "model",
-            name: "harness-plan-text.txt",
-            mimeType: "text/plain",
-            size: 123,
-            owner: { type: "plugin", id: "harness-plugin" },
-            generationSource: "harness_plan",
-          },
-        ],
-      },
-      {
-        role: "tool",
-        type: "tool_result",
-        turnScopeId: "turn-scope-u1",
-        dialogProcessId: "dp-u1",
-        tool_call_id: "call-1",
-        content: JSON.stringify({
-          toolName: "write_file",
-          state: "OK",
-          resolvedPath: "/workspace/u1/project/a.txt",
-          fileName: "a.txt",
-        }),
-      },
-      {
-        role: "tool",
-        type: "tool_result",
-        tool_call_id: "call-2",
-        content: "ordinary tool result should not be in summary".repeat(20),
-      },
-      {
-        id: "w1",
-        role: "assistant",
-        type: "workflow",
-        turnScopeId: "turn-scope-workflow",
-        presentationMessageId: "w1",
-        chatPresentation: true,
-        content: longWorkflowContent,
-        activityTimeline: [{
-          eventId: "workflow-activity-1",
-          event: "workflow_semantic_response",
-          sequence: 1,
-          sequenceDomain: "message-event",
-          sequenceScopeId: "w1",
-          authority: "authoritative",
-        }],
-        pluginMessage: true,
-        pluginMeta: {
-          pluginId: "p1",
-          source: "workflow-plugin",
-          kind: "workflow",
-          phase: "final",
-          nodeName: "Done",
-          internalState: { huge: true },
-          payload: {
-            workflowRunId: "workflow-run-1",
-            semantic: {
-              nodes: [
-                { id: "start", type: "state", stateType: "start", name: "Start" },
-                { id: "act", type: "action", name: "Action", task: "Do work" },
-              ],
-              flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
+    sessionB.messages = canonicalMessages(
+      [
+        {
+          id: "u1",
+          messageId: "u1",
+          messageUid: "sm-u1",
+          role: "user",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          content: longUserContent,
+          attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
+        },
+        {
+          id: "i1",
+          role: "system",
+          injectedMessage: true,
+          content: "injected secret should not be in summary",
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          content: longAssistantContent,
+          activityTimeline: [
+            {
+              eventId: "activity-1",
+              event: "thinking",
+              sequence: 1,
+              sequenceDomain: "message-event",
+              sequenceScopeId: "a1",
+              authority: "authoritative",
+              text: "full thinking",
             },
-            execution: {
+          ],
+          toolTimeline: [
+            {
+              key: "call:call-1",
+              toolCallId: "call-1",
+              status: "completed",
+              call: { eventId: "tool-call-1" },
+              resultEvent: {
+                eventId: "tool-result-1",
+                transferEnvelopes: [],
+              },
+            },
+          ],
+          tool_calls: [
+            { id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } },
+          ],
+          rawMessages: [{ role: "assistant", content: "raw" }],
+        },
+        {
+          id: "plugin-attachment-assistant",
+          role: "assistant",
+          turnScopeId: "turn-scope-plugin",
+          content: "plugin attachment result",
+          attachments: [
+            {
+              attachmentId: "att-plugin-1",
+              sessionId: "B",
+              attachmentSource: "model",
+              name: "harness-plan-text.txt",
+              mimeType: "text/plain",
+              size: 123,
+              owner: { type: "plugin", id: "harness-plugin" },
+              generationSource: "harness_plan",
+            },
+          ],
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          tool_call_id: "call-1",
+          content: JSON.stringify({
+            toolName: "write_file",
+            state: "OK",
+            resolvedPath: "/workspace/u1/project/a.txt",
+            fileName: "a.txt",
+          }),
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          tool_call_id: "call-2",
+          content: "ordinary tool result should not be in summary".repeat(20),
+        },
+        {
+          id: "w1",
+          role: "assistant",
+          type: "workflow",
+          turnScopeId: "turn-scope-workflow",
+          presentationMessageId: "w1",
+          chatPresentation: true,
+          content: longWorkflowContent,
+          activityTimeline: [
+            {
+              eventId: "workflow-activity-1",
+              event: "workflow_semantic_response",
+              sequence: 1,
+              sequenceDomain: "message-event",
+              sequenceScopeId: "w1",
+              authority: "authoritative",
+            },
+          ],
+          pluginMessage: true,
+          pluginMeta: {
+            pluginId: "p1",
+            source: "workflow-plugin",
+            kind: "workflow",
+            phase: "final",
+            nodeName: "Done",
+            internalState: { huge: true },
+            payload: {
               workflowRunId: "workflow-run-1",
-              instanceId: "workflow-run-1",
-              completed: true,
-              status: "success",
-              nodeAgentRuns: [
+              semantic: {
+                nodes: [
+                  { id: "start", type: "state", stateType: "start", name: "Start" },
+                  { id: "act", type: "action", name: "Action", task: "Do work" },
+                ],
+                flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
+              },
+              execution: {
+                workflowRunId: "workflow-run-1",
+                instanceId: "workflow-run-1",
+                completed: true,
+                status: "success",
+                nodeAgentRuns: [
+                  {
+                    stepId: "step-act",
+                    nodeDialogId: "dialog-act",
+                    nodeSessionId: "session-act",
+                    stepStatus: "success",
+                    step: { nodeId: "act", nodeName: "Action", type: "action" },
+                    nodeResultTransferEnvelopes: [workflowTransferEnvelope],
+                    nodeResultText: "large node result should be dropped".repeat(80),
+                  },
+                ],
+              },
+              nodeSessions: [
                 {
-                  stepId: "step-act",
-                  nodeDialogId: "dialog-act",
-                  nodeSessionId: "session-act",
+                  nodeId: "act",
+                  nodeName: "Action",
+                  dialogId: "dialog-act",
+                  sessionId: "session-act",
                   stepStatus: "success",
-                  step: { nodeId: "act", nodeName: "Action", type: "action" },
-                  nodeResultTransferEnvelopes: [workflowTransferEnvelope],
-                  nodeResultText: "large node result should be dropped".repeat(80),
+                  transferEnvelopes: [workflowTransferEnvelope],
+                  nodeResultText: "large node session result should be dropped".repeat(80),
                 },
               ],
+              diagnostics: { huge: "debug detail should be dropped" },
             },
-            nodeSessions: [
-              {
-                nodeId: "act",
-                nodeName: "Action",
-                dialogId: "dialog-act",
-                sessionId: "session-act",
-                stepStatus: "success",
-                transferEnvelopes: [workflowTransferEnvelope],
-                nodeResultText: "large node session result should be dropped".repeat(80),
-              },
-            ],
-            diagnostics: { huge: "debug detail should be dropped" },
           },
+          transferEnvelopes: [workflowTransferEnvelope],
         },
-        transferEnvelopes: [workflowTransferEnvelope],
-      },
-      {
-        id: "u2",
-        role: "user",
-        type: "message",
-        dialogProcessId: "dp-tool-only",
-        content: "run tool only thinking details",
-      },
-      {
-        id: "tool-display-assistant",
-        role: "assistant",
-        type: "message",
-        dialogProcessId: "dp-tool-only",
-        content: "tool only final answer",
-        toolTimeline: [
-          { key: "call:tool-only-1", toolCallId: "tool-only-1", status: "running", call: { eventId: "tool-only-call-1" } },
-          { key: "call:tool-only-2", toolCallId: "tool-only-2", status: "completed", call: { eventId: "tool-only-call-2" }, resultEvent: { eventId: "tool-only-result-2" } },
-        ],
-      },
-      {
-        role: "assistant",
-        type: "tool_call",
-        dialogProcessId: "dp-tool-only",
-        tool_calls: [
-          { id: "call-tool-only", function: { name: "search", arguments: { q: "demo" } } },
-        ],
-      },
-      {
-        role: "tool",
-        type: "tool_result",
-        dialogProcessId: "dp-tool-only",
-        tool_call_id: "call-tool-only",
-        content: "tool only result detail should not be in summary",
-      },
-    ], "lightweight_b");
+        {
+          id: "u2",
+          role: "user",
+          type: "message",
+          dialogProcessId: "dp-tool-only",
+          content: "run tool only thinking details",
+        },
+        {
+          id: "tool-display-assistant",
+          role: "assistant",
+          type: "message",
+          dialogProcessId: "dp-tool-only",
+          content: "tool only final answer",
+          toolTimeline: [
+            {
+              key: "call:tool-only-1",
+              toolCallId: "tool-only-1",
+              status: "running",
+              call: { eventId: "tool-only-call-1" },
+            },
+            {
+              key: "call:tool-only-2",
+              toolCallId: "tool-only-2",
+              status: "completed",
+              call: { eventId: "tool-only-call-2" },
+              resultEvent: { eventId: "tool-only-result-2" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          type: "tool_call",
+          dialogProcessId: "dp-tool-only",
+          tool_calls: [
+            { id: "call-tool-only", function: { name: "search", arguments: { q: "demo" } } },
+          ],
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          dialogProcessId: "dp-tool-only",
+          tool_call_id: "call-tool-only",
+          content: "tool only result detail should not be in summary",
+        },
+      ],
+      "lightweight_b",
+    );
     await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
 
-    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");
+    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      "B",
+      "A",
+    );
     const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
     const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
-    assert.equal(persistedSession.messages.every((item) => "turnScopeId" in item), true);
+    assert.equal(
+      persistedSession.messages.every((item) => "turnScopeId" in item),
+      true,
+    );
     let summary = JSON.parse(await readFile(summaryFile, "utf8"));
     assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal(summary.sessionId, "B");
     assert.equal(summary.messages.length, 6);
-    assert.equal(summary.messages.every((item) => "turnScopeId" in item), true);
+    assert.equal(
+      summary.messages.every((item) => "turnScopeId" in item),
+      true,
+    );
     assert.deepEqual(
       (({ id, messageId, messageUid }) => ({ id, messageId, messageUid }))(summary.messages[0]),
       { id: "u1", messageId: "u1", messageUid: "sm-u1" },
@@ -1094,15 +1211,25 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(summary.stats.hasToolDetails, true);
     assert.equal("toolLogSummaries" in summary, false);
     assert.equal(summary.messages.find((item) => item.id === "a1").toolTimeline, undefined);
-    assert.equal(typeof summary.messages.find((item) => item.id === "a1").thinkingDetailRef?.file, "string");
-    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(userId, "B", "A");
+    assert.equal(
+      typeof summary.messages.find((item) => item.id === "a1").thinkingDetailRef?.file,
+      "string",
+    );
+    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
+      userId,
+      "B",
+      "A",
+    );
     const assistantMessage = hydratedSummary.messages.find((item) => item.id === "a1");
     assert.equal(assistantMessage.toolTimeline.length, 1);
     assert.equal(assistantMessage.toolTimeline[0].status, "completed");
     assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
     assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, undefined);
     assert.equal("writtenFiles" in assistantMessage.toolTimeline[0].resultEvent, false);
-    assert.equal(JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"), false);
+    assert.equal(
+      JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"),
+      false,
+    );
 
     const userMessage = summary.messages.find((item) => item.id === "u1");
     assert.equal(userMessage.turnScopeId, "turn-scope-u1");
@@ -1128,7 +1255,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
-    const pluginAttachmentAssistant = summary.messages.find((item) => item.id === "plugin-attachment-assistant");
+    const pluginAttachmentAssistant = summary.messages.find(
+      (item) => item.id === "plugin-attachment-assistant",
+    );
     assert.deepEqual(pluginAttachmentAssistant.attachments, [
       {
         attachmentId: "att-plugin-1",
@@ -1144,7 +1273,9 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("id" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
     assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
-    const toolOnlyAssistantMessage = summary.messages.find((item) => item.id === "tool-display-assistant");
+    const toolOnlyAssistantMessage = summary.messages.find(
+      (item) => item.id === "tool-display-assistant",
+    );
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
     assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 2);
@@ -1164,39 +1295,62 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal("internalState" in workflowMessage.pluginMeta, false);
     assert.equal(workflowMessage.pluginMeta.payload.execution.completed, true);
     assert.equal(workflowMessage.pluginMeta.payload.execution.status, "success");
-    assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].stepStatus, "success");
+    assert.equal(
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].stepStatus,
+      "success",
+    );
     assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].step.nodeId, "act");
     assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].stepStatus, "success");
     assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].nodeId, "act");
     assert.equal(workflowMessage.pluginMeta.payload.semantic.nodes.length, 2);
-    assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0], false);
+    assert.equal(
+      "nodeResultText" in workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0],
+      false,
+    );
     assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.nodeSessions[0], false);
     assert.equal("diagnostics" in workflowMessage.pluginMeta.payload, false);
     assert.equal("transferEnvelopes" in workflowMessage, true);
     assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
     assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
     assert.equal("filePath" in workflowMessage.transferEnvelopes[0], false);
-    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-workflow-1");
-    assert.equal(workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.sessionId, "B");
-    assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
     assert.equal(
-      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+      workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(
-      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+      workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.sessionId,
+      "B",
+    );
+    assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal(
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0]
+        .payload.attachments[0].identity.attachmentId,
+      "att-workflow-1",
+    );
+    assert.equal(
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0]
+        .identity.attachmentId,
       "att-workflow-1",
     );
     assert.equal(JSON.stringify(summary).includes("injected secret"), false);
 
-    await writeFile(summaryFile, JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }), "utf8");
+    await writeFile(
+      summaryFile,
+      JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }),
+      "utf8",
+    );
     await assert.rejects(
       runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" }),
       (error) => error?.code === "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED",
     );
-    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({ userId });
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
+      userId,
+    });
     assert.deepEqual(maintenance.rebuiltSessionIds, ["B"]);
-    const displayData = await runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" });
+    const displayData = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "B",
+    });
     assert.equal(displayData.summary, true);
     assert.equal(displayData.sessions.length, 1);
     assert.equal(displayData.sessions[0].depth, 2);

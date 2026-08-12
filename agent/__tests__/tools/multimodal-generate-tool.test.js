@@ -5,10 +5,41 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createModelRequestExecutor } from "@noobot/model-runtime";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 import { createMultimodalGenerateTool } from "../../src/tools/ai-models/multimodal-generate-tool.js";
 
 function getMultimodalGenerateTool(runtime = {}) {
+  if (!runtime.modelPort) {
+    const executor = createModelRequestExecutor({
+      credentialPort: { resolve: ({ modelSpec }) => modelSpec.api_key },
+      providerRuntime: {
+        fetchImpl: runtime?.sharedTools?.fetch,
+      },
+      clock: { sleep: async () => {} },
+    });
+    runtime.modelPort = {
+      invoke(request) {
+        return executor.invoke({
+          ...request,
+          invocation: {
+            requestId: "multimodal-test-request",
+            invocationId: "multimodal-test-invocation",
+            sessionId: "multimodal-test-session",
+            parentSessionId: "",
+            dialogProcessId: "multimodal-test-process",
+            turnScopeId: "multimodal-test-turn",
+            runId: "multimodal-test-run",
+            flow: request.invocation.flow,
+            purpose: request.invocation.purpose,
+            domain: request.invocation.domain,
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+          },
+        });
+      },
+    };
+  }
   const tools = createMultimodalGenerateTool({
     agentContext: { bindings: { runtime } },
   });
@@ -30,6 +61,8 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
           base_url: "https://models.example.com/v1?token=secret",
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -70,10 +103,7 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
         assert.equal(error?.details?.apiType, "images_async");
         assert.equal(error?.details?.callMode, "images_async_api");
         assert.equal(error?.details?.baseUrl, "https://models.example.com/v1");
-        assert.deepEqual(error?.details?.availableApiTypes, [
-          "openai_responses",
-          "images_async",
-        ]);
+        assert.deepEqual(error?.details?.availableApiTypes, ["openai_responses", "images_async"]);
         assert.equal(error?.details?.proxyEnv?.HTTPS_PROXY, "http://***:***@127.0.0.1:7890/");
         assert.equal(JSON.stringify(error?.details?.proxyEnv || {}).includes("secret"), false);
         return true;
@@ -97,6 +127,8 @@ test("multimodal_generate: explicit images_async overrides provider default api 
           base_url: "https://models.example.com/v1",
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -138,7 +170,11 @@ test("multimodal_generate: explicit images_async overrides provider default api 
       return true;
     },
   );
-  assert.deepEqual(requestedUrls, ["https://models.example.com/v1/images/generations"]);
+  assert.deepEqual(requestedUrls, [
+    "https://models.example.com/v1/images/generations",
+    "https://models.example.com/v1/images/generations",
+    "https://models.example.com/v1/images/generations",
+  ]);
 });
 
 test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {
@@ -155,6 +191,8 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
           base_url: `http://127.0.0.1:${port}/v1`,
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -184,7 +222,11 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
             async text() {
               return JSON.stringify({
                 status: "completed",
-                result_data: [{ b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}` }],
+                result_data: [
+                  {
+                    b64_json: `data:image/png;base64,${Buffer.from("fake-image").toString("base64")}`,
+                  },
+                ],
               });
             },
           };
@@ -201,12 +243,14 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
   };
   const tool = getMultimodalGenerateTool(runtime);
 
-  const payload = JSON.parse(await tool.invoke({
-    api_type: "images_async",
-    generation_content: "draw a bird",
-    model_name: "gpt-image-2",
-    size: "1:1",
-  }));
+  const payload = JSON.parse(
+    await tool.invoke({
+      api_type: "images_async",
+      generation_content: "draw a bird",
+      model_name: "gpt-image-2",
+      size: "1:1",
+    }),
+  );
 
   assert.equal(payload.ok, true);
   assert.equal(payload.callMode, "images_async_api");
@@ -231,6 +275,8 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
           base_url: "https://api.aicodewith.com",
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -255,7 +301,10 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
             },
           };
         }
-        if (String(url || "") === "https://api.aicodewith.com/v1/tasks/task-unified-1777017804-vskdh190") {
+        if (
+          String(url || "") ===
+          "https://api.aicodewith.com/v1/tasks/task-unified-1777017804-vskdh190"
+        ) {
           return {
             ok: true,
             async text() {
@@ -287,16 +336,18 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
   };
   const tool = getMultimodalGenerateTool(runtime);
 
-  const payload = JSON.parse(await tool.invoke({
-    api_type: "images_async",
-    generation_content: "一只可爱的猫咪在阳光下打盹",
-    model_name: "gpt-image-2",
-    size: "1:1",
-    resolution: "1K",
-    n: 4,
-    quality: "low",
-    image_urls: ["https://your-image-url.png"],
-  }));
+  const payload = JSON.parse(
+    await tool.invoke({
+      api_type: "images_async",
+      generation_content: "一只可爱的猫咪在阳光下打盹",
+      model_name: "gpt-image-2",
+      size: "1:1",
+      resolution: "1K",
+      n: 4,
+      quality: "low",
+      image_urls: ["https://your-image-url.png"],
+    }),
+  );
 
   assert.equal(payload.ok, true);
   assert.equal(payload.summary.task_id, "task-unified-1777017804-vskdh190");
@@ -306,15 +357,17 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
     "GET https://api.aicodewith.com/v1/tasks/task-unified-1777017804-vskdh190",
     "GET https://cdn.example.com/generated-cat.png",
   ]);
-  assert.deepEqual(bodies, [{
-    model: "gpt-image-2",
-    prompt: "一只可爱的猫咪在阳光下打盹",
-    size: "1:1",
-    resolution: "1K",
-    n: 4,
-    quality: "low",
-    image_urls: ["https://your-image-url.png"],
-  }]);
+  assert.deepEqual(bodies, [
+    {
+      model: "gpt-image-2",
+      prompt: "一只可爱的猫咪在阳光下打盹",
+      size: "1:1",
+      resolution: "1K",
+      n: 4,
+      quality: "low",
+      image_urls: ["https://your-image-url.png"],
+    },
+  ]);
 });
 
 test("multimodal_generate: images_async normalizes chatgpt base path to official v1 task endpoint", async () => {
@@ -329,6 +382,8 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
           base_url: "https://api.aicodewith.com/chatgpt/v1",
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -397,6 +452,8 @@ test("multimodal_generate: images_async applies official parameter defaults and 
           base_url: "https://api.aicodewith.com",
           model: "gpt-image-2-beta",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -469,6 +526,8 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
           base_url: "https://api.aicodewith.com",
           model: "gpt-image-2",
           format: "openai_compatible",
+          providerId: "gpt_image_2",
+          adapterId: "openai-compatible",
           multimodal_generation: {
             support_understanding: false,
             support_generation: {
@@ -513,8 +572,8 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
     (error) => {
       assert.equal(error?.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
       assert.match(error?.message || "", /not found \(request_id: req_404\)/);
-      assert.match(error?.message || "", /任务不存在或无权访问/);
-      assert.match(error?.message || "", /只能查询自己创建的任务/);
+      assert.doesNotMatch(error?.message || "", /任务不存在或无权访问/);
+      assert.doesNotMatch(error?.message || "", /只能查询自己创建的任务/);
       assert.equal(error?.details?.requestMethod, "GET");
       assert.equal(error?.details?.requestUrl, "https://api.aicodewith.com/v1/tasks/task-private");
       return true;

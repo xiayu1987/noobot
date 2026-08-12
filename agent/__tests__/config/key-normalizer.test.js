@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeKnownConfigKeys } from "../../src/config/core/key-normalizer.js";
+import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
 
 test("normalizeKnownConfigKeys: 应将已知 snake_case 键转换为 camelCase", () => {
   const input = {
@@ -41,10 +41,7 @@ test("normalizeKnownConfigKeys: mcp_servers 子树内键名应保持原样", () 
 
 test("normalizeKnownConfigKeys: 数组和基础类型应被安全处理", () => {
   const input = {
-    docker_mounts: [
-      { mount_source: "/a", mount_target: "/b" },
-      "plain",
-    ],
+    docker_mounts: [{ mount_source: "/a", mount_target: "/b" }, "plain"],
     value: 1,
   };
   const out = normalizeKnownConfigKeys(input);

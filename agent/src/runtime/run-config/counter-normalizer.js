@@ -7,17 +7,7 @@
 export function normalizeSystemRuntimeCounters(systemRuntime, userMessage) {
   if (!systemRuntime || typeof systemRuntime !== "object") return;
 
-  const toolLoopExecutionCount = Number(systemRuntime.toolLoopExecutionCount || 0);
-  systemRuntime.toolLoopExecutionCount =
-    Number.isFinite(toolLoopExecutionCount) && toolLoopExecutionCount > 0
-      ? toolLoopExecutionCount
-      : 0;
-
-  const phaseSummaryLoopCount = Number(
-    systemRuntime.phaseSummaryLoopCount ??
-      systemRuntime.toolLoopExecutionCount ??
-      0,
-  );
+  const phaseSummaryLoopCount = Number(systemRuntime.phaseSummaryLoopCount || 0);
   systemRuntime.phaseSummaryLoopCount =
     Number.isFinite(phaseSummaryLoopCount) && phaseSummaryLoopCount > 0
       ? phaseSummaryLoopCount

@@ -28,6 +28,7 @@ test("default semantic prompt documents closed state-node constructs", () => {
   assert.match(zh, /stateType=merge 汇聚/);
   assert.match(zh, /branch -> actions -> merge 的闭合并发段/);
   assert.match(zh, /避免悬空 branch 或 merge/);
+  assert.match(zh, /工具名、参数值、调用次数、顺序和禁止条件必须逐字保留/);
 
   const en = getWorkflowDefaultSemanticPrompt("en-US");
   assert.match(en, /Structural constraints/);
@@ -37,6 +38,8 @@ test("default semantic prompt documents closed state-node constructs", () => {
   assert.match(en, /stateType=merge/);
   assert.match(en, /closed branch -> actions -> merge segment/);
   assert.match(en, /dangling branch or merge/);
+  assert.match(en, /tool names, argument values, call counts, ordering, and prohibitions/);
+  assert.match(en, /preserved verbatim/);
 });
 
 function createMockBotHookManager() {
@@ -417,7 +420,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
       enabled: true,
       mode: "on",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A"',
@@ -425,7 +428,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
           'EDGE from=start to=act',
           'EDGE from=act to=end',
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
         childRunPayload = payload;

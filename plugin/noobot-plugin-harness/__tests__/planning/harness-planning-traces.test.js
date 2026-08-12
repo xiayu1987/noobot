@@ -7,6 +7,7 @@ import {
   assert,
   assertFlatCapabilityMessages,
   createAgentHookManager,
+  createTestModelResponse,
   exists,
   fs,
   os,
@@ -26,21 +27,11 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
       basePath,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({
-        content: '{"taskOwner":"Noobot","taskChecklist":[{"index":1,"task":"检查上下文","owner":"Noobot"}]}',
-        output: '{"taskOwner":"Noobot","taskChecklist":[{"index":1,"task":"检查上下文","owner":"Noobot"}]}',
-        finishedReason: "no_tool_call",
-        turn: 1,
-        traces: [
-          {
-            turn: 1,
-            purpose: "planning",
-            domain: "planning",
-            locale: "zh-CN",
-            toolCalls: [{ name: "call_service", id: "c1", status: "executed" }],
-          },
-        ],
-      }),
+      capabilityModelInvoker: async () =>
+        createTestModelResponse(
+          '{"taskOwner":"Noobot","taskChecklist":[{"index":1,"task":"检查上下文","owner":"Noobot"}]}',
+          { toolCalls: [{ name: "call_service", id: "c1", status: "executed" }] },
+        ),
     },
   );
 
@@ -67,7 +58,7 @@ test("harness writes capability model traces to dedicated jsonl artifact", async
   assert.equal(typeof record.traceId, "string");
   assert.equal(record.traceId.length > 0, true);
   assert.equal(record.detail.purpose, "planning");
-  assert.equal(record.detail.traces[0].toolCalls[0].status, "executed");
+  assert.equal(record.detail.modelAttempts[0].output.toolCalls[0].status, "executed");
 
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   assert.equal(manifest.paths.capabilityTraces, traceFile);

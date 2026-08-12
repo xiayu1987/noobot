@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { filePath as path, isAbsolutePathAnyPlatform } from "@noobot/path-resolver";
+import {
+  filePath as path,
+  isAbsolutePathAnyPlatform,
+  resolveSandboxPath,
+} from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import {
@@ -17,7 +21,6 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
-import { resolveSandboxPath } from "@noobot/path-resolver";
 import {
   DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_READ_MAX_LINES,
@@ -28,7 +31,12 @@ import {
   splitLines,
   toPositiveInt,
 } from "./file-utils.js";
-import { collectSearchFiles, hasRipgrep, searchFilesWithRipgrep, searchInText } from "./file-search.js";
+import {
+  collectSearchFiles,
+  hasRipgrep,
+  searchFilesWithRipgrep,
+  searchInText,
+} from "./file-search.js";
 import { confirmCriticalToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import {
   applySearchHunks,
@@ -83,12 +91,16 @@ function buildPatchFailurePayload({
 
 function resolveFileToolIsSandbox(agentContext = {}) {
   const runtime = agentContext?.bindings?.runtime || {};
-  const globalCfg = runtime?.globalConfig?.tools?.execute_script && typeof runtime.globalConfig.tools.execute_script === "object"
-    ? runtime.globalConfig.tools.execute_script
-    : {};
-  const userCfg = runtime?.userConfig?.tools?.execute_script && typeof runtime.userConfig.tools.execute_script === "object"
-    ? runtime.userConfig.tools.execute_script
-    : {};
+  const globalCfg =
+    runtime?.globalConfig?.tools?.execute_script &&
+    typeof runtime.globalConfig.tools.execute_script === "object"
+      ? runtime.globalConfig.tools.execute_script
+      : {};
+  const userCfg =
+    runtime?.userConfig?.tools?.execute_script &&
+    typeof runtime.userConfig.tools.execute_script === "object"
+      ? runtime.userConfig.tools.execute_script
+      : {};
   const scriptConfig = { ...globalCfg, ...userCfg };
   return scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
 }
@@ -101,9 +113,7 @@ function toFileToolDisplayPath({ resolvedPath = "", agentContext = {} } = {}) {
     runtime,
     agentContext,
   });
-  return resolveFileToolIsSandbox(agentContext) && sandboxPath
-    ? sandboxPath
-    : resolvedPath;
+  return resolveFileToolIsSandbox(agentContext) && sandboxPath ? sandboxPath : resolvedPath;
 }
 
 function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
@@ -131,13 +141,18 @@ function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
     }
     return "";
   })();
-  return [baseText, modeText].map((item) => String(item || "").trim()).filter(Boolean).join(" ");
+  return [baseText, modeText]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 function uniqueNumbers(values = []) {
-  return Array.from(new Set(values
-    .map((item) => Number(item))
-    .filter((item) => Number.isInteger(item) && item >= 0)));
+  return Array.from(
+    new Set(
+      values.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item >= 0),
+    ),
+  );
 }
 
 function buildPatchParseAttempts({ format = "", patch = "", strip = 1 } = {}) {
@@ -160,7 +175,11 @@ function buildPatchRootAttempts(root = "") {
   const normalizedRoot = String(root || "").trim();
   if (!normalizedRoot) return [""];
   const attempts = [normalizedRoot];
-  if (normalizedRoot === ".." || normalizedRoot.startsWith("../") || normalizedRoot.startsWith("..\\")) {
+  if (
+    normalizedRoot === ".." ||
+    normalizedRoot.startsWith("../") ||
+    normalizedRoot.startsWith("..\\")
+  ) {
     attempts.push("");
   }
   return Array.from(new Set(attempts));
@@ -172,7 +191,13 @@ function parsePatchAttempt({ patch = "", attempt = {} } = {}) {
     : parseUnifiedDiff(patch, attempt.strip);
 }
 
-async function preparePatchExecution({ format = "", patch = "", strip = 1, root = "", agentContext = {} } = {}) {
+async function preparePatchExecution({
+  format = "",
+  patch = "",
+  strip = 1,
+  root = "",
+  agentContext = {},
+} = {}) {
   const attempts = buildPatchParseAttempts({ format, patch, strip });
   const rootAttempts = buildPatchRootAttempts(root);
   const failures = [];
@@ -186,7 +211,11 @@ async function preparePatchExecution({ format = "", patch = "", strip = 1, root 
         continue;
       }
       try {
-        const targets = await resolvePatchTargetsWithOptions({ patches: parsed, agentContext, root: rootAttempt });
+        const targets = await resolvePatchTargetsWithOptions({
+          patches: parsed,
+          agentContext,
+          root: rootAttempt,
+        });
         return { ...attempt, root: rootAttempt, parsed, targets };
       } catch (error) {
         failures.push({ ...attempt, root: rootAttempt, stage: "resolve", error });
@@ -207,10 +236,13 @@ async function preparePatchExecution({ format = "", patch = "", strip = 1, root 
       message: item.error?.message || String(item.error),
     }));
   }
-  throw error || recoverableToolError("invalid patch", {
-    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-    details: { field: "patch" },
-  });
+  throw (
+    error ||
+    recoverableToolError("invalid patch", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: { field: "patch" },
+    })
+  );
 }
 
 export function createFileTool({ agentContext }) {
@@ -222,14 +254,45 @@ export function createFileTool({ agentContext }) {
     description: tTool(agentContext, "tools.file.readDescriptionWithLineNumbers"),
     schema: z.object({
       filePath: z.string().describe(tTool(agentContext, "tools.file.readFilePathField")),
-      startLine: z.number().int().optional().describe(tTool(agentContext, "tools.file.readStartLineField")),
-      endLine: z.number().int().optional().describe(tTool(agentContext, "tools.file.readEndLineField")),
-      includeLineNumbers: z.boolean().optional().default(true).describe(tTool(agentContext, "tools.file.readIncludeLineNumbersField")),
-      maxLines: z.number().int().optional().default(DEFAULT_READ_MAX_LINES).describe(tTool(agentContext, "tools.file.readMaxLinesField")),
+      startLine: z
+        .number()
+        .int()
+        .optional()
+        .describe(tTool(agentContext, "tools.file.readStartLineField")),
+      endLine: z
+        .number()
+        .int()
+        .optional()
+        .describe(tTool(agentContext, "tools.file.readEndLineField")),
+      includeLineNumbers: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe(tTool(agentContext, "tools.file.readIncludeLineNumbersField")),
+      maxLines: z
+        .number()
+        .int()
+        .optional()
+        .default(DEFAULT_READ_MAX_LINES)
+        .describe(tTool(agentContext, "tools.file.readMaxLinesField")),
       riskLevel: createRiskLevelSchema(agentContext, "tools.file.readRiskLevelField"),
     }),
-    func: async ({ filePath, startLine, endLine, includeLineNumbers = true, maxLines = DEFAULT_READ_MAX_LINES, riskLevel }) => {
-      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.READ_FILE, operation: "read file", target: "the requested file", reason: "The file may contain privacy information, credentials, tokens, or secrets." });
+    func: async ({
+      filePath,
+      startLine,
+      endLine,
+      includeLineNumbers = true,
+      maxLines = DEFAULT_READ_MAX_LINES,
+      riskLevel,
+    }) => {
+      await confirmCriticalToolOperation({
+        runtime,
+        riskLevel,
+        toolName: TOOL_NAME.READ_FILE,
+        operation: "read file",
+        target: "the requested file",
+        reason: "The file may contain privacy information, credentials, tokens, or secrets.",
+      });
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
@@ -275,18 +338,29 @@ export function createFileTool({ agentContext }) {
     schema: z.object({
       filePath: z.string().describe(tTool(agentContext, "tools.file.writeFilePathField")),
       content: z.string().describe(tTool(agentContext, "tools.file.writeContentField")),
-      overwrite: z.boolean().optional().default(true).describe(tTool(agentContext, "tools.file.writeOverwriteField")),
+      overwrite: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe(tTool(agentContext, "tools.file.writeOverwriteField")),
       riskLevel: createRiskLevelSchema(agentContext, "tools.file.writeRiskLevelField"),
     }),
     func: async ({ filePath, content, overwrite = true, riskLevel }) => {
-      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.WRITE_FILE, operation: "write file", target: "the requested file", reason: "The write may make destructive or security-sensitive changes." });
+      await confirmCriticalToolOperation({
+        runtime,
+        riskLevel,
+        toolName: TOOL_NAME.WRITE_FILE,
+        operation: "write file",
+        target: "the requested file",
+        reason: "The write may make destructive or security-sensitive changes.",
+      });
       assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
       const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
         filePath,
         agentContext,
         fieldName: "filePath",
       });
-      if (overwrite === false && await exists(resolvedPath)) {
+      if (overwrite === false && (await exists(resolvedPath))) {
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           message: "file exists; set overwrite=true to replace it",
@@ -303,12 +377,14 @@ export function createFileTool({ agentContext }) {
         resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         isSandbox,
-        outputArtifacts: [{
-          type: "text",
-          name: path.basename(resolvedPath),
-          mimeType: "text/plain",
-          content,
-        }],
+        outputArtifacts: [
+          {
+            type: "text",
+            name: path.basename(resolvedPath),
+            mimeType: "text/plain",
+            content,
+          },
+        ],
       });
     },
   });
@@ -317,19 +393,59 @@ export function createFileTool({ agentContext }) {
     name: TOOL_NAME.SEARCH,
     description: tTool(agentContext, "tools.search.description"),
     schema: z.object({
-      source: z.enum(["files", "text"]).optional().default("files").describe(tTool(agentContext, "tools.search.fieldSource")),
+      source: z
+        .enum(["files", "text"])
+        .optional()
+        .default("files")
+        .describe(tTool(agentContext, "tools.search.fieldSource")),
       query: z.string().describe(tTool(agentContext, "tools.search.fieldQuery")),
-      isRegex: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.search.fieldIsRegex")),
-      caseSensitive: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.search.fieldCaseSensitive")),
+      isRegex: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(tTool(agentContext, "tools.search.fieldIsRegex")),
+      caseSensitive: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(tTool(agentContext, "tools.search.fieldCaseSensitive")),
       path: z.string().optional().describe(tTool(agentContext, "tools.search.fieldPath")),
       glob: z.string().optional().describe(tTool(agentContext, "tools.search.fieldGlob")),
       text: z.string().optional().describe(tTool(agentContext, "tools.search.fieldText")),
-      contextLines: z.number().int().optional().default(DEFAULT_SEARCH_CONTEXT_LINES).describe(tTool(agentContext, "tools.search.fieldContextLines")),
-      maxResults: z.number().int().optional().default(DEFAULT_SEARCH_MAX_RESULTS).describe(tTool(agentContext, "tools.search.fieldMaxResults")),
+      contextLines: z
+        .number()
+        .int()
+        .optional()
+        .default(DEFAULT_SEARCH_CONTEXT_LINES)
+        .describe(tTool(agentContext, "tools.search.fieldContextLines")),
+      maxResults: z
+        .number()
+        .int()
+        .optional()
+        .default(DEFAULT_SEARCH_MAX_RESULTS)
+        .describe(tTool(agentContext, "tools.search.fieldMaxResults")),
       riskLevel: createRiskLevelSchema(agentContext, "tools.search.fieldRiskLevel"),
     }),
-    func: async ({ source = "files", query, isRegex = false, caseSensitive = false, path: inputPath = ".", glob = "", text = "", contextLines = DEFAULT_SEARCH_CONTEXT_LINES, maxResults = DEFAULT_SEARCH_MAX_RESULTS, riskLevel }) => {
-      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.SEARCH, operation: source === "text" ? "search provided text" : "search local files", target: source === "text" ? "caller-provided text" : "the requested file scope", reason: "Search results may contain privacy information, credentials, tokens, or secrets." });
+    func: async ({
+      source = "files",
+      query,
+      isRegex = false,
+      caseSensitive = false,
+      path: inputPath = ".",
+      glob = "",
+      text = "",
+      contextLines = DEFAULT_SEARCH_CONTEXT_LINES,
+      maxResults = DEFAULT_SEARCH_MAX_RESULTS,
+      riskLevel,
+    }) => {
+      await confirmCriticalToolOperation({
+        runtime,
+        riskLevel,
+        toolName: TOOL_NAME.SEARCH,
+        operation: source === "text" ? "search provided text" : "search local files",
+        target: source === "text" ? "caller-provided text" : "the requested file scope",
+        reason: "Search results may contain privacy information, credentials, tokens, or secrets.",
+      });
       const normalizedSource = String(source || "files").trim() === "text" ? "text" : "files";
       const normalizedQuery = String(query || "");
       if (!normalizedQuery) {
@@ -337,7 +453,14 @@ export function createFileTool({ agentContext }) {
       }
       if (normalizedSource === "text") {
         const normalizedText = String(text || "");
-        const result = searchInText({ text: normalizedText, query: normalizedQuery, isRegex, caseSensitive, contextLines, maxResults });
+        const result = searchInText({
+          text: normalizedText,
+          query: normalizedQuery,
+          isRegex,
+          caseSensitive,
+          contextLines,
+          maxResults,
+        });
         return toToolJsonResult(TOOL_NAME.SEARCH, {
           ok: true,
           source: "text",
@@ -377,9 +500,7 @@ export function createFileTool({ agentContext }) {
           fastSearchResult = null;
         }
       }
-      let matches = Array.isArray(fastSearchResult?.matches)
-        ? fastSearchResult.matches
-        : [];
+      let matches = Array.isArray(fastSearchResult?.matches) ? fastSearchResult.matches : [];
       let truncated = fastSearchResult?.truncated === true;
       if (!fastSearchResult) {
         const files = await collectSearchFiles({
@@ -391,7 +512,8 @@ export function createFileTool({ agentContext }) {
         });
         matches = [];
         for (const file of files) {
-          if (abortSignal?.aborted) throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
+          if (abortSignal?.aborted)
+            throw abortSignal.reason || new DOMException("The operation was aborted", "AbortError");
           if (matches.length >= maxCount) break;
           let content = "";
           try {
@@ -428,15 +550,38 @@ export function createFileTool({ agentContext }) {
     name: TOOL_NAME.PATCH_FILE,
     description: tTool(agentContext, "tools.patch_file.description"),
     schema: z.object({
-      format: z.enum(["unified_diff", "apply_patch"]).optional().describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
+      format: z
+        .enum(["unified_diff", "apply_patch"])
+        .optional()
+        .describe(tTool(agentContext, "tools.patch_file.fieldFormat")),
       patch: z.string().describe(buildPatchFieldDescription(agentContext, "fieldPatch")),
-      strip: z.number().int().optional().default(1).describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
-      root: z.string().optional().default("").describe(buildPatchFieldDescription(agentContext, "fieldRoot")),
-      dryRun: z.boolean().optional().default(false).describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
+      strip: z
+        .number()
+        .int()
+        .optional()
+        .default(1)
+        .describe(tTool(agentContext, "tools.patch_file.fieldStrip")),
+      root: z
+        .string()
+        .optional()
+        .default("")
+        .describe(buildPatchFieldDescription(agentContext, "fieldRoot")),
+      dryRun: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(tTool(agentContext, "tools.patch_file.fieldDryRun")),
       riskLevel: createRiskLevelSchema(agentContext, "tools.patch_file.fieldRiskLevel"),
     }),
     func: async ({ format, patch = "", strip = 1, root = "", dryRun = false, riskLevel }) => {
-      await confirmCriticalToolOperation({ runtime, riskLevel, toolName: TOOL_NAME.PATCH_FILE, operation: dryRun ? "validate file patch" : "apply file patch", target: "the requested file scope", reason: "The patch may add, modify, move, or delete files." });
+      await confirmCriticalToolOperation({
+        runtime,
+        riskLevel,
+        toolName: TOOL_NAME.PATCH_FILE,
+        operation: dryRun ? "validate file patch" : "apply file patch",
+        target: "the requested file scope",
+        reason: "The patch may add, modify, move, or delete files.",
+      });
       const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
       const normalizedFormat = prepared.format;
       const stripAppliesToTargets = prepared.targets.some((item) => {
@@ -471,9 +616,11 @@ export function createFileTool({ agentContext }) {
         const original = await readFile(item.resolvedOldPath, "utf8");
         let nextContent = "";
         try {
-          nextContent = normalizedFormat === "unified_diff" && !(item.hunks || []).some((hunk) => hunk?.searchOnly)
-            ? applyUnifiedHunks(original, item.hunks || [])
-            : applySearchHunks(original, item.hunks || []);
+          nextContent =
+            normalizedFormat === "unified_diff" &&
+            !(item.hunks || []).some((hunk) => hunk?.searchOnly)
+              ? applyUnifiedHunks(original, item.hunks || [])
+              : applySearchHunks(original, item.hunks || []);
         } catch (error) {
           return toToolJsonResult(
             TOOL_NAME.PATCH_FILE,
@@ -489,7 +636,11 @@ export function createFileTool({ agentContext }) {
           );
         }
         const outputPath = item.resolvedNewPath || item.resolvedOldPath;
-        writePlans.push({ filePath: outputPath, content: nextContent, displayPath: item.newPath || item.oldPath });
+        writePlans.push({
+          filePath: outputPath,
+          content: nextContent,
+          displayPath: item.newPath || item.oldPath,
+        });
         if (item.mode === "move" && item.resolvedOldPath !== outputPath) {
           deletePlans.push({ filePath: item.resolvedOldPath, displayPath: item.oldPath });
         }
@@ -511,8 +662,12 @@ export function createFileTool({ agentContext }) {
         dryRun: dryRun === true,
         root: String(resolvedRoot || ""),
         requestedRoot: String(root || ""),
-        changedFiles: writePlans.map((item) => toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext })),
-        deletedFiles: deletePlans.map((item) => toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext })),
+        changedFiles: writePlans.map((item) =>
+          toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
+        ),
+        deletedFiles: deletePlans.map((item) =>
+          toFileToolDisplayPath({ resolvedPath: item.filePath, agentContext }),
+        ),
         resolvedFiles: [
           ...writePlans.map((item) => ({
             path: item.displayPath,

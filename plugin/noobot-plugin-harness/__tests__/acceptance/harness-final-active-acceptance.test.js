@@ -12,11 +12,14 @@ import path from "node:path";
 import {
   createTestHookContext,
   createTestHookManager as createAgentHookManager,
+  createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
+import {
+  createAcceptanceHandler,
+  createGuidanceHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
 import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
@@ -24,13 +27,15 @@ function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 1, true);
   const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)), true);
+  assert.equal(
+    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
+    true,
+  );
   const first = messages[0] || {};
   const last = messages[messages.length - 1] || {};
   assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
   assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
 }
-
 
 test("final acceptance separate model receives revised plan, all phase checklists, then final request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });
@@ -70,25 +75,34 @@ test("final acceptance separate model receives revised plan, all phase checklist
         acceptance: { semanticValidation: true },
         capabilityModelInvoker: async (payload) => {
           invocations.push(payload);
-          return { content: "ADD A1 plan=1 status=pass 总体验收通过" };
+          return createTestModelResponse("ADD A1 plan=1 status=pass 总体验收通过");
         },
       },
     },
   });
 
   assert.equal(invocations.length, 2);
-  const semanticInvocation = invocations.find((item = {}) => item.purpose === "acceptance_semantic_validation");
+  const semanticInvocation = invocations.find(
+    (item = {}) => item.purpose === "acceptance_semantic_validation",
+  );
   assert.equal(Boolean(semanticInvocation), true);
   const messages = semanticInvocation.messages;
   assert.equal(Array.isArray(messages), true);
   assert.equal(messages.length >= 4, true);
-  const planIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-main-plan"));
+  const planIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes("harness-acceptance-main-plan"),
+  );
   const phaseIndexes = messages
     .map((item = {}, index) =>
-      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1)
+      String(item.content || "").includes("harness-phase-acceptance-reports") ? index : -1,
+    )
     .filter((index) => index >= 0);
-  const requestIndex = messages.findIndex((item = {}) => String(item.content || "").includes("harness-acceptance-semantic-validation"));
-  const protocolIndex = messages.findIndex((item = {}) => String(item.content || "").includes("acceptance_patch_v1"));
+  const requestIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes("harness-acceptance-semantic-validation"),
+  );
+  const protocolIndex = messages.findIndex((item = {}) =>
+    String(item.content || "").includes("acceptance_patch_v1"),
+  );
   assert.equal(messages[protocolIndex].role, "system");
   assert.equal(messages[planIndex].role, "user");
   assert.equal(phaseIndexes.length >= 2, true);
@@ -106,10 +120,12 @@ test("final acceptance separate model receives revised plan, all phase checklist
   assert.match(String(messages[phaseIndexes[0]].content), /阶段验收清单一/);
   assert.match(String(messages[phaseIndexes[1]].content), /阶段验收清单二/);
   assert.match(String(messages[protocolIndex].content), /acceptance_patch_v1/);
-  assert.match(String(messages[protocolIndex].content), /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/);
+  assert.match(
+    String(messages[protocolIndex].content),
+    /ADD A\[验收ID\] plan=计划ID status=\[pass\|warn\|fail\]/,
+  );
   assert.match(String(messages[protocolIndex].content), /risk=\[low\|medium\|high\]/);
 });
-
 
 test("harness active request_task_acceptance semantic validation receives agent ctx via tool config", async () => {
   const hookManager = createAgentHookManager();
@@ -123,7 +139,16 @@ test("harness active request_task_acceptance semantic validation receives agent 
       resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return { content: JSON.stringify({ status: "pass", consistent: true, checklistCoverage: [], missingItems: [], unsupportedClaims: [], suggestions: [] }) };
+        return createTestModelResponse(
+          JSON.stringify({
+            status: "pass",
+            consistent: true,
+            checklistCoverage: [],
+            missingItems: [],
+            unsupportedClaims: [],
+            suggestions: [],
+          }),
+        );
       },
     },
   );
@@ -143,7 +168,9 @@ test("harness active request_task_acceptance semantic validation receives agent 
     },
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
-  const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
+  const tool = agentContext.payload.tools.registry.find(
+    (item) => item.name === "request_task_acceptance",
+  );
   const raw = await tool.invoke(
     { mode: "active" },
     {
@@ -161,9 +188,11 @@ test("harness active request_task_acceptance semantic validation receives agent 
   assertFlatCapabilityMessages(invocations[1].messages);
   assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report.semanticValidation.status, "pass");
-  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent, true);
+  assert.equal(
+    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent,
+    true,
+  );
 });
-
 
 test("harness active request_task_acceptance falls back to closure meta when configurable meta lacks harness", async () => {
   const hookManager = createAgentHookManager();
@@ -177,8 +206,8 @@ test("harness active request_task_acceptance falls back to closure meta when con
       resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             status: "pass",
             consistent: true,
             checklistCoverage: [],
@@ -186,7 +215,7 @@ test("harness active request_task_acceptance falls back to closure meta when con
             unsupportedClaims: [],
             suggestions: [],
           }),
-        };
+        );
       },
     },
   );
@@ -206,7 +235,9 @@ test("harness active request_task_acceptance falls back to closure meta when con
     },
   };
   await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
-  const tool = agentContext.payload.tools.registry.find((item) => item.name === "request_task_acceptance");
+  const tool = agentContext.payload.tools.registry.find(
+    (item) => item.name === "request_task_acceptance",
+  );
   const raw = await tool.invoke(
     { mode: "active" },
     {

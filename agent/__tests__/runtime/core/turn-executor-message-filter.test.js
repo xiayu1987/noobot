@@ -13,7 +13,7 @@ import {
   invokeWithToolsTurn as invokeWithToolsTurnProduction,
 } from "../../../src/runtime/turn/turn-executor.js";
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
-import { prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
+import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
 function invokeNoToolsTurn(args = {}) {
   prepareTestTurnExecution(args.modelState, args.loopState, `no-tools-${args.loopState?.dialogProcessId || "turn"}`);
@@ -35,7 +35,7 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
   };
 
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
@@ -97,7 +97,7 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
   };
 
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
@@ -176,7 +176,7 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
   const history = { role: "assistant", content: "hist", dialogProcessId: "d-old" };
   const incremental = { role: "user", content: "current", dialogProcessId: "d-current" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime,
     eventListener: null,
     abortSignal: null,
@@ -258,7 +258,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     },
   };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime,
     eventListener: null,
     abortSignal: null,
@@ -322,7 +322,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
   const history = { role: "assistant", content: "recent-history", dialogProcessId: "d-old" };
   const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime,
     eventListener: null,
     abortSignal: null,
@@ -353,7 +353,10 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     { role: "assistant", content: "recent-history" },
     { role: "user", content: "current-user" },
   ]);
-  assert.equal(loopState.modelContext.messageBlocks.system.at(-1), harnessSystem);
+  assert.equal(
+    loopState.modelContext.messageBlocks.system.at(-1)?.content,
+    harnessSystem.content,
+  );
 });
 
 test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stopped-snapshot resume turn", async () => {
@@ -437,7 +440,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     },
   };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime,
     eventListener: null,
     abortSignal: null,
@@ -485,9 +488,15 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     },
     { role: "user", content: "latest-guidance", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
   ]);
-  assert.equal(loopState.modelContext.messageBlocks.system.includes(harnessSystem), true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental.includes(latestGuidance), true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental.includes(staleGuidance), true);
+  assert.equal(loopState.modelContext.messageBlocks.system.some(
+    (message) => message?.content === harnessSystem.content,
+  ), true);
+  assert.equal(loopState.modelContext.messageBlocks.incremental.some(
+    (message) => message?.content === latestGuidance.content,
+  ), true);
+  assert.equal(loopState.modelContext.messageBlocks.incremental.some(
+    (message) => message?.content === staleGuidance.content,
+  ), true);
   assert.equal(capturedMessages.some((message) => message?.content === "stale-guidance"), true);
 });
 
@@ -516,7 +525,7 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
   };
   const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime,
     eventListener: null,
     abortSignal: null,
@@ -576,7 +585,7 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
   };
 
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
@@ -625,7 +634,7 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
   };
 
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime: {
       runConfig: { streaming: false },
       systemRuntime: {
@@ -667,20 +676,13 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
   assert.equal(events.some((item) => item?.event === "main_model_content"), false);
 });
 
-test("invokeNoToolsTurn stores reasoning-only retry prompt in incremental block", async () => {
-  let callCount = 0;
-  const llm = {
-    async invoke() {
-      callCount += 1;
-      if (callCount === 1) {
-        return { content: "", additional_kwargs: { reasoning_content: "thinking only" } };
-      }
-      return { content: "ok after retry" };
-    },
-  };
-
+test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
   const modelState = {
-    llm,
+    modelPort: {
+      async invoke() {
+        return { output: { text: "ok after retry", toolCalls: [] } };
+      },
+    },
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
@@ -701,35 +703,19 @@ test("invokeNoToolsTurn stores reasoning-only retry prompt in incremental block"
   const result = await invokeNoToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.output, "ok after retry");
-  const retryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
+  const providerRetryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
     String(message?.content || "").includes("thinking only"),
   );
-  assert.ok(retryPrompt);
+  assert.equal(providerRetryPrompt, undefined);
 });
 
-test("invokeWithToolsTurn stores reasoning-only retry prompt in incremental block", async () => {
-  let callCount = 0;
-  const llm = {
-    bindTools() {
-      return {
-        async invoke() {
-          callCount += 1;
-          if (callCount === 1) {
-            return { content: "", additional_kwargs: { reasoning_content: "thinking with tools" } };
-          }
-          return {
-            content: "ok with tools after retry",
-            tool_calls: [],
-            additional_kwargs: {},
-            response_metadata: {},
-          };
-        },
-      };
-    },
-  };
-
+test("invokeWithToolsTurn does not project provider retry attempts into context", async () => {
   const modelState = {
-    llm,
+    modelPort: {
+      async invoke() {
+        return { output: { text: "ok with tools after retry", toolCalls: [] } };
+      },
+    },
     runtime: {
       runConfig: { streaming: false },
       systemRuntime: {},
@@ -756,10 +742,10 @@ test("invokeWithToolsTurn stores reasoning-only retry prompt in incremental bloc
   const result = await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.equal(result.aiContentText, "ok with tools after retry");
-  const retryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
+  const providerRetryPrompt = loopState.modelContext.messageBlocks.incremental.find((message) =>
     String(message?.content || "").includes("thinking with tools"),
   );
-  assert.ok(retryPrompt);
+  assert.equal(providerRetryPrompt, undefined);
 });
 
 test("invokeWithToolsTurn normalizes dirty blocks to system history incremental before llm invoke", async () => {
@@ -781,7 +767,7 @@ test("invokeWithToolsTurn normalizes dirty blocks to system history incremental 
   const incrementalUser = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2", additional_kwargs: { noobotMessageId: "current-message" } };
 
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,

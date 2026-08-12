@@ -16,10 +16,26 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 
 test("projectRecoveredMessagesToIdentity atomically replaces every recovered round identity", () => {
   const messages = [
-    { type: "human", dialogProcessId: "dialog-stopped", turnScopeId: "turn-stopped", content: "question" },
+    {
+      type: "human",
+      dialogProcessId: "dialog-stopped",
+      turnScopeId: "turn-stopped",
+      content: "question",
+    },
     { type: "ai", content: "answer", tool_calls: [{ id: "call-1" }] },
-    { type: "tool", dialogProcessId: "dialog-older", turnScopeId: "turn-older", tool_call_id: "call-1", content: "result" },
-    { type: "system", dialogProcessId: "dialog-current", turnScopeId: "turn-current", content: "system" },
+    {
+      type: "tool",
+      dialogProcessId: "dialog-older",
+      turnScopeId: "turn-older",
+      tool_call_id: "call-1",
+      content: "result",
+    },
+    {
+      type: "system",
+      dialogProcessId: "dialog-current",
+      turnScopeId: "turn-current",
+      content: "system",
+    },
   ];
 
   const projected = projectRecoveredMessagesToIdentity(messages, {
@@ -27,12 +43,14 @@ test("projectRecoveredMessagesToIdentity atomically replaces every recovered rou
     turnScopeId: "turn-current",
   });
 
-  assert.deepEqual(projected.map((message) => message.dialogProcessId), [
-    "dialog-current", "dialog-current", "dialog-current", "dialog-current",
-  ]);
-  assert.deepEqual(projected.map((message) => message.turnScopeId), [
-    "turn-current", "turn-current", "turn-current", "turn-current",
-  ]);
+  assert.deepEqual(
+    projected.map((message) => message.dialogProcessId),
+    ["dialog-current", "dialog-current", "dialog-current", "dialog-current"],
+  );
+  assert.deepEqual(
+    projected.map((message) => message.turnScopeId),
+    ["turn-current", "turn-current", "turn-current", "turn-current"],
+  );
   assert.ok(projected.every((message) => message.sourceDialogProcessId === undefined));
   assert.equal(projected[1].tool_calls[0].id, "call-1");
   assert.equal(projected[2].tool_call_id, "call-1");
@@ -41,13 +59,19 @@ test("projectRecoveredMessagesToIdentity atomically replaces every recovered rou
     dialogProcessId: "dialog-next",
     turnScopeId: "turn-next",
   });
-  assert.deepEqual(projected.map((message) => message.dialogProcessId), [
-    "dialog-next", "dialog-next", "dialog-next", "dialog-next",
-  ]);
+  assert.deepEqual(
+    projected.map((message) => message.dialogProcessId),
+    ["dialog-next", "dialog-next", "dialog-next", "dialog-next"],
+  );
 });
 
 test("projectRecoveredMessagesToIdentity rebinds session and round identity", () => {
-  const message = { type: "ai", sessionId: "old-session", dialogProcessId: "old-dialog", turnScopeId: "old-turn" };
+  const message = {
+    type: "ai",
+    sessionId: "old-session",
+    dialogProcessId: "old-dialog",
+    turnScopeId: "old-turn",
+  };
   const identity = {
     userName: "admin",
     sessionId: "current-session",
@@ -112,26 +136,29 @@ test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snaps
   };
 
   await assert.rejects(
-    () => engine._prepareStoppedSnapshotResumeTurnExecution({
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        dialogProcessId: "dialog-current",
-        turnScopeId: "turn-current",
-        runConfig: {
-          resumeFromStoppedSnapshot: true,
-          resumeTurnScopeId: "turn-stopped",
+    () =>
+      engine._prepareStoppedSnapshotResumeTurnExecution({
+        payload: {
+          userId: "u1",
+          sessionId: "s1",
+          dialogProcessId: "dialog-current",
           turnScopeId: "turn-current",
+          runConfig: {
+            resumeFromStoppedSnapshot: true,
+            resumeTurnScopeId: "turn-stopped",
+            turnScopeId: "turn-current",
+          },
         },
-      },
-      contextBuilder,
-    }),
+        contextBuilder,
+      }),
     /stopped snapshot resume requires resumeDialogProcessId and resumeTurnScopeId/,
   );
 });
 
 test("stopped snapshot resume degrades to a normal turn when the optional snapshot is missing", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-missing-stopped-snapshot-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-missing-stopped-snapshot-"),
+  );
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
   const calls = [];
@@ -172,7 +199,6 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
 test("stopped snapshot resume preserves history and incremental block boundaries", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = {};
-  engine._applyRunConfigToolPolicy = (context) => context;
   engine.agentRuntimeFacade = {
     buildRunTurnContext(context) {
       return context;
@@ -214,7 +240,6 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
 
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
-  engine._applyRunConfigToolPolicy = (context) => context;
   engine.agentRuntimeFacade = {
     buildRunTurnContext(context) {
       return context;
@@ -223,8 +248,12 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
   const captured = [];
   const contextBuilder = {
     attachmentService: null,
-    _resolveRuntimeBasePath() { return ""; },
-    _getEffectiveConfig() { return {}; },
+    _resolveRuntimeBasePath() {
+      return "";
+    },
+    _getEffectiveConfig() {
+      return {};
+    },
     async buildExistingSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
     },
@@ -251,9 +280,18 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       contextBuilder,
     });
 
-    assert.deepEqual(captured[0].system.map((message) => message.content), ["snapshot task-state system"]);
-    assert.deepEqual(captured[0].history.map((message) => message.content), ["history"]);
-    assert.deepEqual(captured[0].options.incrementalMessages.map((message) => message.content), ["incremental"]);
+    assert.deepEqual(
+      captured[0].system.map((message) => message.content),
+      ["snapshot task-state system"],
+    );
+    assert.deepEqual(
+      captured[0].history.map((message) => message.content),
+      ["history"],
+    );
+    assert.deepEqual(
+      captured[0].options.incrementalMessages.map((message) => message.content),
+      ["incremental"],
+    );
     assert.equal(captured[0].history[0].dialogProcessId, "dialog-current");
     assert.equal(captured[0].history[0].turnScopeId, "turn-current");
   } finally {
@@ -268,13 +306,15 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
     attachmentService: {
       async ingest(payload) {
         ingestCalls.push(payload);
-        return [{
-          attachmentId: "att-1",
-          sessionId: payload.sessionId,
-          name: "resume.docx",
-          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          path: "/workspace/resume.docx",
-        }];
+        return [
+          {
+            attachmentId: "att-1",
+            sessionId: payload.sessionId,
+            name: "resume.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            path: "/workspace/resume.docx",
+          },
+        ];
       },
     },
     _resolveRuntimeBasePath() {
@@ -296,11 +336,13 @@ test("_resolveStoppedResumeAttachments ingests raw attachments into the current 
 
   assert.equal(ingestCalls.length, 1);
   assert.equal(ingestCalls[0].sessionId, "s1");
-  assert.deepEqual(attachments, [{
-    attachmentId: "att-1",
-    sessionId: "s1",
-    name: "resume.docx",
-    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    path: "/workspace/resume.docx",
-  }]);
+  assert.deepEqual(attachments, [
+    {
+      attachmentId: "att-1",
+      sessionId: "s1",
+      name: "resume.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      path: "/workspace/resume.docx",
+    },
+  ]);
 });

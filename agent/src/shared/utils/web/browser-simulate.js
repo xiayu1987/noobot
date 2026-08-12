@@ -6,17 +6,12 @@
 import { chromium } from "playwright";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { logger } from "../../../observability/index.js";
-import { normalizeTimeMs } from "../../../config/core/time-config-normalizer.js";
+import { normalizeTimeMs } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-const BLOCKED_RESOURCE_TYPES = new Set([
-  "image",
-  "media",
-  "font",
-  "other",
-]);
+const BLOCKED_RESOURCE_TYPES = new Set(["image", "media", "font", "other"]);
 const TRACKING_HOST_PATTERNS = [
   /doubleclick\.net$/i,
   /googlesyndication\.com$/i,
@@ -50,10 +45,7 @@ async function getSharedBrowser(runtimeContext = null) {
     launchPromise = chromium
       .launch({
         headless: true,
-        args: [
-          "--disable-blink-features=AutomationControlled",
-          "--no-default-browser-check",
-        ],
+        args: ["--disable-blink-features=AutomationControlled", "--no-default-browser-check"],
       })
       .then((browser) => {
         sharedBrowser = browser;
@@ -132,8 +124,7 @@ export async function browseUrlHtml({
       timezoneId: "Asia/Shanghai",
       colorScheme: "light",
       extraHTTPHeaders: {
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         "Upgrade-Insecure-Requests": "1",
       },
@@ -165,8 +156,7 @@ export async function browseUrlHtml({
           await page.waitForLoadState("networkidle", {
             timeout: resolvedNetworkIdleTimeoutMs,
           });
-        } catch {
-        }
+        } catch {}
         await page.waitForTimeout(300);
         return {
           ok: true,
@@ -184,9 +174,7 @@ export async function browseUrlHtml({
       await context.close().catch(() => {});
     }
   } catch (error) {
-    logger.error(
-      `[browseUrlHtml] ${targetUrl} failed: ${error?.message || String(error)}`,
-    );
+    logger.error(`[browseUrlHtml] ${targetUrl} failed: ${error?.message || String(error)}`);
     return {
       ok: false,
       status: 0,

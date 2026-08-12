@@ -21,12 +21,23 @@ const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
 
 function canonicalAttachments(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : []).filter((attachment) => {
+  return (Array.isArray(attachments) ? attachments : []).flatMap((attachment) => {
+    const normalized =
+      attachment && typeof attachment === "object"
+        ? {
+            ...attachment,
+            attachmentId: attachment?.attachmentId || attachment?.identity?.attachmentId,
+            sessionId: attachment?.sessionId || attachment?.identity?.sessionId,
+            attachmentSource:
+              attachment?.attachmentSource || attachment?.identity?.attachmentSource,
+          }
+        : null;
+    if (!normalized) return [];
     try {
-      projectAttachmentIdentity(attachment);
-      return true;
+      projectAttachmentIdentity(normalized);
+      return [normalized];
     } catch {
-      return false;
+      return [];
     }
   });
 }
@@ -92,7 +103,9 @@ function parseStructuredValue(value) {
 }
 
 function compactSummaryValue(value, maxLength = 96) {
-  const normalized = String(value ?? "").replaceAll(/\s+/g, " ").trim();
+  const normalized = String(value ?? "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
 }
 
@@ -114,16 +127,20 @@ export function buildToolOperationSummary(tool = "", detail, { result = false } 
     subject = compactSummaryValue(value.command || value.script || value.stdout || "");
   } else if (toolName === "search") {
     const matchCount = Array.isArray(value.matches) ? `${value.matches.length} matches` : "";
-    subject = compactSummaryValue([value.query, value.path || value.source, matchCount].filter(Boolean).join(" · "));
+    subject = compactSummaryValue(
+      [value.query, value.path || value.source, matchCount].filter(Boolean).join(" · "),
+    );
   } else if (toolName === "list_skills") {
     const itemCount = Array.isArray(value.items) ? `${value.items.length} items` : "";
     subject = compactSummaryValue(value.parentSkill || itemCount);
   } else if (toolName === "user_interaction") {
     subject = compactSummaryValue(value.content || value.message || "");
   } else {
-    subject = fileSummary(value) || compactSummaryValue(
-      value.command || value.query || value.content || value.message || value.stdout || "",
-    );
+    subject =
+      fileSummary(value) ||
+      compactSummaryValue(
+        value.command || value.query || value.content || value.message || value.stdout || "",
+      );
   }
   if (!subject && result && typeof detail === "string" && !Object.keys(value).length) {
     const rawResult = compactSummaryValue(detail);
@@ -136,7 +153,9 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
   if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
-  const summary = text(facet.summary) || buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
+  const summary =
+    text(facet.summary) ||
+    buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
   return {
     eventId: text(facet.eventId),
     event: isCall ? "tool_call" : "tool_result",
@@ -147,10 +166,12 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
     tool: text(entry.tool),
     text: summary,
     ...(isCall ? { args: canonicalDetail } : { result: canonicalDetail }),
-    ...(isCall ? {} : {
-      success: entry.success !== false,
-      status: entry.success === false ? "failed" : "completed",
-    }),
+    ...(isCall
+      ? {}
+      : {
+          success: entry.success !== false,
+          status: entry.success === false ? "failed" : "completed",
+        }),
     ...(Array.isArray(facet.attachments) && facet.attachments.length
       ? { attachments: facet.attachments }
       : {}),
@@ -164,7 +185,11 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
 }
 
 export function reduceToolTimeline(timeline = [], envelope = {}) {
-  if (![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(envelope?.eventType)) {
+  if (
+    ![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
+      envelope?.eventType,
+    )
+  ) {
     return Array.isArray(timeline) ? timeline : [];
   }
   const key = timelineKey(envelope);
@@ -188,15 +213,28 @@ export function reduceToolTimeline(timeline = [], envelope = {}) {
       ? { attachments: envelope.attachments }
       : {}),
   };
-  const updated = envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
-    ? { ...current, tool: text(envelope.tool || toolCall?.name || current.tool), args: toolCall?.args ?? envelope.args ?? current.args, call: eventFact, status: current.result ? "completed" : "running" }
-    : { ...current, tool: text(envelope.tool || toolResult?.name || current.tool), result: toolResult?.output ?? envelope.result, success: toolResult?.success ?? envelope.success !== false, resultEvent: eventFact, status: "completed" };
+  const updated =
+    envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
+      ? {
+          ...current,
+          tool: text(envelope.tool || toolCall?.name || current.tool),
+          args: toolCall?.args ?? envelope.args ?? current.args,
+          call: eventFact,
+          status: current.result ? "completed" : "running",
+        }
+      : {
+          ...current,
+          tool: text(envelope.tool || toolResult?.name || current.tool),
+          result: toolResult?.output ?? envelope.result,
+          success: toolResult?.success ?? envelope.success !== false,
+          resultEvent: eventFact,
+          status: "completed",
+        };
   if (index >= 0) next[index] = updated;
   else next.push(updated);
-  return next.sort((left, right) => compareTimelineFacts(
-    left.call || left.resultEvent,
-    right.call || right.resultEvent,
-  ));
+  return next.sort((left, right) =>
+    compareTimelineFacts(left.call || left.resultEvent, right.call || right.resultEvent),
+  );
 }
 
 export function selectToolTimelineLogs(message = {}, { completedOnly = false } = {}) {
@@ -265,7 +303,8 @@ export function selectTaskCheckReceipts(message = {}) {
       Array.isArray(payload) ||
       payload.toolName !== "task_check" ||
       payload.protocolVersion !== 1
-    ) continue;
+    )
+      continue;
     try {
       const receipt = parseTaskCheckReceipt(payload.summary);
       receipts.push({
@@ -294,17 +333,21 @@ export function mergeToolTimelines(...timelines) {
       ...previous,
       ...candidate,
       key,
-      call: previous.call && candidate?.call
-        ? newerFacet(previous.call, candidate.call)
-        : candidate?.call || previous.call,
-      resultEvent: previous.resultEvent && candidate?.resultEvent
-        ? newerFacet(previous.resultEvent, candidate.resultEvent)
-        : candidate?.resultEvent || previous.resultEvent,
-      status: previous.resultEvent || candidate?.resultEvent ? "completed" : candidate?.status || previous.status,
+      call:
+        previous.call && candidate?.call
+          ? newerFacet(previous.call, candidate.call)
+          : candidate?.call || previous.call,
+      resultEvent:
+        previous.resultEvent && candidate?.resultEvent
+          ? newerFacet(previous.resultEvent, candidate.resultEvent)
+          : candidate?.resultEvent || previous.resultEvent,
+      status:
+        previous.resultEvent || candidate?.resultEvent
+          ? "completed"
+          : candidate?.status || previous.status,
     });
   }
-  return [...merged.values()].sort((left, right) => compareTimelineFacts(
-    left.call || left.resultEvent,
-    right.call || right.resultEvent,
-  ));
+  return [...merged.values()].sort((left, right) =>
+    compareTimelineFacts(left.call || left.resultEvent, right.call || right.resultEvent),
+  );
 }

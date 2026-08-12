@@ -32,7 +32,8 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       providers: {
         test_model: {
           enabled: true,
-          type: "openai_compatible",
+          format: "openai_compatible",
+          operatorId: "openai",
           model: "test-model",
           api_key: "test-key",
           baseUrl: "http://localhost/test",
@@ -54,7 +55,6 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       parentSessionId: "parent-session-engine-stop",
       dialogProcessId: "dialog-engine-stop",
       turnScopeId: "turn-engine-stop",
-      toolLoopExecutionCount: 0,
       phaseSummaryLoopCount: 0,
       toolConsecutiveFailureCount: 0,
     },

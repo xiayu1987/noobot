@@ -11,14 +11,14 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(
-    path.join(os.tmpdir(), "noobot-session-boundary-"),
-  );
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
   try {
     return await fn(workspaceRoot);
   } finally {
@@ -35,22 +35,6 @@ async function exists(filePath) {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 test("renameSession should persist custom title to full, display summary and sessions summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -64,13 +48,15 @@ test("renameSession should persist custom title to full, display summary and ses
     await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
     await runtime.sessionCrudService.ensureSession(userId, "A", "");
     const session = await runtime.repositories.sessionRepository.findById(userId, "A", "");
-    session.messages = [{
-      messageUid: "sm_rename_user",
-      role: "user",
-      content: "old generated title",
-      dialogProcessId: "dialog-rename",
-      turnScopeId: "turn-rename",
-    }];
+    session.messages = [
+      {
+        messageUid: "sm_rename_user",
+        role: "user",
+        content: "old generated title",
+        dialogProcessId: "dialog-rename",
+        turnScopeId: "turn-rename",
+      },
+    ];
     await runtime.repositories.sessionRepository.save(userId, session, "");
 
     const renamed = await runtime.sessionCrudService.renameSession({
@@ -84,14 +70,22 @@ test("renameSession should persist custom title to full, display summary and ses
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "A", "");
     const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
-    const displaySummary = JSON.parse(await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"));
+    const displaySummary = JSON.parse(
+      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
+    );
     const sessionsSummary = JSON.parse(
-      await readFile(path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"), "utf8"),
+      await readFile(
+        path.join(workspaceRoot, userId, "runtime", "session", "sessions.json"),
+        "utf8",
+      ),
     );
 
     assert.equal(full.customTitle, "新会话名称");
     assert.equal(displaySummary.title, "新会话名称");
-    assert.equal(sessionsSummary.sessions.find((item) => item.sessionId === "A").title, "新会话名称");
+    assert.equal(
+      sessionsSummary.sessions.find((item) => item.sessionId === "A").title,
+      "新会话名称",
+    );
   });
 });
 
@@ -102,7 +96,8 @@ test("renameSession should validate title and return null for missing session", 
     const runtime = createSessionServices({ workspaceRoot });
 
     await assert.rejects(
-      () => runtime.sessionCrudService.renameSession({ userId, sessionId: "missing", title: "   " }),
+      () =>
+        runtime.sessionCrudService.renameSession({ userId, sessionId: "missing", title: "   " }),
       /Session title is required/,
     );
 

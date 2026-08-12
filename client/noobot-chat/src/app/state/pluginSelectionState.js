@@ -5,7 +5,6 @@
  */
 export const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
 export const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
-const FRONTEND_DEFAULT_ON_PLUGIN_KEYS = new Set(["harness"]);
 
 export function safeParseStringArray(rawValue = "") {
   try {
@@ -27,20 +26,23 @@ export function loadSelectedPluginKeys() {
 }
 
 export function normalizeAvailablePlugins(pluginDefinitions = {}) {
-  const definitions = pluginDefinitions && typeof pluginDefinitions === "object" ? pluginDefinitions : {};
+  const definitions =
+    pluginDefinitions && typeof pluginDefinitions === "object" ? pluginDefinitions : {};
   return Object.entries(definitions)
     .map(([pluginKey, pluginDefinition]) => {
-      const source = pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
+      const source =
+        pluginDefinition && typeof pluginDefinition === "object" ? pluginDefinition : {};
       return {
         key: String(pluginKey || "").trim(),
         label: String(source?.label || source?.name || pluginKey || "").trim(),
         description: String(source?.description || "").trim(),
         enabled: source?.enabled === true,
-        mode: String(source?.mode || "")
-          .trim()
-          .toLowerCase() === "on"
-          ? "on"
-          : "off",
+        mode:
+          String(source?.mode || "")
+            .trim()
+            .toLowerCase() === "on"
+            ? "on"
+            : "off",
       };
     })
     .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);
@@ -50,9 +52,7 @@ export function getDefaultOnPluginKeys(pluginOptions = []) {
   return (Array.isArray(pluginOptions) ? pluginOptions : [])
     .filter(
       (pluginItem) =>
-        pluginItem?.enabled === true &&
-        (String(pluginItem?.mode || "").toLowerCase() === "on" ||
-          FRONTEND_DEFAULT_ON_PLUGIN_KEYS.has(String(pluginItem?.key || "").trim())),
+        pluginItem?.enabled === true && String(pluginItem?.mode || "").toLowerCase() === "on",
     )
     .map((pluginItem) => String(pluginItem?.key || "").trim())
     .filter(Boolean);
@@ -96,8 +96,8 @@ export function syncSelectedPluginsWithConfig({
     return;
   }
   const selectedPluginKeySet = new Set(
-    selectedPlugins.value.filter((pluginKey) =>
-      availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
+    selectedPlugins.value.filter(
+      (pluginKey) => availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
     ),
   );
   for (const pluginKey of defaultOnPluginKeys) {

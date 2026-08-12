@@ -6,6 +6,100 @@
 import { expect } from "@playwright/test";
 import { waitForTurnTerminal } from "./scenario-assertions.js";
 
+async function withComposerOptionsPanel(page, callback) {
+  const overlay = page.locator(".more-panel-overlay");
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  try {
+    return await callback(page.locator(".more-panel"));
+  } finally {
+    await page.locator(".more-collapse-btn").click();
+    await expect(page.locator(".more-panel-overlay")).toBeHidden();
+  }
+}
+
+function normalizePositiveIntegerEntries(record = {}) {
+  return Object.fromEntries(
+    Object.entries(record)
+      .map(([key, value]) => [key, Number(value)])
+      .filter(([, value]) => Number.isInteger(value) && value > 0),
+  );
+}
+
+async function updateAppShellLayoutOptions(page, missingControlSelector, mode, payload) {
+  return withComposerOptionsPanel(page, async (panel) => {
+    await expect(panel.locator(missingControlSelector)).toHaveCount(0);
+    await panel.locator(".composer-options").evaluate(
+      (_node, { nextMode, nextPayload }) => {
+        const bridge = window.__NOOBOT_E2E_APP_SHELL__;
+        if (!bridge || typeof bridge !== "object") {
+          throw new Error("AppShell E2E bridge is unavailable");
+        }
+        const requiredMethods = [
+          "getComposerConfigSnapshot",
+          "updateFrontendThresholdsEnabled",
+          nextMode === "runtimeThresholds" ? "updatePluginModelConfig" : "updateSummaryPolicy",
+        ];
+        for (const methodName of requiredMethods) {
+          if (typeof bridge[methodName] !== "function") {
+            throw new Error(`AppShell E2E bridge method is unavailable: ${methodName}`);
+          }
+        }
+        if (nextMode === "runtimeThresholds") {
+          const snapshot = bridge.getComposerConfigSnapshot();
+          const currentConfig = snapshot?.pluginModelConfig || {};
+          const currentHarness = currentConfig.harness || {};
+          const nextHarness = {
+            ...currentHarness,
+            ...(nextPayload.summaryTurns
+              ? {
+                  guidance: {
+                    ...(currentHarness.guidance || {}),
+                    summary: {
+                      ...(currentHarness.guidance?.summary || {}),
+                      turnsThreshold: nextPayload.summaryTurns,
+                    },
+                  },
+                }
+              : {}),
+            ...(nextPayload.planUpdateTurns
+              ? {
+                  planning: {
+                    ...(currentHarness.planning || {}),
+                    planUpdate: {
+                      ...(currentHarness.planning?.planUpdate || {}),
+                      triggerTurnsThreshold: nextPayload.planUpdateTurns,
+                    },
+                  },
+                }
+              : {}),
+            ...(nextPayload.phaseAcceptanceTurns
+              ? {
+                  acceptance: {
+                    ...(currentHarness.acceptance || {}),
+                    phase: {
+                      ...(currentHarness.acceptance?.phase || {}),
+                      triggerTurnsThreshold: nextPayload.phaseAcceptanceTurns,
+                    },
+                  },
+                }
+              : {}),
+          };
+          bridge.updatePluginModelConfig({ ...currentConfig, harness: nextHarness });
+          bridge.updateFrontendThresholdsEnabled(true);
+          return;
+        }
+        if (nextMode === "summaryPolicy") {
+          bridge.updateFrontendThresholdsEnabled(true);
+          bridge.updateSummaryPolicy(nextPayload);
+          return;
+        }
+        throw new Error(`Unsupported AppShell E2E update mode: ${nextMode}`);
+      },
+      { nextMode: mode, nextPayload: payload },
+    );
+  });
+}
+
 export async function sendMessage(page, message) {
   await page.locator(".chat-input textarea").fill(message);
   await page.locator(".send-btn").click();
@@ -31,15 +125,39 @@ export async function addAttachment(page, file) {
 export async function selectPlugins(page, pluginKeys = []) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const buttons = page.locator(".plugin-option-button");
-  for (let index = 0; index < await buttons.count(); index += 1) {
+  for (let index = 0; index < (await buttons.count()); index += 1) {
     const button = buttons.nth(index);
-    const key = String(await button.getAttribute("title") || await button.textContent() || "").trim().toLowerCase();
+    const key = String((await button.getAttribute("title")) || (await button.textContent()) || "")
+      .trim()
+      .toLowerCase();
     const shouldSelect = pluginKeys.some((item) => key.includes(item.toLowerCase()));
-    const selected = await button.getAttribute("type") === "primary" || await button.evaluate((node) => node.classList.contains("el-button--primary"));
+    const selected =
+      (await button.getAttribute("type")) === "primary" ||
+      (await button.evaluate((node) => node.classList.contains("el-button--primary")));
     if (selected !== shouldSelect) await button.click();
   }
+  await page.locator(".more-collapse-btn").click();
+  await expect(page.locator(".more-panel-overlay")).toBeHidden();
+}
+
+export async function selectScenario(page, scenarioKey) {
+  const panel = page.locator(".more-panel");
+  const overlay = page.locator(".more-panel-overlay");
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
+  const scenario = String(scenarioKey || "")
+    .trim()
+    .toLowerCase();
+  const target = panel
+    .locator(".scenario-option-button")
+    .filter({
+      hasText: scenario === "programming" ? /编程|programming/i : new RegExp(scenario, "i"),
+    })
+    .first();
+  await expect(target).toBeVisible();
+  await target.click();
+  await expect(target).toHaveClass(/el-button--primary/);
   await page.locator(".more-collapse-btn").click();
   await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
@@ -47,7 +165,7 @@ export async function selectPlugins(page, pluginKeys = []) {
 export async function setHarnessCapability(page, label, enabled) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const field = panel.locator(".plugin-model-field").filter({
     has: page.locator(".plugin-model-label").getByText(label, { exact: true }),
   });
@@ -61,7 +179,7 @@ export async function setHarnessCapability(page, label, enabled) {
 export async function setHarnessGuidanceAnalysisIntensity(page, value) {
   const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
+  if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const control = panel.locator(".plugin-guidance-analysis-control");
   await expect(control).toBeVisible();
   const slider = control.locator(".el-slider__button-wrapper[role='slider']");
@@ -84,143 +202,21 @@ export async function setHarnessGuidanceAnalysisIntensity(page, value) {
 }
 
 export async function setHarnessRuntimeThresholds(page, thresholds = {}) {
-  const panel = page.locator(".more-panel");
-  const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
-  await expect(panel.locator("[data-threshold-key], .plugin-turn-threshold-control")).toHaveCount(0);
-  const normalized = Object.fromEntries(
-    Object.entries(thresholds)
-      .map(([key, value]) => [key, Number(value)])
-      .filter(([, value]) => Number.isInteger(value) && value > 0),
+  await updateAppShellLayoutOptions(
+    page,
+    "[data-threshold-key], .plugin-turn-threshold-control",
+    "runtimeThresholds",
+    normalizePositiveIntegerEntries(thresholds),
   );
-  await panel.locator(".composer-options").evaluate((_element, runtimeThresholds) => {
-    const rootVNode = document.querySelector("#app")?._vnode;
-    const visited = new Set();
-    let layoutComponent = null;
-    const visit = (vnode, depth = 0) => {
-      if (!vnode || typeof vnode !== "object" || visited.has(vnode) || depth > 40) return;
-      visited.add(vnode);
-      if (Array.isArray(vnode)) {
-        vnode.forEach((child) => visit(child, depth));
-        return;
-      }
-      const component = vnode.component;
-      if (component) {
-        const name = String(component.type?.__name || component.type?.name || "");
-        if (name === "AppShellLayout") {
-          layoutComponent = component;
-          return;
-        }
-        visit(component.subTree, depth + 1);
-      }
-      if (Array.isArray(vnode.children)) {
-        vnode.children.forEach((child) => visit(child, depth + 1));
-      }
-    };
-    visit(rootVNode);
-    const updatePluginModelConfig = layoutComponent?.vnode?.props?.["onUpdate:pluginModelConfig"];
-    const updateFrontendThresholdsEnabled =
-      layoutComponent?.vnode?.props?.["onUpdate:frontendThresholdsEnabled"];
-    if (typeof updatePluginModelConfig !== "function") {
-      throw new Error("AppShellLayout plugin-model-config event boundary is unavailable");
-    }
-    if (typeof updateFrontendThresholdsEnabled !== "function") {
-      throw new Error("AppShellLayout frontend-threshold mode boundary is unavailable");
-    }
-    const currentConfig = layoutComponent.props?.pluginModelConfig || {};
-    const currentHarness = currentConfig.harness || {};
-    const nextHarness = {
-      ...currentHarness,
-      ...(runtimeThresholds.summaryTurns
-        ? {
-            guidance: {
-              ...(currentHarness.guidance || {}),
-              summary: {
-                ...(currentHarness.guidance?.summary || {}),
-                turnsThreshold: runtimeThresholds.summaryTurns,
-              },
-            },
-          }
-        : {}),
-      ...(runtimeThresholds.planUpdateTurns
-        ? {
-            planning: {
-              ...(currentHarness.planning || {}),
-              planUpdate: {
-                ...(currentHarness.planning?.planUpdate || {}),
-                triggerTurnsThreshold: runtimeThresholds.planUpdateTurns,
-              },
-            },
-          }
-        : {}),
-      ...(runtimeThresholds.phaseAcceptanceTurns
-        ? {
-            acceptance: {
-              ...(currentHarness.acceptance || {}),
-              phase: {
-                ...(currentHarness.acceptance?.phase || {}),
-                triggerTurnsThreshold: runtimeThresholds.phaseAcceptanceTurns,
-              },
-            },
-          }
-        : {}),
-    };
-    updateFrontendThresholdsEnabled(true);
-    updatePluginModelConfig({ ...currentConfig, harness: nextHarness });
-  }, normalized);
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
 
 export async function setRunSummaryPolicy(page, policy = {}) {
-  const panel = page.locator(".more-panel");
-  const overlay = page.locator(".more-panel-overlay");
-  if (!await overlay.isVisible()) await page.locator(".composer-icon-btn").first().click();
-  await expect(panel.locator("[data-summary-policy-key]")).toHaveCount(0);
-  const normalizedPolicy = Object.fromEntries(
-    Object.entries(policy)
-      .map(([key, value]) => [key, Number(value)])
-      .filter(([, value]) => Number.isInteger(value) && value > 0),
+  await updateAppShellLayoutOptions(
+    page,
+    "[data-summary-policy-key]",
+    "summaryPolicy",
+    normalizePositiveIntegerEntries(policy),
   );
-  await panel.locator(".composer-options").evaluate((_element, nextPolicy) => {
-    const rootVNode = document.querySelector("#app")?._vnode;
-    const visited = new Set();
-    let updateSummaryPolicy = null;
-    let updateFrontendThresholdsEnabled = null;
-    const visit = (vnode, depth = 0) => {
-      if (!vnode || typeof vnode !== "object" || visited.has(vnode) || depth > 40) return;
-      visited.add(vnode);
-      if (Array.isArray(vnode)) {
-        vnode.forEach((child) => visit(child, depth));
-        return;
-      }
-      const component = vnode.component;
-      if (component) {
-        const name = String(component.type?.__name || component.type?.name || "");
-        if (name === "AppShellLayout") {
-          updateSummaryPolicy = component.vnode?.props?.["onUpdate:summaryPolicy"] || null;
-          updateFrontendThresholdsEnabled =
-            component.vnode?.props?.["onUpdate:frontendThresholdsEnabled"] || null;
-          return;
-        }
-        visit(component.subTree, depth + 1);
-      }
-      if (Array.isArray(vnode.children)) {
-        vnode.children.forEach((child) => visit(child, depth + 1));
-      }
-    };
-    visit(rootVNode);
-    if (typeof updateSummaryPolicy !== "function") {
-      throw new Error("AppShellLayout summary-policy event boundary is unavailable");
-    }
-    if (typeof updateFrontendThresholdsEnabled !== "function") {
-      throw new Error("AppShellLayout frontend-threshold mode boundary is unavailable");
-    }
-    updateFrontendThresholdsEnabled(true);
-    updateSummaryPolicy(nextPolicy);
-  }, normalizedPolicy);
-  await page.locator(".more-collapse-btn").click();
-  await expect(page.locator(".more-panel-overlay")).toBeHidden();
 }
 
 export async function setMainSummaryTurnsThreshold(page, value) {
@@ -241,7 +237,11 @@ export async function waitForNaturalCompletion({
   return terminal;
 }
 
-export async function editLatestUserMessage(page, content, { attachment = null, removeAttachments = false } = {}) {
+export async function editLatestUserMessage(
+  page,
+  content,
+  { attachment = null, removeAttachments = false } = {},
+) {
   const editButton = page.locator(".monotonic-chip-btn.is-primary").last();
   await editButton.click();
   const card = page.locator(".monotonic-edit-card").last();

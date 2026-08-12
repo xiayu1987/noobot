@@ -5,7 +5,10 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
-  selectPlugins, sendMessage, stopActiveTurn, waitForNaturalCompletion,
+  selectPlugins,
+  sendMessage,
+  stopActiveTurn,
+  waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import {
   assertRootModelInvocation,
@@ -13,11 +16,16 @@ import {
   isMainAgentModelInvocation,
 } from "../helpers/model-message-assertions.js";
 import {
-  waitForModelInvocationTraces, waitForSessionExecutionEventTree,
+  waitForModelInvocationTraces,
+  waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import {
-  assertContinuation, assertTurnLifecycle, commandsForSession, lifecycleForSession,
-  waitForCommand, waitForLifecycle,
+  assertContinuation,
+  assertTurnLifecycle,
+  commandsForSession,
+  lifecycleForSession,
+  waitForCommand,
+  waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
@@ -25,55 +33,87 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
   test.setTimeout(420000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const beforeSend = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(noobot.page, uniquePrompt(
-    testInfo,
-    "build three sequential child tasks; each child uses execute_script once for a small arithmetic calculation",
-  ));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(
+      testInfo,
+      [
+        "build exactly three sequential workflow child tasks named calc1, calc2, calc3.",
+        "Each child must call execute_script exactly once for a concrete arithmetic calculation.",
+        "Use these calculations in order: calc1=11+7, calc2=6*8, calc3=144/12.",
+        "Do not merge tasks, do not answer directly, and start executing the workflow immediately.",
+      ].join(" "),
+    ),
+  );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", beforeSend);
   const processing = await waitForLifecycle(
-    protocolCapture, noobot.sessionId, "turn.processing_started", 0, send.identity.turnScopeId,
+    protocolCapture,
+    noobot.sessionId,
+    "turn.processing_started",
+    0,
+    send.identity.turnScopeId,
   );
   const authoritativeSend = {
     ...send,
     identity: { ...send.identity, dialogProcessId: processing.dialogProcessId },
   };
-  const initialTraces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (traces) =>
-    traces.some((record) => record.parentSessionId === noobot.sessionId
-      && isMainAgentModelInvocation(record)),
+  const initialTraces = await waitForModelInvocationTraces(
+    noobot.userId,
+    noobot.sessionId,
+    (traces) => traces.some((record) => record.parentSessionId === noobot.sessionId),
   );
   assertWorkflowChildModelInvocation(
-    initialTraces.find((record) => record.parentSessionId === noobot.sessionId
-      && isMainAgentModelInvocation(record)),
+    initialTraces.find((record) => record.parentSessionId === noobot.sessionId),
     noobot.sessionId,
   );
 
   await stopActiveTurn(noobot.page);
   const stop = await waitForCommand(protocolCapture, noobot.sessionId, "turn.stop", beforeSend);
   await waitForLifecycle(
-    protocolCapture, noobot.sessionId, "turn.stop_completed", 0, send.identity.turnScopeId,
+    protocolCapture,
+    noobot.sessionId,
+    "turn.stop_completed",
+    0,
+    send.identity.turnScopeId,
   );
   expect(stop.identity).toMatchObject(authoritativeSend.identity);
   assertTurnLifecycle(protocolCapture, noobot.sessionId, send.identity.turnScopeId);
   const stoppedExecutionEvents = await waitForSessionExecutionEventTree(
     noobot.userId,
     noobot.sessionId,
-    (records) => records.some((record) =>
-      record.event === "detached_sub_session_stop_committed"
-        && record.parentSessionId === noobot.sessionId
-        && record.data?.reason === "user_stop"
-        && record.data?.state === "stop_completed"),
+    (records) =>
+      records.some(
+        (record) =>
+          record.event === "detached_sub_session_stop_committed" &&
+          record.parentSessionId === noobot.sessionId &&
+          record.data?.reason === "user_stop" &&
+          record.data?.state === "stop_completed",
+      ),
   );
-  expect(stoppedExecutionEvents.some((record) =>
-    record.event === "detached_sub_session_failure_committed")).toBe(false);
+  expect(
+    stoppedExecutionEvents.some(
+      (record) => record.event === "detached_sub_session_failure_committed",
+    ),
+  ).toBe(false);
 
   const beforeContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(noobot.page, uniquePrompt(testInfo, "continue the stopped workflow to completion"));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "continue the stopped workflow to completion"),
+  );
   const continued = await waitForCommand(
-    protocolCapture, noobot.sessionId, "turn.continue", beforeContinue,
+    protocolCapture,
+    noobot.sessionId,
+    "turn.continue",
+    beforeContinue,
   );
   assertContinuation(authoritativeSend, continued);
   await waitForLifecycle(
-    protocolCapture, noobot.sessionId, "turn.processing_started", 0, continued.identity.turnScopeId,
+    protocolCapture,
+    noobot.sessionId,
+    "turn.processing_started",
+    0,
+    continued.identity.turnScopeId,
   );
   await waitForNaturalCompletion({
     page: noobot.page,
@@ -83,10 +123,16 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     timeoutMs: 300000,
   });
   assertTurnLifecycle(protocolCapture, noobot.sessionId, continued.identity.turnScopeId);
-  const continuedTraces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (traces) =>
-    traces.some((record) => record.turnScopeId === continued.identity.turnScopeId)
-      || traces.some((record) => record.parentSessionId === noobot.sessionId
-        && !initialTraces.some((initial) => initial.dialogProcessId === record.dialogProcessId)),
+  const continuedTraces = await waitForModelInvocationTraces(
+    noobot.userId,
+    noobot.sessionId,
+    (traces) =>
+      traces.some((record) => record.turnScopeId === continued.identity.turnScopeId) ||
+      traces.some(
+        (record) =>
+          record.parentSessionId === noobot.sessionId &&
+          !initialTraces.some((initial) => initial.dialogProcessId === record.dialogProcessId),
+      ),
   );
   continuedTraces.forEach((trace) => {
     if (!isMainAgentModelInvocation(trace)) return;
@@ -98,7 +144,10 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
   });
 });
 
-test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({ noobot, protocolCapture }, testInfo) => {
+test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({
+  noobot,
+  protocolCapture,
+}, testInfo) => {
   test.setTimeout(900000);
   const runToCompletion = async (pluginKeys, purpose) => {
     await selectPlugins(noobot.page, pluginKeys);
@@ -106,7 +155,11 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({ 
     await sendMessage(noobot.page, uniquePrompt(testInfo, purpose));
     const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", before);
     await waitForLifecycle(
-      protocolCapture, noobot.sessionId, "turn.processing_started", 0, command.identity.turnScopeId,
+      protocolCapture,
+      noobot.sessionId,
+      "turn.processing_started",
+      0,
+      command.identity.turnScopeId,
     );
     await waitForNaturalCompletion({
       page: noobot.page,
@@ -117,40 +170,62 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({ 
     });
     assertTurnLifecycle(protocolCapture, noobot.sessionId, command.identity.turnScopeId);
     if (pluginKeys.includes("workflow")) {
-      const events = lifecycleForSession(protocolCapture, noobot.sessionId)
-        .filter((event) => event.turnScopeId === command.identity.turnScopeId);
+      const events = lifecycleForSession(protocolCapture, noobot.sessionId).filter(
+        (event) => event.turnScopeId === command.identity.turnScopeId,
+      );
       expect(events.some((event) => event.executionId)).toBe(true);
     }
     return command;
   };
 
   const firstWorkflow = await runToCompletion(
-    ["workflow", "harness"], "execute one child task that uses execute_script once to calculate 21 * 2",
+    ["workflow", "harness"],
+    "execute one child task that uses execute_script once to calculate 21 * 2",
   );
   const ordinary = await runToCompletion([], "answer directly without creating a workflow");
   const secondWorkflow = await runToCompletion(
-    ["workflow", "harness"], "execute a second child task that uses execute_script once to calculate 6 * 7",
+    ["workflow", "harness"],
+    "execute a second child task that uses execute_script once to calculate 6 * 7",
   );
 
-  expect(new Set(firstWorkflow.preferences.selectedPlugins)).toEqual(new Set(["workflow", "harness"]));
+  expect(new Set(firstWorkflow.preferences.selectedPlugins)).toEqual(
+    new Set(["workflow", "harness"]),
+  );
   expect(ordinary.preferences.selectedPlugins).toEqual([]);
-  expect(new Set(secondWorkflow.preferences.selectedPlugins)).toEqual(new Set(["workflow", "harness"]));
-  expect(new Set([
-    firstWorkflow.identity.turnScopeId,
-    ordinary.identity.turnScopeId,
-    secondWorkflow.identity.turnScopeId,
-  ]).size).toBe(3);
-
-  const traces = await waitForModelInvocationTraces(noobot.userId, noobot.sessionId, (records) =>
-    records.some((record) => record.turnScopeId === ordinary.identity.turnScopeId)
-      && new Set(records.filter((record) => record.parentSessionId === noobot.sessionId)
-        .map((record) => record.dialogProcessId)).size >= 2,
+  expect(new Set(secondWorkflow.preferences.selectedPlugins)).toEqual(
+    new Set(["workflow", "harness"]),
   );
-  const ordinaryTrace = traces.find((record) =>
-    record.turnScopeId === ordinary.identity.turnScopeId && isMainAgentModelInvocation(record));
+  expect(
+    new Set([
+      firstWorkflow.identity.turnScopeId,
+      ordinary.identity.turnScopeId,
+      secondWorkflow.identity.turnScopeId,
+    ]).size,
+  ).toBe(3);
+
+  const traces = await waitForModelInvocationTraces(
+    noobot.userId,
+    noobot.sessionId,
+    (records) =>
+      records.some((record) => record.turnScopeId === ordinary.identity.turnScopeId) &&
+      new Set(
+        records
+          .filter((record) => record.parentSessionId === noobot.sessionId)
+          .map((record) => record.dialogProcessId),
+      ).size >= 2,
+  );
+  const ordinaryTrace = traces.find(
+    (record) =>
+      record.turnScopeId === ordinary.identity.turnScopeId && isMainAgentModelInvocation(record),
+  );
   assertRootModelInvocation(ordinaryTrace, noobot.sessionId, ordinary.identity.turnScopeId);
-  const workflowChildTraces = traces.filter((record) =>
-    record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record));
-  expect(new Set(workflowChildTraces.map((record) => record.dialogProcessId)).size).toBeGreaterThanOrEqual(2);
-  workflowChildTraces.forEach((record) => assertWorkflowChildModelInvocation(record, noobot.sessionId));
+  const workflowChildTraces = traces.filter(
+    (record) => record.parentSessionId === noobot.sessionId && isMainAgentModelInvocation(record),
+  );
+  expect(
+    new Set(workflowChildTraces.map((record) => record.dialogProcessId)).size,
+  ).toBeGreaterThanOrEqual(2);
+  workflowChildTraces.forEach((record) =>
+    assertWorkflowChildModelInvocation(record, noobot.sessionId),
+  );
 });

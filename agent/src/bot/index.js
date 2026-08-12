@@ -7,14 +7,13 @@ import { createSessionFacade, createSessionServices } from "../session/index.js"
 import { MemoryManager } from "../memory/index.js";
 import { AttachmentService } from "../artifacts/index.js";
 import { SkillService } from "../skills/index.js";
-import { ConfigService } from "../config/index.js";
+import { ConfigService, mergeConfig } from "../config/index.js";
 import { SystemErrorLogger } from "../observability/index.js";
 import { AsyncJobManager } from "./async-job-manager.js";
 import { SessionExecutionEngine } from "./session/session-execution-engine.js";
 import { WorkspaceService } from "./workspace-infra/workspace-service.js";
 import { filePath as path } from "@noobot/path-resolver";
 import { rm } from "node:fs/promises";
-import { mergeConfig } from "../config/index.js";
 import { resolveAttachments } from "../context/providers/attachment-resolver.js";
 
 export * as hook from "./hook/index.js";
@@ -52,8 +51,7 @@ export class BotManager {
     this.asyncJobManager = new AsyncJobManager({
       session: this.session,
       runSession: (payload = {}) => this.sessionRunner.runSession(payload),
-      upsertParentAsyncTask: (payload = {}) =>
-        this.sessionRunner._upsertParentAsyncTask(payload),
+      upsertParentAsyncTask: (payload = {}) => this.sessionRunner._upsertParentAsyncTask(payload),
       errorLogger: this.errorLogger,
     });
 
@@ -100,12 +98,7 @@ export class BotManager {
     });
   }
 
-  getAttachmentById({
-    userId,
-    attachmentId,
-    sessionId = "",
-    attachmentSource = "",
-  }) {
+  getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return this.attach.getAttachmentById({
       userId,
       attachmentId,
@@ -114,21 +107,14 @@ export class BotManager {
     });
   }
 
-  deleteScopedAttachmentsBySessionIds({
-    userId,
-    sessionIds = [],
-  } = {}) {
+  deleteScopedAttachmentsBySessionIds({ userId, sessionIds = [] } = {}) {
     return this.attach.deleteScopedAttachmentsBySessionIds({
       userId,
       sessionIds,
     });
   }
 
-  pruneOrphanScopedAttachments({
-    userId,
-    keepSessionIds = [],
-    attachmentSources = [],
-  } = {}) {
+  pruneOrphanScopedAttachments({ userId, keepSessionIds = [], attachmentSources = [] } = {}) {
     return this.attach.pruneOrphanScopedAttachments({
       userId,
       keepSessionIds,
@@ -136,10 +122,7 @@ export class BotManager {
     });
   }
 
-  async deleteToolResultOverflowBySessionIds({
-    userId,
-    sessionIds = [],
-  } = {}) {
+  async deleteToolResultOverflowBySessionIds({ userId, sessionIds = [] } = {}) {
     const basePath = String(this.getWorkspacePath(userId) || "").trim();
     const normalizedIds = [
       ...new Set(
@@ -152,8 +135,18 @@ export class BotManager {
       return { deletedSessionIds: [], deletedCount: 0 };
     }
 
-    const semanticTransferRoot = path.join(basePath, "runtime", "ops_workdir", ".semantic-transfer");
-    const legacyOverflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");
+    const semanticTransferRoot = path.join(
+      basePath,
+      "runtime",
+      "ops_workdir",
+      ".semantic-transfer",
+    );
+    const legacyOverflowRoot = path.join(
+      basePath,
+      "runtime",
+      "ops_workdir",
+      ".tool-result-overflow",
+    );
     const deletedSessionIds = [];
     for (const sessionId of normalizedIds) {
       const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -164,8 +157,7 @@ export class BotManager {
           rm(path.join(legacyOverflowRoot, safeSessionDir), { recursive: true, force: true }),
         ]);
         deletedSessionIds.push(sessionId);
-      } catch {
-      }
+      } catch {}
     }
     return { deletedSessionIds, deletedCount: deletedSessionIds.length };
   }

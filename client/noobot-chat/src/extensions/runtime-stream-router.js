@@ -28,12 +28,22 @@ export function routeRuntimeStreamEvent(event = "", data = {}, context = {}) {
   };
   const matched = resolveExtensionPoint(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, projectionContext);
   const routes = provideResolvedExtensionValues(matched, projectionContext);
-  context?.logRuntimeProjectionDiagnostics?.("frontend.pluginRuntime.gatewayEvaluated", {
-    sessionId: String(data?.route?.rootSessionId || data?.parentSessionId || data?.sessionId || context?.sessionId || ""),
+  const buildProjectionDiagnostics = (extra = {}) => ({
+    sessionId: String(
+      data?.route?.rootSessionId ||
+        data?.parentSessionId ||
+        data?.sessionId ||
+        context?.sessionId ||
+        "",
+    ),
     dialogProcessId: String(data?.dialogProcessId || ""),
     turnScopeId: String(data?.turnScopeId || context?.turnScopeId || ""),
     transportEvent: String(event || ""),
     source: String(context?.source || "unknown"),
+    ...extra,
+  });
+  context?.logRuntimeProjectionDiagnostics?.("frontend.pluginRuntime.gatewayEvaluated", {
+    ...buildProjectionDiagnostics(),
     registeredContributionIds: registered.map((item) => item.id),
     matchedContributionIds: matched.map((item) => item.id),
     projectorCount: routes.filter((route) => typeof route === "function").length,
@@ -44,11 +54,7 @@ export function routeRuntimeStreamEvent(event = "", data = {}, context = {}) {
       if (route({ event, data, context }) === true) return true;
     } catch (error) {
       context?.logRuntimeProjectionDiagnostics?.("frontend.pluginRuntime.projectorFailed", {
-        sessionId: String(data?.route?.rootSessionId || data?.parentSessionId || data?.sessionId || context?.sessionId || ""),
-        dialogProcessId: String(data?.dialogProcessId || ""),
-        turnScopeId: String(data?.turnScopeId || context?.turnScopeId || ""),
-        transportEvent: String(event || ""),
-        source: String(context?.source || "unknown"),
+        ...buildProjectionDiagnostics(),
         error: String(error?.message || error || ""),
       });
       console.warn(`[runtime-stream-router] route failed: ${error?.message || error}`);

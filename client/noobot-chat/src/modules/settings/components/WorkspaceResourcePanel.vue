@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
-import { Document, Folder, Key } from "@element-plus/icons-vue";
+import { Document, Folder } from "@element-plus/icons-vue";
 import SettingsPanelHeader from "./SettingsPanelHeader.vue";
 import SettingsWorkspacePanel from "./SettingsWorkspacePanel.vue";
 import WorkspaceResourceToolbar from "./WorkspaceResourceToolbar.vue";
@@ -144,7 +144,9 @@ function sectionClass(name) {
               class="dark-btn noobot-action-btn noobot-flat-soft-btn"
               size="small"
               :loading="syncingAll"
-              :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || resettingAll"
+              :disabled="
+                loadingAllTree || loadingFile || saving || resetting || syncing || resettingAll
+              "
               :title="translate('settings.syncAllConfig')"
               @click="$emit('sync-all-workspace')"
             >
@@ -154,14 +156,20 @@ function sectionClass(name) {
               class="danger-btn noobot-action-btn"
               size="small"
               :loading="resettingAll"
-              :disabled="loadingAllTree || loadingFile || saving || resetting || syncing || syncingAll"
+              :disabled="
+                loadingAllTree || loadingFile || saving || resetting || syncing || syncingAll
+              "
               :title="translate('settings.resetAllWorkspaceKeepRuntime')"
               @click="$emit('reset-all-workspace')"
             >
               {{ translate("settings.reset") }}
             </el-button>
           </div>
-          <el-scrollbar class="tree-scroll" v-loading="loadingAllTree" element-loading-background="var(--noobot-mask-bg)">
+          <el-scrollbar
+            class="tree-scroll"
+            v-loading="loadingAllTree"
+            element-loading-background="var(--noobot-mask-bg)"
+          >
             <el-tree
               :data="allWorkspaceTree"
               node-key="path"
@@ -191,27 +199,15 @@ function sectionClass(name) {
           :translate="translate"
           @insert-param="(key) => $emit('insert-param', key)"
         />
-        <el-collapse-item
+        <WorkspaceParamTreeSection
           name="user-params"
           :title="translate('settings.userParams')"
-          class="resource-collapse-item"
-          :class="sectionClass('user-params')"
-        >
-          <el-scrollbar class="tree-scroll" v-loading="loadingUserParamCatalog" element-loading-background="var(--noobot-mask-bg)">
-            <el-tree :data="userParamTreeData" node-key="key" :props="{ label: 'label', children: 'children' }" class="custom-tree param-tree">
-              <template #default="{ data }">
-                <span class="tree-node param-row" @dblclick.stop="$emit('insert-param', data.key)">
-                  <el-icon class="node-icon"><Key /></el-icon>
-                  <span class="node-label">{{ data.label }}</span>
-                  <span class="param-desc" :title="data.description">{{ data.description || translate("settings.noDescription") }}</span>
-                </span>
-              </template>
-            </el-tree>
-            <div v-if="!userParamTreeData.length && !loadingUserParamCatalog" class="empty-tip left-empty">
-              <p>{{ translate("settings.noParams") }}</p>
-            </div>
-          </el-scrollbar>
-        </el-collapse-item>
+          :item-class="sectionClass('user-params')"
+          :tree-data="userParamTreeData"
+          :loading="loadingUserParamCatalog"
+          :translate="translate"
+          @insert-param="(key) => $emit('insert-param', key)"
+        />
       </el-collapse>
     </div>
   </SettingsWorkspacePanel>
@@ -283,38 +279,6 @@ function sectionClass(name) {
 
 .resource-collapse :deep(.resource-collapse-item--collapsed) {
   margin-top: auto;
-}
-
-.tree-node {
-  width: 100%;
-  min-width: 0;
-}
-
-.node-icon {
-  color: var(--noobot-text-secondary);
-}
-
-.param-row {
-  cursor: pointer;
-}
-
-.param-desc {
-  margin-left: auto;
-  color: var(--noobot-text-muted);
-  font-size: var(--noobot-font-size-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 120px;
-}
-
-.left-empty {
-  position: static;
-  min-height: 80px;
-}
-
-.empty-tip :deep(.el-empty__description p) {
-  color: var(--noobot-text-muted);
 }
 
 @media (max-width: 768px) {

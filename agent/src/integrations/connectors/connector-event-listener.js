@@ -10,10 +10,7 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import {
-  CONNECTOR_TYPE,
-  normalizeConnectorType,
-} from "../../config/core/enums.js";
+import { CONNECTOR_TYPE, normalizeConnectorType } from "@noobot/agent-config-protocol";
 import {
   CONNECTOR_INTERACTION_EVENT,
   CONNECTOR_INTERACTION_TYPE,
@@ -47,21 +44,24 @@ async function recordConnectorInteractionFailure({
   data = {},
 } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
-  return writeRoutedRuntimeEvent({
-    source: "agent",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-    event,
-    userId: String(runtime?.userId || "").trim(),
-    sessionId: normalizedSessionId,
-    dialogProcessId: String(dialogProcessId || "").trim(),
-    data: {
-      ...(data && typeof data === "object" ? data : {}),
-      error: error?.message || String(error || ""),
+  return writeRoutedRuntimeEvent(
+    {
+      source: "agent",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+      event,
+      userId: String(runtime?.userId || "").trim(),
+      sessionId: normalizedSessionId,
+      dialogProcessId: String(dialogProcessId || "").trim(),
+      data: {
+        ...(data && typeof data === "object" ? data : {}),
+        error: error?.message || String(error || ""),
+      },
     },
-  }, {
-    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-  });
+    {
+      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+    },
+  );
 }
 
 function resolveConnectToolName(connectorType = "") {
@@ -119,11 +119,9 @@ export class ConnectorEventListener {
     const normalizedType = normalizeConnectorType(connectorType);
     const normalizedName = String(connectorName || "").trim();
     if (
-      ![
-        CONNECTOR_TYPE.DATABASE,
-        CONNECTOR_TYPE.TERMINAL,
-        CONNECTOR_TYPE.EMAIL,
-      ].includes(normalizedType)
+      ![CONNECTOR_TYPE.DATABASE, CONNECTOR_TYPE.TERMINAL, CONNECTOR_TYPE.EMAIL].includes(
+        normalizedType,
+      )
     ) {
       return;
     }
@@ -147,10 +145,7 @@ export class ConnectorEventListener {
     connectionInfo = {},
     connectionMeta = {},
   } = {}) {
-    if (
-      !this.historyStore ||
-      typeof this.historyStore.upsertConnectedConnector !== "function"
-    ) {
+    if (!this.historyStore || typeof this.historyStore.upsertConnectedConnector !== "function") {
       return;
     }
     await this.historyStore.upsertConnectedConnector({

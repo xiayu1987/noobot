@@ -5,7 +5,7 @@
  */
 import { safeNum, normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { CONNECTOR_TYPE } from "../../config/core/enums.js";
+import { CONNECTOR_TYPE } from "@noobot/agent-config-protocol";
 import { CONNECTOR_RUNTIME_STATUS } from "../../integrations/connectors/constants.js";
 function normalizeHistoryConnectorItems(items = []) {
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
@@ -17,20 +17,17 @@ function normalizeHistoryConnectorItems(items = []) {
         ? connectorItem.connection_meta
         : {},
     status:
-      String(
-        connectorItem?.status || CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
-      ).trim() || CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
+      String(connectorItem?.status || CONNECTOR_RUNTIME_STATUS.DISCONNECTED).trim() ||
+      CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
     status_code: Number(connectorItem?.status_code ?? 410),
     status_message:
       String(connectorItem?.status_message || "").trim() ||
       tSystem("status.disconnectedFromHistory"),
-    checked_at:
-      String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
+    checked_at: String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
     last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
     connect_count: safeNum(connectorItem?.connect_count),
     connection_defaults:
-      connectorItem?.connection_defaults &&
-      typeof connectorItem.connection_defaults === "object"
+      connectorItem?.connection_defaults && typeof connectorItem.connection_defaults === "object"
         ? connectorItem.connection_defaults
         : {},
   }));
@@ -49,9 +46,8 @@ function normalizeRuntimeConnectorItems(items = [], connectorType = "") {
         ? connectorItem.connectionMeta
         : {},
     status:
-      String(
-        connectorItem?.status || CONNECTOR_RUNTIME_STATUS.CONNECTED,
-      ).trim() || CONNECTOR_RUNTIME_STATUS.CONNECTED,
+      String(connectorItem?.status || CONNECTOR_RUNTIME_STATUS.CONNECTED).trim() ||
+      CONNECTOR_RUNTIME_STATUS.CONNECTED,
     status_code: Number(connectorItem?.statusCode ?? 0),
     status_message:
       String(connectorItem?.statusMessage || tSystem("connectors.statusOk")).trim() ||
@@ -80,9 +76,8 @@ function mergeRuntimeAndHistoryConnectorGroup({
       ...previousItem,
       ...runtimeItem,
       status:
-        String(
-          runtimeItem?.status || CONNECTOR_RUNTIME_STATUS.CONNECTED,
-        ).trim() || CONNECTOR_RUNTIME_STATUS.CONNECTED,
+        String(runtimeItem?.status || CONNECTOR_RUNTIME_STATUS.CONNECTED).trim() ||
+        CONNECTOR_RUNTIME_STATUS.CONNECTED,
       status_code: Number(runtimeItem?.status_code ?? 0),
       status_message: String(runtimeItem?.status_message || tSystem("connectors.statusOk")).trim(),
       checked_at:
@@ -152,7 +147,6 @@ function buildSelectedCompactConnector({
   };
 }
 
-
 export async function resolveConnectorStatusSection({
   rootSessionId = "",
   userId = "",
@@ -161,37 +155,30 @@ export async function resolveConnectorStatusSection({
   connectorHistoryStore = null,
 } = {}) {
   const normalizedRootSessionId = String(rootSessionId || "").trim();
-  const normalizedSelectedConnectors = normalizeSelectedConnectors(
-    selectedConnectors,
-  );
+  const normalizedSelectedConnectors = normalizeSelectedConnectors(selectedConnectors);
   const buildCurrentConnectors = ({
     databaseSourceList = [],
     terminalSourceList = [],
     emailSourceList = [],
   } = {}) =>
     Object.fromEntries(
-      Object.entries(normalizedSelectedConnectors).map(
-        ([connectorType, connectorName]) => [
+      Object.entries(normalizedSelectedConnectors).map(([connectorType, connectorName]) => [
+        connectorType,
+        buildSelectedCompactConnector({
           connectorType,
-          buildSelectedCompactConnector({
-            connectorType,
-            connectorName,
-            sourceList:
-              connectorType === CONNECTOR_TYPE.DATABASE
-                ? databaseSourceList
-                : connectorType === CONNECTOR_TYPE.TERMINAL
-                  ? terminalSourceList
-                  : connectorType === CONNECTOR_TYPE.EMAIL
-                    ? emailSourceList
-                    : [],
-          }),
-        ],
-      ),
+          connectorName,
+          sourceList:
+            connectorType === CONNECTOR_TYPE.DATABASE
+              ? databaseSourceList
+              : connectorType === CONNECTOR_TYPE.TERMINAL
+                ? terminalSourceList
+                : connectorType === CONNECTOR_TYPE.EMAIL
+                  ? emailSourceList
+                  : [],
+        }),
+      ]),
     );
-  if (
-    !normalizedRootSessionId ||
-    !connectorChannelStore
-  ) {
+  if (!normalizedRootSessionId || !connectorChannelStore) {
     return {
       root_session_id: normalizedRootSessionId,
       connectors: { databases: [], terminals: [], emails: [] },
@@ -215,8 +202,7 @@ export async function resolveConnectorStatusSection({
     CONNECTOR_TYPE.EMAIL,
   );
   const historyConnectors =
-    connectorHistoryStore &&
-    typeof connectorHistoryStore.listSessionConnectors === "function"
+    connectorHistoryStore && typeof connectorHistoryStore.listSessionConnectors === "function"
       ? await connectorHistoryStore.listSessionConnectors({
           userId,
           sessionId: normalizedRootSessionId,
@@ -244,9 +230,7 @@ export async function resolveConnectorStatusSection({
   const compactTerminals = mergedTerminals.map((connectorItem) =>
     toCompactConnectorInfo(connectorItem),
   );
-  const compactEmails = mergedEmails.map((connectorItem) =>
-    toCompactConnectorInfo(connectorItem),
-  );
+  const compactEmails = mergedEmails.map((connectorItem) => toCompactConnectorInfo(connectorItem));
   return {
     root_session_id: normalizedRootSessionId,
     connectors: {

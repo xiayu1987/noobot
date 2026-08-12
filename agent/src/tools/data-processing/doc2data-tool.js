@@ -6,10 +6,11 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { DOC2DATA_PARSE_ENGINE } from "../../config/core/enums.js";
+import { DOC2DATA_PARSE_ENGINE } from "@noobot/agent-config-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { invokeModelWithTextAndAttachments, resolveModelSpecByAlias } from "../../models/index.js";
+import { resolveModelSpecByAlias } from "../../models/resolver/index.js";
+import { buildAttachmentContentBlock } from "../../models/attachment/formatter.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { convertDocumentToImages } from "../../shared/utils/doc/doc2img.js";
 import { assertAndResolveUserWorkspaceFilePath } from "../core/check-tool-input.js";
@@ -24,8 +25,11 @@ import {
 } from "@noobot/runtime-events";
 import { TOOL_DATA_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/context-protocol/model-invocation-policy";
-import { decodeLibreOfficeTextBuffer, parseDocumentToTextViaLibreOffice } from "./doc2data/libreoffice.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import {
+  decodeLibreOfficeTextBuffer,
+  parseDocumentToTextViaLibreOffice,
+} from "./doc2data/libreoffice.js";
 import {
   backwriteFirstAttachment,
   buildExistingArtifactPersistedOutput,
@@ -61,30 +65,35 @@ async function recordDoc2DataLibreOfficeFallback({
   ).trim();
   const systemRuntime = runtime?.systemRuntime || {};
   const dialogProcessId = String(systemRuntime?.dialogProcessId || "").trim();
-  const turnScopeId = String(systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "").trim();
+  const turnScopeId = String(
+    systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
+  ).trim();
   if (!sessionId) return { ok: true, skipped: true };
   const inputValue = String(inputFile || "");
-  return writeRoutedRuntimeEvent({
-    scope: "session",
-    source: "agent",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-    event: "agent.doc2data.libreofficeFallbackToVision",
-    userId,
-    sessionId,
-    ...(dialogProcessId ? { dialogProcessId } : {}),
-    ...(turnScopeId ? { turnScopeId } : {}),
-    data: {
-      inputFileName: path.basename(inputValue),
-      inputPathLength: inputValue.length,
-      errorName: String(error?.name || ""),
-      errorCode: String(error?.code || ""),
-      errorMessage: error?.message || String(error || ""),
-      parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+  return writeRoutedRuntimeEvent(
+    {
+      scope: "session",
+      source: "agent",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+      event: "agent.doc2data.libreofficeFallbackToVision",
+      userId,
+      sessionId,
+      ...(dialogProcessId ? { dialogProcessId } : {}),
+      ...(turnScopeId ? { turnScopeId } : {}),
+      data: {
+        inputFileName: path.basename(inputValue),
+        inputPathLength: inputValue.length,
+        errorName: String(error?.name || ""),
+        errorCode: String(error?.code || ""),
+        errorMessage: error?.message || String(error || ""),
+        parseEngine: DOC2DATA_PARSE_ENGINE.LIBREOFFICE,
+      },
     },
-  }, {
-    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-  });
+    {
+      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+    },
+  );
 }
 
 export function createDoc2DataTool({ agentContext }) {
@@ -99,18 +108,39 @@ export function createDoc2DataTool({ agentContext }) {
     description: tTool(runtime, "tools.doc2data.description"),
     schema: z.object({
       filePath: z.string().describe(tTool(runtime, "tools.doc2data.fieldFilePath")),
-      attachmentId: z.string().optional().describe("Canonical source attachment ID when the input is a session attachment."),
+      attachmentId: z
+        .string()
+        .optional()
+        .describe("Canonical source attachment ID when the input is a session attachment."),
       prompt: z.string().optional().describe(tTool(runtime, "tools.doc2data.fieldPrompt")),
       dpi: z.number().optional().describe(tTool(runtime, "tools.doc2data.fieldDpi")),
-      parseEngine: z.string().optional().describe(tTool(runtime, "tools.doc2data.fieldParseEngine")),
+      parseEngine: z
+        .string()
+        .optional()
+        .describe(tTool(runtime, "tools.doc2data.fieldParseEngine")),
     }),
-    func: async ({ filePath, attachmentId, prompt, dpi, parseEngine }, _runManager, toolConfig = {}) => {
+    func: async (
+      { filePath, attachmentId, prompt, dpi, parseEngine },
+      _runManager,
+      toolConfig = {},
+    ) => {
       const transferIdentity = toolConfig?.configurable?.transferIdentity;
-      const resolvedParseEngine = resolveDoc2DataParseEngine(runtime, parseEngine, userConfig, globalConfig);
+      const resolvedParseEngine = resolveDoc2DataParseEngine(
+        runtime,
+        parseEngine,
+        userConfig,
+        globalConfig,
+      );
       const normalizedDpi = Number(dpi);
-      const resolvedDpi = Number.isFinite(normalizedDpi) && normalizedDpi > 0 ? Math.floor(normalizedDpi) : 180;
+      const resolvedDpi =
+        Number.isFinite(normalizedDpi) && normalizedDpi > 0 ? Math.floor(normalizedDpi) : 180;
       let effectiveParseEngine = resolvedParseEngine;
-      const inputFile = await assertAndResolveUserWorkspaceFilePath({ filePath, agentContext, fieldName: "filePath", mustExist: true });
+      const inputFile = await assertAndResolveUserWorkspaceFilePath({
+        filePath,
+        agentContext,
+        fieldName: "filePath",
+        mustExist: true,
+      });
       const sourceAttachmentMeta = await resolveDocInputAttachmentMeta(agentContext, attachmentId);
       const generatedArtifactMeta = isGeneratedDataProcessingArtifact(sourceAttachmentMeta)
         ? sourceAttachmentMeta
@@ -121,7 +151,10 @@ export function createDoc2DataTool({ agentContext }) {
           details: { input: inputFile },
         });
       }
-      if (resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE && isLegacyDocInputFile(inputFile)) {
+      if (
+        resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE &&
+        isLegacyDocInputFile(inputFile)
+      ) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.libreofficeDocUnsupported"), {
           code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
           details: { input: inputFile, parseEngine: resolvedParseEngine },
@@ -131,70 +164,117 @@ export function createDoc2DataTool({ agentContext }) {
       const directTextDocument = await readDirectTextDocumentIfAvailable(inputFile);
       if (directTextDocument) {
         if (generatedArtifactMeta) {
-          const persistedOutput = buildExistingArtifactPersistedOutput({ runtime, agentContext, attachmentMeta: generatedArtifactMeta, text: directTextDocument.text, identity: transferIdentity });
+          const persistedOutput = buildExistingArtifactPersistedOutput({
+            runtime,
+            agentContext,
+            attachmentMeta: generatedArtifactMeta,
+            text: directTextDocument.text,
+            identity: transferIdentity,
+          });
           const attachments = normalizePersistedAttachments(persistedOutput);
-          return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
+          return toToolJsonResult(
+            TOOL_NAME.DOC_TO_DATA,
+            {
+              ok: true,
+              status: TOOL_RESULT_STATUS.COMPLETED,
+              message:
+                "输入已经是数据处理生成的中间产物，已复用原文件；未超过限制时直接返回 text，超过限制时返回预览，避免递归复制。",
+              mode: TOOL_DATA_MODE.DIRECT_TEXT,
+              input: inputFile,
+              reusedExistingArtifact: true,
+              ...persistedOutput.resultFields,
+              summary: {
+                bytes: Number(directTextDocument.bytes || 0),
+                parse_engine: resolvedParseEngine,
+                parsed_from_attachment_id: String(generatedArtifactMeta?.attachmentId || ""),
+                source_attachment_backwritten: false,
+                saved_attachment_count: attachments.length,
+                text_length: directTextDocument.text.length,
+              },
+            },
+            true,
+          );
+        }
+        const persistedOutput = await persistDoc2DataTextAttachment({
+          runtime,
+          agentContext,
+          inputFile,
+          text: directTextDocument.text,
+          mode: TOOL_DATA_MODE.DIRECT_TEXT,
+          identity: transferIdentity,
+        });
+        const attachments = normalizePersistedAttachments(persistedOutput);
+        const updatedSourceAttachment = await backwriteFirstAttachment({
+          runtime,
+          sourceAttachmentMeta,
+          attachments,
+        });
+        return toToolJsonResult(
+          TOOL_NAME.DOC_TO_DATA,
+          {
             ok: true,
             status: TOOL_RESULT_STATUS.COMPLETED,
-            message: "输入已经是数据处理生成的中间产物，已复用原文件；未超过限制时直接返回 text，超过限制时返回预览，避免递归复制。",
+            message:
+              "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
             mode: TOOL_DATA_MODE.DIRECT_TEXT,
             input: inputFile,
-            reusedExistingArtifact: true,
             ...persistedOutput.resultFields,
             summary: {
               bytes: Number(directTextDocument.bytes || 0),
               parse_engine: resolvedParseEngine,
-              parsed_from_attachment_id: String(generatedArtifactMeta?.attachmentId || ""),
-              source_attachment_backwritten: false,
+              parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+              source_attachment_backwritten: Boolean(updatedSourceAttachment),
               saved_attachment_count: attachments.length,
               text_length: directTextDocument.text.length,
             },
-          }, true);
-        }
-        const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: directTextDocument.text, mode: TOOL_DATA_MODE.DIRECT_TEXT, identity: transferIdentity });
-        const attachments = normalizePersistedAttachments(persistedOutput);
-        const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
-        return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
-          ok: true,
-          status: TOOL_RESULT_STATUS.COMPLETED,
-          message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
-          mode: TOOL_DATA_MODE.DIRECT_TEXT,
-          input: inputFile,
-          ...persistedOutput.resultFields,
-          summary: {
-            bytes: Number(directTextDocument.bytes || 0),
-            parse_engine: resolvedParseEngine,
-            parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-            source_attachment_backwritten: Boolean(updatedSourceAttachment),
-            saved_attachment_count: attachments.length,
-            text_length: directTextDocument.text.length,
           },
-        }, true);
+          true,
+        );
       }
 
       if (resolvedParseEngine === DOC2DATA_PARSE_ENGINE.LIBREOFFICE) {
         try {
-          const libreOfficeResult = await parseDocumentToTextViaLibreOffice({ runtime, inputFile, sourceAttachmentMeta });
-          const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: libreOfficeResult.text, mode: libreOfficeResult.mode || "libreoffice_text", identity: transferIdentity });
-          const attachments = normalizePersistedAttachments(persistedOutput);
-          const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
-          return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
-            ok: true,
-            status: TOOL_RESULT_STATUS.COMPLETED,
-            message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
+          const libreOfficeResult = await parseDocumentToTextViaLibreOffice({
+            runtime,
+            inputFile,
+            sourceAttachmentMeta,
+          });
+          const persistedOutput = await persistDoc2DataTextAttachment({
+            runtime,
+            agentContext,
+            inputFile,
+            text: libreOfficeResult.text,
             mode: libreOfficeResult.mode || "libreoffice_text",
-            input: inputFile,
-            ...persistedOutput.resultFields,
-            summary: {
-              bytes: Number(libreOfficeResult.bytes || 0),
-              parse_engine: resolvedParseEngine,
-              libreoffice_output_format: String(libreOfficeResult.outputFormat || ""),
-              parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-              source_attachment_backwritten: Boolean(updatedSourceAttachment),
-              saved_attachment_count: attachments.length,
-              text_length: libreOfficeResult.text.length,
+            identity: transferIdentity,
+          });
+          const attachments = normalizePersistedAttachments(persistedOutput);
+          const updatedSourceAttachment = await backwriteFirstAttachment({
+            runtime,
+            sourceAttachmentMeta,
+            attachments,
+          });
+          return toToolJsonResult(
+            TOOL_NAME.DOC_TO_DATA,
+            {
+              ok: true,
+              status: TOOL_RESULT_STATUS.COMPLETED,
+              message:
+                "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
+              mode: libreOfficeResult.mode || "libreoffice_text",
+              input: inputFile,
+              ...persistedOutput.resultFields,
+              summary: {
+                bytes: Number(libreOfficeResult.bytes || 0),
+                parse_engine: resolvedParseEngine,
+                libreoffice_output_format: String(libreOfficeResult.outputFormat || ""),
+                parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+                source_attachment_backwritten: Boolean(updatedSourceAttachment),
+                saved_attachment_count: attachments.length,
+                text_length: libreOfficeResult.text.length,
+              },
             },
-          }, true);
+            true,
+          );
         } catch (libreOfficeError) {
           if (isAbortError(libreOfficeError)) throw libreOfficeError;
           effectiveParseEngine = DOC2DATA_PARSE_ENGINE.VISION;
@@ -207,7 +287,12 @@ export function createDoc2DataTool({ agentContext }) {
       }
 
       const outputRoot = path.join(basePath, "runtime", "workspace", ".doc2data");
-      const converted = await convertDocumentToImages({ inputFile, outputRoot, format: "png", dpi: resolvedDpi });
+      const converted = await convertDocumentToImages({
+        inputFile,
+        outputRoot,
+        format: "png",
+        dpi: resolvedDpi,
+      });
       const images = converted.imagePaths || [];
       if (!images.length) {
         throw recoverableToolError(tTool(runtime, "tools.doc2data.noImagesProduced"), {
@@ -215,8 +300,33 @@ export function createDoc2DataTool({ agentContext }) {
           details: { input: converted.input },
         });
       }
-      const imageAlias = resolveAttachmentAliasByType({ globalConfig, userConfig, mediaType: "image" });
-      const modelSpec = resolveModelSpecByAlias({ alias: imageAlias, globalConfig, userConfig, fallbackToDefault: true });
+      const imageAlias = resolveAttachmentAliasByType({
+        globalConfig,
+        userConfig,
+        mediaType: "image",
+      });
+      if (!imageAlias) {
+        throw recoverableToolError("doc2data vision mode requires an explicit image model", {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { mediaType: "image" },
+        });
+      }
+      const modelSpec = resolveModelSpecByAlias({
+        alias: imageAlias,
+        globalConfig,
+        userConfig,
+        fallbackToDefault: false,
+      });
+      if (!modelSpec) {
+        throw recoverableToolError(`configured image model not found: ${imageAlias}`, {
+          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          details: { alias: imageAlias, mediaType: "image" },
+        });
+      }
+      const modelPort = runtime?.modelPort;
+      if (!modelPort || typeof modelPort.invoke !== "function") {
+        throw new Error("doc2data requires runtime.modelPort");
+      }
       const userPrompt = resolveDoc2DataPrompt(runtime, prompt);
       const imageBatches = await buildImageBatches(images);
       const batchResults = [];
@@ -224,55 +334,95 @@ export function createDoc2DataTool({ agentContext }) {
         const batch = imageBatches[batchIndex];
         const pageNumbers = batch.map((imageItem) => imageItem.page);
         const range = `${pageNumbers[0]}-${pageNumbers[pageNumbers.length - 1]}`;
-        const modelResult = await invokeModelWithTextAndAttachments({
-          modelName: modelSpec?.alias || modelSpec?.model,
-          text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", { batchIndex: batchIndex + 1, range })}`,
-          attachments: batch.map((imageItem) => ({ type: resolveMimeTypeByPath(imageItem.imagePath, "image"), mimeType: resolveMimeTypeByPath(imageItem.imagePath, "image"), data: imageItem.dataUrl })),
-          globalConfig,
-          userConfig,
-          streaming: false,
-          context: {
-            runtime,
-            invocation: {
-              flow: "tool.doc2data",
-              purpose: "document_extraction",
-              domain: "data_processing",
-              contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        const attachmentBlocks = batch
+          .map((imageItem) => {
+            const mimeType = resolveMimeTypeByPath(imageItem.imagePath, "image");
+            return buildAttachmentContentBlock({
+              attachment: { type: mimeType, mimeType, data: imageItem.dataUrl },
+              providerFormat: modelSpec.format,
+            });
+          })
+          .filter(Boolean);
+        const modelResponse = await modelPort.invoke({
+          model: modelSpec,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `${userPrompt}\n\n${tTool(runtime, "tools.doc2data.batchPrompt", { batchIndex: batchIndex + 1, range })}`,
+                },
+                ...attachmentBlocks,
+              ],
             },
+          ],
+          options: {
+            streaming: false,
+            signal: runtime?.abortSignal || undefined,
+          },
+          invocation: {
+            flow: "tool.doc2data",
+            purpose: "document_extraction",
+            domain: "data_processing",
+            contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
           },
         });
-        const text = normalizeModelOutput(modelResult?.response?.content);
-        batchResults.push({ batch: batchIndex + 1, pages: pageNumbers, totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0), text });
+        const text = normalizeModelOutput(modelResponse.output.text);
+        batchResults.push({
+          batch: batchIndex + 1,
+          pages: pageNumbers,
+          totalBytes: batch.reduce((sum, item) => sum + item.sizeBytes, 0),
+          text,
+        });
       }
       const mergedText = batchResults.map((batchResult) => batchResult.text).join("\n\n");
-      const totalImageBytes = imageBatches.flatMap((batch) => batch).reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
-      const persistedOutput = await persistDoc2DataTextAttachment({ runtime, agentContext, inputFile, text: mergedText, mode: TOOL_DATA_MODE.IMAGE_MODEL, identity: transferIdentity });
-      const attachments = normalizePersistedAttachments(persistedOutput);
-      const updatedSourceAttachment = await backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments });
-
-      return toToolJsonResult(TOOL_NAME.DOC_TO_DATA, {
-        ok: true,
-        status: TOOL_RESULT_STATUS.COMPLETED,
-        message: "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
+      const totalImageBytes = imageBatches
+        .flatMap((batch) => batch)
+        .reduce((sum, item) => sum + Number(item?.sizeBytes || 0), 0);
+      const persistedOutput = await persistDoc2DataTextAttachment({
+        runtime,
+        agentContext,
+        inputFile,
+        text: mergedText,
         mode: TOOL_DATA_MODE.IMAGE_MODEL,
-        input: converted.input,
-        pdfPath: converted.pdfPath,
-        imageCount: images.length,
-        ...persistedOutput.resultFields,
-        model: { alias: modelSpec?.alias || "", name: modelSpec?.model || "" },
-        summary: {
-          batch_count: batchResults.length,
-          parse_engine: effectiveParseEngine,
-          parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
-          parsed_result_path: String(attachments?.[0]?.path || ""),
-          source_attachment_backwritten: Boolean(updatedSourceAttachment),
-          total_image_bytes: totalImageBytes,
-          batch_max_bytes: MAX_BATCH_BYTES,
-          saved_attachment_count: attachments.length,
-          text_length: mergedText.length,
-          pages: batchResults.flatMap((item) => item.pages || []),
+        identity: transferIdentity,
+      });
+      const attachments = normalizePersistedAttachments(persistedOutput);
+      const updatedSourceAttachment = await backwriteFirstAttachment({
+        runtime,
+        sourceAttachmentMeta,
+        attachments,
+      });
+
+      return toToolJsonResult(
+        TOOL_NAME.DOC_TO_DATA,
+        {
+          ok: true,
+          status: TOOL_RESULT_STATUS.COMPLETED,
+          message:
+            "内容已通过 semantic-transfer 保存到附件；未超过限制时同时直接返回 text，超过限制时返回预览。",
+          mode: TOOL_DATA_MODE.IMAGE_MODEL,
+          input: converted.input,
+          pdfPath: converted.pdfPath,
+          imageCount: images.length,
+          ...persistedOutput.resultFields,
+          model: { alias: modelSpec?.alias || "", name: modelSpec?.model || "" },
+          summary: {
+            batch_count: batchResults.length,
+            parse_engine: effectiveParseEngine,
+            parsed_from_attachment_id: String(sourceAttachmentMeta?.attachmentId || ""),
+            parsed_result_path: String(attachments?.[0]?.path || ""),
+            source_attachment_backwritten: Boolean(updatedSourceAttachment),
+            total_image_bytes: totalImageBytes,
+            batch_max_bytes: MAX_BATCH_BYTES,
+            saved_attachment_count: attachments.length,
+            text_length: mergedText.length,
+            pages: batchResults.flatMap((item) => item.pages || []),
+          },
         },
-      }, true);
+        true,
+      );
     },
   });
 

@@ -45,19 +45,31 @@ export function validateInteractionRequestPayload(data = {}) {
   }
   const required = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"];
   const missing = required.filter((key) => !clean(data[key]));
-  const hasPayload = typeof data.content === "string"
-    || Array.isArray(data.fields)
-    || Boolean(clean(data.interactionType))
-    || (data.interactionData && typeof data.interactionData === "object" && !Array.isArray(data.interactionData));
+  const hasPayload =
+    typeof data.content === "string" ||
+    Array.isArray(data.fields) ||
+    Boolean(clean(data.interactionType)) ||
+    (data.interactionData &&
+      typeof data.interactionData === "object" &&
+      !Array.isArray(data.interactionData));
   if (missing.length) return { valid: false, reason: "missing_identity", missing };
   if (!hasPayload) return { valid: false, reason: "missing_payload", missing: [] };
-  const lifecycle = normalizeInteractionLifecycle(data.lifecycle || data.interactionData?.lifecycle);
-  if (String(data.lifecycle || data.interactionData?.lifecycle || "").trim() &&
-      lifecycle === INTERACTION_LIFECYCLE.PENDING &&
-      clean(data.lifecycle || data.interactionData?.lifecycle).toLowerCase() !== lifecycle) {
+  if (data.timeoutMs !== undefined && (!Number.isInteger(data.timeoutMs) || data.timeoutMs <= 0)) {
+    return { valid: false, reason: "invalid_timeout_ms", missing: [] };
+  }
+  const lifecycle = normalizeInteractionLifecycle(
+    data.lifecycle || data.interactionData?.lifecycle,
+  );
+  if (
+    String(data.lifecycle || data.interactionData?.lifecycle || "").trim() &&
+    lifecycle === INTERACTION_LIFECYCLE.PENDING &&
+    clean(data.lifecycle || data.interactionData?.lifecycle).toLowerCase() !== lifecycle
+  ) {
     return { valid: false, reason: "invalid_lifecycle", missing: [] };
   }
-  const resolvedBy = normalizeInteractionResolvedBy(data.resolvedBy || data.interactionData?.resolvedBy);
+  const resolvedBy = normalizeInteractionResolvedBy(
+    data.resolvedBy || data.interactionData?.resolvedBy,
+  );
   if (isTerminalInteractionLifecycle(lifecycle) && !resolvedBy) {
     return { valid: false, reason: "missing_terminal_resolved_by", missing: ["resolvedBy"] };
   }
@@ -79,24 +91,26 @@ export function validateInteractionRequest(event = {}) {
  */
 export function isPendingInteractionReplay(record = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return false;
-  const eventType = clean(
-    record?.identity?.eventType ?? record?.eventType ?? record?.event,
-  );
+  const eventType = clean(record?.identity?.eventType ?? record?.eventType ?? record?.event);
   if (eventType !== INTERACTION_EVENT_TYPE.REQUEST) return false;
-  const payload = record?.payload && typeof record.payload === "object"
-    ? record.payload
-    : record?.data && typeof record.data === "object"
-      ? record.data
-      : record;
+  const payload =
+    record?.payload && typeof record.payload === "object"
+      ? record.payload
+      : record?.data && typeof record.data === "object"
+        ? record.data
+        : record;
   const validation = validateInteractionRequestPayload(payload);
-  return validation.valid &&
+  return (
+    validation.valid &&
     normalizeInteractionLifecycle(payload.lifecycle || payload.interactionData?.lifecycle) ===
-      INTERACTION_LIFECYCLE.PENDING;
+      INTERACTION_LIFECYCLE.PENDING
+  );
 }
 
 export function validateInteractionResponsePayload(data = {}) {
-  const missing = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"]
-    .filter((key) => !clean(data?.[key]));
+  const missing = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
+    (key) => !clean(data?.[key]),
+  );
   return missing.length
     ? { valid: false, reason: "missing_identity", missing }
     : { valid: true, reason: "", missing: [] };

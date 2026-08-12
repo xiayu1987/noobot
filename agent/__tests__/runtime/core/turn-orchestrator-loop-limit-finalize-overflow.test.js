@@ -5,12 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HumanMessage } from "@langchain/core/messages";
 
 import { runFunctionCallLoop as runFunctionCallLoopProduction } from "../../../src/runtime/turn/orchestrator.js";
 import { createHookManager } from "@noobot/hook-protocol";
 import {
   createTestTurnMessagesStore,
+  createTestModelPort,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
 
@@ -81,7 +81,7 @@ function createModelState(llm, defaultModelSpec = null) {
       ? defaultModelSpec
       : { alias: "test_alias", model: "test-model" };
   const modelState = {
-    llm,
+    modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
     activeModelAlias: String(resolvedModelSpec?.alias || "test_alias"),
     eventListener: null,
@@ -168,7 +168,10 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   const secondInvocationMessages = capturedInvocations[1] || [];
   const finalizePromptMessage = [...secondInvocationMessages]
     .reverse()
-    .find((messageItem) => messageItem instanceof HumanMessage);
+    .find((messageItem) =>
+      String(messageItem?.additional_kwargs?.noobotInternalMessageType || "") ===
+        "tool_loop_limit_finalize_prompt",
+    );
   assert.ok(finalizePromptMessage);
   assert.match(
     String(finalizePromptMessage.content || ""),

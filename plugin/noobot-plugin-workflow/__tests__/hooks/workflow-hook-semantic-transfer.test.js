@@ -46,29 +46,33 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       semanticModel: "qwen3_6_plus",
       semanticPrompt: "emit workflow dsl",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出：节点A执行完成"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act',
-          'EDGE from=act to=end',
+          "EDGE from=start to=act",
+          "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
         traces: [{ id: "semantic_trace_1" }],
       }),
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: "wf-node-session-1",
           dialogProcessId: "wf_node_dialog_1",
           persisted: { outputDir: "/tmp/noobot/workflow/s1/node1" },
           result: {
-            answer: "answer-node-done\n\n[Harness-Review]\n{\"status\":\"pass\"}",
-            messages: [
-              { role: "assistant", content: "message-node-done", type: "message" },
-            ],
+            answer: 'answer-node-done\n\n[Harness-Review]\n{"status":"pass"}',
+            messages: [{ role: "assistant", content: "message-node-done", type: "message" }],
           },
         };
       },
@@ -112,17 +116,22 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
         controllers: {
           runtime: {
             materializePendingCurrentTurnMessageEvents() {
-              return { activityTimeline: [{
-                eventId: "workflow_semantic:test",
-                event: "workflow_semantic_response",
-                type: "workflow_semantic",
-                text: "canonical workflow analysis",
-                output: "canonical workflow analysis",
-                sequence: 1,
-                sequenceDomain: "message-event",
-                sequenceScopeId: "assistant-presentation-1",
-                authority: "authoritative",
-              }], toolTimeline: [] };
+              return {
+                activityTimeline: [
+                  {
+                    eventId: "workflow_semantic:test",
+                    event: "workflow_semantic_response",
+                    type: "workflow_semantic",
+                    text: "canonical workflow analysis",
+                    output: "canonical workflow analysis",
+                    sequence: 1,
+                    sequenceDomain: "message-event",
+                    sequenceScopeId: "assistant-presentation-1",
+                    authority: "authoritative",
+                  },
+                ],
+                toolTimeline: [],
+              };
             },
             sharedTools: {
               resolveAttachmentDisplayPath({ meta = {} } = {}) {
@@ -139,7 +148,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
                 calls: semanticTransferCalls,
                 prefix: "wf-node-result",
                 sessionId: "s1",
-                calls: semanticTransferCalls,
               }),
             },
           },
@@ -155,7 +163,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.ok(agentResult);
 
   assert.equal(subSessionCalls.length, 1);
-  assert.equal(semanticTransferCalls.some((item) => item?.strategy === "workflow_subagent"), true);
+  assert.equal(
+    semanticTransferCalls.some((item) => item?.strategy === "workflow_subagent"),
+    true,
+  );
   assert.equal(planningPersistCalls.length, 1);
   assert.equal(eventLogCalls.length > 0, true);
   const planningRuntimeEvent = eventLogCalls.find(
@@ -163,7 +174,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   )?.event;
   assert.equal(planningRuntimeEvent?.turnScopeId, "root-turn-1");
   assert.equal(planningRuntimeEvent?.presentationMessageId, "assistant-presentation-1");
-  assert.equal(planningRuntimeEvent?.workflowPayload?.workflowRunId, planningRuntimeEvent?.workflowRunId);
+  assert.equal(
+    planningRuntimeEvent?.workflowPayload?.workflowRunId,
+    planningRuntimeEvent?.workflowRunId,
+  );
   assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.nodes), true);
   assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.flowtos), true);
   assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
@@ -192,19 +206,16 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
 
   assert.ok(agentResult.workflow);
   assert.ok(String(agentResult.workflow?.workflowRunId || "").trim());
-  assert.equal(
-    agentResult.workflow?.execution?.workflowRunId,
-    agentResult.workflow?.workflowRunId,
-  );
-  assert.equal(
-    agentResult.workflow?.execution?.instanceId,
-    agentResult.workflow?.workflowRunId,
-  );
+  assert.equal(agentResult.workflow?.execution?.workflowRunId, agentResult.workflow?.workflowRunId);
+  assert.equal(agentResult.workflow?.execution?.instanceId, agentResult.workflow?.workflowRunId);
   assert.equal(agentResult.workflow?.planningDialog?.dialogProcessId, "d1");
   assert.equal(agentResult.workflow?.planningDialog?.dialogId, undefined);
   assert.match(String(agentResult.workflow.nodeSessions[0]?.dialogProcessId || ""), /^wf_node_/);
   assert.equal(agentResult.workflow.nodeSessions[0]?.dialogId, undefined);
-  assert.match(String(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogProcessId || ""), /^wf_node_/);
+  assert.match(
+    String(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogProcessId || ""),
+    /^wf_node_/,
+  );
   assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.nodeDialogId, undefined);
   assert.equal(
     String(agentResult.workflow?.planningDialog?.storageFile || "").endsWith("planning.json"),
@@ -254,17 +265,12 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.stepStatus,
     undefined,
   );
-  assert.equal(
-    workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.stepStatus,
-    undefined,
-  );
+  assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.stepStatus, undefined);
   const hasPayloadBuiltEvent = eventLogCalls.some(
     (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",
   );
   assert.equal(hasPayloadBuiltEvent, true);
 });
-
-
 
 test("workflow hook propagates semantic transfer envelopes for node result artifacts", async () => {
   const hookManager = createMockBotHookManager();
@@ -284,18 +290,24 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
       mode: "on",
       semanticModel: "qwen3_6_plus",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出节点结果"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act',
-          'EDGE from=act to=end',
+          "EDGE from=start to=act",
+          "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-semantic-node-session-1",
         dialogProcessId: "wf_semantic_node_dialog_1",
         result: {
@@ -326,18 +338,22 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
                   }
                   const isFinal = String(strategy || "") === "workflow_final_plan";
                   return {
-                    transferEnvelopes: [isFinal ? createV2AttachmentTransferEnvelope({
-                      attachmentId: "wf-semantic-final-1",
-                      sessionId: "s1",
-                      producerType: "plugin",
-                      producerId: "workflow-final-summary",
-                      transferId: "transfer-wf-semantic-final-1",
-                      messageId: "message-wf-semantic-final-1",
-                      name: "final-summary.md",
-                      scenario: "workflow",
-                      strategy: "workflow_final_plan",
-                      reason: "workflow_completed_attachment_summary",
-                    }) : envelope],
+                    transferEnvelopes: [
+                      isFinal
+                        ? createV2AttachmentTransferEnvelope({
+                            attachmentId: "wf-semantic-final-1",
+                            sessionId: "s1",
+                            producerType: "plugin",
+                            producerId: "workflow-final-summary",
+                            transferId: "transfer-wf-semantic-final-1",
+                            messageId: "message-wf-semantic-final-1",
+                            name: "final-summary.md",
+                            scenario: "workflow",
+                            strategy: "workflow_final_plan",
+                            reason: "workflow_completed_attachment_summary",
+                          })
+                        : envelope,
+                    ],
                   };
                 },
               },
@@ -355,15 +371,19 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
   assert.equal(agentResult.workflow?.transferEnvelopes?.length >= 1, true);
   assert.equal(agentResult.workflow?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
   assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.length >= 1, true);
-  assert.equal(agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
+  assert.equal(
+    agentResult.workflow?.nodeSessions?.[0]?.transferEnvelopes?.[0]?.protocol,
+    "noobot.semantic-transfer",
+  );
   const workflowTurnMessage = workflowTurn(agentResult);
   assert.equal(workflowTurnMessage?.chatPresentation, true);
   assert.equal(workflowTurnMessage?.transferEnvelopes?.length >= 1, true);
   assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(workflowTurnMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "wf-semantic-result-1");
+  assert.equal(
+    workflowTurnMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId,
+    "wf-semantic-result-1",
+  );
 });
-
-
 
 test("workflow hook routes final attachment summary composition through semantic-transfer", async () => {
   const hookManager = createMockBotHookManager();
@@ -377,18 +397,24 @@ test("workflow hook routes final attachment summary composition through semantic
       mode: "on",
       semanticModel: "qwen3_6_plus",
       capabilityModelInvoker: async () => ({
-        output: [
+        output: { text: [
           "WORKFLOW_DSL/1",
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=act type=action name="节点A" task="请输出节点结果"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act',
-          'EDGE from=act to=end',
+          "EDGE from=start to=act",
+          "EDGE from=act to=end",
           "END",
-        ].join("\n"),
+        ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-summary-node-session-1",
         dialogProcessId: "wf_summary_node_dialog_1",
         result: {
@@ -416,9 +442,8 @@ test("workflow hook routes final attachment summary composition through semantic
                 async transferSemanticContent(payload = {}) {
                   semanticTransferCalls.push(payload);
                   const generationSource = String(payload?.generationSource || "").trim();
-                  const suffix = generationSource === "workflow_completed_attachment_summary"
-                    ? "final"
-                    : "node";
+                  const suffix =
+                    generationSource === "workflow_completed_attachment_summary" ? "final" : "node";
                   const envelope = createV2AttachmentTransferEnvelope({
                     attachmentId: `wf-semantic-${suffix}-1`,
                     sessionId: "s1",
@@ -462,13 +487,17 @@ test("workflow hook routes final attachment summary composition through semantic
     : [];
   assert.equal(
     transferEnvelopes.some(
-      (item = {}) => String(item?.payload?.attachments?.[0]?.identity?.attachmentId || "").trim() === "wf-semantic-final-1",
+      (item = {}) =>
+        String(item?.payload?.attachments?.[0]?.identity?.attachmentId || "").trim() ===
+        "wf-semantic-final-1",
     ),
     true,
   );
   assert.equal(
     workflowPayloadTransferEnvelopes.some(
-      (item = {}) => String(item?.payload?.attachments?.[0]?.identity?.attachmentId || "").trim() === "wf-semantic-final-1",
+      (item = {}) =>
+        String(item?.payload?.attachments?.[0]?.identity?.attachmentId || "").trim() ===
+        "wf-semantic-final-1",
     ),
     true,
   );

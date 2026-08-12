@@ -18,16 +18,28 @@ function ref(value) {
 
 function createHarness(overrides = {}) {
   const sessions = ref([
-    { sessionId: "s1", title: "Old title", caller: "user", messages: [{ role: "user", content: "hello" }] },
+    {
+      sessionId: "s1",
+      title: "Old title",
+      caller: "user",
+      messages: [{ role: "user", content: "hello" }],
+    },
   ]);
   const notify = vi.fn();
-  const renameSessionApi = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+  const renameSessionApi = vi
+    .fn()
+    .mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
   const getSessionsApi = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({
       ok: true,
       sessions: [
-        { sessionId: "s1", title: "New title", caller: "user", updatedAt: "2026-01-01T00:00:00.000Z" },
+        {
+          sessionId: "s1",
+          title: "New title",
+          caller: "user",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
       ],
     }),
   });
@@ -60,12 +72,14 @@ function createHarness(overrides = {}) {
 describe("createSessionListActions.fetchSessions identity reconciliation", () => {
   it("reconciles an optimistic Session by its preallocated identity", async () => {
     const turnScopeId = "client-turn:refresh-1";
-    const sessions = ref([{
-      sessionId: "session-1",
-      isLocal: true,
-      caller: "user",
-      messages: [{ role: "assistant", turnScopeId, pending: true }],
-    }]);
+    const sessions = ref([
+      {
+        sessionId: "session-1",
+        isLocal: true,
+        caller: "user",
+        messages: [{ role: "assistant", turnScopeId, pending: true }],
+      },
+    ]);
     const activeSessionId = ref("session-1");
     const registry = createTurnRuntimeRegistryState();
     applyTurnRuntimeEvent(registry, {
@@ -80,18 +94,25 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
       ok: true,
       json: async () => ({
         ok: true,
-        sessions: [{
-          sessionId: "session-1",
-          caller: "user",
-          updatedAt: "2026-01-01T00:00:00.000Z",
-          turnLifecycleSnapshot: {
-            activeTurn: null,
-            recentTerminalTurns: [{ turnScopeId, state: "completed", sequence: 2 }],
+        sessions: [
+          {
+            sessionId: "session-1",
+            caller: "user",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            turnLifecycleSnapshot: {
+              activeTurn: null,
+              recentTerminalTurns: [{ turnScopeId, state: "completed", sequence: 2 }],
+            },
           },
-        }],
+        ],
       }),
     });
-    const { actions } = createHarness({ sessions, activeSessionId, turnRuntimeRegistry, getSessionsApi });
+    const { actions } = createHarness({
+      sessions,
+      activeSessionId,
+      turnRuntimeRegistry,
+      getSessionsApi,
+    });
 
     await expect(actions.fetchSessions("session-1", { silent: true })).resolves.toBe(true);
 
@@ -105,13 +126,15 @@ describe("createSessionListActions.fetchSessions identity reconciliation", () =>
 
 describe("createSessionListActions unavailable sessions", () => {
   it("does not fetch details for an unavailable session", async () => {
-    const sessions = ref([{
-      sessionId: "legacy",
-      title: "Legacy session",
-      isUnavailable: true,
-      availability: "unavailable",
-      unavailableReason: { code: "INVALID_TRANSFER_ENVELOPE", message: "legacy protocol" },
-    }]);
+    const sessions = ref([
+      {
+        sessionId: "legacy",
+        title: "Legacy session",
+        isUnavailable: true,
+        availability: "unavailable",
+        unavailableReason: { code: "INVALID_TRANSFER_ENVELOPE", message: "legacy protocol" },
+      },
+    ]);
     const activeSessionId = ref("");
     const { actions, fetchSessionDetail, notify } = createHarness({ sessions, activeSessionId });
 
@@ -130,7 +153,10 @@ describe("createSessionListActions.renameSession", () => {
     await expect(actions.renameSession("s1", "   ")).resolves.toBe(false);
 
     expect(renameSessionApi).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith({ type: "warning", message: "common.sessionTitleRequired" });
+    expect(notify).toHaveBeenCalledWith({
+      type: "warning",
+      message: "common.sessionTitleRequired",
+    });
   });
 
   it("allows renaming while another turn is sending", async () => {
@@ -139,7 +165,10 @@ describe("createSessionListActions.renameSession", () => {
     await expect(actions.renameSession("s1", "New title")).resolves.toBe(true);
 
     expect(renameSessionApi).toHaveBeenCalled();
-    expect(notify).not.toHaveBeenCalledWith({ type: "warning", message: "common.cannotRenameWhileSending" });
+    expect(notify).not.toHaveBeenCalledWith({
+      type: "warning",
+      message: "common.cannotRenameWhileSending",
+    });
   });
 
   it("rejects unchanged titles without calling backend", async () => {
@@ -153,7 +182,10 @@ describe("createSessionListActions.renameSession", () => {
 
   it("renames local sessions locally without calling backend", async () => {
     const sessions = ref([{ sessionId: "local-1", title: "Local old", isLocal: true }]);
-    const { actions, renameSessionApi } = createHarness({ sessions, activeSessionId: ref("local-1") });
+    const { actions, renameSessionApi } = createHarness({
+      sessions,
+      activeSessionId: ref("local-1"),
+    });
 
     await expect(actions.renameSession("local-1", " Local new ")).resolves.toBe(true);
 
@@ -164,7 +196,10 @@ describe("createSessionListActions.renameSession", () => {
   it("calls backend rename and refreshes session list for persisted sessions", async () => {
     const authFetch = vi.fn();
     const ensureConnected = vi.fn(() => true);
-    const { actions, renameSessionApi, getSessionsApi } = createHarness({ authFetch, ensureConnected });
+    const { actions, renameSessionApi, getSessionsApi } = createHarness({
+      authFetch,
+      ensureConnected,
+    });
 
     await expect(actions.renameSession("s1", " New title ")).resolves.toBe(true);
 
@@ -186,7 +221,6 @@ describe("createSessionListActions.deleteSession", () => {
       pending: true,
     };
     const activeSession = {
-      sessionId: "s-active",
       sessionId: "s-active",
       title: "Active",
       caller: "user",
@@ -216,12 +250,14 @@ describe("createSessionListActions.deleteSession", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        sessions: [{
-          sessionId: "s-active",
-          title: "Active",
-          caller: "user",
-          updatedAt: "2026-01-01T00:01:00.000Z",
-        }],
+        sessions: [
+          {
+            sessionId: "s-active",
+            title: "Active",
+            caller: "user",
+            updatedAt: "2026-01-01T00:01:00.000Z",
+          },
+        ],
       }),
     });
     const fetchSessionDetail = vi.fn();

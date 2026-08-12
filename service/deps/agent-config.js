@@ -13,6 +13,7 @@ export {
   normalizeBooleanLike,
   normalizeTimeMs,
   resolveBuiltinScenarios,
+  resolveLocalizedBuiltinScenarios,
   resolveRunConfigValue,
   resolveTimeMs,
 } from "noobot-agent/config";

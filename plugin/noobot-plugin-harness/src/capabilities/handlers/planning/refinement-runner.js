@@ -16,7 +16,7 @@ import {
   normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelName,
   resolveCapabilityModelMessages,
@@ -66,13 +66,14 @@ export async function runPlanningRefinementBySeparateModel(
     return { applied: false, status: "invoker_missing" };
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const explicitTargetIndexes = Array.isArray(targetMainStepIndexes)
-    ? targetMainStepIndexes.map((item) => Number(item)).filter((item) => Number.isFinite(item) && item > 0)
+    ? targetMainStepIndexes
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item) && item > 0)
     : [];
   const refinementTargetMainSteps = resolveRefinementTargetMainSteps(bucket, state, {
     preferredTargetMainStepIndexes: explicitTargetIndexes,
@@ -88,13 +89,9 @@ export async function runPlanningRefinementBySeparateModel(
     return { applied: false, status: "converged" };
   }
 
-  const refinementTask = buildPlanningRefinementPrompt(
-    locale,
-    bucket,
-    state,
-    "",
-    { targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index) },
-  );
+  const refinementTask = buildPlanningRefinementPrompt(locale, bucket, state, "", {
+    targetMainStepIndexes: refinementTargetMainSteps.map((item) => item.index),
+  });
   const agentMessagesBase = Array.isArray(baseMessages)
     ? baseMessages
     : resolveCapabilityModelMessages(meta, {
@@ -130,7 +127,7 @@ export async function runPlanningRefinementBySeparateModel(
 
   let refinementResponse = null;
   try {
-    refinementResponse = await invokeWithReasoningRetry({
+    refinementResponse = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "planning_refinement",
@@ -147,10 +144,8 @@ export async function runPlanningRefinementBySeparateModel(
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_refinement"),
       },
-      maxReasoningRetries: 1,
       purpose: "planning_refinement",
       domain: CAPABILITY_DOMAIN.PLANNING,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.PLANNING,
@@ -159,7 +154,6 @@ export async function runPlanningRefinementBySeparateModel(
         });
       },
       ctx,
-      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -173,9 +167,7 @@ export async function runPlanningRefinementBySeparateModel(
       error: String(error?.message || error || ""),
     };
   }
-  const refinementText =
-    extractRawTextContent(refinementResponse?.content) ||
-    String(refinementResponse?.text || refinementResponse?.output || "").trim();
+  const refinementText = String(refinementResponse?.output?.text || "").trim();
   const refinementAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_refinement",
     content: refinementText,
@@ -211,7 +203,9 @@ export async function runPlanningRefinementBySeparateModel(
           dynamicPolicyPrompt,
         }),
         formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
-      ].filter(Boolean).join("\n\n"),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
       dedupe: true,
     });
     return {

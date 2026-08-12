@@ -357,6 +357,9 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     message: "hello plugin",
     runConfig: {
       turnScopeId: "turn-scope-smoke",
+      executionId: "agent:turn-scope-smoke",
+      executionKind: "agent",
+      rootExecutionId: "agent:turn-scope-smoke",
       selectedPlugins: ["harness"],
       plugins: {
         harness: {

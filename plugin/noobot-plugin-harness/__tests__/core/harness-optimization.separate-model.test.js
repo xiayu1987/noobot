@@ -15,40 +15,17 @@ import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
-import { createGuidanceHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { invokeWithReasoningRetry } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
 import {
-  relaySeparateModelOutputAsUserMessage,
-} from "../../src/capabilities/handlers/shared.js";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+  createGuidanceHandler,
+  createPlanningHandler,
+} from "../helpers/context-aware-handler-fixtures.js";
+import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
+import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
+import {
+  createTestHookContext,
+  createTestModelResponse,
+} from "../helpers/public-runtime-fixtures.js";
 import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 test("planning separate_model avoids duplicate invoker calls while one run is in-flight", async () => {
   const handler = createPlanningHandler();
@@ -63,12 +40,12 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
       capabilityModelInvoker: async () => {
         invokerCalls += 1;
         await new Promise((resolve) => setTimeout(resolve, 80));
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             taskOwner: "admin",
             taskChecklist: [{ index: 1, task: "inspect planning path", owner: "admin" }],
           }),
-        };
+        );
       },
     },
   };
@@ -90,7 +67,6 @@ test("planning separate_model avoids duplicate invoker calls while one run is in
     false,
   );
 });
-
 test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when enabled", () => {
   const ctx = createTestHookContext();
   const payload = {
@@ -106,7 +82,10 @@ test("relaySeparateModelOutputAsUserMessage dedupes repeated planning relay when
   assert.equal(second, false);
   assert.equal(ctx.modelContext.messages.length, 1);
   assert.equal(ctx.modelContext.messages[0]?.role, "user");
-  assert.match(String(ctx.modelContext.messages[0]?.content || ""), /\[来自harness外部模型输出\/planning\]/);
+  assert.match(
+    String(ctx.modelContext.messages[0]?.content || ""),
+    /\[来自harness外部模型输出\/planning\]/,
+  );
 });
 
 test("relaySeparateModelOutputAsUserMessage preserves oversized relay content when transfer refs exist", () => {
@@ -117,35 +96,39 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
     content,
     dedupe: true,
     transferPayload: {
-      transferEnvelopes: [attachmentTransfer({
-        transferId: "transfer-planning-refinement-1",
-        messageId: "message-planning-refinement-1",
-        identity: {
-          sessionId: "test-session-1",
-          turnScopeId: "test-turn:test-dialog-1",
-          runId: "test-run-1",
-          producer: { type: "plugin", id: "harness:planning_refinement" },
-        },
-        direction: "output",
-        intent: {
-          source: "plugin",
-          reason: "planning_refinement",
-          scenario: "harness",
-          strategy: "harness_summary",
-        },
-        attachments: [{
+      transferEnvelopes: [
+        attachmentTransfer({
+          transferId: "transfer-planning-refinement-1",
+          messageId: "message-planning-refinement-1",
           identity: {
-            attachmentId: "att-1",
             sessionId: "test-session-1",
-            attachmentSource: "model",
+            turnScopeId: "test-turn:test-dialog-1",
+            runId: "test-run-1",
+            producer: { type: "plugin", id: "harness:planning_refinement" },
           },
-          role: "primary",
-          name: "detail.md",
-          mimeType: "text/markdown",
-          size: Buffer.byteLength(content, "utf8"),
-        }],
-        meta: { persisted: true },
-      })],
+          direction: "output",
+          intent: {
+            source: "plugin",
+            reason: "planning_refinement",
+            scenario: "harness",
+            strategy: "harness_summary",
+          },
+          attachments: [
+            {
+              identity: {
+                attachmentId: "att-1",
+                sessionId: "test-session-1",
+                attachmentSource: "model",
+              },
+              role: "primary",
+              name: "detail.md",
+              mimeType: "text/markdown",
+              size: Buffer.byteLength(content, "utf8"),
+            },
+          ],
+          meta: { persisted: true },
+        }),
+      ],
     },
   });
 
@@ -201,24 +184,23 @@ test("planning separate_model uses injected resolveModelMessages from harness me
     harness: {
       planningGuidanceMode: "separate_model",
       resolveModelMessages: ({ ctx: resolverCtx = {}, messages = [] } = {}) => {
-        const source = Array.isArray(messages) && messages.length
-          ? messages
-          : [
-              ...(resolverCtx.modelContext.messageBlocks?.history || []),
-              ...(resolverCtx.modelContext.messageBlocks?.incremental || []),
-            ];
-        return source.filter((item) =>
-          String(item?.content || "").includes("keep-me"),
-        );
+        const source =
+          Array.isArray(messages) && messages.length
+            ? messages
+            : [
+                ...(resolverCtx.modelContext.messageBlocks?.history || []),
+                ...(resolverCtx.modelContext.messageBlocks?.incremental || []),
+              ];
+        return source.filter((item) => String(item?.content || "").includes("keep-me"));
       },
       capabilityModelInvoker: async ({ messages = [] } = {}) => {
         capturedMessages = messages;
-        return {
-          content: JSON.stringify({
+        return createTestModelResponse(
+          JSON.stringify({
             taskOwner: "admin",
             taskChecklist: [{ index: 1, task: "ok", owner: "admin" }],
           }),
-        };
+        );
       },
     },
   };
@@ -226,56 +208,12 @@ test("planning separate_model uses injected resolveModelMessages from harness me
   await handler({ capability: "planning", point: "agent.before_llm_call", ctx, meta });
 
   assert.equal(Array.isArray(capturedMessages), true);
-  assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "drop-me"), false);
-  assert.equal(capturedMessages.some((item = {}) => String(item?.content || "") === "keep-me"), true);
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-test("invokeWithReasoningRetry throws error when reasoning-only persists after one retry", async () => {
-  let calls = 0;
-  const ctx = {
-    agentContext: {
-      payload: {
-        harness: {
-          state: { counters: {}, flags: {}, signals: {}, pending: {} },
-          taskChecklist: [],
-          acceptanceReports: [],
-          reviewReports: [],
-          planningRawOutputs: [],
-          logs: { planning: [], guidance: [], acceptance: [], review: [] },
-        },
-      },
-    },
-  };
-
-  await assert.rejects(
-    () =>
-      invokeWithReasoningRetry({
-        invoker: async () => {
-          calls += 1;
-          return { content: "<think>only reasoning</think>" };
-        },
-        invokePayload: { messages: [{ role: "user", content: "x" }] },
-        maxReasoningRetries: 1,
-        purpose: "planning",
-        domain: "planning",
-        ctx,
-      }),
-    (error) => error?.code === "CAPABILITY_REASONING_RETRY_EXHAUSTED",
+  assert.equal(
+    capturedMessages.some((item = {}) => String(item?.content || "") === "drop-me"),
+    false,
   );
-  assert.equal(calls, 2);
+  assert.equal(
+    capturedMessages.some((item = {}) => String(item?.content || "") === "keep-me"),
+    true,
+  );
 });

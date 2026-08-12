@@ -18,7 +18,7 @@ import {
   normalizeTransferPayload,
   relaySeparateModelOutputAsUserMessage,
   saveCapabilityOutputAsTransferArtifacts,
-  invokeWithReasoningRetry,
+  invokeCapabilityModel,
   resolveCapabilityModelInvoker,
   resolveCapabilityModelMessages,
   resolveCapabilityModelName,
@@ -76,9 +76,7 @@ import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/mode
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
 
-function buildSummaryRelayContent({
-  overviewText = "",
-} = {}) {
+function buildSummaryRelayContent({ overviewText = "" } = {}) {
   return String(overviewText || "").trim();
 }
 
@@ -122,11 +120,7 @@ export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   return runPlanUpdateAfterSummary(ctx, meta);
 }
 
-export async function runPlanUpdateAfterSummary(
-  ctx = {},
-  meta = {},
-  { baseMessages = null } = {},
-) {
+export async function runPlanUpdateAfterSummary(ctx = {}, meta = {}, { baseMessages = null } = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
@@ -139,18 +133,15 @@ export async function runPlanUpdateAfterSummary(
     return false;
   }
   const locale = state?.locale || LOCALE.ZH_CN;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const fallbackMessages = resolveCapabilityModelMessages(meta, {
     ctx,
     purpose: "summary",
   });
-  const modelMessages = [
-    ...(Array.isArray(baseMessages) ? baseMessages : fallbackMessages),
-  ];
+  const modelMessages = [...(Array.isArray(baseMessages) ? baseMessages : fallbackMessages)];
   let changed = false;
 
   if (!canAttemptPlanUpdate(ctx, state, { increment: true, stage: "revision" })) {
@@ -185,7 +176,7 @@ export async function runPlanUpdateAfterSummary(
   });
   let revisionResponse = null;
   try {
-    revisionResponse = await invokeWithReasoningRetry({
+    revisionResponse = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose: "planning_revision",
@@ -202,10 +193,8 @@ export async function runPlanUpdateAfterSummary(
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, "planning_revision"),
       },
-      maxReasoningRetries: 1,
       purpose: "planning_revision",
       domain: CAPABILITY_DOMAIN.PLANNING,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.PLANNING,
@@ -214,7 +203,6 @@ export async function runPlanUpdateAfterSummary(
         });
       },
       ctx,
-      meta,
     });
   } catch (error) {
     appendCapabilityLog(ctx, {
@@ -224,15 +212,14 @@ export async function runPlanUpdateAfterSummary(
     });
     return changed;
   }
-  const revisionText =
-    extractRawTextContent(revisionResponse?.content) ||
-    String(revisionResponse?.text || revisionResponse?.output || "").trim();
+  const revisionText = String(revisionResponse?.output?.text || "").trim();
   applyDynamicPolicyPromptFromText(ctx, revisionText, {
     source: "planning_revision",
     stage: "revision",
   });
   const flagsAfterRevision = resolveScenarioPolicyFlagsFromContext(ctx, meta);
-  const dynamicPolicyPromptAfterRevision = flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
+  const dynamicPolicyPromptAfterRevision =
+    flagsAfterRevision.dynamicPolicyPrompt || dynamicPolicyPrompt;
   const revisionAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
     purpose: "planning_revision",
     content: revisionText,
@@ -270,7 +257,7 @@ export async function runPlanUpdateAfterSummary(
     content: buildPostPlanUserFollowupPrompt(locale, "revision", {
       programmingMode: flagsAfterRevision.programmingMode,
       textMode: flagsAfterRevision.textMode,
-                        dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
+      dynamicPolicyPrompt: dynamicPolicyPromptAfterRevision,
     }),
     dedupe: true,
   });
@@ -307,16 +294,20 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   const invoker = resolveCapabilityModelInvoker(meta);
   if (!invoker) return false;
   const locale = state?.locale || LOCALE.ZH_CN;
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
 
-  const requestedAction = String(action || "auto").trim().toLowerCase();
-  const allowSummary = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
-  const allowGuidance = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.guidance;
-  const allowAnalysis = requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.analysis;
+  const requestedAction = String(action || "auto")
+    .trim()
+    .toLowerCase();
+  const allowSummary =
+    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.summary;
+  const allowGuidance =
+    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.guidance;
+  const allowAnalysis =
+    requestedAction === "auto" || requestedAction === GUIDANCE_DECISION.action.analysis;
 
   let purpose = "";
   let workflowPurpose = "";
@@ -400,23 +391,24 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
           includeWorkflowPolicy: false,
         })
       : "";
-  const invokerMessages = workflowPurpose === "analysis"
-    ? buildCapabilityModelMessages({
-        locale,
-        agentMessages: modelMessages,
-        task: prompt,
-        taskRole: "user",
-        postTaskMessages: [...workflowContextContents, responsibilityPrompt],
-        postTaskRole: "user",
-      })
-    : buildCapabilityProtocolModelMessages({
-        locale,
-        agentMessages: modelMessages,
-        contextMessages: workflowContextContents,
-        protocolPrompt: prompt,
-        workflowPolicyPrompt,
-        responsibilityPrompt,
-      });
+  const invokerMessages =
+    workflowPurpose === "analysis"
+      ? buildCapabilityModelMessages({
+          locale,
+          agentMessages: modelMessages,
+          task: prompt,
+          taskRole: "user",
+          postTaskMessages: [...workflowContextContents, responsibilityPrompt],
+          postTaskRole: "user",
+        })
+      : buildCapabilityProtocolModelMessages({
+          locale,
+          agentMessages: modelMessages,
+          contextMessages: workflowContextContents,
+          protocolPrompt: prompt,
+          workflowPolicyPrompt,
+          responsibilityPrompt,
+        });
 
   let response = null;
   const summaryStartedAt = purpose === "summary" ? Date.now() : 0;
@@ -432,7 +424,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     });
   }
   try {
-    response = await invokeWithReasoningRetry({
+    response = await invokeCapabilityModel({
       invoker,
       invokePayload: {
         purpose,
@@ -451,12 +443,10 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
         ctx,
         toolAllowlist: resolveCapabilityToolAllowlist(meta, purpose),
       },
-      maxReasoningRetries: 1,
       purpose,
       pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
       chain: workflowPurpose === "analysis" ? "auxiliary" : undefined,
       domain: CAPABILITY_DOMAIN.GUIDANCE,
-      appendCapabilityLog,
       appendModelTrace: async (retryResponse = null) => {
         await appendCapabilityModelTraceLog(ctx, {
           domain: CAPABILITY_DOMAIN.GUIDANCE,
@@ -487,9 +477,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     });
     return false;
   }
-  const responseText =
-    extractRawTextContent(response?.content) ||
-    String(response?.text || response?.output || "").trim();
+  const responseText = String(response?.output?.text || "").trim();
   let relayText = responseText;
   let relayAttachments = [];
   let summaryMergeText = responseText;
@@ -499,14 +487,15 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     summaryMergeText = summaryOverviewText;
     const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
     const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-    const summaryDetailTransferPayload = saveDetailToAttachment && summaryDetailAttachmentText
-      ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
-        purpose: "summary_detail",
-        content: summaryDetailAttachmentText,
-        generationSource: "harness_summary_detail",
-        domain: CAPABILITY_DOMAIN.GUIDANCE,
-      })
-      : { transferEnvelopes: [] };
+    const summaryDetailTransferPayload =
+      saveDetailToAttachment && summaryDetailAttachmentText
+        ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
+            purpose: "summary_detail",
+            content: summaryDetailAttachmentText,
+            generationSource: "harness_summary_detail",
+            domain: CAPABILITY_DOMAIN.GUIDANCE,
+          })
+        : { transferEnvelopes: [] };
     recordSummaryDetailTransferEnvelopes(ctx, summaryDetailTransferPayload);
     const baseRelayText = saveDetailToAttachment
       ? buildSummaryRelayContent({
@@ -524,7 +513,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     relayText = [
       relayText || baseRelayText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
-    ].filter(Boolean).join("\n\n");
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     relayAttachments = summaryDetailTransferPayload;
   } else if (workflowPurpose !== "analysis") {
     relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
@@ -557,7 +548,9 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
     clearIncrementalCapabilityMessageCacheForContext(ctx);
-    const checkpointRequestedMessageCount = Array.isArray(state?.pending?.summaryCheckpointMessageIds)
+    const checkpointRequestedMessageCount = Array.isArray(
+      state?.pending?.summaryCheckpointMessageIds,
+    )
       ? state.pending.summaryCheckpointMessageIds.length
       : 0;
     const checkpointStartedAt = Date.now();

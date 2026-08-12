@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  createTestHookContext,
+  createTestModelResponse,
+} from "../helpers/public-runtime-fixtures.js";
+import {
   assert,
   assertFlatCapabilityMessages,
   createAgentHookManager,
@@ -16,7 +20,6 @@ import {
   test,
   waitForFile,
 } from "../helpers/harness-planning-helper.js";
-import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 test("harness planning disables blocked tools (except help) and injects request_task_acceptance tool", async () => {
   const hookManager = createAgentHookManager();
@@ -66,7 +69,10 @@ test("harness planning skips auxiliary scope llm hooks", async () => {
   };
 
   await hookManager.emit("agent.before_llm_call", ctx);
-  assert.equal(messages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))), false);
+  assert.equal(
+    messages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))),
+    false,
+  );
   const names = ctx.agentContext.payload.tools.registry.map((tool) => tool.name);
   assert.equal(names.includes("request_task_acceptance"), false);
 });
@@ -83,11 +89,9 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "planning_refinement") {
-          return {
-            content: "ADD 1.1 细化步骤一",
-          };
+          return createTestModelResponse("ADD 1.1 细化步骤一");
         }
-        return { content: "1. 解析附件\n2. 执行核心任务" };
+        return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
       },
     },
   );
@@ -169,7 +173,7 @@ test("harness planning does not inject refinement tool by default in programming
       trace: false,
       promptPolicy: false,
       planningGuidanceMode: "separate_model",
-      capabilityModelInvoker: async () => ({ content: "1. 解析附件\n2. 执行核心任务" }),
+      capabilityModelInvoker: async () => createTestModelResponse("1. 解析附件\n2. 执行核心任务"),
     },
   );
 
@@ -235,9 +239,9 @@ test("harness request_plan_refinement falls back to closure meta when configurab
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
         if (payload.purpose === "planning_refinement") {
-          return { content: "ADD 1.1 细化步骤一" };
+          return createTestModelResponse("ADD 1.1 细化步骤一");
         }
-        return { content: "1. 解析附件\n2. 执行核心任务" };
+        return createTestModelResponse("1. 解析附件\n2. 执行核心任务");
       },
     },
   );
@@ -318,7 +322,10 @@ test("harness planning allows tool-call turn without assistant text when plannin
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "", tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }] },
+    ai: {
+      content: "",
+      tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }],
+    },
     modelResponse: { finish_reason: "tool_calls" },
     agentContext,
   });
@@ -347,13 +354,9 @@ test("harness planning separate model uses resolved planning tool allowlist", as
       },
       capabilityModelInvoker: async (payload) => {
         invocations.push(payload);
-        return {
-          content: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
-          output: '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
-          finishedReason: "no_tool_call",
-          turn: 1,
-          traces: [{ turn: 1, purpose: "planning", domain: "planning", locale: "zh-CN", toolCalls: [] }],
-        };
+        return createTestModelResponse(
+          '{"taskChecklist":[{"index":1,"task":"执行核心任务","owner":"任务负责者1"}]}',
+        );
       },
     },
   );
@@ -381,13 +384,17 @@ test("harness planning separate model uses resolved planning tool allowlist", as
   assert.equal(invocations[0].promptVersion, "v1");
   assert.equal(invocations[0].envelopeType, "structured_v1");
   assertFlatCapabilityMessages(invocations[0].messages);
-  const contextPrompt = invocations[0].messages.find((item = {}) =>
-    String(item?.role || "") === "user" &&
-    /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")));
+  const contextPrompt = invocations[0].messages.find(
+    (item = {}) =>
+      String(item?.role || "") === "user" &&
+      /规划输入上下文摘要（精简）如下/.test(String(item?.content || "")),
+  );
   assert.match(String(contextPrompt?.content || ""), /"latestUserGoal": "开始任务"/);
-  const taskPrompt = invocations[0].messages.find((item = {}) =>
-    String(item?.role || "") === "system" &&
-    /harness-planning-bootstrap/.test(String(item?.content || "")));
+  const taskPrompt = invocations[0].messages.find(
+    (item = {}) =>
+      String(item?.role || "") === "system" &&
+      /harness-planning-bootstrap/.test(String(item?.content || "")),
+  );
   assert.match(String(taskPrompt?.content || ""), /\[CURRENT_TASK_GOAL\]/);
   assert.match(String(taskPrompt?.content || ""), /\[PLAN\]/);
 });

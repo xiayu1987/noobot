@@ -3,194 +3,79 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { WORKFLOW_PARAMS } from "../../../../core/workflow-params.js";
+import { validateModelResponse } from "@noobot/model-protocol";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import { resolveIncrementalCapabilityMessages } from "./incremental-message-cache.js";
 import { markMessageAsProtocol } from "./message-metadata.js";
 
-const THINK_BLOCK_RE = /<think>([\s\S]*?)<\/think>/gi;
-const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
-const WORKFLOW_EVENTS = WORKFLOW_PARAMS.workflow.events;
-
 function buildAuxiliaryModelNoScriptMessage(ctx = {}) {
-  return markMessageAsProtocol({
-    role: "system",
-    content: translateI18nText(
-      resolveLocale(ctx),
-      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.AUXILIARY_MODEL_NO_SCRIPT_CONSTRAINT,
-    ),
-  }, "harness:auxiliary-model-no-script-constraint");
+  return markMessageAsProtocol(
+    {
+      role: "system",
+      content: translateI18nText(
+        resolveLocale(ctx),
+        HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.AUXILIARY_MODEL_NO_SCRIPT_CONSTRAINT,
+      ),
+    },
+    "harness:auxiliary-model-no-script-constraint",
+  );
 }
 
-function extractTextContent(content = "") {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item = {}) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") return item.text;
-      return "";
-    })
-    .join("\n")
-    .trim();
-}
-
-function stripThinkingBlocks(text = "") {
-  return String(text || "").replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-}
-
-function extractThinkingTextFromContent(content = "") {
-  const raw = extractTextContent(content);
-  if (!raw) return "";
-  const chunks = [];
-  let match = null;
-  const regex = new RegExp(THINK_BLOCK_RE);
-  while ((match = regex.exec(raw))) {
-    const text = String(match?.[1] || "").trim();
-    if (text) chunks.push(text);
-  }
-  return chunks.join("\n").trim();
-}
-
-function extractResponseText(response = null) {
-  const contentText = stripThinkingBlocks(extractTextContent(response?.content));
-  if (contentText) return contentText;
-  return stripThinkingBlocks(String(response?.text || response?.output || "").trim());
-}
-
-function extractReasoningText(response = null) {
-  const candidates = [
-    response?.reasoning_content,
-    response?.reasoningContent,
-    response?.additional_kwargs?.reasoning_content,
-    response?.additional_kwargs?.reasoningContent,
-    response?.response_metadata?.reasoning_content,
-    response?.response_metadata?.reasoningContent,
-    response?.raw?.choices?.[0]?.message?.reasoning_content,
-    response?.raw?.choices?.[0]?.message?.reasoningContent,
-  ];
-  for (const item of candidates) {
-    const text = extractTextContent(item);
-    if (text) return text;
-  }
-  const thinkingFromContent = extractThinkingTextFromContent(response?.content);
-  if (thinkingFromContent) return thinkingFromContent;
-  const thinkingFromText = extractThinkingTextFromContent(response?.text || response?.output || "");
-  if (thinkingFromText) return thinkingFromText;
-  return "";
-}
-
-function appendReasoningToBucket(ctx = {}, { purpose = "", reasoning = "", attempt = 1 } = {}) {
+function appendReasoningAttemptsToBucket(ctx = {}, { purpose = "", response = null } = {}) {
+  const attempts = Array.isArray(response?.execution?.attempts) ? response.execution.attempts : [];
+  const reasoningAttempts = attempts.filter(
+    (attempt = {}) =>
+      attempt.kind === "reasoning_only" && String(attempt?.output?.reasoning || "").trim(),
+  );
+  if (!reasoningAttempts.length) return false;
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
-  const { bucket } = holder;
-  if (!Array.isArray(bucket.modelReasoningTraces)) {
-    bucket.modelReasoningTraces = [];
+  if (!Array.isArray(holder.bucket.modelReasoningTraces)) {
+    holder.bucket.modelReasoningTraces = [];
   }
-  bucket.modelReasoningTraces.push({
-    capturedAt: new Date().toISOString(),
-    purpose: String(purpose || "unknown").trim() || "unknown",
-    attempt: Number(attempt) || 1,
-    content: String(reasoning || ""),
-  });
-  if (bucket.modelReasoningTraces.length > 40) {
-    bucket.modelReasoningTraces.splice(0, bucket.modelReasoningTraces.length - 40);
+  for (const attempt of reasoningAttempts) {
+    holder.bucket.modelReasoningTraces.push({
+      capturedAt: new Date().toISOString(),
+      purpose: String(purpose || "unknown").trim() || "unknown",
+      attempt: Number(attempt.attempt) || 1,
+      content: String(attempt.output.reasoning),
+    });
+  }
+  if (holder.bucket.modelReasoningTraces.length > 40) {
+    holder.bucket.modelReasoningTraces.splice(0, holder.bucket.modelReasoningTraces.length - 40);
   }
   return true;
 }
 
-export async function invokeWithReasoningRetry({
+export async function invokeCapabilityModel({
   invoker = null,
   invokePayload = {},
-  maxReasoningRetries = 1,
   purpose = "",
-  domain = "",
-  appendCapabilityLog = null,
   appendModelTrace = null,
   ctx = {},
-  meta = {},
 } = {}) {
   if (typeof invoker !== "function") return null;
   if (isHarnessAgentTurnEnded(ctx)) return null;
   const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
-  let runtimeMessages = resolveIncrementalCapabilityMessages({
-    ctx,
-    purpose: purpose || payload?.purpose,
-    messages: Array.isArray(payload?.messages) ? payload.messages : [],
-  });
-  runtimeMessages = [buildAuxiliaryModelNoScriptMessage(ctx), ...runtimeMessages];
-  let response = null;
-
-  for (let attempt = 0; attempt <= Math.max(0, Number(maxReasoningRetries) || 0); attempt += 1) {
-    if (isHarnessAgentTurnEnded(ctx)) return response;
-    response = await invoker({
-      ...payload,
-      messages: runtimeMessages,
-    });
-    if (typeof appendModelTrace === "function") {
-      await appendModelTrace(response, { attempt });
-    }
-    const responseText = extractResponseText(response);
-    if (responseText) return response;
-    if (isHarnessAgentTurnEnded(ctx)) return response;
-    const reasoningText = extractReasoningText(response);
-    if (!reasoningText) return response;
-
-    appendReasoningToBucket(ctx, {
-      purpose,
-      reasoning: reasoningText,
-      attempt: attempt + 1,
-    });
-    if (typeof appendCapabilityLog === "function") {
-      appendCapabilityLog(ctx, {
-        domain,
-        event: SHARED_EVENTS.capabilityReasoningCaptured,
-        detail: {
-          purpose,
-          attempt: attempt + 1,
-          reasoningChars: reasoningText.length,
-        },
-      });
-    }
-    if (attempt >= maxReasoningRetries) {
-      if (typeof appendCapabilityLog === "function") {
-        appendCapabilityLog(ctx, {
-          domain,
-          event: SHARED_EVENTS.capabilityReasoningRetryExhaustedError,
-          detail: {
-            purpose,
-            attempt: attempt + 1,
-            maxReasoningRetries: Math.max(0, Number(maxReasoningRetries) || 0),
-          },
-        });
-      }
-      const error = new Error(
-        `reasoning-only response after retry exhausted: ${String(purpose || "unknown").trim() || "unknown"}`,
-      );
-      error.code = "CAPABILITY_REASONING_RETRY_EXHAUSTED";
-      error.purpose = String(purpose || "").trim() || "unknown";
-      error.domain = String(domain || "").trim() || "unknown";
-      throw error;
-    }
-    const reasoningMessage = [
-      "<!-- harness-capability-reasoning -->",
-      "\u4ee5\u4e0b\u662f\u4e0a\u6b21\u6a21\u578b\u8fd4\u56de\u7684\u601d\u8003\u5185\u5bb9\uff0c\u4ec5\u4f9b\u53c2\u8003\uff0c\u4e0d\u4ee3\u8868\u6700\u7ec8\u7b54\u6848\uff1a",
-      reasoningText,
-    ].join("\n");
-    runtimeMessages = [{ role: "system", content: reasoningMessage }, ...runtimeMessages];
-    if (typeof appendCapabilityLog === "function") {
-      appendCapabilityLog(ctx, {
-        domain,
-        event: WORKFLOW_EVENTS.reasoningRetryScheduled,
-        detail: {
-          purpose,
-          attempt: attempt + 1,
-        },
-      });
-    }
+  const runtimeMessages = [
+    buildAuxiliaryModelNoScriptMessage(ctx),
+    ...resolveIncrementalCapabilityMessages({
+      ctx,
+      purpose: purpose || payload.purpose,
+      messages: Array.isArray(payload.messages) ? payload.messages : [],
+    }),
+  ];
+  const response = validateModelResponse(await invoker({ ...payload, messages: runtimeMessages }));
+  if (!String(response.output.text || "").trim()) {
+    throw new TypeError(
+      `harness capability model returned empty output: ${purpose || payload.purpose || "unknown"}`,
+    );
   }
-  void meta;
+  appendReasoningAttemptsToBucket(ctx, { purpose, response });
+  if (typeof appendModelTrace === "function") {
+    await appendModelTrace(response);
+  }
   return response;
 }

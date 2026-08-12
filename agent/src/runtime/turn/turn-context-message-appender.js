@@ -20,7 +20,9 @@ export function appendTurnContextControlMessage({
   const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
   const normalizedInternalType = String(internalType || "").trim();
   if (!turnMessageStore?.push || !modelContext || !dialogProcessId || !turnScopeId) {
-    throw new Error("Turn context control message requires canonical Turn identity and message stores");
+    throw new Error(
+      "Turn context control message requires canonical Turn identity and message stores",
+    );
   }
   if (!normalizedInternalType) {
     throw new TypeError("Turn context control message internalType is required");
@@ -29,20 +31,26 @@ export function appendTurnContextControlMessage({
   const additionalKwargs = {
     noobotMessageId: messageUid,
     noobotInternalMessageType: normalizedInternalType,
+    chatPresentation: false,
   };
   const persistedMessage = turnMessageStore.push({
     messageUid,
     role: "user",
     type: "context_control",
+    chatPresentation: false,
     noobotInternalMessageType: normalizedInternalType,
     content: String(content || ""),
     dialogProcessId,
     turnScopeId,
     additional_kwargs: additionalKwargs,
   });
-  appendContextMessage(modelContext, new HumanMessage({
-    content: persistedMessage.content,
-    additional_kwargs: additionalKwargs,
-  }), { block: "incremental" });
+  appendContextMessage(
+    modelContext,
+    new HumanMessage({
+      content: persistedMessage.content,
+      additional_kwargs: additionalKwargs,
+    }),
+    { block: "incremental" },
+  );
   return persistedMessage;
 }

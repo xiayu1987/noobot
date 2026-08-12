@@ -24,7 +24,6 @@ function summaryContent(state = "CONTINUE") {
 function createTool() {
   const systemRuntime = {
     needsPhaseSummary: true,
-    toolLoopExecutionCount: 3,
     phaseSummaryLoopCount: 3,
   };
   const runtime = { systemRuntime };
@@ -48,7 +47,6 @@ test("task_summary returns only the derived receipt for CONTINUE", async () => {
   assert.equal(payload.summary.details, undefined);
   assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
   assert.equal(systemRuntime.needsPhaseSummary, false);
-  assert.equal(systemRuntime.toolLoopExecutionCount, 0);
   assert.equal(systemRuntime.phaseSummaryLoopCount, 0);
 });
 
@@ -74,7 +72,6 @@ test("task_summary rejects non-protocol text without mutating summary state", as
     (error) => error?.code === "RECOVERABLE_INVALID_TOOL_INPUT",
   );
   assert.equal(systemRuntime.needsPhaseSummary, true);
-  assert.equal(systemRuntime.toolLoopExecutionCount, 3);
   assert.equal(systemRuntime.phaseSummaryLoopCount, 3);
   assert.equal(systemRuntime.mainFlowControlInstruction, undefined);
 });

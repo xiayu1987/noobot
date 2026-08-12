@@ -16,6 +16,7 @@
   "dependencies": {
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",
+    "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/shared": "file:../../shared",

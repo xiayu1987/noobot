@@ -10,112 +10,139 @@ import {
   MAX_MINI_RUNNER_TOOL_TURNS,
   createAgentCapabilityModelInvoker,
 } from "../../../../src/runtime/capability-runner/index.js";
-import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
 import { createTestAgentExecutionScope } from "../../../helpers/agent-execution-scope.js";
 
-function createFakeModel(responses = []) {
-  let index = 0;
-  const invocations = [];
-  const model = {
-    invocations,
-    bindTools() { return this; },
-    async invoke(messages, options = {}) {
-      invocations.push({ messages, options });
-      const response = responses[index] || responses.at(-1) || { content: "" };
-      index += 1;
-      response.seenMessages = messages;
-      response.seenOptions = options;
-      return response;
-    },
-  };
-  return model;
-}
+const modelSpec = Object.freeze({
+  alias: "test",
+  model: "test-model",
+  format: "openai_compatible",
+  providerId: "test",
+  adapterId: "openai-compatible",
+});
 
-function createLegacyFakeModel(responses = []) {
+function createModelPort(outputs = []) {
   let index = 0;
+  const requests = [];
   return {
-    bindTools() { return this; },
-    async invoke(messages) {
-      const response = responses[index] || responses.at(-1) || { content: "" };
+    requests,
+    async invoke(request) {
+      requests.push(request);
+      const output = outputs[index] || outputs.at(-1) || { text: "" };
       index += 1;
-      response.seenMessages = messages;
-      return response;
+      return {
+        output: {
+          text: String(output.text || ""),
+          reasoning: String(output.reasoning || ""),
+          toolCalls: Array.isArray(output.toolCalls) ? output.toolCalls : [],
+          finishReason: String(output.finishReason || ""),
+          usage: output.usage || {},
+        },
+        execution: { attemptCount: 1, attempts: [], model: modelSpec, provider: {} },
+      };
     },
   };
 }
 
-function createCapabilityAgentContext({ runtime = {}, tools = [] } = {}) {
-  return createTestAgentExecutionScope(runtime, { tools });
-}
-
-test("mini-runner appends assistant tool-call message before tool result", async () => {
-  const first = {
-    content: "need tool",
-    tool_calls: [{ id: "c1", name: "echo", args: { text: "hi" } }],
+function createContext({ modelPort, tools = [], eventListener = null } = {}) {
+  const runtime = {
+    globalConfig: {},
+    userConfig: {},
+    modelPort,
+    eventListener,
+    systemRuntime: { turnScopeId: "turn-test" },
   };
-  const second = { content: "done" };
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelFn: () => createFakeModel([first, second]),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-    executeToolCallFn: async () => ({ toolResultText: "echo:hi" }),
-  });
-
-  const result = await invoker({
-    messages: [{ role: "user", content: "go" }],
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal(result.output, "done");
-  assert.equal(result.toolTurnLimitReached, false);
-  assert.equal(second.seenMessages.at(1), first);
-  assert.equal(second.seenMessages.at(2).role, "tool");
-});
-
-test("mini-runner supports OpenAI function-style tool calls and JSON args", async () => {
-  const first = {
-    content: "",
-    additional_kwargs: {
-      tool_calls: [{ id: "c2", function: { name: "echo", arguments: '{"text":"hi"}' } }],
+  return {
+    runtime,
+    ctx: {
+      sessionId: "session-test",
+      dialogProcessId: "dialog-test",
+      agentContext: createTestAgentExecutionScope(runtime, { tools }),
     },
   };
-  let capturedCall = null;
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    maxTurns: 1,
-    createChatModelFn: () => createFakeModel([first]),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-    executeToolCallFn: async ({ call }) => { capturedCall = call; return { toolResultText: "ok" }; },
+}
+
+function createInvoker(options = {}) {
+  return createAgentCapabilityModelInvoker({
+    resolveDefaultModelSpecFn: () => modelSpec,
+    resolveModelSpecByNameFn: () => modelSpec,
+    ...options,
+  });
+}
+
+test("mini-runner sends canonical requests through the host ModelPort", async () => {
+  const modelPort = createModelPort([{ text: "done" }]);
+  const { ctx } = createContext({ modelPort });
+  const result = await createInvoker({ enableToolBinding: false })({
+    purpose: "planning",
+    domain: "workflow",
+    messages: [{ role: "user", content: "plan" }],
+    ctx,
   });
 
-  await invoker({ ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) } });
-  assert.equal(capturedCall.name, "echo");
-  assert.deepEqual(capturedCall.args, { text: "hi" });
+  assert.equal(result.output.text, "done");
+  assert.equal(result.finishedReason, "tool_binding_disabled");
+  assert.equal(modelPort.requests.length, 1);
+  assert.equal(modelPort.requests[0].invocation.purpose, "planning");
+  assert.equal(modelPort.requests[0].invocation.domain, "workflow");
+  assert.equal(modelPort.requests[0].options.streaming, false);
 });
 
-test("mini-runner records rejected and missing tool call statuses in traces", async () => {
-  const first = {
-    content: "need tools",
-    tool_calls: [
-      { id: "c1", name: "blocked", args: {} },
-      { id: "c2", name: "missing", args: {} },
-    ],
-  };
-  const invoker = createAgentCapabilityModelInvoker({
+test("mini-runner appends assistant tool calls and tool results before the next request", async () => {
+  const modelPort = createModelPort([
+    { text: "need tool", toolCalls: [{ id: "c1", name: "echo", args: { text: "hi" } }] },
+    { text: "done" },
+  ]);
+  const tool = { name: "echo" };
+  const { ctx } = createContext({ modelPort, tools: [tool] });
+  const executed = [];
+  const result = await createInvoker({
+    enableToolBinding: true,
+    toolAllowlist: ["echo"],
+    adaptToolsForBindingFn: () => ({ tools: [tool], bindOptions: { tool_choice: "auto" } }),
+    executeToolCallFn: async ({ call }) => {
+      executed.push(call);
+      return { toolResultText: "echo:hi" };
+    },
+  })({ messages: [{ role: "user", content: "go" }], ctx });
+
+  assert.equal(result.output.text, "done");
+  assert.equal(result.finishedReason, "no_tool_call");
+  assert.equal(executed[0].name, "echo");
+  assert.deepEqual(executed[0].args, { text: "hi" });
+  const secondMessages = modelPort.requests[1].messages;
+  assert.equal(secondMessages[1].role, "assistant");
+  assert.equal(secondMessages[1].tool_calls[0].id, "c1");
+  assert.equal(secondMessages[2].role, "tool");
+  assert.equal(secondMessages[2].content, "echo:hi");
+  assert.deepEqual(modelPort.requests[0].options.toolBinding, { tool_choice: "auto" });
+});
+
+test("mini-runner records rejected and missing tools without invoking them", async () => {
+  const modelPort = createModelPort([
+    {
+      text: "",
+      toolCalls: [
+        { id: "blocked", name: "blocked", args: {} },
+        { id: "missing", name: "missing", args: {} },
+      ],
+    },
+  ]);
+  const { ctx } = createContext({ modelPort, tools: [{ name: "missing" }] });
+  let executions = 0;
+  const result = await createInvoker({
     enableToolBinding: true,
     maxTurns: 1,
     toolAllowlist: ["missing"],
-    createChatModelFn: () => createFakeModel([first]),
     adaptToolsForBindingFn: () => ({ tools: [] }),
-    executeToolCallFn: async () => ({ toolResultText: "should-not-run" }),
-  });
+    executeToolCallFn: async () => {
+      executions += 1;
+      return { toolResultText: "unexpected" };
+    },
+  })({ ctx });
 
-  const result = await invoker({
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "missing" }] }) },
-  });
-
+  assert.equal(executions, 0);
   assert.deepEqual(
-    result.traces[0].toolCalls.map((call) => ({ name: call.name, status: call.status })),
+    result.toolTurns[0].toolCalls.map(({ name, status }) => ({ name, status })),
     [
       { name: "blocked", status: "rejected" },
       { name: "missing", status: "not_found" },
@@ -123,703 +150,60 @@ test("mini-runner records rejected and missing tool call statuses in traces", as
   );
 });
 
-test("mini-runner preserves standalone system previous-summary context", async () => {
-  let seenMessages = [];
+test("mini-runner isolates explicit model selection and plugin headers", async () => {
+  const modelPort = createModelPort([{ text: "selected" }]);
+  const { ctx } = createContext({ modelPort });
+  let resolvedName = "";
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke(messages) {
-        seenMessages = messages;
-        return { content: "ok" };
-      },
-    }),
-  });
-
-  await invoker({
-    purpose: "summary",
-    ctx: { agentContext: createCapabilityAgentContext() },
-    messages: [
-      { role: "user", content: "继续" },
-      { role: "system", content: "<!-- plugin-current-complete-plan-checklist -->\n当前完整计划\n1. A" },
-      {
-        role: "system",
-        content: "<!-- plugin-previous-summary-context -->\n上一次小结\n[SUMMARY_DETAIL]\n- 上一轮完整证据",
-      },
-      { role: "user", content: "请生成小结" },
-    ],
-  });
-
-  const checklistIndex = seenMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("plugin-current-complete-plan-checklist"),
-  );
-  const previousSummaryIndex = seenMessages.findIndex((item = {}) =>
-    String(item?.content || "").includes("上一轮完整证据"),
-  );
-  assert.equal(checklistIndex >= 0, true);
-  assert.equal(previousSummaryIndex, checklistIndex + 1);
-  assert.equal(seenMessages[previousSummaryIndex]?.role, "system");
-});
-
-test("mini-runner sends guidance analysis response through execution event listener only", async () => {
-  const hookEvents = [];
-  const executionEvents = [];
-  const activityFacts = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke() {
-        return { content: "guidance output" };
-      },
-    }),
-  });
-
-  await invoker({
-    purpose: "guidance",
-    pluginFlow: "analysis",
-    chain: "auxiliary",
-    ctx: {
-      sessionId: "s1",
-      dialogProcessId: "dp1",
-      emitHookClientEvent(event, data) {
-        hookEvents.push({ event, data });
-      },
-      agentContext: createCapabilityAgentContext({
-        runtime: {
-          systemRuntime: {
-            sessionId: "s1",
-            turnScopeId: "turn",
-            messageEventStream: {
-              activeMessageId: "model-message-1",
-              activePresentationMessageId: "presentation-message-1",
-              sequence: 0,
-            },
-          },
-          projectCurrentTurnMessageEvent(activityFact) {
-            activityFacts.push(activityFact);
-            return {
-              ...activityFact,
-              authority: "authoritative",
-            };
-          },
-          eventListener: {
-            onEvent(eventPayload) {
-              executionEvents.push(eventPayload);
-            },
-          },
-        },
-      }),
+    resolveDefaultModelSpecFn: () => {
+      throw new Error("default model must not be selected");
     },
-  });
-
-  assert.equal(hookEvents.length, 0);
-  assert.equal(executionEvents.length, 1);
-  assert.equal(activityFacts.length, 1);
-  assert.equal(activityFacts[0].text, "guidance output");
-  assert.equal(activityFacts[0].output, "guidance output");
-  assert.equal(activityFacts[0].text.includes("Plugin 模型返回 / guidance"), false);
-  const thinkingEvent = executionEvents[0];
-  assert.equal(thinkingEvent.event, "thinking");
-  assert.equal(thinkingEvent.data.envelopeKind, "noobot.message_event");
-  assert.equal(thinkingEvent.data.envelopeVersion, 2);
-  assert.equal(thinkingEvent.data.eventType, "thinking");
-  assert.equal(thinkingEvent.data.purpose, "guidance");
-  assert.equal(thinkingEvent.data.pluginFlow, "analysis");
-  assert.equal(thinkingEvent.data.chain, "auxiliary");
-  assert.equal(thinkingEvent.data.type, "guidance_analysis");
-  assert.equal(thinkingEvent.data.event, "guidance_analysis_response");
-  assert.equal(thinkingEvent.data.output, "guidance output");
-  assert.equal(thinkingEvent.data.dialogProcessId, "dp1");
-  assert.match(thinkingEvent.data.eventId, /^guidance-analysis:/);
-  assert.equal(thinkingEvent.data.sequenceDomain, "message-event");
-  assert.equal(thinkingEvent.data.sequenceScopeId, thinkingEvent.data.messageId);
-});
-
-test("mini-runner uses harness flow for plugin flow header without changing purpose", async () => {
-  let capturedHeaders = null;
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: ({ additionalHeaders } = {}) => {
-      capturedHeaders = additionalHeaders;
-      return {
-        async invoke() {
-          return { content: "analysis output" };
-        },
-      };
+    resolveModelSpecByNameFn: ({ modelName }) => {
+      resolvedName = modelName;
+      return modelSpec;
     },
   });
 
   await invoker({
-    purpose: "guidance",
-    pluginFlow: "analysis",
-    chain: "auxiliary",
-    domain: "guidance",
-    ctx: {
-      sessionId: "s1",
-      agentContext: createCapabilityAgentContext({
-        runtime: {
-          systemRuntime: {
-            sessionId: "s1",
-            turnScopeId: "turn",
-            messageEventStream: {
-              activeMessageId: "model-message-1",
-              activePresentationMessageId: "presentation-message-1",
-              sequence: 0,
-            },
-          },
-          projectCurrentTurnMessageEvent(activityFact) {
-            return {
-              ...activityFact,
-              authority: "authoritative",
-            };
-          },
-          eventListener: { onEvent() {} },
-        },
-      }),
-    },
-  });
-
-  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "plugin.analysis");
-  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "guidance");
-  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "guidance");
-  assert.equal(capturedHeaders?.["X-Plugin-Session-Id"], "s1");
-});
-
-test("mini-runner keeps ordinary guidance on guidance flow header", async () => {
-  let capturedHeaders = null;
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: ({ additionalHeaders } = {}) => {
-      capturedHeaders = additionalHeaders;
-      return {
-        async invoke() {
-          return { content: "guidance output" };
-        },
-      };
-    },
-  });
-
-  await invoker({
-    purpose: "guidance",
-    domain: "guidance",
-    ctx: { agentContext: createCapabilityAgentContext() },
-  });
-
-  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "plugin.guidance");
-  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "guidance");
-  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "guidance");
-});
-
-test("mini-runner maps harness flow headers for main and sub workflows", async () => {
-  const captured = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: ({ additionalHeaders } = {}) => {
-      captured.push(additionalHeaders);
-      return {
-        async invoke() {
-          return { content: "ok" };
-        },
-      };
-    },
-  });
-
-  const cases = [
-    { purpose: "planning", domain: "planning", flow: "plugin.planning" },
-    { purpose: "guidance", domain: "guidance", flow: "plugin.guidance" },
-    { purpose: "guidance", pluginFlow: "analysis", domain: "guidance", flow: "plugin.analysis" },
-    { purpose: "summary", domain: "guidance", flow: "plugin.summary" },
-    { purpose: "planning_revision", domain: "planning", flow: "plugin.planning_revision" },
-    { purpose: "planning_refinement", domain: "planning", flow: "plugin.planning_refinement" },
-    { purpose: "phase_acceptance", domain: "acceptance", flow: "plugin.phase_acceptance" },
-  ];
-
-  for (const item of cases) {
-    await invoker({
-      purpose: item.purpose,
-      pluginFlow: item.pluginFlow,
-      domain: item.domain,
-      ctx: { agentContext: createCapabilityAgentContext() },
-    });
-  }
-
-  assert.deepEqual(
-    captured.map((headers = {}) => ({
-      flow: headers["X-Plugin-Flow"],
-      purpose: headers["X-Plugin-Purpose"],
-      domain: headers["X-Plugin-Domain"],
-    })),
-    cases.map((item) => ({
-      flow: item.flow,
-      purpose: item.purpose,
-      domain: item.domain,
-    })),
-  );
-});
-
-test("mini-runner preserves custom flow prefix while using harness flow name", async () => {
-  let capturedHeaders = null;
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    flowPrefix: "botPlugin",
-    createChatModelFn: ({ additionalHeaders } = {}) => {
-      capturedHeaders = additionalHeaders;
-      return {
-        async invoke() {
-          return { content: "bot output" };
-        },
-      };
-    },
-  });
-
-  await invoker({
-    purpose: "semantic",
-    pluginFlow: "semantic_check",
-    domain: "bot",
-    ctx: { agentContext: createCapabilityAgentContext() },
-  });
-
-  assert.equal(capturedHeaders?.["X-Plugin-Flow"], "botPlugin.semantic_check");
-  assert.equal(capturedHeaders?.["X-Plugin-Purpose"], "semantic");
-  assert.equal(capturedHeaders?.["X-Plugin-Domain"], "bot");
-});
-
-test("mini-runner does not classify plain guidance as guidance analysis", async () => {
-  const executionEvents = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke() {
-        return { content: "guidance output" };
-      },
-    }),
-  });
-
-  await invoker({
-    purpose: "guidance",
-    ctx: {
-      agentContext: createCapabilityAgentContext({
-        runtime: {
-          eventListener: {
-            onEvent(eventPayload) {
-              executionEvents.push(eventPayload);
-            },
-          },
-        },
-      }),
-    },
-  });
-
-  assert.equal(executionEvents.length, 0);
-});
-
-test("mini-runner does not emit harness capability response for non-guidance analysis purposes", async () => {
-  const emitted = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke() {
-        return { content: "planning output" };
-      },
-    }),
-  });
-
-  await invoker({
+    model: "planning-model",
     purpose: "planning",
-    ctx: {
-      emitHookClientEvent(event, data) {
-        emitted.push({ event, data });
-      },
-      agentContext: createCapabilityAgentContext(),
-    },
-  });
-
-  await invoker({
-    purpose: "acceptance",
-    ctx: {
-      emitHookClientEvent(event, data) {
-        emitted.push({ event, data });
-      },
-      agentContext: createCapabilityAgentContext(),
-    },
-  });
-
-  assert.equal(emitted.length, 0);
-});
-
-test("mini-runner emits workflow semantic output as a canonical thinking activity", async () => {
-  const executionEvents = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: false,
-    createChatModelFn: () => ({
-      async invoke() {
-        return { content: "WORKFLOW_DSL/1\nEND" };
-      },
-    }),
-  });
-  const runtime = {
-    runConfig: {
-      messageId: "turn-message-workflow",
-      presentationMessageId: "presentation-workflow",
-    },
-    systemRuntime: {
-      sessionId: "session-workflow",
-      turnScopeId: "turn-workflow",
-    },
-    eventListener: {
-      onEvent(eventPayload) {
-        executionEvents.push(eventPayload);
-      },
-    },
-  };
-  bindAssistantMessageEventStream(runtime, {
-    messageId: "turn-message-workflow",
-    presentationMessageId: "presentation-workflow",
-  });
-
-  await invoker({
-    purpose: "workflow_semantic",
     domain: "workflow",
-    ctx: {
-      sessionId: "session-workflow",
-      agentContext: createCapabilityAgentContext({ runtime }),
-    },
+    pluginFlow: "plan",
+    messages: [],
+    ctx,
   });
 
-  assert.equal(executionEvents.length, 1);
-  assert.equal(executionEvents[0]?.event, "thinking");
-  assert.equal(executionEvents[0]?.data?.event, "workflow_semantic_response");
-  assert.equal(executionEvents[0]?.data?.activityKind, "workflow_semantic");
-  assert.equal(executionEvents[0]?.data?.text, "WORKFLOW_DSL/1\nEND");
-  assert.equal(executionEvents[0]?.data?.messageId, "turn-message-workflow");
-  assert.equal(executionEvents[0]?.data?.presentationMessageId, "presentation-workflow");
-  assert.equal(runtime.systemRuntime.messageEventStream.sequence, 1);
+  assert.equal(resolvedName, "planning-model");
+  assert.equal(modelPort.requests[0].options.headers["X-Plugin-Flow"], "plugin.plan");
+  assert.equal(modelPort.requests[0].options.headers["X-Plugin-Purpose"], "planning");
+  assert.equal(modelPort.requests[0].options.headers["X-Plugin-Domain"], "workflow");
 });
 
-test("mini-runner treats * as all tools in current registry", async () => {
-  const first = {
-    content: "need tools",
-    tool_calls: [
-      { id: "c1", name: "echo", args: {} },
-      { id: "c2", name: "other", args: {} },
-    ],
-  };
-  const executed = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    maxTurns: 1,
-    toolAllowlist: ["*"],
-    createChatModelFn: () => createFakeModel([first]),
-    adaptToolsForBindingFn: (tools) => ({ tools }),
-    executeToolCallFn: async ({ call }) => {
-      executed.push(call.name);
-      return { toolResultText: "ok" };
-    },
-  });
-
-  const result = await invoker({
-    ctx: {
-      agentContext: createCapabilityAgentContext({
-        tools: [{ name: "echo" }, { name: "other" }],
-      }),
-    },
-  });
-
-  assert.deepEqual(executed, ["echo", "other"]);
-  assert.deepEqual(
-    result.traces[0].toolCalls.map((call) => ({ name: call.name, status: call.status })),
-    [
-      { name: "echo", status: "executed" },
-      { name: "other", status: "executed" },
-    ],
+test("mini-runner requires the authoritative host ModelPort", async () => {
+  const { ctx } = createContext({ modelPort: null });
+  await assert.rejects(
+    createInvoker({ enableToolBinding: false })({ messages: [], ctx }),
+    /requires the host ModelPort/,
   );
 });
 
-test("mini-runner finalizes with no-tools follow-up when max turns reached without assistant text", async () => {
-  const first = {
-    content: "",
-    tool_calls: [{ id: "c1", name: "echo", args: { text: "hi" } }],
-  };
-  const second = { content: '{"taskChecklist":[{"index":1,"task":"执行核心任务"}]}' };
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    maxTurns: 1,
-    createChatModelFn: () => createFakeModel([first, second]),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-    executeToolCallFn: async () => ({ toolResultText: "echo:hi" }),
-  });
-
-  const result = await invoker({
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal(result.finishedReason, "max_turn_reached_finalized");
-  assert.match(String(result.output || ""), /taskChecklist/);
-});
-
-test("mini-runner caps tool turns at 5 and returns default planning output when model gives no final text", async () => {
-  const makeToolCall = (id) => ({
-    content: "",
-    tool_calls: [{ id: `c${id}`, name: "echo", args: { text: `hi-${id}` } }],
-  });
-  const responses = [
-    makeToolCall(1),
-    makeToolCall(2),
-    makeToolCall(3),
-    makeToolCall(4),
-    makeToolCall(5),
-    { content: "" },
-  ];
-  let executedCount = 0;
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    maxTurns: 99,
-    createChatModelFn: () => createFakeModel(responses),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-    executeToolCallFn: async () => {
-      executedCount += 1;
-      return { toolResultText: "echo:ok" };
-    },
-  });
-
-  const result = await invoker({
-    purpose: "planning",
-    locale: "zh-CN",
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal(executedCount, MAX_MINI_RUNNER_TOOL_TURNS);
-  assert.equal(result.turn, MAX_MINI_RUNNER_TOOL_TURNS);
-  assert.equal(result.finishedReason, "max_turn_reached_finalized");
-  assert.equal(result.toolTurnLimitReached, true);
-  assert.equal(result.traces.at(-1)?.toolTurnLimitReached, true);
-  assert.match(String(result.output || ""), /taskChecklist/);
-  assert.match(String(result.output || ""), /tool_turn_limit_reached/);
-});
-
-test("mini-runner uses configured capability model name when provided", async () => {
-  let defaultFactoryCalled = false;
-  let namedModel = "";
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelFn: () => {
-      defaultFactoryCalled = true;
-      return createFakeModel([{ content: "default" }]);
-    },
-    createChatModelByNameFn: (modelName) => {
-      namedModel = modelName;
-      return createFakeModel([{ content: "named" }]);
-    },
-  });
-
-  const result = await invoker({
-    model: "planner_model_alias",
-    purpose: "planning",
-    messages: [{ role: "user", content: "go" }],
-    ctx: { agentContext: createCapabilityAgentContext() },
-  });
-
-  assert.equal(defaultFactoryCalled, false);
-  assert.equal(namedModel, "planner_model_alias");
-  assert.equal(result.output, "named");
-  assert.equal(result.traces[0].model, "planner_model_alias");
-});
-
-test("mini-runner defaults to no-tool binding invocation", async () => {
-  let bindCalled = false;
-  const invoker = createAgentCapabilityModelInvoker({
-    createChatModelFn: () => ({
-      bindTools() {
-        bindCalled = true;
-        return this;
-      },
-      async invoke() {
-        return { content: "plain result" };
-      },
-    }),
-  });
-  const result = await invoker({
-    purpose: "planning",
-    domain: "planning",
-    locale: "zh-CN",
-    messages: [{ role: "user", content: "go" }],
-    ctx: {
-      agentContext: createTestAgentExecutionScope({}, {
-        tools: [{ name: "echo" }],
-      }),
-    },
-  });
-  assert.equal(bindCalled, false);
-  assert.equal(result.finishedReason, "tool_binding_disabled");
-  assert.equal(result.output, "plain result");
-  assert.deepEqual(result.traces, [
-    {
-      turn: 1,
-      purpose: "planning",
-      domain: "planning",
-      model: undefined,
-      locale: "zh-CN",
-      toolCalls: [],
-      finishedReason: "tool_binding_disabled",
-    },
+test("mini-runner enforces the configured tool-turn limit and finalizes through ModelPort", async () => {
+  const toolCall = { text: "", toolCalls: [{ id: "c1", name: "echo", args: {} }] };
+  const modelPort = createModelPort([
+    ...Array.from({ length: MAX_MINI_RUNNER_TOOL_TURNS }, () => toolCall),
+    { text: "finalized" },
   ]);
-});
-
-test("mini-runner bound dashscope requests force thinking disabled options", async () => {
-  const fakeModel = createFakeModel([{ content: "ok" }]);
-  const invoker = createAgentCapabilityModelInvoker({
+  const tool = { name: "echo" };
+  const { ctx } = createContext({ modelPort, tools: [tool] });
+  const result = await createInvoker({
     enableToolBinding: true,
-    createChatModelFn: () => fakeModel,
-    resolveDefaultModelSpecFn: () => ({ format: "dashscope", preserve_thinking: true, thinking_budget: 2048 }),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-  });
+    toolAllowlist: ["echo"],
+    adaptToolsForBindingFn: () => ({ tools: [tool] }),
+    executeToolCallFn: async () => ({ toolResultText: "ok" }),
+  })({ messages: [], ctx });
 
-  await invoker({
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal(fakeModel.invocations[0].options.preserve_thinking, false);
-  assert.equal(fakeModel.invocations[0].options.thinking_budget, 0);
-});
-
-test("mini-runner bound openai compatible requests use tool_reasoning_effort", async () => {
-  const fakeModel = createFakeModel([{ content: "ok" }]);
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelByNameFn: () => fakeModel,
-    resolveModelSpecByNameFn: ({ modelName }) => ({
-      model: modelName,
-      format: "openai_compatible",
-      reasoning_effort: "high",
-      tool_reasoning_effort: "medium",
-    }),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-  });
-
-  await invoker({
-    model: "named-openai",
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal(fakeModel.invocations[0].options.reasoning_effort, "medium");
-});
-
-test("mini-runner does not inject bound-tool overrides without bound tools", async () => {
-  const fakeModel = createFakeModel([{ content: "ok" }]);
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelFn: () => fakeModel,
-    resolveDefaultModelSpecFn: () => ({ format: "dashscope" }),
-    adaptToolsForBindingFn: () => ({ tools: [] }),
-  });
-
-  await invoker({
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.equal("preserve_thinking" in fakeModel.invocations[0].options, false);
-  assert.equal("thinking_budget" in fakeModel.invocations[0].options, false);
-  assert.equal("reasoning_effort" in fakeModel.invocations[0].options, false);
-});
-
-test("mini-runner filters only summarized history before first model invoke", async () => {
-  let firstInvokeMessages = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelFn: () => ({
-      bindTools() {
-        return this;
-      },
-      async invoke(messages) {
-        if (!firstInvokeMessages.length) firstInvokeMessages = messages.map((item) => ({ ...item }));
-        return { content: "ok" };
-      },
-    }),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-  });
-
-  await invoker({
-    messages: [
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
-      { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
-      { role: "assistant", content: "keep-assistant" },
-      { role: "user", content: "keep-user" },
-      { role: "assistant", content: "drop-summarized", summarized: true },
-    ],
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  assert.deepEqual(
-    firstInvokeMessages.map((item) => ({ role: item.role, content: item.content })),
-    [
-      { role: "assistant", content: "" },
-      { role: "tool", content: "{\"ok\":true}" },
-      { role: "assistant", content: "keep-assistant" },
-      { role: "user", content: "keep-user" },
-    ],
-  );
-});
-
-test("mini-runner compacts semantic-transfer tool messages before model invoke", async () => {
-  let firstInvokeMessages = [];
-  const invoker = createAgentCapabilityModelInvoker({
-    enableToolBinding: true,
-    createChatModelFn: () => ({
-      bindTools() {
-        return this;
-      },
-      async invoke(messages) {
-        if (!firstInvokeMessages.length) firstInvokeMessages = messages.map((item) => ({ ...item }));
-        return { content: "ok" };
-      },
-    }),
-    adaptToolsForBindingFn: () => ({ tools: [{ name: "echo" }] }),
-  });
-  const envelope = {
-    protocol: "noobot.semantic-transfer",
-    version: 2,
-    transferId: "transfer-mini",
-    messageId: "message-mini",
-    identity: {
-      sessionId: "s1",
-      turnScopeId: "turn-mini",
-      runId: "run-mini",
-      producer: { type: "tool", id: "c1" },
-    },
-    direction: "output",
-    payload: {
-      mode: "attachment",
-      attachments: [{
-        identity: { attachmentId: "att-mini", sessionId: "s1", attachmentSource: "model" },
-        role: "primary",
-        name: "result.md",
-        mimeType: "text/markdown",
-        size: 12,
-      }],
-    },
-    intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" },
-    meta: { persisted: true },
-  };
-
-  await invoker({
-    messages: [
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "echo" } }] },
-      {
-        role: "tool",
-        content: JSON.stringify({
-          ok: true,
-          transferEnvelopes: [envelope],
-        }),
-        tool_call_id: "c1",
-      },
-    ],
-    ctx: { agentContext: createCapabilityAgentContext({ tools: [{ name: "echo" }] }) },
-  });
-
-  const compactedToolPayload = JSON.parse(firstInvokeMessages.find((item) => item.role === "tool").content);
-  assert.equal(compactedToolPayload.transferEnvelopes[0].version, 2);
-  assert.equal(
-    compactedToolPayload.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
-    "att-mini",
-  );
-  assert.equal("transferFiles" in compactedToolPayload, false);
+  assert.equal(result.toolTurnLimitReached, true);
+  assert.equal(result.output.text, "finalized");
+  assert.equal(modelPort.requests.length, MAX_MINI_RUNNER_TOOL_TURNS + 1);
 });
