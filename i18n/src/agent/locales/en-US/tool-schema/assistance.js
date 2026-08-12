@@ -108,6 +108,32 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.trySwitchApiType": "Try switching api_type, for example openai_responses or images_async."
     }
   },
+  "multimodal_parse": {
+    "description": {
+      "key": "tools.multimodalParse.description",
+      "text": "Parse one or more files together and save the parsed result."
+    },
+    "params": {
+      "file_paths": {
+        "key": "tools.multimodalParse.fieldFilePaths",
+        "text": "Paths of one or more files to parse together."
+      },
+      "model_name": {
+        "key": "tools.multimodalParse.fieldModelName",
+        "text": "Model used to parse the files (optional)."
+      },
+      "prompt": {
+        "key": "tools.multimodalParse.fieldPrompt",
+        "text": "Parsing instructions (optional)."
+      }
+    },
+    "texts": {
+      "tools.multimodalParse.filePathsRequired": "file_paths must contain at least one path",
+      "tools.multimodalParse.fileTooLarge": (params = {}) => `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
+      "tools.multimodalParse.defaultPrompt": "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
+      "tools.multimodalParse.modelNotFound": "No model is configured with multimodal parsing enabled"
+    }
+  },
   "switch_model": {
     "description": {
       "key": "tools.model.description",

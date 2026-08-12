@@ -8,41 +8,19 @@ export const CONTENT_TOOL_SCHEMA = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "Extract document content into text data. Input filePath (optional prompt, dpi, parseEngine). parseEngine supports libreoffice/vision and defaults to libreoffice. Vision is not recommended."
+      "text": "Extract document content into text data using local document parsing. Input filePath."
     },
     "params": {
-      "dpi": {
-        "key": "tools.doc2data.fieldDpi",
-        "text": "DPI (optional)."
-      },
       "filePath": {
         "key": "tools.doc2data.fieldFilePath",
         "text": "Document path."
       },
-      "parseEngine": {
-        "key": "tools.doc2data.fieldParseEngine",
-        "text": "Parse engine (optional): libreoffice or vision. Default is libreoffice. Vision is not recommended."
-      },
-      "prompt": {
-        "key": "tools.doc2data.fieldPrompt",
-        "text": "Extraction prompt (optional)."
-      }
     },
     "texts": {
-      "doc2img.inputFileRequired": "inputFile required",
-      "doc2img.noImageOutputFromPdf": "no image output generated from PDF",
-      "doc2img.unsupportedFileType": "unsupported file type",
-      "tools.doc2data.batchPrompt": (params = {}) =>
-    `This is image batch ${Number(params.batchIndex || 1)}, page range ${String(params.range || "")}. Output in page order.`,
-      "tools.doc2data.extractPrompt": "Extract all readable text from the document, preserve original structure, and do not fabricate content.",
-      "tools.doc2data.imageFileUseMedia2Data": "Image files should be parsed with the media2data tool.",
-      "tools.doc2data.libreofficeDocUnsupported": "LibreOffice parsing is disabled for .doc documents. Use parseEngine=vision instead.",
-      "tools.doc2data.libreofficeParseFailed": "LibreOffice document parsing failed. You can try parseEngine=vision.",
-      "tools.doc2data.libreofficeUnavailable": "LibreOffice parsing is unavailable. Install dependencies or use parseEngine=vision.",
-      "tools.doc2data.noImagesProduced": "no images produced"
-      ,
-      "tools.doc2data.unsupportedParseEngine": (params = {}) =>
-    `Unsupported parseEngine: ${String(params.parseEngine || "")}. Allowed values: libreoffice / vision.`
+      "tools.doc2data.imageFileUseMultimodalParse": "Parse image files with multimodal_parse.",
+      "tools.doc2data.libreofficeDocUnsupported": "Legacy .doc files are unsupported. Convert the file to .docx or PDF first.",
+      "tools.doc2data.libreofficeParseFailed": "Local document parsing failed.",
+      "tools.doc2data.libreofficeUnavailable": "Local document parsing is unavailable. Install LibreOffice."
     }
   },
   "media_to_data": {

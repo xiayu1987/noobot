@@ -20,7 +20,6 @@ function normalizeModelMultimodalInfo(modelSpec = {}) {
         .filter(Boolean)
     : [];
   return {
-    support_understanding: multimodalGeneration?.support_understanding === true,
     support_generation: {
       enabled: supportGeneration?.enabled === true,
       support_scope: supportScope,
@@ -46,6 +45,7 @@ export function resolveModelSection({
           ? true
           : currentModelSpec?.used_for_conversation === true,
       multimodal_generation: normalizeModelMultimodalInfo(currentModelSpec),
+      multimodal_parsing: { enabled: currentModelSpec?.multimodal_parsing?.enabled === true },
     },
     available: Object.entries(providers)
       .filter(([, providerConfig]) => providerConfig?.enabled !== false)
@@ -58,6 +58,7 @@ export function resolveModelSection({
             ? true
             : providerConfig?.used_for_conversation === true,
         multimodal_generation: normalizeModelMultimodalInfo(providerConfig),
+        multimodal_parsing: { enabled: providerConfig?.multimodal_parsing?.enabled === true },
       })),
   };
 }
@@ -68,4 +69,3 @@ export function resolveAllEnabledProviders(effectiveConfig = {}) {
     Object.entries(providers).filter(([, cfg]) => cfg?.enabled !== false),
   );
 }
-

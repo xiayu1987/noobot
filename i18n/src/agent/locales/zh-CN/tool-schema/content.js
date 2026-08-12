@@ -8,41 +8,19 @@ export const CONTENT_TOOL_SCHEMA = {
   "doc_to_data": {
     "description": {
       "key": "tools.doc2data.description",
-      "text": "提取文档内容为文本数据。输入 filePath（可选 prompt、dpi、parseEngine）。parseEngine 支持 libreoffice/vision，默认 libreoffice。不推荐使用 vision。"
+      "text": "使用本地文档解析能力提取文档内容为文本数据。输入 filePath。"
     },
     "params": {
-      "dpi": {
-        "key": "tools.doc2data.fieldDpi",
-        "text": "DPI（可选）。"
-      },
       "filePath": {
         "key": "tools.doc2data.fieldFilePath",
         "text": "文档路径。"
       },
-      "parseEngine": {
-        "key": "tools.doc2data.fieldParseEngine",
-        "text": "解析引擎（可选）：libreoffice 或 vision，默认 libreoffice。不推荐使用 vision。"
-      },
-      "prompt": {
-        "key": "tools.doc2data.fieldPrompt",
-        "text": "提取提示词（可选）。"
-      }
     },
     "texts": {
-      "doc2img.inputFileRequired": "inputFile 必填",
-      "doc2img.noImageOutputFromPdf": "PDF 未生成图片输出",
-      "doc2img.unsupportedFileType": "不支持的文件类型",
-      "tools.doc2data.batchPrompt": (params = {}) =>
-    `这是第 ${Number(params.batchIndex || 1)} 批图片，页码范围 ${String(params.range || "")}。请按页码顺序输出。`,
-      "tools.doc2data.extractPrompt": "请提取文档中的全部可识别文字，按原始结构输出，不要编造内容。",
-      "tools.doc2data.imageFileUseMedia2Data": "图片文件请使用 media2data 工具解析",
-      "tools.doc2data.libreofficeDocUnsupported": "LibreOffice 已禁用 .doc 文档解析，请改用 parseEngine=vision。",
-      "tools.doc2data.libreofficeParseFailed": "LibreOffice 文档解析失败，可尝试 parseEngine=vision。",
-      "tools.doc2data.libreofficeUnavailable": "未检测到 LibreOffice 解析能力，请安装依赖或改用 parseEngine=vision。",
-      "tools.doc2data.noImagesProduced": "未生成可用图片"
-      ,
-      "tools.doc2data.unsupportedParseEngine": (params = {}) =>
-    `不支持的 parseEngine：${String(params.parseEngine || "")}。可选值：libreoffice / vision。`
+      "tools.doc2data.imageFileUseMultimodalParse": "图片文件请使用 multimodal_parse 工具解析",
+      "tools.doc2data.libreofficeDocUnsupported": "不支持旧版 .doc 文档，请先转换为 .docx 或 PDF。",
+      "tools.doc2data.libreofficeParseFailed": "本地文档解析失败。",
+      "tools.doc2data.libreofficeUnavailable": "未检测到本地文档解析能力，请安装 LibreOffice。"
     }
   },
   "media_to_data": {

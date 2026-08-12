@@ -64,7 +64,6 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -130,7 +129,6 @@ test("multimodal_generate: explicit images_async overrides provider default api 
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -194,7 +192,6 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -278,7 +275,6 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -385,7 +381,6 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -455,7 +450,6 @@ test("multimodal_generate: images_async applies official parameter defaults and 
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],
@@ -529,7 +523,6 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
-            support_understanding: false,
             support_generation: {
               enabled: true,
               support_scope: ["image"],

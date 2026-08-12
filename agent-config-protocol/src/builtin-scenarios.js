@@ -16,7 +16,8 @@ export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
   "search",
   "patch_file",
   "execute_script",
-  "process_content_task",
+  "multimodal_generate",
+  "multimodal_parse",
 ]);
 export const PROGRAMMING_AUXILIARY_TOOL_NAMES = Object.freeze([
   "user_interaction",

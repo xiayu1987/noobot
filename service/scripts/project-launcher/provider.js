@@ -45,8 +45,10 @@ export function buildProviderFromTemplate({
         used_for_conversation: true,
         temperature: 0.7,
         max_tokens: 10000,
+        multimodal_parsing: {
+          enabled: false,
+        },
         multimodal_generation: {
-          support_understanding: false,
           support_generation: {
             enabled: false,
             support_scope: [],
@@ -62,8 +64,10 @@ export function buildProviderFromTemplate({
   baseProvider.format = format;
 
   if (forceConversationDefaults) {
+    baseProvider.multimodal_parsing = {
+      enabled: false,
+    };
     baseProvider.multimodal_generation = {
-      support_understanding: false,
       support_generation: {
         enabled: false,
         support_scope: [],

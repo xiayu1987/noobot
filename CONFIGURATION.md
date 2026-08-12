@@ -108,7 +108,6 @@ Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProces
 | `tools.web_to_data.enabled` | boolean | Enable web content extraction tool |
 | `tools.web_to_data.switch_web_mode` | string | Web extraction mode (e.g. `browser_simulate`) |
 | `tools.doc_to_data.enabled` | boolean | Enable document parsing tool |
-| `tools.doc_to_data.parse_engine` | string | Document parsing engine (default `libreoffice`) |
 | `tools.process_content_task.enabled` | boolean | Enable content processing tool |
 | `tools.process_content_task.max_tool_loop_turns` | number | Loop cap in content task |
 | `tools.execute_script.enabled` | boolean | Enable script execution tool |
@@ -258,7 +257,7 @@ Current plugin defaults in repo:
 | `providers.<alias>.preserve_thinking` | boolean | Optional (if supported) |
 | `providers.<alias>.thinking_budget` | number | Optional (if supported) |
 | `providers.<alias>.description` | string | Provider description |
-| `providers.<alias>.multimodal_generation.support_understanding` | boolean | Multi-modal understanding support |
+| `providers.<alias>.multimodal_parsing.enabled` | boolean | Multi-modal parsing enabled |
 | `providers.<alias>.multimodal_generation.support_generation.enabled` | boolean | Multi-modal generation enabled |
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[] | e.g. `["image"]` |
 

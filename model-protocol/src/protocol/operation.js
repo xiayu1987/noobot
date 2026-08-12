@@ -7,6 +7,7 @@ export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
   WEB_SEARCH: "web_search",
   IMAGE_GENERATION: "image_generation",
+  MULTIMODAL_PARSE: "multimodal_parse",
 });
 
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
@@ -83,6 +84,30 @@ export function normalizeModelOperation(input = {}) {
       options: Object.freeze({}),
     });
   }
+  if (kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
+    rejectUnknownKeys(operationInput, ["prompt", "attachments"], "model operation.input");
+    if (!Array.isArray(operationInput.attachments) || operationInput.attachments.length === 0) {
+      throw new TypeError("model operation.input.attachments must be a non-empty array");
+    }
+    const attachments = operationInput.attachments.map((value, index) => {
+      const attachmentPath = `model operation.input.attachments[${index}]`;
+      const attachment = requirePlainObject(value, attachmentPath);
+      rejectUnknownKeys(attachment, ["mimeType", "data", "fileName"], attachmentPath);
+      return Object.freeze({
+        mimeType: requireText(attachment.mimeType, `${attachmentPath}.mimeType`),
+        data: requireText(attachment.data, `${attachmentPath}.data`),
+        fileName: String(attachment.fileName || "").trim(),
+      });
+    });
+    return Object.freeze({
+      kind,
+      input: Object.freeze({
+        prompt: requireText(operationInput.prompt, "model operation.input.prompt"),
+        attachments: Object.freeze(attachments),
+      }),
+      options: Object.freeze({}),
+    });
+  }
   rejectUnknownKeys(operationInput, ["prompt"], "model operation.input");
   return Object.freeze({
     kind,
@@ -121,6 +146,13 @@ export function normalizeModelOperationResult(kind, input = {}) {
     return Object.freeze({
       rawText: String(source.rawText || "").trim(),
       output: Object.freeze([...source.output]),
+    });
+  }
+  if (operationKind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
+    rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
+    return Object.freeze({
+      rawText: String(source.rawText || "").trim(),
+      output: Array.isArray(source.output) ? Object.freeze([...source.output]) : Object.freeze([]),
     });
   }
   rejectUnknownKeys(source, ["rawText", "imageArtifacts", "output", "taskId", "rawTask"], "model response.result");

@@ -13,6 +13,7 @@ import { emitEvent } from "../../../events/index.js";
 const DATA_PROCESSING_ARTIFACT_SOURCES = new Set([
   ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
   ARTIFACT_GENERATION_SOURCE.MEDIA_TO_DATA_TOOL,
+  ARTIFACT_GENERATION_SOURCE.MULTIMODAL_PARSE_TOOL,
   ARTIFACT_GENERATION_SOURCE.WEB_TO_DATA_TOOL,
 ]);
 
@@ -102,12 +103,15 @@ export async function persistDoc2DataTextAttachment({
   text = "",
   mode = "",
   identity = null,
+  toolName = TOOL_NAME.DOC_TO_DATA,
+  generationSource = ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+  artifactLabel = "doc2data",
 }) {
   const inputBaseName = sanitizeArtifactBaseName(
     path.basename(String(inputFile || "").trim(), path.extname(String(inputFile || "").trim())),
   );
   const modeSuffix = sanitizeArtifactBaseName(mode || "result", "result");
-  const artifactName = `${inputBaseName}.doc2data.${modeSuffix}.md`;
+  const artifactName = `${inputBaseName}.${sanitizeArtifactBaseName(artifactLabel, "doc2data")}.${modeSuffix}.md`;
   const materialized = await materializeTextForToolResult({
     runtime,
     agentContext,
@@ -115,11 +119,11 @@ export async function persistDoc2DataTextAttachment({
     name: artifactName,
     mimeType: MIME_TYPE.TEXT_MARKDOWN,
     attachmentSource: TOOL_ATTACHMENT_SOURCE.MODEL,
-    generationSource: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+    generationSource,
     source: TRANSFER_SOURCE.TOOL,
-    reason: ARTIFACT_GENERATION_SOURCE.DOC_TO_DATA_TOOL,
+    reason: generationSource,
     alwaysPersist: true,
-    producer: { type: "tool", name: TOOL_NAME.DOC_TO_DATA },
+    producer: { type: "tool", name: toolName },
     identity,
     meta: { mode, inputFile },
   });
@@ -135,6 +139,7 @@ async function backwriteParsedResultToSourceAttachment({
   runtime = {},
   sourceAttachmentMeta = null,
   parsedAttachmentMeta = null,
+  toolName = TOOL_NAME.DOC_TO_DATA,
 }) {
   const sourceAttachmentId = String(sourceAttachmentMeta?.attachmentId || "").trim();
   if (!sourceAttachmentId || !parsedAttachmentMeta) return null;
@@ -146,7 +151,7 @@ async function backwriteParsedResultToSourceAttachment({
       userId,
       sourceAttachmentId,
       parsedAttachmentMeta,
-      toolName: TOOL_NAME.DOC_TO_DATA,
+      toolName,
       sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
       sourceAttachmentSource: String(sourceAttachmentMeta?.attachmentSource || "").trim(),
     });
@@ -170,7 +175,7 @@ export function normalizePersistedAttachments(persistedOutput) {
     : [];
 }
 
-export async function backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments }) {
+export async function backwriteFirstAttachment({ runtime, sourceAttachmentMeta, attachments, toolName }) {
   const firstAttachment = attachments?.[0] || null;
   const parsedAttachmentMeta = firstAttachment?.identity
     ? {
@@ -184,5 +189,6 @@ export async function backwriteFirstAttachment({ runtime, sourceAttachmentMeta, 
     runtime,
     sourceAttachmentMeta,
     parsedAttachmentMeta,
+    toolName,
   });
 }

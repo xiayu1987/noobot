@@ -449,17 +449,16 @@ test("doc_to_data: libreoffice rejects legacy .doc before conversion", async () 
   await assert.rejects(
     () => tool.invoke({
       filePath: "runtime/ops_workdir/input.doc",
-      parseEngine: "libreoffice",
     }),
     (error) => {
       assert.equal(error?.code, ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE);
-      assert.match(error?.message || "", /LibreOffice|vision|\.doc/);
+      assert.match(error?.message || "", /\.doc/);
       return true;
     },
   );
 });
 
-test("doc_to_data: libreoffice abort propagates instead of falling back to vision", async () => {
+test("doc_to_data: libreoffice abort propagates", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-abort-"));
   const docPath = path.join(basePath, "runtime", "ops_workdir", "input.docx");
   await fs.mkdir(path.dirname(docPath), { recursive: true });
@@ -477,7 +476,6 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
   await assert.rejects(
     () => tool.invoke({
       filePath: "runtime/ops_workdir/input.docx",
-      parseEngine: "libreoffice",
     }),
     (error) => {
       assert.equal(error?.name, "AbortError");
@@ -487,7 +485,7 @@ test("doc_to_data: libreoffice abort propagates instead of falling back to visio
   );
 });
 
-test("doc_to_data: libreoffice fallback writes runtime-events session system event", async () => {
+test("doc_to_data: libreoffice failure writes one runtime-events system event", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-doc2data-runtime-events-"));
   const sessionDir = path.join(basePath, "u1", "runtime", "session", "s1");
   await fs.mkdir(sessionDir, { recursive: true });
@@ -512,7 +510,6 @@ test("doc_to_data: libreoffice fallback writes runtime-events session system eve
 
   await assert.rejects(() => tool.invoke({
     filePath: "runtime/ops_workdir/input.docx",
-    parseEngine: "libreoffice",
   }));
 
   const records = await readJsonl(path.join(
@@ -524,16 +521,12 @@ test("doc_to_data: libreoffice fallback writes runtime-events session system eve
     "events",
     "system.jsonl",
   ));
-  assert.equal(records.length, 2);
+  assert.equal(records.length, 1);
   const parseFailedRecord = records.find(
     (record) => record.event === "agent.doc2data.libreofficeParse.failed",
   );
-  const fallbackRecord = records.find(
-    (record) => record.event === "agent.doc2data.libreofficeFallbackToVision",
-  );
   assert.ok(parseFailedRecord);
-  assert.ok(fallbackRecord);
-  for (const record of [parseFailedRecord, fallbackRecord]) {
+  for (const record of [parseFailedRecord]) {
     assert.equal(record.source, "agent");
     assert.equal(record.channel, "direct");
     assert.equal(record.category, "system");
@@ -541,7 +534,6 @@ test("doc_to_data: libreoffice fallback writes runtime-events session system eve
     assert.equal(record.sessionId, "s1");
     assert.equal(record.dialogProcessId, "dp1");
     assert.equal(record.turnScopeId, "turn1");
-    assert.equal(record.data.parseEngine, "libreoffice");
     assert.equal(record.data.inputFileName, "input.docx");
     assert.ok(Number(record.data.inputPathLength) > 0);
     assert.ok(String(record.data.errorMessage || ""));

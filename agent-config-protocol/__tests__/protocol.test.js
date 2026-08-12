@@ -71,7 +71,8 @@ test("programming required tools use the scenario protocol list and deny remains
     "search",
     "patch_file",
     "execute_script",
-    "process_content_task",
+    "multimodal_generate",
+    "multimodal_parse",
     "other",
   ].map((name) => ({ name }));
   const tools = resolveToolBindings({
@@ -83,7 +84,7 @@ test("programming required tools use the scenario protocol list and deny remains
   });
   assert.deepEqual(
     tools.map(({ name }) => name),
-    ["read_file", "write_file", "search", "patch_file", "process_content_task", "other"],
+    ["read_file", "write_file", "search", "patch_file", "multimodal_generate", "multimodal_parse", "other"],
   );
 });
 test("custom_only is not widened by programming scenario requirements", () => {
