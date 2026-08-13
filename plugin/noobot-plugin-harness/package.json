@@ -20,7 +20,7 @@
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/shared": "file:../../shared",
-    "@langchain/core": "^1.2.3",
+    "@langchain/core": "^1.2.6",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

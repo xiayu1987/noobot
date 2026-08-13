@@ -6,7 +6,7 @@
 
 ## 1) 运行依赖
 
-- Node.js 20.18.1+
+- Node.js 22.22.2+
 - npm 9+
 - 可选系统依赖：
   - `libreoffice`（Office 文档转换）

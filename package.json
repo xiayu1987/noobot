@@ -2,6 +2,9 @@
   "name": "noobot",
   "version": "4.1.6",
   "private": true,
+  "engines": {
+    "node": ">=22.22.2"
+  },
   "workspaces": [
     "path-resolver",
     "hook-protocol",
@@ -37,12 +40,12 @@
   ],
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "es-module-lexer": "^2.1.0",
+    "es-module-lexer": "^2.3.1",
     "eslint": "^10.8.1",
     "eslint-plugin-vue": "^10.10.0",
-    "globals": "^16.5.0",
+    "globals": "^17.11.0",
     "prettier": "^3.9.6",
-    "vue": "3.5.40"
+    "vue": "3.5.41"
   },
   "scripts": {
     "project:launcher": "node ./scripts/project-launcher.mjs",

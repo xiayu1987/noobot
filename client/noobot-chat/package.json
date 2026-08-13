@@ -43,21 +43,21 @@
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/session-protocol": "file:../../session-protocol",
     "@noobot/shared": "file:../../shared",
-    "element-plus": "^2.14.3",
-    "markdown-it": "^14.3.0",
-    "mermaid": "^11.16.0",
+    "element-plus": "^2.14.4",
+    "markdown-it": "^15.0.0",
+    "mermaid": "^11.16.1",
     "noobot-i18n": "file:../../i18n",
-    "pinia": "^4.0.2",
-    "vue": "^3.5.40"
+    "pinia": "^4.0.3",
+    "vue": "^3.5.41"
   },
   "devDependencies": {
-    "@playwright/test": "^1.54.2",
+    "@playwright/test": "^1.62.1",
     "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.11",
-    "es-module-lexer": "^2.1.0",
-    "jsdom": "^29.1.1",
+    "es-module-lexer": "^2.3.1",
+    "jsdom": "^30.0.1",
     "noobot-agent": "file:../../agent",
-    "vite": "^8.1.5",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10"
   },
   "overrides": {

@@ -13,8 +13,8 @@
     "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
-    "@langchain/openai": "^1.5.5",
-    "openai": "^6.49.0",
+    "@langchain/openai": "^1.5.7",
+    "openai": "^7.4.0",
     "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/shared": "file:../shared"
   }
