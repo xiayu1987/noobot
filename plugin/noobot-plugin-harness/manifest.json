@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "harness",
   "name": "noobot-plugin-harness",
-  "version": "4.1.6",
+  "version": "4.1.7",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -36,7 +36,9 @@
     },
     "service": {
       "hooks": {
-        "registers": ["service.after_session_delete"],
+        "registers": [
+          "service.after_session_delete"
+        ],
         "emits": []
       }
     },
@@ -73,7 +75,9 @@
       "session.delete.observe",
       "http.authenticated"
     ],
-    "authenticatedRoutes": ["/api/internal/session/:userId/:sessionId/thinking-detail"]
+    "authenticatedRoutes": [
+      "/api/internal/session/:userId/:sessionId/thinking-detail"
+    ]
   },
   "enabledByDefault": true
 }
