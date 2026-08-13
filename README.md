@@ -9,7 +9,7 @@
 [![Stars](https://img.shields.io/github/stars/xiayu1987/noobot?style=flat)](https://github.com/xiayu1987/noobot/stargazers)
 [![Quality Checks](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-![Node](https://img.shields.io/badge/node-%3E%3D18-blue)
+![Node](https://img.shields.io/badge/node-%3E%3D20.18.1-blue)
 
 [Download the latest Windows or macOS release](https://github.com/xiayu1987/noobot/releases/latest) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
 
@@ -121,7 +121,7 @@ chmod +x stop-services.sh
 
 ## Requirements
 
-- Node.js 18+ (recommended 20+)
+- Node.js 20.18.1+
 - npm 9+
 - Linux/macOS
 
