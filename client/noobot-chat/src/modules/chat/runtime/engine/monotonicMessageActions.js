@@ -17,8 +17,6 @@ import {
 import { nowIso, nowMs } from "../../model/timeFields.js";
 import {
   SESSION_RUN_EVENT,
-  FrontendRunState,
-  getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine.js";
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import {
@@ -61,35 +59,6 @@ function syncSessionMessageSummary(session) {
   session.messageCount = messages.length;
   session.lastMessage = findVisibleLastMessage(messages);
   session.updatedAt = nowIso();
-}
-
-function isStoppedTurnStatusPlaceholder(message = {}) {
-  return message?.turnStatusPlaceholder === true &&
-    normalizeTrimmedString(message?.turnStatus?.status || message?.status) === "user_stopped";
-}
-
-function isStoppingAssistantMessage(message = {}) {
-  if (getMessageRole(message) !== "assistant") return false;
-  const channelState = getMessageRuntimeChannelState(message);
-  return ["frontend_user_stopping", "stopping", "user_stopped"].includes(
-    normalizeTrimmedString(channelState?.state || message?.state || message?.status),
-  );
-}
-
-function isUserStopConfirmedRunState(state = "") {
-  return [
-    FrontendRunState.USER_STOPPING,
-    FrontendRunState.USER_STOP_COMPLETED,
-    "user_stopped",
-  ].includes(normalizeTrimmedString(state));
-}
-
-function getStoppedTurnMessage({ targetMessage = null, originalTargetMessage = null } = {}) {
-  if (isStoppedTurnStatusPlaceholder(targetMessage)) return targetMessage;
-  if (isStoppedTurnStatusPlaceholder(originalTargetMessage)) return originalTargetMessage;
-  if (isStoppingAssistantMessage(originalTargetMessage)) return originalTargetMessage;
-  if (isStoppingAssistantMessage(targetMessage)) return targetMessage;
-  return null;
 }
 
 function normalizeSessionDetailSnapshot(payload = {}, fallbackSessionId = "") {
@@ -183,24 +152,12 @@ export function createMonotonicMessageActions({
   async function prepareMonotonicMessageAction({
     timeoutMs,
     pollIntervalMs,
-    targetMessage = null,
-    originalTargetMessage = null,
   } = {}) {
     const rejectStopPrecondition = () => {
       const message = translate("chat.monotonicActionStopTimeout");
       notify({ type: "warning", message });
       throw new Error(message);
     };
-    const targetTurnScopeId = getMessageTurnScopeId(targetMessage) || getMessageTurnScopeId(originalTargetMessage);
-    const stoppedTurnMessage = getStoppedTurnMessage({ targetMessage, originalTargetMessage }) ||
-      (targetTurnScopeId
-        ? (Array.isArray(activeSession?.value?.messages) ? activeSession.value.messages : []).find(
-            (message) =>
-              getMessageTurnScopeId(message) === targetTurnScopeId &&
-              (isStoppedTurnStatusPlaceholder(message) || isStoppingAssistantMessage(message)),
-          )
-        : null);
-    if (stoppedTurnMessage) return true;
     const runtime = activeTurnRuntime();
     const runtimeDisplayState = turnRuntimeDisplayState(runtime);
     if (
@@ -292,6 +249,7 @@ export function createMonotonicMessageActions({
     const anchor = buildMessageAnchor(userTargetMessage);
     if (!Object.keys(anchor).length) return false;
     const deleteCommandId = `delete:${initialSessionId}:${anchor.turnScopeId || anchor.dialogProcessId || anchor.id || "anchor"}`;
+    const supersededOperation = messageOperationStore?.getActiveOperation?.(initialSessionId);
     const deleteOperation = messageOperationStore?.registerOperation?.({
       type: "delete",
       opId: deleteCommandId,
@@ -299,6 +257,17 @@ export function createMonotonicMessageActions({
       status: "stopping",
       turnScopeId: anchor.turnScopeId || "",
     });
+    if (
+      supersededOperation?.type === "resend" &&
+      normalizeTrimmedString(supersededOperation.turnScopeId)
+    ) {
+      applyRunStateEvent?.({
+        type: SESSION_RUN_EVENT.LOCAL_RESEND_FAILED,
+        sessionId: initialSessionId,
+        turnScopeId: supersededOperation.turnScopeId,
+        source: "delete_superseded_resend",
+      });
+    }
     logWorkflowDiagnostics("frontend.messageDelete.started", () => ({
       sessionId: initialSessionId,
       dialogProcessId: getMessageDialogProcessId(userTargetMessage),

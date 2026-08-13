@@ -47,6 +47,7 @@ function settleStopped(store, session) {
     sessionId,
     turnScopeId,
     resolved: true,
+    aggregateVersion: Number(session.aggregateVersion || 0),
     turn: {
       sessionId, turnScopeId, dialogProcessId: status.dialogProcessId,
       state: "stop_completed", phase: "stop", revision, sequence: revision,

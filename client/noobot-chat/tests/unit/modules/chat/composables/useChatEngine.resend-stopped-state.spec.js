@@ -20,6 +20,7 @@ import {
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
+  applyTurnRuntimeEvent,
   applyTurnTerminalResolution,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -37,6 +38,7 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
       sessionId,
       turnScopeId,
       resolved: true,
+      aggregateVersion: 1,
       turn: {
         sessionId,
         turnScopeId,
@@ -66,6 +68,112 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
 }
 
 describe("useChatEngine.resend stopped state", () => {
+  it("edit-resends immediately after stop without requiring a session refresh", async () => {
+    const sessionId = "local-resend-immediate-after-stop";
+    const stoppedTurnScopeId = "turn-immediate-stop";
+    const terminalResolutionFetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => createTurnTerminalResolution({
+        commandId: "resolve-immediate-stop",
+        sessionId,
+        turnScopeId: stoppedTurnScopeId,
+        resolved: true,
+        aggregateVersion: 12,
+        turn: {
+          sessionId,
+          turnScopeId: stoppedTurnScopeId,
+          dialogProcessId: "dp-immediate-stop",
+          state: "stop_completed",
+          phase: "stop",
+          revision: 5,
+          sequence: 5,
+          completionCommitId: "commit-immediate-stop",
+          summaryVersion: 5,
+          terminalStatus: { status: "user_stopped" },
+          capabilities: { actionLocked: false, canStop: false },
+        },
+      }),
+    }));
+    const stream = vi.fn(async () => {});
+    const replaceSessionTurnApi = vi.fn(
+      async ({ turnScopeId, newContent, commandId, anchor, expectedAggregateVersion }) => {
+        const replacementUser = {
+          id: `msg-user-${turnScopeId}`,
+          messageId: `msg-user-${turnScopeId}`,
+          turnScopeId,
+          role: RoleEnum.USER,
+          content: newContent,
+          dialogProcessId: "",
+        };
+        return makeTurnReplacementResponse({
+          commandId,
+          sessionId,
+          aggregateVersion: Number(expectedAggregateVersion || 0) + 1,
+          replacedTurnScopeIds: [anchor.turnScopeId],
+          replacementUser,
+        });
+      },
+    );
+    const applySessionDetail = vi.fn((detail) => {
+      const mainSession = detail.sessions?.[0] || {};
+      activeSession.value = { ...activeSession.value, ...mainSession };
+    });
+    const { engine, activeSession, turnRuntimeRegistry, deps } = createHarness({
+      sessionId,
+      stream,
+      deps: { replaceSessionTurnApi, applySessionDetail, terminalResolutionFetcher },
+    });
+    activeSession.value.aggregateVersion = 11;
+    const stoppedUser = {
+      id: "user-immediate-stop",
+      turnScopeId: stoppedTurnScopeId,
+      dialogProcessId: "dp-immediate-stop",
+      role: RoleEnum.USER,
+      content: "original",
+    };
+    const stoppedAssistant = {
+      id: "assistant-immediate-stop",
+      turnScopeId: stoppedTurnScopeId,
+      dialogProcessId: "dp-immediate-stop",
+      role: RoleEnum.ASSISTANT,
+      content: "partial",
+      pending: false,
+      statusLabel: "chat.stopped",
+      channelState: {
+        state: "user_stopped",
+        turnScopeId: stoppedTurnScopeId,
+        dialogProcessId: "dp-immediate-stop",
+      },
+    };
+    activeSession.value.messages = [stoppedUser, stoppedAssistant];
+    activeSession.value.rawMessages = [stoppedUser, stoppedAssistant];
+    applyTurnRuntimeEvent(turnRuntimeRegistry.value, {
+      type: SESSION_RUN_EVENT.LOCAL_USER_STOP_REQUEST_STARTED,
+      sessionId,
+      turnScopeId: stoppedTurnScopeId,
+      dialogProcessId: "dp-immediate-stop",
+      source: "test_stop_without_refresh",
+    });
+    await expect(
+      engine.resolveTurnTerminalState(sessionId, stoppedTurnScopeId, {
+        revision: 5,
+        sequence: 5,
+      }),
+    ).resolves.toMatchObject({ applied: true });
+    expect(activeSession.value.aggregateVersion).toBe(12);
+
+    await expect(
+      engine.resendMonotonicMessage(stoppedAssistant, "edited without refresh"),
+    ).resolves.toBe(true);
+
+    expect(deps.chatWebSocketClient.requestStop).not.toHaveBeenCalled();
+    expect(replaceSessionTurnApi).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedAggregateVersion: 12 }),
+      expect.any(Object),
+    );
+    expect(stream).toHaveBeenCalledTimes(1);
+  });
+
   it("resendMonotonicMessage rejects stale stopped replacement snapshots without the new turnScopeId", async () => {
     const stream = vi.fn(async (payload, onEvent) =>
       emitAuthorityProcessing(onEvent, {

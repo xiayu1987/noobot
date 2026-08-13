@@ -56,7 +56,7 @@ export function createAuthoritativeTurnSnapshot({
 
 export function resolveAuthoritativeTurnTerminal({
   lifecycle: lifecycleSource = {}, turnTimings = [], commandId = "", sessionId = "",
-  turnScopeId = "", retryAfterMs = 250,
+  turnScopeId = "", aggregateVersion = null, retryAfterMs = 250,
 } = {}) {
   const normalizedCommandId = clean(commandId);
   const normalizedSessionId = clean(sessionId);
@@ -65,6 +65,7 @@ export function resolveAuthoritativeTurnTerminal({
     commandId: normalizedCommandId || "invalid",
     sessionId: normalizedSessionId,
     turnScopeId: normalizedTurnScopeId,
+    aggregateVersion,
   };
   if (!normalizedCommandId || !normalizedSessionId || !normalizedTurnScopeId) {
     return createTurnTerminalResolution({ ...base, reason: "invalid_terminal_resolution_request" });

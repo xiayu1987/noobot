@@ -12,13 +12,41 @@ import {
   createTurnLifecycleEnvelope,
   createTurnLifecycleSnapshot,
   createTurnLifecycleReceipt,
+  createTurnTerminalResolution,
   deriveAuthoritativeTurnCapabilities,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
   validateTurnLifecycleReceipt,
+  validateTurnTerminalResolution,
   validateSessionProvisionIntent,
   validateAttachmentParsedEvent,
 } from "@noobot/session-protocol";
+
+test("terminal resolution binds terminal state to the committed Session aggregate version", () => {
+  const resolution = createTurnTerminalResolution({
+    commandId: "resolve-terminal-version",
+    sessionId: "session-terminal-version",
+    turnScopeId: "turn-terminal-version",
+    resolved: true,
+    aggregateVersion: 12,
+    turn: {
+      sessionId: "session-terminal-version",
+      turnScopeId: "turn-terminal-version",
+      state: TURN_STATE.STOP_COMPLETED,
+      phase: TURN_PHASE.STOP,
+      revision: 5,
+      sequence: 5,
+      terminalStatus: { status: "user_stopped" },
+    },
+  });
+
+  assert.equal(resolution.aggregateVersion, 12);
+  assert.deepEqual(validateTurnTerminalResolution(resolution), { valid: true, errors: [] });
+  assert.deepEqual(
+    validateTurnTerminalResolution({ ...resolution, aggregateVersion: null }).errors,
+    ["invalid_aggregate_version"],
+  );
+});
 
 test("attachment parsed event requires canonical source and parsed-result identities", () => {
   const validEvent = {

@@ -205,6 +205,7 @@ export class SessionCrudService {
     return resolveAuthoritativeTurnTerminal({
       lifecycle: bundle.session.turnLifecycle,
       turnTimings: bundle.session.turnTimings,
+      aggregateVersion: bundle.session.aggregateVersion,
       commandId: normalizedCommandId,
       sessionId: normalizedSessionId,
       turnScopeId: normalizedTurnScopeId,

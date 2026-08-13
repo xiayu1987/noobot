@@ -429,6 +429,12 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：`task_check_required` 每次只对应一个模型输入 marker 且下一轮不残留；`task_check` 输入遵循 `NOOBOT_TASK_CHECK/1`，结果只含协议回执且不保存附件；最后一次 checkpoint 前的最新检查 call/result 不被标记为已小结，思考面板展示本轮最新检查摘要，下一轮 history 仍包含该工具结果。
 
+### PBE-042：停止后同页立即编辑重发
+
+步骤：发送消息并等待 `processing_started`，点击 Stop 并等待 `stop_completed`；保持当前页面和连接，不刷新、不重连、不重新加载 Session 详情，立即编辑最新用户消息并提交重发。
+
+断言：停止提交后的持久化 Session `aggregateVersion` 已推进；紧接着的 `replace-turn.expectedAggregateVersion` 精确等于该版本且 HTTP 成功；随后产生唯一 `turn.resend` 和对应的 `turn.processing_started`。不得依赖刷新或冲突后的重新水合修复前端并发版本。
+
 ### PBE-036：全工具、实时思考明细与交互结果闭环
 
 步骤：启用 Harness 真实 guidance analysis 并关闭 planning/acceptance，顺序调用本场景声明的安全业务工具集合 `write_file/read_file/search/patch_file(dryRun)/execute_script/list_skills/user_interaction`；持续采样实时思考面板，在交互卡片填写固定必填值，完成后打开思考详情。模型/provider 未产生工具调用前文本时不得伪造主模型思考内容。

@@ -53,6 +53,7 @@ function settle(registry, sessionId, turnScopeId, state = "completed", revision 
     sessionId,
     turnScopeId,
     resolved: true,
+    aggregateVersion: 1,
     turn: {
       turnScopeId,
       state,

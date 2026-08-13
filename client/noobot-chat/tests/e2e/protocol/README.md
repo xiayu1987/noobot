@@ -7,7 +7,7 @@
 
 - `fixtures/`：浏览器、认证、Session、协议捕获及证据输出生命周期。
 - `helpers/`：浏览器操作和各协议域断言，不产生业务状态。
-- `specs/`：30 条去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、Harness 低轮次工作流、主流程小结 checkpoint，以及工具/实时思考/交互闭环。
+- `specs/`：去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、停止后同页编辑重发、Harness 低轮次工作流、主流程小结 checkpoint，以及工具/实时思考/交互闭环。
 - `playwright.protocol.config.js`：协议测试唯一 Playwright 配置。
 
 运行前必须提供：

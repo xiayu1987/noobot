@@ -118,10 +118,11 @@ function createSessionDetailSnapshot(session = {}) {
   };
 }
 
-function operationSeed({ sessionId }) {
+function operationSeed({ sessionId, turnScopeId }) {
   return {
     type: "resend",
     sessionId,
+    turnScopeId,
     status: "pending",
   };
 }
@@ -239,7 +240,10 @@ export function createResendMessageTransaction({
     const originalInputValue = input?.value;
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
-    const operation = messageOperationStore?.registerOperation(operationSeed({ sessionId }));
+    const operation = messageOperationStore?.registerOperation(operationSeed({
+      sessionId,
+      turnScopeId: resendTurnScopeId,
+    }));
     if (!normalizeTrimmedString(operation?.opId)) {
       throw new TypeError("resend command registration failed: missing_command_id");
     }
