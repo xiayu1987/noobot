@@ -272,3 +272,35 @@ test("desktop boot flow reports error and keeps startup page when service startu
     },
   ]);
 });
+
+test("desktop startup offers missing dependencies even when the service is already healthy", async () => {
+  const statuses = [];
+  let dependencyRequestCount = 0;
+  let configState = null;
+  const manager = createDesktopServiceManager({
+    app: { isPackaged: false, getPath: () => "/user-data" },
+    healthUrl: "http://127.0.0.1:10061/health",
+    startupTimeoutMs: 100,
+    pollIntervalMs: 1,
+    sendStatus: (status) => statuses.push(status),
+    ensureDesktopGlobalConfig: () => ({
+      superAdmin: { missing: false },
+      missingParams: [],
+    }),
+    getDesktopConfigState: () => configState,
+    setDesktopConfigState: (state) => {
+      configState = state;
+    },
+    inspectDependencies: async () => [
+      { key: "playwright", name: "Playwright Chromium", available: false },
+    ],
+    requestDependencySetup: async () => {
+      dependencyRequestCount += 1;
+    },
+    fetchImpl: async () => ({ ok: true, json: async () => ({ ok: true }) }),
+  });
+
+  await manager.ensureServiceStarted();
+  assert.equal(dependencyRequestCount, 1);
+  assert.deepEqual(statuses.map((status) => status.phase), ["checking", "ready"]);
+});

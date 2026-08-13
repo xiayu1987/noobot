@@ -11,6 +11,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   buildNativeProcessEnv,
   cleanupNativeTaskDirectory,
+  resolveNativeBrowserExecutable,
   resolveNativeLibreOfficeExecutable,
   terminateNativeProcessTree,
 } from "../../src/tools/execution/native-script-process.js";
@@ -132,6 +133,23 @@ test("native LibreOffice executable uses the host-resolved dependency path", () 
   assert.equal(
     resolveNativeLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }),
     "libreoffice",
+  );
+});
+
+test("native browser executable prefers the client-resolved dependency path", () => {
+  assert.equal(
+    resolveNativeBrowserExecutable({
+      playwrightExecutable: "/standard-cache/chromium",
+      sourceEnv: { NOOBOT_PLAYWRIGHT_CHROMIUM_PATH: "/client/chromium" },
+    }),
+    "/client/chromium",
+  );
+  assert.equal(
+    resolveNativeBrowserExecutable({
+      playwrightExecutable: "/standard-cache/chromium",
+      sourceEnv: {},
+    }),
+    "/standard-cache/chromium",
   );
 });
 

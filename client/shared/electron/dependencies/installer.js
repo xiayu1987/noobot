@@ -6,8 +6,11 @@
 import { dependencySpecs, desktopDependencyTimeouts } from "./specs.js";
 import { createDependencyError, getDependencyErrorMeta, withTimeout } from "./process.js";
 import { getDependencyProxyEnv, maskDependencyProxyUrl } from "./proxy.js";
+import { joinClientPath } from "../../path-resolver.js";
 
 export function createDependencyInstaller({
+  app = null,
+  backendRoot = "",
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},
   sendStatus = () => {},
@@ -19,6 +22,18 @@ export function createDependencyInstaller({
   installManagedDependencyMac,
   getDependencyProxyUrl = () => "",
 } = {}) {
+  function getPlaywrightInstallCommand() {
+    const nodeCommand = process.execPath;
+    const cliPath = joinClientPath(backendRoot, "node_modules", "playwright", "cli.js");
+    return {
+      command: nodeCommand,
+      args: [cliPath, "install", "chromium"],
+      env: {
+        ELECTRON_RUN_AS_NODE: "1",
+      },
+    };
+  }
+
   function getProxyRunOptions() {
     const proxyUrl = String(getDependencyProxyUrl() || "").trim();
     return { env: getDependencyProxyEnv(proxyUrl), masked: maskDependencyProxyUrl(proxyUrl), enabled: Boolean(proxyUrl) };
@@ -89,6 +104,7 @@ export function createDependencyInstaller({
 
   async function buildDependencyInstallCommand(spec) {
     writeDependencyLog("install-command:build:start", { label: spec.label, platform: process.platform }, { debug: true });
+    if (spec.managedInstaller === "playwright") return getPlaywrightInstallCommand();
     const packages = spec.packages?.[process.platform] || {};
     if (process.platform === "win32") {
       if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: buildWindowsWingetInstallArgs(packages.winget) };
@@ -226,7 +242,7 @@ export function createDependencyInstaller({
       try {
         result = await runProcess(installCommand.command, installCommand.args, {
           timeoutMs: desktopDependencyTimeouts.installMs,
-          env: proxy.env,
+          env: { ...proxy.env, ...(installCommand.env || {}) },
         });
       } finally {
         clearInterval(heartbeat);

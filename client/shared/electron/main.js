@@ -49,6 +49,7 @@ const {
 
 let pendingConfigResolve = null;
 let pendingSuperAdminResolve = null;
+let pendingDependencyResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
@@ -92,18 +93,20 @@ function sendStatus(status) {
 const { ensureDesktopGlobalConfig, saveConfigParamValues, saveSuperAdminConfig } = createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog });
 const { runProcess: runDependencyProcess } = createDependencyProcessTools({ appendEarlyLog });
 
-const { ensureSelectedDependencies } = createDesktopDependencyManager({
+const { ensureSelectedDependencies, inspectDependencies } = createDesktopDependencyManager({
   app,
+  backendRoot: app.isPackaged ? packagedBackendRoot : repoRoot,
   appendEarlyLog,
   writeDependencyLog,
   sendStatus,
   getDependencyProxyUrl: () => String(desktopConfigState?.superAdmin?.dependencyProxyUrl || ""),
 });
 
-const { requestSuperAdminConfig, requestMissingConfigParams } = createStartupConfigRequesters({
+const { requestSuperAdminConfig, requestMissingConfigParams, requestDependencySetup } = createStartupConfigRequesters({
   sendStatus,
   setPendingConfigResolve: (resolve) => { pendingConfigResolve = resolve; },
   setPendingSuperAdminResolve: (resolve) => { pendingSuperAdminResolve = resolve; },
+  setPendingDependencyResolve: (resolve) => { pendingDependencyResolve = resolve; },
 });
 
 const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager({
@@ -126,6 +129,8 @@ const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager
   setDesktopConfigState: (state) => { desktopConfigState = state; },
   requestSuperAdminConfig,
   requestMissingConfigParams,
+  requestDependencySetup,
+  inspectDependencies,
 });
 
 const { boot, hasBootStarted } = createDesktopBootstrap({
@@ -162,6 +167,8 @@ registerStartupIpcHandlers({
   setPendingConfigResolve: (resolve) => { pendingConfigResolve = resolve; },
   getPendingSuperAdminResolve: () => pendingSuperAdminResolve,
   setPendingSuperAdminResolve: (resolve) => { pendingSuperAdminResolve = resolve; },
+  getPendingDependencyResolve: () => pendingDependencyResolve,
+  setPendingDependencyResolve: (resolve) => { pendingDependencyResolve = resolve; },
   ensureDesktopGlobalConfig,
   saveConfigParamValues,
   saveSuperAdminConfig,

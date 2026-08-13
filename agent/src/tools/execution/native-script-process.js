@@ -43,6 +43,18 @@ export function resolveNativeLibreOfficeExecutable({
   return platform === "win32" ? "soffice.exe" : "libreoffice";
 }
 
+export function resolveNativeBrowserExecutable({
+  playwrightExecutable = "",
+  sourceEnv = process.env,
+} = {}) {
+  return String(
+    sourceEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH ||
+      sourceEnv.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ||
+      playwrightExecutable ||
+      "",
+  ).trim();
+}
+
 export function buildNativeProcessEnv({
   home = "",
   temp = "",

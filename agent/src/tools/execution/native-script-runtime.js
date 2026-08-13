@@ -5,6 +5,7 @@
  */
 import { execFile } from "node:child_process";
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import vm from "node:vm";
 import {
   TASK_PATH_KINDS,
@@ -119,9 +120,16 @@ async function runCapability(command, commandArgs, cwd, timeoutMs, label, roots)
   try {
     return redactProcessResult(await runFixed(command, commandArgs, cwd, timeoutMs), roots);
   } catch (error) {
+    if (error?.killed || error?.code === "ETIMEDOUT") {
+      throw new Error(`${label} timed out after ${Number(timeoutMs || 0)} ms`);
+    }
     const detail = redactCapabilityText(error?.stderr || error?.message || "", roots).trim();
     throw new Error(`${label} failed${detail ? `: ${detail}` : ""}`);
   }
+}
+
+export function buildLibreOfficeUserInstallationUrl(tempRoot) {
+  return pathToFileURL(path.join(tempRoot, "libreoffice-profile")).href;
 }
 
 function assertHttpUrl(value) {
@@ -295,6 +303,7 @@ export async function createNativeScriptRuntime({
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
   const taskRoots = { input: inputRoot, output: outputRoot, temp: tempRoot };
+  const capabilityTimeoutMs = Math.max(1, Number(timeoutMs || 0) - 5000);
   await Promise.all([mkdir(outputRoot, { recursive: true }), mkdir(tempRoot, { recursive: true })]);
   const inputRelative = (reference) => {
     const key = String(reference ?? "").trim();
@@ -342,7 +351,7 @@ export async function createNativeScriptRuntime({
     await resolveChild(tempRoot, relative, "temporary path");
     return createTaskPath({ kind: TASK_PATH_KINDS.TEMP, relative });
   };
-  const resolveReadable = async (reference) => {
+  const resolveReadableFile = async (reference, label) => {
     const value = String(reference || "").trim();
     let target;
     if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT })) {
@@ -356,11 +365,15 @@ export async function createNativeScriptRuntime({
     } else if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP })) {
       target = resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP }).path;
     } else {
-      throw new Error("files.readText requires an input://, output://, or temp:// task path");
+      throw new Error(`${label} requires an input://, output://, or temp:// task path`);
     }
     const linkInfo = await lstat(target);
     if (linkInfo.isSymbolicLink() || !linkInfo.isFile())
-      throw new Error("files.readText requires a regular non-symbolic file");
+      throw new Error(`${label} requires a regular non-symbolic file`);
+    return { target, linkInfo };
+  };
+  const resolveReadable = async (reference) => {
+    const { target, linkInfo } = await resolveReadableFile(reference, "files.readText");
     if (linkInfo.size > LENGTH_THRESHOLDS.nativeScript.textReadBytes)
       throw new Error("files.readText file exceeds 8 MB");
     return target;
@@ -394,7 +407,7 @@ export async function createNativeScriptRuntime({
           "libreoffice.convert({ input, outputDirectory, outputFormat }) requires input",
         );
       }
-      const source = await resolveInput(inputPath);
+      const { target: source } = await resolveReadableFile(inputPath, "libreoffice.convert input");
       const targetDir = await resolveOutput(outputDirectory);
       await mkdir(targetDir, { recursive: true });
       const format = String(outputFormat || "").trim();
@@ -410,7 +423,7 @@ export async function createNativeScriptRuntime({
           "--nolockcheck",
           "--norestore",
           "--invisible",
-          `-env:UserInstallation=file://${tempRoot}/libreoffice-profile`,
+          `-env:UserInstallation=${buildLibreOfficeUserInstallationUrl(tempRoot)}`,
           "--convert-to",
           format,
           "--outdir",
@@ -418,7 +431,7 @@ export async function createNativeScriptRuntime({
           source,
         ],
         tempRoot,
-        timeoutMs,
+        capabilityTimeoutMs,
         "LibreOffice",
         pathRoots,
       );
@@ -461,7 +474,7 @@ export async function createNativeScriptRuntime({
         "ffmpeg",
         ["-nostdin", "-y", ...resolvedArgs],
         tempRoot,
-        timeoutMs,
+        capabilityTimeoutMs,
         "FFmpeg",
         pathRoots,
       );
@@ -485,7 +498,14 @@ export async function createNativeScriptRuntime({
           return value;
         }),
       );
-      return runCapability("ffprobe", resolvedArgs, tempRoot, timeoutMs, "FFprobe", pathRoots);
+      return runCapability(
+        "ffprobe",
+        resolvedArgs,
+        tempRoot,
+        capabilityTimeoutMs,
+        "FFprobe",
+        pathRoots,
+      );
     },
   });
   let browser = null;

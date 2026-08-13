@@ -7,9 +7,11 @@ import { createDependencyDetector } from "./detect.js";
 import { createDependencyInstaller } from "./installer.js";
 import { createMacDependencyInstallerTools } from "./managed-mac.js";
 import { createDependencyProcessTools } from "./process.js";
+import { dependencySpecs } from "./specs.js";
 
 export function createDesktopDependencyManager({
   app,
+  backendRoot = "",
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},
   sendStatus = () => {},
@@ -33,6 +35,8 @@ export function createDesktopDependencyManager({
   });
 
   const { findAvailableCommand, isDependencyInstalled, waitForDependencyInstalled } = createDependencyDetector({
+    app,
+    backendRoot,
     appendEarlyLog,
     writeDependencyLog,
     runProcess,
@@ -52,8 +56,24 @@ export function createDesktopDependencyManager({
     waitForDependencyInstalled,
     installLibreOfficeFromDmg,
     installManagedDependencyMac,
+    app,
+    backendRoot,
     getDependencyProxyUrl,
   });
 
-  return { ensureSelectedDependencies };
+  async function inspectDependencies() {
+    const dependencies = [];
+    for (const [key, spec] of Object.entries(dependencySpecs)) {
+      let available = false;
+      try {
+        available = await isDependencyInstalled(spec);
+      } catch (error) {
+        writeDependencyLog("inspect:error", { key, label: spec.label, error });
+      }
+      dependencies.push({ key, name: spec.label, available });
+    }
+    return dependencies;
+  }
+
+  return { ensureSelectedDependencies, inspectDependencies };
 }
