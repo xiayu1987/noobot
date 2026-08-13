@@ -14,6 +14,7 @@ import {
   convertPathView,
   detectPathPlatform,
   normalizePathForPlatform,
+  PLATFORM_PROTECTED_ROOTS,
   resolvePathUnderRoot,
   TASK_PATH_KINDS,
   TASK_PATH_VIEW,
@@ -138,7 +139,8 @@ test("logical path contracts keep sandbox exclusive to script execution", () => 
 test("built-in path policy is complete and aligned with every tool contract", () => {
   assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY), true);
   assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY.roles.superAdmin.host.deniedRoots), true);
-  assert.deepEqual(resolvePathPolicy({}), BUILTIN_PATH_POLICY);
+  assert.deepEqual(resolvePathPolicy({}, { platform: "windows" }), BUILTIN_PATH_POLICY);
+  assert.deepEqual(PLATFORM_PROTECTED_ROOTS.linux, ["/proc", "/sys", "/dev"]);
   assert.deepEqual(BUILTIN_PATH_POLICY.display, {
     fileTools: "logical",
     scriptTools: "logical",
@@ -155,6 +157,31 @@ test("built-in path policy is complete and aligned with every tool contract", ()
   }
 });
 
+test("built-in protected roots follow the service execution platform", () => {
+  assert.deepEqual(
+    resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots,
+    ["/proc", "/sys", "/dev"],
+  );
+  assert.deepEqual(
+    resolvePathPolicy({}, { platform: "win32" }).roles.superAdmin.host.deniedRoots,
+    [],
+  );
+  assert.deepEqual(
+    resolvePathPolicy({}, { platform: "darwin" }).roles.superAdmin.host.deniedRoots,
+    ["/dev"],
+  );
+  assert.deepEqual(
+    resolvePathPolicy({
+      security: {
+        pathPolicy: {
+          roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
+        },
+      },
+    }, { platform: "windows" }).roles.superAdmin.host.deniedRoots,
+    ["C:/Windows/System32"],
+  );
+});
+
 test("global path policy recursively overrides only configured values", () => {
   const policy = resolvePathPolicy({
     security: {
@@ -169,7 +196,7 @@ test("global path policy recursively overrides only configured values", () => {
         display: { file_tools: "none" },
       },
     },
-  });
+  }, { platform: "linux" });
 
   assert.equal(policy.roles.regularUser.workspace.own, "read_write");
   assert.equal(policy.roles.regularUser.workspace.others, "read_only");
@@ -197,7 +224,7 @@ test("path authorization defaults to the built-in policy when callers omit it", 
 });
 
 test("global path policy expands host access only for super administrators", () => {
-  const pathPolicy = resolvePathPolicy({});
+  const pathPolicy = resolvePathPolicy({}, { platform: "linux" });
   const hostRef = resolvePathRef({
     input: "/data/report.txt",
     workspaceRoot: "/srv/workspaces/u1",

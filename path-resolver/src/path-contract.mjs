@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath, isAbsolutePathAnyPlatform, normalizePathForPlatform, normalizeSlashPath } from "./platform.mjs";
+import {
+  filePath,
+  isAbsolutePathAnyPlatform,
+  normalizePathForPlatform,
+  normalizePathPlatform,
+  normalizeSlashPath,
+  PATH_PLATFORMS,
+} from "./platform.mjs";
 
 export const PATH_REF_VIEWS = Object.freeze({ WORKSPACE: "workspace", HOST: "host", ATTACHMENT: "attachment", TASK_LOCAL: "task-local" });
 export const EXECUTION_PATH_VIEWS = Object.freeze({ HOST: "host", SANDBOX: "sandbox", TASK_LOCAL: "task-local", SERVICE_LOCAL: "service-local" });
@@ -12,6 +19,12 @@ export const DISPLAY_PATH_VIEWS = Object.freeze({ LOGICAL: "logical", ATTACHMENT
 export const PATH_CAPABILITIES = Object.freeze({
   FILE_READ: "file.read", FILE_WRITE: "file.write", FILE_PATCH: "file.patch", FILE_SEARCH: "file.search",
   DOCUMENT_INPUT: "document.input", MULTIMODAL_INPUT: "multimodal.input", SCRIPT_INPUT: "script.input", NATIVE_INPUT: "native.input",
+});
+
+export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
+  [PATH_PLATFORMS.LINUX]: ["/proc", "/sys", "/dev"],
+  [PATH_PLATFORMS.MACOS]: ["/dev"],
+  [PATH_PLATFORMS.WINDOWS]: [],
 });
 
 function deepFreeze(value) {
@@ -59,7 +72,7 @@ export const BUILTIN_PATH_POLICY = deepFreeze({
       host: {
         access: "allow",
         allowedRoots: ["<host-filesystem>"],
-        deniedRoots: ["/proc", "/sys", "/dev"],
+        deniedRoots: [],
       },
     },
   },
@@ -178,12 +191,22 @@ function within(root, candidate) {
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${filePath.sep}`) && !filePath.isAbsolute(relative));
 }
 
-export function resolvePathPolicy(globalConfig = {}) {
+export function resolvePathPolicy(globalConfig = {}, { platform = process.platform } = {}) {
   const configured = globalConfig?.security?.pathPolicy || globalConfig?.security?.path_policy || {};
   const configuredRoles = configured.roles || {};
   const configuredSuperAdmin = configuredRoles.superAdmin || configuredRoles.super_admin || {};
   const configuredCapabilities = Object.fromEntries(Object.entries(configured.capabilities || {}).map(([key, value]) => [key, canonicalRule(value)]));
   const configuredRegularUser = configuredRoles.regularUser || configuredRoles.regular_user || {};
+  const executionPlatform = normalizePathPlatform(platform);
+  const platformDefaults = mergePolicy(BUILTIN_PATH_POLICY, {
+    roles: {
+      superAdmin: {
+        host: {
+          deniedRoots: PLATFORM_PROTECTED_ROOTS[executionPlatform] || [],
+        },
+      },
+    },
+  });
   const override = {
     ...configured,
     roles: {
@@ -202,7 +225,7 @@ export function resolvePathPolicy(globalConfig = {}) {
   };
   delete override.roles.regular_user;
   delete override.roles.super_admin;
-  return deepFreeze(mergePolicy(BUILTIN_PATH_POLICY, override));
+  return deepFreeze(mergePolicy(platformDefaults, override));
 }
 
 export function authorizePathRef({ pathRef, principal = {}, capability = "", pathPolicy = {}, executionPath = "", workspaceRoot = "" } = {}) {
