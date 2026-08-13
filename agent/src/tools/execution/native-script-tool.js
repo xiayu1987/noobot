@@ -32,6 +32,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildNativeProcessEnv,
   cleanupNativeTaskDirectory,
+  resolveNativeBrowserExecutable,
   resolveNativeLibreOfficeExecutable,
   terminateNativeProcessTree,
 } from "./native-script-process.js";
@@ -277,7 +278,9 @@ export function createNativeScriptTool({ agentContext }) {
         }
         const scriptPath = path.join(taskRoot, "task.mjs");
         const { chromium } = await import("playwright");
-        const browserExecutablePath = chromium.executablePath();
+        const browserExecutablePath = resolveNativeBrowserExecutable({
+          playwrightExecutable: chromium.executablePath(),
+        });
         const browserExecutableStat = await stat(browserExecutablePath);
         if (!browserExecutableStat.isFile()) {
           throw new Error("configured Playwright Chromium executable is not a file");

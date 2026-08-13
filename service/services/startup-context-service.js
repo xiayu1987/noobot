@@ -166,6 +166,8 @@ export function safeStartupContextForLog(context = {}) {
         PATH: normalized.runtime.env.PATH ? "[set]" : "",
         NOOBOT_FFMPEG_PATH: normalized.runtime.env.NOOBOT_FFMPEG_PATH || "",
         NOOBOT_FFPROBE_PATH: normalized.runtime.env.NOOBOT_FFPROBE_PATH || "",
+        NOOBOT_PLAYWRIGHT_CHROMIUM_PATH:
+          normalized.runtime.env.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH || "",
         LIBRE_OFFICE_EXE: normalized.runtime.env.LIBRE_OFFICE_EXE || "",
       },
     },

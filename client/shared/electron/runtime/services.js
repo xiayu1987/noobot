@@ -33,6 +33,8 @@ export function createDesktopServiceManager({
   setDesktopConfigState = () => {},
   requestSuperAdminConfig,
   requestMissingConfigParams,
+  requestDependencySetup,
+  inspectDependencies = async () => [],
   spawnProcess = spawn,
   execFileProcess = execFile,
   fetchImpl = fetch,
@@ -104,7 +106,7 @@ export function createDesktopServiceManager({
       String(configState?.superAdmin?.dependencyProxyUrl || "").trim(),
     );
     const dependencyEnv = {
-      ...buildDependencyRuntimeEnv({ app }),
+      ...buildDependencyRuntimeEnv({ app, backendRoot }),
       ...dependencyProxyEnv,
     };
     const dependencySummary = {
@@ -293,7 +295,10 @@ export function createDesktopServiceManager({
       : ["run", "-w", "agent-proxy", "start"];
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
-    const dependencyEnv = buildDependencyRuntimeEnv({ app });
+    const dependencyEnv = buildDependencyRuntimeEnv({
+      app,
+      backendRoot: isPackaged ? packagedBackendRoot : repoRoot,
+    });
     const dependencySummary = {
       ...summarizeDependencyRuntimeEnv(dependencyEnv),
       sourceSummary: summarizeDependencySources({ runtimeEnv: dependencyEnv, app }),
@@ -379,10 +384,7 @@ export function createDesktopServiceManager({
     if (serviceStartupPromise) return serviceStartupPromise;
     serviceStartupPromise = (async () => {
       sendStatus({ phase: "checking", message: `Checking ${healthUrl}` });
-      if (await isServiceHealthy()) {
-        sendStatus({ phase: "ready", message: "Noobot service is already running." });
-        return;
-      }
+      const serviceAlreadyHealthy = await isServiceHealthy();
 
       setDesktopConfigState(
         ensureDesktopGlobalConfig({
@@ -407,6 +409,14 @@ export function createDesktopServiceManager({
             userDataPath: app.getPath("userData"),
           }),
         );
+      }
+      const dependencies = await inspectDependencies();
+      if (dependencies.some((dependency) => !dependency.available)) {
+        await requestDependencySetup(dependencies);
+      }
+      if (serviceAlreadyHealthy) {
+        sendStatus({ phase: "ready", message: "Noobot service is already running." });
+        return;
       }
       sendStatus({ phase: "starting", message: "Starting Noobot service..." });
       startNoobotService();

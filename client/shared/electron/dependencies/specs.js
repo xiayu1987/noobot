@@ -17,6 +17,10 @@ export const desktopDependencyTimeouts = Object.freeze({
 });
 
 export const dependencySpecs = {
+  playwright: {
+    label: "Playwright Chromium",
+    managedInstaller: "playwright",
+  },
   libreoffice: {
     label: "LibreOffice",
     checkCommands: ["libreoffice", "soffice"],

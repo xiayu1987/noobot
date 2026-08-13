@@ -27,6 +27,12 @@ contextBridge.exposeInMainWorld("noobotDesktop", {
   skipConfigParams() {
     return ipcRenderer.invoke("noobot:skip-config-params");
   },
+  installDependencies(dependencies) {
+    return ipcRenderer.invoke("noobot:install-dependencies", dependencies);
+  },
+  skipDependencies() {
+    return ipcRenderer.invoke("noobot:skip-dependencies");
+  },
   saveSuperAdmin(values) {
     return ipcRenderer.invoke("noobot:save-super-admin", values);
   },

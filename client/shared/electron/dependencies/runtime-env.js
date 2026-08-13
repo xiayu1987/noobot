@@ -5,6 +5,7 @@
  */
 import fs from "node:fs";
 import os from "node:os";
+import { createRequire } from "node:module";
 import { clientPathDelimiter, clientPathDirname, joinClientPath, normalizeClientPath } from "../../path-resolver.js";
 
 function normalizeString(value = "") {
@@ -78,6 +79,25 @@ function getManagedBinDirs({ app = null } = {}) {
 
 function resolveFirstExistingPath(candidates = [], exists = fs.existsSync) {
   return uniqueTruthyStrings(candidates).find((candidate) => pathExists(candidate, exists)) || "";
+}
+
+function resolvePlaywrightChromiumExecutable({
+  backendRoot = "",
+  env = process.env,
+  exists = fs.existsSync,
+} = {}) {
+  const configured = resolveFirstExistingPath(
+    [env.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH, env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH],
+    exists,
+  );
+  if (configured) return configured;
+  try {
+    const requireFromBackend = createRequire(joinClientPath(backendRoot, "package.json"));
+    const executablePath = normalizeString(requireFromBackend("playwright").chromium.executablePath());
+    return pathExists(executablePath, exists) ? executablePath : "";
+  } catch {
+    return "";
+  }
 }
 
 function resolveLibreOfficeExecutable({
@@ -186,6 +206,7 @@ function prependPathDirs(pathValue = "", dirs = [], platform = process.platform)
 
 export function buildDependencyRuntimeEnv({
   app = null,
+  backendRoot = "",
   env = process.env,
   platform = process.platform,
   exists = fs.existsSync,
@@ -193,6 +214,11 @@ export function buildDependencyRuntimeEnv({
   const ffmpegPath = resolveBinaryPath("ffmpeg", { app, env, platform, exists });
   const ffprobePath = resolveBinaryPath("ffprobe", { app, env, platform, exists });
   const libreOfficePath = resolveLibreOfficeExecutable({ env, platform, exists });
+  const playwrightChromiumPath = resolvePlaywrightChromiumExecutable({
+    backendRoot,
+    env,
+    exists,
+  });
   const dependencyDirs = uniqueTruthyStrings([
     ...getManagedBinDirs({ app }).filter((directory) => pathExists(directory, exists)),
     ffmpegPath && clientPathDirname(ffmpegPath),
@@ -204,6 +230,9 @@ export function buildDependencyRuntimeEnv({
   };
   if (ffmpegPath) output.NOOBOT_FFMPEG_PATH = ffmpegPath;
   if (ffprobePath) output.NOOBOT_FFPROBE_PATH = ffprobePath;
+  if (playwrightChromiumPath) {
+    output.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH = playwrightChromiumPath;
+  }
   if (libreOfficePath) {
     output.LIBRE_OFFICE_EXE = libreOfficePath;
     output.LIBREOFFICE_EXE = libreOfficePath;
@@ -247,6 +276,17 @@ function summarizeDarwinDependencySources({ runtimeEnv = {}, env = process.env, 
   const nodePath = resolveBinaryPath("node", { app, env: { ...env, PATH: runtimeEnv.PATH || env.PATH || "" }, platform, exists });
   return [
     buildDependencySourceItem({
+      key: "playwright",
+      name: "Playwright Chromium",
+      available: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
+      installMode: "playwright-managed-or-existing",
+      sourceType: "playwright",
+      customEnvKeys: hasCustomDependencySource(env, "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH")
+        ? ["NOOBOT_PLAYWRIGHT_CHROMIUM_PATH"]
+        : [],
+      configKeys: ["playwright.chromium"],
+    }),
+    buildDependencySourceItem({
       key: "libreoffice",
       name: "LibreOffice",
       available: Boolean(runtimeEnv.LIBRE_OFFICE_EXE),
@@ -287,6 +327,17 @@ function summarizeWin32DependencySources({ runtimeEnv = {}, env = process.env, p
   const pathEnv = runtimeEnv.PATH || env.PATH || "";
   const nodePath = resolveBinaryPath("node", { env: { ...env, PATH: pathEnv }, platform, exists });
   return [
+    buildDependencySourceItem({
+      key: "playwright",
+      name: "Playwright Chromium",
+      available: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
+      installMode: "playwright-managed-or-existing",
+      sourceType: "playwright",
+      customEnvKeys: hasCustomDependencySource(env, "NOOBOT_PLAYWRIGHT_CHROMIUM_PATH")
+        ? ["NOOBOT_PLAYWRIGHT_CHROMIUM_PATH"]
+        : [],
+      configKeys: ["playwright.chromium"],
+    }),
     buildDependencySourceItem({
       key: "libreoffice",
       name: "LibreOffice",
@@ -348,12 +399,14 @@ export function summarizeDependencySources({
 
 export function summarizeDependencyRuntimeEnv(runtimeEnv = {}) {
   return {
+    hasPlaywrightChromium: Boolean(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH),
     hasFfmpeg: Boolean(runtimeEnv.NOOBOT_FFMPEG_PATH),
     hasFfprobe: Boolean(runtimeEnv.NOOBOT_FFPROBE_PATH),
     hasLibreOffice: Boolean(runtimeEnv.LIBRE_OFFICE_EXE),
     ffmpegPath: runtimeEnv.NOOBOT_FFMPEG_PATH || "",
     ffprobePath: runtimeEnv.NOOBOT_FFPROBE_PATH || "",
     libreOfficePath: runtimeEnv.LIBRE_OFFICE_EXE || "",
+    playwrightChromiumPath: runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH || "",
     pathPrefix: splitPathEnv(runtimeEnv.PATH || "").slice(0, 5).join(" | "),
   };
 }

@@ -66,32 +66,6 @@
           dependencies on Windows/macOS.</small
         >
       </el-form-item>
-      <div class="dependency-panel field-full">
-        <div class="dependency-title">
-          <label>Optional dependencies</label
-          ><el-tag size="small" type="primary" effect="plain">Auto skip installed</el-tag>
-        </div>
-        <el-checkbox-group
-          :model-value="selectedDependencies"
-          class="dependency-list"
-          @update:model-value="$emit('update:selectedDependencies', $event)"
-        >
-          <el-checkbox
-            v-for="item in dependencies"
-            :key="item.key"
-            class="dependency-card"
-            :value="item.key"
-            border
-          >
-            <strong>{{ item.name }}</strong>
-            <span>{{ item.description }}</span>
-          </el-checkbox>
-        </el-checkbox-group>
-        <small
-          >Checked dependencies are installed only when missing. Setup shows a clear error if
-          automatic installation is not available.</small
-        >
-      </div>
     </div>
     <el-alert
       v-if="error"
@@ -111,12 +85,10 @@
 const props = defineProps({
   form: { type: Object, required: true },
   modelOptions: { type: Array, default: () => [] },
-  dependencies: { type: Array, default: () => [] },
-  selectedDependencies: { type: Array, default: () => [] },
   error: { type: String, default: "" },
   saving: { type: Boolean, default: false },
 });
-const emit = defineEmits(["submit", "update:form", "update:selectedDependencies"]);
+const emit = defineEmits(["submit", "update:form"]);
 
 function formatModelLabel(item) {
   return [item?.key, item?.model, item?.description]

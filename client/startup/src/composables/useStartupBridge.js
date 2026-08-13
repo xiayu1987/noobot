@@ -36,10 +36,15 @@ export function useStartupBridge() {
   const skippingConfig = ref(false);
   const superAdminError = ref("");
   const configError = ref("");
+  const dependencyError = ref("");
+  const missingDependencies = ref([]);
+  const installingDependencies = ref(false);
+  const skippingDependencies = ref(false);
   const modelOptions = ref([]);
   const selectedDependencies = ref([]);
   const superAdminForm = reactive({ language: "zh-CN", model: "", userId: "", connectCode: "", dependencyProxyUrl: "" });
   const dependencies = [
+    { key: "playwright", name: "Playwright Chromium", description: "Browser automation for web navigation, screenshots and testing." },
     { key: "libreoffice", name: "LibreOffice", description: "Document conversion for Office files, spreadsheets and presentations." },
     { key: "ffmpeg", name: "FFmpeg", description: "Audio and video processing for media extraction and conversion." },
     { key: "nodejs", name: "Node.js", description: "JavaScript runtime required by local services and tooling." },
@@ -69,7 +74,9 @@ export function useStartupBridge() {
   }
 
   function hideForms() {
-    if (currentStep.value === "super-admin" || currentStep.value === "config") currentStep.value = "starting";
+    if (["super-admin", "config", "dependencies"].includes(currentStep.value)) {
+      currentStep.value = "starting";
+    }
   }
 
   function setStep(step) {
@@ -111,12 +118,22 @@ export function useStartupBridge() {
       message.value = status.message;
       appendLogLine(status.message);
     }
-    if (dependencyPhases.has(status.phase)) {
+    if (dependencyPhases.has(status.phase) && currentStep.value !== "dependencies") {
       superAdminCompleted.value = true;
       setStep("dependency");
     }
     if (status.phase === "super-admin-required") return renderSuperAdminForm(status.superAdmin);
     if (status.phase === "config-optional") return renderConfigForm(status.params);
+    if (status.phase === "dependency-optional") {
+      const descriptions = new Map(dependencies.map((item) => [item.key, item.description]));
+      missingDependencies.value = (Array.isArray(status.dependencies) ? status.dependencies : [])
+        .filter((item) => item?.available !== true)
+        .map((item) => ({ ...item, description: descriptions.get(item.key) || "Optional runtime dependency." }));
+      selectedDependencies.value = [];
+      dependencyError.value = "";
+      setStep("dependencies");
+      return;
+    }
     if (status.phase === "dependency-missing") {
       const text = status.message || "A selected dependency is missing and cannot be installed automatically.";
       const canRetry = status.retryable === true;
@@ -127,7 +144,7 @@ export function useStartupBridge() {
       message.value = text;
       appendLogLine(text);
       appendLogLine(manualHint);
-      setStep("dependency");
+      if (currentStep.value !== "dependencies") setStep("dependency");
       lastDependencyRetryable.value = canRetry;
       showRetry.value = canRetry;
       return;
@@ -150,10 +167,7 @@ export function useStartupBridge() {
     superAdminCompleted.value = true;
     setStep("dependency");
     try {
-      const depSet = new Set(selectedDependencies.value);
-      const dependenciesPayload = { libreoffice: depSet.has("libreoffice"), ffmpeg: depSet.has("ffmpeg"), nodejs: depSet.has("nodejs") };
-      if (Object.values(dependenciesPayload).some(Boolean)) message.value = "Saving setup and checking selected dependencies...";
-      const result = await desktop?.saveSuperAdmin({ language, model, userId, connectCode, dependencyProxyUrl, dependencies: dependenciesPayload });
+      const result = await desktop?.saveSuperAdmin({ language, model, userId, connectCode, dependencyProxyUrl });
       if (!result?.ok) {
         superAdminCompleted.value = false;
         currentStep.value = "super-admin";
@@ -212,6 +226,38 @@ export function useStartupBridge() {
     }
   }
 
+  async function installDependencies() {
+    const selected = new Set(selectedDependencies.value);
+    if (!selected.size) return;
+    installingDependencies.value = true;
+    dependencyError.value = "";
+    try {
+      await desktop?.installDependencies?.(
+        Object.fromEntries(missingDependencies.value.map((item) => [item.key, selected.has(item.key)])),
+      );
+      hideForms();
+      message.value = "Dependencies checked. Starting Noobot service...";
+    } catch (error) {
+      dependencyError.value = error?.message || String(error);
+    } finally {
+      installingDependencies.value = false;
+    }
+  }
+
+  async function skipDependencies() {
+    skippingDependencies.value = true;
+    dependencyError.value = "";
+    try {
+      await desktop?.skipDependencies?.();
+      hideForms();
+      message.value = "Optional dependencies skipped for this startup.";
+    } catch (error) {
+      dependencyError.value = error?.message || String(error);
+    } finally {
+      skippingDependencies.value = false;
+    }
+  }
+
   async function retryStartup() {
     showRetry.value = false;
     clearLog();
@@ -238,15 +284,21 @@ export function useStartupBridge() {
     skippingConfig,
     superAdminError,
     configError,
+    dependencyError,
     modelOptions,
     selectedDependencies,
     superAdminForm,
     dependencies,
+    missingDependencies,
+    installingDependencies,
+    skippingDependencies,
     updateSuperAdminForm,
     updateConfigValues,
     submitSuperAdmin,
     submitConfig,
     skipConfig,
+    installDependencies,
+    skipDependencies,
     retryStartup,
   };
 }

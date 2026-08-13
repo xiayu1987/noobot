@@ -9,7 +9,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
-import { resolveBrowserProxyFromEnv } from "../../src/tools/execution/native-script-runtime.js";
+import {
+  buildLibreOfficeUserInstallationUrl,
+  resolveBrowserProxyFromEnv,
+} from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 const IDENTITY = Object.freeze({
@@ -35,6 +38,14 @@ test("native browser proxy derives Playwright options without exposing its URL",
     },
   );
   assert.equal(resolveBrowserProxyFromEnv({}), undefined);
+});
+
+test("native LibreOffice profile uses an encoded file URL", () => {
+  const value = buildLibreOfficeUserInstallationUrl(
+    path.join(os.tmpdir(), "Noobot Native Profile #1"),
+  );
+  assert.equal(new URL(value).protocol, "file:");
+  assert.match(value, /Noobot%20Native%20Profile%20%231\/libreoffice-profile$/);
 });
 
 function createRuntime(basePath, patch = {}) {
@@ -264,7 +275,8 @@ test("execute_native_script fails when LibreOffice reports success without an ou
       {
         inputs: [{ source: "input.html" }],
         script_body: `
-await libreoffice.convert({ input: 0, outputDirectory: output.directory, outputFormat: "not_a_real_format" });
+const source = await files.input(0);
+await libreoffice.convert({ input: source, outputDirectory: output.directory, outputFormat: "not_a_real_format" });
 `,
       },
       { configurable: { transferIdentity: IDENTITY } },
@@ -325,6 +337,52 @@ log(converted.output, converted.outputBytes);
   assert.equal(persistedRequest.artifacts[0].name, "0.pdf");
   assert.ok(Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").length > 0);
   assert.match(result.stdout, /output:\/\/0\.pdf/);
+});
+
+test("execute_native_script converts a same-task output token with LibreOffice", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-output-"));
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `libreoffice-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const source = await output.file("source.html");
+await files.writeText(source, "<html><body><h1>Same task</h1></body></html>");
+const converted = await libreoffice.convert({
+  input: source,
+  outputDirectory: output.directory,
+  outputFormat: "pdf",
+});
+log(converted.output);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 2);
+  assert.deepEqual(
+    persistedRequest.artifacts.map((artifact) => artifact.name).sort(),
+    ["source.html", "source.pdf"],
+  );
+  assert.match(result.stdout, /output:\/\/source\.pdf/);
 });
 
 test("execute_native_script projects runtime roots but preserves caller path data", async () => {

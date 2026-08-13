@@ -9,6 +9,8 @@ import { desktopDependencyTimeouts } from "./specs.js";
 import { sleep } from "./process.js";
 
 export function createDependencyDetector({
+  app = null,
+  backendRoot = "",
   appendEarlyLog = () => {},
   writeDependencyLog = () => {},
   runProcess,
@@ -17,6 +19,17 @@ export function createDependencyDetector({
   getMacManagedCommandPath = () => "",
   prependManagedDependencyPath = () => {},
 } = {}) {
+  async function hasPlaywrightChromium() {
+    const script = "import('playwright').then(async ({chromium})=>{const fs=await import('node:fs');process.exit(fs.existsSync(chromium.executablePath())?0:1)}).catch(()=>process.exit(1))";
+    const env = { ELECTRON_RUN_AS_NODE: "1" };
+    const result = await runProcess(process.execPath, ["-e", script], {
+      cwd: backendRoot || undefined,
+      env,
+      timeoutMs: desktopDependencyTimeouts.commandProbeMs,
+    });
+    return result.ok;
+  }
+
   function getFileMode(filePath) {
     try {
       return fs.statSync(filePath).mode.toString(8);
@@ -96,6 +109,7 @@ export function createDependencyDetector({
   }
 
   async function isDependencyInstalled(spec) {
+    if (spec.managedInstaller === "playwright") return hasPlaywrightChromium();
     const specKeys = Object.keys(spec || {}).join(",");
     appendEarlyLog(`[dependency:installed:start] label=${spec?.label || ""}; platform=${process.platform}; managedCommand=${spec?.managedCommand || ""}; checkCommands=${(spec?.checkCommands || []).join(",")}; keys=${specKeys}`);
     writeDependencyLog("installed:start", {
@@ -218,6 +232,7 @@ export function createDependencyDetector({
     hasMacAppBundle,
     hasWindowsRegistryInstallPath,
     hasWindowsWingetPackage,
+    hasPlaywrightChromium,
     isDependencyInstalled,
     parseWindowsRegistryDefaultValue,
     waitForDependencyInstalled,

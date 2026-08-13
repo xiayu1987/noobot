@@ -12,12 +12,9 @@
           v-if="currentStep === 'super-admin'"
           :form="superAdminForm"
           :model-options="modelOptions"
-          :dependencies="dependencies"
-          :selected-dependencies="selectedDependencies"
           :error="superAdminError"
           :saving="savingSuperAdmin"
           @update:form="updateSuperAdminForm"
-          @update:selected-dependencies="selectedDependencies = $event"
           @submit="submitSuperAdmin"
         />
         <ConfigSetupForm
@@ -31,6 +28,17 @@
           @submit="submitConfig"
           @skip="skipConfig"
         />
+        <DependencySetupForm
+          v-if="currentStep === 'dependencies'"
+          :missing-dependencies="missingDependencies"
+          :selected-dependencies="selectedDependencies"
+          :error="dependencyError"
+          :installing="installingDependencies"
+          :skipping="skippingDependencies"
+          @update:selected-dependencies="selectedDependencies = $event"
+          @install="installDependencies"
+          @skip="skipDependencies"
+        />
         <StartupLogPanel :text="logText" />
         <RetryActions :show="showRetry" @retry="retryStartup" />
       </div>
@@ -42,6 +50,7 @@
 import StartupHero from "../components/StartupHero.vue";
 import SuperAdminSetupForm from "../components/SuperAdminSetupForm.vue";
 import ConfigSetupForm from "../components/ConfigSetupForm.vue";
+import DependencySetupForm from "../components/DependencySetupForm.vue";
 import StartupLogPanel from "../components/StartupLogPanel.vue";
 import RetryActions from "../components/RetryActions.vue";
 import { useStartupBridge } from "../composables/useStartupBridge.js";
@@ -58,15 +67,21 @@ const {
   skippingConfig,
   superAdminError,
   configError,
+  dependencyError,
   modelOptions,
   selectedDependencies,
   superAdminForm,
   dependencies,
+  missingDependencies,
+  installingDependencies,
+  skippingDependencies,
   updateSuperAdminForm,
   updateConfigValues,
   submitSuperAdmin,
   submitConfig,
   skipConfig,
+  installDependencies,
+  skipDependencies,
   retryStartup,
 } = useStartupBridge();
 </script>

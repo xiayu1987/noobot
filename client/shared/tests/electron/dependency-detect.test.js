@@ -62,6 +62,53 @@ test("darwin managed dependency probe uses managedVersionArgs", async () => {
   });
 });
 
+test("Playwright dependency detection delegates to the packaged Playwright version", async () => {
+  const calls = [];
+  const detector = createDependencyDetector({
+    app: { isPackaged: true },
+    backendRoot: "/application/backend",
+    runProcess: async (command, args, options) => {
+      calls.push({ command, args, options });
+      return { ok: true, code: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.equal(await detector.isDependencyInstalled({ managedInstaller: "playwright" }), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].command, process.execPath);
+  assert.deepEqual(calls[0].args.slice(0, 1), ["-e"]);
+  assert.equal(calls[0].options.cwd, "/application/backend");
+  assert.equal(calls[0].options.env.ELECTRON_RUN_AS_NODE, "1");
+});
+
+test("Playwright installer runs only when selected", async () => {
+  const runs = [];
+  const installer = createDependencyInstaller({
+    app: { isPackaged: true },
+    backendRoot: "/application/backend",
+    findAvailableCommand: async () => "",
+    isDependencyInstalled: async () => false,
+    waitForDependencyInstalled: async () => true,
+    runProcess: async (command, args, options) => {
+      runs.push({ command, args, options });
+      return { ok: true, code: 0, stdout: "", stderr: "" };
+    },
+  });
+
+  assert.deepEqual(await installer.ensureSelectedDependencies({}), []);
+  assert.equal(runs.length, 0);
+
+  const result = await installer.ensureSelectedDependencies({ playwright: true });
+  assert.equal(result[0].ok, true);
+  assert.equal(runs[0].command, process.execPath);
+  assert.deepEqual(runs[0].args, [
+    path.join("/application/backend", "node_modules", "playwright", "cli.js"),
+    "install",
+    "chromium",
+  ]);
+  assert.equal(runs[0].options.env.ELECTRON_RUN_AS_NODE, "1");
+});
+
 test("darwin dependency source summary is redacted for model context", async () => {
   await withPlatform("darwin", async () => {
     const summary = summarizeDependencySources({
@@ -112,8 +159,13 @@ test("win32 dependency source summary is platform neutral and redacted", async (
 
     const text = JSON.stringify(summary);
     assert.equal(summary.platform, "win32");
-    assert.equal(summary.dependencies.length, 3);
-    assert.deepEqual(summary.dependencies.map((item) => item.key), ["libreoffice", "ffmpeg", "nodejs"]);
+    assert.equal(summary.dependencies.length, 4);
+    assert.deepEqual(summary.dependencies.map((item) => item.key), [
+      "playwright",
+      "libreoffice",
+      "ffmpeg",
+      "nodejs",
+    ]);
     assert.equal(summary.dependencies.find((item) => item.key === "libreoffice")?.installMode, "managed");
     assert.equal(summary.dependencies.find((item) => item.key === "ffmpeg")?.sourceType, "self-hosted");
     assert.equal(summary.dependencies.find((item) => item.key === "nodejs")?.available, true);
@@ -511,4 +563,19 @@ test("win32 dependency runtime env uses semicolon PATH semantics with slash-norm
       "C:/Program Files/LibreOffice/program;C:\\Tools\\ffmpeg\\bin;C:\\Tools\\node\\bin;C:\\Windows\\System32",
     );
   });
+});
+
+test("dependency runtime env accepts an explicitly installed Playwright Chromium", () => {
+  const chromiumPath = "/opt/manual-playwright/chromium";
+  const runtimeEnv = buildDependencyRuntimeEnv({
+    backendRoot: "/missing/backend",
+    env: {
+      PATH: "/usr/bin",
+      NOOBOT_PLAYWRIGHT_CHROMIUM_PATH: chromiumPath,
+    },
+    platform: "linux",
+    exists: (filePath) => filePath === chromiumPath,
+  });
+
+  assert.equal(runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH, chromiumPath);
 });

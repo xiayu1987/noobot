@@ -74,7 +74,7 @@ test("save super admin refreshes desktop config before writing user template con
     model: "openai",
   });
 
-  assert.deepEqual(result, { ok: true, dependencies: [] });
+  assert.deepEqual(result, { ok: true });
   assert.equal(calls[0][0], "ensureDesktopGlobalConfig");
   assert.equal(calls[1][0], "setDesktopConfigState");
   assert.deepEqual(calls[2], [
@@ -87,4 +87,36 @@ test("save super admin refreshes desktop config before writing user template con
     },
   ]);
   assert.notEqual(calls[2][1].userConfigPath, staleState.templateConfigPath);
+});
+
+test("dependency setup can install selected dependencies or skip the current startup", async () => {
+  const ipcMain = createIpcMainMock();
+  const calls = [];
+  let pendingResolve = () => calls.push(["resolved"]);
+
+  registerStartupIpcHandlers({
+    app: { isPackaged: true, getPath: () => "/user-data" },
+    ipcMain,
+    ensureSelectedDependencies: async (dependencies) => {
+      calls.push(["install", dependencies]);
+      return [{ key: "playwright", ok: true }];
+    },
+    getPendingDependencyResolve: () => pendingResolve,
+    setPendingDependencyResolve: (resolve) => {
+      pendingResolve = resolve;
+    },
+  });
+
+  const installed = await ipcMain.handlers.get("noobot:install-dependencies")(null, {
+    playwright: true,
+  });
+  assert.deepEqual(installed, {
+    ok: true,
+    dependencies: [{ key: "playwright", ok: true }],
+  });
+  assert.deepEqual(calls, [["install", { playwright: true }], ["resolved"]]);
+
+  pendingResolve = () => calls.push(["skipped"]);
+  assert.deepEqual(await ipcMain.handlers.get("noobot:skip-dependencies")(), { ok: true });
+  assert.deepEqual(calls.at(-1), ["skipped"]);
 });

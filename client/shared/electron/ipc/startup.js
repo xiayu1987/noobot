@@ -12,7 +12,7 @@ function getDefaultIpcMain() {
   return require("electron").ipcMain;
 }
 
-export function createStartupConfigRequesters({ sendStatus = () => {}, setPendingConfigResolve = () => {}, setPendingSuperAdminResolve = () => {} } = {}) {
+export function createStartupConfigRequesters({ sendStatus = () => {}, setPendingConfigResolve = () => {}, setPendingSuperAdminResolve = () => {}, setPendingDependencyResolve = () => {} } = {}) {
   function requestSuperAdminConfig(superAdmin) {
     sendStatus({
       phase: "super-admin-required",
@@ -31,7 +31,16 @@ export function createStartupConfigRequesters({ sendStatus = () => {}, setPendin
     });
   }
 
-  return { requestSuperAdminConfig, requestMissingConfigParams };
+  function requestDependencySetup(dependencies) {
+    sendStatus({
+      phase: "dependency-optional",
+      message: "Optional dependencies are missing. Install them now or skip for this startup.",
+      dependencies,
+    });
+    return new Promise((resolve) => setPendingDependencyResolve(resolve));
+  }
+
+  return { requestSuperAdminConfig, requestMissingConfigParams, requestDependencySetup };
 }
 
 export function registerStartupIpcHandlers({
@@ -44,6 +53,8 @@ export function registerStartupIpcHandlers({
   setPendingConfigResolve = () => {},
   getPendingSuperAdminResolve = () => null,
   setPendingSuperAdminResolve = () => {},
+  getPendingDependencyResolve = () => null,
+  setPendingDependencyResolve = () => {},
   ensureDesktopGlobalConfig,
   saveConfigParamValues,
   saveSuperAdminConfig,
@@ -92,6 +103,25 @@ export function registerStartupIpcHandlers({
     return { ok: true };
   });
 
+  ipcMain.handle("noobot:install-dependencies", async (_event, dependencies = {}) => {
+    const results = await ensureSelectedDependencies(dependencies);
+    const pendingDependencyResolve = getPendingDependencyResolve();
+    if (pendingDependencyResolve) {
+      setPendingDependencyResolve(null);
+      pendingDependencyResolve();
+    }
+    return { ok: true, dependencies: results };
+  });
+
+  ipcMain.handle("noobot:skip-dependencies", () => {
+    const pendingDependencyResolve = getPendingDependencyResolve();
+    if (pendingDependencyResolve) {
+      setPendingDependencyResolve(null);
+      pendingDependencyResolve();
+    }
+    return { ok: true };
+  });
+
   ipcMain.handle("noobot:save-super-admin", async (_event, values = {}) => {
     const state = refreshDesktopConfigState();
     const proxyUrl = String(values.dependencyProxyUrl || "").trim();
@@ -108,7 +138,6 @@ export function registerStartupIpcHandlers({
     saveSuperAdminConfig({ globalConfigPath: state.globalConfigPath, userConfigPath: state.templateConfigPath, userId: values.userId, connectCode: values.connectCode, language: values.language, model: values.model, dependencyProxyUrl: proxyUrl });
     refreshDesktopConfigState();
     sendStatus({ phase: "dependency", message: proxyUrl ? `Dependency downloads will use proxy ${maskDependencyProxyUrl(proxyUrl)}.` : "Dependency downloads will not use a proxy." });
-    const dependencyResults = await ensureSelectedDependencies(values.dependencies || {});
     const nextState = refreshDesktopConfigState();
     if (nextState.superAdmin?.missing) {
       sendStatus({ phase: "super-admin-required", message: "Please complete super admin setup.", superAdmin: nextState.superAdmin });
@@ -119,6 +148,6 @@ export function registerStartupIpcHandlers({
       setPendingSuperAdminResolve(null);
       pendingSuperAdminResolve();
     }
-    return { ok: true, dependencies: dependencyResults };
+    return { ok: true };
   });
 }
