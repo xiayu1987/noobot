@@ -15,6 +15,16 @@ const WINDOWS_PROCESS_ENV_KEYS = Object.freeze([
   "PATHEXT",
   "SystemDrive",
 ]);
+const NETWORK_PROXY_ENV_KEYS = Object.freeze([
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "ALL_PROXY",
+  "NO_PROXY",
+  "http_proxy",
+  "https_proxy",
+  "all_proxy",
+  "no_proxy",
+]);
 
 export function buildNativeProcessEnv({
   home = "",
@@ -29,6 +39,9 @@ export function buildNativeProcessEnv({
     LANG: "C.UTF-8",
     ELECTRON_RUN_AS_NODE: "1",
   };
+  for (const key of NETWORK_PROXY_ENV_KEYS) {
+    if (String(sourceEnv[key] || "").trim()) environment[key] = sourceEnv[key];
+  }
   if (platform === "win32") {
     for (const key of WINDOWS_PROCESS_ENV_KEYS) {
       if (String(sourceEnv[key] || "").trim()) environment[key] = sourceEnv[key];

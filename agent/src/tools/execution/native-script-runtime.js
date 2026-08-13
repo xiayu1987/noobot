@@ -142,6 +142,33 @@ function isAllowedBrowserResource(value) {
   }
 }
 
+export function resolveBrowserProxyFromEnv(env = process.env) {
+  const value = String(
+    env.HTTPS_PROXY ||
+      env.https_proxy ||
+      env.HTTP_PROXY ||
+      env.http_proxy ||
+      env.ALL_PROXY ||
+      env.all_proxy ||
+      "",
+  ).trim();
+  if (!value) return undefined;
+  try {
+    const proxy = new URL(value);
+    if (!proxy.hostname || !proxy.port) return undefined;
+    const options = {
+      server: `${proxy.protocol}//${proxy.hostname}:${proxy.port}`,
+    };
+    if (proxy.username) options.username = decodeURIComponent(proxy.username);
+    if (proxy.password) options.password = decodeURIComponent(proxy.password);
+    const bypass = String(env.NO_PROXY || env.no_proxy || "").trim();
+    if (bypass) options.bypass = bypass;
+    return options;
+  } catch {
+    return undefined;
+  }
+}
+
 function createLocatorFacade(locator, { resolveInput, resolveOutput }) {
   return opaqueFacade({
     click: (options) => locator.click(options),
@@ -191,6 +218,7 @@ function createPageFacade(page, paths) {
     title: () => page.title(),
     url: () => page.url(),
     content: () => page.content(),
+    setContent: (html, options) => page.setContent(String(html || ""), options),
     textContent: (selector, options) => page.textContent(String(selector || ""), options),
     click: (selector, options) => page.click(String(selector || ""), options),
     fill: (selector, value, options) =>
@@ -208,7 +236,15 @@ function createPageFacade(page, paths) {
         ...options,
         path: await paths.resolveOutput(options.path),
       }),
+    close: (options) => page.close(options),
   });
+}
+
+function requireOptionsObject(value, signature) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${signature} requires one options object`);
+  }
+  return value;
 }
 
 function assertFixedArgs(args, label) {
@@ -343,7 +379,20 @@ export async function createNativeScriptRuntime({
   const writeJson = (reference, value) =>
     writeText(reference, `${JSON.stringify(redactCapabilityValue(value, pathRoots), null, 2)}\n`);
   const libreoffice = opaqueFacade({
-    convert: async ({ input: inputPath, outputDirectory = ".", outputFormat = "pdf" } = {}) => {
+    convert: async (options) => {
+      const {
+        input: inputPath,
+        outputDirectory = ".",
+        outputFormat = "pdf",
+      } = requireOptionsObject(
+        options,
+        "libreoffice.convert({ input, outputDirectory, outputFormat })",
+      );
+      if (inputPath === undefined || inputPath === null || String(inputPath).trim() === "") {
+        throw new TypeError(
+          "libreoffice.convert({ input, outputDirectory, outputFormat }) requires input",
+        );
+      }
       const source = await resolveInput(inputPath);
       const targetDir = await resolveOutput(outputDirectory);
       await mkdir(targetDir, { recursive: true });
@@ -389,7 +438,11 @@ export async function createNativeScriptRuntime({
     },
   });
   const ffmpeg = opaqueFacade({
-    run: async ({ args: commandArgs = [] } = {}) => {
+    run: async (options) => {
+      const { args: commandArgs } = requireOptionsObject(options, "ffmpeg.run({ args })");
+      if (!Array.isArray(commandArgs) || commandArgs.length === 0) {
+        throw new TypeError("ffmpeg.run({ args }) requires a non-empty args array");
+      }
       assertFixedArgs(commandArgs, "ffmpeg");
       const resolvedArgs = await Promise.all(
         commandArgs.map(async (value) => {
@@ -413,7 +466,11 @@ export async function createNativeScriptRuntime({
     },
   });
   const ffprobe = opaqueFacade({
-    run: async ({ args: commandArgs = [] } = {}) => {
+    run: async (options) => {
+      const { args: commandArgs } = requireOptionsObject(options, "ffprobe.run({ args })");
+      if (!Array.isArray(commandArgs) || commandArgs.length === 0) {
+        throw new TypeError("ffprobe.run({ args }) requires a non-empty args array");
+      }
       assertFixedArgs(commandArgs, "ffprobe");
       const resolvedArgs = await Promise.all(
         commandArgs.map(async (value) => {
@@ -437,6 +494,7 @@ export async function createNativeScriptRuntime({
     const instance = await playwright.chromium.launch({
       headless: true,
       executablePath: String(browserExecutablePath || "").trim(),
+      proxy: resolveBrowserProxyFromEnv(),
     });
     browser = instance;
     return instance;

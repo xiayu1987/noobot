@@ -183,7 +183,7 @@ export const INVOCATION_TOOL_SCHEMA = {
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args，以及可直接调用的日志函数 log(message)（不是 log.info）。必须使用 await files.input(index) 获取输入令牌，使用 await output.file(...) 或 await output.tempFile(...) 创建输出或临时令牌；files.readText/readJson 可读取三类令牌，files.writeText/writeJson 只写 output://。脚本 return 值不作为文件输出，正式产物必须写入 output://。",
+        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })。先用 await files.input(index) 获取 input:// 令牌，用 await output.file(...) 或 await output.tempFile(...) 创建输出或临时令牌。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 只写 output://。脚本 return 值不作为文件输出，正式产物必须写入 output://。",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
