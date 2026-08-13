@@ -181,13 +181,14 @@ desktop client's `dist/` directory.
 Environment variables for `start.sh`:
 
 - `CADDY_ADDR` (default `:10060`)
-- `API_UPSTREAM` (default `127.0.0.1:10061`)
 - `AGENT_PROXY_UPSTREAM` (default `127.0.0.1:10062`)
+- `PORT` (service port, default `10061`)
 
 Example:
 
 ```bash
-CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 ./start.sh
+CADDY_ADDR=:8080 PORT=3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 \
+AGENT_PROXY_PORT=3002 ./start.sh
 ```
 
 ## PM2 (local)

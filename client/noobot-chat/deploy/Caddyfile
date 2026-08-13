@@ -1,37 +1,37 @@
-http://:10060 {
-  root * ./dist
-  encode gzip zstd
+http://{$CADDY_ADDR} {
+	root * ./dist
+	encode gzip zstd
 
-  route {
-    @connect_api path /api/internal/connect
-    handle @connect_api {
-      uri strip_prefix /api
-      reverse_proxy 127.0.0.1:10062 {
-        header_up -x-proxy-token
-        header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
-      }
-    }
+	route {
+		@connect_api path /api/internal/connect
+		handle @connect_api {
+			uri strip_prefix /api
+			reverse_proxy {$AGENT_PROXY_UPSTREAM} {
+				header_up -x-proxy-token
+				header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
+			}
+		}
 
-    @ide path /ide /ide/*
-    handle @ide {
-      reverse_proxy 127.0.0.1:10062
-    }
+		@ide path /ide /ide/*
+		handle @ide {
+			reverse_proxy {$AGENT_PROXY_UPSTREAM}
+		}
 
-    @connect_direct path /internal/connect
-    handle @connect_direct {
-      reverse_proxy 127.0.0.1:10062 {
-        header_up -x-proxy-token
-        header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
-      }
-    }
+		@connect_direct path /internal/connect
+		handle @connect_direct {
+			reverse_proxy {$AGENT_PROXY_UPSTREAM} {
+				header_up -x-proxy-token
+				header_up x-proxy-token 5fd50423-d915-49d7-8e9a-62d93f33777b
+			}
+		}
 
-    @api path_regexp api ^/api(/.*)?$
-    handle @api {
-      uri strip_prefix /api
-      reverse_proxy 127.0.0.1:10062
-    }
+		@api path_regexp api ^/api(/.*)?$
+		handle @api {
+			uri strip_prefix /api
+			reverse_proxy {$AGENT_PROXY_UPSTREAM}
+		}
 
-    try_files {path} /index.html
-    file_server
-  }
+		try_files {path} /index.html
+		file_server
+	}
 }

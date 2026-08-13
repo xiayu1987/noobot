@@ -178,13 +178,14 @@ npm run build:mac
 `start.sh` 可用环境变量：
 
 - `CADDY_ADDR`（默认 `:10060`）
-- `API_UPSTREAM`（默认 `127.0.0.1:10061`）
 - `AGENT_PROXY_UPSTREAM`（默认 `127.0.0.1:10062`）
+- `PORT`（service 端口，默认 `10061`）
 
 示例：
 
 ```bash
-CADDY_ADDR=:8080 API_UPSTREAM=127.0.0.1:3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 ./start.sh
+CADDY_ADDR=:8080 PORT=3001 AGENT_PROXY_UPSTREAM=127.0.0.1:3002 \
+AGENT_PROXY_PORT=3002 ./start.sh
 ```
 
 ## PM2（项目内）
