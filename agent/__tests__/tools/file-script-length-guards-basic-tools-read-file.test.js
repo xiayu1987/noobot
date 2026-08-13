@@ -39,7 +39,12 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const regularReadTool = regularTools.find((item) => item?.name === "read_file");
   assert.ok(regularReadTool);
   await assert.rejects(
-    () => regularReadTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
+    () =>
+      regularReadTool.invoke({
+        riskLevel: "low",
+        filePath: outsidePath,
+        includeLineNumbers: false,
+      }),
     /路径超出允许范围|path out of scope/,
   );
 
@@ -54,7 +59,11 @@ test("read_file: 超级管理员可以读取工作区外文件", async () => {
   const superReadTool = superTools.find((item) => item?.name === "read_file");
   assert.ok(superReadTool);
   const result = parseToolResult(
-    await superReadTool.invoke({ riskLevel: "low", filePath: outsidePath, includeLineNumbers: false }),
+    await superReadTool.invoke({
+      riskLevel: "low",
+      filePath: outsidePath,
+      includeLineNumbers: false,
+    }),
   );
   assert.equal(result.ok, true);
   assert.equal(result.content, "outside\ncontent");
@@ -87,11 +96,15 @@ test("read_file: 越界错误不暴露宿主 allowedRoots", async () => {
   );
 });
 
-test("read_file: 相对路径优先基于 directories.rootDirectory", async () => {
+test("read_file: 相对路径固定基于用户 workspace", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-root-directory-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
-  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"), "navigator\n", "utf8");
+  await fs.writeFile(
+    path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"),
+    "navigator\n",
+    "utf8",
+  );
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
@@ -112,19 +125,26 @@ test("read_file: 相对路径优先基于 directories.rootDirectory", async () =
   const readTool = tools.find((item) => item?.name === "read_file");
   assert.ok(readTool);
 
-  const result = parseToolResult(await readTool.invoke({ riskLevel: "low",
-    filePath: "client/noobot-chat/src/app/ChatMessageNavigator.vue",
-    includeLineNumbers: false,
-  }));
+  const result = parseToolResult(
+    await readTool.invoke({
+      riskLevel: "low",
+      filePath: "noobot/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+      includeLineNumbers: false,
+    }),
+  );
   assert.equal(result.ok, true);
   assert.equal(result.content, "navigator");
 });
 
-test("read_file: 非沙箱兼容 /project 前缀到 directories.rootDirectory", async () => {
+test("read_file: 不接受 execute_script 的 /project 执行路径", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-project-alias-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, "client/noobot-chat/src/app"), { recursive: true });
-  await fs.writeFile(path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"), "navigator\n", "utf8");
+  await fs.writeFile(
+    path.join(repoPath, "client/noobot-chat/src/app/ChatMessageNavigator.vue"),
+    "navigator\n",
+    "utf8",
+  );
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
@@ -150,10 +170,13 @@ test("read_file: 非沙箱兼容 /project 前缀到 directories.rootDirectory", 
   const readTool = tools.find((item) => item?.name === "read_file");
   assert.ok(readTool);
 
-  const result = parseToolResult(await readTool.invoke({ riskLevel: "low",
-    filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
-    includeLineNumbers: false,
-  }));
-  assert.equal(result.ok, true);
-  assert.equal(result.content, "navigator");
+  await assert.rejects(
+    () =>
+      readTool.invoke({
+        riskLevel: "low",
+        filePath: "/project/client/noobot-chat/src/app/ChatMessageNavigator.vue",
+        includeLineNumbers: false,
+      }),
+    /sandbox|沙箱/i,
+  );
 });

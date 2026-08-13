@@ -4,7 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
-import { deepClone, fileExists, hasOwnProperty, isPlainObject, readJsonStrict, writeJson } from "./utils.js";
+import {
+  deepClone,
+  fileExists,
+  hasOwnProperty,
+  isPlainObject,
+  readJsonStrict,
+  writeJson,
+} from "./utils.js";
 
 export function normalizeProviderAlias(modelName = "") {
   const normalized = String(modelName || "")
@@ -113,7 +120,10 @@ export function resolveTemplateProvider(providers = {}, format = "") {
   return isPlainObject(firstProvider) ? firstProvider : null;
 }
 
-export function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programmingModel = "" } = {}) {
+export function normalizeBuiltinScenarioConfigForLauncher(
+  scenarios = {},
+  { programmingModel = "" } = {},
+) {
   const source = isPlainObject(scenarios) ? scenarios : {};
   const defaultScenario = String(source.default || "full").trim();
   const definitions = isPlainObject(source.definitions) ? source.definitions : {};
@@ -130,10 +140,7 @@ export function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { prog
   };
 }
 
-export function alignInitialModelReferences({
-  globalConfig = {},
-  providerAlias = "",
-} = {}) {
+export function alignInitialModelReferences({ globalConfig = {}, providerAlias = "" } = {}) {
   const alias = String(providerAlias || "").trim();
   if (!isPlainObject(globalConfig) || !alias) return globalConfig;
 

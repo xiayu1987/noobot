@@ -5,9 +5,7 @@
  */
 import { emitEvent } from "../events/index.js";
 import { tEngine } from "./i18n-adapter.js";
-import {
-  PHASE_SUMMARY_OVERFLOW_POLICY,
-} from "./constants/index.js";
+import { PHASE_SUMMARY_OVERFLOW_POLICY } from "./constants/index.js";
 import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
@@ -19,11 +17,7 @@ import {
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
 import { extractMessageTextContent } from "../context/session/message-content-utils.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
-import {
-  MAIN_FLOW_CONTROL_REASON,
-  requestMainFlowFinalNoToolsTurn,
-} from "./main-flow-control.js";
-
+import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
 
 function getSystemRuntime(runtime = {}) {
   return runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
@@ -36,7 +30,6 @@ function hasTool(tools = [], toolName) {
     (def) => String(def?.name || "").trim() === toolName,
   );
 }
-
 
 function hasTaskSummaryTool(tools = []) {
   return hasTool(tools, TASK_SUMMARY_TOOL_NAME);
@@ -96,9 +89,9 @@ function handlePostSummaryCharsOverflow({
     });
   }
   emitEvent(modelState?.eventListener || null, "phase_summary_hard_overflow", {
-      loopCount,
-      charsThreshold,
-      unsummarizedChars,
+    loopCount,
+    charsThreshold,
+    unsummarizedChars,
   });
   return PHASE_SUMMARY_OVERFLOW_POLICY.ENFORCE_NO_TOOLS_WHEN_STILL_OVERFLOW === true;
 }
@@ -120,28 +113,27 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
 
-  const hasTaskSummaryCall = (Array.isArray(toolCallResults) ? toolCallResults : [])
-    .some((r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME);
+  const hasTaskSummaryCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
+    (r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+  );
   if (hasTaskSummaryCall) return false;
 
   const currentCount = Number(systemRuntime.phaseSummaryLoopCount || 0);
-  const nextCount = Number.isFinite(currentCount) && currentCount >= 0
-    ? currentCount + 1
-    : 1;
+  const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
   systemRuntime.phaseSummaryLoopCount = nextCount;
 
   if (!hasTaskSummaryTool(loopState?.tools || [])) return false;
   if (systemRuntime.needsPhaseSummary === true) return false;
 
   const loopThreshold = Number(loopState?.phaseSummaryLoopTurns || 0);
-  const reachedLoopThreshold = Number.isFinite(loopThreshold) &&
-    loopThreshold > 0 &&
-    nextCount >= loopThreshold;
+  const reachedLoopThreshold =
+    Number.isFinite(loopThreshold) && loopThreshold > 0 && nextCount >= loopThreshold;
   const charsThreshold = Number(loopState?.phaseSummaryMessageCharsThreshold || 0);
-  const unsummarizedChars = resolveUnsummarizedMessageChars(loopState?.modelContext?.messages || []);
-  const reachedCharsThreshold = Number.isFinite(charsThreshold) &&
-    charsThreshold > 0 &&
-    unsummarizedChars > charsThreshold;
+  const unsummarizedChars = resolveUnsummarizedMessageChars(
+    loopState?.modelContext?.messages || [],
+  );
+  const reachedCharsThreshold =
+    Number.isFinite(charsThreshold) && charsThreshold > 0 && unsummarizedChars > charsThreshold;
   if (!reachedLoopThreshold && !reachedCharsThreshold) {
     systemRuntime.phaseSummaryByCharsPrompted = false;
     return false;
@@ -188,17 +180,16 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   if (!systemRuntime) return false;
   if (!hasTool(loopState?.tools || [], TASK_CHECK_TOOL_NAME)) return false;
 
-  const hasTaskCheckCall = (Array.isArray(toolCallResults) ? toolCallResults : [])
-    .some((result) => String(result?.call?.name || "").trim() === TASK_CHECK_TOOL_NAME);
+  const hasTaskCheckCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
+    (result) => String(result?.call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
+  );
   if (hasTaskCheckCall) {
     systemRuntime.taskCheckLoopCount = 0;
     return false;
   }
 
   const currentCount = Number(systemRuntime.taskCheckLoopCount || 0);
-  const nextCount = Number.isFinite(currentCount) && currentCount >= 0
-    ? currentCount + 1
-    : 1;
+  const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
   systemRuntime.taskCheckLoopCount = nextCount;
   const threshold = Number(loopState?.taskCheckLoopTurns || 0);
   if (!Number.isFinite(threshold) || threshold <= 0 || nextCount < threshold) return false;
@@ -213,10 +204,10 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   emitEvent(modelState?.eventListener || null, "task_check_required", {
     loopCount: nextCount,
     threshold,
+    modelLoopRound: Number(systemRuntime.modelLoopRound || 0),
   });
   return true;
 }
-
 
 export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   const runtime = modelState?.runtime || {};
@@ -226,8 +217,7 @@ export function maybePromptHelpToolByLoop({ modelState, loopState }) {
   if (!Number.isFinite(threshold) || threshold <= 0) return false;
   if (!hasTool(loopState?.tools || [], REQUEST_HELP_TOOL_NAME)) return false;
   const currentCount = Number(systemRuntime.helpPromptLoopCount || 0);
-  const nextCount =
-    Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
+  const nextCount = Number.isFinite(currentCount) && currentCount >= 0 ? currentCount + 1 : 1;
   systemRuntime.helpPromptLoopCount = nextCount;
   if (nextCount < threshold) return false;
   systemRuntime.helpPromptLoopCount = 0;

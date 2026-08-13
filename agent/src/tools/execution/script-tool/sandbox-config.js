@@ -14,9 +14,7 @@ export function resolveSandboxProviderConfig(scriptConfig = {}) {
   const providerConfig =
     scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
       ? scriptConfig.sandboxProvider
-      : scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : null;
+      : null;
   if (!providerConfig || typeof providerConfig !== "object" || Array.isArray(providerConfig)) {
     return { provider: SANDBOX_PROVIDER_NAME.DOCKER, providerDetail: {} };
   }
@@ -36,18 +34,12 @@ export function resolveDockerScriptConfig(scriptConfig = {}, providerDetail = {}
   void scriptConfig;
   return {
     dockerContainerScope:
-      providerDetail?.dockerContainerScope ||
-      DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_SCOPE,
+      providerDetail?.dockerContainerScope || DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_SCOPE,
     dockerContainerName:
-      providerDetail?.dockerContainerName ||
-      DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_NAME,
+      providerDetail?.dockerContainerName || DOCKER_SANDBOX_DEFAULT.DEFAULT_CONTAINER_NAME,
     dockerImage: providerDetail?.dockerImage || DOCKER_SANDBOX_DEFAULT.DEFAULT_IMAGE,
-    dockerMounts: Array.isArray(providerDetail?.dockerMounts)
-      ? providerDetail.dockerMounts
-      : [],
-    dockerProjectMountSource: String(
-      providerDetail?.dockerProjectMountSource || "",
-    ).trim(),
+    dockerMounts: Array.isArray(providerDetail?.dockerMounts) ? providerDetail.dockerMounts : [],
+    dockerProjectMountSource: String(providerDetail?.dockerProjectMountSource || "").trim(),
     dockerProjectMountTarget:
       String(providerDetail?.dockerProjectMountTarget || "").trim() || "/project",
     dockerLockWaitTimeoutMs: resolveTimeMs(providerDetail, {

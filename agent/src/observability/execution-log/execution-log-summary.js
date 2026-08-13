@@ -43,7 +43,6 @@ const TOOL_LABELS = {
   patch_file: "修改文件",
   search: "搜索代码/文件",
   execute_script: "执行命令",
-  process_content_task: "处理附件/内容",
   call_service: "调用外部服务",
   request_help: "请求帮助",
   task_summary: "提交阶段小结",
@@ -69,7 +68,8 @@ function isNoisySystemLog(log = {}) {
   const category = String(log?.category || data.category || "").toLowerCase();
   const type = String(log?.type || data.type || "").toLowerCase();
   if (HIDDEN_SYSTEM_EVENTS.has(event)) return true;
-  if (category === "system" && type === "system" && !VISIBLE_NON_TOOL_EVENTS.has(event)) return true;
+  if (category === "system" && type === "system" && !VISIBLE_NON_TOOL_EVENTS.has(event))
+    return true;
   return false;
 }
 
@@ -158,7 +158,11 @@ export function summarizeExecutionLogs(logs = [], { maxSteps = 80, dialogProcess
   const sourceLogs = Array.isArray(logs) ? logs : [];
   const wantedDialogProcessId = String(dialogProcessId || "").trim();
   const scopedLogs = wantedDialogProcessId
-    ? sourceLogs.filter((log) => String(log?.dialogProcessId || log?.data?.dialogProcessId || "") === wantedDialogProcessId)
+    ? sourceLogs.filter(
+        (log) =>
+          String(log?.dialogProcessId || log?.data?.dialogProcessId || "") ===
+          wantedDialogProcessId,
+      )
     : sourceLogs;
   const visibleLogs = scopedLogs.filter(isVisibleExecutionLog);
   const steps = visibleLogs.slice(-maxSteps).map((log, index) => ({

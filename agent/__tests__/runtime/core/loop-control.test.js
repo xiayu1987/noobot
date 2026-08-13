@@ -32,7 +32,9 @@ test("task check prompt is periodic and independent from phase summary state", (
   });
   const modelState = {
     eventListener: { onEvent: (event) => events.push(event) },
-    runtime: { systemRuntime: { taskCheckLoopCount: 0, needsPhaseSummary: true } },
+    runtime: {
+      systemRuntime: { taskCheckLoopCount: 0, modelLoopRound: 10, needsPhaseSummary: true },
+    },
   };
   const loopState = {
     tools: [{ name: "task_check" }],
@@ -65,6 +67,10 @@ test("task check prompt is periodic and independent from phase summary state", (
   assert.equal(maybeRequestTaskCheck({ modelState, loopState }), false);
   assert.equal(modelState.runtime.systemRuntime.taskCheckLoopCount, 1);
   assert.equal(events.filter((event) => event?.event === "task_check_required").length, 1);
+  assert.equal(
+    events.find((event) => event?.event === "task_check_required")?.data?.modelLoopRound,
+    10,
+  );
 });
 
 test("a task_check call starts the next periodic slice without adding a prompt", () => {

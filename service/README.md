@@ -12,6 +12,7 @@
   - `libreoffice` (Office document conversion)
   - `ffmpeg` (audio/video processing)
   - `docker` / `bubblewrap (bwrap)` / `firejail` (used only when `tools.execute_script.sandbox_mode=true`)
+  - Sandbox paths belong only to `execute_script` execution and cannot be passed to general file tools.
 
 ## 2) Run
 

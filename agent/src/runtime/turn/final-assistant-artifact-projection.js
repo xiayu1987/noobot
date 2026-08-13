@@ -11,11 +11,7 @@ import {
   dedupeSessionAttachmentRefs,
 } from "../../session/transfer-attachment-refs.js";
 
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
-  "doc_to_data_tool",
-  "media_to_data_tool",
-  "tool_result_overflow",
-]);
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -68,9 +64,7 @@ function shouldPromoteTransferEnvelope(envelope = {}) {
   const attachments = getTransferAttachments(envelope);
   if (!attachments.length) return true;
   return attachments.some((item = {}) => {
-    const attributes = isPlainObject(envelope?.meta?.attributes)
-      ? envelope.meta.attributes
-      : {};
+    const attributes = isPlainObject(envelope?.meta?.attributes) ? envelope.meta.attributes : {};
     return shouldPromoteAttachmentToAssistant({
       ...attributes,
       ...item,

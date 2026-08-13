@@ -20,12 +20,21 @@ function resolveRepoRoot() {
   const cwd = process.cwd();
   if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts"))) return parent;
+  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts")))
+    return parent;
   return cwd;
 }
 
 const ROOT = resolveRepoRoot();
-const TARGET_DIRS = ["agent", "service", "agent-proxy", "model-proxy", "client", "plugin", "workflow"];
+const TARGET_DIRS = [
+  "agent",
+  "service",
+  "agent-proxy",
+  "model-proxy",
+  "client",
+  "plugin",
+  "workflow",
+];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
 const IGNORE_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,
@@ -39,25 +48,25 @@ const IGNORE_PATH_PARTS = [
   `${path.sep}__tests__${path.sep}`,
   `${path.sep}tests${path.sep}`,
 ];
-const IGNORE_BASENAMES = new Set([
-  "package.json",
-  "package-lock.json",
-]);
+const IGNORE_BASENAMES = new Set(["package.json", "package-lock.json"]);
 
 const RULES = [
   {
     id: "unix-temp-path",
-    message: "Avoid hardcoded Unix temp paths in production code; use os.tmpdir() or an explicit platform-gated allow.",
+    message:
+      "Avoid hardcoded Unix temp paths in production code; use os.tmpdir() or an explicit platform-gated allow.",
     pattern: /(["'`])\/(?:tmp|var\/tmp)(?:\/)?\1/,
   },
   {
     id: "posix-command-v",
-    message: "Avoid POSIX-only `command -v`; use a cross-platform command lookup or an explicit platform-gated allow.",
+    message:
+      "Avoid POSIX-only `command -v`; use a cross-platform command lookup or an explicit platform-gated allow.",
     pattern: /command\s+-v/,
   },
   {
     id: "bash-shell",
-    message: "Avoid assuming bash exists on all platforms; gate Linux/container sandboxes or add an explicit allow.",
+    message:
+      "Avoid assuming bash exists on all platforms; gate Linux/container sandboxes or add an explicit allow.",
     pattern: /(["'`])bash\1|(["'`])-lc\2/,
   },
   {
@@ -74,37 +83,36 @@ const RULES = [
 const PACKAGE_SCRIPT_RULES = [
   {
     id: "posix-parameter-expansion",
-    message: "Avoid POSIX shell parameter expansion in npm scripts; use a Node launcher or cross-env style wrapper.",
+    message:
+      "Avoid POSIX shell parameter expansion in npm scripts; use a Node launcher or cross-env style wrapper.",
     pattern: /\$\{[A-Za-z_][A-Za-z0-9_]*:-[^}]+}/,
   },
 ];
 const SOURCE_ALLOWLIST = new Map([
-  ["agent/src/sandbox/bubblewrap-sandbox.js", new Map([
-    ["unix-temp-path", [/^"\/(?:var\/)?tmp",$/]],
-    ["bash-shell", [/^"(?:bash|-lc)",$/]],
-  ])],
-  ["agent/src/sandbox/firejail-sandbox.js", new Map([
-    ["bash-shell", [/^"(?:bash|-lc)",$/]],
-  ])],
-  ["agent/src/tools/data-processing/doc2data/libreoffice.js", new Map([
-    ["unix-temp-path", [/^"\/tmp",$/]],
-    ["signal-kill", [/^process\.kill\(processId, "SIG(?:TERM|KILL)"\);$/]],
-  ])],
-  ["agent/src/tools/data-processing/media2data-tool.js", new Map([
-    ["signal-kill", [/^childProcess\.kill\("SIG(?:TERM|KILL)"\);$/]],
-  ])],
-  ["agent/src/tools/execution/script-tool/process-exec.js", new Map([
-    ["shell-spawn", [/^shell: true,$/]],
-  ])],
-  ["service/services/openvscode/process.js", new Map([
-    ["signal-kill", [/process\.kill\(pid, "SIG(?:TERM|KILL)"\)/]],
-  ])],
-  ["client/noobot-chat/src/modules/chat/composables/message/useMessagePreview/constants.js", new Map([
-    ["bash-shell", [/^"bash",$/]],
-  ])],
-  ["client/shared/electron/runtime/services.js", new Map([
-    ["signal-kill", [/^child\.kill\("SIGTERM"\);$/]],
-  ])],
+  [
+    "agent/src/sandbox/bubblewrap-sandbox.js",
+    new Map([
+      ["unix-temp-path", [/^"\/(?:var\/)?tmp",$/]],
+      ["bash-shell", [/^"(?:bash|-lc)",$/]],
+    ]),
+  ],
+  ["agent/src/sandbox/firejail-sandbox.js", new Map([["bash-shell", [/^"(?:bash|-lc)",$/]]])],
+  [
+    "agent/src/tools/execution/script-tool/process-exec.js",
+    new Map([["shell-spawn", [/^shell: true,$/]]]),
+  ],
+  [
+    "service/services/openvscode/process.js",
+    new Map([["signal-kill", [/process\.kill\(pid, "SIG(?:TERM|KILL)"\)/]]]),
+  ],
+  [
+    "client/noobot-chat/src/modules/chat/composables/message/useMessagePreview/constants.js",
+    new Map([["bash-shell", [/^"bash",$/]]]),
+  ],
+  [
+    "client/shared/electron/runtime/services.js",
+    new Map([["signal-kill", [/^child\.kill\("SIGTERM"\);$/]]]),
+  ],
 ]);
 
 function toPosix(filePath) {
@@ -177,9 +185,7 @@ function scanPackageScripts(filePath) {
   } catch {
     return [];
   }
-  const scripts = parsed?.scripts && typeof parsed.scripts === "object"
-    ? parsed.scripts
-    : {};
+  const scripts = parsed?.scripts && typeof parsed.scripts === "object" ? parsed.scripts : {};
   const violations = [];
   for (const [scriptName, scriptCommand] of Object.entries(scripts)) {
     const command = String(scriptCommand || "");
@@ -207,10 +213,7 @@ for (const dir of TARGET_DIRS) {
   if (exists(packageFile)) packageFiles.push(packageFile);
 }
 
-const violations = [
-  ...files.flatMap(scanFile),
-  ...packageFiles.flatMap(scanPackageScripts),
-];
+const violations = [...files.flatMap(scanFile), ...packageFiles.flatMap(scanPackageScripts)];
 
 if (violations.length) {
   console.error("[check-cross-platform-compat] possible Windows/macOS/Linux compatibility issues:");
@@ -218,7 +221,9 @@ if (violations.length) {
     console.error(`- ${item.file}:${item.line} [${item.rule}] ${item.message}`);
     console.error(`  ${item.source}`);
   }
-  console.error("\nFix the code or add a narrowly matched entry to SOURCE_ALLOWLIST for intentional platform-specific code.");
+  console.error(
+    "\nFix the code or add a narrowly matched entry to SOURCE_ALLOWLIST for intentional platform-specific code.",
+  );
   process.exit(1);
 }
 

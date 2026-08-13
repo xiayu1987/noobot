@@ -13,26 +13,14 @@ import { normalizeParentSessionId } from "../../context/parent-session-id-resolv
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import {
-  EXECUTION_LOG_EVENT,
-  MESSAGE_ROLE,
-  MESSAGE_TYPE,
-} from "../config/constants.js";
+import { EXECUTION_LOG_EVENT, MESSAGE_ROLE, MESSAGE_TYPE } from "../config/constants.js";
 
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
-  "doc_to_data_tool",
-  "media_to_data_tool",
-  "web_to_data_tool",
-  "tool_result_overflow",
-]);
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
-const DIRECT_CONSUMED_INTERMEDIATE_TOOLS = new Set([
-  "doc_to_data",
-  "media_to_data",
-  "web_to_data",
-]);
-const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
-const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS = LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
+const SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS =
+  LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
+const SESSION_TURN_FULL_RAW_MODEL_PREVIEW_CHARS =
+  LENGTH_THRESHOLDS.preview.sessionSummaryArrayItemChars;
 
 function normalizeIsoTime(value = "") {
   const text = String(value || "").trim();
@@ -43,15 +31,6 @@ function normalizeIsoTime(value = "") {
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function parseJsonObjectSafely(text = "") {
-  try {
-    const parsed = JSON.parse(String(text || ""));
-    return isPlainObject(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 function filterSessionAttachments(attachments = []) {
@@ -86,28 +65,6 @@ function resolveAuthoritativeMessageId(message = {}) {
       message?.lc_kwargs?.additional_kwargs?.messageId ||
       "",
   ).trim();
-}
-
-function sanitizeToolContentForSession(content = "", explicitToolName = "") {
-  const parsed = parseJsonObjectSafely(content);
-  if (!parsed) return String(content || "");
-  const toolName = String(explicitToolName || parsed?.toolName || "").trim();
-  const shouldDropDirectConsumedPayload = DIRECT_CONSUMED_INTERMEDIATE_TOOLS.has(toolName);
-  if (!shouldDropDirectConsumedPayload) return String(content || "");
-
-  const summary =
-    parsed?.summary && typeof parsed.summary === "object" && !Array.isArray(parsed.summary)
-      ? parsed.summary
-      : {};
-  return JSON.stringify({
-    toolName: toolName || String(parsed?.toolName || "").trim(),
-    ok: parsed?.ok !== false,
-    status: String(parsed?.status || "completed").trim() || "completed",
-    mode: String(parsed?.mode || "").trim(),
-    intermediateConsumedByModel: true,
-    sessionPersistence: "summary_only",
-    summary,
-  });
 }
 
 function previewString(value = "", maxChars = SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS) {
@@ -267,10 +224,7 @@ export class SessionTurnPersister {
     const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
     const normalizedTurnTimingThinkingStartedAt = normalizeIsoTime(turnTimingThinkingStartedAt);
     const normalizedTurnTimingThinkingFinishedAt = normalizeIsoTime(turnTimingThinkingFinishedAt);
-    const sessionContent =
-      role === MESSAGE_ROLE.TOOL
-        ? sanitizeToolContentForSession(content, toolName)
-        : String(content || "");
+    const sessionContent = String(content || "");
     const sessionTransferEnvelopes = filterSessionTransferEnvelopes(transferEnvelopes);
     const fullTurnPayload = {
       role,
@@ -314,9 +268,7 @@ export class SessionTurnPersister {
       frontendUserMessage: frontendUserMessage === true,
       pluginMessage: pluginMessage === true,
       pluginMeta:
-        pluginMeta &&
-        typeof pluginMeta === "object" &&
-        !Array.isArray(pluginMeta)
+        pluginMeta && typeof pluginMeta === "object" && !Array.isArray(pluginMeta)
           ? pluginMeta
           : null,
       ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
@@ -365,8 +317,7 @@ export class SessionTurnPersister {
           persistenceContext,
         });
       }
-    } catch {
-    }
+    } catch {}
     const turnPayload = {
       userId,
       sessionId,
@@ -448,13 +399,10 @@ export class SessionTurnPersister {
         dialogProcessId:
           resolveMessageDialogProcessId(messageItem) ||
           resolveDialogProcessIdFromContext({ dialogProcessId }),
-        parentDialogProcessId:
-          messageItem.parentDialogProcessId || parentDialogProcessId || "",
+        parentDialogProcessId: messageItem.parentDialogProcessId || parentDialogProcessId || "",
         taskId: messageItem.taskId || null,
         taskStatus: messageItem.taskStatus || null,
-        tool_calls: Array.isArray(messageItem.tool_calls)
-          ? messageItem.tool_calls
-          : null,
+        tool_calls: Array.isArray(messageItem.tool_calls) ? messageItem.tool_calls : null,
         tool_call_id: messageItem.tool_call_id || "",
         attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
         modelAlias: (messageItem.modelAlias ?? "").trim(),
@@ -493,7 +441,9 @@ export class SessionTurnPersister {
           !Array.isArray(messageItem.modelResponseMetadata)
             ? messageItem.modelResponseMetadata
             : null,
-        activityTimeline: Array.isArray(messageItem.activityTimeline) ? messageItem.activityTimeline : [],
+        activityTimeline: Array.isArray(messageItem.activityTimeline)
+          ? messageItem.activityTimeline
+          : [],
         toolTimeline: Array.isArray(messageItem.toolTimeline) ? messageItem.toolTimeline : [],
         turnScopeId: String(messageItem.turnScopeId || turnScopeId || "").trim(),
         thinkingStartedAt: "",
@@ -520,5 +470,4 @@ export class SessionTurnPersister {
     }
     return Array.isArray(persistedTurns) ? persistedTurns : [];
   }
-
 }

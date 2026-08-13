@@ -14,7 +14,6 @@ const MONTHLY_SUMMARY_PATCH_EXAMPLE =
 const YEARLY_SUMMARY_PATCH_EXAMPLE =
   'ADD Y[1] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
 
-
 const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
   daily: Object.freeze({
     protocol:
@@ -44,8 +43,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "用户工作区目录",
     workspaceDirectoryDescriptions: {
       runtime: "运行时数据根目录",
-      "runtime/attach": "附件根目录（按 sessionId/source 分组）",
-      "runtime/attach/scoped": "附件作用域目录：scoped/<sessionId>/<source>/attachments.json",
+      "runtime/attach":
+        "附件 workspace 逻辑目录；权威分层为 runtime/attach/scoped/<sessionId>/<attachmentSource>/。查找或审计时使用该 workspace 相对路径；跨工具传递附件时使用完整附件身份，不拼接物理文件路径。",
       "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
       "runtime/ops_workdir": "脚本执行与中间工作区",
@@ -65,16 +64,19 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       mcpServers: "可用 MCP 服务器（name + type + description）",
       connectors: "当前连接器信息",
       attachments: "当前附件元信息",
+      executionEvidence: "工具执行事实规则",
     },
     pathGuidance: {
-      preferRelative: "默认目录见 directories：currentDirectory、rootDirectory、opsWorkdir。",
-      sandboxView: "相对路径基于 rootDirectory；脚本默认在 opsWorkdir；绝对路径只用 allowedRoots 内的沙箱路径。",
-      sandboxMounts: "额外挂载只用 extraMountTargets 中的沙箱路径。",
-      hostView: "相对路径基于 rootDirectory；脚本默认在 opsWorkdir；currentDirectory 仅说明当前目录。",
-      superUserHost: "可使用 Windows（如 C:\\\\dir）、macOS/Linux（如 /Users、/home）等 host 绝对路径。",
-      regularHost: "绝对路径必须位于 rootDirectory 内；Windows 用 C:\\\\ 前缀，macOS/Linux 用 / 前缀。",
+      preferRelative: "通用文件路径使用 workspace 逻辑视角；相对路径固定基于当前用户工作区。",
+      workspaceView: "sandbox 仅属于 execute_script 的执行视角，不能作为其他工具的文件路径传递。",
+      taskLocalView: "execute_native_script 的 task-local 仅本次调用有效，输出 name 不是路径；跨工具只传结果中的完整附件身份，不得拼接 workspace 或 host 路径。",
+      superUserHost:
+        "可使用 Windows（如 C:\\\\dir）、macOS/Linux（如 /Users、/home）等 host 绝对路径。",
+      regularHost: "普通用户不能使用 host 绝对路径。",
       patchRoot: "patch root 通常省略；填写时只能是工作区相对子目录。",
     },
+    executionEvidence:
+      "只有当前上下文中实际出现的工具调用及对应工具结果，才能报告为已执行。工具绑定列表只表示可用能力；不得把未调用的工具、模型内置能力或不存在于运行时工具集的名称写成已执行。工具审计以运行时 toolTimeline 和 execution events 为权威事实。",
   },
   memoryPrompt: {
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
@@ -97,8 +99,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "ADD L[记忆ID] [稳定长期记忆]",
         "UPDATE L[记忆ID] [修改后的稳定长期记忆]",
         "DELETE L[记忆ID]",
-        "ADD M[元数据ID] key=\"字段\" value=\"值\"",
-        "UPDATE M[元数据ID] key=\"字段\" value=\"值\"",
+        'ADD M[元数据ID] key="字段" value="值"',
+        'UPDATE M[元数据ID] key="字段" value="值"',
         "DELETE M[元数据ID]",
         "硬性约束：L/M ID 必须使用正整数；更新或删除必须复用已有 ID；新增使用未占用 ID。",
         "硬性约束：长期记忆正文必须落入 L 命令；M 命令只是辅助检索/分类元数据，不能只输出 M 而不输出对应的 L 记忆。",
@@ -115,10 +117,11 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     dailyExperiencePrompt: (params = {}) => {
       const knownDomainText = String(params.knownDomainText || "").trim();
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || DAILY_EXPERIENCE_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE D[整数ID] domain="领域" new=true|false experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+      const patchExample =
+        String(params.patchExample || "").trim() || DAILY_EXPERIENCE_PATCH_EXAMPLE;
       return [
         "系统指令：",
         "请分析以下短期记忆，归类到已知领域，或在必要时创建新领域。",
@@ -143,10 +146,10 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || WEEKLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE W[整数ID] category="大类" experiences="经验1 || 经验2" lessons="教训1 || 教训2"';
+      const patchExample = String(params.patchExample || "").trim() || WEEKLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "系统指令：",
         `请对领域 [${domainName}] 最近 7 天的记录进行结构化周总结。`,
@@ -171,10 +174,11 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || MONTHLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE M[整数ID] category="大类" subcategory="小类" patterns="规律1 || 规律2" methodologies="方法1 || 方法2"';
+      const patchExample =
+        String(params.patchExample || "").trim() || MONTHLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "系统指令：",
         `分析以下【${domainName}】领域过去一个月的总结，目标是模式识别。`,
@@ -198,10 +202,10 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || YEARLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE Y[整数ID] category="大类" subcategory="小类" principles="原则1 || 原则2" reflections="反思1 || 反思2"';
+      const patchExample = String(params.patchExample || "").trim() || YEARLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "系统指令：",
         `站在高维视角审视【${domainName}】领域过去一年的全部复盘。`,

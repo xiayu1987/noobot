@@ -71,12 +71,18 @@ test("execute_script: command 超过 semantic-transfer 阈值时保存附件并�
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].version, 2);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
-  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "execute-script-command.tool-input.sh");
-  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
+  assert.equal(
+    result.transferEnvelopes[0].payload.attachments[0].name,
+    "execute-script-command.tool-input.sh",
+  );
+  assert.equal(
+    typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "string",
+  );
   assert.equal(result.toolInputOverflow?.field, "command");
 });
 
-test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", async () => {
+test("execute_script: host 执行返回逻辑 workspace 与独立 execution 视角", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-path-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
   const tools = createScriptTool({
@@ -85,7 +91,7 @@ test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", a
         globalConfig: {
           tools: {
             execute_script: {
-              sandboxMode: false,
+              execution: { view: "host" },
             },
           },
         },
@@ -104,16 +110,15 @@ test("execute_script: 非沙箱返回仅包含当前 host 工作目录视角", a
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
 
-  const result = parseToolResult(await invokeScript(tool, { command: "printf 'ok'", riskLevel: "low" }));
+  const result = parseToolResult(
+    await invokeScript(tool, { command: "printf 'ok'", riskLevel: "low" }),
+  );
 
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, true);
   assert.equal(result.mode, "local");
-  assert.deepEqual(result.workspace, {
-    relativePath: "runtime/ops_workdir",
-    absolutePath: runtimeOpsWorkdir,
-    view: "non_sandbox",
-  });
+  assert.deepEqual(result.workspace, { path: "runtime/ops_workdir", view: "workspace" });
+  assert.deepEqual(result.execution, { view: "host", provider: "host" });
   assert.equal(result.runtime, undefined);
   assert.equal(result.mounts, undefined);
   assert.equal(result.stdout, "ok");
@@ -145,7 +150,11 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
   assert.equal(defaultResult.stdout, "a\nb\n");
 
   const withLines = parseToolResult(
-    await invokeScript(tool, { command: "printf 'a\\nb\\n'; printf 'err\\n' >&2", riskLevel: "low", includeLineNumbers: true }),
+    await invokeScript(tool, {
+      command: "printf 'a\\nb\\n'; printf 'err\\n' >&2",
+      riskLevel: "low",
+      includeLineNumbers: true,
+    }),
   );
   assert.equal(withLines.ok, true);
   assert.equal(withLines.includeLineNumbers, true);
@@ -180,7 +189,8 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
 
   const failResult = parseToolResult(
     await invokeScript(tool, {
-      command: "node -e \"console.error('boom'); process.stdout.write('partial'); process.exit(7)\"",
+      command:
+        "node -e \"console.error('boom'); process.stdout.write('partial'); process.exit(7)\"",
       riskLevel: "low",
     }),
   );
@@ -222,7 +232,9 @@ test("execute_script: foreground 大输出通过 V2 附件身份保留", async (
   assert.equal(result.stdout.length, LENGTH_THRESHOLDS.semanticTransfer.previewChars);
   assert.equal(result.stderr, "");
   assert.equal(result.stdout.endsWith("xxx"), true);
-  const stdoutRef = result.transferEnvelopes[0].payload.attachments.find((item) => item.name === "execute-script-stdout.txt");
+  const stdoutRef = result.transferEnvelopes[0].payload.attachments.find(
+    (item) => item.name === "execute-script-stdout.txt",
+  );
   assert.equal(stdoutRef.size, outputLength);
   assert.equal(typeof stdoutRef.identity.attachmentId, "string");
   assert.equal(result.stdoutPath, undefined);
@@ -233,22 +245,26 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   const savedArtifacts = [];
   const attachmentService = {
     async ingestGeneratedArtifacts(payload = {}) {
-      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map((artifact = {}, index) => {
-        const content = Buffer.from(String(artifact.contentBase64 || ""), "base64").toString("utf8");
-        savedArtifacts.push({ ...artifact, content, generationSource: payload.generationSource });
-        return {
-          attachmentId: `att-script-background-${index + 1}`,
-          sessionId: payload.sessionId,
-          attachmentSource: payload.attachmentSource,
-          name: artifact.name,
-          mimeType: artifact.mimeType,
-          size: Buffer.byteLength(content, "utf8"),
-          path: `/host/background/${artifact.name}`,
-          relativePath: `runtime/attach/background/${artifact.name}`,
-          generatedByModel: true,
-          generationSource: payload.generationSource,
-        };
-      });
+      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
+        (artifact = {}, index) => {
+          const content = Buffer.from(String(artifact.contentBase64 || ""), "base64").toString(
+            "utf8",
+          );
+          savedArtifacts.push({ ...artifact, content, generationSource: payload.generationSource });
+          return {
+            attachmentId: `att-script-background-${index + 1}`,
+            sessionId: payload.sessionId,
+            attachmentSource: payload.attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: Buffer.byteLength(content, "utf8"),
+            path: `/host/background/${artifact.name}`,
+            relativePath: `runtime/attach/background/${artifact.name}`,
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          };
+        },
+      );
     },
   };
   const agentContext = buildAgentContext(basePath, "primary-user", {
@@ -287,7 +303,10 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
   assert.equal(stderrArtifact?.content, "err");
   assert.equal(stdoutArtifact?.generationSource, "execute_script_background");
   assert.equal(result.transferEnvelopes[0].payload.attachments.length, 2);
-  assert.equal(result.transferEnvelopes[0].payload.attachments.every((item) => item.identity.attachmentId), true);
+  assert.equal(
+    result.transferEnvelopes[0].payload.attachments.every((item) => item.identity.attachmentId),
+    true,
+  );
 });
 
 test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer 保留完整内容", async () => {
@@ -296,22 +315,26 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
   const savedArtifacts = [];
   const attachmentService = {
     async ingestGeneratedArtifacts(payload = {}) {
-      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map((artifact = {}, index) => {
-        const content = Buffer.from(String(artifact.contentBase64 || ""), "base64").toString("utf8");
-        savedArtifacts.push({ ...artifact, content });
-        return {
-          attachmentId: `att-script-output-${index + 1}`,
-          sessionId: payload.sessionId,
-          attachmentSource: payload.attachmentSource,
-          name: artifact.name,
-          mimeType: artifact.mimeType,
-          size: Buffer.byteLength(content, "utf8"),
-          path: `/host/${artifact.name}`,
-          relativePath: `runtime/attach/${artifact.name}`,
-          generatedByModel: true,
-          generationSource: payload.generationSource,
-        };
-      });
+      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
+        (artifact = {}, index) => {
+          const content = Buffer.from(String(artifact.contentBase64 || ""), "base64").toString(
+            "utf8",
+          );
+          savedArtifacts.push({ ...artifact, content });
+          return {
+            attachmentId: `att-script-output-${index + 1}`,
+            sessionId: payload.sessionId,
+            attachmentSource: payload.attachmentSource,
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: Buffer.byteLength(content, "utf8"),
+            path: `/host/${artifact.name}`,
+            relativePath: `runtime/attach/${artifact.name}`,
+            generatedByModel: true,
+            generationSource: payload.generationSource,
+          };
+        },
+      );
     },
   };
   const agentContext = buildAgentContext(basePath, "primary-user", {
@@ -356,7 +379,9 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
     sessionId: "s-script-large-output",
   });
   const result = parseToolResult(runnerResult.toolResultText);
-  const stdoutFile = result.transferEnvelopes[0].payload.attachments.find((item) => item.name === "execute-script-stdout.txt");
+  const stdoutFile = result.transferEnvelopes[0].payload.attachments.find(
+    (item) => item.name === "execute-script-stdout.txt",
+  );
 
   assert.equal(result.ok, true);
   assert.equal(result.outputOverflow, true);
@@ -389,7 +414,11 @@ test("execute_script: foreground abort terminates the process group and settles"
     cwd,
     60000,
     controller.signal,
-    { onTerminate: () => { terminationHookCalls += 1; } },
+    {
+      onTerminate: () => {
+        terminationHookCalls += 1;
+      },
+    },
   );
   setTimeout(() => controller.abort(), 50);
   const result = await pending;
@@ -402,7 +431,9 @@ test("execute_script: foreground abort terminates the process group and settles"
 
 test("execute_script: aborted Docker queue entry never starts after lock release", async () => {
   let releaseFirst;
-  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
   const containerName = `script-queue-abort-${Date.now()}`;
   const first = enqueueDockerContainerTask({
     containerName,
@@ -413,7 +444,9 @@ test("execute_script: aborted Docker queue entry never starts after lock release
   const second = enqueueDockerContainerTask({
     containerName,
     abortSignal: controller.signal,
-    task: async () => { secondInvoked = true; },
+    task: async () => {
+      secondInvoked = true;
+    },
   });
 
   controller.abort();
@@ -423,7 +456,7 @@ test("execute_script: aborted Docker queue entry never starts after lock release
   assert.equal(secondInvoked, false);
 });
 
-test("execute_script: 沙箱 workspace 元信息仅包含沙箱视角与 system 环境字段", async () => {
+test("execute_script: sandbox 不改变公开 workspace 逻辑视角", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-sandbox-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
   const meta = buildExecutionWorkspaceMeta({
@@ -445,16 +478,7 @@ test("execute_script: 沙箱 workspace 元信息仅包含沙箱视角与 system 
     },
   });
 
-  assert.deepEqual(meta, {
-    relativePath: "runtime/ops_workdir",
-    absolutePath: "/workspace/primary-user/runtime/ops_workdir",
-    view: "sandbox",
-    defaultWorkdir: "/workspace/primary-user/runtime/ops_workdir",
-    sandboxRoot: "/workspace",
-    relativePathBase: "defaultWorkdir",
-    allowedRoots: ["/workspace", "/project"],
-    extraMountTargets: ["/project"],
-  });
+  assert.deepEqual(meta, { path: "runtime/ops_workdir", view: "workspace" });
 });
 
 test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角", async () => {
@@ -474,11 +498,9 @@ test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角"
     },
   });
 
-  assert.equal(meta.runtime.image, "example/script:latest");
-  assert.equal(meta.runtime.container, undefined);
-  assert.equal(meta.runtime.scope, undefined);
+  assert.equal(meta.execution.image, "example/script:latest");
+  assert.equal(meta.execution.view, "sandbox");
+  assert.equal(meta.execution.provider, "docker");
   assert.equal(meta.mounts, undefined);
-  assert.equal(meta.workspace.absolutePath, "/workspace/primary-user/runtime/ops_workdir");
-  assert.equal(meta.workspace.view, "sandbox");
-  assert.deepEqual(meta.workspace.allowedRoots, ["/workspace", "/project"]);
+  assert.deepEqual(meta.workspace, { path: "runtime/ops_workdir", view: "workspace" });
 });

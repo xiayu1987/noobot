@@ -51,3 +51,41 @@ test("normalizeKnownConfigKeys: 数组和基础类型应被安全处理", () => 
   assert.equal(out.dockerMounts[1], "plain");
   assert.equal(out.value, 1);
 });
+
+test("normalizeKnownConfigKeys: execute_script 外部沙箱配置映射为唯一内部执行协议", () => {
+  const out = normalizeKnownConfigKeys({
+    tools: {
+      execute_script: {
+        sandbox_mode: true,
+        sandbox_provider: {
+          default: "docker",
+          docker: { docker_container_scope: "global" },
+        },
+      },
+    },
+  });
+  assert.deepEqual(out.tools.execute_script, {
+    execution: {
+      view: "sandbox",
+      sandboxProvider: {
+        default: "docker",
+        docker: { dockerContainerScope: "global" },
+      },
+    },
+  });
+});
+
+test("normalizeKnownConfigKeys: execute_script 外部和内部协议冲突时拒绝", () => {
+  assert.throws(
+    () =>
+      normalizeKnownConfigKeys({
+        tools: {
+          execute_script: {
+            sandbox_mode: true,
+            execution: { view: "host" },
+          },
+        },
+      }),
+    /conflicts/,
+  );
+});

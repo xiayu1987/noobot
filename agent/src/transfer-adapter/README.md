@@ -1,6 +1,6 @@
 # semantic-transfer（归档说明）
 
-> ⚠️ 本文档已归档，仅保留历史背景。当前整改状态以 `docs/semantic-transfer-code-alignment-todos.md` 为准，原始需求对照以 `docs/semantic-transfer-raw-notes.md` 为准。
+> 本文档仅说明 transfer adapter 的模块入口。当前协议和场景以 [`docs/semantic-transfer-scenario-inventory.md`](../../../docs/semantic-transfer-scenario-inventory.md) 与 `@noobot/semantic-transfer-protocol` 为准。
 
 ## 当前实现口径（2026-06）
 

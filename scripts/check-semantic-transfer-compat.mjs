@@ -32,23 +32,22 @@ const OVERFLOW_FIELD_REGEXES = [
   { field: "overflow_file_sandbox_path", regex: /overflow_file_sandbox_path/ },
 ];
 
-const OVERFLOW_ALLOWED_FILES = new Set([
-  "agent/src/transfer-adapter/legacy-adapter.js",
-]);
+const OVERFLOW_ALLOWED_FILES = new Set(["agent/src/transfer-adapter/legacy-adapter.js"]);
 
-const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(Object.entries({
-  "agent/src/bot/session/scoped-artifact-persistence-helpers.js":
-    "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/artifacts/runtime/artifact-service.js":
-    "LLM output media attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/tools/ai-models/multimodal-generate-tool.js":
-    "multimodal image generation attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js":
-    "email connector attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-  "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js":
-    "ordinary agent-collab async result attachment persistence must use attachmentService.ingestGeneratedArtifacts",
-}));
-
+const SETTLED_ATTACHMENT_SERVICE_ONLY_FILES = new Map(
+  Object.entries({
+    "agent/src/bot/session/scoped-artifact-persistence-helpers.js":
+      "generic generated artifacts must use attachmentService.ingestGeneratedArtifacts",
+    "agent/src/artifacts/runtime/artifact-service.js":
+      "LLM output media attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+    "agent/src/tools/ai-models/multimodal-generate-tool.js":
+      "multimodal image generation attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+    "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js":
+      "email connector attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+    "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js":
+      "ordinary agent-collab async result attachment persistence must use attachmentService.ingestGeneratedArtifacts",
+  }),
+);
 
 const REMOVED_PUBLIC_WRAPPER_REGEXES = [
   { api: "transferSemanticContentSync", regex: /\btransferSemanticContentSync\b/ },
@@ -79,7 +78,7 @@ const HARNESS_FINAL_MESSAGE_COMPOSITION_REGEXES = [
 const REQUIRED_TASK_SUMMARY_TRANSFER_FILE = "agent/src/runtime/tool-execution/tool-runner.js";
 const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
   {
-    snippet: "\"task_summary\"",
+    snippet: '"task_summary"',
     hint: "task_summary.summaryContent must stay in the tool_input semantic-transfer path so summaries are persisted as TransferEnvelope attachments.",
   },
   {
@@ -92,60 +91,99 @@ const REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS = [
   },
 ];
 
-const LEGACY_FIELD_ALLOWED_FILES = new Map(Object.entries({
-  "agent/src/context/assembly/message-builder.js": "model context compatibility consumes runtime attachmentMetas",
-  "agent/src/runtime/tool-execution/tool-runner.js": "tool overflow builds TransferEnvelope then legacy overflow via adapter",
-  "agent/src/runtime/tool-execution/state-committer.js": "runtime/turn event stream still emits attachmentMetas for existing consumers",
-  "agent/src/artifacts/runtime/artifact-service.js": "artifact extraction compatibility reads legacy + transfer",
-  "agent/src/artifacts/meta-ops.js": "legacy attachment meta normalization utility",
-  "agent/src/artifacts/runtime-attachment.js": "runtime attachment legacy store",
-  "agent/src/artifacts/service/attachment-service.js": "attachment service rewrites persisted message metas",
-  "agent/src/bot/execution/runner.js": "session runner attachment compatibility",
-  "agent/src/bot/execution/finalizer.js": "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
-  "agent/src/bot/execution/turn-persister.js": "turn persistence legacy schema",
-  "agent/src/bot/session/session-execution-engine.js": "session execution legacy bridge",
-  "agent/src/bot/session/detached-subsession-runner.js": "detached sub-session runner still accepts/publishes attachmentMetas in session snapshot compatibility contract",
-  "agent/src/session/services/session-message-service.js": "session message service keeps attachmentMetas compatibility for persisted/runtime message contracts",
-  "agent/src/integrations/connectors/emails/read-email.js": "email connector legacy bridge",
-  "agent/src/context/builders/runtime-environment-builder.js": "runtime environment exposes semantic-transfer helpers and legacy metas",
-  "agent/src/context/index.js": "context builder public attachment contract",
-  "agent/src/context/session/message-converter.js": "replay compatibility preserves legacy fields",
-  "agent/src/transfer-adapter/storage/attachment-adapter.js": "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
-  "agent/src/transfer-adapter/storage/consumer.js": "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
-  "agent/src/transfer-adapter/core/compact.js": "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
-  "agent/src/transfer-adapter/transfer/tool-result-overflow.js": "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
-  "agent/src/transfer-adapter/legacy-adapter.js": "central legacy compatibility adapter",
-  "agent/src/transfer-adapter/envelope/normalizer.js": "semantic-transfer normalizes legacy fallback (semantic dir layout)",
-  "agent/src/tools/ai-models/multimodal-generate-tool.js": "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
-  "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js": "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
-  "agent/src/tools/data-processing/doc2data-tool.js": "tool input/output compatibility",
-  "agent/src/tools/data-processing/media2data-tool.js": "tool input/output compatibility",
-  "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js": "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
-  "agent/src/tools/collaboration/agent-collab/collab-task-utils.js": "agent-collab payload compatibility",
-  "agent/src/tools/collaboration/agent-collab/tool-wait-async-result.js": "agent-collab wait result compatibility",
+const LEGACY_FIELD_ALLOWED_FILES = new Map(
+  Object.entries({
+    "agent/src/context/assembly/message-builder.js":
+      "model context compatibility consumes runtime attachmentMetas",
+    "agent/src/runtime/tool-execution/tool-runner.js":
+      "tool overflow builds TransferEnvelope then legacy overflow via adapter",
+    "agent/src/runtime/tool-execution/state-committer.js":
+      "runtime/turn event stream still emits attachmentMetas for existing consumers",
+    "agent/src/artifacts/runtime/artifact-service.js":
+      "artifact extraction compatibility reads legacy + transfer",
+    "agent/src/artifacts/meta-ops.js": "legacy attachment meta normalization utility",
+    "agent/src/artifacts/runtime-attachment.js": "runtime attachment legacy store",
+    "agent/src/artifacts/service/attachment-service.js":
+      "attachment service rewrites persisted message metas",
+    "agent/src/bot/execution/runner.js": "session runner attachment compatibility",
+    "agent/src/bot/execution/finalizer.js":
+      "final assistant aggregation keeps attachmentMetas compatibility for persisted turn schema",
+    "agent/src/bot/execution/turn-persister.js": "turn persistence legacy schema",
+    "agent/src/bot/session/session-execution-engine.js": "session execution legacy bridge",
+    "agent/src/bot/session/detached-subsession-runner.js":
+      "detached sub-session runner still accepts/publishes attachmentMetas in session snapshot compatibility contract",
+    "agent/src/session/services/session-message-service.js":
+      "session message service keeps attachmentMetas compatibility for persisted/runtime message contracts",
+    "agent/src/integrations/connectors/emails/read-email.js": "email connector legacy bridge",
+    "agent/src/context/builders/runtime-environment-builder.js":
+      "runtime environment exposes semantic-transfer helpers and legacy metas",
+    "agent/src/context/index.js": "context builder public attachment contract",
+    "agent/src/context/session/message-converter.js":
+      "replay compatibility preserves legacy fields",
+    "agent/src/transfer-adapter/storage/attachment-adapter.js":
+      "semantic-transfer adapter derives legacy fields centrally (semantic dir layout)",
+    "agent/src/transfer-adapter/storage/consumer.js":
+      "semantic-transfer consumer accepts legacy fallback (semantic dir layout)",
+    "agent/src/transfer-adapter/core/compact.js":
+      "semantic-transfer compact model view reads envelope attachmentMeta/filePath fields",
+    "agent/src/transfer-adapter/transfer/tool-result-overflow.js":
+      "semantic-transfer overflow compacts TransferEnvelope file fields and emits original-file envelope references",
+    "agent/src/transfer-adapter/legacy-adapter.js": "central legacy compatibility adapter",
+    "agent/src/transfer-adapter/envelope/normalizer.js":
+      "semantic-transfer normalizes legacy fallback (semantic dir layout)",
+    "agent/src/tools/ai-models/multimodal-generate-tool.js":
+      "multimodal tool returns attachmentMetas from attachmentService for existing consumers",
+    "agent/src/tools/connectors/connector-toolkit/tool-access-connector.js":
+      "connector output keeps attachmentMetas compatibility; ordinary email attachment save stays on attachmentService",
+    "agent/src/tools/collaboration/agent-collab/collab-artifact-persist.js":
+      "agent-collab async result output keeps attachmentMetas compatibility; ordinary save stays on attachmentService",
+    "agent/src/tools/collaboration/agent-collab/collab-task-utils.js":
+      "agent-collab payload compatibility",
+    "agent/src/tools/collaboration/agent-collab/tool-wait-async-result.js":
+      "agent-collab wait result compatibility",
 
-  "client/noobot-chat/src/modules/chat/model/messageModel.js": "frontend message model keeps legacy fallback but consumes transfer first",
-  "client/noobot-chat/src/modules/chat/model/transferEnvelopes.js": "frontend semantic-transfer adapter maps envelope files to legacy display metas",
-  "client/noobot-chat/src/modules/chat/composables/message/useMessageFiles.js": "frontend message file list consumes attachmentMetas compatibility after transfer-first extraction",
+    "client/noobot-chat/src/modules/chat/model/messageModel.js":
+      "frontend message model keeps legacy fallback but consumes transfer first",
+    "client/noobot-chat/src/modules/chat/model/transferEnvelopes.js":
+      "frontend semantic-transfer adapter maps envelope files to legacy display metas",
+    "client/noobot-chat/src/modules/chat/composables/message/useMessageFiles.js":
+      "frontend message file list consumes attachmentMetas compatibility after transfer-first extraction",
 
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js": "harness final output artifact attachment keeps legacy metas alongside transfer payload",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/controller.js": "harness relay compatibility",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/model-runner.js": "harness relay compatibility",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/planning/refinement-runner.js": "harness relay compatibility",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/attachment-log-utils.js": "harness central compatibility helper",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/message/injection-utils.js": "harness injected message compatibility",
-  "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/sandbox-path.js": "harness path block compatibility",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/acceptance/output-finalizer.js":
+      "harness final output artifact attachment keeps legacy metas alongside transfer payload",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/controller.js":
+      "harness relay compatibility",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/guidance/model-runner.js":
+      "harness relay compatibility",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/planning/refinement-runner.js":
+      "harness relay compatibility",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/attachment-log-utils.js":
+      "harness central compatibility helper",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/message/injection-utils.js":
+      "harness injected message compatibility",
+    "plugin/noobot-plugin-harness/src/capabilities/handlers/shared/sandbox-path.js":
+      "harness path block compatibility",
 
-  "plugin/noobot-plugin-workflow/src/core/hooks.js": "workflow payload keeps transfer fields with legacy fallback",
-  "plugin/noobot-plugin-workflow/src/core/hooks/attachments.js": "workflow central attachment/transfer bridge consumes envelope file fields and legacy attachmentMetas fallback",
-  "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js": "workflow node sub-session compatibility still passes input attachmentMetas alongside transfer payloads",
-  "plugin/noobot-plugin-workflow/src/core/hooks/persistence.js": "workflow persistence snapshots keep attachmentMetas compatibility while transfer payload migrates",
-  "plugin/noobot-plugin-workflow/src/core/orchestrator/execution-runner.js": "workflow orchestrator compatibility publishes node result attachmentMetas derived from transfer payloads",
-  "plugin/noobot-plugin-workflow/src/core/orchestrator/payload-enrichment.js": "workflow orchestrator enriches legacy node attachmentMetas for existing consumers",
-  "plugin/noobot-plugin-workflow/src/core/orchestrator/planning-message.js": "workflow planning message contract initializes attachmentMetas for compatibility",
-  "plugin/noobot-plugin-workflow/src/core/orchestrator/result-publisher.js": "workflow result publisher keeps attachmentMetas compatibility in final payload",
-  "plugin/noobot-plugin-workflow/src/core/orchestrator/semantic-resolution.js": "workflow semantic resolution renders existing attachmentMetas contract for prompts",
-}));
+    "plugin/noobot-plugin-workflow/src/core/hooks.js":
+      "workflow payload keeps transfer fields with legacy fallback",
+    "plugin/noobot-plugin-workflow/src/core/hooks/attachments.js":
+      "workflow central attachment/transfer bridge consumes envelope file fields and legacy attachmentMetas fallback",
+    "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js":
+      "workflow node sub-session compatibility still passes input attachmentMetas alongside transfer payloads",
+    "plugin/noobot-plugin-workflow/src/core/hooks/persistence.js":
+      "workflow persistence snapshots keep attachmentMetas compatibility while transfer payload migrates",
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/execution-runner.js":
+      "workflow orchestrator compatibility publishes node result attachmentMetas derived from transfer payloads",
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/payload-enrichment.js":
+      "workflow orchestrator enriches legacy node attachmentMetas for existing consumers",
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/planning-message.js":
+      "workflow planning message contract initializes attachmentMetas for compatibility",
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/result-publisher.js":
+      "workflow result publisher keeps attachmentMetas compatibility in final payload",
+    "plugin/noobot-plugin-workflow/src/core/orchestrator/semantic-resolution.js":
+      "workflow semantic resolution renders existing attachmentMetas contract for prompts",
+  }),
+);
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -182,12 +220,7 @@ function isCommentOrImportLine(line = "") {
 
 function isCommentOrEmptyLine(line = "") {
   const text = String(line || "").trim();
-  return (
-    !text ||
-    text.startsWith("//") ||
-    text.startsWith("*") ||
-    text.startsWith("/*")
-  );
+  return !text || text.startsWith("//") || text.startsWith("*") || text.startsWith("/*");
 }
 
 function detectFile(file) {
@@ -279,25 +312,27 @@ function detectRequiredTaskSummaryTransferGuard() {
   try {
     raw = readFileSync(file, "utf8");
   } catch (error) {
-    return [{
-      type: "required-task-summary-transfer",
-      field: "tool_input",
-      file: REQUIRED_TASK_SUMMARY_TRANSFER_FILE,
-      line: 1,
-      text: `missing or unreadable file: ${error?.message || String(error)}`,
-      hint: "task_summary.summaryContent must be guarded as a semantic-transfer tool_input scenario.",
-    }];
+    return [
+      {
+        type: "required-task-summary-transfer",
+        field: "tool_input",
+        file: REQUIRED_TASK_SUMMARY_TRANSFER_FILE,
+        line: 1,
+        text: `missing or unreadable file: ${error?.message || String(error)}`,
+        hint: "task_summary.summaryContent must be guarded as a semantic-transfer tool_input scenario.",
+      },
+    ];
   }
-  return REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS
-    .filter((item) => !raw.includes(item.snippet))
-    .map((item) => ({
+  return REQUIRED_TASK_SUMMARY_TRANSFER_SNIPPETS.filter((item) => !raw.includes(item.snippet)).map(
+    (item) => ({
       type: "required-task-summary-transfer",
       field: "task_summary.summaryContent",
       file: REQUIRED_TASK_SUMMARY_TRANSFER_FILE,
       line: 1,
       text: `missing required snippet: ${item.snippet}`,
       hint: item.hint,
-    }));
+    }),
+  );
 }
 
 function run() {
@@ -312,16 +347,15 @@ function run() {
     walk(full, files);
   }
 
-  const violations = [
-    ...files.flatMap(detectFile),
-    ...detectRequiredTaskSummaryTransferGuard(),
-  ];
+  const violations = [...files.flatMap(detectFile), ...detectRequiredTaskSummaryTransferGuard()];
   if (!violations.length) {
     console.log("[semantic-transfer-compat] OK");
     return;
   }
 
-  console.error(`[semantic-transfer-compat] Found ${violations.length} potential legacy transfer compatibility violation(s):`);
+  console.error(
+    `[semantic-transfer-compat] Found ${violations.length} potential legacy transfer compatibility violation(s):`,
+  );
   for (const item of violations) {
     console.error(`- ${item.file}:${item.line} [${item.type}:${item.field}] ${item.text}`);
     console.error(`  ${item.hint}`);

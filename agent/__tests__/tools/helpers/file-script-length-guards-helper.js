@@ -22,37 +22,40 @@ import { createTestAgentExecutionScope } from "../../helpers/agent-execution-sco
 
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
-    overrides?.runtime && typeof overrides.runtime === "object"
-      ? overrides.runtime
-      : {};
+    overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
   const sharedTools =
     runtimeOverrides?.sharedTools && typeof runtimeOverrides.sharedTools === "object"
       ? runtimeOverrides.sharedTools
       : {};
-  return createTestAgentExecutionScope({
-          basePath,
-          userId,
-          globalConfig: {
-            tools: {
-              execute_script: {
-                sandboxMode: true,
-                sandboxProvider: {
-                  default: "docker",
-                  docker: { dockerContainerScope: "global" },
-                },
+  return createTestAgentExecutionScope(
+    {
+      basePath,
+      userId,
+      globalConfig: {
+        tools: {
+          execute_script: {
+            execution: {
+              view: "sandbox",
+              sandboxProvider: {
+                default: "docker",
+                docker: { dockerContainerScope: "global" },
               },
             },
           },
-          userConfig: {},
-          systemRuntime: {
-            userId,
-            sessionId: "s-1",
-            rootSessionId: "s-1",
-            config: {},
-          },
-          sharedTools,
+        },
+      },
+      userConfig: {},
+      systemRuntime: {
+        userId,
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        config: {},
+      },
+      sharedTools,
       ...runtimeOverrides,
-    }, { identity: { userId } });
+    },
+    { identity: { userId } },
+  );
 }
 
 function parseToolResult(raw = "") {
@@ -62,22 +65,23 @@ function parseToolResult(raw = "") {
 function buildAttachmentService() {
   return {
     async ingestGeneratedArtifacts(payload = {}) {
-      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map((artifact = {}, index) => ({
-        attachmentId: `att-tool-input-${index + 1}`,
-        sessionId: payload.sessionId,
-        attachmentSource: payload.attachmentSource,
-        name: artifact.name,
-        mimeType: artifact.mimeType,
-        size: Buffer.from(String(artifact.contentBase64 || ""), "base64").length,
-        path: `/host/${artifact.name}`,
-        relativePath: `runtime/attach/${artifact.name}`,
-        generatedByModel: true,
-        generationSource: payload.generationSource,
-      }));
+      return (Array.isArray(payload.artifacts) ? payload.artifacts : []).map(
+        (artifact = {}, index) => ({
+          attachmentId: `att-tool-input-${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(String(artifact.contentBase64 || ""), "base64").length,
+          path: `/host/${artifact.name}`,
+          relativePath: `runtime/attach/${artifact.name}`,
+          generatedByModel: true,
+          generationSource: payload.generationSource,
+        }),
+      );
     },
   };
 }
-
 
 export {
   test,

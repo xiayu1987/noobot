@@ -4,17 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { access, readdir } from "node:fs/promises";
-import { filePath as path, resolveSandboxPath } from "@noobot/path-resolver";
+import { filePath as path, resolvePathRef } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
-import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
-import { normalizeSkillAction, SKILL_ACTION } from "@noobot/agent-config-protocol";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
-import { recoverableToolError } from "../../shared/errors/index.js";
 import { safeJoin } from "../../shared/utils/fs-safe.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 
 function getBasePath(agentContext) {
@@ -25,20 +21,13 @@ function getBasePath(agentContext) {
 function toSkillDisplayPath({ targetPath = "", runtime = {}, agentContext = null } = {}) {
   const normalizedPath = String(targetPath || "").trim();
   if (!normalizedPath) return "";
-  return (
-    resolveSandboxPath({
-      hostPath: normalizedPath,
-      runtime,
-      agentContext,
-    }) || normalizedPath
-  );
+  void agentContext;
+  return resolvePathRef({ input: normalizedPath, workspaceRoot: runtime?.basePath || "" }).path;
 }
 
 export function createSkillTool({ agentContext }) {
   const basePath = getBasePath(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const currentTurnMessages = runtime?.currentTurnMessages || null;
-  const currentTurnTasks = runtime?.currentTurnTasks || null;
   if (!basePath) return [];
   const skillRoot = path.join(basePath, "skills");
 
@@ -91,103 +80,5 @@ export function createSkillTool({ agentContext }) {
     },
   });
 
-  const manageSkillTaskTool = new DynamicStructuredTool({
-    name: TOOL_NAME.SET_SKILL_TASK,
-    description: tTool(runtime, "tools.skill.setDescription"),
-    schema: z.object({
-      action: z.string().describe(tTool(runtime, "tools.skill.fieldAction")),
-      skillName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldSkillName")),
-      taskName: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskName")),
-      taskId: z.string().optional().describe(tTool(runtime, "tools.skill.fieldTaskId")),
-      result: z.string().optional().describe(tTool(runtime, "tools.skill.fieldResult")),
-    }),
-    func: async ({ action, skillName, taskName, taskId, result }) => {
-      const normalizedAction = normalizeSkillAction(action);
-      if (!normalizedAction) {
-        throw recoverableToolError(tTool(runtime, "tools.skill.invalidAction", { action }), {
-          code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
-        });
-      }
-
-      if (normalizedAction === SKILL_ACTION.START) {
-        if (!String(skillName || "").trim()) {
-          throw recoverableToolError(tTool(runtime, "tools.skill.skillNameRequiredOnStart"), {
-            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-          });
-        }
-        const createdTaskId = uuidv4();
-        if (
-          currentTurnTasks &&
-          typeof currentTurnTasks.push === "function" &&
-          currentTurnMessages &&
-          typeof currentTurnMessages.updateLast === "function"
-        ) {
-          currentTurnTasks.push({
-            taskId: createdTaskId,
-            skillName: String(skillName || "").trim(),
-            taskName: String(taskName || "").trim(),
-            taskStatus: SKILL_ACTION.START,
-            startedAt: new Date().toISOString(),
-            endedAt: "",
-          });
-          currentTurnMessages.updateLast({
-            taskId: createdTaskId,
-            taskStatus: SKILL_ACTION.START,
-          });
-        }
-        return toToolJsonResult(
-          TOOL_NAME.SET_SKILL_TASK,
-          {
-            ok: true,
-            action: normalizedAction,
-            task: {
-              taskId: createdTaskId,
-              skillName: skillName || "",
-              taskName: taskName || "",
-              taskStatus: SKILL_ACTION.START,
-            },
-          },
-          true,
-        );
-      }
-      let resolvedTaskId = String(taskId || "").trim();
-      if (
-        currentTurnTasks &&
-        typeof currentTurnTasks.last === "function" &&
-        typeof currentTurnTasks.updateLast === "function"
-      ) {
-        const lastTask = currentTurnTasks.last();
-        resolvedTaskId = resolvedTaskId || String(lastTask?.taskId || "").trim();
-        if (resolvedTaskId) {
-          currentTurnTasks.updateLast({
-            taskId: resolvedTaskId,
-            taskStatus: SKILL_ACTION.COMPLETED,
-            endedAt: new Date().toISOString(),
-            result: result || "",
-          });
-          if (currentTurnMessages && typeof currentTurnMessages.updateLast === "function") {
-            currentTurnMessages.updateLast({
-              taskId: resolvedTaskId,
-              taskStatus: SKILL_ACTION.COMPLETED,
-            });
-          }
-        }
-      }
-      return toToolJsonResult(
-        TOOL_NAME.SET_SKILL_TASK,
-        {
-          ok: true,
-          action: normalizedAction,
-          task: {
-            taskId: resolvedTaskId,
-            taskStatus: SKILL_ACTION.COMPLETED,
-            result: result || "",
-          },
-        },
-        true,
-      );
-    },
-  });
-
-  return [listSkillTool, manageSkillTaskTool];
+  return [listSkillTool];
 }

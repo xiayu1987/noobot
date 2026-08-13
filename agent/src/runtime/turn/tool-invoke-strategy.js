@@ -46,7 +46,7 @@ export function createBoundLlmToolChoiceInvoker({
       messages: filterForModelContext(messages),
       tools: boundTools,
       options: {
-        streaming: invokeMode !== "with_tools_non_streaming",
+        streaming: false,
         callbacks: runtime?.modelCallbacks,
         signal: abortSignal,
         invoke: {

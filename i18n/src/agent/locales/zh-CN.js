@@ -113,7 +113,8 @@ export default {
   "connect.failed": "连接失败",
   "connect.userIdConnectCodeRequired": "必须提供 userId/connectCode",
   "context.contextBuilderRequired": "contextBuilder 必填",
-  "context.builderContainerInputRequired": "ContextBuilder 需要容器输入: { config, serviceContainer, sessionContext }",
+  "context.builderContainerInputRequired":
+    "ContextBuilder 需要容器输入: { config, serviceContainer, sessionContext }",
   "init.invalidResetSections": "无效的 reset sections",
   "init.userWorkspacePathNotDirectory": "用户 workspace 路径不是目录",
   "init.workspaceTemplateMissing": "workspace 模板不存在",
@@ -130,12 +131,14 @@ export default {
   "tools.file.readEndLineField": "结束行（1-based）。",
   "tools.file.readIncludeLineNumbersField": "content 是否带行号。",
   "tools.file.readMaxLinesField": "最大返回行数。",
-  "tools.file.readRiskLevelField": "操作风险等级：low、medium、high 或 critical。读取可能涉及隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
+  "tools.file.readRiskLevelField":
+    "操作风险等级：low、medium、high 或 critical。读取可能涉及隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.file.writeOverwriteField": "文件存在时是否覆盖。",
-  "tools.file.writeRiskLevelField": "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
+  "tools.file.writeRiskLevelField":
+    "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
   "tools.search.description": "搜索文件或文本，返回命中行与上下文。",
   "tools.search.fieldSource": "搜索来源：files 或 text。",
-  "tools.search.fieldQuery": "关键词或正则。",
+  "tools.search.fieldQuery": "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
   "tools.search.fieldIsRegex": "是否按正则搜索。",
   "tools.search.fieldCaseSensitive": "是否区分大小写。",
   "tools.search.fieldPath": "文件搜索路径。",
@@ -143,33 +146,45 @@ export default {
   "tools.search.fieldText": "待搜索文本（source=text 时使用）。",
   "tools.search.fieldContextLines": "上下文行数。",
   "tools.search.fieldMaxResults": "最大命中数。",
-  "tools.search.fieldRiskLevel": "操作风险等级：low、medium、high 或 critical。搜索可能检索或返回隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
-  "tools.patch_file.description": "按补丁修改文件；兼容 git/unified diff、apply_patch、常见模型混合格式和路径层级误差。",
-  "tools.patch_file.fieldFormat": "补丁格式提示；不确定可不填，工具会自动尝试 unified_diff/git diff 与 apply_patch。",
-  "tools.patch_file.fieldPatch": "补丁内容；推荐先读文件，用精确上下文。路径按当前系统上下文的路径规则填写，不要把虚拟根名写成相对路径前缀。",
-  "tools.patch_file.fieldPatchPathHintSandbox": "沙箱视角：相对路径基于默认根目录 rootDirectory；绝对路径只用允许根 allowedRoots。",
-  "tools.patch_file.fieldPatchPathHintHost": "Host 视角：相对路径基于默认根目录 rootDirectory；绝对路径必须位于 rootDirectory 内（Windows 用 C:\\\\ 前缀，macOS/Linux 用 / 前缀）。",
-  "tools.patch_file.fieldPatchPathHintSuperHost": "Host 视角，超级管理员：相对路径基于默认根目录 rootDirectory；可使用 host 绝对路径（Windows 如 C:\\\\dir，macOS/Linux 如 /Users、/home）。",
-  "tools.patch_file.fieldStrip": "diff 路径层级提示；常见 a/、b/、无前缀和虚拟根误差会自动尝试，不确定可省略。",
+  "tools.search.fieldRiskLevel":
+    "操作风险等级：low、medium、high 或 critical。搜索可能检索或返回隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
+  "tools.patch_file.description":
+    "按补丁修改文件；兼容 git/unified diff、apply_patch、常见模型混合格式和路径层级误差。",
+  "tools.patch_file.fieldFormat":
+    "补丁格式提示；不确定可不填，工具会自动尝试 unified_diff/git diff 与 apply_patch。",
+  "tools.patch_file.fieldPatch":
+    "补丁内容；推荐先读文件，用精确上下文。路径按当前系统上下文的路径规则填写，不要把虚拟根名写成相对路径前缀。",
+  "tools.patch_file.fieldPatchPathHintHost":
+    "workspace 逻辑视角：使用当前用户工作区相对路径；普通用户不能使用 host 绝对路径。",
+  "tools.patch_file.fieldPatchPathHintSuperHost":
+    "workspace 逻辑视角：相对路径基于当前用户工作区；超级管理员也可使用经全局路径策略授权的 host 绝对路径。",
+  "tools.patch_file.fieldStrip":
+    "diff 路径层级提示；常见 a/、b/、无前缀和虚拟根误差会自动尝试，不确定可省略。",
   "tools.patch_file.fieldRoot": "补丁根目录（可选，仅工作区相对子目录）；通常可省略。不要用 ..。",
   "tools.patch_file.fieldRootPathHintSandbox": "root 不是沙箱绝对路径入口。",
   "tools.patch_file.fieldRootPathHintHost": "root 只用于选择工作区子目录。",
   "tools.patch_file.fieldRootPathHintSuperHost": "root 不是 host 绝对路径入口。",
-  "tools.patch_file.rootInvalidHintSandbox": "不要用 root:'..' 或沙箱绝对路径作为 root；root 只选工作区相对子目录，沙箱绝对路径应直接写在补丁文件路径里。",
-  "tools.patch_file.rootInvalidHintHost": "不要用 root:'..' 或绝对路径作为 root；root 只选工作区相对子目录。",
-  "tools.patch_file.rootInvalidHintSuperHost": "不要用 root:'..' 或 host 绝对路径作为 root；root 只选工作区相对子目录，host 绝对路径应直接写在补丁文件路径里。",
+  "tools.patch_file.rootInvalidHintHost":
+    "不要用 root:'..' 或绝对路径作为 root；root 只选工作区相对子目录。",
+  "tools.patch_file.rootInvalidHintSuperHost":
+    "不要用 root:'..' 或 host 绝对路径作为 root；root 只选工作区相对子目录，host 绝对路径应直接写在补丁文件路径里。",
   "tools.patch_file.fieldDryRun": "只验证不写入。",
-  "tools.patch_file.fieldRiskLevel": "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
-  "tools.risk.criticalConfirmation": (params = {}) => [
-    "即将执行需要安全确认的工具操作，请明确确认。",
-    `工具：${String(params.toolName || "")}`,
-    `操作：${String(params.operation || "")}`,
-    `风险等级：${String(params.riskLevel || "")}`,
-    params.target ? `目标：${String(params.target)}` : "",
-    params.reason ? `风险原因：${String(params.reason)}` : "",
-    "是否确认继续？",
-  ].filter(Boolean).join("\n"),
-  "tools.risk.criticalConfirmationUnavailable": "此风险等级的操作需要用户确认，但用户交互通道不可用。",
+  "tools.patch_file.fieldRiskLevel":
+    "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
+  "tools.risk.criticalConfirmation": (params = {}) =>
+    [
+      "即将执行需要安全确认的工具操作，请明确确认。",
+      `工具：${String(params.toolName || "")}`,
+      `操作：${String(params.operation || "")}`,
+      `风险等级：${String(params.riskLevel || "")}`,
+      params.target ? `目标：${String(params.target)}` : "",
+      params.reason ? `风险原因：${String(params.reason)}` : "",
+      "是否确认继续？",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  "tools.risk.criticalConfirmationUnavailable":
+    "此风险等级的操作需要用户确认，但用户交互通道不可用。",
   "tools.risk.criticalCancelled": "风险操作未获用户确认，已取消。",
   "services.handlerModuleNotFound": "未找到 service handler 模块",
   "services.handlerNotFound": "未找到 service handler",
@@ -177,7 +192,8 @@ export default {
   "session.parentSessionNotFoundPossiblyDeleted": "未找到父会话（可能已删除）",
   "session.workspaceNotInitialized": "工作区未初始化",
   "status.disconnectedFromHistory": "已断开历史连接",
-  "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
+  "web2img.readabilityNotInstalledWarn":
+    "@mozilla/readability/jsdom 未安装，自动回退到 DOM 提取。可执行: npm i @mozilla/readability jsdom",
   "web2img.contentTruncated": "内容过长，已截断",
   "web2img.descriptionLabel": "描述",
   "web2img.mainContentTitle": "正文",
@@ -185,7 +201,8 @@ export default {
   "web2img.textCleanAppendixTitle": "文本清洗附录",
   "web2img.noReadableTextExtracted": "未提取到 trafilatura/readability 文本",
   "web2img.resultIndex": "结果索引",
-  "web2img.sharpNotInstalledRawWarn": "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",
+  "web2img.sharpNotInstalledRawWarn":
+    "sharp 未安装，无法做图片缩放/切分/转码，将返回原始截图。请执行: npm i sharp",
   "web2img.sharpNotInstalledSplitWarn": "sharp 未安装，图片后处理/分切不可用。可执行: npm i sharp",
   "ws.badRequest": "请求无效",
   "ws.dialogStoppedByUser": "对话已被用户停止",
@@ -196,13 +213,16 @@ export default {
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
-  "agent.phaseSummaryPrompt": "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短摘要\n[DETAILS]\n整合之前小结后的完整详细内容，覆盖目标、已完成事项、关键结果、遗留问题；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
-  "agent.taskCheckPrompt": "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
+  "agent.phaseSummaryPrompt":
+    "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短摘要\n[DETAILS]\n整合之前小结后的完整详细内容，覆盖目标、已完成事项、关键结果、遗留问题；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
+  "agent.taskCheckPrompt":
+    "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
   "agent.abortError": "对话已被用户停止",
   "scenarios.full.name": "全能",
   "scenarios.full.description": "通用情景：不限制工具和上下文，按任务需要自主选择能力。",
   "scenarios.programming.name": "编程",
-  "scenarios.programming.description": "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
+  "scenarios.programming.description":
+    "编程情景：先 search/read_file 确认真实内容，再用 patch_file 修改；优先精确上下文补丁，避免手算 unified diff 行数；补丁失败后重新读取再改，必要时用 write_file。",
   "scenarios.text.name": "文本",
-  "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。"
+  "scenarios.text.description": "文本情景：适合写作、改写、摘要、翻译与内容整理。",
 };

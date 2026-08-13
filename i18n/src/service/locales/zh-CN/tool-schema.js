@@ -7,16 +7,14 @@
 import { CONNECTOR_TOOL_SCHEMA } from "./tool-schema/connectors.js";
 import { FILE_TOOL_SCHEMA } from "./tool-schema/files.js";
 import { TASK_ORCHESTRATION_TOOL_SCHEMA } from "./tool-schema/task-orchestration.js";
-import { CONTENT_TOOL_SCHEMA } from "./tool-schema/content.js";
 import { INVOCATION_TOOL_SCHEMA } from "./tool-schema/invocation.js";
 import { ASSISTANCE_TOOL_SCHEMA } from "./tool-schema/assistance.js";
 
 function buildToolSchemaFlat(schemaByTool = {}) {
   const flat = {};
   for (const spec of Object.values(schemaByTool || {})) {
-    const description = spec?.description && typeof spec.description === "object"
-      ? spec.description
-      : {};
+    const description =
+      spec?.description && typeof spec.description === "object" ? spec.description : {};
     const descriptionKey = String(description?.key || "").trim();
     const descriptionText = description?.text;
     if (descriptionKey) flat[descriptionKey] = descriptionText;
@@ -43,7 +41,6 @@ export const TOOL_SCHEMA_BY_TOOL = {
   ...CONNECTOR_TOOL_SCHEMA,
   ...FILE_TOOL_SCHEMA,
   ...TASK_ORCHESTRATION_TOOL_SCHEMA,
-  ...CONTENT_TOOL_SCHEMA,
   ...INVOCATION_TOOL_SCHEMA,
   ...ASSISTANCE_TOOL_SCHEMA,
 };

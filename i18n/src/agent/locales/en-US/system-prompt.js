@@ -14,7 +14,6 @@ const MONTHLY_SUMMARY_PATCH_EXAMPLE =
 const YEARLY_SUMMARY_PATCH_EXAMPLE =
   'ADD Y[1] category="Category" subcategory="Subcategory" principles="Principle 1 || Principle 2" reflections="Reflection 1 || Reflection 2"';
 
-
 const EXPERIENCE_PATCH_PROTOCOLS = Object.freeze({
   daily: Object.freeze({
     protocol:
@@ -44,11 +43,9 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "User workspace directory",
     workspaceDirectoryDescriptions: {
       runtime: "Runtime data root",
-      "runtime/attach": "Attachment root (grouped by sessionId/source)",
-      "runtime/attach/scoped":
-        "Attachment scoped directory: scoped/<sessionId>/<source>/attachments.json",
-      "runtime/connectors":
-        "Connector runtime/history info (e.g. connector-history.json)",
+      "runtime/attach":
+        "Attachment workspace logical directory; the authoritative hierarchy is runtime/attach/scoped/<sessionId>/<attachmentSource>/. Use this workspace-relative path for search or audit; use the complete attachment identity for cross-tool transfer instead of constructing a physical file path.",
+      "runtime/connectors": "Connector runtime/history info (e.g. connector-history.json)",
       "runtime/session": "Session and execution records",
       "runtime/ops_workdir": "Script execution and intermediate workspace",
       "runtime/memory": "Short-term/long-term memory data",
@@ -63,21 +60,27 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       longMemory: "Related long-term memory",
       models: "Available models and current model",
       skills: "Skill list (top-level)",
-      services:
-        "Available external service endpoints (serviceName + endpointName + description)",
+      services: "Available external service endpoints (serviceName + endpointName + description)",
       mcpServers: "Available MCP servers (name + type + description)",
       connectors: "Current connector information",
       attachments: "Current attachment metadata",
+      executionEvidence: "Tool execution evidence rules",
     },
     pathGuidance: {
-      preferRelative: "Default directories are in directories: currentDirectory, rootDirectory, opsWorkdir.",
-      sandboxView: "Sandbox view: relative paths use rootDirectory; scripts default to opsWorkdir; absolute paths must be sandbox paths inside allowedRoots.",
-      sandboxMounts: "Extra mounts may be used only when listed in extraMountTargets (sandbox paths).",
-      hostView: "Host view: relative paths use rootDirectory; scripts default to opsWorkdir; currentDirectory only names the current directory.",
-      superUserHost: "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
-      regularHost: "Absolute paths must stay inside rootDirectory; Windows uses a C:\\\\ prefix, macOS/Linux use a / prefix.",
-      patchRoot: "For patch_file, usually omit root; if set, root must be a workspace-relative child directory.",
+      preferRelative:
+        "General file paths use the workspace logical view; relative paths are always based on the current user's workspace.",
+      workspaceView:
+        "Sandbox is only the execute_script execution view and cannot be passed to other tools as a file path.",
+      taskLocalView:
+        "execute_native_script task-local paths last for one call, and output names are not paths. Across tools, pass only the complete attachment identity; never construct workspace or host paths.",
+      superUserHost:
+        "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
+      regularHost: "Regular users cannot use host absolute paths.",
+      patchRoot:
+        "For patch_file, usually omit root; if set, root must be a workspace-relative child directory.",
     },
+    executionEvidence:
+      "Report a tool as executed only when its actual call and corresponding result appear in the current context. The bound-tool list represents availability only. Never claim an uncalled tool, a model-internal capability, or a name absent from the runtime tool set as executed. Runtime toolTimeline and execution events are authoritative for tool auditing.",
   },
   memoryPrompt: {
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
@@ -100,8 +103,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "ADD L[memoryId] [stable long-term memory]",
         "UPDATE L[memoryId] [updated stable long-term memory]",
         "DELETE L[memoryId]",
-        "ADD M[metadataId] key=\"field\" value=\"value\"",
-        "UPDATE M[metadataId] key=\"field\" value=\"value\"",
+        'ADD M[metadataId] key="field" value="value"',
+        'UPDATE M[metadataId] key="field" value="value"',
         "DELETE M[metadataId]",
         "Hard constraint: L/M IDs must be positive integers; UPDATE/DELETE must reuse existing IDs; ADD must use an unused ID.",
         "Hard constraint: long-memory body content must be written through L commands; M commands are only auxiliary retrieval/classification metadata, so do not output M commands without corresponding L memories.",
@@ -118,10 +121,11 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     dailyExperiencePrompt: (params = {}) => {
       const knownDomainText = String(params.knownDomainText || "").trim();
       const shortMemoryItems = JSON.stringify(params.shortMemoryItems ?? [], null, 2);
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE D[integer] domain="domain" new=true|false experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || DAILY_EXPERIENCE_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE D[integer] domain="domain" new=true|false experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
+      const patchExample =
+        String(params.patchExample || "").trim() || DAILY_EXPERIENCE_PATCH_EXAMPLE;
       return [
         "System Instruction:",
         "Analyze the following short-term memories, classify them into known domains, or create new domains.",
@@ -146,10 +150,10 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownCategoryText = String(params.knownCategoryText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE W[integer] category="category" experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || WEEKLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE W[integer] category="category" experiences="exp1 || exp2" lessons="lesson1 || lesson2"';
+      const patchExample = String(params.patchExample || "").trim() || WEEKLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "System Instruction:",
         `Create a structured weekly synthesis for the past 7 days of records in domain [${domainName}].`,
@@ -174,10 +178,11 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE M[integer] category="category" subcategory="subcategory" patterns="pattern1 || pattern2" methodologies="method1 || method2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || MONTHLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE M[integer] category="category" subcategory="subcategory" patterns="pattern1 || pattern2" methodologies="method1 || method2"';
+      const patchExample =
+        String(params.patchExample || "").trim() || MONTHLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "System Instruction:",
         `Analyze monthly summaries for domain [${domainName}] and focus on pattern recognition.`,
@@ -201,10 +206,10 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       const domainName = String(params.domainName || "").trim();
       const knownTreeText = String(params.knownTreeText || "").trim();
       const mergedText = String(params.mergedText || "");
-      const patchProtocol = String(params.patchProtocol || "").trim()
-        || 'ADD/UPDATE/DELETE Y[integer] category="category" subcategory="subcategory" principles="principle1 || principle2" reflections="reflection1 || reflection2"';
-      const patchExample = String(params.patchExample || "").trim()
-        || YEARLY_SUMMARY_PATCH_EXAMPLE;
+      const patchProtocol =
+        String(params.patchProtocol || "").trim() ||
+        'ADD/UPDATE/DELETE Y[integer] category="category" subcategory="subcategory" principles="principle1 || principle2" reflections="reflection1 || reflection2"';
+      const patchExample = String(params.patchExample || "").trim() || YEARLY_SUMMARY_PATCH_EXAMPLE;
       return [
         "System Instruction:",
         `Review one year of retrospectives for domain [${domainName}] at a high strategic level.`,

@@ -65,13 +65,15 @@ test("patch_file: hunk 不匹配时返回带行号上下文", async () => {
     "*** End Patch",
     "",
   ].join("\n");
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: badPatch }));
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: badPatch }),
+  );
 
   assert.equal(result.toolName, "patch_file");
   assert.equal(result.ok, false);
   assert.equal(result.filePath, "a.txt");
   assert.equal(String(result.resolvedPath).includes(basePath), false);
-  assert.match(result.resolvedPath, /^\/workspace\//);
+  assert.equal(result.resolvedPath, "a.txt");
   assert.equal(result.details.line, 1);
   assert.match(result.nearbyContent, /1 \| one/);
   assert.match(result.nearbyContent, /2 \| two/);

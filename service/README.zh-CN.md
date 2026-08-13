@@ -11,7 +11,8 @@
 - 可选系统依赖：
   - `libreoffice`（Office 文档转换）
   - `ffmpeg`（音视频处理）
-  - `docker` / `bubblewrap(bwrap)` / `firejail`（仅在启用 `tools.execute_script.sandbox_mode=true` 时用于脚本沙箱）
+  - `docker` / `bubblewrap(bwrap)` / `firejail`（仅在 `tools.execute_script.sandbox_mode=true` 时用于脚本沙箱）
+  - 沙箱路径只属于 `execute_script` 执行视角，不能传给通用文件工具。
 
 ## 2) 启动方式
 

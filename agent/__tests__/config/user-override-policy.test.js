@@ -47,6 +47,33 @@ test("sanitizeUserConfig: 应剔除 tools.execute_script 覆盖", () => {
   assert.deepEqual(out.tools, { safe_tool: { enabled: true } });
 });
 
+test("sanitizeUserConfig: 用户不能扩大全局路径策略或连接器路径根", () => {
+  const out = sanitizeUserConfig({
+    security: { path_policy: { roles: { regular_user: { host: { access: "allow" } } } } },
+    tools: { access_connector: { command_file: { allowed_roots: ["/"], enabled: false } } },
+  });
+  assert.equal(out.security, undefined);
+  assert.equal(out.tools.access_connector.command_file.allowedRoots, undefined);
+  assert.equal(out.tools.access_connector.command_file.enabled, false);
+});
+
+test("sanitizeUserConfig: execute_native_script 只能由全局管理员配置", () => {
+  const sanitized = sanitizeUserConfig({
+    tools: {
+      execute_native_script: { enabled: true },
+      read_file: { enabled: false },
+    },
+  });
+  assert.equal(sanitized.tools.execute_native_script, undefined);
+  assert.equal(sanitized.tools.read_file.enabled, false);
+
+  const disabled = mergeConfig(
+    { tools: { execute_native_script: { enabled: false } } },
+    { tools: { execute_native_script: { enabled: true } } },
+  );
+  assert.equal(disabled.tools.execute_native_script.enabled, false);
+});
+
 test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () => {
   const globalConfig = {
     default_provider: "openai",
@@ -397,6 +424,7 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "search",
     "patch_file",
     "execute_script",
+    "execute_native_script",
     "multimodal_generate",
     "multimodal_parse",
     "user_interaction",

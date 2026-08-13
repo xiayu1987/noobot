@@ -6,7 +6,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createContentProcessTool } from "../../src/tools/data-processing/content-process-tool.js";
 import { createModelTool } from "../../src/tools/ai-models/model-tool.js";
 import { createServiceTool } from "../../src/tools/execution/service-tool.js";
 import { createConnectorAccessTool } from "../../src/tools/connectors/connector-access-tool.js";
@@ -16,29 +15,23 @@ import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.
 function buildAgentContext(runtime = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
-        basePath: "/tmp/noobot-test-workspace",
-        globalConfig: {},
-        userConfig: {},
-        systemRuntime: {
-          sessionId: "s-1",
-          rootSessionId: "s-1",
-          config: {},
-        },
-        ...runtime,
+      basePath: "/tmp/noobot-test-workspace",
+      globalConfig: {},
+      userConfig: {},
+      systemRuntime: {
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        config: {},
+      },
+      ...runtime,
     }),
   };
 }
 
-test("工具初始化 smoke: plugin/data-processing/ai/execution/connectors", async () => {
+test("工具初始化 smoke: ai/execution/connectors", async () => {
   const fileTools = createFileTool(buildAgentContext());
   assert.equal(fileTools[0]?.name, "read_file");
   assert.equal(fileTools[1]?.name, "write_file");
-
-  const contentTools = createContentProcessTool(buildAgentContext());
-  assert.deepEqual(
-    contentTools.map((tool) => tool?.name).sort(),
-    ["doc_to_data", "media_to_data", "process_content_task", "web_to_data"],
-  );
 
   const modelTools = createModelTool(buildAgentContext());
   assert.ok(modelTools.some((tool) => tool?.name === "switch_model"));

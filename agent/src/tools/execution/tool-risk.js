@@ -20,22 +20,60 @@ const TOOL_RISK_ORDER = Object.freeze({ low: 0, medium: 1, high: 2, critical: 3 
 const CONFIRMATION_MINIMUM_RISK = Object.freeze({ low: 3, medium: 2, high: 1, critical: 0 });
 
 export function normalizeSafeConfirmLevel(value) {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   return Object.hasOwn(TOOL_RISK_ORDER, normalized) ? normalized : TOOL_RISK_LEVEL.LOW;
 }
 
-export function shouldConfirmToolRisk({ safeConfirm = true, safeConfirmLevel = "low", riskLevel } = {}) {
+export function shouldConfirmToolRisk({
+  safeConfirm = true,
+  safeConfirmLevel = "low",
+  riskLevel,
+} = {}) {
   if (safeConfirm === false) return false;
-  const normalizedRiskLevel = String(riskLevel || "").trim().toLowerCase();
+  const normalizedRiskLevel = String(riskLevel || "")
+    .trim()
+    .toLowerCase();
   if (!Object.hasOwn(TOOL_RISK_ORDER, normalizedRiskLevel)) return false;
-  return TOOL_RISK_ORDER[normalizedRiskLevel] >= CONFIRMATION_MINIMUM_RISK[normalizeSafeConfirmLevel(safeConfirmLevel)];
+  return (
+    TOOL_RISK_ORDER[normalizedRiskLevel] >=
+    CONFIRMATION_MINIMUM_RISK[normalizeSafeConfirmLevel(safeConfirmLevel)]
+  );
 }
 
 export function createRiskLevelSchema(runtimeOrContext, descriptionKey) {
   return z.enum(Object.values(TOOL_RISK_LEVEL)).describe(tTool(runtimeOrContext, descriptionKey));
 }
 
-function confirmationContent(runtime, { toolName, operation, target = "", reason = "", riskLevel = "" }) {
+export function maxToolRiskLevel(...values) {
+  return values.reduce((highest, value) => {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (!Object.hasOwn(TOOL_RISK_ORDER, normalized)) return highest;
+    return TOOL_RISK_ORDER[normalized] > TOOL_RISK_ORDER[highest] ? normalized : highest;
+  }, TOOL_RISK_LEVEL.LOW);
+}
+
+export function classifyFileToolRisk({ operation = "read", pathView = "workspace" } = {}) {
+  const normalizedOperation = String(operation || "read")
+    .trim()
+    .toLowerCase();
+  const hostResource =
+    String(pathView || "workspace")
+      .trim()
+      .toLowerCase() === "host";
+  if (["write", "patch", "delete"].includes(normalizedOperation)) {
+    return hostResource ? TOOL_RISK_LEVEL.CRITICAL : TOOL_RISK_LEVEL.HIGH;
+  }
+  return hostResource ? TOOL_RISK_LEVEL.HIGH : TOOL_RISK_LEVEL.LOW;
+}
+
+function confirmationContent(
+  runtime,
+  { toolName, operation, target = "", reason = "", riskLevel = "" },
+) {
   return tTool(runtime, "tools.risk.criticalConfirmation", {
     toolName,
     operation,
@@ -54,13 +92,19 @@ export async function confirmCriticalToolOperation({
   reason = "",
 }) {
   const config = runtime?.systemRuntime?.config || {};
-  if (!shouldConfirmToolRisk({ safeConfirm: config.safeConfirm, safeConfirmLevel: config.safeConfirmLevel, riskLevel })) return;
+  if (
+    !shouldConfirmToolRisk({
+      safeConfirm: config.safeConfirm,
+      safeConfirmLevel: config.safeConfirmLevel,
+      riskLevel,
+    })
+  )
+    return;
   const bridge = runtime?.userInteractionBridge || null;
   if (!bridge?.requestUserInteraction) {
-    throw recoverableToolError(
-      tTool(runtime, "tools.risk.criticalConfirmationUnavailable"),
-      { code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING },
-    );
+    throw recoverableToolError(tTool(runtime, "tools.risk.criticalConfirmationUnavailable"), {
+      code: ERROR_CODE.RECOVERABLE_USER_INTERACTION_BRIDGE_MISSING,
+    });
   }
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const result = await bridge.requestUserInteraction({
@@ -75,12 +119,9 @@ export async function confirmCriticalToolOperation({
     resolvedBy: "",
   });
   if (result?.confirmed !== true) {
-    throw recoverableToolError(
-      tTool(runtime, "tools.risk.criticalCancelled"),
-      {
-        code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
-        details: { confirmed: false, cancelled: true },
-      },
-    );
+    throw recoverableToolError(tTool(runtime, "tools.risk.criticalCancelled"), {
+      code: ERROR_CODE.RECOVERABLE_USER_CANCELLED,
+      details: { confirmed: false, cancelled: true },
+    });
   }
 }

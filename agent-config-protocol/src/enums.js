@@ -97,16 +97,6 @@ export const MCP_SERVER_TYPE_ALIASES = {
   ],
 };
 
-export const SKILL_ACTION = {
-  START: "start",
-  COMPLETED: "completed",
-};
-
-export const SKILL_ACTION_ALIASES = {
-  [SKILL_ACTION.START]: [SKILL_ACTION.START, "begin", "running", "in_progress"],
-  [SKILL_ACTION.COMPLETED]: [SKILL_ACTION.COMPLETED, "done", "finish", "finished"],
-};
-
 export const DOC2DATA_FORMAT = {
   PNG: "png",
   JPEG: "jpeg",
@@ -219,10 +209,6 @@ export function normalizeModelAdapterId(input = "") {
 
 export function normalizeMcpServerType(input = "") {
   return normalizeWithAliases(input, MCP_SERVER_TYPE_ALIASES);
-}
-
-export function normalizeSkillAction(input = "") {
-  return normalizeWithAliases(input, SKILL_ACTION_ALIASES);
 }
 
 export function normalizeDoc2DataFormat(input = "") {

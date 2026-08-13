@@ -7,13 +7,12 @@ import { mkdir } from "node:fs/promises";
 import {
   filePath as path,
   resolveRuntimePathContext,
+  TOOL_PATH_CONTRACTS,
 } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
-import {
-  getRuntimeFromAgentContext,
-} from "../../context/agent-context-accessor.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   buildBubblewrapCommand,
   bwrapSupportsOption,
@@ -28,7 +27,12 @@ import {
   SCRIPT_EXECUTION_MODE,
 } from "./script-tool/constants.js";
 import { confirmCriticalToolOperation, createRiskLevelSchema } from "./tool-risk.js";
-import { run, runFileBacked, hasCommand, normalizeExecutionMode } from "./script-tool/process-exec.js";
+import {
+  run,
+  runFileBacked,
+  hasCommand,
+  normalizeExecutionMode,
+} from "./script-tool/process-exec.js";
 import {
   resolveSandboxProviderConfig,
   resolveDockerScriptConfig,
@@ -63,10 +67,17 @@ export function createScriptTool({ agentContext }) {
     !Array.isArray(effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME])
       ? effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME]
       : {};
-  const sandboxEnabled = scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+  const executionConfig =
+    scriptConfig?.execution && typeof scriptConfig.execution === "object"
+      ? scriptConfig.execution
+      : {};
+  const sandboxEnabled =
+    String(executionConfig?.view || "host")
+      .trim()
+      .toLowerCase() === "sandbox";
   const { provider: sandboxProvider, providerDetail } =
-    resolveSandboxProviderConfig(scriptConfig);
-  const dockerConfig = resolveDockerScriptConfig(scriptConfig, providerDetail);
+    resolveSandboxProviderConfig(executionConfig);
+  const dockerConfig = resolveDockerScriptConfig(executionConfig, providerDetail);
   const pathContext = resolveRuntimePathContext({
     runtime,
     agentContext,
@@ -75,6 +86,7 @@ export function createScriptTool({ agentContext }) {
     userId,
     globalConfig,
     effectiveConfig,
+    executionContext: { view: sandboxEnabled ? "sandbox" : "host", config: executionConfig },
   });
   const description = buildScriptToolDescription({
     runtime,
@@ -86,17 +98,32 @@ export function createScriptTool({ agentContext }) {
 
   const execute_script = new DynamicStructuredTool({
     name: EXECUTE_SCRIPT_TOOL_NAME,
+    metadata: { pathContract: TOOL_PATH_CONTRACTS.scriptInput },
     description,
     schema: z.object({
       command: z.string().describe(tTool(runtime, "tools.script.fieldCommand")),
       riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel"),
-      executionMode: z.enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
+      executionMode: z
+        .enum([SCRIPT_EXECUTION_MODE.FOREGROUND, SCRIPT_EXECUTION_MODE.BACKGROUND])
         .optional()
         .default(SCRIPT_EXECUTION_MODE.FOREGROUND)
         .describe(tTool(runtime, "tools.script.fieldExecutionMode")),
-      includeLineNumbers: z.boolean().optional().default(false).describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
+      includeLineNumbers: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(tTool(runtime, "tools.script.fieldIncludeLineNumbers")),
     }),
-    func: async ({ command, riskLevel, executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND, includeLineNumbers = false }, _runManager, toolConfig = {}) => {
+    func: async (
+      {
+        command,
+        riskLevel,
+        executionMode = SCRIPT_EXECUTION_MODE.FOREGROUND,
+        includeLineNumbers = false,
+      },
+      _runManager,
+      toolConfig = {},
+    ) => {
       await mkdir(workspace, { recursive: true });
       const normalizedCommand = String(command || "");
       const requestedExecutionMode = normalizeExecutionMode(executionMode);
@@ -117,9 +144,10 @@ export function createScriptTool({ agentContext }) {
       });
 
       if (!sandboxEnabled) {
-        const runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-          ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal)
-          : await run(normalizedCommand, workspace, timeout, abortSignal);
+        const runResult =
+          requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
+            ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal)
+            : await run(normalizedCommand, workspace, timeout, abortSignal);
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
           return toolFileBackedExecResult(
             "local",
@@ -144,7 +172,13 @@ export function createScriptTool({ agentContext }) {
             agentContext,
             pathContext,
           }),
-          { includeLineNumbers: shouldIncludeLineNumbers, runtime, agentContext, basePath, identity },
+          {
+            includeLineNumbers: shouldIncludeLineNumbers,
+            runtime,
+            agentContext,
+            basePath,
+            identity,
+          },
         );
       }
 
@@ -259,11 +293,7 @@ export function createScriptTool({ agentContext }) {
       } else {
         const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
         if (!dockerInstalled) {
-          throw missingCommandError(
-            SANDBOX_PROVIDER_NAME.DOCKER,
-            SANDBOX_COMMAND.DOCKER,
-            runtime,
-          );
+          throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, SANDBOX_COMMAND.DOCKER, runtime);
         }
         dockerRunInput = {
           userRoot,
@@ -278,14 +308,10 @@ export function createScriptTool({ agentContext }) {
 
       let runResult = null;
       if (mode === SANDBOX_PROVIDER_NAME.DOCKER && dockerRunInput) {
-        const { result: dockerResult, docker: built } = await runDockerCommand(
-          {
-            ...dockerRunInput,
-            runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-              ? runFileBacked
-              : run,
-          },
-        );
+        const { result: dockerResult, docker: built } = await runDockerCommand({
+          ...dockerRunInput,
+          runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
+        });
         runResult = dockerResult;
         extra = {
           ...extra,
@@ -301,9 +327,10 @@ export function createScriptTool({ agentContext }) {
           }),
         };
       } else {
-        runResult = requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-          ? await runFileBacked(sandboxCmd, workspace, timeout, abortSignal)
-          : await run(sandboxCmd, workspace, timeout, abortSignal);
+        runResult =
+          requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
+            ? await runFileBacked(sandboxCmd, workspace, timeout, abortSignal)
+            : await run(sandboxCmd, workspace, timeout, abortSignal);
       }
       if (
         mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&

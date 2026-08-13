@@ -44,8 +44,6 @@ export const BUILTIN_CONFIG_PRUNE_PATHS = Object.freeze([
   ["tools", "delegate_task_async", "pollIntervalMs"],
   ["tools", "wait_async_task_result", "poll_interval_ms"],
   ["tools", "wait_async_task_result", "pollIntervalMs"],
-  ["tools", "process_content_task", "max_tool_loop_turns"],
-  ["tools", "process_content_task", "maxToolLoopTurns"],
   ["tools", "execute_script", "script_timeout_ms"],
   ["tools", "execute_script", "scriptTimeoutMs"],
   ["tools", "process_connector_tool", "max_tool_loop_turns"],
