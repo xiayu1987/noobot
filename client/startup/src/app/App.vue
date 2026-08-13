@@ -6,7 +6,7 @@
 <template>
   <main class="startup-shell">
     <section class="startup-card">
-      <StartupHero :message="message" />
+      <StartupHero :message="message" :messages="messages" />
       <div class="content">
         <SuperAdminSetupForm
           v-if="currentStep === 'super-admin'"
@@ -14,6 +14,7 @@
           :model-options="modelOptions"
           :error="superAdminError"
           :saving="savingSuperAdmin"
+          :messages="messages"
           @update:form="updateSuperAdminForm"
           @submit="submitSuperAdmin"
         />
@@ -24,6 +25,7 @@
           :error="configError"
           :saving="savingConfig"
           :skipping="skippingConfig"
+          :messages="messages"
           @update:values="updateConfigValues"
           @submit="submitConfig"
           @skip="skipConfig"
@@ -35,12 +37,13 @@
           :error="dependencyError"
           :installing="installingDependencies"
           :skipping="skippingDependencies"
+          :messages="messages"
           @update:selected-dependencies="selectedDependencies = $event"
           @install="installDependencies"
           @skip="skipDependencies"
         />
-        <StartupLogPanel :text="logText" />
-        <RetryActions :show="showRetry" @retry="retryStartup" />
+        <StartupLogPanel :text="logText" :messages="messages" />
+        <RetryActions :show="showRetry" :messages="messages" @retry="retryStartup" />
       </div>
     </section>
   </main>
@@ -57,6 +60,7 @@ import { useStartupBridge } from "../composables/useStartupBridge.js";
 
 const {
   message,
+  messages,
   currentStep,
   requiredParams,
   configValues,

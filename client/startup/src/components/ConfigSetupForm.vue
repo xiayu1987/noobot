@@ -6,7 +6,7 @@
 <template>
   <el-form class="setup-form" label-position="top" @submit.prevent="$emit('submit')">
     <p>
-      The following configuration variables are optional. You can fill them now or skip this step.
+      {{ messages.config.intro }}
     </p>
     <div class="form-grid">
       <el-form-item
@@ -20,7 +20,7 @@
           autocomplete="off"
           @update:model-value="updateValue(item.key, $event)"
         />
-        <small>{{ item.description || "Optional configuration value" }}</small>
+        <small>{{ item.description || messages.config.valueHelp }}</small>
       </el-form-item>
     </div>
     <el-alert
@@ -32,8 +32,10 @@
       :closable="false"
     />
     <div class="actions">
-      <el-button native-type="submit" type="primary" :loading="saving">Save and continue</el-button>
-      <el-button :loading="skipping" @click="$emit('skip')">Skip</el-button>
+      <el-button native-type="submit" type="primary" :loading="saving">{{
+        messages.config.save
+      }}</el-button>
+      <el-button :loading="skipping" @click="$emit('skip')">{{ messages.config.skip }}</el-button>
     </div>
   </el-form>
 </template>
@@ -45,6 +47,7 @@ const props = defineProps({
   error: { type: String, default: "" },
   saving: { type: Boolean, default: false },
   skipping: { type: Boolean, default: false },
+  messages: { type: Object, required: true },
 });
 const emit = defineEmits(["submit", "skip", "update:values"]);
 

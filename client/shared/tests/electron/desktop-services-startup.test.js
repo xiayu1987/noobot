@@ -64,6 +64,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
   };
   let desktopConfigState = null;
   const calls = [];
+  const startupEvents = [];
   const execFileCalls = [];
   let healthCalls = 0;
   const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
@@ -86,7 +87,11 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
     startupTimeoutMs: 200,
     pollIntervalMs: 1,
     getLogFilePath: (fileName = "desktop-startup.log") => path.join(userDataPath, "logs", fileName),
-    ensureDesktopGlobalConfig: () => configState,
+    ensureDesktopGlobalConfig: () => {
+      startupEvents.push("config-loaded");
+      return configState;
+    },
+    sendStatus: (status) => startupEvents.push(`status:${status.phase}`),
     getDesktopConfigState: () => desktopConfigState,
     setDesktopConfigState: (state) => {
       desktopConfigState = state;
@@ -135,6 +140,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
     calls,
     execFileCalls,
     getHealthCalls: () => healthCalls,
+    startupEvents,
     manager,
     restore: async () => {
       if (originalResourcesPath) {
@@ -162,6 +168,7 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
       assert.ok(fixture.getHealthCalls() >= 2);
+      assert.deepEqual(fixture.startupEvents.slice(0, 2), ["config-loaded", "status:checking"]);
     } finally {
       await fixture.restore();
     }

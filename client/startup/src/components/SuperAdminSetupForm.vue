@@ -6,11 +6,10 @@
 <template>
   <el-form label-position="top" class="setup-form" @submit.prevent="$emit('submit')">
     <p>
-      Complete the required first-run setup. These values are saved only in your desktop user data
-      directory.
+      {{ messages.setup.intro }}
     </p>
     <div class="form-grid">
-      <el-form-item label="Language">
+      <el-form-item :label="messages.setup.language">
         <el-select
           :model-value="form.language"
           @update:model-value="updateField('language', $event)"
@@ -18,9 +17,9 @@
           <el-option label="简体中文" value="zh-CN" />
           <el-option label="English" value="en-US" />
         </el-select>
-        <small>Used as the default Noobot interface and response language.</small>
+        <small>{{ messages.setup.languageHelp }}</small>
       </el-form-item>
-      <el-form-item label="Model">
+      <el-form-item :label="messages.setup.model">
         <el-select
           :model-value="form.model"
           filterable
@@ -33,38 +32,35 @@
             :value="item.key"
           />
         </el-select>
-        <small>Used as the default model for global and default user configuration.</small>
+        <small>{{ messages.setup.modelHelp }}</small>
       </el-form-item>
-      <el-form-item label="Super admin username">
+      <el-form-item :label="messages.setup.username">
         <el-input
           :model-value="form.userId"
           autocomplete="username"
-          placeholder="e.g. owner"
+          :placeholder="messages.setup.usernamePlaceholder"
           @update:model-value="updateField('userId', $event)"
         />
-        <small>Please use a non-default administrator name.</small>
+        <small>{{ messages.setup.usernameHelp }}</small>
       </el-form-item>
-      <el-form-item class="field-full" label="Connect code">
+      <el-form-item class="field-full" :label="messages.setup.connectCode">
         <el-input
           :model-value="form.connectCode"
           autocomplete="off"
-          placeholder="Create a private connection code"
+          :placeholder="messages.setup.connectCodePlaceholder"
           show-password
           @update:model-value="updateField('connectCode', $event)"
         />
-        <small>Keep this code private. It is used to connect as the super admin.</small>
+        <small>{{ messages.setup.connectCodeHelp }}</small>
       </el-form-item>
-      <el-form-item class="field-full" label="Dependency download proxy">
+      <el-form-item class="field-full" :label="messages.setup.proxy">
         <el-input
           :model-value="form.dependencyProxyUrl"
           autocomplete="off"
-          placeholder="Optional, e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:7890"
+          :placeholder="messages.setup.proxyPlaceholder"
           @update:model-value="updateField('dependencyProxyUrl', $event)"
         />
-        <small
-          >Optional. If set, Noobot checks it before saving and uses it when downloading
-          dependencies on Windows/macOS.</small
-        >
+        <small>{{ messages.setup.proxyHelp }}</small>
       </el-form-item>
     </div>
     <el-alert
@@ -76,7 +72,9 @@
       :closable="false"
     />
     <div class="actions">
-      <el-button native-type="submit" type="primary" :loading="saving">Next</el-button>
+      <el-button native-type="submit" type="primary" :loading="saving">{{
+        messages.setup.next
+      }}</el-button>
     </div>
   </el-form>
 </template>
@@ -87,6 +85,7 @@ const props = defineProps({
   modelOptions: { type: Array, default: () => [] },
   error: { type: String, default: "" },
   saving: { type: Boolean, default: false },
+  messages: { type: Object, required: true },
 });
 const emit = defineEmits(["submit", "update:form"]);
 

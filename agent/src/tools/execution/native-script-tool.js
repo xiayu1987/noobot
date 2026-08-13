@@ -73,13 +73,18 @@ function validateScriptBody(value) {
   try {
     ast = parse(
       `async ({ browser, libreoffice, ffmpeg, ffprobe, files, output, args, log }) => {\n${body}\n}`,
-      { ecmaVersion: "latest", sourceType: "module" },
+      { ecmaVersion: "latest", sourceType: "module", locations: true },
     );
   } catch (error) {
     throw new Error(`script_body syntax error: ${error.message}`);
   }
   const visit = (node) => {
     if (!node || typeof node !== "object") return;
+    const location = () => {
+      const line = Math.max(1, Number(node.loc?.start?.line || 2) - 1);
+      const column = Math.max(1, Number(node.loc?.start?.column || 0) + 1);
+      return ` at line ${line}, column ${column}`;
+    };
     if (
       [
         "ImportDeclaration",
@@ -91,10 +96,12 @@ function validateScriptBody(value) {
         "ThisExpression",
       ].includes(node.type)
     ) {
-      throw new Error(`script_body contains forbidden syntax: ${node.type}`);
+      throw new Error(`script_body contains forbidden syntax: ${node.type}${location()}`);
     }
     if (node.type === "Identifier" && FORBIDDEN_IDENTIFIERS.has(node.name)) {
-      throw new Error(`script_body contains forbidden runtime capability: ${node.name}`);
+      throw new Error(
+        `script_body contains forbidden runtime capability: ${node.name}${location()}`,
+      );
     }
     if (node.type === "MemberExpression") {
       const propertyName =
@@ -104,13 +111,15 @@ function validateScriptBody(value) {
             ? node.property.name
             : "";
       if (FORBIDDEN_PROPERTIES.has(propertyName))
-        throw new Error(`script_body contains forbidden property access: ${propertyName}`);
+        throw new Error(
+          `script_body contains forbidden property access: ${propertyName}${location()}`,
+        );
       if (node.computed && node.property?.type !== "Literal") {
-        throw new Error("script_body contains forbidden dynamic property access");
+        throw new Error(`script_body contains forbidden dynamic property access${location()}`);
       }
     }
     if (node.type === "Literal" && FORBIDDEN_PROPERTIES.has(String(node.value || ""))) {
-      throw new Error(`script_body contains forbidden property name: ${node.value}`);
+      throw new Error(`script_body contains forbidden property name: ${node.value}${location()}`);
     }
     for (const [key, child] of Object.entries(node)) {
       if (key === "start" || key === "end") continue;

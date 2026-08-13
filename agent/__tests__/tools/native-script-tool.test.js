@@ -150,6 +150,28 @@ test("execute_native_script rejects host runtime escape syntax before execution"
   }
 });
 
+test("execute_native_script reports the source location of forbidden dynamic property access", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-location-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  await assert.rejects(
+    () =>
+      tool.invoke(
+        {
+          script_body: [
+            "const values = { safe: 1 };",
+            'const key = "safe";',
+            "log(values.safe);",
+            "log(values[key]);",
+          ].join("\n"),
+        },
+        { configurable: { transferIdentity: IDENTITY } },
+      ),
+    /forbidden dynamic property access at line 4, column 5/,
+  );
+});
+
 test("execute_native_script uses the installed Chromium path with an isolated task HOME", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-"));
   let persistedRequest = null;
@@ -394,10 +416,10 @@ log(converted.output);
 
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.output_file_count, 2);
-  assert.deepEqual(
-    persistedRequest.artifacts.map((artifact) => artifact.name).sort(),
-    ["source.docx", "source.html"],
-  );
+  assert.deepEqual(persistedRequest.artifacts.map((artifact) => artifact.name).sort(), [
+    "source.docx",
+    "source.html",
+  ]);
   assert.match(result.stdout, /output:\/\/source\.docx/);
 });
 
@@ -492,6 +514,97 @@ log(parsed.status, temporaryText);
   assert.match(result.stdout, /FFMETADATA/);
   assert.equal(persistedRequest.artifacts.length, 1);
   assert.equal(persistedRequest.artifacts[0].name, "result.json");
+});
+
+test("execute_native_script writes and reads temporary text and JSON without collecting attachments", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-write-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const temporaryText = await output.tempFile("temporary.txt");
+const temporaryJson = await output.tempFile("temporary.json");
+await files.writeText(temporaryText, "temporary-content");
+await files.writeJson(temporaryJson, { status: "ready" });
+log(await files.readText(temporaryText), (await files.readJson(temporaryJson)).status);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /temporary-content ready/);
+  assert.equal(result.output_file_count, 0);
+  assert.deepEqual(result.transferEnvelopes, []);
+});
+
+test("execute_native_script converts into an explicit temporary LibreOffice directory", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-temp-"));
+  await fs.writeFile(
+    path.join(basePath, "input.html"),
+    "<html><body><h1>Temporary PDF</h1></body></html>",
+    "utf8",
+  );
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "input.html" }],
+        script_body: `
+const source = await files.input(0);
+const temporaryDirectory = await output.tempDirectory("libreoffice-output");
+const converted = await libreoffice.convert({
+  input: source,
+  outputDirectory: temporaryDirectory,
+  outputFormat: "pdf",
+});
+log(converted.output, (await files.readText(converted.output)).length);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /temp:\/\/libreoffice-output\/0\.pdf/);
+  assert.doesNotMatch(result.stderr, /output:\/\/temp:/);
+  assert.equal(result.output_file_count, 0);
+  assert.deepEqual(result.transferEnvelopes, []);
+});
+
+test("execute_native_script rejects a temporary file token as LibreOffice outputDirectory", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-file-dir-"));
+  await fs.writeFile(path.join(basePath, "input.html"), "<p>source</p>", "utf8");
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "input.html" }],
+        script_body: `
+const source = await files.input(0);
+const temporaryFile = await output.tempFile("libreoffice-output");
+await libreoffice.convert({
+  input: source,
+  outputDirectory: temporaryFile,
+  outputFormat: "pdf",
+});
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(
+    result.stderr,
+    /outputDirectory requires output\.directory or output\.tempDirectory/,
+  );
+  assert.doesNotMatch(result.stderr, /output:\/\/temp:/);
 });
 
 test("execute_native_script requires task paths for file reads and output tokens for writes", async () => {
