@@ -82,6 +82,12 @@ export function buildNativeProcessEnv({
   return environment;
 }
 
+export function buildNativeCapabilityProcessEnv(options = {}) {
+  const environment = buildNativeProcessEnv(options);
+  delete environment.ELECTRON_RUN_AS_NODE;
+  return environment;
+}
+
 export function terminateNativeProcessTree(
   child,
   signal = "SIGTERM",

@@ -10,6 +10,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import {
   buildNativeProcessEnv,
+  buildNativeCapabilityProcessEnv,
   cleanupNativeTaskDirectory,
   resolveNativeBrowserExecutable,
   resolveNativeLibreOfficeExecutable,
@@ -96,6 +97,18 @@ test("native process environment forces packaged Electron into Node mode", () =>
   });
 
   assert.equal(environment.ELECTRON_RUN_AS_NODE, "1");
+});
+
+test("native capability processes do not inherit Electron Node mode", () => {
+  const environment = buildNativeCapabilityProcessEnv({
+    home: "/task",
+    temp: "/temp",
+    platform: "linux",
+    sourceEnv: { PATH: "/usr/bin", ELECTRON_RUN_AS_NODE: "1" },
+  });
+
+  assert.equal(environment.ELECTRON_RUN_AS_NODE, undefined);
+  assert.equal(environment.PATH, "/usr/bin");
 });
 
 test("native process environment preserves only declared network proxy variables", () => {

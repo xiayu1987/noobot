@@ -17,7 +17,14 @@ import {
   resolveTaskPath,
 } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { buildNativeProcessEnv } from "./native-script-process.js";
+import { buildNativeCapabilityProcessEnv } from "./native-script-process.js";
+
+const LIBREOFFICE_OUTPUT_FORMATS = Object.freeze({
+  docx: Object.freeze({ extension: "docx", convertTo: "docx:Office Open XML Text" }),
+  xlsx: Object.freeze({ extension: "xlsx", convertTo: "xlsx:Calc MS Excel 2007 XML" }),
+  pptx: Object.freeze({ extension: "pptx", convertTo: "pptx:Impress MS PowerPoint 2007 XML" }),
+  pdf: Object.freeze({ extension: "pdf", convertTo: "pdf" }),
+});
 
 function inside(root, candidate) {
   const relative = path.relative(root, candidate);
@@ -53,7 +60,7 @@ function runFixed(command, args, cwd, timeoutMs) {
         shell: false,
         timeout: Number(timeoutMs || 0) || undefined,
         windowsHide: true,
-        env: buildNativeProcessEnv({ home: cwd, temp: path.join(cwd, "tmp") }),
+        env: buildNativeCapabilityProcessEnv({ home: cwd, temp: path.join(cwd, "tmp") }),
         maxBuffer: LENGTH_THRESHOLDS.nativeScript.processOutputBytes,
       },
       (error, stdout, stderr) => {
@@ -130,6 +137,14 @@ async function runCapability(command, commandArgs, cwd, timeoutMs, label, roots)
 
 export function buildLibreOfficeUserInstallationUrl(tempRoot) {
   return pathToFileURL(path.join(tempRoot, "libreoffice-profile")).href;
+}
+
+export function resolveLibreOfficeOutputFormat(outputFormat) {
+  const format = String(outputFormat || "").trim().toLowerCase();
+  if (!/^[a-z0-9_-]{1,32}$/i.test(format)) {
+    throw new Error("LibreOffice output format is invalid");
+  }
+  return LIBREOFFICE_OUTPUT_FORMATS[format] || { extension: format, convertTo: format };
 }
 
 function assertHttpUrl(value) {
@@ -410,9 +425,7 @@ export async function createNativeScriptRuntime({
       const { target: source } = await resolveReadableFile(inputPath, "libreoffice.convert input");
       const targetDir = await resolveOutput(outputDirectory);
       await mkdir(targetDir, { recursive: true });
-      const format = String(outputFormat || "").trim();
-      if (!/^[a-z0-9_-]{1,32}$/i.test(format))
-        throw new Error("LibreOffice output format is invalid");
+      const format = resolveLibreOfficeOutputFormat(outputFormat);
       const result = await runCapability(
         String(libreOfficeExecutable || "").trim() ||
           (process.platform === "win32" ? "soffice.exe" : "libreoffice"),
@@ -425,7 +438,7 @@ export async function createNativeScriptRuntime({
           "--invisible",
           `-env:UserInstallation=${buildLibreOfficeUserInstallationUrl(tempRoot)}`,
           "--convert-to",
-          format,
+          format.convertTo,
           "--outdir",
           targetDir,
           source,
@@ -438,7 +451,7 @@ export async function createNativeScriptRuntime({
       if (/error|no export filter|failed/i.test(String(result.stderr || "")))
         throw new Error("LibreOffice conversion reported an error");
       const sourceBase = path.basename(source, path.extname(source));
-      const expected = path.join(targetDir, `${sourceBase}.${format}`);
+      const expected = path.join(targetDir, `${sourceBase}.${format.extension}`);
       const outputStat = await stat(expected).catch(() => null);
       if (!outputStat?.isFile() || outputStat.size <= 0)
         throw new Error("LibreOffice conversion produced no non-empty output");

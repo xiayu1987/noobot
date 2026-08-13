@@ -11,6 +11,7 @@ import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
 import {
   buildLibreOfficeUserInstallationUrl,
+  resolveLibreOfficeOutputFormat,
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
@@ -46,6 +47,21 @@ test("native LibreOffice profile uses an encoded file URL", () => {
   );
   assert.equal(new URL(value).protocol, "file:");
   assert.match(value, /Noobot%20Native%20Profile%20%231\/libreoffice-profile$/);
+});
+
+test("native LibreOffice uses authoritative Office Open XML export filters", () => {
+  assert.deepEqual(resolveLibreOfficeOutputFormat("docx"), {
+    extension: "docx",
+    convertTo: "docx:Office Open XML Text",
+  });
+  assert.deepEqual(resolveLibreOfficeOutputFormat("xlsx"), {
+    extension: "xlsx",
+    convertTo: "xlsx:Calc MS Excel 2007 XML",
+  });
+  assert.deepEqual(resolveLibreOfficeOutputFormat("pptx"), {
+    extension: "pptx",
+    convertTo: "pptx:Impress MS PowerPoint 2007 XML",
+  });
 });
 
 function createRuntime(basePath, patch = {}) {
@@ -323,7 +339,7 @@ const source = await files.input(0);
 const converted = await libreoffice.convert({
   input: source,
   outputDirectory: output.directory,
-  outputFormat: "pdf",
+  outputFormat: "docx",
 });
 log(converted.output, converted.outputBytes);
 `,
@@ -334,9 +350,9 @@ log(converted.output, converted.outputBytes);
 
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.output_file_count, 1);
-  assert.equal(persistedRequest.artifacts[0].name, "0.pdf");
+  assert.equal(persistedRequest.artifacts[0].name, "0.docx");
   assert.ok(Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").length > 0);
-  assert.match(result.stdout, /output:\/\/0\.pdf/);
+  assert.match(result.stdout, /output:\/\/0\.docx/);
 });
 
 test("execute_native_script converts a same-task output token with LibreOffice", async () => {
@@ -367,7 +383,7 @@ await files.writeText(source, "<html><body><h1>Same task</h1></body></html>");
 const converted = await libreoffice.convert({
   input: source,
   outputDirectory: output.directory,
-  outputFormat: "pdf",
+  outputFormat: "docx",
 });
 log(converted.output);
 `,
@@ -380,9 +396,9 @@ log(converted.output);
   assert.equal(result.output_file_count, 2);
   assert.deepEqual(
     persistedRequest.artifacts.map((artifact) => artifact.name).sort(),
-    ["source.html", "source.pdf"],
+    ["source.docx", "source.html"],
   );
-  assert.match(result.stdout, /output:\/\/source\.pdf/);
+  assert.match(result.stdout, /output:\/\/source\.docx/);
 });
 
 test("execute_native_script projects runtime roots but preserves caller path data", async () => {
