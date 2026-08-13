@@ -11,6 +11,7 @@ import {
   summarizeDependencyRuntimeEnv,
   summarizeDependencySources,
 } from "../dependencies/runtime-env.js";
+import { getDependencyProxyEnv } from "../dependencies/proxy.js";
 
 export function createDesktopServiceManager({
   app,
@@ -45,9 +46,14 @@ export function createDesktopServiceManager({
     if (!child) return;
     const pid = Number(child.pid || 0);
     if (process.platform === "win32" && Number.isInteger(pid) && pid > 0) {
-      execFileProcess("taskkill", ["/PID", String(pid), "/T", "/F"], {
-        windowsHide: true,
-      }, () => {});
+      execFileProcess(
+        "taskkill",
+        ["/PID", String(pid), "/T", "/F"],
+        {
+          windowsHide: true,
+        },
+        () => {},
+      );
       return;
     }
     child.kill("SIGTERM");
@@ -55,15 +61,25 @@ export function createDesktopServiceManager({
 
   function syncPackagedProxyConfig(proxyName) {
     if (!app.isPackaged) return;
-    const examplePath = path.join(packagedBackendRoot, proxyName, `${proxyName}.config.example.json`);
+    const examplePath = path.join(
+      packagedBackendRoot,
+      proxyName,
+      `${proxyName}.config.example.json`,
+    );
     const configPath = path.join(packagedBackendRoot, proxyName, `${proxyName}.config.json`);
     if (fs.existsSync(configPath)) return;
     if (!fs.existsSync(examplePath)) {
-      sendStatus({ phase: "warning", message: `Skipped ${proxyName} config sync; example config not found: ${examplePath}` });
+      sendStatus({
+        phase: "warning",
+        message: `Skipped ${proxyName} config sync; example config not found: ${examplePath}`,
+      });
       return;
     }
     fs.copyFileSync(examplePath, configPath);
-    sendStatus({ phase: "config", message: `Synced ${proxyName} config from example: ${examplePath} -> ${configPath}` });
+    sendStatus({
+      phase: "config",
+      message: `Synced ${proxyName} config from example: ${examplePath} -> ${configPath}`,
+    });
   }
 
   function syncPackagedProxyConfigs() {
@@ -71,13 +87,26 @@ export function createDesktopServiceManager({
     syncPackagedProxyConfig("model-proxy");
   }
 
-  function writeStartupContext({ isPackaged, userDataPath, cwd, configDir, configState, globalConfigPath } = {}) {
+  function writeStartupContext({
+    isPackaged,
+    userDataPath,
+    cwd,
+    configDir,
+    configState,
+    globalConfigPath,
+  } = {}) {
     const runtimeDir = path.join(userDataPath, "runtime");
     fs.mkdirSync(runtimeDir, { recursive: true });
     const backendRoot = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const startupContextPath = path.join(runtimeDir, "startup-context.json");
-    const dependencyEnv = buildDependencyRuntimeEnv({ app });
+    const dependencyProxyEnv = getDependencyProxyEnv(
+      String(configState?.superAdmin?.dependencyProxyUrl || "").trim(),
+    );
+    const dependencyEnv = {
+      ...buildDependencyRuntimeEnv({ app }),
+      ...dependencyProxyEnv,
+    };
     const dependencySummary = {
       ...summarizeDependencyRuntimeEnv(dependencyEnv),
       sourceSummary: summarizeDependencySources({ runtimeEnv: dependencyEnv, app }),
@@ -130,7 +159,6 @@ export function createDesktopServiceManager({
     return { startupContextPath, dependencyEnv, dependencySummary };
   }
 
-
   async function isServiceHealthy() {
     try {
       const controller = new AbortController();
@@ -162,11 +190,16 @@ export function createDesktopServiceManager({
   function startNoobotService() {
     if (managedServiceProcess) return;
     const isPackaged = app.isPackaged;
-    const command = isPackaged ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
+    const command = isPackaged
+      ? process.execPath
+      : process.platform === "win32"
+        ? "npm.cmd"
+        : "npm";
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const userDataPath = app.getPath("userData");
     const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
-    const configState = getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
+    const configState =
+      getDesktopConfigState() || ensureDesktopGlobalConfig({ isPackaged, userDataPath });
     setDesktopConfigState(configState);
     const globalConfigPath = configState.globalConfigPath;
     const { startupContextPath, dependencyEnv, dependencySummary } = writeStartupContext({
@@ -178,7 +211,11 @@ export function createDesktopServiceManager({
       globalConfigPath,
     });
     const args = isPackaged
-      ? [path.join(packagedBackendRoot, "service", "app.js"), "--startup-context", startupContextPath]
+      ? [
+          path.join(packagedBackendRoot, "service", "app.js"),
+          "--startup-context",
+          startupContextPath,
+        ]
       : ["run", "-w", "service", "start", "--", "--startup-context", startupContextPath];
     sendStatus({
       phase: "starting",
@@ -246,8 +283,14 @@ export function createDesktopServiceManager({
   function startAgentProxy() {
     if (managedAgentProxyProcess) return;
     const isPackaged = app.isPackaged;
-    const command = isPackaged ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
-    const args = isPackaged ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")] : ["run", "-w", "agent-proxy", "start"];
+    const command = isPackaged
+      ? process.execPath
+      : process.platform === "win32"
+        ? "npm.cmd"
+        : "npm";
+    const args = isPackaged
+      ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")]
+      : ["run", "-w", "agent-proxy", "start"];
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const frontendRoot = isPackaged ? path.join(process.resourcesPath, "frontend") : "";
     const dependencyEnv = buildDependencyRuntimeEnv({ app });
@@ -297,13 +340,19 @@ export function createDesktopServiceManager({
     });
     managedAgentProxyProcess.once("error", (error) => {
       managedAgentProxyProcess = null;
-      sendStatus({ phase: "error", message: `Failed to start Noobot agent proxy process: ${error?.message || String(error)}` });
+      sendStatus({
+        phase: "error",
+        message: `Failed to start Noobot agent proxy process: ${error?.message || String(error)}`,
+      });
     });
     managedAgentProxyProcess.once("exit", (code, signal) => {
       const wasManaged = managedAgentProxyProcess;
       managedAgentProxyProcess = null;
       if (wasManaged && code !== 0 && code !== null) {
-        sendStatus({ phase: "error", message: `Noobot agent proxy exited early (code=${code}, signal=${signal || ""}).` });
+        sendStatus({
+          phase: "error",
+          message: `Noobot agent proxy exited early (code=${code}, signal=${signal || ""}).`,
+        });
       }
     });
   }
@@ -335,14 +384,29 @@ export function createDesktopServiceManager({
         return;
       }
 
-      setDesktopConfigState(ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") }));
+      setDesktopConfigState(
+        ensureDesktopGlobalConfig({
+          isPackaged: app.isPackaged,
+          userDataPath: app.getPath("userData"),
+        }),
+      );
       if (getDesktopConfigState().superAdmin?.missing) {
         await requestSuperAdminConfig(getDesktopConfigState().superAdmin);
-        setDesktopConfigState(ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") }));
+        setDesktopConfigState(
+          ensureDesktopGlobalConfig({
+            isPackaged: app.isPackaged,
+            userDataPath: app.getPath("userData"),
+          }),
+        );
       }
       if (getDesktopConfigState().missingParams.length) {
         await requestMissingConfigParams(getDesktopConfigState().missingParams);
-        setDesktopConfigState(ensureDesktopGlobalConfig({ isPackaged: app.isPackaged, userDataPath: app.getPath("userData") }));
+        setDesktopConfigState(
+          ensureDesktopGlobalConfig({
+            isPackaged: app.isPackaged,
+            userDataPath: app.getPath("userData"),
+          }),
+        );
       }
       sendStatus({ phase: "starting", message: "Starting Noobot service..." });
       startNoobotService();
@@ -356,7 +420,10 @@ export function createDesktopServiceManager({
         syncPackagedProxyConfigs();
         if (!(await isAgentProxyHealthy())) startAgentProxy();
         const proxyHealthy = await waitForHealthyAgentProxy();
-        if (!proxyHealthy) throw new Error(`Noobot agent proxy did not become healthy within ${startupTimeoutMs}ms.`);
+        if (!proxyHealthy)
+          throw new Error(
+            `Noobot agent proxy did not become healthy within ${startupTimeoutMs}ms.`,
+          );
         sendStatus({ phase: "ready", message: "Noobot agent proxy is ready." });
       }
     })().finally(() => {
@@ -364,7 +431,6 @@ export function createDesktopServiceManager({
     });
     return serviceStartupPromise;
   }
-
 
   function stopManagedService() {
     if (managedAgentProxyProcess) {
@@ -377,7 +443,6 @@ export function createDesktopServiceManager({
     managedServiceProcess = null;
     stopManagedChildProcess(child);
   }
-
 
   return { ensureServiceStarted, stopManagedService };
 }

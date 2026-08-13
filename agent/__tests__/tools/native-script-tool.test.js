@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
+import { resolveBrowserProxyFromEnv } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 const IDENTITY = Object.freeze({
@@ -18,6 +19,22 @@ const IDENTITY = Object.freeze({
   turnScopeId: "turn:native-script",
   runId: "run:native-script",
   producer: { type: "tool", id: "call:native-script" },
+});
+
+test("native browser proxy derives Playwright options without exposing its URL", () => {
+  assert.deepEqual(
+    resolveBrowserProxyFromEnv({
+      HTTPS_PROXY: "http://user:secret@127.0.0.1:7890/",
+      NO_PROXY: "localhost,127.0.0.1",
+    }),
+    {
+      server: "http://127.0.0.1:7890",
+      username: "user",
+      password: "secret",
+      bypass: "localhost,127.0.0.1",
+    },
+  );
+  assert.equal(resolveBrowserProxyFromEnv({}), undefined);
 });
 
 function createRuntime(basePath, patch = {}) {
@@ -143,6 +160,58 @@ await page.screenshot({ path: "browser/page.png" });
   assert.equal(persistedRequest.artifacts[0].name, "browser__page.png");
 });
 
+test("execute_native_script supports restricted offline browser content and page cleanup", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-content-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const page = await browser.newPage();
+await page.setContent("<main><h1>Native browser ready</h1></main>");
+log(await page.title(), await page.textContent("h1"));
+await page.close();
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /Native browser ready/);
+});
+
+test("execute_native_script rejects non-canonical capability call signatures", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-signature-"));
+  await fs.writeFile(path.join(basePath, "input.html"), "<p>source</p>", "utf8");
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  const cases = [
+    {
+      script_body: `await ffmpeg.run(["-version"]);`,
+      expected: /ffmpeg\.run\(\{ args \}\) requires one options object/,
+    },
+    {
+      script_body: `await ffprobe.run({ args: [] });`,
+      expected: /ffprobe\.run\(\{ args \}\) requires a non-empty args array/,
+    },
+    {
+      inputs: [{ source: "input.html" }],
+      script_body: `const source = await files.input(0); await libreoffice.convert(source);`,
+      expected: /libreoffice\.convert.*requires one options object/,
+    },
+  ];
+  for (const item of cases) {
+    const result = JSON.parse(
+      await tool.invoke(item, { configurable: { transferIdentity: IDENTITY } }),
+    );
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, item.expected);
+  }
+});
+
 test("execute_native_script resolves FFmpeg output tokens into collected binary attachments", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-ffmpeg-"));
   let persistedRequest = null;
@@ -207,6 +276,55 @@ await libreoffice.convert({ input: 0, outputDirectory: output.directory, outputF
   assert.equal(result.output_file_count, 0);
   assert.match(result.stderr, /LibreOffice conversion/);
   assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
+});
+
+test("execute_native_script converts a declared input token with LibreOffice", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-input-"));
+  await fs.writeFile(
+    path.join(basePath, "input.html"),
+    "<html><body><h1>Native document</h1><p>Input token conversion</p></body></html>",
+    "utf8",
+  );
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `libreoffice-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "input.html" }],
+        script_body: `
+const source = await files.input(0);
+const converted = await libreoffice.convert({
+  input: source,
+  outputDirectory: output.directory,
+  outputFormat: "pdf",
+});
+log(converted.output, converted.outputBytes);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal(persistedRequest.artifacts[0].name, "0.pdf");
+  assert.ok(Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").length > 0);
+  assert.match(result.stdout, /output:\/\/0\.pdf/);
 });
 
 test("execute_native_script projects runtime roots but preserves caller path data", async () => {

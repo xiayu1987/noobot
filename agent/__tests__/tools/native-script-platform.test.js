@@ -96,6 +96,24 @@ test("native process environment forces packaged Electron into Node mode", () =>
   assert.equal(environment.ELECTRON_RUN_AS_NODE, "1");
 });
 
+test("native process environment preserves only declared network proxy variables", () => {
+  const environment = buildNativeProcessEnv({
+    home: "/task",
+    temp: "/temp",
+    platform: "linux",
+    sourceEnv: {
+      PATH: "/usr/bin",
+      HTTPS_PROXY: "http://127.0.0.1:7890",
+      NO_PROXY: "127.0.0.1,localhost",
+      SECRET: "must-not-pass",
+    },
+  });
+
+  assert.equal(environment.HTTPS_PROXY, "http://127.0.0.1:7890");
+  assert.equal(environment.NO_PROXY, "127.0.0.1,localhost");
+  assert.equal(environment.SECRET, undefined);
+});
+
 test("native process termination waits for the Windows process tree to exit", async () => {
   const calls = [];
   let releaseTaskkill;

@@ -36,7 +36,7 @@ function createMockChildProcess() {
   return child;
 }
 
-async function createFixture({ packaged = false } = {}) {
+async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {}) {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-services-startup-"));
   const repoRoot = path.join(rootDir, "repo");
   const userDataPath = path.join(rootDir, "user-data");
@@ -60,7 +60,7 @@ async function createFixture({ packaged = false } = {}) {
     workspaceRootPath: path.join(userDataPath, "workspace"),
     workspaceTemplatePath: path.join(userDataPath, "template"),
     missingParams: [],
-    superAdmin: {},
+    superAdmin: { dependencyProxyUrl },
   };
   let desktopConfigState = null;
   const calls = [];
@@ -98,10 +98,20 @@ async function createFixture({ packaged = false } = {}) {
       const target = String(url || "");
       if (packaged) {
         if (target.includes(":10061")) {
-          return { ok: true, json: async () => ({ ok: calls.some((call) => call.args.join(" ").includes("service/app.js")) }) };
+          return {
+            ok: true,
+            json: async () => ({
+              ok: calls.some((call) => call.args.join(" ").includes("service/app.js")),
+            }),
+          };
         }
         if (target.includes(":10062")) {
-          return { ok: true, json: async () => ({ ok: calls.some((call) => call.args.join(" ").includes("agent-proxy.js")) }) };
+          return {
+            ok: true,
+            json: async () => ({
+              ok: calls.some((call) => call.args.join(" ").includes("agent-proxy.js")),
+            }),
+          };
         }
       }
       return { ok: true, json: async () => ({ ok: calls.length > 0 }) };
@@ -152,6 +162,26 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
       assert.ok(fixture.getHealthCalls() >= 2);
+    } finally {
+      await fixture.restore();
+    }
+  });
+});
+
+test("desktop startup passes configured dependency proxy to the service runtime", async () => {
+  await withPlatform("win32", async () => {
+    const fixture = await createFixture({
+      packaged: false,
+      dependencyProxyUrl: "http://user:secret@127.0.0.1:7890",
+    });
+    try {
+      await fixture.manager.ensureServiceStarted();
+
+      assert.equal(fixture.calls[0].options.env.HTTPS_PROXY, "http://user:secret@127.0.0.1:7890/");
+      assert.equal(
+        fixture.calls[0].options.env.HTTP_PROXY,
+        fixture.calls[0].options.env.HTTPS_PROXY,
+      );
     } finally {
       await fixture.restore();
     }
@@ -216,8 +246,14 @@ test("packaged desktop startup uses Electron node runtime for service and agent 
       assert.match(agentProxyCall.args[0], /agent-proxy[/\\]agent-proxy\.js$/);
       assert.equal(agentProxyCall.options.cwd, fixture.packagedBackendRoot);
       assert.equal(agentProxyCall.options.env.ELECTRON_RUN_AS_NODE, "1");
-      assert.equal(agentProxyCall.options.env.AGENT_PROXY_UPSTREAM_HTTP_BASE, "http://127.0.0.1:10061");
-      assert.equal(agentProxyCall.options.env.AGENT_PROXY_UPSTREAM_WS_URL, "ws://127.0.0.1:10061/chat/ws");
+      assert.equal(
+        agentProxyCall.options.env.AGENT_PROXY_UPSTREAM_HTTP_BASE,
+        "http://127.0.0.1:10061",
+      );
+      assert.equal(
+        agentProxyCall.options.env.AGENT_PROXY_UPSTREAM_WS_URL,
+        "ws://127.0.0.1:10061/chat/ws",
+      );
     } finally {
       await fixture.restore();
     }
