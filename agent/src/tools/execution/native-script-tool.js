@@ -135,6 +135,7 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
     let bytes = 0;
     let timedOut = false;
     let aborted = false;
+    let settled = false;
     const capture = (target, chunk) => {
       if (bytes < LENGTH_THRESHOLDS.nativeScript.processOutputBytes) {
         target.push(
@@ -162,18 +163,25 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
     const timer = setTimeout(() => terminate("timeout"), timeoutMs);
     timer.unref?.();
-    child.on("close", async (code, signal) => {
+    const settle = async ({ code = 1, signal = "", spawnError = null } = {}) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       if (forceKillTimer) clearTimeout(forceKillTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
       await terminationPromise;
+      if (spawnError) capture(stderr, Buffer.from(spawnError.message || String(spawnError)));
       resolve({
         code: timedOut ? 124 : aborted ? 130 : Number(code || 0),
         signal: signal || "",
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
       });
-    });
+    };
+    child.on("error", (error) =>
+      settle({ code: Number(error?.errno || 1) || 1, spawnError: error }),
+    );
+    child.on("close", (code, signal) => settle({ code, signal }));
   });
 }
 

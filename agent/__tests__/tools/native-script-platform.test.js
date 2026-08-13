@@ -46,6 +46,7 @@ test("native process environment isolates task paths on Linux and macOS", () => 
       HOME: "/task",
       TMPDIR: "/temp",
       LANG: "C.UTF-8",
+      ELECTRON_RUN_AS_NODE: "1",
     });
   }
 });
@@ -71,6 +72,7 @@ test("native process environment keeps required Windows process variables", () =
     HOME: "C:/task",
     TMPDIR: "C:/temp",
     LANG: "C.UTF-8",
+    ELECTRON_RUN_AS_NODE: "1",
     SystemRoot: "C:/Windows",
     WINDIR: "C:/Windows",
     ComSpec: "C:/Windows/System32/cmd.exe",
@@ -81,6 +83,17 @@ test("native process environment keeps required Windows process variables", () =
     TMP: "C:/temp",
   });
   assert.equal(environment.SECRET, undefined);
+});
+
+test("native process environment forces packaged Electron into Node mode", () => {
+  const environment = buildNativeProcessEnv({
+    home: "/task",
+    temp: "/temp",
+    platform: "linux",
+    sourceEnv: { PATH: "/usr/bin", ELECTRON_RUN_AS_NODE: "" },
+  });
+
+  assert.equal(environment.ELECTRON_RUN_AS_NODE, "1");
 });
 
 test("native process termination waits for the Windows process tree to exit", async () => {

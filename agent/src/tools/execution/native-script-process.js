@@ -27,6 +27,7 @@ export function buildNativeProcessEnv({
     HOME: home,
     TMPDIR: temp,
     LANG: "C.UTF-8",
+    ELECTRON_RUN_AS_NODE: "1",
   };
   if (platform === "win32") {
     for (const key of WINDOWS_PROCESS_ENV_KEYS) {
