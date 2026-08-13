@@ -5,18 +5,18 @@
  */
 import {
   filePath as path,
+  authorizePathRef,
   buildToolPathScopeErrorDetails,
+  PATH_CAPABILITIES,
+  resolvePathPolicy,
+  resolvePathRef,
   resolveToolInputPath,
-  resolveToolPathPolicy,
 } from "@noobot/path-resolver";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
-import {
-  tToolDescription,
-  tToolParamDescription,
-} from "../../core/tool-schema-i18n.js";
+import { tToolDescription, tToolParamDescription } from "../../core/tool-schema-i18n.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { collectNonSensitiveDefaults } from "./connector-fields.js";
 import { resolveRememberedConnectorInfo } from "./connector-context.js";
@@ -44,7 +44,9 @@ import {
 function normalizeBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return fallback;
   if (["1", "true", "yes", "on"].includes(normalized)) return true;
   if (["0", "false", "no", "off"].includes(normalized)) return false;
@@ -61,7 +63,9 @@ function normalizeExtensionList(input = [], fallback = []) {
   const source = Array.isArray(input) ? input : fallback;
   const set = new Set();
   for (const item of source) {
-    const normalized = String(item || "").trim().toLowerCase();
+    const normalized = String(item || "")
+      .trim()
+      .toLowerCase();
     if (!normalized) continue;
     set.add(normalized.startsWith(".") ? normalized : `.${normalized}`);
   }
@@ -75,9 +79,7 @@ function isPathUnderRoot(rootPath = "", targetPath = "") {
 }
 
 function resolveWorkspaceBasePath(runtime = {}) {
-  const basePath = String(
-    runtime?.basePath || runtime?.workspaceBasePath || "",
-  ).trim();
+  const basePath = String(runtime?.basePath || runtime?.workspaceBasePath || "").trim();
   if (!basePath) return "";
   return path.resolve(basePath);
 }
@@ -130,15 +132,6 @@ function resolveAccessConnectorFilePolicy({
         ? accessConfig.command_file
         : {};
   const workspaceBasePath = resolveWorkspaceBasePath(runtime);
-  const workspaceRoot = String(runtime?.globalConfig?.workspaceRoot || "").trim();
-  const toolPolicy = resolveToolPathPolicy({
-    runtime,
-    agentContext,
-    runtimeBasePath: workspaceBasePath,
-    workspacePath: workspaceBasePath,
-    workspaceRoot,
-    isSuperUser: isSuperUserRuntime(runtime),
-  });
   const configuredRoots = Array.isArray(commandFileConfig?.allowedRoots)
     ? commandFileConfig.allowedRoots
     : Array.isArray(commandFileConfig?.allowed_roots)
@@ -150,27 +143,17 @@ function resolveAccessConnectorFilePolicy({
     .map((item) =>
       path.isAbsolute(item)
         ? path.resolve(item)
-        : toolPolicy.relativeHostRoot
-          ? path.resolve(toolPolicy.relativeHostRoot, item)
-          : workspaceBasePath
-            ? path.resolve(workspaceBasePath, item)
-            : path.resolve(item),
+        : workspaceBasePath
+          ? path.resolve(workspaceBasePath, item)
+          : path.resolve(item),
     );
-  const roots = uniquePaths([
-    ...toolPolicy.allowedRoots,
-    ...configuredAllowedRoots,
-  ]);
   const defaultExtensionsByType =
     BUILTIN_THRESHOLDS.connectorCommandFile.allowedExtensionsByType?.[connectorType] || [];
   return {
-    enabled: normalizeBoolean(
-      commandFileConfig?.enabled ?? commandFileConfig?.enable,
-      true,
-    ),
+    enabled: normalizeBoolean(commandFileConfig?.enabled ?? commandFileConfig?.enable, true),
     maxBytes: BUILTIN_THRESHOLDS.connectorCommandFile.maxBytes,
-    allowedRoots: roots,
-    relativeHostRoot: toolPolicy.relativeHostRoot,
-    superUserBypassesDirectoryScope: toolPolicy.superUserBypassesDirectoryScope,
+    allowedRoots: uniquePaths(configuredAllowedRoots),
+    relativeHostRoot: workspaceBasePath,
     allowedExtensions: normalizeExtensionList(defaultExtensionsByType, defaultExtensionsByType),
   };
 }
@@ -191,13 +174,10 @@ async function resolveCommandFromFile({
   }
 
   if (![CONNECTOR_TYPE.DATABASE, CONNECTOR_TYPE.TERMINAL].includes(connectorType)) {
-    throw recoverableToolError(
-      "command_file_path only supports database/terminal connector",
-      {
-        code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
-        details: { field: "command_file_path", connector_type: connectorType },
-      },
-    );
+    throw recoverableToolError("command_file_path only supports database/terminal connector", {
+      code: ERROR_CODE.RECOVERABLE_INVALID_CONNECTOR_TYPE,
+      details: { field: "command_file_path", connector_type: connectorType },
+    });
   }
 
   const policy = resolveAccessConnectorFilePolicy({
@@ -213,13 +193,6 @@ async function resolveCommandFromFile({
       details: { field: "command_file_path", reason: "disabled" },
     });
   }
-  if (!isSuperUser && !policy.allowedRoots.length) {
-    throw recoverableToolError("command_file_path allowed roots not configured", {
-      code: ERROR_CODE.RECOVERABLE_RUNTIME_BASEPATH_MISSING,
-      details: { field: "command_file_path" },
-    });
-  }
-
   const resolvedToolPath = resolveToolInputPath({
     inputPath: normalizedFilePath,
     runtime,
@@ -227,8 +200,8 @@ async function resolveCommandFromFile({
     workspacePath: policy.relativeHostRoot || resolveWorkspaceBasePath(runtime),
     workspaceRoot: String(runtime?.globalConfig?.workspaceRoot || "").trim(),
     allowHostAbsolute: true,
-    allowSandbox: true,
-    allowVirtualRelative: true,
+    allowSandbox: false,
+    allowVirtualRelative: false,
   });
   if (!resolvedToolPath.ok) {
     throw recoverableToolError(resolvedToolPath.hint || "command_file_path invalid", {
@@ -242,11 +215,25 @@ async function resolveCommandFromFile({
     });
   }
   const resolvedInputPath = path.resolve(resolvedToolPath.resolvedPath);
-
-  const inAllowedRoots = policy.allowedRoots.some((rootPath) =>
-    isPathUnderRoot(rootPath, resolvedInputPath),
-  );
-  if (!policy.superUserBypassesDirectoryScope && !inAllowedRoots) {
+  const workspaceBasePath = resolveWorkspaceBasePath(runtime);
+  const pathRef = resolvePathRef({
+    input: resolvedInputPath,
+    workspaceRoot: workspaceBasePath,
+    owner: String(runtime?.userId || ""),
+  });
+  const authorization = authorizePathRef({
+    pathRef,
+    principal: {
+      userId: String(runtime?.userId || ""),
+      role: isSuperUser ? "super_admin" : "regular_user",
+      isSuperUser,
+    },
+    capability: PATH_CAPABILITIES.DOCUMENT_INPUT,
+    pathPolicy: resolvePathPolicy(runtime?.globalConfig || {}),
+    executionPath: resolvedInputPath,
+    workspaceRoot: workspaceBasePath,
+  });
+  if (!authorization.allowed) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -255,6 +242,18 @@ async function resolveCommandFromFile({
           pathView: resolvedToolPath.view,
         }),
       },
+    });
+  }
+  const inConfiguredRoots =
+    !policy.allowedRoots.length ||
+    policy.allowedRoots.some((rootPath) => isPathUnderRoot(rootPath, resolvedInputPath));
+  if (!inConfiguredRoots) {
+    throw recoverableToolError("command_file_path out of connector scope", {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: buildToolPathScopeErrorDetails({
+        field: "command_file_path",
+        pathView: pathRef.view,
+      }),
     });
   }
 
@@ -271,10 +270,22 @@ async function resolveCommandFromFile({
     realpath(resolvedInputPath),
     stat(resolvedInputPath),
   ]);
-  const realInAllowedRoots = policy.allowedRoots.some((rootPath) =>
-    isPathUnderRoot(rootPath, resolvedRealPath),
-  );
-  if (!policy.superUserBypassesDirectoryScope && !realInAllowedRoots) {
+  const realAuthorization = authorizePathRef({
+    pathRef,
+    principal: {
+      userId: String(runtime?.userId || ""),
+      role: isSuperUser ? "super_admin" : "regular_user",
+      isSuperUser,
+    },
+    capability: PATH_CAPABILITIES.DOCUMENT_INPUT,
+    pathPolicy: resolvePathPolicy(runtime?.globalConfig || {}),
+    executionPath: resolvedRealPath,
+    workspaceRoot: workspaceBasePath,
+  });
+  const realInConfiguredRoots =
+    !policy.allowedRoots.length ||
+    policy.allowedRoots.some((rootPath) => isPathUnderRoot(rootPath, resolvedRealPath));
+  if (!realAuthorization.allowed || !realInConfiguredRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
@@ -315,7 +326,7 @@ async function resolveCommandFromFile({
     });
   }
 
-  const commandText = String(await readFile(resolvedRealPath, "utf8") || "").trim();
+  const commandText = String((await readFile(resolvedRealPath, "utf8")) || "").trim();
   if (!commandText) {
     throw recoverableToolError("command file is empty", {
       code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -324,7 +335,6 @@ async function resolveCommandFromFile({
   }
   return commandText;
 }
-
 
 function resolveConnectorBucketName(connectorType = "") {
   if (connectorType === CONNECTOR_TYPE.DATABASE) return CONNECTOR_TYPE.CHANNEL_BUCKET.DATABASE;
@@ -397,9 +407,7 @@ function buildAccessConnectorTool(context = {}) {
       const sourceArtifacts = Array.isArray(artifacts) ? artifacts : [];
       if (!sourceArtifacts.length) return [];
       const runtimeSessionId = String(
-        runtime?.systemRuntime?.sessionId ||
-          runtime?.systemRuntime?.rootSessionId ||
-          "",
+        runtime?.systemRuntime?.sessionId || runtime?.systemRuntime?.rootSessionId || "",
       ).trim();
       const generationSource = String(
         options?.generationSource || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ,
@@ -421,35 +429,26 @@ function buildAccessConnectorTool(context = {}) {
           fallbackGenerationSource: generationSource,
         }),
       );
-      const attachments = rawAttachments.map(
-        (attachmentItem, attachmentIndex) => ({
-          attachmentId: String(attachmentItem?.attachmentId || "").trim(),
-          sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
-          attachmentSource: String(
-            attachmentItem?.attachmentSource ||
-              (generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
-                ? TOOL_ATTACHMENT_SOURCE.EMAIL
-                : TOOL_ATTACHMENT_SOURCE.MODEL),
-          ).trim(),
-          name: String(attachmentItem?.name || "").trim(),
-          mimeType: String(
-            attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-          ).trim(),
-          size: Number(attachmentItem?.size || 0),
-          generatedByModel: attachmentItem?.generatedByModel === true,
-          generationSource: String(
-            attachmentItem?.generationSource || generationSource,
-          ).trim(),
-          email_attachment_type: String(
-            sourceArtifacts?.[attachmentIndex]?.email_attachment_type || "",
-          ).trim(),
-          email_content_id: String(
-            sourceArtifacts?.[attachmentIndex]?.email_content_id || "",
-          ).trim(),
-          email_is_inline:
-            sourceArtifacts?.[attachmentIndex]?.email_is_inline === true,
-        }),
-      );
+      const attachments = rawAttachments.map((attachmentItem, attachmentIndex) => ({
+        attachmentId: String(attachmentItem?.attachmentId || "").trim(),
+        sessionId: String(attachmentItem?.sessionId || runtimeSessionId).trim(),
+        attachmentSource: String(
+          attachmentItem?.attachmentSource ||
+            (generationSource === ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ
+              ? TOOL_ATTACHMENT_SOURCE.EMAIL
+              : TOOL_ATTACHMENT_SOURCE.MODEL),
+        ).trim(),
+        name: String(attachmentItem?.name || "").trim(),
+        mimeType: String(attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM).trim(),
+        size: Number(attachmentItem?.size || 0),
+        generatedByModel: attachmentItem?.generatedByModel === true,
+        generationSource: String(attachmentItem?.generationSource || generationSource).trim(),
+        email_attachment_type: String(
+          sourceArtifacts?.[attachmentIndex]?.email_attachment_type || "",
+        ).trim(),
+        email_content_id: String(sourceArtifacts?.[attachmentIndex]?.email_content_id || "").trim(),
+        email_is_inline: sourceArtifacts?.[attachmentIndex]?.email_is_inline === true,
+      }));
       return {
         attachments,
         transferEnvelopes: [],
@@ -470,7 +469,11 @@ function buildAccessConnectorTool(context = {}) {
         description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "command"),
       },
       command_file_path: {
-        description: tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "command_file_path"),
+        description: tToolParamDescription(
+          runtime,
+          TOOL_NAME.ACCESS_CONNECTOR,
+          "command_file_path",
+        ),
       },
     },
     async func({ connector_name, connector_type, command, command_file_path }) {
@@ -486,11 +489,9 @@ function buildAccessConnectorTool(context = {}) {
       }
       const connectorType = normalizeConnectorType(connector_type);
       if (
-        ![
-          CONNECTOR_TYPE.DATABASE,
-          CONNECTOR_TYPE.TERMINAL,
-          CONNECTOR_TYPE.EMAIL,
-        ].includes(connectorType)
+        ![CONNECTOR_TYPE.DATABASE, CONNECTOR_TYPE.TERMINAL, CONNECTOR_TYPE.EMAIL].includes(
+          connectorType,
+        )
       ) {
         throw recoverableToolError(
           tTool(runtime, "tools.access_connector.errorConnectorTypeRequired"),
@@ -502,21 +503,20 @@ function buildAccessConnectorTool(context = {}) {
       const inlineCommand = String(command || "").trim();
       const fileCommandPath = String(command_file_path || "").trim();
       if (inlineCommand && fileCommandPath) {
-        throw recoverableToolError(
-          "Provide either command or command_file_path, not both",
-          {
-            code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-            details: { fields: ["command", "command_file_path"] },
-          },
-        );
+        throw recoverableToolError("Provide either command or command_file_path, not both", {
+          code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+          details: { fields: ["command", "command_file_path"] },
+        });
       }
-      const resolvedCommand = inlineCommand || (await resolveCommandFromFile({
-        commandFilePath: fileCommandPath,
-        connectorType,
-        effectiveConfig,
-        runtime,
-        agentContext,
-      }));
+      const resolvedCommand =
+        inlineCommand ||
+        (await resolveCommandFromFile({
+          commandFilePath: fileCommandPath,
+          connectorType,
+          effectiveConfig,
+          runtime,
+          agentContext,
+        }));
       const requestedConnectorName = String(connector_name || "").trim();
       const selectedResolution = resolveSelectedConnectorName({
         runtime,
@@ -527,12 +527,9 @@ function buildAccessConnectorTool(context = {}) {
       });
       const selectedConnectorName = String(selectedResolution?.connectorName || "").trim();
       if (!selectedConnectorName) {
-        throw recoverableToolError(
-          tConnector(runtime, "selectedMissing", { connectorType }),
-          {
-            code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISSING,
-          },
-        );
+        throw recoverableToolError(tConnector(runtime, "selectedMissing", { connectorType }), {
+          code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISSING,
+        });
       }
       if (selectedResolution?.inferred === true) {
         upsertRuntimeSelectedConnector(runtime, {
@@ -540,10 +537,7 @@ function buildAccessConnectorTool(context = {}) {
           connectorName: selectedConnectorName,
         });
       }
-      if (
-        requestedConnectorName &&
-        requestedConnectorName !== selectedConnectorName
-      ) {
+      if (requestedConnectorName && requestedConnectorName !== selectedConnectorName) {
         throw recoverableToolError(
           tConnector(runtime, "selectedOnly", {
             connectorName: selectedConnectorName,
@@ -634,9 +628,7 @@ function buildAccessConnectorTool(context = {}) {
           TOOL_NAME.ACCESS_CONNECTOR,
           {
             ok: result?.ok === true,
-            status: result?.ok
-              ? TOOL_RESULT_STATUS.COMPLETED
-              : TOOL_RESULT_STATUS.FAILED,
+            status: result?.ok ? TOOL_RESULT_STATUS.COMPLETED : TOOL_RESULT_STATUS.FAILED,
             message: result?.ok
               ? tConnector(runtime, "execCompleted")
               : tConnector(runtime, "execFailed", {
@@ -653,10 +645,7 @@ function buildAccessConnectorTool(context = {}) {
       } catch (error) {
         throw recoverableToolError(error?.message || String(error), {
           code: String(error?.code || ERROR_CODE.RECOVERABLE_ACCESS_CONNECTOR_FAILED),
-          details:
-            error?.details && typeof error.details === "object"
-              ? error.details
-              : undefined,
+          details: error?.details && typeof error.details === "object" ? error.details : undefined,
         });
       }
     },

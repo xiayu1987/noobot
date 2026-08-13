@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
-import { resolveSandboxPathMappings, resolveExecuteScriptConfig, resolveRuntimeUserId, sanitizeSandboxUserPart, normalizeDockerContainerScope, normalizeSandboxProvider } from "./sandbox-mapping.mjs";
+import {
+  resolveSandboxPathMappings,
+  resolveRuntimeUserId,
+  sanitizeSandboxUserPart,
+  normalizeDockerContainerScope,
+  normalizeSandboxProvider,
+} from "./sandbox-mapping.mjs";
 
 const OPS_WORKDIR_RELATIVE_PATH = "runtime/ops_workdir";
 
@@ -23,46 +29,22 @@ function resolveRuntimeHostRoot({
   ).trim();
 }
 
-function resolveRuntimeWorkspaceRoot({
-  runtime = {},
-  globalConfig = {},
-  workspaceRoot = "",
-} = {}) {
+function resolveRuntimeWorkspaceRoot({ runtime = {}, globalConfig = {}, workspaceRoot = "" } = {}) {
   return String(
-    workspaceRoot ||
-      globalConfig?.workspaceRoot ||
-      runtime?.globalConfig?.workspaceRoot ||
-      "",
+    workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot || "",
   ).trim();
-}
-
-function resolveEffectiveExecuteScriptConfig({
-  runtime = {},
-  effectiveConfig = {},
-} = {}) {
-  const effectiveScriptConfig =
-    effectiveConfig?.tools?.execute_script &&
-    typeof effectiveConfig.tools.execute_script === "object"
-      ? effectiveConfig.tools.execute_script
-      : null;
-  if (effectiveScriptConfig) return effectiveScriptConfig;
-  return resolveExecuteScriptConfig(runtime);
 }
 
 function resolveSandboxProviderContext(scriptConfig = {}) {
   const sandboxProviderCfg =
-    ((scriptConfig?.sandboxProvider &&
-      typeof scriptConfig.sandboxProvider === "object"
+    (scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
       ? scriptConfig.sandboxProvider
       : null) ||
-      (scriptConfig?.sandbox_provider &&
-      typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : null) ||
-      {});
-  const provider = normalizeSandboxProvider(
-    sandboxProviderCfg?.default || "docker",
-  );
+    (scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
+      ? scriptConfig.sandbox_provider
+      : null) ||
+    {};
+  const provider = normalizeSandboxProvider(sandboxProviderCfg?.default || "docker");
   const providerDetail =
     sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
       ? sandboxProviderCfg[provider]
@@ -70,10 +52,7 @@ function resolveSandboxProviderContext(scriptConfig = {}) {
   return { provider, providerDetail, providerConfig: sandboxProviderCfg };
 }
 
-function resolveRuntimePathMappingRuntime({
-  runtime = {},
-  effectiveConfig = {},
-} = {}) {
+function resolveRuntimePathMappingRuntime({ runtime = {}, effectiveConfig = {} } = {}) {
   if (effectiveConfig?.tools && typeof effectiveConfig.tools === "object") {
     return {
       ...runtime,
@@ -85,13 +64,7 @@ function resolveRuntimePathMappingRuntime({
 }
 
 function uniqueNormalizedPaths(paths = []) {
-  return Array.from(
-    new Set(
-      paths
-        .map((item) => normalizeSlashPath(item))
-        .filter(Boolean),
-    ),
-  );
+  return Array.from(new Set(paths.map((item) => normalizeSlashPath(item)).filter(Boolean)));
 }
 
 function objectOrEmpty(value) {
@@ -117,6 +90,7 @@ export function resolveRuntimePathContext({
   userId = "",
   globalConfig = {},
   effectiveConfig = {},
+  executionContext = {},
 } = {}) {
   const resolvedUserId = resolveRuntimeUserId({ runtime, agentContext, userId });
   const hostRootDirectory = resolveRuntimeHostRoot({
@@ -133,12 +107,21 @@ export function resolveRuntimePathContext({
   const hostOpsWorkdir = hostRootDirectory
     ? filePath.join(hostRootDirectory, OPS_WORKDIR_RELATIVE_PATH)
     : "";
-  const scriptConfig = resolveEffectiveExecuteScriptConfig({ runtime, effectiveConfig });
-  const sandboxEnabled =
-    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
-  const { provider: sandboxProvider, providerDetail } =
-    resolveSandboxProviderContext(scriptConfig);
-  const mappingRuntime = resolveRuntimePathMappingRuntime({ runtime, effectiveConfig });
+  const executionView = String(executionContext?.view || "host")
+    .trim()
+    .toLowerCase();
+  const sandboxEnabled = executionView === "sandbox";
+  const scriptConfig =
+    sandboxEnabled && executionContext?.config && typeof executionContext.config === "object"
+      ? executionContext.config
+      : {};
+  const { provider: sandboxProvider, providerDetail } = resolveSandboxProviderContext(scriptConfig);
+  const mappingRuntime = sandboxEnabled
+    ? resolveRuntimePathMappingRuntime({
+        runtime,
+        effectiveConfig: { tools: { execute_script: { execution: scriptConfig } } },
+      })
+    : { ...runtime, userConfig: {}, globalConfig: { ...(runtime?.globalConfig || {}), tools: {} } };
   const sandboxPathMappings = resolveSandboxPathMappings(mappingRuntime);
   const hostMountSources = uniqueNormalizedPaths(
     sandboxPathMappings.map((item = {}) => item.source),
@@ -238,9 +221,7 @@ export function resolveRuntimePathContext({
   }
 
   const sandboxScope = normalizeDockerContainerScope(
-    providerDetail?.dockerContainerScope ||
-      providerDetail?.docker_container_scope ||
-      "global",
+    providerDetail?.dockerContainerScope || providerDetail?.docker_container_scope || "global",
   );
   const userPart = sanitizeSandboxUserPart(resolvedUserId || "user") || "user";
   const sandboxRoot = "/workspace";
@@ -284,6 +265,7 @@ export function resolveAgentPathContext({
   userId = "",
   globalConfig = {},
   effectiveConfig = {},
+  executionContext = {},
 } = {}) {
   const baseContext = resolveRuntimePathContext({
     runtime,
@@ -294,11 +276,14 @@ export function resolveAgentPathContext({
     userId,
     globalConfig,
     effectiveConfig,
+    executionContext,
   });
   const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });
   if (!Object.keys(staticDirectories).length) return baseContext;
 
-  const directoryView = String(staticDirectories.view || baseContext.directories.view || baseContext.view || "").trim();
+  const directoryView = String(
+    staticDirectories.view || baseContext.directories.view || baseContext.view || "",
+  ).trim();
   const directories = {
     ...baseContext.directories,
     ...staticDirectories,
@@ -309,12 +294,14 @@ export function resolveAgentPathContext({
   };
   const isSandboxView = directories.view === PATH_VIEWS.SANDBOX;
   const staticRootDirectory = String(directories.rootDirectory || "").trim();
-  const hostRootDirectory = !isSandboxView && staticRootDirectory
-    ? staticRootDirectory
-    : baseContext.hostRootDirectory;
-  const hostAllowedRoots = !isSandboxView && Array.isArray(directories.allowedRoots)
-    ? uniqueNormalizedPaths(directories.allowedRoots.filter((item) => !isHostFilesystemSentinel(item)))
-    : [];
+  const hostRootDirectory =
+    !isSandboxView && staticRootDirectory ? staticRootDirectory : baseContext.hostRootDirectory;
+  const hostAllowedRoots =
+    !isSandboxView && Array.isArray(directories.allowedRoots)
+      ? uniqueNormalizedPaths(
+          directories.allowedRoots.filter((item) => !isHostFilesystemSentinel(item)),
+        )
+      : [];
 
   return {
     ...baseContext,
@@ -330,49 +317,5 @@ export function resolveAgentPathContext({
     hostRootDirectory,
     hostAllowedRoots,
     directories,
-  };
-}
-
-export function resolveToolPathPolicy({
-  runtime = {},
-  agentContext = null,
-  runtimeBasePath = "",
-  workspacePath = "",
-  workspaceRoot = "",
-  userId = "",
-  globalConfig = {},
-  effectiveConfig = {},
-  isSuperUser = false,
-} = {}) {
-  const pathContext = resolveAgentPathContext({
-    runtime,
-    agentContext,
-    runtimeBasePath,
-    workspacePath,
-    workspaceRoot,
-    userId,
-    globalConfig,
-    effectiveConfig,
-  });
-  const validationRoot = workspacePath || runtimeBasePath || pathContext.hostRootDirectory;
-  const relativeHostRoot = pathContext.hostRootDirectory || validationRoot || ".";
-  const sandboxModeEnabled = pathContext.sandboxEnabled;
-  const allowedRoots = uniqueNormalizedPaths([
-    validationRoot,
-    ...pathContext.hostAllowedRoots,
-    ...(isSuperUser && sandboxModeEnabled && pathContext.isDockerGlobal && workspaceRoot
-      ? [workspaceRoot]
-      : []),
-    ...pathContext.hostMountSources,
-  ])
-    .filter((item) => !isHostFilesystemSentinel(item))
-    .map((item) => filePath.resolve(item));
-  return {
-    pathContext,
-    relativeHostRoot: filePath.resolve(relativeHostRoot),
-    validationRoot: validationRoot ? filePath.resolve(validationRoot) : "",
-    allowedRoots,
-    sandboxModeEnabled,
-    superUserBypassesDirectoryScope: isSuperUser && !sandboxModeEnabled,
   };
 }

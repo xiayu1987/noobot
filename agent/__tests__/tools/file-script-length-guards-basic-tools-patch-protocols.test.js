@@ -35,8 +35,7 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const regularHostDescription = regularHostTool?.schema?.shape?.patch?.description || "";
-  assert.match(regularHostDescription, /Host 视角/);
-  assert.match(regularHostDescription, /rootDirectory/);
+  assert.match(regularHostDescription, /workspace|工作区/i);
   assert.doesNotMatch(regularHostDescription, /allowedRoots/);
   assert.doesNotMatch(regularHostDescription, /sandbox|超级管理员|super user/i);
 
@@ -58,8 +57,8 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const superHostDescription = superHostTool?.schema?.shape?.patch?.description || "";
-  assert.match(superHostDescription, /Windows/);
-  assert.match(superHostDescription, /macOS\/Linux/);
+  assert.match(superHostDescription, /超级管理员/);
+  assert.match(superHostDescription, /host 绝对路径/);
   assert.doesNotMatch(superHostDescription, /sandbox/i);
 
   const sandboxTool = createFileTool({
@@ -89,9 +88,7 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const sandboxDescription = sandboxTool?.schema?.shape?.patch?.description || "";
-  assert.match(sandboxDescription, /rootDirectory/);
-  assert.match(sandboxDescription, /allowedRoots/);
-  assert.doesNotMatch(sandboxDescription, /host absolute|超级管理员|super user/i);
+  assert.equal(sandboxDescription, superHostDescription);
 });
 
 test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
@@ -112,7 +109,9 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "*** End Patch",
     "",
   ].join("\n");
-  const applyResult = parseToolResult(await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: applyPatch }));
+  const applyResult = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: applyPatch }),
+  );
   assert.equal(applyResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 
@@ -127,12 +126,20 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
     "",
   ].join("\n");
   const dryRunResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, dryRun: true }),
+    await tool.invoke({
+      riskLevel: "low",
+      format: "unified_diff",
+      patch: diff,
+      strip: 1,
+      dryRun: true,
+    }),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 
-  const diffResult = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
+  const diffResult = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+  );
   assert.equal(diffResult.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });
@@ -161,7 +168,10 @@ test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数�
   const result = parseToolResult(await tool.invoke({ riskLevel: "low", patch: gitDiff }));
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
-  assert.equal(await fs.readFile(path.join(basePath, "src/a.txt"), "utf8"), "one\n--- changed literal\nthree\n");
+  assert.equal(
+    await fs.readFile(path.join(basePath, "src/a.txt"), "utf8"),
+    "one\n--- changed literal\nthree\n",
+  );
 });
 
 test("patch_file: unified_diff hunk 行数不准时自动按内容重算", async () => {
@@ -182,12 +192,14 @@ test("patch_file: unified_diff hunk 行数不准时自动按内容重算", async
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: badCountDiff, strip: 1 }));
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: badCountDiff, strip: 1 }),
+  );
   assert.equal(result.ok, true);
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
 });
 
-test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => {
+test("patch_file: unified_diff 拒绝 /project 虚拟路径前缀", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-path-"));
   await fs.mkdir(path.join(basePath, "client"), { recursive: true });
   await fs.writeFile(path.join(basePath, "client/a.txt"), "one\ntwo\n", "utf8");
@@ -205,13 +217,13 @@ test("patch_file: unified_diff 兼容 /project 虚拟路径前缀", async () => 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["/workspace/u-test/client/a.txt"]);
-  assert.equal(await fs.readFile(path.join(basePath, "client/a.txt"), "utf8"), "one\nTWO\n");
+  await assert.rejects(
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    /not found/i,
+  );
 });
 
-test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 下的项目根", async () => {
+test("patch_file: 超级管理员也不能使用虚拟 project 路径猜测项目根", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-super-root-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, ".git"), { recursive: true });
@@ -221,7 +233,12 @@ test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "admin", {
       runtime: {
-        systemRuntime: { isSuperUser: true, userId: "admin", sessionId: "s-1", rootSessionId: "s-1" },
+        systemRuntime: {
+          isSuperUser: true,
+          userId: "admin",
+          sessionId: "s-1",
+          rootSessionId: "s-1",
+        },
       },
     }),
   });
@@ -238,17 +255,21 @@ test("patch_file: 超级管理员可将虚拟 project 路径解析到 workspace 
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
-  assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["/workspace/admin/noobot/client/noobot-chat/src/a.txt"]);
-  assert.equal(await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"), "one\nTWO\n");
+  await assert.rejects(
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    /not found|ambiguous|invalid/i,
+  );
 });
 
 test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-"));
   const repoPath = path.join(workspacePath, "noobot");
   await fs.mkdir(path.join(repoPath, "service/ws"), { recursive: true });
-  await fs.writeFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  await fs.writeFile(
+    path.join(repoPath, "service/ws/chat-websocket-server.js"),
+    "one\ntwo\n",
+    "utf8",
+  );
   const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);
@@ -264,11 +285,18 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   ].join("\n");
 
   const dryRunResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "noobot", dryRun: true }),
+    await tool.invoke({
+      riskLevel: "low",
+      format: "unified_diff",
+      patch: diff,
+      strip: 1,
+      root: "noobot",
+      dryRun: true,
+    }),
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
-  assert.deepEqual(dryRunResult.changedFiles, ["/workspace/u-test/noobot/service/ws/chat-websocket-server.js"]);
+  assert.deepEqual(dryRunResult.changedFiles, ["noobot/service/ws/chat-websocket-server.js"]);
   assert.equal(dryRunResult.resolvedFiles[0]?.path, "noobot/service/ws/chat-websocket-server.js");
   assert.equal(
     await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
@@ -276,17 +304,30 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   );
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "noobot" }),
+    await tool.invoke({
+      riskLevel: "low",
+      format: "unified_diff",
+      patch: diff,
+      strip: 1,
+      root: "noobot",
+    }),
   );
   assert.equal(result.ok, true);
-  assert.equal(await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
+  assert.equal(
+    await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
+    "one\nTWO\n",
+  );
 });
 
 test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async () => {
   const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-root-win-"));
   const appPath = path.join(workspacePath, "app");
   await fs.mkdir(path.join(appPath, "service/ws"), { recursive: true });
-  await fs.writeFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "one\ntwo\n", "utf8");
+  await fs.writeFile(
+    path.join(appPath, "service/ws/chat-websocket-server.js"),
+    "one\ntwo\n",
+    "utf8",
+  );
   const tools = createFileTool({ agentContext: buildAgentContext(workspacePath) });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);
@@ -302,17 +343,30 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
   ].join("\n");
 
   const result = parseToolResult(
-    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1, root: "app\\" }),
+    await tool.invoke({
+      riskLevel: "low",
+      format: "unified_diff",
+      patch: diff,
+      strip: 1,
+      root: "app\\",
+    }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["/workspace/u-test/app/service/ws/chat-websocket-server.js"]);
-  assert.equal(await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"), "one\nTWO\n");
+  assert.deepEqual(result.changedFiles, ["app/service/ws/chat-websocket-server.js"]);
+  assert.equal(
+    await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"),
+    "one\nTWO\n",
+  );
 });
 
 test("patch_file: 兼容模型混用 unified 文件头和 apply_patch 风格 @@ hunk", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-mixed-format-"));
   await fs.mkdir(path.join(basePath, "agent/src"), { recursive: true });
-  await fs.writeFile(path.join(basePath, "agent/src/a.js"), "import a from \"a\";\nimport b from \"b\";\nrun();\n", "utf8");
+  await fs.writeFile(
+    path.join(basePath, "agent/src/a.js"),
+    'import a from "a";\nimport b from "b";\nrun();\n',
+    "utf8",
+  );
   const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
   const tool = tools.find((item) => item?.name === "patch_file");
   assert.ok(tool);
@@ -321,20 +375,25 @@ test("patch_file: 兼容模型混用 unified 文件头和 apply_patch 风格 @@ 
     "--- a/agent/src/a.js",
     "+++ b/agent/src/a.js",
     "@@",
-    " import a from \"a\";",
-    "-import b from \"b\";",
-    "+import c from \"c\";",
+    ' import a from "a";',
+    '-import b from "b";',
+    '+import c from "c";',
     " run();",
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: mixedPatch }));
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: mixedPatch }),
+  );
   assert.equal(result.ok, true);
   assert.equal(result.format, "unified_diff");
-  assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "import a from \"a\";\nimport c from \"c\";\nrun();\n");
+  assert.equal(
+    await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"),
+    'import a from "a";\nimport c from "c";\nrun();\n',
+  );
 });
 
-test("patch_file: format 传错时自动回退到实际协议", async () => {
+test("patch_file: format 与内容协议不匹配时拒绝", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-format-fallback-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\nthree\n", "utf8");
   const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
@@ -353,13 +412,14 @@ test("patch_file: format 传错时自动回退到实际协议", async () => {
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: applyPatch }));
-  assert.equal(result.ok, true);
-  assert.equal(result.format, "apply_patch");
-  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\nTWO\nthree\n");
+  await assert.rejects(
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: applyPatch }),
+    /format does not match/i,
+  );
+  assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });
 
-test("patch_file: strip 传错时自动尝试无前缀路径", async () => {
+test("patch_file: strip 传错时拒绝而不自动猜测", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-strip-fallback-"));
   await fs.mkdir(path.join(basePath, "agent/src"), { recursive: true });
   await fs.writeFile(path.join(basePath, "agent/src/a.js"), "one\ntwo\n", "utf8");
@@ -377,9 +437,9 @@ test("patch_file: strip 传错时自动尝试无前缀路径", async () => {
     "",
   ].join("\n");
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }));
-  assert.equal(result.ok, true);
-  assert.equal(result.strip, 0);
-  assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "one\nTWO\n");
+  await assert.rejects(
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    /not found/i,
+  );
+  assert.equal(await fs.readFile(path.join(basePath, "agent/src/a.js"), "utf8"), "one\ntwo\n");
 });
-

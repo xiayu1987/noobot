@@ -16,6 +16,7 @@ export const PROGRAMMING_REQUIRED_TOOL_NAMES = Object.freeze([
   "search",
   "patch_file",
   "execute_script",
+  "execute_native_script",
   "multimodal_generate",
   "multimodal_parse",
 ]);

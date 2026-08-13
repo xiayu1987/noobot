@@ -295,8 +295,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     turn,
   });
 
-  emitEvent(eventListener, "llm_call_start", { turn, mode: "with_tools" });
-
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding,
     boundTools,
@@ -360,6 +358,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     };
   }
 
+  const currentModelLoopRound = Number(systemRuntime?.modelLoopRound || 0);
+  const modelLoopRound =
+    Number.isFinite(currentModelLoopRound) && currentModelLoopRound >= 0
+      ? currentModelLoopRound + 1
+      : 1;
+  systemRuntime.modelLoopRound = modelLoopRound;
+  emitEvent(eventListener, "main_model_loop_started", { turn, modelLoopRound });
+  emitEvent(eventListener, "llm_call_start", { turn, modelLoopRound, mode: "with_tools" });
+
   let ai = null;
   const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
   const presentationMessageId = currentAssistantPresentationMessageId(runtime);
@@ -372,6 +379,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
         phase: "llm_call",
         turn,
+        modelLoopRound,
         mode: "with_tools",
         status: "error",
         startedAt: llmStartedAt,
@@ -405,6 +413,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     context: buildHookContext(HOOK_POINT.AGENT.AFTER_LLM_CALL, runtime, {
       phase: "llm_call",
       turn,
+      modelLoopRound,
       mode: "with_tools",
       status: "success",
       startedAt: llmStartedAt,
@@ -499,6 +508,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   emitEvent(eventListener, "llm_call_end", {
     turn,
+    modelLoopRound,
     hasToolCalls: Boolean(calls.length),
   });
   handleRequiredToolChoiceNotFollowed({

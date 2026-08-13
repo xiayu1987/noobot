@@ -14,11 +14,25 @@ import {
   RunConfigResolver,
   resolveToolBindings,
   validateConfigSnapshot,
+  normalizeKnownConfigKeys,
 } from "../src/index.js";
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
   assert.equal(snapshot.protocol, "noobot.agent-config");
   assert.equal(validateConfigSnapshot(snapshot), snapshot);
+});
+test("configuration adapter maps readable execute_script sandbox fields once", () => {
+  const normalized = normalizeKnownConfigKeys({
+    tools: {
+      execute_script: {
+        sandbox_mode: false,
+        sandbox_provider: { default: "bubblewrap" },
+      },
+    },
+  });
+  assert.deepEqual(normalized.tools.execute_script, {
+    execution: { view: "host", sandboxProvider: { default: "bubblewrap" } },
+  });
 });
 
 test("config snapshot owns immutable metadata arrays", () => {
@@ -71,6 +85,7 @@ test("programming required tools use the scenario protocol list and deny remains
     "search",
     "patch_file",
     "execute_script",
+    "execute_native_script",
     "multimodal_generate",
     "multimodal_parse",
     "other",
@@ -84,7 +99,16 @@ test("programming required tools use the scenario protocol list and deny remains
   });
   assert.deepEqual(
     tools.map(({ name }) => name),
-    ["read_file", "write_file", "search", "patch_file", "multimodal_generate", "multimodal_parse", "other"],
+    [
+      "read_file",
+      "write_file",
+      "search",
+      "patch_file",
+      "execute_native_script",
+      "multimodal_generate",
+      "multimodal_parse",
+      "other",
+    ],
   );
 });
 test("custom_only is not widened by programming scenario requirements", () => {

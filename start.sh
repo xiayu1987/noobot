@@ -183,14 +183,14 @@ print_missing_dependency_hints() {
         echo "- ripgrep(rg)：未安装不影响系统启动，但会降低 search 工具在大项目中的搜索性能。"
         ;;
       docker)
-        echo "- docker：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=docker 时，执行脚本 的 docker 沙箱模式才不可用。"
+        echo "- docker：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=docker 时，执行脚本的 Docker 沙箱模式才不可用。"
         echo "  官方安装文档: https://docs.docker.com/engine/install/"
         ;;
       bubblewrap)
-        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=bubblewrap 时，执行脚本 的 Bubblewrap+overlayfs 沙箱模式才不可用。"
+        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=bubblewrap 时，执行脚本的 Bubblewrap+overlayfs 沙箱模式才不可用。"
         ;;
       firejail)
-        echo "- firejail：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=firejail 时，执行脚本 的 Firejail 沙箱模式才不可用。"
+        echo "- firejail：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=firejail 时，执行脚本的 Firejail 沙箱模式才不可用。"
         ;;
     esac
   done

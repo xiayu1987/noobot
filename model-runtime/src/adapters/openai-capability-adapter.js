@@ -35,16 +35,31 @@ const HTTP_STATUS_FALLBACKS = Object.freeze({
 });
 
 function normalizeLocale(locale = "") {
-  return String(locale || "").trim().toLowerCase().startsWith("en") ? "en-US" : "zh-CN";
+  return String(locale || "")
+    .trim()
+    .toLowerCase()
+    .startsWith("en")
+    ? "en-US"
+    : "zh-CN";
 }
 
 const IMAGES_ASYNC_FALLBACKS = Object.freeze({
-  "zh-CN": Object.freeze({ taskIdMissing: "缺少任务 ID", taskFailed: "任务执行失败", taskTimeout: (id) => `任务超时：${id}` }),
-  "en-US": Object.freeze({ taskIdMissing: "Task ID is missing", taskFailed: "Task failed", taskTimeout: (id) => `Task timed out: ${id}` }),
+  "zh-CN": Object.freeze({
+    taskIdMissing: "缺少任务 ID",
+    taskFailed: "任务执行失败",
+    taskTimeout: (id) => `任务超时：${id}`,
+  }),
+  "en-US": Object.freeze({
+    taskIdMissing: "Task ID is missing",
+    taskFailed: "Task failed",
+    taskTimeout: (id) => `Task timed out: ${id}`,
+  }),
 });
 
 function normalizeBaseUrl(baseUrl = "") {
-  const normalized = String(baseUrl || "").trim().replace(/\/+$/, "");
+  const normalized = String(baseUrl || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!normalized) return "";
   try {
     const url = new URL(normalized);
@@ -66,14 +81,19 @@ function buildApiUrl(baseUrl = "", path = "") {
 
 function normalizeCount(value = 1, modelName = "") {
   const count = Math.min(10, Math.max(1, Math.floor(Number(value || 1)) || 1));
-  return String(modelName || "").trim().toLowerCase() === "gpt-image-2-beta" ? 1 : count;
+  return String(modelName || "")
+    .trim()
+    .toLowerCase() === "gpt-image-2-beta"
+    ? 1
+    : count;
 }
 
 function unwrapPayload(payload = {}) {
   const source = payload && typeof payload === "object" ? payload : {};
   for (const key of ["data", "payload", "result"]) {
     const nested = source[key];
-    if (nested && typeof nested === "object" && !Array.isArray(nested)) Object.assign(source, nested);
+    if (nested && typeof nested === "object" && !Array.isArray(nested))
+      Object.assign(source, nested);
   }
   return source;
 }
@@ -85,7 +105,16 @@ function normalizeTask(payload = {}) {
   return {
     ...source,
     ...first,
-    result_data: source.result_data || source.resultData || source.images || source.output || first.result_data || first.resultData || first.images || first.output || [],
+    result_data:
+      source.result_data ||
+      source.resultData ||
+      source.images ||
+      source.output ||
+      first.result_data ||
+      first.resultData ||
+      first.images ||
+      first.output ||
+      [],
   };
 }
 
@@ -97,7 +126,9 @@ function taskId(payload = {}) {
 function imageArtifacts(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item = {}, index) => {
-      const value = String(item.b64_json || item.image_base64 || item.base64 || item.data || "").trim();
+      const value = String(
+        item.b64_json || item.image_base64 || item.base64 || item.data || "",
+      ).trim();
       const dataUrlMatch = /^data:[^;]+;base64,(.+)$/i.exec(value);
       return {
         fileName: `generated_image_${index + 1}.png`,
@@ -108,7 +139,15 @@ function imageArtifacts(items = []) {
     .filter((item) => item.b64Json || item.url);
 }
 
-async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body, signal, locale = "zh-CN" }) {
+async function requestJson({
+  fetchImpl,
+  url,
+  method = "GET",
+  headers = {},
+  body,
+  signal,
+  locale = "zh-CN",
+}) {
   let response;
   try {
     response = await fetchImpl(url, {
@@ -134,12 +173,15 @@ async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body,
   if (!response.ok) {
     const returnedMessage = String(
       (typeof payload?.error?.message === "string" ? payload.error.message : "") ||
-      (typeof payload?.message === "string" ? payload.message : "") ||
-      (typeof payload?.error === "string" ? payload.error : "") ||
-      (!parsedJson ? responseText : "") ||
-      "",
+        (typeof payload?.message === "string" ? payload.message : "") ||
+        (typeof payload?.error === "string" ? payload.error : "") ||
+        (!parsedJson ? responseText : "") ||
+        "",
     ).trim();
-    const message = returnedMessage || HTTP_STATUS_FALLBACKS[normalizeLocale(locale)]?.[response.status] || `HTTP ${response.status}`;
+    const message =
+      returnedMessage ||
+      HTTP_STATUS_FALLBACKS[normalizeLocale(locale)]?.[response.status] ||
+      `HTTP ${response.status}`;
     const error = new Error(message);
     error.status = response.status;
     error.payload = payload;
@@ -150,7 +192,16 @@ async function requestJson({ fetchImpl, url, method = "GET", headers = {}, body,
   return payload;
 }
 
-async function executeImagesAsync({ modelSpec, credential, input, options, signal, fetchImpl, clock, locale }) {
+async function executeImagesAsync({
+  modelSpec,
+  credential,
+  input,
+  options,
+  signal,
+  fetchImpl,
+  clock,
+  locale,
+}) {
   const localized = IMAGES_ASYNC_FALLBACKS[normalizeLocale(locale)];
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
@@ -171,7 +222,9 @@ async function executeImagesAsync({ modelSpec, credential, input, options, signa
       ...(resolution ? { resolution } : {}),
       n: normalizeCount(options.n, modelSpec.model),
       ...(String(options.quality || "").trim() ? { quality: String(options.quality).trim() } : {}),
-      ...(Array.isArray(options.imageUrls) && options.imageUrls.length ? { image_urls: options.imageUrls } : {}),
+      ...(Array.isArray(options.imageUrls) && options.imageUrls.length
+        ? { image_urls: options.imageUrls }
+        : {}),
     },
   });
   const id = taskId(created);
@@ -183,13 +236,24 @@ async function executeImagesAsync({ modelSpec, credential, input, options, signa
   const taskUrl = buildApiUrl(baseUrl, `/v1/tasks/${encodeURIComponent(id)}`);
   const startedAt = Date.now();
   while (Date.now() - startedAt < Number(options.timeoutMs || TIMEOUT_MS)) {
-    const task = normalizeTask(await requestJson({ fetchImpl, url: taskUrl, headers, signal, locale }));
-    const status = String(task.status || "").trim().toLowerCase();
+    const task = normalizeTask(
+      await requestJson({ fetchImpl, url: taskUrl, headers, signal, locale }),
+    );
+    const status = String(task.status || "")
+      .trim()
+      .toLowerCase();
     if (status === "completed") {
-      return { taskId: id, imageArtifacts: imageArtifacts(task.result_data), rawText: "", rawTask: task };
+      return {
+        taskId: id,
+        imageArtifacts: imageArtifacts(task.result_data),
+        rawText: "",
+        rawTask: task,
+      };
     }
     if (status === "failed") {
-      const error = new Error(String(task.error || task.message || options.taskFailedMessage || localized.taskFailed));
+      const error = new Error(
+        String(task.error || task.message || options.taskFailedMessage || localized.taskFailed),
+      );
       error.apiTypeSwitchHint = true;
       throw error;
     }
@@ -207,9 +271,12 @@ function extractResponsesImages(output = []) {
     for (const value of values) {
       const type = String(value?.type || "").toLowerCase();
       if (!type.includes("image")) continue;
-      const b64Json = String(value?.result || value?.b64_json || value?.image_base64 || value?.data || "").trim();
+      const b64Json = String(
+        value?.result || value?.b64_json || value?.image_base64 || value?.data || "",
+      ).trim();
       const url = String(value?.image_url?.url || value?.url || "").trim();
-      if (b64Json || url) artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
+      if (b64Json || url)
+        artifacts.push({ fileName: `generated_image_${artifacts.length + 1}.png`, b64Json, url });
     }
   }
   return artifacts;
@@ -224,13 +291,24 @@ export async function executeOpenAiOperation({
   fetchImpl = globalThis.fetch,
   clock = { sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
   locale = "zh-CN",
+  mapMultimodalAttachment = mapOpenAiMultimodalAttachment,
+  multimodalParseTransport = "responses",
   openAiClientFactory = (config) => new OpenAI(config),
 }) {
   if (
     operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION &&
     operation.options.apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC
   ) {
-    return executeImagesAsync({ modelSpec, credential, input: operation.input, options: operation.options, signal, fetchImpl, clock, locale });
+    return executeImagesAsync({
+      modelSpec,
+      credential,
+      input: operation.input,
+      options: operation.options,
+      signal,
+      fetchImpl,
+      clock,
+      locale,
+    });
   }
   const client = openAiClientFactory({
     apiKey: credential,
@@ -238,36 +316,89 @@ export async function executeOpenAiOperation({
     defaultHeaders: headers,
   });
   if (operation.kind === MODEL_OPERATION_KIND.WEB_SEARCH) {
-    const result = await client.responses.create({
-      model: modelSpec.model,
-      input: [{ role: "user", content: [{ type: "input_text", text: String(operation.input.query || "").trim() }] }],
-      tools: [{ type: "web_search" }],
-    }, { signal: signal || undefined });
-    return { rawText: String(result?.output_text || "").trim(), output: Array.isArray(result?.output) ? result.output : [] };
+    const result = await client.responses.create(
+      {
+        model: modelSpec.model,
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: String(operation.input.query || "").trim() }],
+          },
+        ],
+        tools: [{ type: "web_search" }],
+      },
+      { signal: signal || undefined },
+    );
+    return {
+      rawText: String(result?.output_text || "").trim(),
+      output: Array.isArray(result?.output) ? result.output : [],
+    };
   }
   if (operation.kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
-    const attachmentContent = operation.input.attachments.map((attachment) => {
-      const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
-      const data = String(attachment.data || "").trim();
-      return mimeType.toLowerCase().startsWith("image/")
-        ? { type: "input_image", image_url: data }
-        : { type: "input_file", file_data: data, filename: String(attachment.fileName || "").trim() || undefined };
-    });
-    const result = await client.responses.create({
-      model: modelSpec.model,
-      input: [{ role: "user", content: [
-        { type: "input_text", text: String(operation.input.prompt || "").trim() },
-        ...attachmentContent,
-      ] }],
-    }, { signal: signal || undefined });
-    return { rawText: String(result?.output_text || "").trim(), output: Array.isArray(result?.output) ? result.output : [] };
+    const attachmentContent = operation.input.attachments.map(mapMultimodalAttachment);
+    if (multimodalParseTransport === "chat_completions") {
+      const completion = await client.chat.completions.create(
+        {
+          model: modelSpec.model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: String(operation.input.prompt || "").trim() },
+                ...attachmentContent,
+              ],
+            },
+          ],
+        },
+        { signal: signal || undefined },
+      );
+      const content = completion?.choices?.[0]?.message?.content;
+      const rawText =
+        typeof content === "string"
+          ? content.trim()
+          : (Array.isArray(content) ? content : [])
+              .filter((item) => String(item?.type || "").trim() === "text")
+              .map((item) => String(item?.text || ""))
+              .join("")
+              .trim();
+      return { rawText, output: [] };
+    }
+    const result = await client.responses.create(
+      {
+        model: modelSpec.model,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: String(operation.input.prompt || "").trim() },
+              ...attachmentContent,
+            ],
+          },
+        ],
+      },
+      { signal: signal || undefined },
+    );
+    return {
+      rawText: String(result?.output_text || "").trim(),
+      output: Array.isArray(result?.output) ? result.output : [],
+    };
   }
   if (operation.kind === MODEL_OPERATION_KIND.IMAGE_GENERATION) {
-    const result = await client.responses.create({
-      model: modelSpec.model,
-      input: [{ role: "user", content: [{ type: "input_text", text: String(operation.input.prompt || "").trim() }] }],
-      tools: [{ type: "image_generation", size: String(operation.options.size || "1024x1024").trim() }],
-    }, { signal: signal || undefined });
+    const result = await client.responses.create(
+      {
+        model: modelSpec.model,
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_text", text: String(operation.input.prompt || "").trim() }],
+          },
+        ],
+        tools: [
+          { type: "image_generation", size: String(operation.options.size || "1024x1024").trim() },
+        ],
+      },
+      { signal: signal || undefined },
+    );
     return {
       rawText: String(result?.output_text || "").trim(),
       imageArtifacts: extractResponsesImages(result?.output),
@@ -275,4 +406,21 @@ export async function executeOpenAiOperation({
     };
   }
   throw new TypeError(`unsupported OpenAI model operation: ${operation.kind}`);
+}
+
+export function mapOpenAiMultimodalAttachment(attachment = {}) {
+  const mimeType = String(attachment.mimeType || "application/octet-stream").trim();
+  const data = String(attachment.data || "").trim();
+  const normalizedMimeType = mimeType.toLowerCase();
+  if (normalizedMimeType.startsWith("image/")) return { type: "input_image", image_url: data };
+  if (normalizedMimeType.startsWith("audio/")) {
+    const format = ["audio/wav", "audio/x-wav"].includes(normalizedMimeType) ? "wav" : "mp3";
+    const base64 = data.startsWith("data:") ? data.slice(data.indexOf(",") + 1) : data;
+    return { type: "input_audio", input_audio: { data: base64, format } };
+  }
+  return {
+    type: "input_file",
+    file_data: data,
+    filename: String(attachment.fileName || "").trim() || undefined,
+  };
 }

@@ -341,6 +341,17 @@ export function createRequestHelpTool({ agentContext } = {}) {
       );
       const shouldCallModel = normalizedRequestType !== REQUEST_HELP_TYPES.WEB_SEARCH;
 
+      if (normalizedRequestType === REQUEST_HELP_TYPES.WEB_SEARCH && !shouldCallServices) {
+        throw recoverableToolError(tTool(runtime, "tools.request_help.webSearchHelpUnavailable"), {
+          code: ERROR_CODE.RECOVERABLE_REQUEST_HELP_FAILED,
+          details: {
+            status: TOOL_RESULT_STATUS.FAILED,
+            requestType: normalizedRequestType,
+            configuredHelpServiceCount: helpServiceList.length,
+          },
+        });
+      }
+
       const servicePromise = shouldCallServices
         ? Promise.all(
             helpServiceList.map((configItem) =>
@@ -401,9 +412,7 @@ export function createRequestHelpTool({ agentContext } = {}) {
 
       if (status === TOOL_RESULT_STATUS.FAILED) {
         throw recoverableToolError(
-          modelResult?.error ||
-            serviceError ||
-            tTool(runtime, "tools.request_help.helpContentRequired"),
+          modelResult?.error || serviceError || tTool(runtime, "tools.request_help.requestFailed"),
           {
             code: ERROR_CODE.RECOVERABLE_REQUEST_HELP_FAILED,
             details: {

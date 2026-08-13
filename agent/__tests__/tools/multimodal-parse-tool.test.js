@@ -24,7 +24,14 @@ test("multimodal_parse parses multiple files and backwrites every user source at
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-"));
   const relativePath = path.join("runtime", "attach", "scoped", "session-1", "user", "scan.png");
   const inputPath = path.join(basePath, relativePath);
-  const secondRelativePath = path.join("runtime", "attach", "scoped", "session-1", "user", "invoice.pdf");
+  const secondRelativePath = path.join(
+    "runtime",
+    "attach",
+    "scoped",
+    "session-1",
+    "user",
+    "invoice.pdf",
+  );
   const secondInputPath = path.join(basePath, secondRelativePath);
   await fs.mkdir(path.dirname(inputPath), { recursive: true });
   await fs.writeFile(inputPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
@@ -45,7 +52,7 @@ test("multimodal_parse parses multiple files and backwrites every user source at
           api_key: "test-key",
           model: "gpt-5.4",
           format: "openai_compatible",
-          multimodal_parsing: { enabled: true },
+          multimodal_parsing: { enabled: true, input_modalities: ["image", "document"] },
         },
       },
     },
@@ -78,6 +85,14 @@ test("multimodal_parse parses multiple files and backwrites every user source at
       },
     },
     attachmentService: {
+      async getAttachmentById(request) {
+        return runtime.userMessageAttachments.find(
+          (attachment) =>
+            attachment.attachmentId === request.attachmentId &&
+            attachment.sessionId === request.sessionId &&
+            attachment.attachmentSource === request.attachmentSource,
+        );
+      },
       async ingestGeneratedArtifacts(request) {
         ingestRequest = request;
         const artifact = request.artifacts[0];
@@ -114,7 +129,17 @@ test("multimodal_parse parses multiple files and backwrites every user source at
   const [tool] = createMultimodalParseTool({ agentContext });
   const result = JSON.parse(
     await tool.invoke(
-      { file_paths: [relativePath, secondRelativePath], prompt: "Extract the invoice" },
+      {
+        inputs: [
+          {
+            source: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "user" },
+          },
+          {
+            source: { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
+          },
+        ],
+        prompt: "Extract the invoice",
+      },
       { configurable: { transferIdentity: TRANSFER_IDENTITY } },
     ),
   );
@@ -127,14 +152,18 @@ test("multimodal_parse parses multiple files and backwrites every user source at
   assert.equal(modelRequest.operation.input.attachments[1].mimeType, "application/pdf");
   assert.equal(modelRequest.invocation.contextSequencePolicy, "independent_request");
   assert.equal(ingestRequest.generationSource, "multimodal_parse_tool");
-  assert.match(ingestRequest.artifacts[0].name, /^scan\.multimodal-parse\..+\.md$/);
-  assert.deepEqual(linkRequests.map((request) => request.sourceAttachmentId), ["source-1", "source-2"]);
+  assert.equal(ingestRequest.artifacts[0].name, "scan.multimodal-parse.multimodal_model.md");
+  assert.deepEqual(
+    linkRequests.map((request) => request.sourceAttachmentId),
+    ["source-1", "source-2"],
+  );
   assert.ok(linkRequests.every((request) => request.toolName === "multimodal_parse"));
   assert.equal(runtime.userMessageAttachments[0].parsedResult.attachmentId, "parsed-1");
   assert.equal(runtime.userMessageAttachments[1].parsedResult.attachmentId, "parsed-1");
   assert.equal(result.ok, true);
   assert.equal(result.summary.source_attachment_backwritten_count, 2);
   assert.equal(result.summary.input_file_count, 2);
+  assert.deepEqual(result.summary.input_modalities, ["image", "document"]);
   assert.deepEqual(result.summary.parsed_from_attachment_ids, ["source-1", "source-2"]);
   assert.equal(result.summary.saved_attachment_count, 1);
 });
@@ -157,7 +186,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
           api_key: "test-key",
           model: "gpt-5.4",
           format: "openai_compatible",
-          multimodal_parsing: { enabled: true },
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
         },
       },
     },
@@ -172,16 +201,18 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
     },
     attachmentService: {
       async ingestGeneratedArtifacts(request) {
-        return [{
-          attachmentId: "parsed-ordinary",
-          sessionId: "session-1",
-          attachmentSource: "model",
-          name: request.artifacts[0].name,
-          mimeType: request.artifacts[0].mimeType,
-          size: 20,
-          path: path.join(basePath, request.artifacts[0].name),
-          relativePath: request.artifacts[0].name,
-        }];
+        return [
+          {
+            attachmentId: "parsed-ordinary",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 20,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
       },
       async linkParsedResultToAttachment() {
         linkCalled = true;
@@ -189,16 +220,86 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
     },
   });
   const [tool] = createMultimodalParseTool({ agentContext });
-  const result = JSON.parse(await tool.invoke(
-    { file_paths: ["ordinary.pdf"] },
-    { configurable: { transferIdentity: TRANSFER_IDENTITY } },
-  ));
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "ordinary.pdf" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
 
   assert.equal(modelCalled, true);
   assert.equal(linkCalled, false);
   assert.equal(result.ok, true);
   assert.deepEqual(result.summary.parsed_from_attachment_ids, []);
   assert.equal(result.summary.source_attachment_backwritten_count, 0);
+});
+
+test("multimodal_parse passes audio and video files to the configured model", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-media-"));
+  await fs.writeFile(path.join(basePath, "recording.wav"), Buffer.from([0x52, 0x49, 0x46, 0x46]));
+  await fs.writeFile(path.join(basePath, "clip.mp4"), Buffer.from([0x00, 0x00, 0x00, 0x18]));
+  let modelRequest = null;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    runtimeModel: "parse-model",
+    globalConfig: {
+      providers: {
+        "parse-model": {
+          enabled: true,
+          model: "qwen3.5-omni-plus",
+          format: "dashscope",
+          multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },
+        },
+      },
+    },
+    userConfig: {},
+    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke(request) {
+        modelRequest = request;
+        return { result: { rawText: "parsed media", output: [] } };
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return [
+          {
+            attachmentId: "parsed-media",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 12,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "recording.wav" }, { source: "clip.mp4" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
+
+  assert.deepEqual(
+    modelRequest.operation.input.attachments.map(({ mimeType, fileName }) => ({
+      mimeType,
+      fileName,
+    })),
+    [
+      { mimeType: "audio/wav", fileName: "recording.wav" },
+      { mimeType: "video/mp4", fileName: "clip.mp4" },
+    ],
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.input_file_count, 2);
 });
 
 test("multimodal_parse rejects combined files at the official 50 MB request limit", async () => {
@@ -216,12 +317,16 @@ test("multimodal_parse rejects combined files at the official 50 MB request limi
     basePath,
     userId: "admin",
     userMessageAttachments: [],
-    modelPort: { async invoke() { modelCalled = true; } },
+    modelPort: {
+      async invoke() {
+        modelCalled = true;
+      },
+    },
   });
   const [tool] = createMultimodalParseTool({ agentContext });
 
   await assert.rejects(
-    () => tool.invoke({ file_paths: ["first.pdf", "second.pdf"] }),
+    () => tool.invoke({ inputs: [{ source: "first.pdf" }, { source: "second.pdf" }] }),
     /50 MB/,
   );
   assert.equal(modelCalled, false);
@@ -240,7 +345,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
           enabled: true,
           model: "gpt-5.4",
           format: "openai_compatible",
-          multimodal_parsing: { enabled: true },
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
         },
         "text-only": {
           enabled: true,
@@ -256,7 +361,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   const [tool] = createMultimodalParseTool({ agentContext });
 
   await assert.rejects(
-    () => tool.invoke({ file_paths: ["input.pdf"], model_name: "text-only" }),
+    () => tool.invoke({ inputs: [{ source: "input.pdf" }], model_name: "text-only" }),
     /多模态解析|multimodal parsing/,
   );
 });
@@ -281,7 +386,7 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
           enabled: true,
           model: "gpt-5.4",
           format: "openai_compatible",
-          multimodal_parsing: { enabled: true },
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
         },
       },
     },
@@ -295,25 +400,29 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
     },
     attachmentService: {
       async ingestGeneratedArtifacts(request) {
-        return [{
-          attachmentId: "parsed-fallback",
-          sessionId: "session-1",
-          attachmentSource: "model",
-          name: request.artifacts[0].name,
-          mimeType: request.artifacts[0].mimeType,
-          size: 6,
-          path: path.join(basePath, request.artifacts[0].name),
-          relativePath: request.artifacts[0].name,
-        }];
+        return [
+          {
+            attachmentId: "parsed-fallback",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 6,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
       },
     },
   });
   const [tool] = createMultimodalParseTool({ agentContext });
 
-  const result = JSON.parse(await tool.invoke(
-    { file_paths: ["input.pdf"] },
-    { configurable: { transferIdentity: TRANSFER_IDENTITY } },
-  ));
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "input.pdf" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
 
   assert.equal(invokedModel.alias, "parse-model");
   assert.equal(invokedModel.model, "gpt-5.4");

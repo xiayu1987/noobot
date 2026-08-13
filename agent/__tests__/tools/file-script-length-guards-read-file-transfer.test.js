@@ -30,7 +30,9 @@ test("read_file: 具体工具不判断大文件，原始内容交由 semantic-tr
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "large.txt", includeLineNumbers: false }));
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", filePath: "large.txt", includeLineNumbers: false }),
+  );
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
@@ -61,10 +63,11 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const rawToolResultText = await tool.invoke({ riskLevel: "low",
-      filePath: "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt",
-      includeLineNumbers: true,
-      maxLines: 500,
+  const rawToolResultText = await tool.invoke({
+    riskLevel: "low",
+    filePath: "runtime/ops_workdir/large_test_file.txt",
+    includeLineNumbers: true,
+    maxLines: 500,
   });
   const rawResult = parseToolResult(rawToolResultText);
 
@@ -72,7 +75,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   assert.equal(rawResult.ok, true);
   assert.equal(rawResult.content.length > 8000, true);
   assert.equal(rawResult.contentOmitted, undefined);
-  assert.equal(rawResult.resolvedPath, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(rawResult.resolvedPath, "runtime/ops_workdir/large_test_file.txt");
   assert.equal(String(rawResult.resolvedPath || "").includes(workspaceRoot), false);
   assert.equal(rawResult.transferEnvelopes, undefined);
 
@@ -105,11 +108,11 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   assert.equal(envelope.protocol, "noobot.semantic-transfer");
   assert.equal(envelope.version, 2);
   assert.equal(envelope.payload?.mode, "source_reference");
-  assert.equal(envelope.payload?.reference?.address, "/workspace/primary-user/runtime/ops_workdir/large_test_file.txt");
+  assert.equal(envelope.payload?.reference?.address, "runtime/ops_workdir/large_test_file.txt");
   assert.equal(envelope.payload?.reference?.startLine, 1);
   assert.equal(envelope.payload?.reference?.endLine, 1);
   assert.equal(JSON.stringify(envelope).includes(workspaceRoot), false);
-  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), true);
+  assert.equal(JSON.stringify(envelope).includes("/workspace/primary-user"), false);
   assert.equal("files" in envelope, false);
   assert.equal("storage" in envelope, false);
 });

@@ -45,18 +45,19 @@ vi.mock("noobot-chat/plugin-api/ui", () => ({
 
 vi.mock("noobot-chat/plugin-api/locale", () => ({
   useLocale: () => ({
-    translate: (key, params = {}) => ({
-      "message.parsedResult": "解析结果",
-      "message.parsedResultLabel": "解析结果",
-      "message.previewParsedResult": `预览解析结果 ${params.name || ""}`.trim(),
-      "message.previewParsedResultShort": "预览",
-      "message.downloadParsedResult": `下载解析结果 ${params.name || ""}`.trim(),
-      "message.downloadParsedResultShort": "下载",
-      "message.parsedResultDefaultName": "解析结果.md",
-      "message.pluginAttachment": "插件附件",
-      "composer.expand": "展开",
-      "message.collapse": "收起",
-    }[key] || key),
+    translate: (key, params = {}) =>
+      ({
+        "message.parsedResult": "解析结果",
+        "message.parsedResultLabel": "解析结果",
+        "message.previewParsedResult": `预览解析结果 ${params.name || ""}`.trim(),
+        "message.previewParsedResultShort": "预览",
+        "message.downloadParsedResult": `下载解析结果 ${params.name || ""}`.trim(),
+        "message.downloadParsedResultShort": "下载",
+        "message.parsedResultDefaultName": "解析结果.md",
+        "message.pluginAttachment": "插件附件",
+        "composer.expand": "展开",
+        "message.collapse": "收起",
+      })[key] || key,
   }),
 }));
 
@@ -105,8 +106,12 @@ describe("MessageAttachments parsed result", () => {
   it("emits parsed result preview and download payloads", async () => {
     const wrapper = mountMessageAttachments();
     const buttons = wrapper.findAll("button");
-    const previewButton = buttons.find((button) => button.attributes("title") === "预览解析结果 source.md");
-    const downloadButton = buttons.find((button) => button.attributes("title") === "下载解析结果 source.md");
+    const previewButton = buttons.find(
+      (button) => button.attributes("title") === "预览解析结果 source.md",
+    );
+    const downloadButton = buttons.find(
+      (button) => button.attributes("title") === "下载解析结果 source.md",
+    );
 
     expect(previewButton).toBeTruthy();
     expect(downloadButton).toBeTruthy();
@@ -118,14 +123,16 @@ describe("MessageAttachments parsed result", () => {
       attachmentId: "parsed-1",
       name: "source.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      previewUrl:
+        "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
     expect(wrapper.emitted("preview-resolved")?.[0]?.[1]).toBeUndefined();
     expect(wrapper.emitted("download")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
       name: "source.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      previewUrl:
+        "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
   });
 
@@ -193,8 +200,8 @@ describe("MessageAttachments parsed result", () => {
             attachmentId: "parsed-1",
             sessionId: "session-1",
             attachmentSource: "model",
-            relativePath: "runtime/attach/model/source.doc2data.md",
-            tool: "doc_to_data",
+            relativePath: "runtime/attach/model/source.multimodal-parse.md",
+            tool: "multimodal_parse",
           },
         },
       ],
@@ -206,16 +213,17 @@ describe("MessageAttachments parsed result", () => {
 
     const previewButton = wrapper
       .findAll("button")
-      .find((button) => button.attributes("title") === "预览解析结果 source.doc2data.md");
+      .find((button) => button.attributes("title") === "预览解析结果 source.multimodal-parse.md");
     expect(previewButton).toBeTruthy();
 
     await previewButton.trigger("click");
 
     expect(wrapper.emitted("preview-resolved")?.[0]?.[0]).toMatchObject({
       attachmentId: "parsed-1",
-      name: "source.doc2data.md",
+      name: "source.multimodal-parse.md",
       mimeType: "text/markdown",
-      previewUrl: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
+      previewUrl:
+        "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
     });
     expect(wrapper.emitted("preview-resolved")?.[0]?.[1]).toBeUndefined();
   });

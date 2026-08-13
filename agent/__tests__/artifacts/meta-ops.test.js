@@ -17,40 +17,57 @@ import {
 } from "../../src/artifacts/meta-ops.js";
 
 test("projectCanonicalAttachmentIdentity delegates identity to the shared protocol", () => {
-  assert.deepEqual(projectCanonicalAttachmentIdentity({
-    attachmentId: "att_1",
-    sessionId: "s1",
-    attachmentSource: "user",
-    path: "/runtime/att_1.txt",
-    contentSha256: "sha_1",
-    name: "display.txt",
-    downloadUrl: "/api/attachments/att_1",
-    previewUrl: "",
-    parsedResult: { path: "/runtime/parsed.md" },
-  }, "s1"), {
-    attachmentId: "att_1",
-    sessionId: "s1",
-    attachmentSource: "user",
-  });
+  assert.deepEqual(
+    projectCanonicalAttachmentIdentity(
+      {
+        attachmentId: "att_1",
+        sessionId: "s1",
+        attachmentSource: "user",
+        path: "/runtime/att_1.txt",
+        contentSha256: "sha_1",
+        name: "display.txt",
+        downloadUrl: "/api/attachments/att_1",
+        previewUrl: "",
+        parsedResult: { path: "/runtime/parsed.md" },
+      },
+      "s1",
+    ),
+    {
+      attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
+    },
+  );
 });
 
 test("projectCanonicalAttachmentIdentity ignores access fields but rejects incomplete ownership", () => {
-  assert.deepEqual(projectCanonicalAttachmentIdentity({
-    attachmentId: "att_1",
-    sessionId: "s1",
-    attachmentSource: "user",
-    path: "/runtime/att_1.txt",
-    relativePath: "runtime/att_1.txt",
-  }, "s1"), {
-    attachmentId: "att_1",
-    sessionId: "s1",
-    attachmentSource: "user",
-  });
+  assert.deepEqual(
+    projectCanonicalAttachmentIdentity(
+      {
+        attachmentId: "att_1",
+        sessionId: "s1",
+        attachmentSource: "user",
+        path: "/runtime/att_1.txt",
+        relativePath: "runtime/att_1.txt",
+      },
+      "s1",
+    ),
+    {
+      attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
+    },
+  );
 
   for (const attachment of [
     { id: "att_1", sessionId: "s1", attachmentSource: "user", path: "/runtime/att_1.txt" },
     { attachmentId: "att_1", attachmentSource: "user", path: "/runtime/att_1.txt" },
-    { attachmentId: "att_1", sessionId: "s2", attachmentSource: "user", path: "/runtime/att_1.txt" },
+    {
+      attachmentId: "att_1",
+      sessionId: "s2",
+      attachmentSource: "user",
+      path: "/runtime/att_1.txt",
+    },
     { attachmentId: "att_1", sessionId: "s1", path: "/runtime/att_1.txt" },
   ]) {
     assert.throws(
@@ -73,9 +90,18 @@ test("attachment matching uses only the shared three-field identity", () => {
   const differentIdentity = { ...canonical, attachmentId: "att_2" };
 
   assert.deepEqual(attachmentMatchKeys(canonical), [JSON.stringify(["s1", "user", "att_1"])]);
-  assert.equal(findMatchingAttachmentMeta(canonical, [differentIdentity, sameIdentity]), sameIdentity);
-  assert.equal(findMatchingAttachmentMeta({ ...canonical, path: "/other/same.txt" }, [sameIdentity]), sameIdentity);
-  assert.equal(findMatchingAttachmentMeta({ attachmentId: "att_1", name: "same.txt" }, [canonical]), null);
+  assert.equal(
+    findMatchingAttachmentMeta(canonical, [differentIdentity, sameIdentity]),
+    sameIdentity,
+  );
+  assert.equal(
+    findMatchingAttachmentMeta({ ...canonical, path: "/other/same.txt" }, [sameIdentity]),
+    sameIdentity,
+  );
+  assert.equal(
+    findMatchingAttachmentMeta({ attachmentId: "att_1", name: "same.txt" }, [canonical]),
+    null,
+  );
 });
 
 test("normalizeAttachmentMetas accepts legacy aliases but emits canonical attachment fields", () => {
@@ -136,7 +162,7 @@ test("nested attachment metadata normalizers remove known alias fields", () => {
       relative_path: "runtime/parsed.md",
       updated_at: "2026-07-11T00:00:00.000Z",
       sandbox_enabled: true,
-      tool: "doc_to_data",
+      tool: "multimodal_parse",
     },
   });
 
@@ -151,7 +177,7 @@ test("nested attachment metadata normalizers remove known alias fields", () => {
     mimeType: "text/markdown",
     path: "/tmp/parsed.md",
     relativePath: "runtime/parsed.md",
-    tool: "doc_to_data",
+    tool: "multimodal_parse",
     updatedAt: "2026-07-11T00:00:00.000Z",
     isSandbox: true,
   });
@@ -201,4 +227,3 @@ test("mapAttachmentRecordsToMetas canonicalizes aliases before exposing attachme
   assert.equal(JSON.stringify(meta).includes("updated_at"), false);
   assert.equal(JSON.stringify(meta).includes("dialog_process_id"), false);
 });
-

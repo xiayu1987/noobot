@@ -4,7 +4,17 @@
  */
 
 const OPENAI_MODELS = [/^gpt-4\.1(?:\b|[-_.])/, /^gpt-5(?:\b|[-_.])/];
-const PROVIDER_IDS = new Set(["openai", "anthropic", "google", "gemini", "deepseek", "alibaba", "dashscope", "zhipu", "generic"]);
+const PROVIDER_IDS = new Set([
+  "openai",
+  "anthropic",
+  "google",
+  "gemini",
+  "deepseek",
+  "alibaba",
+  "dashscope",
+  "zhipu",
+  "generic",
+]);
 
 function providerId(spec = {}) {
   const value = String(spec.operatorId || spec.providerId || "")
@@ -13,6 +23,16 @@ function providerId(spec = {}) {
   if (!value) throw new TypeError("model spec.operatorId is required");
   if (!PROVIDER_IDS.has(value)) throw new TypeError(`unsupported model providerId: ${value}`);
   return value;
+}
+
+function usesOpenAiPromptCacheProtocol(spec = {}) {
+  const format = String(spec.format || "")
+    .trim()
+    .toLowerCase();
+  const family = String(spec.modelFamily || "")
+    .trim()
+    .toLowerCase();
+  return format === "openai_compatible" && family === "gpt";
 }
 
 function segment(value) {
@@ -28,7 +48,7 @@ export function resolveCacheVendor(spec = {}) {
 }
 
 export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
-  if (providerId(spec) !== "openai") return "";
+  if (!usesOpenAiPromptCacheProtocol(spec)) return "";
   const model = segment(spec.model);
   if (!model) return "";
   const normalizedFlow = segment(flow);
@@ -62,7 +82,7 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   ])
     delete out[key];
 
-  if (vendor === "openai") {
+  if (usesOpenAiPromptCacheProtocol(spec)) {
     const key =
       String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
       buildPromptCacheKey(spec, flow);
@@ -100,7 +120,7 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   }
   if (
     spec.top_p !== undefined &&
-    !(vendor === "openai" && String(spec.model).toLowerCase().includes("gpt-5"))
+    !(usesOpenAiPromptCacheProtocol(spec) && String(spec.model).toLowerCase().includes("gpt-5"))
   ) {
     out.top_p = spec.top_p;
   }

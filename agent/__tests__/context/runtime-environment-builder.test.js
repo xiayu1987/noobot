@@ -10,10 +10,7 @@ import {
   buildRuntimeContext,
   initializeRuntimeEnvironment,
 } from "../../src/context/builders/runtime-environment-builder.js";
-import {
-  buildSandboxViewStaticInfo,
-  buildStaticInfo,
-} from "../../src/context/providers/environment-provider.js";
+import { buildStaticInfo } from "../../src/context/providers/environment-provider.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 test("buildRuntimeContext keeps sharedTools passthrough and creates turn stores", () => {
@@ -60,65 +57,6 @@ test("buildStaticInfo exposes host default directories", () => {
   assert.deepEqual(staticInfo.directories?.allowedRoots, ["/host/workspaces/u1"]);
 });
 
-test("buildSandboxViewStaticInfo exposes configured sandbox mount targets", () => {
-  const staticInfo = buildSandboxViewStaticInfo({
-    runtimeBasePath: "/host/workspaces/u1",
-    userId: "u1",
-    effectiveConfig: {
-      tools: {
-        sandboxPathMappings: [
-          { source: "/host/project", target: "/repo" },
-        ],
-        execute_script: {
-          sandboxMode: true,
-          sandboxProvider: {
-            default: "docker",
-            docker: {
-              dockerContainerScope: "user",
-              dockerMounts: [
-                { source: "/host/data", target: "/data" },
-              ],
-            },
-          },
-        },
-      },
-    },
-  });
-
-  assert.equal(staticInfo.sandbox?.enabled, true);
-  assert.equal(staticInfo.directories?.view, "sandbox");
-  assert.equal(staticInfo.directories?.rootDirectory, "/workspace");
-  assert.equal(staticInfo.directories?.opsWorkdir, "/workspace/runtime/ops_workdir");
-  assert.equal(staticInfo.directories?.currentDirectory, "/workspace/runtime/ops_workdir");
-  assert.deepEqual(staticInfo.sandbox?.allowedRoots?.sort(), ["/data", "/repo", "/workspace"]);
-  assert.deepEqual(staticInfo.sandbox?.extraMountTargets?.sort(), ["/data", "/repo"]);
-});
-
-test("buildSandboxViewStaticInfo separates sandbox root from user root for docker global scope", () => {
-  const staticInfo = buildSandboxViewStaticInfo({
-    runtimeBasePath: "/host/workspaces/primary-user",
-    userId: "primary-user",
-    effectiveConfig: {
-      tools: {
-        execute_script: {
-          sandboxMode: true,
-          sandboxProvider: {
-            default: "docker",
-            docker: {
-              dockerContainerScope: "global",
-            },
-          },
-        },
-      },
-    },
-  });
-
-  assert.equal(staticInfo.sandbox?.sandboxRoot, "/workspace");
-  assert.equal(staticInfo.directories?.rootDirectory, "/workspace/primary-user");
-  assert.equal(staticInfo.directories?.opsWorkdir, "/workspace/primary-user/runtime/ops_workdir");
-  assert.deepEqual(staticInfo.directories?.allowedRoots, ["/workspace"]);
-});
-
 test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {
   const runtime = buildRuntimeContext({
     userId: "u1",
@@ -126,11 +64,7 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
     globalConfig: {
       tools: {
         execute_script: {
-          sandboxMode: true,
-          sandboxProvider: {
-            default: "docker",
-            docker: { dockerContainerScope: "global" },
-          },
+          execution: { view: "sandbox", sandboxProvider: { default: "docker" } },
         },
       },
     },
@@ -148,13 +82,9 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.equal(typeof runtime.sharedTools.fetch, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanText, "function");
   assert.equal(typeof runtime.sharedTools.textCleaner?.cleanHtml, "function");
-  assert.equal(typeof runtime.sharedTools.resolveAttachmentDisplayPath, "function");
-  assert.equal(typeof runtime.sharedTools.resolveSandboxPath, "function");
-  assert.equal(typeof runtime.sharedTools.resolveHostPath, "function");
-  assert.equal(typeof runtime.sharedTools.toSandboxPath, "function");
-  assert.equal(typeof runtime.sharedTools.toHostPath, "function");
-  assert.equal(typeof runtime.sharedTools.pathMapper?.toSandboxPath, "function");
-  assert.equal(typeof runtime.sharedTools.pathMapper?.toHostPath, "function");
+  assert.equal(runtime.sharedTools.resolveSandboxPath, undefined);
+  assert.equal(runtime.sharedTools.toHostPath, undefined);
+  assert.equal(runtime.sharedTools.pathMapper, undefined);
   assert.equal(typeof runtime.sharedTools.semanticTransfer?.transferSemanticContent, "function");
   assert.equal(runtime.sharedTools.semanticTransfer?.transferSemanticContentSync, undefined);
   assert.equal(typeof runtime.sharedTools.sessionCrypto?.encryptBySessionId, "function");
@@ -168,31 +98,20 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   assert.deepEqual(runtime.sharedTools.sessionCrypto.decryptBySessionId(encrypted, "s1"), {
     ok: true,
   });
-  assert.equal(
-    runtime.sharedTools.resolveAttachmentDisplayPath({
-      meta: {
-        path: "/host/users/u1/runtime/a.md",
-        relativePath: "runtime/a.md",
-      },
-    }),
-    "/workspace/u1/runtime/a.md",
-  );
-  assert.equal(
-    runtime.sharedTools.toHostPath({
-      path: "/workspace/u1/runtime/a.md",
-      sandboxPath: "/workspace/u1/runtime/a.md",
-    }),
-    "/host/users/u1/runtime/a.md",
-  );
 
   assert.equal(typeof runtime.sharedTools.connectorEventListener?.onConnectorAccessed, "function");
   assert.ok(runtime.sharedTools.connectorChannelStore);
   assert.ok(runtime.sharedTools.connectorHistoryStore);
-  assert.deepEqual(Object.keys(runtime.connectorChannels || {}).sort(), ["databases", "emails", "terminals"]);
+  assert.deepEqual(Object.keys(runtime.connectorChannels || {}).sort(), [
+    "databases",
+    "emails",
+    "terminals",
+  ]);
 
   const hasBrowserOrInitError =
     runtime.sharedTools.browser ||
-    (typeof runtime.sharedTools.browserInitError === "string" && runtime.sharedTools.browserInitError.length > 0);
+    (typeof runtime.sharedTools.browserInitError === "string" &&
+      runtime.sharedTools.browserInitError.length > 0);
   assert.equal(Boolean(hasBrowserOrInitError), true);
 
   if (runtime.sharedTools.browser && typeof runtime.sharedTools.browser.close === "function") {
@@ -201,9 +120,7 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
 });
 
 test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePath when caller passes partial runtime", async () => {
-  const overflowContent = "x".repeat(
-    LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1,
-  );
+  const overflowContent = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runtime = buildRuntimeContext({
     userId: "primary-user",
     basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
@@ -215,9 +132,7 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
             default: "docker",
             docker: {
               dockerContainerScope: "global",
-              dockerMounts: [
-                { source: "/home/xiayu/projects/noobot", target: "/project" },
-              ],
+              dockerMounts: [{ source: "/home/xiayu/projects/noobot", target: "/project" }],
             },
           },
         },

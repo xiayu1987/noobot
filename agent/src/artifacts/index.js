@@ -22,7 +22,7 @@ export {
   canonicalAttachmentIdentityKey,
   assertCanonicalAttachments,
 } from "./meta-ops.js";
-export { resolveCanonicalUserSourceAttachment } from "./source-attachment-resolver.js";
+export { resolveCanonicalSourceAttachment } from "./source-attachment-resolver.js";
 export {
   applyRuntimeUserMessageAttachments,
   resolveRuntimeUserMessageAttachments,
@@ -30,7 +30,12 @@ export {
   updateRuntimeUserMessageAttachment,
 } from "./runtime-user-message-attachments.js";
 export { readAttachIndex, writeAttachIndex } from "./index-manager.js";
-export { validateAttachmentPolicy, resolveAttachmentPolicy, isMimeTypeAllowed, isExtensionAllowed } from "./policy/policy-validator.js";
+export {
+  validateAttachmentPolicy,
+  resolveAttachmentPolicy,
+  isMimeTypeAllowed,
+  isExtensionAllowed,
+} from "./policy/policy-validator.js";
 export { getMimeTypeFromExtension, isValidMimeType } from "./policy/mime-utils.js";
 export {
   DEFAULT_ATTACHMENT_SESSION_ID,

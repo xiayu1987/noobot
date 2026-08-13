@@ -5,6 +5,25 @@
  */
 import { isPlainObject } from "./utils.js";
 
+function configValuesEqual(left, right) {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => configValuesEqual(value, right[index]))
+    );
+  }
+  if (!isPlainObject(left) || !isPlainObject(right)) return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  return (
+    leftKeys.length === rightKeys.length &&
+    leftKeys.every((key) => Object.hasOwn(right, key) && configValuesEqual(left[key], right[key]))
+  );
+}
+
 export const SNAKE_TO_CANONICAL_KEY_MAP = {
   workspace_root: "workspaceRoot",
   workspace_template_path: "workspaceTemplatePath",
@@ -13,6 +32,21 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   switch_web_mode: "switchWebMode",
   sandbox_mode: "sandboxMode",
   sandbox_provider: "sandboxProvider",
+  path_policy: "pathPolicy",
+  regular_user: "regularUser",
+  accepted_views: "acceptedViews",
+  host_requires_role: "hostRequiresRole",
+  allowed_roots: "allowedRoots",
+  denied_roots: "deniedRoots",
+  follow_symbolic_links: "followSymbolicLinks",
+  require_real_path_for_existing_targets: "requireRealPathForExistingTargets",
+  validate_write_parent_real_path: "validateWriteParentRealPath",
+  reject_ambiguous_virtual_paths: "rejectAmbiguousVirtualPaths",
+  case_sensitivity: "caseSensitivity",
+  file_tools: "fileTools",
+  script_tools: "scriptTools",
+  native_script: "nativeScript",
+  task_local: "taskLocal",
   docker_container_scope: "dockerContainerScope",
   docker_container_name: "dockerContainerName",
   docker_image: "dockerImage",
@@ -57,6 +91,32 @@ export function normalizeKnownConfigKeys(input, path = []) {
       ? rawKey
       : SNAKE_TO_CANONICAL_KEY_MAP[rawKey] || rawKey;
     out[normalizedKey] = normalizeKnownConfigKeys(value, [...currentPath, normalizedKey]);
+  }
+  if (currentPath[0] === "tools" && currentPath[1] === "execute_script") {
+    const hasMode = Object.hasOwn(out, "sandboxMode");
+    const hasProvider = Object.hasOwn(out, "sandboxProvider");
+    const execution = isPlainObject(out.execution) ? { ...out.execution } : {};
+    if (hasMode) {
+      const mappedView = out.sandboxMode === true ? "sandbox" : "host";
+      if (execution.view !== undefined && execution.view !== mappedView) {
+        throw new Error("tools.execute_script sandbox_mode conflicts with execution.view");
+      }
+      execution.view = mappedView;
+      delete out.sandboxMode;
+    }
+    if (hasProvider) {
+      if (
+        execution.sandboxProvider !== undefined &&
+        !configValuesEqual(execution.sandboxProvider, out.sandboxProvider)
+      ) {
+        throw new Error(
+          "tools.execute_script sandbox_provider conflicts with execution.sandboxProvider",
+        );
+      }
+      execution.sandboxProvider = out.sandboxProvider;
+      delete out.sandboxProvider;
+    }
+    if (hasMode || hasProvider || Object.hasOwn(out, "execution")) out.execution = execution;
   }
   return out;
 }

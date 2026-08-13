@@ -17,9 +17,6 @@
     "list_skills": {
       "enabled": true
     },
-    "set_skill_task": {
-      "enabled": true
-    },
     "call_service": {
       "enabled": true
     },
@@ -49,39 +46,14 @@
       "help_services": [],
       "help_model": ""
     },
-    "web_to_data": {
-      "enabled": true,
-      "switch_web_mode": "browser_simulate"
-    },
-    "doc_to_data": {
+    "execute_native_script": {
       "enabled": true
-    },
-    "process_content_task": {
-      "enabled": true
-    },
-    "execute_script": {
-      "enabled": true,
-      "sandbox_mode": true,
-      "sandbox_provider": {
-        "default": "docker",
-        "docker": {
-          "docker_container_scope": "global",
-          "docker_container_name": "noobot-script-sandbox",
-          "docker_image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm"
-        },
-        "bubblewrap": {},
-        "firejail": {}
-      }
     },
     "process_connector_tool": {
       "enabled": true
     },
     "access_connector": {
-      "enabled": true,
-      "command_file": {
-        "enabled": true,
-        "allowed_roots": []
-      }
+      "enabled": true
     },
     "database_connect_connector": {
       "enabled": true,
@@ -190,7 +162,8 @@
       "tool_reasoning_effort": "low",
       "description": "擅长编码",
       "multimodal_parsing": {
-        "enabled": true
+        "enabled": true,
+        "input_modalities": ["image"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -210,7 +183,8 @@
       "tool_reasoning_effort": "low",
       "description": "擅长编码",
       "multimodal_parsing": {
-        "enabled": true
+        "enabled": true,
+        "input_modalities": ["image", "document"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -230,7 +204,8 @@
       "tool_reasoning_effort": "low",
       "description": "擅长编码",
       "multimodal_parsing": {
-        "enabled": true
+        "enabled": true,
+        "input_modalities": ["image", "document"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -269,7 +244,8 @@
       "preserve_thinking": false,
       "description": "多模态解析",
       "multimodal_parsing": {
-        "enabled": true
+        "enabled": true,
+        "input_modalities": ["image", "audio", "video"]
       },
       "multimodal_generation": {
         "support_generation": {

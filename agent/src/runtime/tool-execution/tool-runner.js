@@ -5,10 +5,7 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { Buffer } from "node:buffer";
-import {
-  currentAssistantMessageId,
-  emitMessageEvent,
-} from "../../events/message-event-stream.js";
+import { currentAssistantMessageId, emitMessageEvent } from "../../events/message-event-stream.js";
 import { isFatalError } from "../../shared/errors/index.js";
 import {
   parseToolOutputArtifacts,
@@ -30,10 +27,7 @@ import {
 } from "../../transfer-adapter/index.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { sanitizeToolResultText } from "@noobot/sanitize";
-import {
-  getToolOutputPolicy,
-  hasToolInputPolicy,
-} from "@noobot/semantic-transfer-protocol";
+import { getToolOutputPolicy, hasToolInputPolicy } from "@noobot/semantic-transfer-protocol";
 
 function shouldTransferToolInput(call = {}) {
   const toolName = String(call?.name || "").trim();
@@ -41,25 +35,17 @@ function shouldTransferToolInput(call = {}) {
 }
 
 function toolProducer(call = {}) {
-  const id = String(
-    call?.id || call?.tool_call_id || call?.toolCallId || "",
-  ).trim();
+  const id = String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
   if (!id) throw new Error("semantic_transfer_tool_call_id_required");
   return { type: "tool", id };
 }
 
-function mergeToolInputTransferPayload(
-  toolResultText = "",
-  transferPayload = {},
-) {
+function mergeToolInputTransferPayload(toolResultText = "", transferPayload = {}) {
   const normalizedTransferPayload =
-    transferPayload &&
-    typeof transferPayload === "object" &&
-    !Array.isArray(transferPayload)
+    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
       ? transferPayload
       : {};
-  if (!Object.keys(normalizedTransferPayload).length)
-    return String(toolResultText || "");
+  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
   const parsed = parseJsonObjectSafely(toolResultText);
   if (!parsed) return String(toolResultText || "");
   return JSON.stringify({
@@ -68,18 +54,12 @@ function mergeToolInputTransferPayload(
   });
 }
 
-function mergeTaskSummaryTransferPayload(
-  toolResultText = "",
-  transferPayload = {},
-) {
+function mergeTaskSummaryTransferPayload(toolResultText = "", transferPayload = {}) {
   const normalizedTransferPayload =
-    transferPayload &&
-    typeof transferPayload === "object" &&
-    !Array.isArray(transferPayload)
+    transferPayload && typeof transferPayload === "object" && !Array.isArray(transferPayload)
       ? transferPayload
       : {};
-  if (!Object.keys(normalizedTransferPayload).length)
-    return String(toolResultText || "");
+  if (!Object.keys(normalizedTransferPayload).length) return String(toolResultText || "");
   const parsed = parseJsonObjectSafely(toolResultText);
   if (!parsed) return String(toolResultText || "");
   return JSON.stringify({
@@ -106,11 +86,7 @@ function mergeToolResultWithInputTransferPayload(
 }
 
 function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
-  if (
-    !inputTransfer ||
-    typeof inputTransfer !== "object" ||
-    Array.isArray(inputTransfer)
-  )
+  if (!inputTransfer || typeof inputTransfer !== "object" || Array.isArray(inputTransfer))
     return {};
   const transferEnvelopes = Array.isArray(inputTransfer.transferEnvelopes)
     ? inputTransfer.transferEnvelopes
@@ -121,10 +97,7 @@ function compactSemanticTransferProtocolPayload(inputTransfer = {}) {
 }
 
 function transferEnvelopesFromStructuredResult(rawResult = null) {
-  const value =
-    typeof rawResult === "string"
-      ? parseJsonObjectSafely(rawResult)
-      : rawResult;
+  const value = typeof rawResult === "string" ? parseJsonObjectSafely(rawResult) : rawResult;
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   return Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : [];
 }
@@ -153,17 +126,13 @@ async function materializeToolOutputArtifacts({
     const contentBase64 =
       artifact.type === "attachment_bytes"
         ? String(artifact.contentBase64 || "").trim()
-        : Buffer.from(String(artifact.content || ""), "utf8").toString(
-            "base64",
-          );
+        : Buffer.from(String(artifact.content || ""), "utf8").toString("base64");
     return { name, mimeType, contentBase64 };
   });
   const persisted = await persistTransferArtifacts({
     runtime,
     agentContext,
-    userId: String(
-      runtime?.userId || runtime?.systemRuntime?.userId || "",
-    ).trim(),
+    userId: String(runtime?.userId || runtime?.systemRuntime?.userId || "").trim(),
     artifacts,
     attachmentSource: "model",
     generationSource: `${toolName}_output`,
@@ -192,16 +161,11 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
     : [];
   const metas = transferEnvelopes
     .flatMap((envelope = {}) => [envelope?.meta, envelope?.meta?.attributes])
-    .filter(
-      (meta = null) => meta && typeof meta === "object" && !Array.isArray(meta),
-    );
+    .filter((meta = null) => meta && typeof meta === "object" && !Array.isArray(meta));
   const overflowMeta = metas.find((meta = {}) => meta?.toolInputOverflow);
   const exceededMeta = metas.find((meta = {}) => meta?.exceeded === true);
-  const messageMeta = metas.find((meta = {}) =>
-    String(meta?.message || "").trim(),
-  );
-  const sourceMeta =
-    overflowMeta || exceededMeta || messageMeta || metas[0] || {};
+  const messageMeta = metas.find((meta = {}) => String(meta?.message || "").trim());
+  const sourceMeta = overflowMeta || exceededMeta || messageMeta || metas[0] || {};
   const toolInputOverflow =
     sourceMeta?.toolInputOverflow &&
     typeof sourceMeta.toolInputOverflow === "object" &&
@@ -209,11 +173,8 @@ function deriveToolInputTransferMeta(inputTransfer = {}) {
       ? sourceMeta.toolInputOverflow
       : null;
   return {
-    exceeded:
-      sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
-    message: String(
-      sourceMeta?.message || toolInputOverflow?.message || "",
-    ).trim(),
+    exceeded: sourceMeta?.exceeded === true || toolInputOverflow?.exceeded === true,
+    message: String(sourceMeta?.message || toolInputOverflow?.message || "").trim(),
     toolInputOverflow,
   };
 }
@@ -226,17 +187,12 @@ function resolveToolHookMeta(runtime = {}) {
   return { ...plugins, runtime };
 }
 
-function detectToolCallFailure({
-  rawResult,
-  toolResultText = "",
-  invokeError = null,
-}) {
+function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = null }) {
   if (invokeError) {
     return { success: false, reason: "invoke_error" };
   }
   if (rawResult && typeof rawResult === "object" && !Array.isArray(rawResult)) {
-    if (rawResult.ok === false)
-      return { success: false, reason: "result_ok_false" };
+    if (rawResult.ok === false) return { success: false, reason: "result_ok_false" };
     return { success: true, reason: "" };
   }
   const parsed = parseJsonObjectSafely(toolResultText);
@@ -338,8 +294,7 @@ export async function executeToolCall({
         }),
       });
       const inputTransferMeta = deriveToolInputTransferMeta(inputTransfer);
-      toolInputTransferPayload =
-        compactSemanticTransferProtocolPayload(inputTransfer);
+      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
       if (
         inputTransferMeta.exceeded === true &&
         inputTransferMeta.toolInputOverflow &&
@@ -395,28 +350,23 @@ export async function executeToolCall({
           sessionId,
           producer: toolProducer(call),
           direction: "output",
-          strategy: "execute_script",
+          strategy: String(call?.name || "tool_output").trim() || "tool_output",
         }),
-        noobotHookContext: buildHookContext(
-          HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
-          runtime,
-          {
-            phase: "tool_call",
-            executionScope,
-            turn,
-            status: "running",
-            startedAt: toolStartedAt,
-            call,
-            toolName: call?.name || "",
-            args: call?.args || {},
-            agentContext,
-          },
-        ),
+        noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
+          phase: "tool_call",
+          executionScope,
+          turn,
+          status: "running",
+          startedAt: toolStartedAt,
+          call,
+          toolName: call?.name || "",
+          args: call?.args || {},
+          agentContext,
+        }),
         noobotHookMeta: resolveToolHookMeta(runtime),
       },
     });
-    toolResultText =
-      typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
+    toolResultText = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
     toolResultText = mergeToolResultWithInputTransferPayload(
       toolResultText,
       toolInputTransferPayload,
@@ -439,6 +389,11 @@ export async function executeToolCall({
     });
     toolResultText = materializedOutput.toolResultText;
     outputArtifactTransferEnvelopes = materializedOutput.transferEnvelopes;
+    if (outputArtifactTransferEnvelopes.length) {
+      toolResultText = mergeToolInputTransferPayload(toolResultText, {
+        transferEnvelopes: outputArtifactTransferEnvelopes,
+      });
+    }
     rawToolResultText = toolResultText;
     if (runtime?.systemRuntime?.config?.sanitizeOutput !== false) {
       toolResultText = await sanitizeToolResultText(toolResultText);
@@ -479,10 +434,7 @@ export async function executeToolCall({
       }),
     });
     invokeError = error;
-    const errorDetails =
-      error?.details && typeof error.details === "object"
-        ? error.details
-        : null;
+    const errorDetails = error?.details && typeof error.details === "object" ? error.details : null;
     toolResultText = toToolJsonResult(call?.name, {
       ok: false,
       status: "failed",
@@ -496,9 +448,7 @@ export async function executeToolCall({
     }
     if (errorLogger && typeof errorLogger.log === "function") {
       const normalizedCause =
-        typeof error?.cause === "string"
-          ? error.cause
-          : error?.cause?.message || "";
+        typeof error?.cause === "string" ? error.cause : error?.cause?.message || "";
       void errorLogger.log({
         userId,
         sessionId,
@@ -518,8 +468,7 @@ export async function executeToolCall({
     toolResultText: rawToolResultText || toolResultText,
     invokeError,
   });
-  const structuredTransferEnvelopes =
-    transferEnvelopesFromStructuredResult(rawResult);
+  const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(rawResult);
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_result_text",
@@ -540,10 +489,7 @@ export async function executeToolCall({
   });
   toolResultText = overflowNormalized.toolResultText;
   if (String(call?.name || "").trim() === "task_summary") {
-    toolResultText = mergeTaskSummaryTransferPayload(
-      toolResultText,
-      toolInputTransferPayload,
-    );
+    toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
   }
   await runAgentRuntimeHook({
     runtime,
@@ -572,9 +518,7 @@ export async function executeToolCall({
     ...(overflowNormalized.transferEnvelopes || []),
   ];
   const uniqueTransferEnvelopes = Array.from(
-    new Map(
-      transferEnvelopes.map((envelope) => [envelope.transferId, envelope]),
-    ).values(),
+    new Map(transferEnvelopes.map((envelope) => [envelope.transferId, envelope])).values(),
   );
   return {
     call,
@@ -586,12 +530,8 @@ export async function executeToolCall({
 }
 
 export async function executeToolCallInTurn(options = {}) {
-  const call =
-    options?.call && typeof options.call === "object" ? options.call : {};
-  const runtime =
-    options?.runtime && typeof options.runtime === "object"
-      ? options.runtime
-      : {};
+  const call = options?.call && typeof options.call === "object" ? options.call : {};
+  const runtime = options?.runtime && typeof options.runtime === "object" ? options.runtime : {};
   const eventListener = options?.eventListener || null;
   const turn = Number(options?.turn || 1);
   const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
@@ -608,8 +548,7 @@ export async function executeToolCallInTurn(options = {}) {
     result: String(result?.toolResultText || ""),
     success: result?.success === true,
     toolCallId,
-    ...(Array.isArray(result?.transferEnvelopes) &&
-    result.transferEnvelopes.length
+    ...(Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
       ? { transferEnvelopes: result.transferEnvelopes }
       : {}),
   });
