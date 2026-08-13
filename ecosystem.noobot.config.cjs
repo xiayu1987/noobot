@@ -6,7 +6,9 @@
 const path = require("node:path");
 
 const root = __dirname;
+const servicePort = process.env.PORT || "10061";
 const serviceEnv = {
+  PORT: servicePort,
   ...(process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS
     ? { NOOBOT_USER_INTERACTION_TIMEOUT_MS: process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS }
     : {}),
@@ -38,6 +40,14 @@ module.exports = {
       kill_timeout: 5000,
       wait_ready: false,
       merge_logs: true,
+      env: {
+        AGENT_PROXY_PORT: process.env.AGENT_PROXY_PORT || "10062",
+        AGENT_PROXY_HOST: process.env.AGENT_PROXY_HOST || "127.0.0.1",
+        AGENT_PROXY_UPSTREAM_WS_URL:
+          process.env.AGENT_PROXY_UPSTREAM_WS_URL || `ws://127.0.0.1:${servicePort}/chat/ws`,
+        AGENT_PROXY_UPSTREAM_HTTP_BASE:
+          process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE || `http://127.0.0.1:${servicePort}`,
+      },
     },
     {
       name: "noobot-model-proxy",
@@ -62,6 +72,10 @@ module.exports = {
       kill_timeout: 5000,
       wait_ready: false,
       merge_logs: true,
+      env: {
+        CADDY_ADDR: process.env.CADDY_ADDR || ":10060",
+        AGENT_PROXY_UPSTREAM: process.env.AGENT_PROXY_UPSTREAM || "127.0.0.1:10062",
+      },
     },
   ],
 };

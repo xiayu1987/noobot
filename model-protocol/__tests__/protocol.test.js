@@ -55,26 +55,76 @@ test("model operations are strict discriminated contracts", () => {
     input: { query: "latest news" },
     options: {},
   });
+  const multimodalParse = createModelRequest({
+    invocation,
+    model,
+    messages: [],
+    operation: {
+      kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
+      input: {
+        prompt: "parse",
+        attachments: [
+          {
+            mimeType: "application/pdf",
+            data: "data:application/pdf;base64,AA==",
+            fileName: "input.pdf",
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(multimodalParse.operation.input.attachments[0].fileName, "input.pdf");
   assert.throws(
-    () => createModelRequest({ invocation, model, messages: [], operation: { kind: "web_search", input: {} } }),
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        operation: {
+          kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
+          input: {
+            prompt: "parse",
+            attachment: {
+              mimeType: "application/pdf",
+              data: "data:application/pdf;base64,AA==",
+            },
+          },
+        },
+      }),
+    /unsupported fields: attachment/,
+  );
+  assert.throws(
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        operation: { kind: "web_search", input: {} },
+      }),
     /input\.query is required/,
   );
   assert.throws(
-    () => createModelRequest({
-      invocation,
-      model,
-      messages: [],
-      operation: { kind: "image_generation", input: { prompt: "draw" }, options: { apiType: "legacy" } },
-    }),
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        operation: {
+          kind: "image_generation",
+          input: { prompt: "draw" },
+          options: { apiType: "legacy" },
+        },
+      }),
     /unsupported image generation api type/,
   );
   assert.throws(
-    () => createModelRequest({
-      invocation,
-      model,
-      messages: [],
-      operation: { kind: "chat", input: { legacy: true } },
-    }),
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        operation: { kind: "chat", input: { legacy: true } },
+      }),
     /unsupported fields: legacy/,
   );
 });
@@ -92,14 +142,17 @@ test("model operation results are validated by operation kind", () => {
   });
   assert.equal(validateModelResponse(response), response);
   assert.throws(
-    () => createModelResponse({
-      invocation,
-      operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
-      output,
-      result: { imageArtifacts: [] },
-      attempts: [{ attempt: 1, status: "completed", kind: "web_search", streaming: false, output }],
-      model,
-    }),
+    () =>
+      createModelResponse({
+        invocation,
+        operationKind: MODEL_OPERATION_KIND.WEB_SEARCH,
+        output,
+        result: { imageArtifacts: [] },
+        attempts: [
+          { attempt: 1, status: "completed", kind: "web_search", streaming: false, output },
+        ],
+        model,
+      }),
     /unsupported fields: imageArtifacts/,
   );
 });

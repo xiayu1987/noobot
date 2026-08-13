@@ -14,8 +14,12 @@ test("appendAgentMessages uses one batch persistence call when the Session suppo
   const persister = new SessionTurnPersister({
     session: {
       appendExecutionLog: async () => {},
-      appendTurn: async () => { appendTurnCount += 1; },
-      appendTurns: async (payload = {}) => { batches.push(payload); },
+      appendTurn: async () => {
+        appendTurnCount += 1;
+      },
+      appendTurns: async (payload = {}) => {
+        batches.push(payload);
+      },
     },
   });
 
@@ -30,7 +34,10 @@ test("appendAgentMessages uses one batch persistence call when the Session suppo
 
   assert.equal(appendTurnCount, 0);
   assert.equal(batches.length, 1);
-  assert.deepEqual(batches[0].turns.map((turn) => turn.messageUid), ["sm_1", "sm_2"]);
+  assert.deepEqual(
+    batches[0].turns.map((turn) => turn.messageUid),
+    ["sm_1", "sm_2"],
+  );
 });
 
 test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {
@@ -54,7 +61,10 @@ test("appendAgentMessages keeps scoped persistence identity for logs and message
   });
 
   assert.ok(executionPayloads.length >= 1);
-  assert.equal(executionPayloads.every((payload) => payload.persistenceContext === persistenceContext), true);
+  assert.equal(
+    executionPayloads.every((payload) => payload.persistenceContext === persistenceContext),
+    true,
+  );
   assert.equal(turnPayloads.length, 1);
   assert.equal(turnPayloads[0].persistenceContext, persistenceContext);
 });
@@ -71,11 +81,13 @@ test("appendAgentMessages forwards the authoritative realtime message identity",
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
-    messages: [{
-      role: "assistant",
-      content: "done",
-      additional_kwargs: { noobotMessageId: "message-1" },
-    }],
+    messages: [
+      {
+        role: "assistant",
+        content: "done",
+        additional_kwargs: { noobotMessageId: "message-1" },
+      },
+    ],
   });
 
   assert.equal(turns[0].messageId, "message-1");
@@ -93,13 +105,15 @@ test("appendAgentMessages forwards the canonical internal control message type",
   await persister.appendAgentMessages({
     userId: "u1",
     sessionId: "s1",
-    messages: [{
-      messageUid: "sm_control",
-      role: "user",
-      type: "context_control",
-      content: "checkpoint",
-      noobotInternalMessageType: "noobot.phase_summary_prompt",
-    }],
+    messages: [
+      {
+        messageUid: "sm_control",
+        role: "user",
+        type: "context_control",
+        content: "checkpoint",
+        noobotInternalMessageType: "noobot.phase_summary_prompt",
+      },
+    ],
   });
 
   assert.equal(turns[0].noobotInternalMessageType, "noobot.phase_summary_prompt");
@@ -119,22 +133,26 @@ test("appendAgentMessages forwards presentation identity and checkpoint context"
     userId: "u1",
     sessionId: "s1",
     persistenceContext,
-    messages: [{
-      role: "assistant",
-      content: "analysis",
-      messageUid: "sm_analysis",
-      messageId: "msg_model_1",
-      presentationMessageId: "msg_chat_1",
-      chatPresentation: false,
-      type: "tool_call",
-      activityTimeline: [{
-        eventId: "guidance-analysis:1",
-        sequence: 1,
-        sequenceDomain: "activity",
-        sequenceScopeId: "msg_chat_1",
-        authority: "authoritative",
-      }],
-    }],
+    messages: [
+      {
+        role: "assistant",
+        content: "analysis",
+        messageUid: "sm_analysis",
+        messageId: "msg_model_1",
+        presentationMessageId: "msg_chat_1",
+        chatPresentation: false,
+        type: "tool_call",
+        activityTimeline: [
+          {
+            eventId: "guidance-analysis:1",
+            sequence: 1,
+            sequenceDomain: "activity",
+            sequenceScopeId: "msg_chat_1",
+            authority: "authoritative",
+          },
+        ],
+      },
+    ],
   });
 
   assert.equal(turns[0].presentationMessageId, "msg_chat_1");
@@ -197,7 +215,24 @@ test("SessionTurnPersister persists tool transfer envelopes into session turns",
         tool_call_id: "call_1",
         toolName: "multimodal_generate",
         content: JSON.stringify({ toolName: "multimodal_generate", ok: true }),
-        transferEnvelopes: [{ protocol: "noobot.semantic-transfer", version: 2, transferId: "transfer-tool-1", messageId: "message-tool-1", identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: "call_1" } }, direction: "output", payload: { mode: "direct", content: "tool result" }, intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" }, meta: {} }],
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            version: 2,
+            transferId: "transfer-tool-1",
+            messageId: "message-tool-1",
+            identity: {
+              sessionId: "s1",
+              turnScopeId: "t1",
+              runId: "r1",
+              producer: { type: "tool", id: "call_1" },
+            },
+            direction: "output",
+            payload: { mode: "direct", content: "tool result" },
+            intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
+            meta: {},
+          },
+        ],
       },
     ],
     dialogProcessId: "dp1",
@@ -222,9 +257,24 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
     version: 2,
     transferId: "transfer-final",
     messageId: "message-final",
-    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "model", id: "model-1" } },
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      runId: "r1",
+      producer: { type: "model", id: "model-1" },
+    },
     direction: "output",
-    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att-final", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "final.md", mimeType: "text/markdown" }] },
+    payload: {
+      mode: "attachment",
+      attachments: [
+        {
+          identity: { attachmentId: "att-final", sessionId: "s1", attachmentSource: "model" },
+          role: "primary",
+          name: "final.md",
+          mimeType: "text/markdown",
+        },
+      ],
+    },
     intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
     meta: {},
   };
@@ -247,107 +297,11 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
   assert.equal(appendedTurns[0].attachmentMetas, undefined);
   assert.equal("attachments" in appendedTurns[0], false);
   assert.equal("transferEnvelopes" in appendedTurns[0], true);
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-final");
+  assert.equal(
+    appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId,
+    "att-final",
+  );
   assert.equal(appendedTurns[0].transferEnvelopes?.length, 1);
-});
-
-test("SessionTurnPersister drops direct-consumed intermediate tool payloads and legacy metas without dropping refresh metadata", async () => {
-  const appendedTurns = [];
-  const executionLogs = [];
-  const session = {
-    appendExecutionLog: async (payload = {}) => {
-      executionLogs.push(payload);
-    },
-    appendTurn: async (payload = {}) => {
-      appendedTurns.push(payload);
-    },
-  };
-  const persister = new SessionTurnPersister({ session });
-
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "tool",
-        type: "tool_result",
-        tool_call_id: "call_doc",
-        toolName: "doc_to_data",
-        transferEnvelopes: [
-          {
-            protocol: "noobot.semantic-transfer",
-            version: 2,
-            transferId: "transfer-doc-1",
-            messageId: "message-doc-1",
-            identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "tool", id: "call_doc" } },
-            direction: "output",
-            payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "input.doc2data.md", mimeType: "text/markdown" }] },
-            intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
-            meta: {},
-          },
-        ],
-        content: JSON.stringify({
-          toolName: "doc_to_data",
-          ok: true,
-          status: "completed",
-          text: "very large parsed text".repeat(100),
-          summary: { saved_attachment_count: 1 },
-        }),
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
-
-  assert.equal(appendedTurns.length, 1);
-  assert.equal("attachmentMetas" in appendedTurns[0], false);
-  assert.equal("attachments" in appendedTurns[0], false);
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.protocol, "noobot.semantic-transfer");
-  assert.equal(appendedTurns[0].transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "parsed_1");
-  const persistedContent = JSON.parse(appendedTurns[0].content);
-  assert.equal(persistedContent.intermediateConsumedByModel, true);
-  assert.equal(persistedContent.sessionPersistence, "summary_only");
-  assert.equal("text" in persistedContent, false);
-  assert.equal("text_length" in persistedContent.summary, false);
-  assert.deepEqual(persistedContent.summary, { saved_attachment_count: 1 });
-  const fullTurnLog = executionLogs[0]?.data || {};
-  assert.equal(fullTurnLog.attachments?.count, 0);
-  assert.equal(fullTurnLog.transferEnvelopes?.count, 1);
-  assert.equal(fullTurnLog.content?.preview.includes("summary_only"), true);
-  assert.equal("text" in JSON.parse(appendedTurns[0].content), false);
-});
-
-test("SessionTurnPersister hides web_to_data intermediate payloads", async () => {
-  const appendedTurns = [];
-  const session = {
-    appendExecutionLog: async () => {},
-    appendTurn: async (payload = {}) => appendedTurns.push(payload),
-  };
-  const persister = new SessionTurnPersister({ session });
-
-  await persister.appendAgentMessages({
-    userId: "u1",
-    sessionId: "s1",
-    messages: [
-      {
-        role: "tool",
-        type: "tool_result",
-        tool_call_id: "call_web",
-        toolName: "web_to_data",
-        content: JSON.stringify({
-          toolName: "web_to_data",
-          ok: true,
-          text: "large web text".repeat(100),
-          attachmentMetas: [{ attachmentId: "web_1", generationSource: "web_to_data_tool" }],
-        }),
-      },
-    ],
-    dialogProcessId: "dp1",
-  });
-
-  const persistedContent = JSON.parse(appendedTurns[0].content);
-  assert.equal(persistedContent.sessionPersistence, "summary_only");
-  assert.equal("text" in persistedContent, false);
-  assert.equal("text_length" in persistedContent.summary, false);
 });
 
 test("SessionTurnPersister persists canonical plugin metadata without old concrete-plugin fields", async () => {

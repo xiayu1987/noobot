@@ -64,6 +64,7 @@
     "@noobot/session-repair": "file:../session-repair",
     "@noobot/shared": "file:../shared",
     "@vscode/ripgrep": "^1.18.0",
+    "acorn": "^8.18.0",
     "noobot-i18n": "file:../i18n",
     "openai": "^6.49.0",
     "pino": "^10.3.1",

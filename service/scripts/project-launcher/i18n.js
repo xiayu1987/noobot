@@ -21,19 +21,37 @@ const CONFIG_TEXT_BILINGUAL_PAIRS = [
     zh: "优先分析代码结构，再构建完整上下文后执行修改与验证。",
     en: "Prioritize code structure analysis, then build full context before making changes and verification.",
   },
-  { zh: "擅长通用对话、多模态推理", en: "Strong at general conversation and multimodal reasoning." },
+  {
+    zh: "擅长通用对话、多模态推理",
+    en: "Strong at general conversation and multimodal reasoning.",
+  },
   { zh: "擅长图片生成", en: "Strong at image generation." },
   { zh: "擅长通用对话、快速响应", en: "Strong at general conversation with fast responses." },
-  { zh: "多模态理解", en: "Multimodal understanding." },
-  { zh: "优先用于补充实时或外部网页信息，先检索再回答。", en: "Use for real-time/external web info; search first, then answer." },
+  { zh: "多模态解析", en: "Multimodal parsing." },
+  {
+    zh: "优先用于补充实时或外部网页信息，先检索再回答。",
+    en: "Use for real-time/external web info; search first, then answer.",
+  },
   { zh: "搜索网页", en: "Search web pages" },
   { zh: "返回可引用的检索结果摘要与来源。", en: "Return citable result summaries with sources." },
   { zh: "searx实例地址", en: "SearX instance address" },
-  { zh: "用于天气类查询，优先返回结构化天气信息。", en: "Use for weather queries, preferably returning structured weather data." },
+  {
+    zh: "用于天气类查询，优先返回结构化天气信息。",
+    en: "Use for weather queries, preferably returning structured weather data.",
+  },
   { zh: "天气查询", en: "Weather query" },
-  { zh: "输入城市名，返回当前与未来天气。", en: "Input a city name to return current and forecast weather." },
-  { zh: "提供 12306购票信息查询等服务", en: "Provides 12306 ticket information query and related services." },
-  { zh: "用于铁路票务查询场景，先说明查询条件再调用。", en: "For railway ticket queries: state conditions first, then call the service." },
+  {
+    zh: "输入城市名，返回当前与未来天气。",
+    en: "Input a city name to return current and forecast weather.",
+  },
+  {
+    zh: "提供 12306购票信息查询等服务",
+    en: "Provides 12306 ticket information query and related services.",
+  },
+  {
+    zh: "用于铁路票务查询场景，先说明查询条件再调用。",
+    en: "For railway ticket queries: state conditions first, then call the service.",
+  },
 ];
 const CONFIG_TEXT_TO_EN = new Map(CONFIG_TEXT_BILINGUAL_PAIRS.map((pair) => [pair.zh, pair.en]));
 const CONFIG_TEXT_TO_ZH = new Map(CONFIG_TEXT_BILINGUAL_PAIRS.map((pair) => [pair.en, pair.zh]));
@@ -105,7 +123,8 @@ const TEXT = {
     warnTemplateMissing:
       "[project-launcher] Warning: template path missing config.json/config.example.json, skipped template/user sync: {path}",
     logLanguageSynced: "[project-launcher] Language synchronized to configs: {language}",
-    logInitDone: "[project-launcher] Initialization completed: global.config.json created and template sync done.",
+    logInitDone:
+      "[project-launcher] Initialization completed: global.config.json created and template sync done.",
     labelTemplateConfig: "Template config",
     labelTargetConfig: "Target config",
     labelGlobalExample: "global.config.example.json",
@@ -123,7 +142,9 @@ export function t(locale = "zh", key = "", params = {}) {
 }
 
 export function normalizeSetupLocale(input = "", fallback = "zh") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   if (!value) return fallback;
   if (["zh", "zh-cn", "zh_cn"].includes(value)) return "zh";
   if (["en", "en-us", "en_us"].includes(value)) return "en";
@@ -135,7 +156,12 @@ export function resolveConfigLanguage(setupLocale = "zh") {
 }
 
 export function resolveTextLocaleFromConfigLanguage(configLanguage = "") {
-  return String(configLanguage || "").trim().toLowerCase().startsWith("en") ? "en" : "zh";
+  return String(configLanguage || "")
+    .trim()
+    .toLowerCase()
+    .startsWith("en")
+    ? "en"
+    : "zh";
 }
 
 export function localizeConfigTextValue(value, targetLocale = "zh") {

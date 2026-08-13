@@ -5,156 +5,202 @@
  */
 
 export const ASSISTANCE_TOOL_SCHEMA = {
-  "request_help": {
-    "description": {
-      "key": "tools.request_help.description",
-      "text": "Request help tool. Input helpContent and requestType. Supports model help, web-search help, and experience help."
+  request_help: {
+    description: {
+      key: "tools.request_help.description",
+      text: "Request help tool. Input helpContent and requestType. Supports model help, web-search help, and experience help.",
     },
-    "params": {
-      "helpContent": {
-        "key": "tools.request_help.fieldHelpContent",
-        "text": "Help request content."
+    params: {
+      helpContent: {
+        key: "tools.request_help.fieldHelpContent",
+        text: "Help request content.",
       },
-      "requestType": {
-        "key": "tools.request_help.fieldRequestType",
-        "text": "Request type: all_help (default, model + web search), model_help (model only), web_search_help (web search only), experience_help (returns memory directories for follow-up lookup)."
-      }
+      requestType: {
+        key: "tools.request_help.fieldRequestType",
+        text: "Request type: all_help (default, model + web search), model_help (model only), web_search_help (web search only), experience_help (returns memory directories for follow-up lookup).",
+      },
     },
-    "texts": {
-      "tools.request_help.helpContentRequired": "helpContent is required"
-    }
+    texts: {
+      "tools.request_help.helpContentRequired": "helpContent is required",
+      "tools.request_help.requestFailed": "Help request failed",
+      "tools.request_help.webSearchHelpUnavailable":
+        "Web-search help is unavailable: request_help.help_services has no configured search service",
+    },
   },
-  "web_search": {
-    "description": {
-      "key": "tools.web_search.description",
-      "text": "Search the web for information. Input query. Returns web search results."
+  web_search: {
+    description: {
+      key: "tools.web_search.description",
+      text: "Search the web for information. Input query. Returns web search results.",
     },
-    "params": {
-      "model_name": {
-        "key": "tools.web_search.fieldModelName",
-        "text": "Model name."
+    params: {
+      model_name: {
+        key: "tools.web_search.fieldModelName",
+        text: "Model name.",
       },
-      "query": {
-        "key": "tools.web_search.fieldQuery",
-        "text": "Search query."
-      }
+      query: {
+        key: "tools.web_search.fieldQuery",
+        text: "Search query.",
+      },
     },
-    "texts": {
+    texts: {
       "tools.web_search.modelApiKeyMissing": "Model API Key missing",
       "tools.web_search.queryRequired": "query required",
       "tools.web_search.searchEngineUrlMissing": "search_engine mode requires endpoints.search.url",
       "tools.web_search.searchFailed": "web search failed",
-      "tools.web_search.userIdMissing": "runtime user ID missing"
-    }
+      "tools.web_search.userIdMissing": "runtime user ID missing",
+    },
   },
-  "multimodal_generate": {
-    "description": {
-      "key": "tools.multimodal.description",
-      "text": "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results."
+  multimodal_generate: {
+    description: {
+      key: "tools.multimodal.description",
+      text: "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results.",
     },
-    "params": {
-      "api_type": {
-        "key": "tools.multimodal.fieldApiType",
-        "text": "Image generation API type (optional), supports openai_responses and images_async."
+    params: {
+      api_type: {
+        key: "tools.multimodal.fieldApiType",
+        text: "Image generation API type (optional), supports openai_responses and images_async.",
       },
-      "generation_content": {
-        "key": "tools.multimodal.fieldGenerationContent",
-        "text": "Generation content description."
+      generation_content: {
+        key: "tools.multimodal.fieldGenerationContent",
+        text: "Generation content description.",
       },
-      "image_size": {
-        "key": "tools.multimodal.fieldImageSize",
-        "text": "Image size (optional)."
+      image_size: {
+        key: "tools.multimodal.fieldImageSize",
+        text: "Image size (optional).",
       },
-      "image_urls": {
-        "key": "tools.multimodal.fieldImageUrls",
-        "text": "Source image URLs for image-to-image or outpainting (optional)."
+      image_urls: {
+        key: "tools.multimodal.fieldImageUrls",
+        text: "Source image URLs for image-to-image or outpainting (optional).",
       },
-      "model_name": {
-        "key": "tools.multimodal.fieldModelName",
-        "text": "Model name."
+      model_name: {
+        key: "tools.multimodal.fieldModelName",
+        text: "Model name.",
       },
-      "n": {
-        "key": "tools.multimodal.fieldN",
-        "text": "Number of images to generate (optional, 1-10)."
+      n: {
+        key: "tools.multimodal.fieldN",
+        text: "Number of images to generate (optional, 1-10).",
       },
-      "quality": {
-        "key": "tools.multimodal.fieldQuality",
-        "text": "Image quality (optional)."
+      quality: {
+        key: "tools.multimodal.fieldQuality",
+        text: "Image quality (optional).",
       },
-      "resolution": {
-        "key": "tools.multimodal.fieldResolution",
-        "text": "Image resolution for ratio size (optional, e.g. 1K, 2K, 4K)."
+      resolution: {
+        key: "tools.multimodal.fieldResolution",
+        text: "Image resolution for ratio size (optional, e.g. 1K, 2K, 4K).",
       },
-      "size": {
-        "key": "tools.multimodal.fieldSize",
-        "text": "Image size or aspect ratio (optional, e.g. auto, 1:1, 16:9, 1024x1024)."
-      }
+      size: {
+        key: "tools.multimodal.fieldSize",
+        text: "Image size or aspect ratio (optional, e.g. auto, 1:1, 16:9, 1024x1024).",
+      },
     },
-    "texts": {
+    texts: {
       "tools.multimodal.fetchGeneratedImageUrlFailed": "fetch generated image url failed",
       "tools.multimodal.fetchUnavailable": "runtime fetch unavailable",
       "tools.multimodal.generateFailed": "multimodal generate failed",
       "tools.multimodal.generationContentRequired": "generation_content required",
-      "tools.multimodal.imagesApiNotEnabledError": "Current account does not have image generation enabled (403 Images API is not enabled).",
-      "tools.multimodal.imagesApiNotEnabledMessage": "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
+      "tools.multimodal.imagesApiNotEnabledError":
+        "Current account does not have image generation enabled (403 Images API is not enabled).",
+      "tools.multimodal.imagesApiNotEnabledMessage":
+        "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
       "tools.multimodal.modelApiKeyMissing": "model api key missing",
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
-    `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
-      "tools.multimodal.multimodalUnsupportedMessage": "Switch to a model that supports image generation, or specify one via model_name.",
+        `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
+      "tools.multimodal.multimodalUnsupportedMessage":
+        "Switch to a model that supports image generation, or specify one via model_name.",
       "tools.multimodal.taskFailed": "image generation task failed",
       "tools.multimodal.taskIdMissing": "image generation task id missing",
       "tools.multimodal.taskTimeout": (params = {}) =>
-    `image generation task timeout: ${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType": "Try switching api_type, for example openai_responses or images_async."
-    }
+        `image generation task timeout: ${String(params.taskId || "").trim()}`,
+      "tools.multimodal.trySwitchApiType":
+        "Try switching api_type, for example openai_responses or images_async.",
+    },
   },
-  "switch_model": {
-    "description": {
-      "key": "tools.model.description",
-      "text": "Switch the current session model. Input modelName. Returns model switch result."
+  multimodal_parse: {
+    description: {
+      key: "tools.multimodalParse.description",
+      text: "Parse one or more image, document, audio, or video files together and save the result. Each input source is a logical file path string or complete attachment identity object; an attachment display name is not a path.",
     },
-    "params": {
-      "modelName": {
-        "key": "tools.model.fieldModelName",
-        "text": "Model name."
-      }
-    },
-    "texts": {
-      "model.enabledProviderModelNotFound": "enabled provider/model not found",
-      "tools.model.switchApplied": "Model switched and will take effect in subsequent calls of this turn"
-    }
-  },
-  "final_answer": {
-    "description": {
-      "key": "tools.final_answer.description",
-      "text": "Output the final text response."
-    },
-    "params": {
-      "reason": {
-        "key": "tools.final_answer.fieldReason",
-        "text": "Reason"
-      }
-    },
-    "texts": {
-      "tools.final_answer.finalizeMessage": "Conversation is ending, please provide the final summary."
-    }
-  },
-  "user_interaction": {
-    "description": {
-      "key": "tools.user_interaction.description",
-      "text": "Request user interaction to collect input or confirm actions. Input content and fields. Returns user-submitted result."
-    },
-    "params": {
-      "content": {
-        "key": "tools.user_interaction.fieldContent",
-        "text": "Interaction content."
+    params: {
+      inputs: {
+        key: "tools.multimodalParse.fieldInputs",
+        text: "One or more image, document, audio, or video inputs; each item contains one source field.",
       },
-      "fields": {
-        "key": "tools.user_interaction.fieldFieldsPayload",
-        "text": "Field definitions (object or JSON string)."
-      }
+      filePath: {
+        key: "tools.multimodalParse.fieldFilePath",
+        text: "When source is a string, it is a logical file path.",
+      },
+      attachmentIdentity: {
+        key: "tools.multimodalParse.fieldAttachmentIdentity",
+        text: "When source is an object, it must contain attachmentId, sessionId, and attachmentSource.",
+      },
+      model_name: {
+        key: "tools.multimodalParse.fieldModelName",
+        text: "Model used to parse the files (optional).",
+      },
+      prompt: {
+        key: "tools.multimodalParse.fieldPrompt",
+        text: "Parsing instructions (optional).",
+      },
     },
-    "texts": {
+    texts: {
+      "tools.multimodalParse.filePathsRequired": "inputs must contain at least one file input",
+      "tools.multimodalParse.fileTooLarge": (params = {}) =>
+        `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
+      "tools.multimodalParse.defaultPrompt":
+        "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
+      "tools.multimodalParse.modelNotFound":
+        "No model is configured with multimodal parsing enabled",
+    },
+  },
+  switch_model: {
+    description: {
+      key: "tools.model.description",
+      text: "Switch the current session model. Input modelName. Returns model switch result.",
+    },
+    params: {
+      modelName: {
+        key: "tools.model.fieldModelName",
+        text: "Model name.",
+      },
+    },
+    texts: {
+      "model.enabledProviderModelNotFound": "enabled provider/model not found",
+      "tools.model.switchApplied":
+        "Model switched and will take effect in subsequent calls of this turn",
+    },
+  },
+  final_answer: {
+    description: {
+      key: "tools.final_answer.description",
+      text: "Output the final text response.",
+    },
+    params: {
+      reason: {
+        key: "tools.final_answer.fieldReason",
+        text: "Reason",
+      },
+    },
+    texts: {
+      "tools.final_answer.finalizeMessage":
+        "Conversation is ending, please provide the final summary.",
+    },
+  },
+  user_interaction: {
+    description: {
+      key: "tools.user_interaction.description",
+      text: "Request user interaction to collect input or confirm actions. Input content and fields. Returns user-submitted result.",
+    },
+    params: {
+      content: {
+        key: "tools.user_interaction.fieldContent",
+        text: "Interaction content.",
+      },
+      fields: {
+        key: "tools.user_interaction.fieldFieldsPayload",
+        text: "Field definitions (object or JSON string).",
+      },
+    },
+    texts: {
       "tools.user_interaction.bridgeMissing": "user interaction bridge missing",
       "tools.user_interaction.cancelled": "cancelled",
       "tools.user_interaction.contentRequired": "interaction content/content required",
@@ -164,11 +210,12 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.fieldName": "Field name (key in returned object)",
       "tools.user_interaction.fieldRequired": "Whether required",
       "tools.user_interaction.invalidFieldsPayload": (params = {}) =>
-    `invalid fields payload: ${String(params.reason || "").trim()}`,
+        `invalid fields payload: ${String(params.reason || "").trim()}`,
       "tools.user_interaction.invalidResponseObject": "invalid interaction response object",
       "tools.user_interaction.missingRequiredField": (params = {}) =>
-    `missing required field: ${String(params.key || "").trim()}`,
-      "tools.user_interaction.sensitiveFieldsBlocked": "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors."
-    }
+        `missing required field: ${String(params.key || "").trim()}`,
+      "tools.user_interaction.sensitiveFieldsBlocked":
+        "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
+    },
   },
 };

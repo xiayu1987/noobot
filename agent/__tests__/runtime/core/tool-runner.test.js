@@ -17,35 +17,39 @@ import { bindAssistantMessageEventStream } from "../../../src/events/message-eve
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 
 function executeToolCall(options = {}) {
-  const runtime = options.runtime && typeof options.runtime === "object"
-    ? options.runtime
-    : {};
+  const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
   runtime.userId = String(runtime.userId || options.userId || "test-user");
-  runtime.globalConfig = runtime.globalConfig && typeof runtime.globalConfig === "object"
-    ? runtime.globalConfig
-    : {};
+  runtime.globalConfig =
+    runtime.globalConfig && typeof runtime.globalConfig === "object" ? runtime.globalConfig : {};
   runtime.globalConfig.workspaceRoot = String(
     runtime.globalConfig.workspaceRoot || runtime.basePath || os.tmpdir(),
   );
-  const systemRuntime = runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : (runtime.systemRuntime = {});
+  const systemRuntime =
+    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : (runtime.systemRuntime = {});
   const identity = String(options.identity || options.call?.id || "test-tool-call");
   systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
   systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
   systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || "test-turn");
-  systemRuntime.executionId = String(systemRuntime.executionId || `agent:${systemRuntime.turnScopeId}`);
-  runtime.runConfig = runtime.runConfig && typeof runtime.runConfig === "object"
-    ? runtime.runConfig
-    : {};
-  runtime.runConfig.turnScopeId = String(runtime.runConfig.turnScopeId || systemRuntime.turnScopeId);
-  runtime.runConfig.executionId = String(runtime.runConfig.executionId || systemRuntime.executionId);
+  systemRuntime.executionId = String(
+    systemRuntime.executionId || `agent:${systemRuntime.turnScopeId}`,
+  );
+  runtime.runConfig =
+    runtime.runConfig && typeof runtime.runConfig === "object" ? runtime.runConfig : {};
+  runtime.runConfig.turnScopeId = String(
+    runtime.runConfig.turnScopeId || systemRuntime.turnScopeId,
+  );
+  runtime.runConfig.executionId = String(
+    runtime.runConfig.executionId || systemRuntime.executionId,
+  );
   runtime.runConfig.sessionId = String(runtime.runConfig.sessionId || systemRuntime.sessionId);
-  systemRuntime.messageEventStream = systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
-    ? systemRuntime.messageEventStream
-    : {
-        sequence: 0,
-      };
+  systemRuntime.messageEventStream =
+    systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
+      ? systemRuntime.messageEventStream
+      : {
+          sequence: 0,
+        };
   if (!systemRuntime.messageEventStream.activeMessageId) {
     bindAssistantMessageEventStream(runtime, {
       messageId: String(options.messageId || `message-${identity}`),
@@ -58,16 +62,29 @@ function executeToolCall(options = {}) {
 }
 
 function getPrimaryTransferAttachment(envelope = {}) {
-  return Array.isArray(envelope?.payload?.attachments)
-    ? envelope.payload.attachments[0] || {}
-    : {};
+  return Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments[0] || {} : {};
 }
 
 function findTransferEnvelopeByReason(envelopes = [], reason = "") {
-  return (Array.isArray(envelopes) ? envelopes : []).find((item = {}) =>
-    item?.intent?.reason === reason,
+  return (Array.isArray(envelopes) ? envelopes : []).find(
+    (item = {}) => item?.intent?.reason === reason,
   );
 }
+
+test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
+  let identity = null;
+  await executeToolCall({
+    call: { id: "call-native", name: "execute_native_script", args: {} },
+    tool: {
+      async invoke(_args, config) {
+        identity = config?.configurable?.transferIdentity;
+        return JSON.stringify({ ok: true, status: "completed" });
+      },
+    },
+  });
+  assert.match(identity.transferId, /:output:execute_native_script$/);
+  assert.equal(identity.transferId.includes(":output:execute_script"), false);
+});
 
 function attachmentEnvelope({
   callId,
@@ -92,13 +109,15 @@ function attachmentEnvelope({
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: { attachmentId, sessionId, attachmentSource: "model" },
-        role: "primary",
-        name,
-        mimeType,
-        size,
-      }],
+      attachments: [
+        {
+          identity: { attachmentId, sessionId, attachmentSource: "model" },
+          role: "primary",
+          name,
+          mimeType,
+          size,
+        },
+      ],
     },
     intent: {
       source: "tool",
@@ -118,23 +137,23 @@ test("executeToolCall does not promote ordinary tool attachments into semantic t
   };
   const tool = {
     invoke: async () => ({
-        toolName: "multimodal_generate",
-        ok: true,
-        attachments: [
-          {
-            attachmentId: "att_1",
-            name: "generated_image_1.png",
-            mimeType: "image/png",
-            size: 123,
-            sessionId: "s1",
-            attachmentSource: "model",
-            path: "/tmp/a.png",
-            relativePath: "runtime/attach/scoped/s1/model/a.png",
-            generatedByModel: true,
-            generationSource: "multimodal_generate_tool",
-          },
-        ],
-      }),
+      toolName: "multimodal_generate",
+      ok: true,
+      attachments: [
+        {
+          attachmentId: "att_1",
+          name: "generated_image_1.png",
+          mimeType: "image/png",
+          size: 123,
+          sessionId: "s1",
+          attachmentSource: "model",
+          path: "/tmp/a.png",
+          relativePath: "runtime/attach/scoped/s1/model/a.png",
+          generatedByModel: true,
+          generationSource: "multimodal_generate_tool",
+        },
+      ],
+    }),
   };
 
   const result = await executeToolCall({
@@ -155,18 +174,19 @@ test("executeToolCall preserves strict V2 transfer envelopes from structured too
     args: {},
   };
   const tool = {
-    invoke: async () =>
-      ({
-        toolName: "multimodal_generate",
-        ok: true,
-        transferEnvelopes: [attachmentEnvelope({
+    invoke: async () => ({
+      toolName: "multimodal_generate",
+      ok: true,
+      transferEnvelopes: [
+        attachmentEnvelope({
           callId: call.id,
           attachmentId: "att_t1",
           name: "generated_image_1.png",
           mimeType: "image/png",
           size: 256,
-        })],
-      }),
+        }),
+      ],
+    }),
   };
 
   const result = await executeToolCall({
@@ -186,7 +206,7 @@ test("executeToolCall preserves strict V2 transfer envelopes from structured too
 test("executeToolCall extracts strict V2 transfer envelopes from JSON tool results", async () => {
   const call = {
     id: "call_transfer_json_result",
-    name: "process_content_task",
+    name: "multimodal_parse",
     args: {},
   };
   const envelope = attachmentEnvelope({
@@ -196,11 +216,12 @@ test("executeToolCall extracts strict V2 transfer envelopes from JSON tool resul
   const result = await executeToolCall({
     call,
     tool: {
-      invoke: async () => JSON.stringify({
-        toolName: call.name,
-        ok: true,
-        transferEnvelopes: [envelope],
-      }),
+      invoke: async () =>
+        JSON.stringify({
+          toolName: call.name,
+          ok: true,
+          transferEnvelopes: [envelope],
+        }),
     },
     turn: 1,
   });
@@ -230,20 +251,31 @@ test("executeToolCall materializes outputArtifacts through the single transfer o
     call,
     runtime,
     tool: {
-      invoke: async () => JSON.stringify({
-        toolName: call.name,
-        ok: true,
-        outputArtifacts: [{ type: "text", name: "result.md", mimeType: "text/markdown", content: "# result" }],
-      }),
+      invoke: async () =>
+        JSON.stringify({
+          toolName: call.name,
+          ok: true,
+          outputArtifacts: [
+            { type: "text", name: "result.md", mimeType: "text/markdown", content: "# result" },
+          ],
+        }),
     },
   });
   const publicResult = JSON.parse(result.toolResultText);
 
   assert.equal("outputArtifacts" in publicResult, false);
   assert.equal("attachments" in publicResult, false);
+  assert.equal(publicResult.transferEnvelopes.length, 1);
+  assert.equal(
+    publicResult.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att-output-1",
+  );
   assert.equal(result.transferEnvelopes.length, 1);
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "result.md");
-  assert.equal(result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-output-1");
+  assert.equal(
+    result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att-output-1",
+  );
 });
 
 test("executeToolCall rejects output artifact types that differ from the registered tool policy", async () => {
@@ -263,12 +295,14 @@ test("executeToolCall rejects output artifact types that differ from the registe
       invoke: async () => ({
         toolName: "write_file",
         ok: true,
-        outputArtifacts: [{
-          type: "attachment_bytes",
-          name: "result.bin",
-          mimeType: "application/octet-stream",
-          contentBase64: "AQID",
-        }],
+        outputArtifacts: [
+          {
+            type: "attachment_bytes",
+            name: "result.bin",
+            mimeType: "application/octet-stream",
+            contentBase64: "AQID",
+          },
+        ],
       }),
     },
   });
@@ -456,12 +490,20 @@ test("executeToolCall hook payload includes normalized runtime meta", async () =
   const hookManager = createHookManager();
   const starts = [];
   const ends = [];
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, async (ctx = {}) => {
-    starts.push(ctx);
-  }, { id: "test.tool-call.before" });
-  hookManager.on(HOOK_POINT.AGENT.AFTER_TOOL_CALL, async (ctx = {}) => {
-    ends.push(ctx);
-  }, { id: "test.tool-call.after" });
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+    async (ctx = {}) => {
+      starts.push(ctx);
+    },
+    { id: "test.tool-call.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+    async (ctx = {}) => {
+      ends.push(ctx);
+    },
+    { id: "test.tool-call.after" },
+  );
 
   const tool = {
     invoke: async () => ({ ok: true }),
@@ -663,22 +705,23 @@ test("executeToolCall task_summary returns transfer metadata without phase summa
     args: { summaryContent },
   };
   const tool = {
-    invoke: async () => JSON.stringify({
-      toolName: "task_summary",
-      ok: true,
-      status: "completed",
-      protocolVersion: 1,
-      summary: {
-        state: "CONTINUE",
-        abstract: "完成阶段工作。",
-        nextAction: "继续验证。",
-        contentHash: "sha256:0123456789abcdef",
-      },
-      message: "请根据小结后的状态、摘要和下一步处理后续流程。",
-      phaseSummary: summaryContent,
-      summarizedMessages: { currentTurn: 3 },
-      extraField: "should be omitted for task_summary",
-    }),
+    invoke: async () =>
+      JSON.stringify({
+        toolName: "task_summary",
+        ok: true,
+        status: "completed",
+        protocolVersion: 1,
+        summary: {
+          state: "CONTINUE",
+          abstract: "完成阶段工作。",
+          nextAction: "继续验证。",
+          contentHash: "sha256:0123456789abcdef",
+        },
+        message: "请根据小结后的状态、摘要和下一步处理后续流程。",
+        phaseSummary: summaryContent,
+        summarizedMessages: { currentTurn: 3 },
+        extraField: "should be omitted for task_summary",
+      }),
   };
   const runtime = {
     attachmentService: {

@@ -13,25 +13,25 @@ This package is a Node.js library. New code should use `@noobot/runtime-events`;
 ## API
 
 ```js
-import { writeRuntimeEvent, createRuntimeEventWriter } from '@noobot/runtime-events';
+import { writeRuntimeEvent, createRuntimeEventWriter } from "@noobot/runtime-events";
 
 await writeRuntimeEvent({
-  source: 'service',
-  scope: 'system',
-  category: 'transport',
-  level: 'warn',
-  event: 'service.runtime.pendingInteraction.rejected',
-  workspaceRoot: '/workspace',
-  data: { reason: 'client_disconnected' },
+  source: "service",
+  scope: "system",
+  category: "transport",
+  level: "warn",
+  event: "service.runtime.pendingInteraction.rejected",
+  workspaceRoot: "/workspace",
+  data: { reason: "client_disconnected" },
 });
 
-const events = createRuntimeEventWriter({ source: 'agent', workspaceRoot: '/workspace' });
+const events = createRuntimeEventWriter({ source: "agent", workspaceRoot: "/workspace" });
 await events.session({
-  category: 'system',
-  level: 'error',
-  event: 'agent.doc2data.failed',
-  userId: 'admin',
-  sessionId: 'session-id',
+  category: "system",
+  level: "error",
+  event: "agent.multimodal_parse.failed",
+  userId: "admin",
+  sessionId: "session-id",
 });
 ```
 

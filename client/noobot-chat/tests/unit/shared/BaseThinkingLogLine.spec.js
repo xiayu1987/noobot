@@ -33,7 +33,7 @@ describe("BaseThinkingLogLine", () => {
     });
 
     expect(wrapper.text()).toContain("执行命令：npm test");
-    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("调用");
+    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("Call");
   });
 
   it("does not render internal event names without readable content", () => {
@@ -62,7 +62,7 @@ describe("BaseThinkingLogLine", () => {
     expect(wrapper.find(".base-thinking-log-line__detail").text()).toContain(
       '"content":"full result"',
     );
-    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("返回");
+    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("Return");
   });
 
   it("uses the same detail block when an expanded item has no separate detail", () => {

@@ -58,12 +58,15 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   assert.equal(result.transferEnvelopes[0].version, 2);
   assert.equal(result.transferEnvelopes[0].payload.mode, "attachment");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "large.txt.tool-input.txt");
-  assert.equal(typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "string");
+  assert.equal(
+    typeof result.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "string",
+  );
   assert.equal(result.toolInputOverflow?.field, "content");
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });
 
-test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
+test("write_file: 返回 workspace 逻辑路径并在 host 执行", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-path-view-"));
   const attachmentService = buildAttachmentService();
   const tools = createFileTool({
@@ -73,7 +76,7 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
         globalConfig: {
           tools: {
             execute_script: {
-              sandboxMode: false,
+              execution: { view: "host" },
             },
           },
         },
@@ -89,7 +92,7 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
       globalConfig: {
         tools: {
           execute_script: {
-            sandboxMode: false,
+            execution: { view: "host" },
           },
         },
       },
@@ -109,7 +112,9 @@ test("write_file: 非沙箱返回 host 工作区路径视角", async () => {
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, path.join(basePath, "runtime/ops_workdir/write-ok.txt"));
+  assert.equal(result.resolvedPath, "runtime/ops_workdir/write-ok.txt");
+  assert.equal(result.pathView, "workspace");
+  assert.equal(result.executionView, "host");
 });
 
 test("write_file: successful output is published as a canonical attachment", async () => {
@@ -138,12 +143,16 @@ test("write_file: successful output is published as a canonical attachment", asy
   assert.equal(runnerResult.transferEnvelopes[0]?.payload?.attachments?.[0]?.name, "result.md");
   assert.equal("attachments" in result, false);
   assert.equal("outputArtifacts" in result, false);
-  assert.equal(await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"), "# result");
+  assert.equal(
+    await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"),
+    "# result",
+  );
 });
 
-test("write_file: 启用沙箱返回沙箱路径视角", async () => {
+test("write_file: execute_script sandbox 配置不改变文件工具视角", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-sandbox-view-"));
   const basePath = path.join(workspaceRoot, "primary-user");
+  await fs.mkdir(basePath, { recursive: true });
   const attachmentService = buildAttachmentService();
   const tools = createFileTool({
     agentContext: buildAgentContext(basePath, "primary-user", {
@@ -152,10 +161,12 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
         globalConfig: {
           tools: {
             execute_script: {
-              sandboxMode: true,
-              sandboxProvider: {
-                default: "docker",
-                docker: { dockerContainerScope: "global" },
+              execution: {
+                view: "sandbox",
+                sandboxProvider: {
+                  default: "docker",
+                  docker: { dockerContainerScope: "global" },
+                },
               },
             },
           },
@@ -172,10 +183,12 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
       globalConfig: {
         tools: {
           execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
+            execution: {
+              view: "sandbox",
+              sandboxProvider: {
+                default: "docker",
+                docker: { dockerContainerScope: "global" },
+              },
             },
           },
         },
@@ -196,7 +209,9 @@ test("write_file: 启用沙箱返回沙箱路径视角", async () => {
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, "/workspace/primary-user/runtime/ops_workdir/write-ok.txt");
+  assert.equal(result.resolvedPath, "runtime/ops_workdir/write-ok.txt");
+  assert.equal(result.pathView, "workspace");
+  assert.equal(result.executionView, "host");
   assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
 });
 
@@ -209,8 +224,19 @@ test("write_file: super user can write an absolute file outside workspace root",
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
-      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      systemRuntime: {
+        userId: "super-root-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: true,
+        config: {},
+      },
       globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
+      userInteractionBridge: {
+        async requestUserInteraction() {
+          return { confirmed: true };
+        },
+      },
     },
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");

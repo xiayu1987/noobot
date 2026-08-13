@@ -1,0 +1,357 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+
+const IDENTITY = Object.freeze({
+  transferId: "transfer:native-script:output",
+  messageId: "message:native-script",
+  sessionId: "session-1",
+  turnScopeId: "turn:native-script",
+  runId: "run:native-script",
+  producer: { type: "tool", id: "call:native-script" },
+});
+
+function createRuntime(basePath, patch = {}) {
+  return {
+    basePath,
+    userId: "admin",
+    globalConfig: { tools: { execute_native_script: { enabled: true } } },
+    userConfig: {},
+    systemRuntime: {
+      sessionId: "session-1",
+      rootSessionId: "session-1",
+      config: { safeConfirm: false },
+    },
+    ...patch,
+  };
+}
+
+test("execute_native_script injects capabilities and persists task output", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-"));
+  await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `native-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({
+    inputs: [{ source: "input.txt" }],
+    arguments: { suffix: "done" },
+    script_body: `
+const inputFile = await files.input(0);
+const outputFile = await output.file("report/result.txt");
+const source = await files.readText(inputFile);
+await files.writeText(outputFile, source + ":" + args.suffix);
+log("completed");
+`,
+  }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.isolation, "host_restricted");
+  assert.equal(result.path_view, "task-local");
+  assert.equal(result.output_file_count, 1);
+  assert.match(result.stdout, /completed/);
+  assert.equal(persistedRequest.generationSource, "execute_native_script");
+  assert.equal(persistedRequest.artifacts[0].name, "report__result.txt");
+  assert.equal(Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").toString(), "source:done");
+  const taskRoot = path.join(basePath, "runtime", "native_tasks");
+  assert.deepEqual(await fs.readdir(taskRoot), []);
+});
+
+test("execute_native_script rejects host runtime escape syntax before execution", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-guard-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  for (const scriptBody of [
+    'await import("node:fs")',
+    "log(process.env)",
+    "log({}.constructor)",
+    "const key = args.key; log({}[key])",
+  ]) {
+    await assert.rejects(
+      () => tool.invoke({ script_body: scriptBody }, { configurable: { transferIdentity: IDENTITY } }),
+      /forbidden/,
+    );
+  }
+});
+
+test("execute_native_script uses the installed Chromium path with an isolated task HOME", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-"));
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `browser-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({
+    arguments: {},
+    script_body: `
+const page = await browser.newPage();
+await page.screenshot({ path: "browser/page.png" });
+`,
+  }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal(persistedRequest.artifacts[0].name, "browser__page.png");
+});
+
+test("execute_native_script resolves FFmpeg output tokens into collected binary attachments", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-ffmpeg-"));
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({ attachmentId: `ffmpeg-${index}`, sessionId: "session-1", attachmentSource: "model", name: artifact.name, mimeType: artifact.mimeType, size: Buffer.from(artifact.contentBase64, "base64").length }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ script_body: `
+const target = await output.file("media/generated.wav");
+await ffmpeg.run({ args: ["-f", "lavfi", "-i", "sine=frequency=440:duration=0.1", target] });
+const probe = await ffprobe.run({ args: ["-v", "error", "-show_entries", "format=format_name", "-of", "default=noprint_wrappers=1", target] });
+log(probe.stdout);
+` }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal(persistedRequest.artifacts[0].name, "media__generated.wav");
+  assert.ok(Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").length > 44);
+  assert.equal(persistedRequest.artifacts[0].meta.virtualPath, "output://media/generated.wav");
+  assert.match(result.stdout, /format_name=wav/);
+  assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks/);
+});
+
+test("execute_native_script fails when LibreOffice reports success without an output artifact", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-"));
+  await fs.writeFile(path.join(basePath, "input.html"), "<html><body>test</body></html>", "utf8");
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ inputs: [{ source: "input.html" }], script_body: `
+await libreoffice.convert({ input: 0, outputDirectory: output.directory, outputFormat: "not_a_real_format" });
+` }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "failed");
+  assert.equal(result.output_file_count, 0);
+  assert.match(result.stderr, /LibreOffice conversion/);
+  assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
+});
+
+test("execute_native_script projects runtime roots but preserves caller path data", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-redaction-"));
+  await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `redaction-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({
+    inputs: [{ source: "input.txt" }],
+    arguments: { nested: { hostPath: "/home/private/source.txt" } },
+    script_body: `
+const source = await files.input(0);
+const target = await output.file("reports/paths.json");
+log({ source, target, nested: args.nested });
+await files.writeJson(target, { source, target, nested: args.nested });
+`,
+  }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /input:\/\/0/);
+  assert.match(result.stdout, /output:\/\/reports\/paths\.json/);
+  assert.match(result.stdout, /\/home\/private\/source\.txt/);
+  const persistedJson = Buffer.from(persistedRequest.artifacts[0].contentBase64, "base64").toString("utf8");
+  assert.deepEqual(JSON.parse(persistedJson), {
+    source: "input://0",
+    target: "output://reports/paths.json",
+    nested: { hostPath: "/home/private/source.txt" },
+  });
+});
+
+test("execute_native_script reads generated output and temporary text through task paths", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-readback-"));
+  let persistedRequest = null;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        persistedRequest = request;
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `readback-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ script_body: `
+const temporary = await output.tempFile("intermediate.json");
+await ffmpeg.run({ args: ["-f", "lavfi", "-i", "anullsrc=duration=0.01", "-f", "ffmetadata", temporary] });
+const generated = await output.file("result.json");
+await files.writeJson(generated, { status: "ready" });
+const parsed = await files.readJson(generated);
+const temporaryText = await files.readText(temporary);
+log(parsed.status, temporaryText);
+` }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /ready/);
+  assert.match(result.stdout, /FFMETADATA/);
+  assert.equal(persistedRequest.artifacts.length, 1);
+  assert.equal(persistedRequest.artifacts[0].name, "result.json");
+});
+
+test("execute_native_script requires task paths for file reads and output tokens for writes", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-file-protocol-"));
+  await fs.writeFile(path.join(basePath, "input.txt"), "source", "utf8");
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+
+  for (const scriptBody of [
+    'await files.readText(0)',
+    'await files.writeText("result.txt", "value")',
+  ]) {
+    const result = JSON.parse(await tool.invoke({ inputs: [{ source: "input.txt" }], script_body: scriptBody }, { configurable: { transferIdentity: IDENTITY } }));
+    assert.equal(result.ok, false);
+    assert.match(result.stderr, /task path|output:\/\//);
+  }
+});
+
+test("execute_native_script discards formal outputs when the script fails", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-failed-output-"));
+  let persistCalls = 0;
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts() {
+        persistCalls += 1;
+        return [];
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ script_body: `
+const target = await output.file("partial.txt");
+await files.writeText(target, "partial");
+throw new Error("intentional failure");
+` }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.output_file_count, 0);
+  assert.equal(result.output_bytes, 0);
+  assert.deepEqual(result.transferEnvelopes, []);
+  assert.equal(persistCalls, 0);
+});
+
+test("execute_native_script exposes opaque capability callables", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-opaque-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ script_body: `
+log(String(files.readText));
+log(String(browser.newPage));
+log(String(ffmpeg.run));
+` }, { configurable: { transferIdentity: IDENTITY } }));
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /native code/);
+  assert.doesNotMatch(result.stdout, /resolveReadable|runCapability|browserExecutablePath|inputRoot|outputRoot/);
+});
+
+test("execute_native_script accepts a complete model attachment identity", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-attachment-input-"));
+  const attachmentPath = path.join(basePath, "runtime", "attach", "scoped", "session-1", "model", "source.txt");
+  await fs.mkdir(path.dirname(attachmentPath), { recursive: true });
+  await fs.writeFile(attachmentPath, "attachment source", "utf8");
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async getAttachmentById(identity) {
+        assert.deepEqual(identity, { userId: "admin", attachmentId: "model-source", sessionId: "session-1", attachmentSource: "model" });
+        return { ...identity, absolutePath: attachmentPath, path: attachmentPath, mimeType: "text/plain" };
+      },
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({ attachmentId: `attachment-result-${index}`, sessionId: "session-1", attachmentSource: "model", name: artifact.name, mimeType: artifact.mimeType, size: Buffer.from(artifact.contentBase64, "base64").length }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({
+    inputs: [{ source: { attachmentId: "model-source", sessionId: "session-1", attachmentSource: "model" } }],
+    script_body: `
+const source = await files.input(0);
+const target = await output.file("copied.txt");
+await files.writeText(target, await files.readText(source));
+`,
+  }, { configurable: { transferIdentity: IDENTITY } }));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+});
+
+test("execute_native_script browser rejects non-HTTP navigation protocols", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-protocol-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(await tool.invoke({ script_body: `
+const page = await browser.newPage();
+await page.goto("file:///etc/passwd");
+` }, { configurable: { transferIdentity: IDENTITY } }));
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /HTTP\(S\)/);
+});
+
+test("execute_native_script is absent unless global configuration explicitly enables it", () => {
+  const runtime = createRuntime("/tmp/noobot-native-disabled", {
+    globalConfig: { tools: { execute_native_script: { enabled: false } } },
+  });
+  assert.deepEqual(createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) }), []);
+});

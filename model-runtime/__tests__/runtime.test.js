@@ -57,6 +57,26 @@ test("openai-compatible adapter applies bound invocation overrides without mutat
   assert.equal(bound.invocationParams({}).reasoning_effort, "low");
 });
 
+test("openai-compatible GPT cache protocol is compiled independently of operator identity", () => {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    flow: "agent.main",
+    modelSpec: {
+      model: "gpt-5.6-sol",
+      modelFamily: "gpt",
+      format: "openai_compatible",
+      operatorId: "generic",
+      providerId: "generic",
+      adapterId: "openai-compatible",
+      base_url: "http://localhost",
+    },
+  });
+  const params = client.invocationParams({});
+
+  assert.equal(params.prompt_cache_key, "noobot-main-gpt-5-6-sol");
+  assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
+});
+
 test("dashscope-compatible adapter applies non-thinking invocation overrides", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -115,6 +135,86 @@ test("executor is the single attempt and retry authority", async () => {
   });
   assert.equal(result.output.text, "ok");
   assert.equal(result.execution.attemptCount, 2);
+});
+
+test("tool-call mismatch streaming downgrade is one-way within an invocation", async () => {
+  const streamingAttempts = [];
+  let calls = 0;
+  const adapter = {
+    id: "test",
+    formats: ["test"],
+    classifyError: () => ({ retryable: false }),
+    createClient: ({ streaming }) => {
+      streamingAttempts.push(streaming);
+      const client = {
+        bindTools: () => client,
+        invoke: async () => {
+          calls += 1;
+          return calls === 1
+            ? { content: "", response_metadata: { finish_reason: "tool_calls" } }
+            : {
+                content: "",
+                tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
+                response_metadata: { finish_reason: "tool_calls" },
+              };
+        },
+      };
+      return client;
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  const response = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    tools: [sdkTool],
+    options: { streaming: true },
+    policies: { retry: { toolCallMismatch: { maxAttempts: 1, downgradeStreaming: true } } },
+  });
+
+  assert.deepEqual(streamingAttempts, [true, false]);
+  assert.deepEqual(
+    response.execution.attempts.map(({ streaming }) => streaming),
+    [true, false],
+  );
+});
+
+test("non-streaming invocation never enables streaming during semantic retries", async () => {
+  const streamingAttempts = [];
+  let calls = 0;
+  const adapter = {
+    id: "test",
+    formats: ["test"],
+    classifyError: () => ({ retryable: false }),
+    createClient: ({ streaming }) => {
+      streamingAttempts.push(streaming);
+      const client = {
+        invoke: async () =>
+          ++calls === 1
+            ? { content: "", additional_kwargs: { reasoning_content: "thinking" } }
+            : { content: "complete" },
+      };
+      return client;
+    },
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+
+  await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    options: { streaming: false },
+    policies: { retry: { reasoningOnly: { maxAttempts: 1 } } },
+  });
+
+  assert.deepEqual(streamingAttempts, [false, false]);
 });
 
 test("executor is the single model context trace authority at each provider attempt", async () => {
@@ -231,13 +331,14 @@ test("non-chat operations execute only through the resolved provider adapter", a
   );
 });
 
-test("provider cache parameters are isolated by explicit provider identity", () => {
+test("cache parameters are isolated by interface protocol, model family, and operator", () => {
   const common = { format: "openai_compatible", adapterId: "openai-compatible" };
   const openAi = compileProviderModelKwargs(
     {
       ...common,
       providerId: "openai",
       model: "gpt-5.6",
+      modelFamily: "gpt",
       extra_body: { cached_content: "leak", cache_control: { type: "ephemeral" } },
     },
     "workflow.plan",
@@ -298,7 +399,11 @@ test("model defaults follow provider-specific sampling guidance", async () => {
     adapterId: "openai-compatible",
   });
   assert.deepEqual(
-    { temperature: openai.temperature, top_p: openai.top_p, frequency_penalty: openai.frequency_penalty },
+    {
+      temperature: openai.temperature,
+      top_p: openai.top_p,
+      frequency_penalty: openai.frequency_penalty,
+    },
     { temperature: 0.7, top_p: undefined, frequency_penalty: undefined },
   );
   const openaiTopP = normalizeRuntimeModelSpec({
@@ -444,7 +549,15 @@ test("responses API and cache key selection are deterministic", () => {
   );
   assert.equal(resolveUseResponsesApi({ format: "openai_compatible", model: "gpt-5" }), false);
   assert.equal(
-    buildPromptCacheKey({ providerId: "openai", model: "gpt-5" }, "agent.main"),
+    buildPromptCacheKey(
+      {
+        providerId: "openai",
+        model: "gpt-5",
+        modelFamily: "gpt",
+        format: "openai_compatible",
+      },
+      "agent.main",
+    ),
     "noobot-main-gpt-5",
   );
 });

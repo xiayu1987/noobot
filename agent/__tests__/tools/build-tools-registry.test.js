@@ -5,11 +5,25 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 import { buildTools } from "../../src/tools/index.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} } = {}) {
+function createContext({
+  globalConfig = {
+    providers: {
+      parse_model: {
+        enabled: true,
+        model: "gpt-5.4",
+        format: "openai_compatible",
+        multimodal_parsing: { enabled: true, input_modalities: ["image"] },
+      },
+    },
+  },
+  userConfig = {},
+  runtimePatch = {},
+} = {}) {
   return {
     agentContext: createTestAgentExecutionScope({
       basePath: "/tmp/noobot-test-workspace",
@@ -25,6 +39,30 @@ function createContext({ globalConfig = {}, userConfig = {}, runtimePatch = {} }
   };
 }
 
+test("buildTools: multimodal_parse requires configured parsing capability", async () => {
+  const tools = await buildTools(createContext({ globalConfig: { providers: {} } }));
+  assert.equal(
+    tools.some((tool) => tool?.name === "multimodal_parse"),
+    false,
+  );
+});
+
+test("buildTools: execute_native_script requires explicit global enablement", async () => {
+  const disabled = await buildTools(createContext());
+  assert.equal(
+    disabled.some((tool) => tool?.name === "execute_native_script"),
+    false,
+  );
+  const enabled = await buildTools(
+    createContext({
+      globalConfig: { tools: { execute_native_script: { enabled: true } } },
+    }),
+  );
+  const tool = enabled.find((item) => item?.name === "execute_native_script");
+  assert.ok(tool);
+  assert.deepEqual(Object.keys(tool.schema.shape).sort(), ["arguments", "inputs", "script_body"]);
+});
+
 test("buildTools: 重组后应注册关键工具", async () => {
   const tools = await buildTools(createContext());
   const names = new Set(tools.map((tool) => tool?.name).filter(Boolean));
@@ -34,21 +72,19 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "write_file",
     "call_service",
     "call_mcp_task",
-    "doc_to_data",
-    "media_to_data",
-    "web_to_data",
-    "process_content_task",
     "process_connector_tool",
     "switch_model",
     "task_summary",
     "request_help",
     "user_interaction",
     "web_search",
+    "multimodal_parse",
   ];
 
   for (const toolName of expected) {
     assert.ok(names.has(toolName), `应注册工具: ${toolName}`);
   }
+  assert.equal(names.has("set_skill_task"), false);
 
   const toolByName = new Map(tools.map((tool) => [tool?.name, tool]));
   assert.deepEqual(Object.keys(toolByName.get("call_mcp_task")?.schema?.shape || {}).sort(), [
@@ -58,6 +94,18 @@ test("buildTools: 重组后应注册关键工具", async () => {
   assert.deepEqual(Object.keys(toolByName.get("web_search")?.schema?.shape || {}).sort(), [
     "query",
   ]);
+  assert.deepEqual(Object.keys(toolByName.get("multimodal_parse")?.schema?.shape || {}).sort(), [
+    "inputs",
+    "model_name",
+    "prompt",
+  ]);
+  const multimodalInputSchema =
+    toolByName.get("multimodal_parse")?.schema?.shape?.inputs?._def?.element;
+  assert.deepEqual(Object.keys(multimodalInputSchema?.shape || {}), ["source"]);
+  const multimodalOpenAiSchema = convertToOpenAITool(toolByName.get("multimodal_parse"));
+  const compiledInput = multimodalOpenAiSchema.function.parameters.properties.inputs.items;
+  assert.deepEqual(Object.keys(compiledInput.properties), ["source"]);
+  assert.deepEqual(compiledInput.required, ["source"]);
 
   const hardDisabled = [
     "delegate_task_async",
@@ -69,6 +117,39 @@ test("buildTools: 重组后应注册关键工具", async () => {
   }
 });
 
+test("buildTools: every path-aware tool declares an authoritative path contract", async () => {
+  const tools = await buildTools(
+    createContext({
+      globalConfig: {
+        tools: { execute_native_script: { enabled: true } },
+        providers: {
+          parse_model: {
+            enabled: true,
+            model: "gpt-5.4",
+            format: "openai_compatible",
+            multimodal_parsing: { enabled: true, input_modalities: ["image"] },
+          },
+        },
+      },
+    }),
+  );
+  const expected = new Set([
+    "read_file",
+    "write_file",
+    "search",
+    "patch_file",
+    "execute_script",
+    "execute_native_script",
+    "multimodal_parse",
+  ]);
+  for (const tool of tools.filter((item) => expected.has(item?.name))) {
+    const contract = tool?.metadata?.pathContract;
+    assert.ok(contract, `${tool.name} must declare pathContract`);
+    assert.equal(contract.accepted.includes("sandbox"), false);
+    if (contract.execution.includes("sandbox")) assert.equal(tool.name, "execute_script");
+  }
+});
+
 test("buildTools: enabled=false 应按配置过滤", async () => {
   const tools = await buildTools(
     createContext({
@@ -76,8 +157,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
         tools: {
           service: { enabled: false },
           model: { enabled: false },
-          process_content_task: { enabled: false },
-          media_to_data: { enabled: false },
           process_connector_tool: { enabled: false },
           request_help: { enabled: false },
           web_search: { enabled: false },
@@ -92,8 +171,6 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
   const shouldBeDisabled = [
     "call_service",
     "switch_model",
-    "process_content_task",
-    "media_to_data",
     "process_connector_tool",
     "request_help",
     "web_search",
@@ -134,7 +211,6 @@ test("buildTools: runtime toolPolicy.denyToolNames 可按统一字段禁用工�
   assert.equal(names.has("wait_async_task_result"), false);
   assert.equal(names.has("plan_multi_task_collaboration"), false);
   assert.equal(names.has("request_help"), true);
-  assert.equal(names.has("process_content_task"), true);
 });
 
 test("buildTools: coding 场景不能绕过 denyToolNames", async () => {

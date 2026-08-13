@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-function resolveLocale(agentContext = null) {
+function resolveLocale(runtime = null) {
   const localeText = String(
-    agentContext?.bindings?.runtime?.systemRuntime?.config?.locale ||
-      agentContext?.bindings?.runtime?.locale ||
+    runtime?.systemRuntime?.config?.locale ||
+      runtime?.locale ||
       "",
   )
     .trim()
@@ -16,8 +16,8 @@ function resolveLocale(agentContext = null) {
 
 const WEB_SEARCH_I18N = {
   "fetchMissing": {
-    "zh-CN": "agentContext.bindings.runtime.sharedTools 中缺少 fetch",
-    "en-US": "fetch missing in agentContext.bindings.runtime.sharedTools",
+    "zh-CN": "runtime.sharedTools 中缺少 fetch",
+    "en-US": "fetch missing in runtime.sharedTools",
   },
   "bodyFormatInvalid": {
     "zh-CN": "body 格式错误：此服务不接受 body，请使用 queryString。",
@@ -274,22 +274,22 @@ async function requestWithFallback({
 }
 
 export default async function webSearchServiceHandler({
-  agentContext = null,
+  runtime,
   endpointCfg,
   serviceCfg,
   custom_param = "",
   queryString = {},
   body,
 }) {
-  const locale = resolveLocale(agentContext);
-  const fetcher = agentContext?.bindings?.runtime?.sharedTools?.fetch;
+  const locale = resolveLocale(runtime);
+  const fetcher = runtime?.sharedTools?.fetch;
   if (typeof fetcher !== "function") {
     return {
       ok: false,
       error: tWebSearch(locale, "fetchMissing"),
     };
   }
-  const textCleaner = agentContext?.bindings?.runtime?.sharedTools?.textCleaner || null;
+  const textCleaner = runtime?.sharedTools?.textCleaner || null;
   const hint = formatHint(endpointCfg, locale);
   if (body !== undefined && body !== null && String(body).trim() !== "") {
     return {

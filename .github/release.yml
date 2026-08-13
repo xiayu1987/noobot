@@ -1,0 +1,16 @@
+changelog:
+  categories:
+    - title: Highlights
+      labels:
+        - enhancement
+        - feature
+    - title: Reliability and security
+      labels:
+        - bug
+        - security
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other changes
+      labels:
+        - "*"

@@ -5,6 +5,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT_DIR/scripts/runtime-process-config.sh"
 CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
 AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
@@ -20,17 +21,13 @@ PM2_LOG_ROTATE_MAX_SIZE="${PM2_LOG_ROTATE_MAX_SIZE:-20M}"
 PM2_LOG_ROTATE_RETAIN="${PM2_LOG_ROTATE_RETAIN:-14}"
 PM2_LOG_ROTATE_WORKER_INTERVAL="${PM2_LOG_ROTATE_WORKER_INTERVAL:-3600}"
 PM2_CLEAN_START="${PM2_CLEAN_START:-0}"
-CLIENT_APP_NAME="noobot-client"
-SERVICE_APP_NAME="noobot-service"
-AGENT_PROXY_APP_NAME="noobot-agent-proxy"
-MODEL_PROXY_APP_NAME="noobot-model-proxy"
 CADDY_ADDR="${CADDY_ADDR:-:10060}"
 AGENT_PROXY_UPSTREAM="${AGENT_PROXY_UPSTREAM:-127.0.0.1:10062}"
-API_UPSTREAM="${API_UPSTREAM:-127.0.0.1:10061}"
+PORT="${PORT:-10061}"
 AGENT_PROXY_PORT="${AGENT_PROXY_PORT:-10062}"
 AGENT_PROXY_HOST="${AGENT_PROXY_HOST:-127.0.0.1}"
-AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:10061/chat/ws}"
-AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:10061}"
+AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:${PORT}/chat/ws}"
+AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:${PORT}}"
 CLIENT_CADDY_BIN="$CLIENT_DIR/deploy/bin/caddy"
 CLIENT_CADDY_CONFIG="$CLIENT_DIR/deploy/Caddyfile"
 PM2_ECOSYSTEM_FILE="$ROOT_DIR/ecosystem.noobot.config.cjs"
@@ -183,14 +180,14 @@ print_missing_dependency_hints() {
         echo "- ripgrep(rg)：未安装不影响系统启动，但会降低 search 工具在大项目中的搜索性能。"
         ;;
       docker)
-        echo "- docker：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=docker 时，执行脚本 的 docker 沙箱模式才不可用。"
+        echo "- docker：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=docker 时，执行脚本的 Docker 沙箱模式才不可用。"
         echo "  官方安装文档: https://docs.docker.com/engine/install/"
         ;;
       bubblewrap)
-        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=bubblewrap 时，执行脚本 的 Bubblewrap+overlayfs 沙箱模式才不可用。"
+        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=bubblewrap 时，执行脚本的 Bubblewrap+overlayfs 沙箱模式才不可用。"
         ;;
       firejail)
-        echo "- firejail：未安装本身不影响系统启动；仅当你在配置中启用 script.sandboxMode=true 且 script.sandboxProvider.default=firejail 时，执行脚本 的 Firejail 沙箱模式才不可用。"
+        echo "- firejail：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=firejail 时，执行脚本的 Firejail 沙箱模式才不可用。"
         ;;
     esac
   done
@@ -459,27 +456,10 @@ ensure_pm2_log_rotation() {
 }
 
 start_or_restart_pm2_apps() {
-  local has_service_app=0
-  local has_client_app=0
-  local has_agent_proxy_app=0
-  local has_model_proxy_app=0
-  if pm2_has_app "$SERVICE_APP_NAME"; then
-    has_service_app=1
-  fi
-  if pm2_has_app "$CLIENT_APP_NAME"; then
-    has_client_app=1
-  fi
-  if pm2_has_app "$AGENT_PROXY_APP_NAME"; then
-    has_agent_proxy_app=1
-  fi
-  if pm2_has_app "$MODEL_PROXY_APP_NAME"; then
-    has_model_proxy_app=1
-  fi
-
-  export CADDY_ADDR AGENT_PROXY_UPSTREAM
+  export CADDY_ADDR AGENT_PROXY_UPSTREAM PORT
   export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
   [[ -f "$PM2_ECOSYSTEM_FILE" ]] || { echo "PM2 ecosystem 配置不存在: $PM2_ECOSYSTEM_FILE" >&2; return 1; }
-  run_pm2 delete "$SERVICE_APP_NAME" "$AGENT_PROXY_APP_NAME" "$MODEL_PROXY_APP_NAME" "$CLIENT_APP_NAME" >/dev/null 2>&1 || true
+  run_pm2 delete "${NOOBOT_PM2_APP_NAMES[@]}" >/dev/null 2>&1 || true
   run_pm2 start "$PM2_ECOSYSTEM_FILE" --update-env
 }
 
@@ -498,14 +478,14 @@ wait_for_apps_and_ports_ready() {
     node -e '
 const fs = require("fs");
 const data = JSON.parse(fs.readFileSync(0, "utf8"));
-const required = ["noobot-service", "noobot-agent-proxy", "noobot-model-proxy", "noobot-client"];
+const required = process.argv.slice(1);
 const bad = required.filter((name) => !data.find((item) => item.name === name && item.pm2_env && item.pm2_env.status === "online"));
 if (bad.length) {
   console.error("PM2 apps not online:", bad.join(", "));
   process.exit(1);
 }
 '
-  )
+  "${NOOBOT_PM2_APP_NAMES[@]}")
 
   while [[ "$elapsed" -lt "$max_wait_seconds" ]]; do
     if apps_json="$(run_pm2 jlist 2>/dev/null)"; then
@@ -514,8 +494,8 @@ if (bad.length) {
           continue
         fi
         if command -v ss >/dev/null 2>&1; then
-          if ss -lnt | egrep ':10060|:10061|:10062' >/dev/null 2>&1; then
-            log "Health check passed: apps online and ports 10060/10061/10062 listening."
+          if noobot_ports_are_listening; then
+            log "Health check passed: apps online and configured ports listening."
             return 0
           fi
         else
@@ -531,7 +511,10 @@ if (bad.length) {
   echo "Startup health check failed after ${max_wait_seconds}s." >&2
   run_pm2 ls || true
   if command -v ss >/dev/null 2>&1; then
-    ss -lntp | egrep ':10060|:10061|:10062' || true
+    local port
+    while IFS= read -r port; do
+      ss -lntp | grep ":${port} " || true
+    done < <(noobot_runtime_ports)
   fi
   run_pm2 logs --lines 80 --nostream || true
   return 1

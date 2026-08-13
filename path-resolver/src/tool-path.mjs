@@ -3,7 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath, normalizePathForPlatform, isAbsolutePathAnyPlatform, resolvePathPlatformFromContext, TOOL_PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
+import {
+  filePath,
+  normalizePathForPlatform,
+  isAbsolutePathAnyPlatform,
+  resolvePathPlatformFromContext,
+  TOOL_PATH_VIEWS,
+  normalizeSlashPath,
+} from "./platform.mjs";
 import { resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.mjs";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
@@ -76,29 +83,6 @@ export function classifyToolInputPath(inputPath = "", { agentContext = null } = 
   };
 }
 
-function resolveSharedToolHostPath({ inputPath = "", runtime = {}, agentContext = null } = {}) {
-  const payload = {
-    path: inputPath,
-    sandboxPath: inputPath,
-    runtime,
-    agentContext,
-  };
-  const resolverCandidates = [
-    runtime?.sharedTools?.resolveHostPath,
-    runtime?.sharedTools?.toHostPath,
-    runtime?.sharedTools?.pathMapper?.toHostPath,
-  ];
-  for (const resolver of resolverCandidates) {
-    if (typeof resolver !== "function") continue;
-    try {
-      const resolved = String(resolver(payload) || "").trim();
-      if (resolved) return filePath.resolve(resolved);
-    } catch {
-    }
-  }
-  return "";
-}
-
 export function resolveToolInputPath({
   inputPath = "",
   agentContext = null,
@@ -106,8 +90,8 @@ export function resolveToolInputPath({
   workspacePath = "",
   workspaceRoot = "",
   allowHostAbsolute = false,
-  allowSandbox = true,
-  allowVirtualRelative = true,
+  allowSandbox = false,
+  allowVirtualRelative = false,
 } = {}) {
   const classified = classifyToolInputPath(inputPath, { agentContext });
   const normalizedWorkspace = workspacePath ? filePath.resolve(workspacePath) : "";
@@ -123,23 +107,6 @@ export function resolveToolInputPath({
     };
   }
 
-  const sharedResolved = resolveSharedToolHostPath({
-    inputPath: classified.normalized,
-    runtime,
-    agentContext,
-  });
-  if (sharedResolved) {
-    return {
-      ...classified,
-      ok: true,
-      resolvedPath: sharedResolved,
-      workspaceRelativePath: "",
-      mapped: true,
-      error: "",
-      hint: "",
-    };
-  }
-
   if (classified.view === TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE) {
     if (!allowSandbox) {
       return {
@@ -151,11 +118,16 @@ export function resolveToolInputPath({
         hint: "Sandbox paths are not allowed here.",
       };
     }
-    if (classified.sandboxRoot === "project" && normalizedWorkspace && !resolveSandboxUserRoot(runtime)) {
+    if (
+      classified.sandboxRoot === "project" &&
+      normalizedWorkspace &&
+      !resolveSandboxUserRoot(runtime)
+    ) {
       const normalizedProjectPath = normalizeSlashPath(classified.normalized);
-      const resolvedPath = normalizedProjectPath === "/project"
-        ? normalizedWorkspace
-        : filePath.resolve(normalizedWorkspace, normalizedProjectPath.slice("/project/".length));
+      const resolvedPath =
+        normalizedProjectPath === "/project"
+          ? normalizedWorkspace
+          : filePath.resolve(normalizedWorkspace, normalizedProjectPath.slice("/project/".length));
       return {
         ...classified,
         ok: true,
@@ -170,9 +142,13 @@ export function resolveToolInputPath({
       const normalizedSandboxPath = normalizeSlashPath(classified.normalized);
       const sandboxUserRoot = normalizeSlashPath(resolveSandboxUserRoot(runtime));
       if (sandboxUserRoot === "/workspace" && normalizedWorkspace) {
-        const resolvedPath = normalizedSandboxPath === "/workspace"
-          ? normalizedWorkspace
-          : filePath.resolve(normalizedWorkspace, normalizedSandboxPath.slice("/workspace/".length));
+        const resolvedPath =
+          normalizedSandboxPath === "/workspace"
+            ? normalizedWorkspace
+            : filePath.resolve(
+                normalizedWorkspace,
+                normalizedSandboxPath.slice("/workspace/".length),
+              );
         return {
           ...classified,
           ok: true,
@@ -184,9 +160,13 @@ export function resolveToolInputPath({
         };
       }
       if (sandboxUserRoot.startsWith("/workspace/")) {
-        const resolvedPath = normalizedSandboxPath === "/workspace"
-          ? normalizedWorkspaceRoot
-          : filePath.resolve(normalizedWorkspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
+        const resolvedPath =
+          normalizedSandboxPath === "/workspace"
+            ? normalizedWorkspaceRoot
+            : filePath.resolve(
+                normalizedWorkspaceRoot,
+                normalizedSandboxPath.slice("/workspace/".length),
+              );
         return {
           ...classified,
           ok: true,
@@ -198,9 +178,13 @@ export function resolveToolInputPath({
         };
       }
       if (!sandboxUserRoot) {
-        const resolvedPath = normalizedSandboxPath === "/workspace"
-          ? normalizedWorkspaceRoot
-          : filePath.resolve(normalizedWorkspaceRoot, normalizedSandboxPath.slice("/workspace/".length));
+        const resolvedPath =
+          normalizedSandboxPath === "/workspace"
+            ? normalizedWorkspaceRoot
+            : filePath.resolve(
+                normalizedWorkspaceRoot,
+                normalizedSandboxPath.slice("/workspace/".length),
+              );
         return {
           ...classified,
           ok: true,
@@ -289,8 +273,7 @@ export function resolveToolInputPath({
 /**
  * Return only path-scope information safe for tool consumers.
  *
- * `resolveToolPathPolicy().allowedRoots` contains host filesystem paths used
- * for enforcement. It is intentionally not part of a public tool error.
+ * Host filesystem enforcement details are intentionally not part of a public tool error.
  */
 export function buildToolPathScopeErrorDetails({ field = "", pathView = "" } = {}) {
   return {

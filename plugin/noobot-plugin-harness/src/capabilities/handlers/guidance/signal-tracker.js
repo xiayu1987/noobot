@@ -3,11 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  GUIDANCE_REASON,
-  TOOL_NAME_SET,
-  ensureHarnessBucket,
-} from "./deps.js";
+import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
 import {
   collectClosedToolCallBatchMessages,
   collectDialogScopedMessagesToSummarize,
@@ -43,9 +39,7 @@ function assertSummaryHistoryClosed(history = []) {
     taskSummaryToolName: "task_summary",
   });
   if (!pendingHistoryMessages.length) return;
-  const messageIds = pendingHistoryMessages
-    .map((message) => getMessageId(message))
-    .filter(Boolean);
+  const messageIds = pendingHistoryMessages.map((message) => getMessageId(message)).filter(Boolean);
   const error = new Error("summary checkpoint history contains messages pending summarization");
   error.pendingHistoryMessageIds = messageIds;
   throw error;
@@ -57,12 +51,10 @@ export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
   assertSummaryHistoryClosed(blocks.history);
   const sourceMessages = blocks.incremental;
   const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages);
-  const messageIds = [...new Set(
-    checkpointMessages.map((message) => getMessageId(message)).filter(Boolean),
-  )];
-  state.pending = state.pending && typeof state.pending === "object"
-    ? state.pending
-    : {};
+  const messageIds = [
+    ...new Set(checkpointMessages.map((message) => getMessageId(message)).filter(Boolean)),
+  ];
+  state.pending = state.pending && typeof state.pending === "object" ? state.pending : {};
   state.pending.summaryCheckpointMessageIds = messageIds;
   return messageIds;
 }
@@ -70,8 +62,7 @@ export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
 export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   void meta;
   const holder = ensureHarnessBucket(ctx);
-  const summaryCheckpointMessageIdsValue =
-    holder?.state?.pending?.summaryCheckpointMessageIds;
+  const summaryCheckpointMessageIdsValue = holder?.state?.pending?.summaryCheckpointMessageIds;
   const summaryCheckpointMessageIds = Array.isArray(summaryCheckpointMessageIdsValue)
     ? summaryCheckpointMessageIdsValue.map((id) => String(id || "").trim()).filter(Boolean)
     : [];
@@ -94,18 +85,19 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const latestTaskCheckIndexes = collectLatestTaskCheckMessageIndexes(checkpointTargets, {
     taskCheckToolName: "task_check",
   });
-  const latestTaskCheckIds = new Set([...latestTaskCheckIndexes]
-    .map((index) => getMessageId(checkpointTargets[index]))
-    .filter(Boolean));
-  const filteredSummaryTargets = summaryTargets.filter((message) =>
-    !latestTaskCheckIds.has(getMessageId(message)));
+  const latestTaskCheckIds = new Set(
+    [...latestTaskCheckIndexes]
+      .map((index) => getMessageId(checkpointTargets[index]))
+      .filter(Boolean),
+  );
+  const filteredSummaryTargets = summaryTargets.filter(
+    (message) => !latestTaskCheckIds.has(getMessageId(message)),
+  );
   requestSummaryCheckpointMainFlowInstruction(ctx, {
     source: "plugin.summary",
-    summarizedMessageIds: [...new Set(
-      filteredSummaryTargets
-        .map((message) => getMessageId(message))
-        .filter(Boolean),
-    )],
+    summarizedMessageIds: [
+      ...new Set(filteredSummaryTargets.map((message) => getMessageId(message)).filter(Boolean)),
+    ],
   });
   if (holder?.state?.pending && hasSummaryCheckpoint) {
     holder.state.pending.summaryCheckpointMessageIds = null;
@@ -122,18 +114,15 @@ export function markToolSignals(ctx = {}) {
   let changed = false;
   if (ctx?.success === true) {
     state.signals.successfulToolCount += 1;
-    if (
-      [
-        TOOL_NAME_SET.MEDIA_TO_DATA,
-        TOOL_NAME_SET.DOC_TO_DATA,
-        TOOL_NAME_SET.WEB_TO_DATA,
-        TOOL_NAME_SET.PROCESS_CONTENT_TASK,
-      ].includes(toolName)
-    ) {
+    if (toolName === TOOL_NAME_SET.MULTIMODAL_PARSE) {
       state.signals.parsedAttachment = true;
       changed = true;
     }
-    if ([TOOL_NAME_SET.DELEGATE_TASK_ASYNC, TOOL_NAME_SET.PLAN_MULTI_TASK_COLLABORATION].includes(toolName)) {
+    if (
+      [TOOL_NAME_SET.DELEGATE_TASK_ASYNC, TOOL_NAME_SET.PLAN_MULTI_TASK_COLLABORATION].includes(
+        toolName,
+      )
+    ) {
       state.signals.subtaskStarted = true;
       changed = true;
     }
@@ -142,7 +131,11 @@ export function markToolSignals(ctx = {}) {
       changed = true;
     }
   }
-  if (ctx?.commitType === "attachments" && Array.isArray(ctx?.payload?.attachments) && ctx.payload.attachments.length) {
+  if (
+    ctx?.commitType === "attachments" &&
+    Array.isArray(ctx?.payload?.attachments) &&
+    ctx.payload.attachments.length
+  ) {
     state.signals.parsedAttachment = true;
     changed = true;
   }

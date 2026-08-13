@@ -4,7 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
-import { deepClone, fileExists, hasOwnProperty, isPlainObject, readJsonStrict, writeJson } from "./utils.js";
+import {
+  deepClone,
+  fileExists,
+  hasOwnProperty,
+  isPlainObject,
+  readJsonStrict,
+  writeJson,
+} from "./utils.js";
 
 export function normalizeProviderAlias(modelName = "") {
   const normalized = String(modelName || "")
@@ -45,8 +52,10 @@ export function buildProviderFromTemplate({
         used_for_conversation: true,
         temperature: 0.7,
         max_tokens: 10000,
+        multimodal_parsing: {
+          enabled: false,
+        },
         multimodal_generation: {
-          support_understanding: false,
           support_generation: {
             enabled: false,
             support_scope: [],
@@ -62,8 +71,10 @@ export function buildProviderFromTemplate({
   baseProvider.format = format;
 
   if (forceConversationDefaults) {
+    baseProvider.multimodal_parsing = {
+      enabled: false,
+    };
     baseProvider.multimodal_generation = {
-      support_understanding: false,
       support_generation: {
         enabled: false,
         support_scope: [],
@@ -109,7 +120,10 @@ export function resolveTemplateProvider(providers = {}, format = "") {
   return isPlainObject(firstProvider) ? firstProvider : null;
 }
 
-export function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { programmingModel = "" } = {}) {
+export function normalizeBuiltinScenarioConfigForLauncher(
+  scenarios = {},
+  { programmingModel = "" } = {},
+) {
   const source = isPlainObject(scenarios) ? scenarios : {};
   const defaultScenario = String(source.default || "full").trim();
   const definitions = isPlainObject(source.definitions) ? source.definitions : {};
@@ -126,10 +140,7 @@ export function normalizeBuiltinScenarioConfigForLauncher(scenarios = {}, { prog
   };
 }
 
-export function alignInitialModelReferences({
-  globalConfig = {},
-  providerAlias = "",
-} = {}) {
+export function alignInitialModelReferences({ globalConfig = {}, providerAlias = "" } = {}) {
   const alias = String(providerAlias || "").trim();
   if (!isPlainObject(globalConfig) || !alias) return globalConfig;
 

@@ -3,16 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  filePath as path,
-  resolveRuntimePathContext,
-} from "@noobot/path-resolver";
+import { filePath as path, resolveRuntimePathContext } from "@noobot/path-resolver";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
-import {
-  hasOwnConfigKey,
-  normalizeBooleanLike,
-} from "../../config/index.js";
+import { hasOwnConfigKey, normalizeBooleanLike } from "../../config/index.js";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -40,51 +34,6 @@ export function buildStaticInfo({ runtimeBasePath = "", userId = "", globalConfi
       workspaceRoot: globalConfig?.workspaceRoot || "",
     },
     directories: pathContext.directories,
-  };
-}
-
-export function buildSandboxViewStaticInfo({
-  runtimeBasePath = "",
-  userId = "",
-  globalConfig = {},
-  effectiveConfig = {},
-} = {}) {
-  const hostStaticInfo = buildStaticInfo({ runtimeBasePath, userId, globalConfig });
-  const pathContext = resolveRuntimePathContext({
-    runtimeBasePath,
-    userId,
-    globalConfig,
-    effectiveConfig,
-  });
-  if (pathContext.view !== "sandbox") return hostStaticInfo;
-  const directories = pathContext.directories;
-  return {
-    userId: hostStaticInfo.userId,
-    platform: hostStaticInfo.platform,
-    arch: hostStaticInfo.arch,
-    nodeVersion: hostStaticInfo.nodeVersion,
-    timezone: hostStaticInfo.timezone,
-    cwd: directories.currentDirectory,
-    defaultWorkdir: directories.opsWorkdir,
-    sandboxRoot: pathContext.sandboxRoot,
-    relativePathBase: directories.relativePathBase,
-    globalDefaults: {
-      workspaceRoot: pathContext.sandboxRoot,
-    },
-    directories,
-    sandbox: {
-      enabled: true,
-      provider: pathContext.sandboxProvider,
-      defaultWorkdir: directories.opsWorkdir,
-      sandboxRoot: pathContext.sandboxRoot,
-      relativePathBase: directories.relativePathBase,
-      allowedRoots: directories.allowedRoots,
-      ...(Array.isArray(pathContext.extraMountTargets) &&
-      pathContext.extraMountTargets.length
-        ? { extraMountTargets: pathContext.extraMountTargets }
-        : {}),
-      hostPathHidden: true,
-    },
   };
 }
 
@@ -119,7 +68,11 @@ export function buildDynamicInfo({
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     safeConfirm: runConfig?.safeConfirm !== false,
     sanitizeOutput: runConfig?.sanitizeOutput !== false,
-    safeConfirmLevel: ["low", "medium", "high", "critical"].includes(String(runConfig?.safeConfirmLevel || "").trim().toLowerCase())
+    safeConfirmLevel: ["low", "medium", "high", "critical"].includes(
+      String(runConfig?.safeConfirmLevel || "")
+        .trim()
+        .toLowerCase(),
+    )
       ? String(runConfig.safeConfirmLevel).trim().toLowerCase()
       : "low",
     ...(hasOwnConfigKey(runConfig, "streaming")

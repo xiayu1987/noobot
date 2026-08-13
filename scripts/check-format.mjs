@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 
 const supported = /\.(?:cjs|js|json|md|mjs|vue|yaml|yml)$/i;
 const ignored =
@@ -21,12 +22,21 @@ function changedFiles(args) {
   }
 }
 
+function isFile(file) {
+  try {
+    return statSync(file).isFile();
+  } catch {
+    return false;
+  }
+}
+
 const files = [
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"]),
   ...changedFiles(["diff", "--name-only", "--diff-filter=ACMR"]),
   ...changedFiles(["diff", "--cached", "--name-only", "--diff-filter=ACMR"]),
 ]
   .filter((file, index, all) => all.indexOf(file) === index)
+  .filter(isFile)
   .filter((file) => supported.test(file) && !ignored.test(file));
 
 if (!files.length) {

@@ -4,14 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
-import {
-  filePath as path,
-  resolveRuntimePathContext,
-} from "@noobot/path-resolver";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
-import {
-  persistTransferArtifacts,
-} from "../../../transfer-adapter/index.js";
+import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
   SANDBOX_PROVIDER_NAME,
@@ -19,83 +13,14 @@ import {
   SCRIPT_WORKDIR_RELATIVE_PATH,
 } from "./constants.js";
 
-function normalizePathForTool(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/");
-}
-
 function compactObject(value = {}) {
   return Object.fromEntries(
-    Object.entries(value && typeof value === "object" ? value : {})
-      .filter(([, item]) => {
-        if (Array.isArray(item)) return item.length > 0;
-        if (item && typeof item === "object") return Object.keys(item).length > 0;
-        return item !== undefined && item !== null && String(item || "").trim() !== "";
-      }),
+    Object.entries(value && typeof value === "object" ? value : {}).filter(([, item]) => {
+      if (Array.isArray(item)) return item.length > 0;
+      if (item && typeof item === "object") return Object.keys(item).length > 0;
+      return item !== undefined && item !== null && String(item || "").trim() !== "";
+    }),
   );
-}
-
-function buildSandboxPathContext({
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
-  dockerConfig = {},
-  docker = {},
-  runtime = {},
-  agentContext = null,
-  workspace = "",
-  pathContext = {},
-} = {}) {
-  if (pathContext?.view === "sandbox") return pathContext;
-  const runtimeBasePath = normalizePathForTool(
-    runtime?.basePath ||
-      agentContext?.context?.environment?.workspace?.basePath ||
-      workspace.replace(/\/runtime\/ops_workdir\/?$/, ""),
-  );
-  return resolveRuntimePathContext({
-    runtime,
-    agentContext,
-    runtimeBasePath,
-    workspacePath: runtimeBasePath,
-    userId: runtime?.userId || "",
-    effectiveConfig: {
-      tools: {
-        execute_script: {
-          sandboxMode: true,
-          sandboxProvider: {
-            default: sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER,
-            [sandboxProvider || SANDBOX_PROVIDER_NAME.DOCKER]: dockerConfig,
-          },
-        },
-      },
-    },
-  });
-}
-
-function resolveSandboxRuntimePathDefaults(options = {}) {
-  const pathContext = buildSandboxPathContext(options);
-  const directories = pathContext?.directories || {};
-  const sandboxRoot = pathContext?.sandboxRoot || "";
-  const defaultWorkdir = normalizePathForTool(
-    options?.docker?.workdir ||
-      directories.opsWorkdir ||
-      pathContext?.opsWorkdir ||
-      "",
-  );
-  const extraMountTargets = Array.isArray(directories.extraMountTargets)
-    ? directories.extraMountTargets
-    : Array.isArray(pathContext?.extraMountTargets)
-      ? pathContext.extraMountTargets
-      : [];
-  const allowedRoots = Array.from(new Set((Array.isArray(directories.allowedRoots)
-    ? directories.allowedRoots
-    : Array.isArray(pathContext?.allowedRoots)
-      ? pathContext.allowedRoots
-      : [sandboxRoot].filter(Boolean)).filter(Boolean)));
-  return compactObject({
-    defaultWorkdir,
-    sandboxRoot,
-    relativePathBase: "defaultWorkdir",
-    allowedRoots,
-    extraMountTargets,
-  });
 }
 
 export function buildExecutionWorkspaceMeta({
@@ -108,29 +33,27 @@ export function buildExecutionWorkspaceMeta({
   docker = {},
   pathContext = {},
 } = {}) {
-  const workspaceHost = normalizePathForTool(workspace);
-  if (!sandboxEnabled) {
-    return {
-      relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
-      absolutePath: workspaceHost,
-      view: "non_sandbox",
-    };
-  }
-  const sandboxDefaults = resolveSandboxRuntimePathDefaults({
-    sandboxProvider,
-    dockerConfig,
-    docker,
-    runtime,
-    agentContext,
-    workspace: workspaceHost,
-    pathContext,
+  void sandboxEnabled;
+  void sandboxProvider;
+  void workspace;
+  void runtime;
+  void agentContext;
+  void dockerConfig;
+  void docker;
+  void pathContext;
+  return { path: SCRIPT_WORKDIR_RELATIVE_PATH, view: "workspace" };
+}
+
+function buildExecutionMeta({
+  sandboxEnabled = false,
+  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  docker = {},
+} = {}) {
+  return compactObject({
+    view: sandboxEnabled ? "sandbox" : "host",
+    provider: sandboxEnabled ? sandboxProvider : "host",
+    image: String(docker?.image || "").trim(),
   });
-  return {
-    relativePath: SCRIPT_WORKDIR_RELATIVE_PATH,
-    absolutePath: String(sandboxDefaults.defaultWorkdir || "").trim(),
-    view: "sandbox",
-    ...sandboxDefaults,
-  };
 }
 
 export function buildScriptExecutionMeta({
@@ -144,9 +67,7 @@ export function buildScriptExecutionMeta({
   pathContext = {},
 } = {}) {
   return compactObject({
-    runtime: compactObject({
-      image: String(docker?.image || "").trim(),
-    }),
+    execution: buildExecutionMeta({ sandboxEnabled, sandboxProvider, docker }),
     workspace: buildExecutionWorkspaceMeta({
       sandboxEnabled,
       sandboxProvider,

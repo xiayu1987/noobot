@@ -36,7 +36,8 @@ export default {
   "attach.countExceedsLimit": "attachments count exceeds limit",
   "attach.extensionNotAllowed": "attachment extension not allowed",
   "attach.fileTooLarge": "attachment too large",
-  "attach.hintAddExtensionToAllowedExtensions": "extension is not allowed by built-in attachment policy",
+  "attach.hintAddExtensionToAllowedExtensions":
+    "extension is not allowed by built-in attachment policy",
   "attach.hintIncreaseMaxFileCountOrReduceFiles": "reduce uploaded files",
   "attach.hintIncreaseMaxFileSizeOrUploadSmaller": "upload a smaller file",
   "attach.hintIncreaseMaxTotalSizeOrReduceUpload": "reduce upload size",
@@ -113,7 +114,8 @@ export default {
   "connect.failed": "connect failed",
   "connect.userIdConnectCodeRequired": "userId/connectCode required",
   "context.contextBuilderRequired": "contextBuilder is required",
-  "context.builderContainerInputRequired": "ContextBuilder requires container input: { config, serviceContainer, sessionContext }",
+  "context.builderContainerInputRequired":
+    "ContextBuilder requires container input: { config, serviceContainer, sessionContext }",
   "init.invalidResetSections": "invalid reset sections",
   "init.userWorkspacePathNotDirectory": "user workspace path is not a directory",
   "init.workspaceTemplateMissing": "workspace template missing",
@@ -122,20 +124,25 @@ export default {
   "model.nameRequired": "model name is required",
   "model.notConversationModel": (params = {}) =>
     `model is not available for conversation switch: ${String(params.alias || "").trim()}`,
-  "tools.script.commandTooLong": "Script content is too long. Please execute in batches or split the script/text and try again.",
+  "tools.script.commandTooLong":
+    "Script content is too long. Please execute in batches or split the script/text and try again.",
   "tools.file.writeContentTooLong": "File content is too long. Please write in batches.",
   "tools.file.readContentTooLong": "File content is too long. Please read in batches.",
-  "tools.file.readDescriptionWithLineNumbers": "Read text file content (line numbers enabled by default).",
+  "tools.file.readDescriptionWithLineNumbers":
+    "Read text file content (line numbers enabled by default).",
   "tools.file.readStartLineField": "Start line (1-based).",
   "tools.file.readEndLineField": "End line (1-based).",
   "tools.file.readIncludeLineNumbersField": "Whether content includes line numbers.",
   "tools.file.readMaxLinesField": "Maximum returned lines.",
-  "tools.file.readRiskLevelField": "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
+  "tools.file.readRiskLevelField":
+    "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.file.writeOverwriteField": "Whether to overwrite when file exists.",
-  "tools.file.writeRiskLevelField": "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
+  "tools.file.writeRiskLevelField":
+    "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
   "tools.search.description": "Search files or text, returning matched lines with context.",
   "tools.search.fieldSource": "Search source: files or text.",
-  "tools.search.fieldQuery": "Keyword or regex.",
+  "tools.search.fieldQuery":
+    "Required non-empty keyword or regex. Do not call search with an empty string.",
   "tools.search.fieldIsRegex": "Search query as regex.",
   "tools.search.fieldCaseSensitive": "Case-sensitive search.",
   "tools.search.fieldPath": "Path for file search.",
@@ -143,33 +150,48 @@ export default {
   "tools.search.fieldText": "Text to search (used when source=text).",
   "tools.search.fieldContextLines": "Number of context lines.",
   "tools.search.fieldMaxResults": "Maximum matches.",
-  "tools.search.fieldRiskLevel": "Operation risk level: low, medium, high, or critical. Searches that may retrieve or return privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
-  "tools.patch_file.description": "Apply patches; tolerant of git/unified diff, apply_patch, common model-mixed formats, and path strip mistakes.",
-  "tools.patch_file.fieldFormat": "Patch format hint; omit when unsure. The tool will try unified_diff/git diff and apply_patch.",
-  "tools.patch_file.fieldPatch": "Patch content; read the file first and use exact context. Follow the current path rules in system context. Do not write virtual root names as relative path prefixes.",
-  "tools.patch_file.fieldPatchPathHintSandbox": "Sandbox view: relative paths use the default rootDirectory; absolute paths must use allowedRoots.",
-  "tools.patch_file.fieldPatchPathHintHost": "Host view: relative paths use the default rootDirectory; absolute paths must stay inside rootDirectory (Windows uses a C:\\\\ prefix, macOS/Linux use a / prefix).",
-  "tools.patch_file.fieldPatchPathHintSuperHost": "Host view, super user: relative paths use the default rootDirectory; host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
-  "tools.patch_file.fieldStrip": "Diff path strip hint; common a/, b/, no-prefix, and virtual-root mistakes are tried automatically. Omit when unsure.",
-  "tools.patch_file.fieldRoot": "Patch root directory (optional, workspace-relative child directory only). Usually omit it. Do not use parent-directory traversal.",
-  "tools.patch_file.fieldRootPathHintSandbox": "root is not an entry point for sandbox absolute paths.",
+  "tools.search.fieldRiskLevel":
+    "Operation risk level: low, medium, high, or critical. Searches that may retrieve or return privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
+  "tools.patch_file.description":
+    "Apply patches; tolerant of git/unified diff, apply_patch, common model-mixed formats, and path strip mistakes.",
+  "tools.patch_file.fieldFormat":
+    "Patch format hint; omit when unsure. The tool will try unified_diff/git diff and apply_patch.",
+  "tools.patch_file.fieldPatch":
+    "Patch content; read the file first and use exact context. Follow the current path rules in system context. Do not write virtual root names as relative path prefixes.",
+  "tools.patch_file.fieldPatchPathHintHost":
+    "Workspace logical view: use paths relative to the current user's workspace; regular users cannot use host absolute paths.",
+  "tools.patch_file.fieldPatchPathHintSuperHost":
+    "Workspace logical view: relative paths use the current user's workspace; super administrators may also use host absolute paths authorized by the global path policy.",
+  "tools.patch_file.fieldStrip":
+    "Diff path strip hint; common a/, b/, no-prefix, and virtual-root mistakes are tried automatically. Omit when unsure.",
+  "tools.patch_file.fieldRoot":
+    "Patch root directory (optional, workspace-relative child directory only). Usually omit it. Do not use parent-directory traversal.",
+  "tools.patch_file.fieldRootPathHintSandbox":
+    "root is not an entry point for sandbox absolute paths.",
   "tools.patch_file.fieldRootPathHintHost": "root only selects a workspace child directory.",
-  "tools.patch_file.fieldRootPathHintSuperHost": "root is not an entry point for host absolute paths.",
-  "tools.patch_file.rootInvalidHintSandbox": "Do not use root:'..' or sandbox absolute paths as root; root only selects a workspace-relative child directory. Put sandbox absolute paths directly in patch file paths.",
-  "tools.patch_file.rootInvalidHintHost": "Do not use root:'..' or absolute paths as root; root only selects a workspace-relative child directory.",
-  "tools.patch_file.rootInvalidHintSuperHost": "Do not use root:'..' or host absolute paths as root; root only selects a workspace-relative child directory. Put host absolute paths directly in patch file paths.",
+  "tools.patch_file.fieldRootPathHintSuperHost":
+    "root is not an entry point for host absolute paths.",
+  "tools.patch_file.rootInvalidHintHost":
+    "Do not use root:'..' or absolute paths as root; root only selects a workspace-relative child directory.",
+  "tools.patch_file.rootInvalidHintSuperHost":
+    "Do not use root:'..' or host absolute paths as root; root only selects a workspace-relative child directory. Put host absolute paths directly in patch file paths.",
   "tools.patch_file.fieldDryRun": "Validate only, do not write.",
-  "tools.patch_file.fieldRiskLevel": "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
-  "tools.risk.criticalConfirmation": (params = {}) => [
-    "A tool operation covered by the safety threshold requires your explicit confirmation.",
-    `Tool: ${String(params.toolName || "")}`,
-    `Operation: ${String(params.operation || "")}`,
-    `Risk level: ${String(params.riskLevel || "")}`,
-    params.target ? `Target: ${String(params.target)}` : "",
-    params.reason ? `Risk: ${String(params.reason)}` : "",
-    "Do you confirm proceeding?",
-  ].filter(Boolean).join("\n"),
-  "tools.risk.criticalConfirmationUnavailable": "This risk level requires confirmation, but the user interaction channel is unavailable.",
+  "tools.patch_file.fieldRiskLevel":
+    "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
+  "tools.risk.criticalConfirmation": (params = {}) =>
+    [
+      "A tool operation covered by the safety threshold requires your explicit confirmation.",
+      `Tool: ${String(params.toolName || "")}`,
+      `Operation: ${String(params.operation || "")}`,
+      `Risk level: ${String(params.riskLevel || "")}`,
+      params.target ? `Target: ${String(params.target)}` : "",
+      params.reason ? `Risk: ${String(params.reason)}` : "",
+      "Do you confirm proceeding?",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  "tools.risk.criticalConfirmationUnavailable":
+    "This risk level requires confirmation, but the user interaction channel is unavailable.",
   "tools.risk.criticalCancelled": "The risky operation was not confirmed and was cancelled.",
   "services.handlerModuleNotFound": "service handler module not found",
   "services.handlerNotFound": "service handler not found",
@@ -177,7 +199,8 @@ export default {
   "session.parentSessionNotFoundPossiblyDeleted": "parent session not found (possibly deleted)",
   "session.workspaceNotInitialized": "workspace not initialized",
   "status.disconnectedFromHistory": "disconnected from history",
-  "web2img.readabilityNotInstalledWarn": "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
+  "web2img.readabilityNotInstalledWarn":
+    "@mozilla/readability/jsdom not installed; fallback to DOM extraction. Run: npm i @mozilla/readability jsdom",
   "web2img.contentTruncated": "content too long, truncated",
   "web2img.descriptionLabel": "Description",
   "web2img.mainContentTitle": "Main Content",
@@ -185,8 +208,10 @@ export default {
   "web2img.textCleanAppendixTitle": "Text Cleaning Appendix",
   "web2img.noReadableTextExtracted": "no trafilatura/readability text extracted",
   "web2img.resultIndex": "Result index",
-  "web2img.sharpNotInstalledRawWarn": "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",
-  "web2img.sharpNotInstalledSplitWarn": "sharp not installed; image post-processing/splitting unavailable. Run: npm i sharp",
+  "web2img.sharpNotInstalledRawWarn":
+    "sharp not installed, cannot post-process images; raw screenshot will be returned. Run: npm i sharp",
+  "web2img.sharpNotInstalledSplitWarn":
+    "sharp not installed; image post-processing/splitting unavailable. Run: npm i sharp",
   "ws.badRequest": "Bad Request",
   "ws.dialogStoppedByUser": "dialog stopped by user",
   "ws.interactionEncryptedRequired": "encrypted interaction response required",
@@ -196,13 +221,18 @@ export default {
   "ws.unauthorized": "Unauthorized",
   "ws.unknownError": "unknown error",
   "ws.userInteractionTimeout": "user interaction timeout",
-  "agent.phaseSummaryPrompt": "The context has reached the phase-summary threshold. This turn must call only task_summary. summaryContent must strictly use the single text protocol: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort abstract\n[DETAILS]\nComplete details integrated with prior summaries, covering goals, completed work, key results, and remaining issues; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections. Use CONTINUE while executable work remains, COMPLETE when the task is finished, and BLOCKED only when progress is impossible.",
-  "agent.taskCheckPrompt": "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
+  "agent.phaseSummaryPrompt":
+    "The context has reached the phase-summary threshold. This turn must call only task_summary. summaryContent must strictly use the single text protocol: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries, clearly distinguishing completed work, key results, remaining work, and blockers; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. Every section must be non-empty; do not add, repeat, or reorder sections. Use CONTINUE while executable work remains; subsequent work must resume only from NEXT_ACTION without repeating completed work. Use COMPLETE when the task is finished and BLOCKED only when progress is impossible.",
+  "agent.taskCheckPrompt":
+    "The periodic task-check threshold has been reached. For this model call, you may call task_check to leave a task-check slice, but the call is optional; this prompt appears only for this call. If called, checkContent must strictly use the single text protocol: NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort task-check abstract\n[DETAILS]\nCurrent goal, progress, drift risks, and omissions\n[NEXT_ACTION]\nSpecific next action. Every section must be non-empty; do not add, repeat, or reorder sections.",
   "agent.abortError": "dialog stopped by user",
   "scenarios.full.name": "All-around",
-  "scenarios.full.description": "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
+  "scenarios.full.description":
+    "General scenario: no restrictions on tools and context; autonomously selects capabilities as needed.",
   "scenarios.programming.name": "Programming",
-  "scenarios.programming.description": "Programming scenario: use search/read_file to confirm real content before patch_file; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use write_file only when needed.",
+  "scenarios.programming.description":
+    "Programming scenario: use search/read_file to confirm real content before patch_file; prefer exact-context patches and avoid hand-computing unified diff counts; after patch failure, reread then retry; use write_file only when needed.",
   "scenarios.text.name": "Text",
-  "scenarios.text.description": "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization."
+  "scenarios.text.description":
+    "Text scenario: suited for writing, rewriting, summarizing, translating, and content organization.",
 };

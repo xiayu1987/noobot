@@ -52,3 +52,22 @@ test("request_help: model invoke receives runtime abort signal", async () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.modelResult?.content, "help response");
 });
+
+test("request_help: web_search_help reports unavailable search configuration", async () => {
+  const runtime = {
+    globalConfig: { tools: { request_help: { help_services: [] } } },
+    userConfig: {},
+    locale: "en-US",
+  };
+  const [tool] = createRequestHelpTool({ agentContext: { bindings: { runtime } } });
+
+  await assert.rejects(
+    tool.invoke({ helpContent: "Find current documentation", requestType: "web_search_help" }),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_REQUEST_HELP_FAILED");
+      assert.match(String(error?.message || ""), /web-search help is unavailable/i);
+      assert.equal(String(error?.message || "").includes("required"), false);
+      return true;
+    },
+  );
+});

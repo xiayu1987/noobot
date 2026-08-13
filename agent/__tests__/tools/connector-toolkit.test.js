@@ -45,9 +45,7 @@ function buildAccessConnectorRuntime({
       rootSessionId: "s-root",
       config: {
         selectedConnectors:
-          selectedConnectors === undefined
-            ? { [type]: name }
-            : selectedConnectors,
+          selectedConnectors === undefined ? { [type]: name } : selectedConnectors,
       },
     },
     sharedTools: {
@@ -206,7 +204,6 @@ test("connector-toolkit/database_connect_connector: 交互补全应携带 pendin
   assert.equal(String(interactionCalls[0]?.resolvedBy || ""), "");
 });
 
-
 test("connector-toolkit/access_connector: 未显式勾选但仅有一个已连接 terminal 时应自动采用", async () => {
   let executed = null;
   const runtime = buildAccessConnectorRuntime({
@@ -221,10 +218,12 @@ test("connector-toolkit/access_connector: 未显式勾选但仅有一个已连�
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
 
-  const result = parseToolJson(await accessTool.invoke({
-    connector_type: "terminal",
-    command: "ls",
-  }));
+  const result = parseToolJson(
+    await accessTool.invoke({
+      connector_type: "terminal",
+      command: "ls",
+    }),
+  );
 
   assert.equal(result.ok, true);
   assert.equal(String(executed?.connectorName || ""), "ops_terminal");
@@ -248,11 +247,13 @@ test("connector-toolkit/access_connector: 未显式勾选但指定已连接 conn
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
 
-  const result = parseToolJson(await accessTool.invoke({
-    connector_name: "ops_terminal",
-    connector_type: "terminal",
-    command: "pwd",
-  }));
+  const result = parseToolJson(
+    await accessTool.invoke({
+      connector_name: "ops_terminal",
+      connector_type: "terminal",
+      command: "pwd",
+    }),
+  );
 
   assert.equal(result.ok, true);
   assert.equal(String(executed?.connectorName || ""), "ops_terminal");
@@ -281,10 +282,12 @@ test("connector-toolkit/access_connector: command_file_path 应可读取文件�
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
-    const result = parseToolJson(await accessTool.invoke({
-      connector_type: "database",
-      command_file_path: "queries/demo.sql",
-    }));
+    const result = parseToolJson(
+      await accessTool.invoke({
+        connector_type: "database",
+        command_file_path: "queries/demo.sql",
+      }),
+    );
     assert.equal(result.ok, true);
     assert.equal(String(executed?.command || ""), "select 1 from dual where 1=1;");
   } finally {
@@ -292,7 +295,7 @@ test("connector-toolkit/access_connector: command_file_path 应可读取文件�
   }
 });
 
-test("connector-toolkit/access_connector: command_file_path 相对路径基于 directories.rootDirectory", async () => {
+test("connector-toolkit/access_connector: command_file_path 相对路径固定基于 workspace", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-root-directory-"));
   try {
     const repoRoot = path.join(workspaceRoot, "noobot");
@@ -321,10 +324,12 @@ test("connector-toolkit/access_connector: command_file_path 相对路径基于 d
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
-    const result = parseToolJson(await accessTool.invoke({
-      connector_type: "database",
-      command_file_path: "queries/demo.sql",
-    }));
+    const result = parseToolJson(
+      await accessTool.invoke({
+        connector_type: "database",
+        command_file_path: "noobot/queries/demo.sql",
+      }),
+    );
     assert.equal(result.ok, true);
     assert.equal(String(executed?.command || ""), "select 3 where 3=3;");
   } finally {
@@ -405,7 +410,7 @@ test("connector-toolkit/access_connector: command_file_path 越界应拒绝", as
   }
 });
 
-test("connector-toolkit/access_connector: 超级管理员 command_file_path 可读取 allowed_roots 外文件", async () => {
+test("connector-toolkit/access_connector: 超级管理员仍受连接器 allowed_roots 收窄", async () => {
   const allowedRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-allowed-"));
   const outsideRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-outside-"));
   try {
@@ -439,12 +444,14 @@ test("connector-toolkit/access_connector: 超级管理员 command_file_path 可�
     const accessTool = tools.find((tool) => tool?.name === "access_connector");
     assert.ok(accessTool, "access_connector 工具应存在");
 
-    const result = parseToolJson(await accessTool.invoke({
-      connector_type: "database",
-      command_file_path: outsideSqlPath,
-    }));
-    assert.equal(result.ok, true);
-    assert.equal(String(executed?.command || ""), "select 2 where 2=2;");
+    await assert.rejects(
+      accessTool.invoke({
+        connector_type: "database",
+        command_file_path: outsideSqlPath,
+      }),
+      (error) => error?.code === "RECOVERABLE_PATH_OUT_OF_SCOPE",
+    );
+    assert.equal(executed, null);
   } finally {
     await rm(allowedRoot, { recursive: true, force: true });
     await rm(outsideRoot, { recursive: true, force: true });
@@ -524,8 +531,7 @@ test("connector-toolkit/access_connector: command_file_path 超过大小限制�
         connector_type: "database",
         command_file_path: "queries/big.sql",
       }),
-      (error) =>
-        error?.code === "RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED",
+      (error) => error?.code === "RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED",
     );
   } finally {
     await rm(tmpRoot, { recursive: true, force: true });
@@ -571,18 +577,21 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
           };
         },
         async executeConnectorCommand(payload = {}) {
-          const saved = await payload.emailAttachmentHandler([
+          const saved = await payload.emailAttachmentHandler(
+            [
+              {
+                name: "mail-1.txt",
+                mimeType: "text/plain",
+                contentBase64: Buffer.from("mail body", "utf8").toString("base64"),
+                email_attachment_type: "attachment",
+                email_content_id: "",
+                email_is_inline: false,
+              },
+            ],
             {
-              name: "mail-1.txt",
-              mimeType: "text/plain",
-              contentBase64: Buffer.from("mail body", "utf8").toString("base64"),
-              email_attachment_type: "attachment",
-              email_content_id: "",
-              email_is_inline: false,
+              generationSource: "email_connector_read",
             },
-          ], {
-            generationSource: "email_connector_read",
-          });
+          );
           assert.equal("transferEnvelopes" in saved, true);
           assert.equal(Array.isArray(saved.transferEnvelopes), true);
           return {
@@ -614,10 +623,12 @@ test("connector-toolkit/access_connector(email): 邮件附件保存不提升为 
   const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
-  const payload = parseToolJson(await accessTool.invoke({
-    connector_type: "email",
-    command: JSON.stringify({ action: "read", uid: 1 }),
-  }));
+  const payload = parseToolJson(
+    await accessTool.invoke({
+      connector_type: "email",
+      command: JSON.stringify({ action: "read", uid: 1 }),
+    }),
+  );
 
   assert.equal(payload.ok, true);
   assert.equal("attachmentMetas" in payload, false);
@@ -694,10 +705,12 @@ test("connector-toolkit/access_connector(email): stdout 里的 transfer-like 字
   const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
-  const payload = parseToolJson(await accessTool.invoke({
-    connector_type: "email",
-    command: JSON.stringify({ action: "read", uid: 1 }),
-  }));
+  const payload = parseToolJson(
+    await accessTool.invoke({
+      connector_type: "email",
+      command: JSON.stringify({ action: "read", uid: 1 }),
+    }),
+  );
 
   assert.equal(payload.ok, true);
   assert.equal("transferResult" in payload, false);
@@ -752,10 +765,12 @@ test("connector-toolkit/access_connector(email): stdout 非 JSON 时不应注入
   const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
   const accessTool = tools.find((tool) => tool?.name === "access_connector");
   assert.ok(accessTool, "access_connector 工具应存在");
-  const payload = parseToolJson(await accessTool.invoke({
-    connector_type: "email",
-    command: JSON.stringify({ action: "read", uid: 1 }),
-  }));
+  const payload = parseToolJson(
+    await accessTool.invoke({
+      connector_type: "email",
+      command: JSON.stringify({ action: "read", uid: 1 }),
+    }),
+  );
 
   assert.equal(payload.ok, true);
   assert.equal(Array.isArray(payload.attachmentMetas), false);

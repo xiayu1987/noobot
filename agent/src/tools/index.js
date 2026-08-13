@@ -5,8 +5,8 @@
  */
 import { createFileTool } from "./execution/file-tool.js";
 import { createScriptTool } from "./execution/script-tool.js";
+import { createNativeScriptTool } from "./execution/native-script-tool.js";
 import { createSkillTool } from "./execution/skill-tool.js";
-import { createContentProcessTool } from "./data-processing/content-process-tool.js";
 import { createServiceTool } from "./execution/service-tool.js";
 import { createModelTool } from "./ai-models/model-tool.js";
 import { createUserInteractionTool } from "./collaboration/user-interaction-tool.js";
@@ -14,6 +14,7 @@ import { createMcpTool } from "./execution/mcp-tool.js";
 import { createConnectorAccessTool } from "./connectors/connector-access-tool.js";
 import { createWebSearchTool } from "./ai-models/web-search-tool.js";
 import { createMultimodalGenerateTool } from "./ai-models/multimodal-generate-tool.js";
+import { createMultimodalParseTool } from "./ai-models/multimodal-parse-tool.js";
 import { createTaskSummaryTool } from "./collaboration/task-summary-tool.js";
 import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
@@ -22,6 +23,7 @@ import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
+import { assertToolPathContract } from "@noobot/path-resolver";
 import {
   getRuntimeFromAgentContext,
   getToolsFromAgentContext,
@@ -60,8 +62,8 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.SEARCH]: [TOOL_NAME.SEARCH, TOOL_CONFIG_ALIAS_KEY.FILE],
   [TOOL_NAME.PATCH_FILE]: [TOOL_NAME.PATCH_FILE, TOOL_CONFIG_ALIAS_KEY.FILE],
   [TOOL_NAME.EXECUTE_SCRIPT]: [TOOL_NAME.EXECUTE_SCRIPT],
+  [TOOL_NAME.EXECUTE_NATIVE_SCRIPT]: [TOOL_NAME.EXECUTE_NATIVE_SCRIPT],
   [TOOL_NAME.LIST_SKILLS]: [TOOL_NAME.LIST_SKILLS, TOOL_CONFIG_ALIAS_KEY.SKILL],
-  [TOOL_NAME.SET_SKILL_TASK]: [TOOL_NAME.SET_SKILL_TASK, TOOL_CONFIG_ALIAS_KEY.SKILL],
   [TOOL_NAME.CALL_SERVICE]: [TOOL_NAME.CALL_SERVICE, TOOL_CONFIG_ALIAS_KEY.SERVICE],
   [TOOL_NAME.CALL_MCP_TASK]: [TOOL_NAME.CALL_MCP_TASK, TOOL_CONFIG_ALIAS_KEY.MCP],
   [TOOL_NAME.DELEGATE_TASK_ASYNC]: [
@@ -78,9 +80,6 @@ const TOOL_CONFIG_ALIASES = {
   ],
   [TOOL_NAME.SWITCH_MODEL]: [TOOL_NAME.SWITCH_MODEL, TOOL_CONFIG_ALIAS_KEY.MODEL],
   [TOOL_NAME.USER_INTERACTION]: [TOOL_NAME.USER_INTERACTION],
-  [TOOL_NAME.WEB_TO_DATA]: [TOOL_NAME.WEB_TO_DATA],
-  [TOOL_NAME.DOC_TO_DATA]: [TOOL_NAME.DOC_TO_DATA],
-  [TOOL_NAME.PROCESS_CONTENT_TASK]: [TOOL_NAME.PROCESS_CONTENT_TASK],
   [TOOL_NAME.PROCESS_CONNECTOR_TOOL]: [TOOL_NAME.PROCESS_CONNECTOR_TOOL],
   [TOOL_NAME.DATABASE_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.DATABASE],
   [TOOL_NAME.TERMINAL_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.TERMINAL],
@@ -89,6 +88,7 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.INSPECT_CONNECTORS]: [TOOL_NAME.INSPECT_CONNECTORS],
   [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],
   [TOOL_NAME.MULTIMODAL_GENERATE]: [TOOL_NAME.MULTIMODAL_GENERATE],
+  [TOOL_NAME.MULTIMODAL_PARSE]: [TOOL_NAME.MULTIMODAL_PARSE],
   [TOOL_NAME.TASK_SUMMARY]: [TOOL_NAME.TASK_SUMMARY],
   [TOOL_NAME.TASK_CHECK]: [TOOL_NAME.TASK_CHECK],
   [TOOL_NAME.REQUEST_HELP]: [TOOL_NAME.REQUEST_HELP],
@@ -135,6 +135,14 @@ function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
   return false;
 }
 
+function hasEnabledMultimodalParsingProvider(effectiveConfig = {}) {
+  const providers = effectiveConfig?.providers || {};
+  return Object.values(providers).some(
+    (providerConfig) =>
+      providerConfig?.enabled !== false && providerConfig?.multimodal_parsing?.enabled === true,
+  );
+}
+
 function resolveMaxSubAgentDepth(_effectiveConfig = {}) {
   return DEFAULT_MAX_SUB_AGENT_DEPTH;
 }
@@ -144,15 +152,17 @@ async function buildToolsDefault(ctx) {
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const allowUserInteraction = runtime?.systemRuntime?.config?.allowUserInteraction !== false;
   const enableMultimodalGenerateTool = hasEnabledMultimodalGenerationProvider(effectiveConfig);
+  const enableMultimodalParseTool = hasEnabledMultimodalParsingProvider(effectiveConfig);
   const baseTools = [
     ...createFileTool(ctx),
     ...createScriptTool(ctx),
+    ...createNativeScriptTool(ctx),
     ...createSkillTool(ctx),
-    ...createContentProcessTool(ctx),
     ...createServiceTool(ctx),
     ...createMcpTool(ctx),
     ...createWebSearchTool(ctx),
     ...(enableMultimodalGenerateTool ? createMultimodalGenerateTool(ctx) : []),
+    ...(enableMultimodalParseTool ? createMultimodalParseTool(ctx) : []),
     ...createConnectorAccessTool(ctx),
     ...createModelTool(ctx),
     ...createTaskSummaryTool(ctx),
@@ -161,6 +171,9 @@ async function buildToolsDefault(ctx) {
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
   const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);
+  for (const tool of enabledTools) {
+    if (tool?.metadata?.pathContract) assertToolPathContract(tool.metadata.pathContract);
+  }
   return await filterToolsByRuntimePolicy({
     agentContext: ctx?.agentContext || {},
     tools: enabledTools,
