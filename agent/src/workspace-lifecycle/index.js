@@ -3,16 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  access,
-  cp,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { deepMerge } from "../shared/utils/shared-utils.js";
@@ -29,7 +20,6 @@ const RESET_SECTION_PATHS = {
 
 const SYNC_PRESERVE_EXISTING_ROOTS = new Set(["memory"]);
 
-
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
   if (!configuredTemplatePath) {
@@ -40,11 +30,7 @@ function resolveTemplateBase(workspaceTemplatePath = "") {
   return path.resolve(configuredTemplatePath);
 }
 
-async function resolveWorkspaceInitPaths({
-  workspaceRoot,
-  workspaceTemplatePath = "",
-  userId,
-}) {
+async function resolveWorkspaceInitPaths({ workspaceRoot, workspaceTemplatePath = "", userId }) {
   const normalizedUserId = String(userId || "").trim();
   const normalizedWorkspaceRoot = String(workspaceRoot || "").trim();
   if (!normalizedUserId || !normalizedWorkspaceRoot) {
@@ -73,7 +59,11 @@ function normalizeResetSections(inputSections) {
   const normalized = Array.from(
     new Set(
       inputSections
-        .map((item) => String(item || "").trim().toLowerCase())
+        .map((item) =>
+          String(item || "")
+            .trim()
+            .toLowerCase(),
+        )
         .filter(Boolean),
     ),
   );
@@ -122,11 +112,7 @@ export async function ensureUserWorkspaceInitialized({
         details: { base },
       });
     }
-    await cp(templateBase, base, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-    });
+    await syncDirectoryIncremental(templateBase, base);
     return base;
   }
 
