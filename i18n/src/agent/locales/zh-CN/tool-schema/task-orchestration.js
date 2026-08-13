@@ -60,12 +60,12 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
   task_summary: {
     description: {
       key: "tools.task_summary.description",
-      text: "提交当前任务阶段小结。仅在系统要求阶段小结时调用。summaryContent 必须严格遵循 NOOBOT_TASK_SUMMARY/1 唯一文本协议，按顺序且仅包含 [STATE]、[ABSTRACT]、[DETAILS]、[NEXT_ACTION] 四段；STATE 只能为 CONTINUE、COMPLETE 或 BLOCKED。完整内容仅通过该输入提交，工具结果只返回派生回执和附件引用。",
+      text: "提交当前任务阶段小结。仅在系统要求阶段小结时调用。summaryContent 必须严格遵循 NOOBOT_TASK_SUMMARY/1 唯一文本协议，按顺序且仅包含 [STATE]、[ABSTRACT]、[DETAILS]、[NEXT_ACTION] 四段；STATE 只能为 CONTINUE、COMPLETE 或 BLOCKED。小结是后续流程的权威阶段状态：已完成事项不得重新执行，CONTINUE 后只从 NEXT_ACTION 继续。完整内容仅通过该输入提交，工具结果只返回派生回执和附件引用。",
     },
     params: {
       summaryContent: {
         key: "tools.task_summary.fieldSummaryContent",
-        text: "严格格式：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短摘要\n[DETAILS]\n整合之前小结后的完整详细内容；覆盖目标、已完成事项、关键结果、遗留问题，编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n明确的下一步动作。CONTINUE 表示继续正常工具循环；COMPLETE 表示任务完成并进入无工具最终回复；BLOCKED 表示无法继续并进入无工具阻塞说明。所有段落非空，不得增加、重复或调整段落。",
+        text: "严格格式：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n已完成阶段的简短事实摘要\n[DETAILS]\n整合之前小结后的权威阶段状态；明确区分已完成事项、关键结果、剩余事项和阻塞，编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n尚未完成且紧接着要执行的唯一明确动作。CONTINUE 表示只从 NEXT_ACTION 继续，不得重新执行 ABSTRACT 或 DETAILS 中已完成的事项；COMPLETE 表示任务完成并进入无工具最终回复；BLOCKED 表示无法继续并进入无工具阻塞说明。所有段落非空，不得增加、重复或调整段落。",
       },
     },
     texts: {
@@ -73,7 +73,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent 不符合 NOOBOT_TASK_SUMMARY/1 协议",
       "tools.task_summary.summaryCompletedFollowState":
-        "请根据小结后的状态、摘要和下一步处理后续流程。",
+        "小结回执是后续流程的权威阶段状态。已完成事项不得重新执行；CONTINUE 时仅从 summary.nextAction 继续，COMPLETE 或 BLOCKED 时按对应状态结束。",
     },
   },
   task_check: {

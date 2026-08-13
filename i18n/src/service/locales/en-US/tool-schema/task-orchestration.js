@@ -63,12 +63,12 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
   task_summary: {
     description: {
       key: "tools.task_summary.description",
-      text: "Submit the current task phase summary only when requested by the system. summaryContent must strictly follow the single NOOBOT_TASK_SUMMARY/1 text protocol, with exactly [STATE], [ABSTRACT], [DETAILS], and [NEXT_ACTION] in that order. STATE must be CONTINUE, COMPLETE, or BLOCKED. The complete content exists only in this input; the tool result returns only a derived receipt and attachment reference.",
+      text: "Submit the current task phase summary only when requested by the system. summaryContent must strictly follow the single NOOBOT_TASK_SUMMARY/1 text protocol, with exactly [STATE], [ABSTRACT], [DETAILS], and [NEXT_ACTION] in that order. STATE must be CONTINUE, COMPLETE, or BLOCKED. The summary is the authoritative phase state for subsequent work: completed work must not be repeated, and CONTINUE resumes only from NEXT_ACTION. The complete content exists only in this input; the tool result returns only a derived receipt and attachment reference.",
     },
     params: {
       summaryContent: {
         key: "tools.task_summary.fieldSummaryContent",
-        text: "Exact format: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort abstract\n[DETAILS]\nComplete detailed content integrated with prior summaries, covering goals, completed work, key results, and remaining issues; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nSpecific next action. CONTINUE resumes the normal tool loop; COMPLETE enters a no-tools final response; BLOCKED enters a no-tools blocker explanation. Every section must be non-empty; do not add, repeat, or reorder sections.",
+        text: "Exact format: NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\nShort factual summary of the completed phase\n[DETAILS]\nAuthoritative phase state integrated with prior summaries; clearly distinguish completed work, key results, remaining work, and blockers; in programming mode include file paths, function names, and line numbers\n[NEXT_ACTION]\nThe single specific unfinished action to execute next. CONTINUE resumes only from NEXT_ACTION and must not repeat work recorded as completed in ABSTRACT or DETAILS; COMPLETE enters a no-tools final response; BLOCKED enters a no-tools blocker explanation. Every section must be non-empty; do not add, repeat, or reorder sections.",
       },
     },
     texts: {
@@ -76,7 +76,7 @@ export const TASK_ORCHESTRATION_TOOL_SCHEMA = {
       "tools.task_summary.summaryProtocolInvalid":
         "summaryContent does not conform to NOOBOT_TASK_SUMMARY/1",
       "tools.task_summary.summaryCompletedFollowState":
-        "Process the next flow according to the summary state, abstract, and next action.",
+        "This summary receipt is the authoritative phase state. Do not repeat completed work; for CONTINUE, proceed only from summary.nextAction, and for COMPLETE or BLOCKED, finish according to that state.",
     },
   },
   task_check: {
