@@ -97,6 +97,11 @@ npm run -w client/windows build:win:dir
 
 `build:win:dir` creates an unpacked Windows app and verifies that `resources/backend/service/app.js` and production dependencies are laid out correctly, without creating an installer.
 
+Electron and electron-builder downloads use the first available proxy source: standard
+`HTTPS_PROXY`/`HTTP_PROXY` environment variables, `NOOBOT_DEPENDENCY_PROXY_URL`, or
+`desktop.dependency_proxy_url` in `service/config/global.config.json` (or the file selected by
+`NOOBOT_GLOBAL_CONFIG_PATH`). Proxy credentials are masked in build logs.
+
 ## Recommended distributable targets
 
 The GitHub release workflow builds the NSIS installer and zip targets by default:

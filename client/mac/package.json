@@ -12,10 +12,10 @@
     "prepare:backend": "node scripts/prepare-backend-runtime.mjs",
     "prepare:electron": "node ../shared/scripts/prepare-electron-runtime.mjs",
     "check": "node --check src/main.js && npm --prefix ../shared test",
-    "build:mac": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --mac",
-    "build:mac:dir": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --mac --dir",
-    "build:mac:dmg": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --mac dmg",
-    "build:mac:zip": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && electron-builder --mac zip"
+    "build:mac": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && node ../shared/scripts/run-electron-builder.mjs --mac",
+    "build:mac:dir": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && node ../shared/scripts/run-electron-builder.mjs --mac --dir",
+    "build:mac:dmg": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && node ../shared/scripts/run-electron-builder.mjs --mac dmg",
+    "build:mac:zip": "npm run prepare:frontend && npm run prepare:electron && npm run prepare:backend && node ../shared/scripts/run-electron-builder.mjs --mac zip"
   },
   "dependencies": {
     "@noobot/client-shared": "file:../shared",
