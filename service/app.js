@@ -132,7 +132,7 @@ try {
   }
   const failures = results.flatMap((result) => result.failures || []);
   if (!shuttingDown) {
-    httpServer = startHttpServer({
+    httpServer = await startHttpServer({
       app,
       getBot,
       resolveRequestLocale,
@@ -143,6 +143,8 @@ try {
       translateText,
       openVSCodeService,
       workspaceRootPath,
+      host: startupContext.service.host || undefined,
+      port: startupContext.service.port,
     });
     await writeRoutedRuntimeEvent({
       scope: "startup",

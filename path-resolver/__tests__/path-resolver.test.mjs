@@ -24,6 +24,7 @@ import {
   resolveTaskPath,
   assertToolPathContract,
   authorizePathRef,
+  BUILTIN_PATH_POLICY,
   resolvePathPolicy,
   resolvePathRef,
   TOOL_PATH_CONTRACTS,
@@ -134,6 +135,67 @@ test("logical path contracts keep sandbox exclusive to script execution", () => 
   );
 });
 
+test("built-in path policy is complete and aligned with every tool contract", () => {
+  assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY), true);
+  assert.equal(Object.isFrozen(BUILTIN_PATH_POLICY.roles.superAdmin.host.deniedRoots), true);
+  assert.deepEqual(resolvePathPolicy({}), BUILTIN_PATH_POLICY);
+  assert.deepEqual(BUILTIN_PATH_POLICY.display, {
+    fileTools: "logical",
+    scriptTools: "logical",
+    nativeScript: "task-local",
+    attachments: "identity",
+    errors: "logical",
+    audit: "execution",
+  });
+  for (const contract of Object.values(TOOL_PATH_CONTRACTS)) {
+    assert.deepEqual(
+      BUILTIN_PATH_POLICY.capabilities[contract.capability].acceptedViews,
+      contract.accepted,
+    );
+  }
+});
+
+test("global path policy recursively overrides only configured values", () => {
+  const policy = resolvePathPolicy({
+    security: {
+      path_policy: {
+        roles: {
+          regular_user: { workspace: { others: "read_only" } },
+          super_admin: { host: { allowed_roots: ["/srv/shared"] } },
+        },
+        capabilities: {
+          "file.read": { host_requires_role: "deny" },
+        },
+        display: { file_tools: "none" },
+      },
+    },
+  });
+
+  assert.equal(policy.roles.regularUser.workspace.own, "read_write");
+  assert.equal(policy.roles.regularUser.workspace.others, "read_only");
+  assert.deepEqual(policy.roles.superAdmin.host.allowedRoots, ["/srv/shared"]);
+  assert.deepEqual(policy.roles.superAdmin.host.deniedRoots, ["/proc", "/sys", "/dev"]);
+  assert.deepEqual(policy.capabilities["file.read"].acceptedViews, ["workspace", "host"]);
+  assert.equal(policy.capabilities["file.read"].hostRequiresRole, "deny");
+  assert.equal(policy.capabilities["file.write"].hostRequiresRole, "super_admin");
+  assert.equal(policy.display.fileTools, "none");
+  assert.equal(policy.display.scriptTools, "logical");
+  assert.equal(Object.hasOwn(policy.capabilities["file.read"], "host_requires_role"), false);
+  assert.equal(Object.hasOwn(policy.roles.superAdmin.host, "allowed_roots"), false);
+});
+
+test("path authorization defaults to the built-in policy when callers omit it", () => {
+  const result = authorizePathRef({
+    pathRef: resolvePathRef({
+      input: { view: "workspace", path: "report.txt", owner: "other" },
+    }),
+    principal: { userId: "u1", role: "regular_user" },
+    capability: "file.read",
+  });
+  assert.equal(result.allowed, false);
+  assert.equal(result.code, "workspace_owner_not_authorized");
+});
+
 test("global path policy expands host access only for super administrators", () => {
   const pathPolicy = resolvePathPolicy({});
   const hostRef = resolvePathRef({
@@ -159,6 +221,17 @@ test("global path policy expands host access only for super administrators", () 
       executionPath: "/data/report.txt",
     }).allowed,
     true,
+  );
+  assert.equal(
+    authorizePathRef({
+      pathRef: resolvePathRef({ input: { view: "workspace", path: "../outside.txt" } }),
+      principal: { userId: "admin", role: "super_admin" },
+      capability: "file.read",
+      pathPolicy,
+      workspaceRoot: "/srv/workspaces/admin",
+      executionPath: "/srv/workspaces/outside.txt",
+    }).code,
+    "workspace_path_out_of_scope",
   );
   assert.equal(
     authorizePathRef({

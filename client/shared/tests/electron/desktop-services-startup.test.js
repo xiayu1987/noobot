@@ -148,6 +148,7 @@ test("desktop startup uses npm.cmd for Windows development service launch", asyn
       assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
+      assert.equal(fixture.calls[0].options.env.NOOBOT_SERVICE_HOST, "127.0.0.1");
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
       assert.match(fixture.calls[0].options.env.NOOBOT_GLOBAL_CONFIG_PATH, /global\.config\.json$/);
       assert.ok(fixture.getHealthCalls() >= 2);
@@ -188,6 +189,7 @@ test("desktop startup uses npm for macOS development service launch", async () =
       assert.deepEqual(fixture.calls[0].args.slice(0, 4), ["run", "-w", "service", "start"]);
       assert.equal(fixture.calls[0].options.cwd, fixture.repoRoot);
       assert.equal(fixture.calls[0].options.env.PORT, "10061");
+      assert.equal(fixture.calls[0].options.env.NOOBOT_SERVICE_HOST, "127.0.0.1");
       assert.equal(fixture.calls[0].options.env.NOOBOT_DESKTOP, "1");
     } finally {
       await fixture.restore();

@@ -39,7 +39,7 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
     schemaVersion: 1,
     app: { platform: "desktop", channel: "win32", packaged: true },
     paths: { backendRoot, pluginRootDir },
-    service: { port: 10061, origin: "http://127.0.0.1:10061" },
+    service: { port: 10061, host: "127.0.0.1", origin: "http://127.0.0.1:10061" },
     runtime: {
       env: {
         PATH: "/managed/bin:/usr/bin",
@@ -79,6 +79,7 @@ test("startup-context-service loads explicit snapshot and preserves explicit plu
   assert.equal(context.paths.backendRoot, path.resolve(backendRoot));
   assert.equal(context.paths.pluginRootDir, path.resolve(pluginRootDir));
   assert.equal(context.service.port, 10061);
+  assert.equal(context.service.host, "127.0.0.1");
   assert.equal(context.runtime.env.NOOBOT_FFMPEG_PATH, "/managed/bin/ffmpeg");
   assert.equal(context.runtime.env.LIBRE_OFFICE_EXE, "/Applications/LibreOffice.app/Contents/MacOS/soffice");
   assert.equal(context.runtime.dependencies.hasFfmpeg, true);

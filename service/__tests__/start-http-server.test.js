@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { createServer } from "node:http";
 import { startHttpServer } from "../bootstrap/start-http-server.js";
 
 async function waitForFile(filePath, { timeoutMs = 1000 } = {}) {
@@ -38,7 +39,7 @@ async function closeServer(server) {
 
 test("startHttpServer writes a startup runtime event when listen succeeds", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-service-startup-"));
-  const server = startHttpServer({
+  const server = await startHttpServer({
     app: (_req, res) => {
       res.statusCode = 404;
       res.end("not-found");
@@ -75,7 +76,7 @@ test("startHttpServer writes a startup runtime event when listen succeeds", asyn
     assert.equal(record.category, "state");
     assert.equal(record.level, "info");
     assert.equal(record.channel, "direct");
-    assert.equal(record.workspaceRoot, workspaceRoot);
+    assert.equal(record.workspaceRoot, undefined);
     assert.equal(record.sessionId, undefined);
     assert.equal(record.data.host, "::");
     assert.equal(typeof record.data.port, "number");
@@ -85,5 +86,27 @@ test("startHttpServer writes a startup runtime event when listen succeeds", asyn
   } finally {
     await closeServer(server);
     await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test("startHttpServer rejects a listen error instead of emitting it unhandled", async () => {
+  const occupied = createServer((_req, res) => res.end());
+  await new Promise((resolve, reject) => {
+    occupied.once("error", reject);
+    occupied.listen(0, "127.0.0.1", resolve);
+  });
+  const address = occupied.address();
+  try {
+    await assert.rejects(
+      () => startHttpServer({
+        app: (_req, res) => res.end(),
+        workspaceRootPath: () => "",
+        host: "127.0.0.1",
+        port: address.port,
+      }),
+      (error) => error?.code === "EADDRINUSE",
+    );
+  } finally {
+    await closeServer(occupied);
   }
 });
