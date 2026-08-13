@@ -14,7 +14,33 @@ export const PATH_CAPABILITIES = Object.freeze({
   DOCUMENT_INPUT: "document.input", MULTIMODAL_INPUT: "multimodal.input", SCRIPT_INPUT: "script.input", NATIVE_INPUT: "native.input",
 });
 
-const DEFAULT_CAPABILITIES = Object.freeze({
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const item of Object.values(value)) deepFreeze(item);
+  return Object.freeze(value);
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergePolicy(base, override) {
+  if (override === undefined) {
+    if (Array.isArray(base)) return [...base];
+    if (!isPlainObject(base)) return base;
+    return Object.fromEntries(Object.entries(base).map(([key, value]) => [key, mergePolicy(value, undefined)]));
+  }
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return Array.isArray(override) ? [...override] : override;
+  }
+  const output = mergePolicy(base, undefined);
+  for (const [key, value] of Object.entries(override)) {
+    output[key] = mergePolicy(base[key], value);
+  }
+  return output;
+}
+
+const DEFAULT_CAPABILITIES = {
   "file.read": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
   "file.write": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
   "file.patch": { acceptedViews: ["workspace", "host"], hostRequiresRole: "super_admin" },
@@ -23,23 +49,54 @@ const DEFAULT_CAPABILITIES = Object.freeze({
   "multimodal.input": { acceptedViews: ["workspace", "attachment", "host"], hostRequiresRole: "super_admin" },
   "script.input": { acceptedViews: ["workspace", "attachment"], hostRequiresRole: "deny" },
   "native.input": { acceptedViews: ["workspace", "attachment", "host"], hostRequiresRole: "super_admin" },
+};
+
+export const BUILTIN_PATH_POLICY = deepFreeze({
+  roles: {
+    regularUser: { workspace: { own: "read_write", others: "deny" }, host: { access: "deny" } },
+    superAdmin: {
+      workspace: { own: "read_write", others: "read_write" },
+      host: {
+        access: "allow",
+        allowedRoots: ["<host-filesystem>"],
+        deniedRoots: ["/proc", "/sys", "/dev"],
+      },
+    },
+  },
+  capabilities: DEFAULT_CAPABILITIES,
+  resolution: {
+    followSymbolicLinks: false,
+    requireRealPathForExistingTargets: true,
+    validateWriteParentRealPath: true,
+    rejectAmbiguousVirtualPaths: true,
+    caseSensitivity: "platform",
+  },
+  display: {
+    fileTools: "logical",
+    scriptTools: "logical",
+    nativeScript: "task-local",
+    attachments: "identity",
+    errors: "logical",
+    audit: "execution",
+  },
 });
-const DEFAULT_ROLES = Object.freeze({
-  regularUser: Object.freeze({ workspace: Object.freeze({ own: "read_write", others: "deny" }), host: Object.freeze({ access: "deny" }) }),
-  superAdmin: Object.freeze({ workspace: Object.freeze({ own: "read_write", others: "read_write" }), host: Object.freeze({ access: "allow", allowedRoots: Object.freeze(["<host-filesystem>"]), deniedRoots: Object.freeze(["/proc", "/sys", "/dev"]) }) }),
-});
-const DEFAULT_RESOLUTION = Object.freeze({ followSymbolicLinks: false, requireRealPathForExistingTargets: true, validateWriteParentRealPath: true, rejectAmbiguousVirtualPaths: true, caseSensitivity: "platform" });
 
 function canonicalRule(value = {}) {
   const acceptedViews = value.acceptedViews || value.accepted_views;
   const hostRequiresRole = value.hostRequiresRole || value.host_requires_role;
-  return { ...value, ...(acceptedViews ? { acceptedViews } : {}), ...(hostRequiresRole ? { hostRequiresRole } : {}) };
+  const canonical = Object.fromEntries(
+    Object.entries(value).filter(([key]) => !["accepted_views", "host_requires_role"].includes(key)),
+  );
+  return { ...canonical, ...(acceptedViews ? { acceptedViews } : {}), ...(hostRequiresRole ? { hostRequiresRole } : {}) };
 }
 
 function canonicalHostRule(value = {}) {
   const allowedRoots = value.allowedRoots || value.allowed_roots;
   const deniedRoots = value.deniedRoots || value.denied_roots;
-  return { ...value, ...(allowedRoots ? { allowedRoots } : {}), ...(deniedRoots ? { deniedRoots } : {}) };
+  const canonical = Object.fromEntries(
+    Object.entries(value).filter(([key]) => !["allowed_roots", "denied_roots"].includes(key)),
+  );
+  return { ...canonical, ...(allowedRoots ? { allowedRoots } : {}), ...(deniedRoots ? { deniedRoots } : {}) };
 }
 
 function canonicalResolution(value = {}) {
@@ -50,7 +107,33 @@ function canonicalResolution(value = {}) {
     rejectAmbiguousVirtualPaths: value.rejectAmbiguousVirtualPaths ?? value.reject_ambiguous_virtual_paths,
     caseSensitivity: value.caseSensitivity || value.case_sensitivity,
   };
-  return { ...value, ...Object.fromEntries(Object.entries(fields).filter(([, item]) => item !== undefined)) };
+  const canonical = Object.fromEntries(
+    Object.entries(value).filter(([key]) => ![
+      "follow_symbolic_links",
+      "require_real_path_for_existing_targets",
+      "validate_write_parent_real_path",
+      "reject_ambiguous_virtual_paths",
+      "case_sensitivity",
+    ].includes(key)),
+  );
+  return { ...canonical, ...Object.fromEntries(Object.entries(fields).filter(([, item]) => item !== undefined)) };
+}
+
+function canonicalDisplay(value = {}) {
+  const fields = {
+    fileTools: value.fileTools ?? value.file_tools,
+    scriptTools: value.scriptTools ?? value.script_tools,
+    nativeScript: value.nativeScript ?? value.native_script,
+  };
+  const canonical = Object.fromEntries(
+    Object.entries(value).filter(([key]) => !["file_tools", "script_tools", "native_script"].includes(key)),
+  );
+  const normalizedFields = Object.fromEntries(
+    Object.entries(fields)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, item === "task_local" ? "task-local" : item]),
+  );
+  return { ...canonical, ...normalizedFields };
 }
 
 export const TOOL_PATH_CONTRACTS = Object.freeze({
@@ -100,39 +183,58 @@ export function resolvePathPolicy(globalConfig = {}) {
   const configuredRoles = configured.roles || {};
   const configuredSuperAdmin = configuredRoles.superAdmin || configuredRoles.super_admin || {};
   const configuredCapabilities = Object.fromEntries(Object.entries(configured.capabilities || {}).map(([key, value]) => [key, canonicalRule(value)]));
-  return Object.freeze({
+  const configuredRegularUser = configuredRoles.regularUser || configuredRoles.regular_user || {};
+  const override = {
+    ...configured,
     roles: {
-      regularUser: { ...DEFAULT_ROLES.regularUser, ...(configuredRoles.regularUser || configuredRoles.regular_user || {}) },
-      superAdmin: { ...DEFAULT_ROLES.superAdmin, ...configuredSuperAdmin, host: { ...DEFAULT_ROLES.superAdmin.host, ...canonicalHostRule(configuredSuperAdmin.host || {}) } },
+      ...configuredRoles,
+      regularUser: configuredRegularUser,
+      superAdmin: {
+        ...configuredSuperAdmin,
+        ...(configuredSuperAdmin.host
+          ? { host: canonicalHostRule(configuredSuperAdmin.host) }
+          : {}),
+      },
     },
-    capabilities: { ...DEFAULT_CAPABILITIES, ...configuredCapabilities },
-    resolution: { ...DEFAULT_RESOLUTION, ...canonicalResolution(configured.resolution || {}) },
-    display: configured.display || {},
-  });
+    capabilities: configuredCapabilities,
+    resolution: canonicalResolution(configured.resolution || {}),
+    display: canonicalDisplay(configured.display || {}),
+  };
+  delete override.roles.regular_user;
+  delete override.roles.super_admin;
+  return deepFreeze(mergePolicy(BUILTIN_PATH_POLICY, override));
 }
 
 export function authorizePathRef({ pathRef, principal = {}, capability = "", pathPolicy = {}, executionPath = "", workspaceRoot = "" } = {}) {
-  const rule = pathPolicy?.capabilities?.[capability] || DEFAULT_CAPABILITIES[capability];
+  const effectivePolicy = isPlainObject(pathPolicy) && Object.keys(pathPolicy).length
+    ? mergePolicy(BUILTIN_PATH_POLICY, pathPolicy)
+    : BUILTIN_PATH_POLICY;
+  const rule = effectivePolicy?.capabilities?.[capability] || BUILTIN_PATH_POLICY.capabilities[capability];
   if (!rule) throw new Error(`unknown path capability: ${capability}`);
   if (!rule.acceptedViews?.includes(pathRef?.view)) return Object.freeze({ allowed: false, code: "path_view_not_accepted", pathRef, capability });
   const isSuperAdmin = principal?.isSuperUser === true || principal?.role === "super_admin";
   if (pathRef.view === "workspace") {
     const owner = String(pathRef.owner || principal?.userId || "").trim();
     const principalId = String(principal?.userId || "").trim();
-    const workspaceRule = isSuperAdmin ? pathPolicy?.roles?.superAdmin?.workspace : pathPolicy?.roles?.regularUser?.workspace;
+    const defaultWorkspaceRule = isSuperAdmin
+      ? BUILTIN_PATH_POLICY.roles.superAdmin.workspace
+      : BUILTIN_PATH_POLICY.roles.regularUser.workspace;
+    const workspaceRule = isSuperAdmin
+      ? effectivePolicy?.roles?.superAdmin?.workspace || defaultWorkspaceRule
+      : effectivePolicy?.roles?.regularUser?.workspace || defaultWorkspaceRule;
     const access = owner && principalId && owner !== principalId ? workspaceRule?.others : workspaceRule?.own;
     if (access === "deny") return Object.freeze({ allowed: false, code: "workspace_owner_not_authorized", pathRef, capability });
   }
   if (pathRef.view === "host") {
     if (rule.hostRequiresRole === "deny" || (rule.hostRequiresRole === "super_admin" && !isSuperAdmin)) return Object.freeze({ allowed: false, code: "host_path_not_authorized", pathRef, capability });
-    const hostRule = pathPolicy?.roles?.superAdmin?.host || {};
+    const hostRule = effectivePolicy?.roles?.superAdmin?.host || BUILTIN_PATH_POLICY.roles.superAdmin.host;
     if (hostRule.access !== "allow") return Object.freeze({ allowed: false, code: "host_path_not_authorized", pathRef, capability });
     const candidate = executionPath || pathRef.path;
     const denied = (hostRule.deniedRoots || []).some((root) => within(root, candidate));
     const allowed = (hostRule.allowedRoots || []).some((root) => root === "<host-filesystem>" || within(root, candidate));
     if (denied || !allowed) return Object.freeze({ allowed: false, code: denied ? "host_path_denied" : "host_path_out_of_scope", pathRef, capability });
   }
-  if (pathRef.view === "workspace" && executionPath && workspaceRoot && !within(workspaceRoot, executionPath) && !isSuperAdmin) return Object.freeze({ allowed: false, code: "workspace_path_out_of_scope", pathRef, capability });
+  if (pathRef.view === "workspace" && executionPath && workspaceRoot && !within(workspaceRoot, executionPath)) return Object.freeze({ allowed: false, code: "workspace_path_out_of_scope", pathRef, capability });
   return Object.freeze({ allowed: true, code: "allowed", pathRef, capability, policy: pathRef.view === "host" ? "super_admin_host_access" : "workspace_access" });
 }
 

@@ -26,6 +26,17 @@ async function createFixture() {
       connect_code: "change-your-connect-code",
     },
     preferences: { language: "zh-CN" },
+    newly_added_config: {
+      nested: {
+        default_value: true,
+        preserved_value: "template",
+      },
+    },
+    security: {
+      path_policy: {
+        resolution: { follow_symbolic_links: false },
+      },
+    },
     providers: {
       openai: { model: "gpt", enabled: true, used_for_conversation: true },
     },
@@ -53,6 +64,34 @@ async function createFixture() {
     restore: () => rm(rootDir, { recursive: true, force: true }),
   };
 }
+
+test("packaged desktop startup incrementally adds any bundled global config fields", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const configDir = path.join(fixture.userDataPath, "config");
+    const globalConfigPath = path.join(configDir, "global.config.json");
+    await mkdir(configDir, { recursive: true });
+    await writeFile(
+      globalConfigPath,
+      JSON.stringify({
+        newly_added_config: { nested: { preserved_value: "client" } },
+      }),
+    );
+
+    manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
+
+    const config = JSON.parse(await readFile(globalConfigPath, "utf8"));
+    assert.equal(config.newly_added_config.nested.default_value, true);
+    assert.equal(config.newly_added_config.nested.preserved_value, "client");
+    assert.equal(config.security.path_policy.resolution.follow_symbolic_links, false);
+  } finally {
+    await fixture.restore();
+  }
+});
 
 test("packaged desktop config restores missing userData template example before saving super admin", async () => {
   const fixture = await createFixture();

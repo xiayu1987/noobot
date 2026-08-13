@@ -108,6 +108,7 @@ export function createDesktopServiceManager({
       },
       service: {
         port: Number(servicePort),
+        host: "127.0.0.1",
         origin: serviceOrigin,
       },
       agentProxy: {
@@ -199,6 +200,7 @@ export function createDesktopServiceManager({
         ...dependencyEnv,
         ELECTRON_RUN_AS_NODE: isPackaged ? "1" : process.env.ELECTRON_RUN_AS_NODE,
         PORT: String(servicePort),
+        NOOBOT_SERVICE_HOST: "127.0.0.1",
         NOOBOT_DESKTOP: "1",
         NOOBOT_USER_DATA_DIR: userDataPath,
         NOOBOT_CONFIG_DIR: configDir,

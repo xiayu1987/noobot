@@ -106,6 +106,7 @@ export function normalizeStartupContext(input = {}, { cwd = process.cwd() } = {}
     },
     service: {
       port: Number(service.port || process.env.PORT || 3000),
+      host: String(service.host || process.env.NOOBOT_SERVICE_HOST || "").trim(),
       origin: String(service.origin || ""),
     },
     runtime: {
