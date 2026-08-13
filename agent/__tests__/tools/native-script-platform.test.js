@@ -11,6 +11,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   buildNativeProcessEnv,
   cleanupNativeTaskDirectory,
+  resolveNativeLibreOfficeExecutable,
   terminateNativeProcessTree,
 } from "../../src/tools/execution/native-script-process.js";
 
@@ -112,6 +113,26 @@ test("native process environment preserves only declared network proxy variables
   assert.equal(environment.HTTPS_PROXY, "http://127.0.0.1:7890");
   assert.equal(environment.NO_PROXY, "127.0.0.1,localhost");
   assert.equal(environment.SECRET, undefined);
+});
+
+test("native LibreOffice executable uses the host-resolved dependency path", () => {
+  assert.equal(
+    resolveNativeLibreOfficeExecutable({
+      platform: "win32",
+      sourceEnv: {
+        LIBRE_OFFICE_EXE: "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+      },
+    }),
+    "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+  );
+  assert.equal(
+    resolveNativeLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }),
+    "soffice.exe",
+  );
+  assert.equal(
+    resolveNativeLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }),
+    "libreoffice",
+  );
 });
 
 test("native process termination waits for the Windows process tree to exit", async () => {

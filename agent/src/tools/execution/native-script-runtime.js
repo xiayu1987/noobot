@@ -291,6 +291,7 @@ export async function createNativeScriptRuntime({
   args,
   timeoutMs,
   browserExecutablePath,
+  libreOfficeExecutable,
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
   const taskRoots = { input: inputRoot, output: outputRoot, temp: tempRoot };
@@ -400,7 +401,8 @@ export async function createNativeScriptRuntime({
       if (!/^[a-z0-9_-]{1,32}$/i.test(format))
         throw new Error("LibreOffice output format is invalid");
       const result = await runCapability(
-        "libreoffice",
+        String(libreOfficeExecutable || "").trim() ||
+          (process.platform === "win32" ? "soffice.exe" : "libreoffice"),
         [
           "--headless",
           "--nologo",

@@ -25,6 +25,23 @@ const NETWORK_PROXY_ENV_KEYS = Object.freeze([
   "all_proxy",
   "no_proxy",
 ]);
+const LIBREOFFICE_EXECUTABLE_ENV_KEYS = Object.freeze([
+  "LIBRE_OFFICE_EXE",
+  "LIBREOFFICE_EXE",
+  "SOFFICE_EXE",
+  "SOFFICE_PATH",
+]);
+
+export function resolveNativeLibreOfficeExecutable({
+  platform = process.platform,
+  sourceEnv = process.env,
+} = {}) {
+  for (const key of LIBREOFFICE_EXECUTABLE_ENV_KEYS) {
+    const value = String(sourceEnv[key] || "").trim();
+    if (value) return value;
+  }
+  return platform === "win32" ? "soffice.exe" : "libreoffice";
+}
 
 export function buildNativeProcessEnv({
   home = "",
