@@ -1,27 +1,52 @@
 # Noobot
 
+**支持工具调用、多模型路由、MCP 与多智能体工作流的自托管 AI Agent 工作空间。**
+
 中文 | [English](./README.md)
 
-![License](https://img.shields.io/badge/license-MIT-green)
+[![Release](https://img.shields.io/github/v/release/xiayu1987/noobot)](https://github.com/xiayu1987/noobot/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/xiayu1987/noobot/total)](https://github.com/xiayu1987/noobot/releases)
+[![Stars](https://img.shields.io/github/stars/xiayu1987/noobot?style=flat)](https://github.com/xiayu1987/noobot/stargazers)
+[![Quality Checks](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-blue)
 
-Noobot 是一个基于 **Node.js + Vue** 的前后端分离智能对话系统。
+[下载最新 Windows 或 macOS 版本](https://github.com/xiayu1987/noobot/releases/latest) · [配置文档](./CONFIGURATION.zh-CN.md) · [参与讨论](https://github.com/xiayu1987/noobot/discussions)
+
+Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI Agent 应用。它在一个自托管部署中提供隔离用户工作区、持久会话、可扩展工具、语义工作流，以及 OpenAI 兼容接口和 DashScope 模型接入。
 
 共创者：Hyler · Epicur · gonglei · Z · Y · C
 
-## 功能特性
+## Noobot 实际运行效果
 
-- 多用户隔离工作区与会话
-- Agent 工具调用与技能扩展
-- SSE 流式输出 + WebSocket 长连接
-- Agent 代理网关（WebSocket 扇出/重放/HTTP 代理）
-- 语义工作流引擎及 Workflow/Harness 插件
-- 共享运行事件、数据清洗、阈值与国际化包
-- Web、启动页、Windows 与 macOS 客户端
-- `start.sh` 一键部署（PM2 + Caddy）
-- 连接器支持（数据库/终端/邮件）
-- MCP 服务集成
-- 多模型提供方管理与情景路由
+全英文虚构股票组合分析演示：Noobot 验证源数据、串联四次文件工具调用、实时展示分析过程，并将结果发布为可复用的报告附件。
+
+![Noobot 使用工具分析虚构股票组合](./docs/assets/noobot-tool-workflow.gif)
+
+<details>
+<summary>查看完成后的分析结果</summary>
+
+![Noobot 完成虚构股票组合分析](./docs/assets/noobot-agent-workspace.png)
+
+</details>
+
+## 为什么选择 Noobot
+
+- **Agent 工作空间：** 多用户工作区和会话隔离，支持持久附件与执行历史。
+- **工具与技能：** 文件操作、原生/沙箱脚本、浏览器自动化、LibreOffice、FFmpeg、多模态解析与生成、服务和可复用技能。
+- **模型互操作：** OpenAI 兼容和 DashScope 接口，按运营商/模型系列路由，支持工具调用、流式响应与多模态能力配置。
+- **多智能体编排：** 任务委派、语义工作流、Workflow 插件，以及 Harness 规划/指导/审查。
+- **MCP 与连接器：** 支持 MCP Server，以及数据库、终端、邮件和自定义服务连接器。
+- **Web 与桌面端：** Vue 3 Web 客户端，以及 Windows 和 macOS Electron 客户端。
+- **自托管运维：** PM2 + Caddy 一键部署，提供运行审计、重放、数据清洗和中英文配置。
+
+## 获取 Noobot
+
+| 方式           | 适用场景         | 入口                                                            |
+| -------------- | ---------------- | --------------------------------------------------------------- |
+| Windows 桌面端 | 本地桌面使用     | [最新版本](https://github.com/xiayu1987/noobot/releases/latest) |
+| macOS 桌面端   | 本地桌面使用     | [最新版本](https://github.com/xiayu1987/noobot/releases/latest) |
+| 自托管 Web     | 服务器部署或开发 | [`./start.sh`](#快速开始)                                       |
 
 ## 项目结构
 
@@ -50,7 +75,7 @@ noobot/
 ├── user-template/            # 用户工作区模板
 ├── workspace/                # 本地运行时用户数据（非源码）
 ├── start.sh                  # 一键启动/部署脚本
-├── close.sh                  # 停止本地 PM2 服务栈
+├── stop-services.sh          # 停止本地 PM2 应用
 └── README.md
 ```
 
@@ -65,6 +90,7 @@ chmod +x start.sh
 ```
 
 说明：
+
 - `start.sh` 会先执行项目启动引导（`scripts/project-launcher.mjs`）。
 - 若 `service/config/global.config.json` 不存在，会进入交互式配置并自动生成配置文件。
 - 在非交互环境可用环境变量初始化（示例）：
@@ -89,8 +115,8 @@ NOOBOT_MODEL_BASE_URL=https://example.com/v1 \
 关闭全部服务：
 
 ```bash
-chmod +x close.sh
-./close.sh
+chmod +x stop-services.sh
+./stop-services.sh
 ```
 
 ## 环境要求
