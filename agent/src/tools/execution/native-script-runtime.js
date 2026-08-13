@@ -16,10 +16,17 @@ import {
   resolveTaskPath,
 } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { buildNativeProcessEnv } from "./native-script-process.js";
 
 function inside(root, candidate) {
   const relative = path.relative(root, candidate);
-  return relative === "" || (relative && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+  return (
+    relative === "" ||
+    (relative &&
+      relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative))
+  );
 }
 
 async function resolveChild(root, relative, label) {
@@ -30,28 +37,34 @@ async function resolveChild(root, relative, label) {
   const candidate = path.resolve(root, value);
   if (candidate === path.resolve(root)) return candidate;
   const parent = await realpath(path.dirname(candidate));
-  if (!inside(root, parent) || !inside(root, candidate)) throw new Error(`${label} is outside the task directory`);
+  if (!inside(root, parent) || !inside(root, candidate))
+    throw new Error(`${label} is outside the task directory`);
   return candidate;
 }
 
 function runFixed(command, args, cwd, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const child = execFile(command, args, {
-      cwd,
-      shell: false,
-      timeout: Number(timeoutMs || 0) || undefined,
-      windowsHide: true,
-      env: { PATH: process.env.PATH || "", HOME: cwd, TMPDIR: path.join(cwd, "tmp"), LANG: "C.UTF-8" },
-      maxBuffer: LENGTH_THRESHOLDS.nativeScript.processOutputBytes,
-    }, (error, stdout, stderr) => {
-      if (error) {
-        error.stdout = stdout;
-        error.stderr = stderr;
-        reject(error);
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
+    const child = execFile(
+      command,
+      args,
+      {
+        cwd,
+        shell: false,
+        timeout: Number(timeoutMs || 0) || undefined,
+        windowsHide: true,
+        env: buildNativeProcessEnv({ home: cwd, temp: path.join(cwd, "tmp") }),
+        maxBuffer: LENGTH_THRESHOLDS.nativeScript.processOutputBytes,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          error.stdout = stdout;
+          error.stderr = stderr;
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      },
+    );
     child.unref?.();
   });
 }
@@ -75,7 +88,9 @@ function redactCapabilityValue(value, roots, seen = new WeakSet()) {
   seen.add(value);
   if (value instanceof Error) return redactCapabilityText(value.message, roots);
   if (Array.isArray(value)) return value.map((item) => redactCapabilityValue(item, roots, seen));
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactCapabilityValue(item, roots, seen)]));
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, redactCapabilityValue(item, roots, seen)]),
+  );
 }
 
 function redactProcessResult(result, roots) {
@@ -90,10 +105,14 @@ function opaqueCallable(implementation) {
 }
 
 function opaqueFacade(values) {
-  return Object.freeze(Object.fromEntries(Object.entries(values).map(([key, value]) => [
-    key,
-    typeof value === "function" ? opaqueCallable(value) : value,
-  ])));
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(values).map(([key, value]) => [
+        key,
+        typeof value === "function" ? opaqueCallable(value) : value,
+      ]),
+    ),
+  );
 }
 
 async function runCapability(command, commandArgs, cwd, timeoutMs, label, roots) {
@@ -145,10 +164,11 @@ function createLocatorFacade(locator, { resolveInput, resolveOutput }) {
       const paths = await Promise.all(values.map(resolveInput));
       return locator.setInputFiles(paths, options);
     },
-    screenshot: async (options = {}) => locator.screenshot({
-      ...options,
-      path: await resolveOutput(options.path),
-    }),
+    screenshot: async (options = {}) =>
+      locator.screenshot({
+        ...options,
+        path: await resolveOutput(options.path),
+      }),
   });
 }
 
@@ -156,12 +176,14 @@ function createPageFacade(page, paths) {
   return opaqueFacade({
     goto: async (url, options) => {
       const response = await page.goto(assertHttpUrl(url), options);
-      return response ? {
-        ok: response.ok(),
-        status: response.status(),
-        statusText: response.statusText(),
-        url: response.url(),
-      } : { ok: true, status: 0, statusText: "", url: page.url() };
+      return response
+        ? {
+            ok: response.ok(),
+            status: response.status(),
+            statusText: response.statusText(),
+            url: response.url(),
+          }
+        : { ok: true, status: 0, statusText: "", url: page.url() };
     },
     reload: (options) => page.reload(options),
     goBack: (options) => page.goBack(options),
@@ -171,16 +193,21 @@ function createPageFacade(page, paths) {
     content: () => page.content(),
     textContent: (selector, options) => page.textContent(String(selector || ""), options),
     click: (selector, options) => page.click(String(selector || ""), options),
-    fill: (selector, value, options) => page.fill(String(selector || ""), String(value ?? ""), options),
-    press: (selector, key, options) => page.press(String(selector || ""), String(key || ""), options),
-    waitForSelector: (selector, options) => page.waitForSelector(String(selector || ""), options).then(() => undefined),
+    fill: (selector, value, options) =>
+      page.fill(String(selector || ""), String(value ?? ""), options),
+    press: (selector, key, options) =>
+      page.press(String(selector || ""), String(key || ""), options),
+    waitForSelector: (selector, options) =>
+      page.waitForSelector(String(selector || ""), options).then(() => undefined),
     waitForLoadState: (state, options) => page.waitForLoadState(state, options),
-    waitForTimeout: (timeout) => page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
+    waitForTimeout: (timeout) =>
+      page.waitForTimeout(Math.min(30000, Math.max(0, Number(timeout || 0)))),
     locator: (selector) => createLocatorFacade(page.locator(String(selector || "")), paths),
-    screenshot: async (options = {}) => page.screenshot({
-      ...options,
-      path: await paths.resolveOutput(options.path),
-    }),
+    screenshot: async (options = {}) =>
+      page.screenshot({
+        ...options,
+        path: await paths.resolveOutput(options.path),
+      }),
   });
 }
 
@@ -188,14 +215,27 @@ function assertFixedArgs(args, label) {
   if (!Array.isArray(args) || args.some((value) => typeof value !== "string")) {
     throw new TypeError(`${label}.args must be an array of strings`);
   }
-  const forbiddenOptions = new Set(["-filter_script", "-filter_complex_script", "-attach", "-dump_attachment", "-protocol_whitelist"]);
+  const forbiddenOptions = new Set([
+    "-filter_script",
+    "-filter_complex_script",
+    "-attach",
+    "-dump_attachment",
+    "-protocol_whitelist",
+  ]);
   for (let index = 0; index < args.length; index += 1) {
     const value = args[index];
     const isPathToken = /^(input|output|temp):\/\//.test(value);
-    if (forbiddenOptions.has(value) || (!isPathToken && /^[a-z][a-z0-9+.-]*:/i.test(value)) || value.split(/[\\/]+/).includes("..")) {
+    if (
+      forbiddenOptions.has(value) ||
+      (!isPathToken && /^[a-z][a-z0-9+.-]*:/i.test(value)) ||
+      value.split(/[\\/]+/).includes("..")
+    ) {
       throw new Error(`${label}.args contains a disallowed path, protocol, or option`);
     }
-    if ((value === "-f" && String(args[index + 1] || "").toLowerCase() === "concat") || String(value).toLowerCase() === "concat") {
+    if (
+      (value === "-f" && String(args[index + 1] || "").toLowerCase() === "concat") ||
+      String(value).toLowerCase() === "concat"
+    ) {
       throw new Error(`${label}.args cannot use the concat demuxer`);
     }
     if (/(?:^|[=:])\/(?:etc|proc|sys|dev|bin|sbin|root|home)(?:\/|$)/i.test(value)) {
@@ -238,13 +278,16 @@ export async function createNativeScriptRuntime({
     if (!info.isFile()) throw new Error("input path must be a file");
     return candidate;
   };
-  const input = async (reference) => createTaskPath({ kind: TASK_PATH_KINDS.INPUT, relative: inputRelative(reference) });
+  const input = async (reference) =>
+    createTaskPath({ kind: TASK_PATH_KINDS.INPUT, relative: inputRelative(reference) });
   const resolveOutput = async (value) => {
     const relative = isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })
       ? parseTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }).relative
       : value;
     if (!String(relative || "")) return outputRoot;
-    await mkdir(path.dirname(path.resolve(outputRoot, String(relative || ""))), { recursive: true });
+    await mkdir(path.dirname(path.resolve(outputRoot, String(relative || ""))), {
+      recursive: true,
+    });
     return resolveChild(outputRoot, relative, "output path");
   };
   const outputFile = async (relative) => {
@@ -268,15 +311,21 @@ export async function createNativeScriptRuntime({
     if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT })) {
       target = await resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
     } else if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) {
-      target = resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.OUTPUT }).path;
+      target = resolveTaskPath({
+        token: value,
+        roots: taskRoots,
+        kind: TASK_PATH_KINDS.OUTPUT,
+      }).path;
     } else if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP })) {
       target = resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP }).path;
     } else {
       throw new Error("files.readText requires an input://, output://, or temp:// task path");
     }
     const linkInfo = await lstat(target);
-    if (linkInfo.isSymbolicLink() || !linkInfo.isFile()) throw new Error("files.readText requires a regular non-symbolic file");
-    if (linkInfo.size > LENGTH_THRESHOLDS.nativeScript.textReadBytes) throw new Error("files.readText file exceeds 8 MB");
+    if (linkInfo.isSymbolicLink() || !linkInfo.isFile())
+      throw new Error("files.readText requires a regular non-symbolic file");
+    if (linkInfo.size > LENGTH_THRESHOLDS.nativeScript.textReadBytes)
+      throw new Error("files.readText file exceeds 8 MB");
     return target;
   };
   const readText = async (reference) => readFile(await resolveReadable(reference), "utf8");
@@ -291,44 +340,92 @@ export async function createNativeScriptRuntime({
     await writeFile(target, redactCapabilityText(content, pathRoots), "utf8");
     return parseTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT }).token;
   };
-  const writeJson = (reference, value) => writeText(reference, `${JSON.stringify(redactCapabilityValue(value, pathRoots), null, 2)}\n`);
+  const writeJson = (reference, value) =>
+    writeText(reference, `${JSON.stringify(redactCapabilityValue(value, pathRoots), null, 2)}\n`);
   const libreoffice = opaqueFacade({
     convert: async ({ input: inputPath, outputDirectory = ".", outputFormat = "pdf" } = {}) => {
       const source = await resolveInput(inputPath);
       const targetDir = await resolveOutput(outputDirectory);
       await mkdir(targetDir, { recursive: true });
       const format = String(outputFormat || "").trim();
-      if (!/^[a-z0-9_-]{1,32}$/i.test(format)) throw new Error("LibreOffice output format is invalid");
-      const result = await runCapability("libreoffice", ["--headless", "--nologo", "--nodefault", "--nolockcheck", "--norestore", "--invisible", `-env:UserInstallation=file://${tempRoot}/libreoffice-profile`, "--convert-to", format, "--outdir", targetDir, source], tempRoot, timeoutMs, "LibreOffice", pathRoots);
-      if (/error|no export filter|failed/i.test(String(result.stderr || ""))) throw new Error("LibreOffice conversion reported an error");
+      if (!/^[a-z0-9_-]{1,32}$/i.test(format))
+        throw new Error("LibreOffice output format is invalid");
+      const result = await runCapability(
+        "libreoffice",
+        [
+          "--headless",
+          "--nologo",
+          "--nodefault",
+          "--nolockcheck",
+          "--norestore",
+          "--invisible",
+          `-env:UserInstallation=file://${tempRoot}/libreoffice-profile`,
+          "--convert-to",
+          format,
+          "--outdir",
+          targetDir,
+          source,
+        ],
+        tempRoot,
+        timeoutMs,
+        "LibreOffice",
+        pathRoots,
+      );
+      if (/error|no export filter|failed/i.test(String(result.stderr || "")))
+        throw new Error("LibreOffice conversion reported an error");
       const sourceBase = path.basename(source, path.extname(source));
       const expected = path.join(targetDir, `${sourceBase}.${format}`);
       const outputStat = await stat(expected).catch(() => null);
-      if (!outputStat?.isFile() || outputStat.size <= 0) throw new Error("LibreOffice conversion produced no non-empty output");
-      return { ...redactProcessResult(result, pathRoots), output: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: path.relative(outputRoot, expected) }), outputBytes: outputStat.size };
+      if (!outputStat?.isFile() || outputStat.size <= 0)
+        throw new Error("LibreOffice conversion produced no non-empty output");
+      return {
+        ...redactProcessResult(result, pathRoots),
+        output: createTaskPath({
+          kind: TASK_PATH_KINDS.OUTPUT,
+          relative: path.relative(outputRoot, expected),
+        }),
+        outputBytes: outputStat.size,
+      };
     },
   });
   const ffmpeg = opaqueFacade({
     run: async ({ args: commandArgs = [] } = {}) => {
       assertFixedArgs(commandArgs, "ffmpeg");
-      const resolvedArgs = await Promise.all(commandArgs.map(async (value) => {
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT })) return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP })) return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP }).path;
-        return value;
-      }));
-      return runCapability("ffmpeg", ["-nostdin", "-y", ...resolvedArgs], tempRoot, timeoutMs, "FFmpeg", pathRoots);
+      const resolvedArgs = await Promise.all(
+        commandArgs.map(async (value) => {
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }))
+            return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP }))
+            return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP })
+              .path;
+          return value;
+        }),
+      );
+      return runCapability(
+        "ffmpeg",
+        ["-nostdin", "-y", ...resolvedArgs],
+        tempRoot,
+        timeoutMs,
+        "FFmpeg",
+        pathRoots,
+      );
     },
   });
   const ffprobe = opaqueFacade({
     run: async ({ args: commandArgs = [] } = {}) => {
       assertFixedArgs(commandArgs, "ffprobe");
-      const resolvedArgs = await Promise.all(commandArgs.map(async (value) => {
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT })) return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
-        if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP })) return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP }).path;
-        return value;
-      }));
+      const resolvedArgs = await Promise.all(
+        commandArgs.map(async (value) => {
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }))
+            return resolveInput(parseTaskPath(value, { kind: TASK_PATH_KINDS.INPUT }).relative);
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) return resolveOutput(value);
+          if (isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP }))
+            return resolveTaskPath({ token: value, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP })
+              .path;
+          return value;
+        }),
+      );
       return runCapability("ffprobe", resolvedArgs, tempRoot, timeoutMs, "FFprobe", pathRoots);
     },
   });
@@ -345,17 +442,32 @@ export async function createNativeScriptRuntime({
     return instance;
   };
   const capabilities = Object.freeze({
-    args: Object.freeze(redactCapabilityValue(args && typeof args === "object" ? args : {}, pathRoots)),
+    args: Object.freeze(
+      redactCapabilityValue(args && typeof args === "object" ? args : {}, pathRoots),
+    ),
     files: opaqueFacade({ input, readText, readJson, writeText, writeJson }),
-    output: opaqueFacade({ file: outputFile, tempFile, directory: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }) }),
+    output: opaqueFacade({
+      file: outputFile,
+      tempFile,
+      directory: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }),
+    }),
     libreoffice,
     ffmpeg,
     ffprobe,
     browser: opaqueFacade({
       newPage: async (contextOptions = {}) => {
         const source = contextOptions && typeof contextOptions === "object" ? contextOptions : {};
-        const allowed = ["viewport", "locale", "colorScheme", "timezoneId", "userAgent", "ignoreHTTPSErrors"];
-        const safeOptions = Object.fromEntries(allowed.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]));
+        const allowed = [
+          "viewport",
+          "locale",
+          "colorScheme",
+          "timezoneId",
+          "userAgent",
+          "ignoreHTTPSErrors",
+        ];
+        const safeOptions = Object.fromEntries(
+          allowed.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]),
+        );
         const context = await (await getBrowser()).newContext(safeOptions);
         await context.route("**/*", async (route) => {
           if (isAllowedBrowserResource(route.request().url())) await route.continue();
@@ -365,7 +477,12 @@ export async function createNativeScriptRuntime({
         return createPageFacade(await context.newPage(), { resolveInput, resolveOutput });
       },
     }),
-    log: opaqueCallable((...values) => console.log("[native-script]", ...values.map((value) => redactCapabilityValue(value, pathRoots)))),
+    log: opaqueCallable((...values) =>
+      console.log(
+        "[native-script]",
+        ...values.map((value) => redactCapabilityValue(value, pathRoots)),
+      ),
+    ),
   });
   return Object.freeze({
     capabilities,

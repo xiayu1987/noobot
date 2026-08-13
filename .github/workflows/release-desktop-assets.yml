@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify Windows native script runtime contract
+        run: node --test agent/__tests__/tools/native-script-platform.test.js
+
       - name: Build Windows package
         run: npm run build:windows
 
@@ -72,6 +75,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Verify macOS native script runtime contract
+        run: node --test agent/__tests__/tools/native-script-platform.test.js
 
       - name: Build macOS package
         run: npm run build:mac
