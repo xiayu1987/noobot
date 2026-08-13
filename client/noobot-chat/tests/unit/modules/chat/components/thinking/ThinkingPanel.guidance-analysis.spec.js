@@ -29,10 +29,10 @@ describe("ThinkingPanel canonical analysis timeline", () => {
         activity("model-1", 3, "main_model_content", "canonical model analysis"),
       ],
     }, { runtime: { running: true, terminal: false } });
-    expect(wrapper.text()).toContain("分析流程");
+    expect(wrapper.text()).toContain("Analysis Flow");
     expect(wrapper.text()).toContain("latest guidance");
     expect(wrapper.text()).not.toContain("old guidance");
-    expect(wrapper.text()).toContain("模型分析");
+    expect(wrapper.text()).toContain("Model Analysis");
     expect(wrapper.text()).toContain("canonical model analysis");
   });
 
@@ -84,7 +84,7 @@ describe("ThinkingPanel canonical analysis timeline", () => {
       role: "assistant", pending: true,
       activityTimeline: [activity("plugin-1", 1, "plugin_capability_response", "must stay hidden", { purpose: "guidance", pluginFlow: "analysis", chain: "auxiliary" })],
     });
-    expect(wrapper.text()).not.toContain("分析流程");
+    expect(wrapper.text()).not.toContain("Analysis Flow");
     expect(wrapper.findAll(".execution-log-line").map((line) => line.text())).toContain("must stay hidden");
   });
 });

@@ -1,27 +1,52 @@
 # Noobot
 
+**Self-hosted AI agent workspace for tool calling, multi-model routing, MCP, and multi-agent workflows.**
+
 [中文](./README.zh-CN.md) | English
 
-![License](https://img.shields.io/badge/license-MIT-green)
+[![Release](https://img.shields.io/github/v/release/xiayu1987/noobot)](https://github.com/xiayu1987/noobot/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/xiayu1987/noobot/total)](https://github.com/xiayu1987/noobot/releases)
+[![Stars](https://img.shields.io/github/stars/xiayu1987/noobot?style=flat)](https://github.com/xiayu1987/noobot/stargazers)
+[![Quality Checks](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml/badge.svg)](https://github.com/xiayu1987/noobot/actions/workflows/quality-checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-blue)
 
-Noobot is a full-stack AI chat system built with **Node.js + Vue**.
+[Download the latest Windows or macOS release](https://github.com/xiayu1987/noobot/releases/latest) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
+
+Noobot is an open-source Web and desktop AI agent application built with Node.js, Vue 3, and Electron. It provides isolated user workspaces, durable sessions, extensible tools, semantic workflows, and OpenAI-compatible or DashScope model access from one self-hosted deployment.
 
 Co-creators: Hyler · Epicur · gonglei · Z · Y · C
 
-## Features
+## See Noobot in Action
 
-- Multi-user isolated workspace/session
-- Agent tools + skill extension
-- SSE streaming output + WebSocket long connection
-- Agent proxy gateway for resilient WebSocket fanout/replay
-- Semantic workflow engine and workflow/harness plugins
-- Shared runtime-event logging, sanitization, thresholds, and i18n packages
-- Web, startup, Windows, and macOS clients
-- One-command deployment via `start.sh` (PM2 + Caddy)
-- Connector support (database/terminal/email)
-- MCP server integration
-- Multi-model provider management with scenario-based routing
+An English demo of a fictional portfolio analysis: Noobot verifies source data, chains four file tools, surfaces the live analysis flow, and publishes reusable report attachments.
+
+![Noobot tool workflow analyzing a fictional stock portfolio](./docs/assets/noobot-tool-workflow.gif)
+
+<details>
+<summary>View the completed analysis</summary>
+
+![Noobot completed fictional portfolio analysis](./docs/assets/noobot-agent-workspace.png)
+
+</details>
+
+## Why Noobot
+
+- **Agent workspace:** multi-user workspace and session isolation with persistent attachments and execution history.
+- **Tools and skills:** file operations, native/script execution, browser automation, LibreOffice, FFmpeg, multimodal parsing/generation, services, and reusable skills.
+- **Model interoperability:** OpenAI-compatible and DashScope interfaces, provider/model-family routing, tool calling, streaming, and multimodal capability configuration.
+- **Multi-agent orchestration:** task delegation, semantic workflows, workflow plugins, and harness-based planning/guidance/review.
+- **MCP and connectors:** MCP servers plus database, terminal, email, and custom service connectors.
+- **Web and desktop:** Vue 3 Web client and packaged Electron clients for Windows and macOS.
+- **Self-hosted operations:** one-command PM2 + Caddy deployment, runtime audit events, replay, sanitization, and bilingual UI/configuration.
+
+## Get Noobot
+
+| Option          | Best for                         | Start here                                                            |
+| --------------- | -------------------------------- | --------------------------------------------------------------------- |
+| Windows desktop | Local desktop use                | [Latest release](https://github.com/xiayu1987/noobot/releases/latest) |
+| macOS desktop   | Local desktop use                | [Latest release](https://github.com/xiayu1987/noobot/releases/latest) |
+| Self-hosted Web | Server or development deployment | [`./start.sh`](#quick-start)                                          |
 
 ## Project Structure
 
@@ -50,7 +75,7 @@ noobot/
 ├── user-template/            # User workspace template
 ├── workspace/                # Local runtime user data (not source code)
 ├── start.sh                  # one-command startup/deploy script
-├── close.sh                  # stop the local PM2 stack
+├── stop-services.sh          # stop the local PM2 applications
 └── README.md
 ```
 
@@ -65,6 +90,7 @@ chmod +x start.sh
 ```
 
 Notes:
+
 - `start.sh` runs the project launcher first (`scripts/project-launcher.mjs`).
 - If `service/config/global.config.json` does not exist, an interactive setup wizard will create it.
 - For non-interactive environments, initialize with env vars (example):
@@ -89,8 +115,8 @@ Default endpoints:
 Stop all services:
 
 ```bash
-chmod +x close.sh
-./close.sh
+chmod +x stop-services.sh
+./stop-services.sh
 ```
 
 ## Requirements
