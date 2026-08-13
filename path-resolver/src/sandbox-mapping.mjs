@@ -6,14 +6,18 @@
 import { normalizeSlashPath } from "./platform.mjs";
 
 export function normalizeSandboxProvider(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   if (["firejail", "fj"].includes(value)) return "firejail";
   if (["bubblewrap", "bwrap"].includes(value)) return "bubblewrap";
   return "docker";
 }
 
 export function normalizeDockerContainerScope(input = "") {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   return ["user", "per_user", "per-user"].includes(value) ? "user" : "global";
 }
 
@@ -36,20 +40,14 @@ export function resolveRuntimeUserId({ runtime = {}, agentContext = null, userId
 }
 
 export function resolveExecuteScriptConfig(runtime = {}) {
-  const globalCfg =
+  const scriptConfig =
     runtime?.globalConfig?.tools?.execute_script &&
     typeof runtime.globalConfig.tools.execute_script === "object"
       ? runtime.globalConfig.tools.execute_script
       : {};
-  const userCfg =
-    runtime?.userConfig?.tools?.execute_script &&
-    typeof runtime.userConfig.tools.execute_script === "object"
-      ? runtime.userConfig.tools.execute_script
-      : {};
-  return {
-    ...globalCfg,
-    ...userCfg,
-  };
+  return scriptConfig?.execution && typeof scriptConfig.execution === "object"
+    ? scriptConfig.execution
+    : {};
 }
 
 function normalizeContainerTarget(target = "") {
@@ -61,18 +59,14 @@ function normalizeContainerTarget(target = "") {
 function resolveExecuteScriptMountMappings(runtime = {}) {
   const scriptConfig = resolveExecuteScriptConfig(runtime);
   const sandboxProviderCfg =
-    ((scriptConfig?.sandboxProvider &&
-      typeof scriptConfig.sandboxProvider === "object"
+    (scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
       ? scriptConfig.sandboxProvider
       : null) ||
-      (scriptConfig?.sandbox_provider &&
-      typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : null) ||
-      {});
-  const provider = normalizeSandboxProvider(
-    sandboxProviderCfg?.default || "docker",
-  );
+    (scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
+      ? scriptConfig.sandbox_provider
+      : null) ||
+    {};
+  const provider = normalizeSandboxProvider(sandboxProviderCfg?.default || "docker");
   const providerDetail =
     sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
       ? sandboxProviderCfg[provider]
@@ -85,9 +79,7 @@ function resolveExecuteScriptMountMappings(runtime = {}) {
   const normalizedMounts = dockerMounts
     .map((item) => (item && typeof item === "object" ? item : {}))
     .map((item) => ({
-      source: normalizeSlashPath(
-        item?.source || item?.mountSource || item?.mount_source || "",
-      ),
+      source: normalizeSlashPath(item?.source || item?.mountSource || item?.mount_source || ""),
       target: normalizeContainerTarget(
         item?.target || item?.mountTarget || item?.mount_target || "",
       ),
@@ -96,14 +88,10 @@ function resolveExecuteScriptMountMappings(runtime = {}) {
   if (normalizedMounts.length) return normalizedMounts;
 
   const legacySource = normalizeSlashPath(
-    providerDetail?.dockerProjectMountSource ||
-      providerDetail?.docker_project_mount_source ||
-      "",
+    providerDetail?.dockerProjectMountSource || providerDetail?.docker_project_mount_source || "",
   );
   const legacyTarget = normalizeContainerTarget(
-    providerDetail?.dockerProjectMountTarget ||
-      providerDetail?.docker_project_mount_target ||
-      "",
+    providerDetail?.dockerProjectMountTarget || providerDetail?.docker_project_mount_target || "",
   );
   if (legacySource && legacyTarget) {
     return [{ source: legacySource, target: legacyTarget }];
@@ -113,22 +101,21 @@ function resolveExecuteScriptMountMappings(runtime = {}) {
 
 export function resolveSandboxUserRoot(runtime = {}) {
   const scriptConfig = resolveExecuteScriptConfig(runtime);
-  const sandboxMode =
-    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
-  if (!sandboxMode) return "";
+  if (
+    String(scriptConfig?.view || "host")
+      .trim()
+      .toLowerCase() !== "sandbox"
+  )
+    return "";
   const sandboxProviderCfg =
-    ((scriptConfig?.sandboxProvider &&
-      typeof scriptConfig.sandboxProvider === "object"
+    (scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
       ? scriptConfig.sandboxProvider
       : null) ||
-      (scriptConfig?.sandbox_provider &&
-      typeof scriptConfig.sandbox_provider === "object"
-        ? scriptConfig.sandbox_provider
-        : null) ||
-      {});
-  const provider = normalizeSandboxProvider(
-    sandboxProviderCfg?.default || "docker",
-  );
+    (scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
+      ? scriptConfig.sandbox_provider
+      : null) ||
+    {};
+  const provider = normalizeSandboxProvider(sandboxProviderCfg?.default || "docker");
   if (provider === "firejail") return "$HOME";
   if (provider === "bubblewrap") return "/workspace";
   const providerDetail =
@@ -136,9 +123,7 @@ export function resolveSandboxUserRoot(runtime = {}) {
       ? sandboxProviderCfg[provider]
       : {};
   const scope = String(
-    providerDetail?.dockerContainerScope ||
-      providerDetail?.docker_container_scope ||
-      "global",
+    providerDetail?.dockerContainerScope || providerDetail?.docker_container_scope || "global",
   )
     .trim()
     .toLowerCase();
@@ -152,7 +137,9 @@ function mapPathByMappings(filePath = "", mappings = []) {
   if (!normalizedFilePath || !Array.isArray(mappings) || !mappings.length) return "";
   for (const mapping of mappings) {
     const source = normalizeSlashPath(mapping?.source || mapping?.hostPath || mapping?.host || "");
-    const target = normalizeSlashPath(mapping?.target || mapping?.sandboxPath || mapping?.sandbox || "");
+    const target = normalizeSlashPath(
+      mapping?.target || mapping?.sandboxPath || mapping?.sandbox || "",
+    );
     if (!source || !target) continue;
     if (normalizedFilePath === source) return target;
     if (normalizedFilePath.startsWith(`${source}/`)) {
@@ -187,12 +174,11 @@ export function resolveSandboxPathMappings(runtime = {}) {
   const globalMappings = runtime?.globalConfig?.tools?.sandboxPathMappings;
   const mappings = Array.isArray(systemRuntimeMappings)
     ? systemRuntimeMappings
-    : (Array.isArray(userMappings) ? userMappings : globalMappings);
+    : Array.isArray(userMappings)
+      ? userMappings
+      : globalMappings;
   const configuredMappings = Array.isArray(mappings) ? mappings : [];
-  return [
-    ...configuredMappings,
-    ...resolveExecuteScriptMountMappings(runtime),
-  ]
+  return [...configuredMappings, ...resolveExecuteScriptMountMappings(runtime)]
     .map((item) => (item && typeof item === "object" ? item : {}))
     .map((item) => ({
       source: normalizeSlashPath(item?.source || item?.hostPath || item?.host || ""),
@@ -211,7 +197,9 @@ export function resolveSandboxPath({
 } = {}) {
   const scriptConfig = resolveExecuteScriptConfig(runtime);
   const sandboxMode =
-    scriptConfig?.sandboxMode === true || scriptConfig?.sandbox_mode === true;
+    String(scriptConfig?.view || "host")
+      .trim()
+      .toLowerCase() === "sandbox";
   const sandboxRoot = String(
     runtime?.systemRuntime?.staticInfo?.sandboxRoot ||
       runtime?.systemRuntime?.staticInfo?.sandbox?.sandboxRoot ||
@@ -225,9 +213,7 @@ export function resolveSandboxPath({
   if (!normalizedHostPath && !String(relativePath || "").trim()) return "";
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = String(
-    runtime?.basePath || "",
-  ).trim();
+  const hostBasePath = String(runtime?.basePath || "").trim();
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   if (sandboxUserRoot && normalizedHostBasePath && normalizedHostPath) {
     if (normalizedHostPath === normalizedHostBasePath) return sandboxUserRoot;
@@ -236,10 +222,7 @@ export function resolveSandboxPath({
     }
   }
 
-  const mappedByConfig = mapPathByMappings(
-    normalizedHostPath,
-    resolveSandboxPathMappings(runtime),
-  );
+  const mappedByConfig = mapPathByMappings(normalizedHostPath, resolveSandboxPathMappings(runtime));
   if (mappedByConfig) return String(mappedByConfig || "").trim();
 
   const normalizedSandboxRoot = normalizeSlashPath(sandboxRoot);
@@ -273,9 +256,7 @@ export function resolveHostPath({
   if (mappedByConfig) return String(mappedByConfig || "").trim();
 
   const sandboxUserRoot = resolveSandboxUserRoot(runtime);
-  const hostBasePath = String(
-    runtime?.basePath || "",
-  ).trim();
+  const hostBasePath = String(runtime?.basePath || "").trim();
   const normalizedHostBasePath = normalizeSlashPath(hostBasePath);
   const normalizedSandboxUserRoot = normalizeSlashPath(sandboxUserRoot);
   if (normalizedSandboxUserRoot && normalizedHostBasePath) {

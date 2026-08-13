@@ -1,0 +1,430 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { createMultimodalParseTool } from "../../src/tools/ai-models/multimodal-parse-tool.js";
+import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+
+const TRANSFER_IDENTITY = Object.freeze({
+  transferId: "transfer:test:multimodal-parse:output",
+  messageId: "message:test-multimodal-parse",
+  sessionId: "session-1",
+  turnScopeId: "turn:test-multimodal-parse",
+  runId: "run:test-multimodal-parse",
+  producer: { type: "tool", id: "call:test-multimodal-parse" },
+});
+
+test("multimodal_parse parses multiple files and backwrites every user source attachment", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-"));
+  const relativePath = path.join("runtime", "attach", "scoped", "session-1", "user", "scan.png");
+  const inputPath = path.join(basePath, relativePath);
+  const secondRelativePath = path.join(
+    "runtime",
+    "attach",
+    "scoped",
+    "session-1",
+    "user",
+    "invoice.pdf",
+  );
+  const secondInputPath = path.join(basePath, secondRelativePath);
+  await fs.mkdir(path.dirname(inputPath), { recursive: true });
+  await fs.writeFile(inputPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  await fs.writeFile(secondInputPath, Buffer.from([0x25, 0x50, 0x44, 0x46]));
+
+  let modelRequest = null;
+  let ingestRequest = null;
+  const linkRequests = [];
+  const runtime = {
+    basePath,
+    userId: "admin",
+    runtimeModel: "parse-model",
+    globalConfig: {
+      providers: {
+        "parse-model": {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "test-key",
+          model: "gpt-5.4",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: true, input_modalities: ["image", "document"] },
+        },
+      },
+    },
+    userConfig: {},
+    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    userMessageAttachments: [
+      {
+        attachmentId: "source-1",
+        sessionId: "session-1",
+        attachmentSource: "user",
+        name: "scan.png",
+        mimeType: "image/png",
+        path: inputPath,
+        relativePath,
+      },
+      {
+        attachmentId: "source-2",
+        sessionId: "session-1",
+        attachmentSource: "user",
+        name: "invoice.pdf",
+        mimeType: "application/pdf",
+        path: secondInputPath,
+        relativePath: secondRelativePath,
+      },
+    ],
+    modelPort: {
+      async invoke(request) {
+        modelRequest = request;
+        return { result: { rawText: "# Parsed\n\ninvoice data", output: [] } };
+      },
+    },
+    attachmentService: {
+      async getAttachmentById(request) {
+        return runtime.userMessageAttachments.find(
+          (attachment) =>
+            attachment.attachmentId === request.attachmentId &&
+            attachment.sessionId === request.sessionId &&
+            attachment.attachmentSource === request.attachmentSource,
+        );
+      },
+      async ingestGeneratedArtifacts(request) {
+        ingestRequest = request;
+        const artifact = request.artifacts[0];
+        return [
+          {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: artifact.name,
+            mimeType: artifact.mimeType,
+            size: Buffer.from(artifact.contentBase64, "base64").length,
+            path: path.join(basePath, artifact.name),
+            relativePath: artifact.name,
+            generationSource: request.generationSource,
+          },
+        ];
+      },
+      async linkParsedResultToAttachment(request) {
+        linkRequests.push(request);
+        const source = runtime.userMessageAttachments.find(
+          (attachment) => attachment.attachmentId === request.sourceAttachmentId,
+        );
+        return {
+          ...source,
+          parsedResult: {
+            attachmentId: request.parsedAttachmentMeta.attachmentId,
+            tool: request.toolName,
+          },
+        };
+      },
+    },
+  };
+  const agentContext = createTestAgentExecutionScope(runtime);
+  const [tool] = createMultimodalParseTool({ agentContext });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [
+          {
+            source: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "user" },
+          },
+          {
+            source: { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
+          },
+        ],
+        prompt: "Extract the invoice",
+      },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
+
+  assert.equal(modelRequest.operation.kind, "multimodal_parse");
+  assert.equal(modelRequest.operation.input.prompt, "Extract the invoice");
+  assert.equal(modelRequest.operation.input.attachments.length, 2);
+  assert.equal(modelRequest.operation.input.attachments[0].mimeType, "image/png");
+  assert.match(modelRequest.operation.input.attachments[0].data, /^data:image\/png;base64,/);
+  assert.equal(modelRequest.operation.input.attachments[1].mimeType, "application/pdf");
+  assert.equal(modelRequest.invocation.contextSequencePolicy, "independent_request");
+  assert.equal(ingestRequest.generationSource, "multimodal_parse_tool");
+  assert.equal(ingestRequest.artifacts[0].name, "scan.multimodal-parse.multimodal_model.md");
+  assert.deepEqual(
+    linkRequests.map((request) => request.sourceAttachmentId),
+    ["source-1", "source-2"],
+  );
+  assert.ok(linkRequests.every((request) => request.toolName === "multimodal_parse"));
+  assert.equal(runtime.userMessageAttachments[0].parsedResult.attachmentId, "parsed-1");
+  assert.equal(runtime.userMessageAttachments[1].parsedResult.attachmentId, "parsed-1");
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.source_attachment_backwritten_count, 2);
+  assert.equal(result.summary.input_file_count, 2);
+  assert.deepEqual(result.summary.input_modalities, ["image", "document"]);
+  assert.deepEqual(result.summary.parsed_from_attachment_ids, ["source-1", "source-2"]);
+  assert.equal(result.summary.saved_attachment_count, 1);
+});
+
+test("multimodal_parse parses a workspace file without source-attachment backwrite", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-source-"));
+  const inputPath = path.join(basePath, "ordinary.pdf");
+  await fs.writeFile(inputPath, "not an attachment", "utf8");
+  let modelCalled = false;
+  let linkCalled = false;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    runtimeModel: "parse-model",
+    globalConfig: {
+      providers: {
+        "parse-model": {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "test-key",
+          model: "gpt-5.4",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+        },
+      },
+    },
+    userConfig: {},
+    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke() {
+        modelCalled = true;
+        return { result: { rawText: "parsed ordinary file", output: [] } };
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return [
+          {
+            attachmentId: "parsed-ordinary",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 20,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
+      },
+      async linkParsedResultToAttachment() {
+        linkCalled = true;
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "ordinary.pdf" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
+
+  assert.equal(modelCalled, true);
+  assert.equal(linkCalled, false);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.summary.parsed_from_attachment_ids, []);
+  assert.equal(result.summary.source_attachment_backwritten_count, 0);
+});
+
+test("multimodal_parse passes audio and video files to the configured model", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-media-"));
+  await fs.writeFile(path.join(basePath, "recording.wav"), Buffer.from([0x52, 0x49, 0x46, 0x46]));
+  await fs.writeFile(path.join(basePath, "clip.mp4"), Buffer.from([0x00, 0x00, 0x00, 0x18]));
+  let modelRequest = null;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    runtimeModel: "parse-model",
+    globalConfig: {
+      providers: {
+        "parse-model": {
+          enabled: true,
+          model: "qwen3.5-omni-plus",
+          format: "dashscope",
+          multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },
+        },
+      },
+    },
+    userConfig: {},
+    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke(request) {
+        modelRequest = request;
+        return { result: { rawText: "parsed media", output: [] } };
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return [
+          {
+            attachmentId: "parsed-media",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 12,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "recording.wav" }, { source: "clip.mp4" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
+
+  assert.deepEqual(
+    modelRequest.operation.input.attachments.map(({ mimeType, fileName }) => ({
+      mimeType,
+      fileName,
+    })),
+    [
+      { mimeType: "audio/wav", fileName: "recording.wav" },
+      { mimeType: "video/mp4", fileName: "clip.mp4" },
+    ],
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.input_file_count, 2);
+});
+
+test("multimodal_parse rejects combined files at the official 50 MB request limit", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-limit-"));
+  const firstPath = path.join(basePath, "first.pdf");
+  const secondPath = path.join(basePath, "second.pdf");
+  const firstHandle = await fs.open(firstPath, "w");
+  const secondHandle = await fs.open(secondPath, "w");
+  await firstHandle.truncate(25 * 1000 * 1000);
+  await secondHandle.truncate(25 * 1000 * 1000);
+  await firstHandle.close();
+  await secondHandle.close();
+  let modelCalled = false;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke() {
+        modelCalled = true;
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  await assert.rejects(
+    () => tool.invoke({ inputs: [{ source: "first.pdf" }, { source: "second.pdf" }] }),
+    /50 MB/,
+  );
+  assert.equal(modelCalled, false);
+});
+
+test("multimodal_parse rejects an explicitly selected model without parsing capability", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-model-"));
+  await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    runtimeModel: "parse-model",
+    globalConfig: {
+      providers: {
+        "parse-model": {
+          enabled: true,
+          model: "gpt-5.4",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+        },
+        "text-only": {
+          enabled: true,
+          model: "text-only",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: false },
+        },
+      },
+    },
+    userConfig: {},
+    userMessageAttachments: [],
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  await assert.rejects(
+    () => tool.invoke({ inputs: [{ source: "input.pdf" }], model_name: "text-only" }),
+    /多模态解析|multimodal parsing/,
+  );
+});
+
+test("multimodal_parse selects an enabled parsing model when the runtime model cannot parse", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-fallback-"));
+  await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
+  let invokedModel = null;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    runtimeModel: "conversation-model",
+    globalConfig: {
+      providers: {
+        "conversation-model": {
+          enabled: true,
+          model: "text-only",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: false },
+        },
+        "parse-model": {
+          enabled: true,
+          model: "gpt-5.4",
+          format: "openai_compatible",
+          multimodal_parsing: { enabled: true, input_modalities: ["document"] },
+        },
+      },
+    },
+    userConfig: {},
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke(request) {
+        invokedModel = request.model;
+        return { result: { rawText: "parsed", output: [] } };
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return [
+          {
+            attachmentId: "parsed-fallback",
+            sessionId: "session-1",
+            attachmentSource: "model",
+            name: request.artifacts[0].name,
+            mimeType: request.artifacts[0].mimeType,
+            size: 6,
+            path: path.join(basePath, request.artifacts[0].name),
+            relativePath: request.artifacts[0].name,
+          },
+        ];
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  const result = JSON.parse(
+    await tool.invoke(
+      { inputs: [{ source: "input.pdf" }] },
+      { configurable: { transferIdentity: TRANSFER_IDENTITY } },
+    ),
+  );
+
+  assert.equal(invokedModel.alias, "parse-model");
+  assert.equal(invokedModel.model, "gpt-5.4");
+  assert.equal(result.model.alias, "parse-model");
+});

@@ -97,16 +97,6 @@ export const MCP_SERVER_TYPE_ALIASES = {
   ],
 };
 
-export const SKILL_ACTION = {
-  START: "start",
-  COMPLETED: "completed",
-};
-
-export const SKILL_ACTION_ALIASES = {
-  [SKILL_ACTION.START]: [SKILL_ACTION.START, "begin", "running", "in_progress"],
-  [SKILL_ACTION.COMPLETED]: [SKILL_ACTION.COMPLETED, "done", "finish", "finished"],
-};
-
 export const DOC2DATA_FORMAT = {
   PNG: "png",
   JPEG: "jpeg",
@@ -115,16 +105,6 @@ export const DOC2DATA_FORMAT = {
 export const DOC2DATA_FORMAT_ALIASES = {
   [DOC2DATA_FORMAT.PNG]: [DOC2DATA_FORMAT.PNG],
   [DOC2DATA_FORMAT.JPEG]: [DOC2DATA_FORMAT.JPEG, "jpg"],
-};
-
-export const DOC2DATA_PARSE_ENGINE = {
-  LIBREOFFICE: "libreoffice",
-  VISION: "vision",
-};
-
-export const DOC2DATA_PARSE_ENGINE_ALIASES = {
-  [DOC2DATA_PARSE_ENGINE.LIBREOFFICE]: [DOC2DATA_PARSE_ENGINE.LIBREOFFICE, "libre_office", "lo"],
-  [DOC2DATA_PARSE_ENGINE.VISION]: [DOC2DATA_PARSE_ENGINE.VISION, "image_model", "model"],
 };
 
 export const MULTIMODAL_SCOPE = {
@@ -231,16 +211,8 @@ export function normalizeMcpServerType(input = "") {
   return normalizeWithAliases(input, MCP_SERVER_TYPE_ALIASES);
 }
 
-export function normalizeSkillAction(input = "") {
-  return normalizeWithAliases(input, SKILL_ACTION_ALIASES);
-}
-
 export function normalizeDoc2DataFormat(input = "") {
   return normalizeWithAliases(input, DOC2DATA_FORMAT_ALIASES);
-}
-
-export function normalizeDoc2DataParseEngine(input = "") {
-  return normalizeWithAliases(input, DOC2DATA_PARSE_ENGINE_ALIASES);
 }
 
 export function normalizeContextSection(input = "") {

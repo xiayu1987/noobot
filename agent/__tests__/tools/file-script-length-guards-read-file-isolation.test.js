@@ -21,12 +21,12 @@ import {
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
 
-test("read_file: should map docker sandbox /workspace/<userId> path to user workspace", async () => {
+test("read_file: reads own workspace through the logical workspace view", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const filePath = path.join(basePath, "runtime/ops_workdir/result.json");
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, "{\"ok\":true}", "utf8");
+  await fs.writeFile(filePath, '{"ok":true}', "utf8");
 
   const agentContext = buildAgentContext(basePath, "primary-user");
   const tools = createFileTool({ agentContext });
@@ -37,7 +37,7 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
     call: {
       id: "call_read_workspace_path",
       name: "read_file",
-      args: { riskLevel: "low", filePath: "/workspace/primary-user/runtime/ops_workdir/result.json" },
+      args: { riskLevel: "low", filePath: "runtime/ops_workdir/result.json" },
     },
     tool,
     runtime: agentContext.bindings.runtime,
@@ -47,9 +47,11 @@ test("read_file: should map docker sandbox /workspace/<userId> path to user work
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | {\"ok\":true}");
+  assert.equal(result.content, '1 | {"ok":true}');
   assert.equal(result.includeLineNumbers, true);
-  assert.equal(result.resolvedPath, "/workspace/primary-user/runtime/ops_workdir/result.json");
+  assert.equal(result.resolvedPath, "runtime/ops_workdir/result.json");
+  assert.equal(result.pathView, "workspace");
+  assert.equal(result.executionView, "host");
   assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
 });
 
@@ -113,7 +115,11 @@ test("read_file: configured super user id does not bypass isolation when runtime
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
   const runnerResult = await executeToolCall({
-    call: { id: "call_missing_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
+    call: {
+      id: "call_missing_super_flag",
+      name: "read_file",
+      args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" },
+    },
     tool,
     runtime: agentContext.bindings.runtime,
     agentContext,
@@ -134,12 +140,22 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   const agentContext = buildAgentContext(basePath, superUserId, {
     runtime: {
       globalConfig: { workspaceRoot, super_admin: { user_id: superUserId } },
-      systemRuntime: { userId: superUserId, sessionId: "s-1", rootSessionId: "s-1", isSuperUser: "true", config: {} },
+      systemRuntime: {
+        userId: superUserId,
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: "true",
+        config: {},
+      },
     },
   });
   const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
   const runnerResult = await executeToolCall({
-    call: { id: "call_non_true_super_flag", name: "read_file", args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" } },
+    call: {
+      id: "call_non_true_super_flag",
+      name: "read_file",
+      args: { riskLevel: "low", filePath: "/workspace/other-user/secret.txt" },
+    },
     tool,
     runtime: agentContext.bindings.runtime,
     agentContext,
@@ -149,7 +165,7 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   assert.match(String(result.message || result.error || ""), /scope|范围|允许|path/i);
 });
 
-test("read_file: configured super user can read another user workspace through /workspace", async () => {
+test("read_file: configured super user can read another user workspace through host view", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "super-root-user");
   const otherUserFile = path.join(workspaceRoot, "other-user", "visible.txt");
@@ -158,7 +174,13 @@ test("read_file: configured super user can read another user workspace through /
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
-      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      systemRuntime: {
+        userId: "super-root-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: true,
+        config: {},
+      },
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
@@ -182,7 +204,7 @@ test("read_file: configured super user can read another user workspace through /
     call: {
       id: "call_super_user_read_other_workspace",
       name: "read_file",
-      args: { riskLevel: "low", filePath: "/workspace/other-user/visible.txt" },
+      args: { riskLevel: "low", filePath: otherUserFile },
     },
     tool,
     runtime: agentContext.bindings.runtime,
@@ -206,7 +228,13 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
-      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      systemRuntime: {
+        userId: "super-root-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: true,
+        config: {},
+      },
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
@@ -239,7 +267,10 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, false);
-  assert.match(String(result.message || result.error || ""), /not found|不存在|未找到|scope|范围|允许|path/i);
+  assert.match(
+    String(result.message || result.error || ""),
+    /not found|不存在|未找到|scope|范围|允许|path/i,
+  );
 });
 
 test("read_file: regular user cannot read an absolute file outside allowed roots", async () => {
@@ -285,7 +316,13 @@ test("read_file: super user can read an absolute file outside workspace root", a
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
-      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      systemRuntime: {
+        userId: "super-root-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: true,
+        config: {},
+      },
       globalConfig: { workspaceRoot, super_admin: { user_id: "super-root-user" } },
     },
   });
@@ -310,7 +347,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
   assert.equal(result.resolvedPath, outsideFile);
 });
 
-test("read_file: super user cannot use host absolute paths outside sandbox roots when sandbox is enabled", async () => {
+test("read_file: execute_script sandbox does not reduce super user host authorization", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-sandbox-outside-root-"));
   const basePath = path.join(workspaceRoot, "super-root-user");
@@ -358,8 +395,10 @@ test("read_file: super user cannot use host absolute paths outside sandbox roots
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, false);
-  assert.match(String(result.message || result.error || ""), /scope|范围|允许|path/i);
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "1 | hidden-outside");
+  assert.equal(result.pathView, "host");
+  assert.equal(result.executionView, "host");
 });
 
 test("read_file: configured super user cross-workspace read still respects mustExist", async () => {
@@ -369,7 +408,13 @@ test("read_file: configured super user cross-workspace read still respects mustE
 
   const agentContext = buildAgentContext(basePath, "super-root-user", {
     runtime: {
-      systemRuntime: { userId: "super-root-user", sessionId: "s-1", rootSessionId: "s-1", isSuperUser: true, config: {} },
+      systemRuntime: {
+        userId: "super-root-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        isSuperUser: true,
+        config: {},
+      },
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
@@ -393,7 +438,7 @@ test("read_file: configured super user cross-workspace read still respects mustE
     call: {
       id: "call_super_user_read_missing_other_workspace",
       name: "read_file",
-      args: { riskLevel: "low", filePath: "/workspace/other-user/missing.txt" },
+      args: { riskLevel: "low", filePath: path.join(workspaceRoot, "other-user", "missing.txt") },
     },
     tool,
     runtime: agentContext.bindings.runtime,
@@ -406,7 +451,7 @@ test("read_file: configured super user cross-workspace read still respects mustE
   assert.match(String(result.message || result.error || ""), /not found|不存在|未找到/i);
 });
 
-test("read_file: should allow mapped sandbox path that points to mounted host directory", async () => {
+test("read_file: runtime sandbox mappings cannot grant file access", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-mounted-root-"));
@@ -414,22 +459,22 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
   await fs.writeFile(mountedFile, "mounted-ok", "utf8");
 
   const agentContext = buildAgentContext(basePath, "primary-user", {
-      runtime: {
-        systemRuntime: {
-          userId: "primary-user",
-          sessionId: "s-1",
-          rootSessionId: "s-1",
-          config: {
-            sandboxPathMappings: [
-              {
-                source: mountedRoot,
-                target: "/project",
-              },
-            ],
-          },
+    runtime: {
+      systemRuntime: {
+        userId: "primary-user",
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        config: {
+          sandboxPathMappings: [
+            {
+              source: mountedRoot,
+              target: "/project",
+            },
+          ],
         },
       },
-    });
+    },
+  });
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
@@ -447,46 +492,41 @@ test("read_file: should allow mapped sandbox path that points to mounted host di
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | mounted-ok");
-  assert.equal(result.resolvedPath, "/project/sandbox-mounted.txt");
-  assert.equal(String(result.resolvedPath || "").includes(mountedRoot), false);
+  assert.equal(result.ok, false);
+  assert.match(String(result.message || result.error || ""), /sandbox|沙箱|scope|范围/i);
 });
 
-test("read_file: should allow docker mount target path under /project", async () => {
+test("read_file: execute_script docker mounts cannot grant file access", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-project-root-"));
-  const projectFile = path.join(
-    projectRoot,
-    "agent/src/tools/execution/file-tool.js",
-  );
+  const projectFile = path.join(projectRoot, "agent/src/tools/execution/file-tool.js");
   await fs.mkdir(path.dirname(projectFile), { recursive: true });
   await fs.writeFile(projectFile, "project-mounted-ok", "utf8");
 
   const agentContext = buildAgentContext(basePath, "primary-user", {
-      runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: {
-              sandboxMode: true,
-              sandboxProvider: {
-                default: "docker",
-                docker: {
-                  dockerContainerScope: "global",
-                  dockerMounts: [
-                    {
-                      source: projectRoot,
-                      target: "/project",
-                    },
-                  ],
-                },
+    runtime: {
+      globalConfig: {
+        tools: {
+          execute_script: {
+            sandboxMode: true,
+            sandboxProvider: {
+              default: "docker",
+              docker: {
+                dockerContainerScope: "global",
+                dockerMounts: [
+                  {
+                    source: projectRoot,
+                    target: "/project",
+                  },
+                ],
               },
             },
           },
         },
       },
-    });
+    },
+  });
   const tools = createFileTool({ agentContext });
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
@@ -504,10 +544,49 @@ test("read_file: should allow docker mount target path under /project", async ()
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | project-mounted-ok");
-  assert.equal(result.resolvedPath, "/project/agent/src/tools/execution/file-tool.js");
-  assert.equal(String(result.resolvedPath || "").includes(projectRoot), false);
+  assert.equal(result.ok, false);
+  assert.match(String(result.message || result.error || ""), /sandbox|沙箱|scope|范围/i);
+});
+
+test("file tools reject direct and nested symbolic-link escapes", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-symlink-workspace-"));
+  const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-symlink-outside-"));
+  await fs.writeFile(path.join(outsidePath, "secret.txt"), "secret", "utf8");
+  await fs.symlink(path.join(outsidePath, "secret.txt"), path.join(workspacePath, "direct.txt"));
+  await fs.mkdir(path.join(workspacePath, "nested"), { recursive: true });
+  await fs.symlink(outsidePath, path.join(workspacePath, "nested", "escape"));
+  const context = buildAgentContext(workspacePath, "u-test");
+  const readTool = createFileTool({ agentContext: context }).find(
+    (item) => item?.name === "read_file",
+  );
+
+  await assert.rejects(
+    () => readTool.invoke({ filePath: "direct.txt", riskLevel: "low" }),
+    /scope|范围|允许|path/i,
+  );
+  await assert.rejects(
+    () => readTool.invoke({ filePath: "nested/escape/secret.txt", riskLevel: "low" }),
+    /scope|范围|允许|path/i,
+  );
+});
+
+test("write_file rejects a symbolic-link parent escape", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-symlink-workspace-"));
+  const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-symlink-outside-"));
+  await fs.symlink(outsidePath, path.join(workspacePath, "escape"));
+  const context = buildAgentContext(workspacePath, "u-test", {
+    runtime: { systemRuntime: { config: { safeConfirm: false } } },
+  });
+  const writeTool = createFileTool({ agentContext: context }).find(
+    (item) => item?.name === "write_file",
+  );
+
+  await assert.rejects(
+    () =>
+      writeTool.invoke({ filePath: "escape/created.txt", content: "blocked", riskLevel: "low" }),
+    /scope|范围|允许|path/i,
+  );
+  await assert.rejects(() => fs.access(path.join(outsidePath, "created.txt")));
 });
 
 test("read_file: 默认返回行号且可关闭行号", async () => {
@@ -517,13 +596,21 @@ test("read_file: 默认返回行号且可关闭行号", async () => {
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const withLines = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 }));
+  const withLines = parseToolResult(
+    await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3 }),
+  );
   assert.equal(withLines.ok, true);
   assert.equal(withLines.content, "2 | b\n3 | c");
   assert.equal(withLines.includeLineNumbers, true);
 
   const withoutLines = parseToolResult(
-    await tool.invoke({ riskLevel: "low", filePath: "lines.txt", startLine: 2, endLine: 3, includeLineNumbers: false }),
+    await tool.invoke({
+      riskLevel: "low",
+      filePath: "lines.txt",
+      startLine: 2,
+      endLine: 3,
+      includeLineNumbers: false,
+    }),
   );
   assert.equal(withoutLines.ok, true);
   assert.equal(withoutLines.content, "b\nc");
@@ -538,7 +625,9 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   const tool = tools.find((item) => item?.name === "read_file");
   assert.ok(tool);
 
-  const result = parseToolResult(await tool.invoke({ riskLevel: "low", filePath: "long.txt", includeLineNumbers: false }));
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", filePath: "long.txt", includeLineNumbers: false }),
+  );
 
   assert.equal(result.ok, true);
   assert.equal(result.startLine, 1);

@@ -8,4 +8,6 @@ export * from "./view.mjs";
 export * from "./tool-path.mjs";
 export * from "./sandbox-mapping.mjs";
 export * from "./runtime-context.mjs";
+export * from "./task-path.mjs";
+export * from "./path-contract.mjs";
 export { filePath as default } from "./platform.mjs";

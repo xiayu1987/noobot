@@ -3,11 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access } from "node:fs/promises";
+import { access, lstat, realpath } from "node:fs/promises";
 import {
+  authorizePathRef,
+  PATH_CAPABILITIES,
   filePath as path,
   normalizePathForPlatform,
-  resolveToolPathPolicy,
+  resolvePathPolicy,
+  resolvePathRef,
   resolveToolInputPath,
   buildToolPathScopeErrorDetails,
 } from "@noobot/path-resolver";
@@ -51,6 +54,15 @@ function isWithinBasePath(basePath = "", targetPath = "") {
   return !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
+async function resolveExistingParent(targetPath = "") {
+  let candidate = path.dirname(path.resolve(targetPath));
+  while (candidate && candidate !== path.dirname(candidate)) {
+    if (await lstat(candidate).catch(() => null)) return realpath(candidate);
+    candidate = path.dirname(candidate);
+  }
+  return realpath(candidate || path.parse(path.resolve(targetPath)).root);
+}
+
 function resolveRuntimeBasePath(agentContext = {}) {
   const basePath = getBasePathFromAgentContext(agentContext);
   if (!basePath) {
@@ -71,6 +83,16 @@ function resolveWorkspaceRoot(agentContext = {}) {
   return workspaceRoot ? path.resolve(workspaceRoot) : "";
 }
 
+export function projectResolvedFilePath({ resolvedPath = "", agentContext = {} } = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  const pathRef = resolvePathRef({
+    input: resolvedPath,
+    workspaceRoot: resolveUserWorkspacePath(agentContext),
+    owner: String(runtime?.userId || ""),
+  });
+  return pathRef.view === "attachment" ? pathRef.identity : pathRef.path;
+}
+
 function resolveSessionContext(agentContext = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const sessionManager = runtime?.sessionManager || null;
@@ -85,68 +107,44 @@ function resolveSessionContext(agentContext = {}) {
   return { sessionManager, userId };
 }
 
-export function assertValidSimpleFileName({
-  fileName = "",
-  fieldName = "fileName",
-}) {
+export function assertValidSimpleFileName({ fileName = "", fieldName = "fileName" }) {
   const normalizedFileName = String(fileName || "").trim();
   if (!normalizedFileName) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        details: { field: fieldName },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: fieldName },
+    });
   }
-  if (
-    normalizedFileName.includes("/") ||
-    normalizedFileName.includes("\\")
-  ) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput({}, "pathSeparatorsNotAllowed")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-        details: { field: fieldName, value: normalizedFileName },
-      },
-    );
+  if (normalizedFileName.includes("/") || normalizedFileName.includes("\\")) {
+    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "pathSeparatorsNotAllowed")}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+      details: { field: fieldName, value: normalizedFileName },
+    });
   }
   if (/[\0-\x1F\x7F]/.test(normalizedFileName)) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput({}, "controlCharsNotAllowed")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-        details: { field: fieldName, value: normalizedFileName },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "controlCharsNotAllowed")}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+      details: { field: fieldName, value: normalizedFileName },
+    });
   }
   return normalizedFileName;
 }
 
-export function assertValidFileNameFromPath({
-  filePath = "",
-  fieldName = "filePath",
-}) {
+export function assertValidFileNameFromPath({ filePath = "", fieldName = "filePath" }) {
   const normalizedPath = String(filePath || "").trim();
   if (!normalizedPath) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput({}, "fieldRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        details: { field: fieldName },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fieldRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: fieldName },
+    });
   }
   const normalizedPathForName = normalizePathForPlatform(normalizedPath);
   const parsedName = path.basename(path.normalize(normalizedPathForName));
   if (!parsedName || parsedName === "." || parsedName === path.sep) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
-        details: { field: fieldName, value: normalizedPath },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput({}, "fileNameIncludedRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_FILE_NAME,
+      details: { field: fieldName, value: normalizedPath },
+    });
   }
   return assertValidSimpleFileName({
     fileName: parsedName,
@@ -161,22 +159,16 @@ export async function assertValidParentSessionId({
 }) {
   const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
   if (!normalizedParentSessionId) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        details: { field: fieldName },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: fieldName },
+    });
   }
   if (!isUuid(normalizedParentSessionId)) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput(agentContext, "invalidUuidFormat")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
-        details: { field: fieldName, value: normalizedParentSessionId },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "invalidUuidFormat")}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_PARENT_SESSION_ID,
+      details: { field: fieldName, value: normalizedParentSessionId },
+    });
   }
 
   const { sessionManager, userId } = resolveSessionContext(agentContext);
@@ -206,17 +198,12 @@ export async function assertValidParentDialogProcessId({
     agentContext,
     fieldName: parentSessionFieldName,
   });
-  const normalizedParentDialogProcessId = String(
-    parentDialogProcessId || "",
-  ).trim();
+  const normalizedParentDialogProcessId = String(parentDialogProcessId || "").trim();
   if (!normalizedParentDialogProcessId) {
-    throw recoverableToolError(
-      `${dialogFieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        details: { field: dialogFieldName },
-      },
-    );
+    throw recoverableToolError(`${dialogFieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: dialogFieldName },
+    });
   }
 
   const { sessionManager, userId } = resolveSessionContext(agentContext);
@@ -250,76 +237,82 @@ export async function assertAndResolveUserWorkspaceFilePath({
   agentContext = {},
   fieldName = "filePath",
   mustExist = false,
+  capability = PATH_CAPABILITIES.FILE_READ,
 }) {
   const normalizedPath = String(filePath || "").trim();
   if (!normalizedPath) {
-    throw recoverableToolError(
-      `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
-      {
-        code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-        details: { field: fieldName },
-      },
-    );
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
+      code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+      details: { field: fieldName },
+    });
   }
 
   const workspacePath = resolveUserWorkspacePath(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
   const isSuperUser = isSuperUserAgentContext(agentContext);
   const workspaceRoot = resolveWorkspaceRoot(agentContext);
-  const pathPolicy = resolveToolPathPolicy({
-    runtime,
-    agentContext,
-    runtimeBasePath: workspacePath,
-    workspacePath,
-    workspaceRoot,
-    isSuperUser,
-  });
   const resolvedToolPath = resolveToolInputPath({
     inputPath: normalizedPath,
     runtime,
-    workspacePath: pathPolicy.relativeHostRoot,
+    workspacePath,
     workspaceRoot,
     agentContext,
     allowHostAbsolute: true,
-    allowSandbox: true,
-    allowVirtualRelative: true,
+    allowSandbox: false,
+    allowVirtualRelative: false,
   });
   if (!resolvedToolPath.ok) {
-    throw recoverableToolError(resolvedToolPath.hint || `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`, {
-      code: resolvedToolPath.error === "host_absolute_not_allowed" ||
-        resolvedToolPath.error === "sandbox_path_not_allowed"
-        ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
-        : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: {
-        field: fieldName,
-        filePath: normalizedPath,
-        pathView: resolvedToolPath.view,
-        error: resolvedToolPath.error,
-        hint: resolvedToolPath.hint,
-        suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
-        suggestedSandboxPath: resolvedToolPath.candidateSandboxPath || "",
-      },
-    });
-  }
-  const resolvedTargetPath = resolvedToolPath.resolvedPath;
-
-  const allowedRoots = pathPolicy.allowedRoots;
-  const inAllowedScope = pathPolicy.superUserBypassesDirectoryScope || allowedRoots.some((rootPath) =>
-    isWithinBasePath(rootPath, resolvedTargetPath),
-  );
-  if (!inAllowedScope) {
     throw recoverableToolError(
-      tCheckInput(agentContext, "pathOutOfScope"),
+      resolvedToolPath.hint || `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
       {
-        code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+        code:
+          resolvedToolPath.error === "host_absolute_not_allowed" ||
+          resolvedToolPath.error === "sandbox_path_not_allowed"
+            ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
+            : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
         details: {
-          ...buildToolPathScopeErrorDetails({
-            field: fieldName,
-            pathView: resolvedToolPath.view,
-          }),
+          field: fieldName,
+          filePath: normalizedPath,
+          pathView: resolvedToolPath.view,
+          error: resolvedToolPath.error,
+          hint: resolvedToolPath.hint,
+          suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
+          suggestedSandboxPath: resolvedToolPath.candidateSandboxPath || "",
         },
       },
     );
+  }
+  const resolvedTargetPath = resolvedToolPath.resolvedPath;
+  const logicalPathRef = resolvePathRef({
+    input: resolvedTargetPath,
+    workspaceRoot: workspacePath,
+    owner: String(runtime?.userId || ""),
+  });
+  const configuredPathPolicy = resolvePathPolicy(runtime?.globalConfig || {});
+  const principal = {
+    userId: String(runtime?.userId || ""),
+    role: isSuperUser ? "super_admin" : "regular_user",
+    isSuperUser,
+  };
+  const authorization = authorizePathRef({
+    pathRef: logicalPathRef,
+    principal,
+    capability,
+    pathPolicy: configuredPathPolicy,
+    executionPath: resolvedTargetPath,
+    workspaceRoot: workspacePath,
+  });
+
+  if (!authorization.allowed) {
+    throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        ...buildToolPathScopeErrorDetails({
+          field: fieldName,
+          pathView: resolvedToolPath.view,
+        }),
+      },
+    });
   }
 
   if (mustExist) {
@@ -334,6 +327,68 @@ export async function assertAndResolveUserWorkspaceFilePath({
         },
       );
     }
+  }
+
+  const existingInfo = await lstat(resolvedTargetPath).catch(() => null);
+  const resolutionPolicy = configuredPathPolicy.resolution || {};
+  if (existingInfo?.isSymbolicLink() && resolutionPolicy.followSymbolicLinks !== true) {
+    throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: fieldName,
+        pathView: logicalPathRef.view,
+        scope: "workspace",
+        reason: "symbolic_link_not_allowed",
+      },
+    });
+  }
+  if (existingInfo && resolutionPolicy.requireRealPathForExistingTargets !== false) {
+    const realTarget = await realpath(resolvedTargetPath);
+    const realDecision = authorizePathRef({
+      pathRef: logicalPathRef,
+      principal,
+      capability,
+      pathPolicy: configuredPathPolicy,
+      executionPath: realTarget,
+      workspaceRoot: workspacePath,
+    });
+    if (!realDecision.allowed)
+      throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+        code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+        details: {
+          field: fieldName,
+          pathView: logicalPathRef.view,
+          scope: "workspace",
+          reason: "real_path_out_of_scope",
+        },
+      });
+  }
+  if (
+    !existingInfo &&
+    resolutionPolicy.validateWriteParentRealPath !== false &&
+    capability !== PATH_CAPABILITIES.FILE_READ &&
+    capability !== PATH_CAPABILITIES.FILE_SEARCH
+  ) {
+    const realParent = await resolveExistingParent(resolvedTargetPath);
+    const projectedTarget = path.join(realParent, path.basename(resolvedTargetPath));
+    const parentDecision = authorizePathRef({
+      pathRef: logicalPathRef,
+      principal,
+      capability,
+      pathPolicy: configuredPathPolicy,
+      executionPath: projectedTarget,
+      workspaceRoot: workspacePath,
+    });
+    if (!parentDecision.allowed)
+      throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+        code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+        details: {
+          field: fieldName,
+          pathView: logicalPathRef.view,
+          scope: "workspace",
+          reason: "write_parent_out_of_scope",
+        },
+      });
   }
 
   return resolvedTargetPath;

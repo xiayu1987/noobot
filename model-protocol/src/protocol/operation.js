@@ -7,6 +7,7 @@ export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
   WEB_SEARCH: "web_search",
   IMAGE_GENERATION: "image_generation",
+  MULTIMODAL_PARSE: "multimodal_parse",
 });
 
 const OPERATION_KINDS = new Set(Object.values(MODEL_OPERATION_KIND));
@@ -28,7 +29,8 @@ function requirePlainObject(value, path) {
 function rejectUnknownKeys(value, allowedKeys, path) {
   const allowed = new Set(allowedKeys);
   const unknown = Object.keys(value).filter((key) => !allowed.has(key));
-  if (unknown.length) throw new TypeError(`${path} contains unsupported fields: ${unknown.join(", ")}`);
+  if (unknown.length)
+    throw new TypeError(`${path} contains unsupported fields: ${unknown.join(", ")}`);
 }
 
 function requireText(value, path) {
@@ -39,9 +41,16 @@ function requireText(value, path) {
 
 function normalizeImageOptions(input = {}) {
   const source = requirePlainObject(input, "model operation.options");
-  rejectUnknownKeys(source, ["apiType", "size", "resolution", "n", "quality", "imageUrls"], "model operation.options");
-  const apiType = String(source.apiType || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES).trim().toLowerCase();
-  if (!IMAGE_API_TYPES.has(apiType)) throw new TypeError(`unsupported image generation api type: ${apiType}`);
+  rejectUnknownKeys(
+    source,
+    ["apiType", "size", "resolution", "n", "quality", "imageUrls"],
+    "model operation.options",
+  );
+  const apiType = String(source.apiType || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES)
+    .trim()
+    .toLowerCase();
+  if (!IMAGE_API_TYPES.has(apiType))
+    throw new TypeError(`unsupported image generation api type: ${apiType}`);
   const count = source.n === undefined ? 1 : Number(source.n);
   if (!Number.isInteger(count) || count < 1 || count > 10) {
     throw new TypeError("model operation.options.n must be an integer between 1 and 10");
@@ -52,7 +61,9 @@ function normalizeImageOptions(input = {}) {
   }
   return Object.freeze({
     apiType,
-    size: String(source.size || (apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024")).trim(),
+    size: String(
+      source.size || (apiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024"),
+    ).trim(),
     resolution: String(source.resolution || "").trim(),
     n: count,
     quality: String(source.quality || "").trim(),
@@ -61,9 +72,14 @@ function normalizeImageOptions(input = {}) {
 }
 
 export function normalizeModelOperation(input = {}) {
-  const source = requirePlainObject(input && typeof input === "object" ? input : {}, "model operation");
+  const source = requirePlainObject(
+    input && typeof input === "object" ? input : {},
+    "model operation",
+  );
   rejectUnknownKeys(source, ["kind", "input", "options"], "model operation");
-  const kind = String(source.kind || MODEL_OPERATION_KIND.CHAT).trim().toLowerCase();
+  const kind = String(source.kind || MODEL_OPERATION_KIND.CHAT)
+    .trim()
+    .toLowerCase();
   if (!OPERATION_KINDS.has(kind)) {
     throw new TypeError(`unsupported model operation: ${kind || "missing"}`);
   }
@@ -79,14 +95,42 @@ export function normalizeModelOperation(input = {}) {
     rejectUnknownKeys(operationOptions, [], "model operation.options");
     return Object.freeze({
       kind,
-      input: Object.freeze({ query: requireText(operationInput.query, "model operation.input.query") }),
+      input: Object.freeze({
+        query: requireText(operationInput.query, "model operation.input.query"),
+      }),
+      options: Object.freeze({}),
+    });
+  }
+  if (kind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
+    rejectUnknownKeys(operationInput, ["prompt", "attachments"], "model operation.input");
+    if (!Array.isArray(operationInput.attachments) || operationInput.attachments.length === 0) {
+      throw new TypeError("model operation.input.attachments must be a non-empty array");
+    }
+    const attachments = operationInput.attachments.map((value, index) => {
+      const attachmentPath = `model operation.input.attachments[${index}]`;
+      const attachment = requirePlainObject(value, attachmentPath);
+      rejectUnknownKeys(attachment, ["mimeType", "data", "fileName"], attachmentPath);
+      return Object.freeze({
+        mimeType: requireText(attachment.mimeType, `${attachmentPath}.mimeType`),
+        data: requireText(attachment.data, `${attachmentPath}.data`),
+        fileName: String(attachment.fileName || "").trim(),
+      });
+    });
+    return Object.freeze({
+      kind,
+      input: Object.freeze({
+        prompt: requireText(operationInput.prompt, "model operation.input.prompt"),
+        attachments: Object.freeze(attachments),
+      }),
       options: Object.freeze({}),
     });
   }
   rejectUnknownKeys(operationInput, ["prompt"], "model operation.input");
   return Object.freeze({
     kind,
-    input: Object.freeze({ prompt: requireText(operationInput.prompt, "model operation.input.prompt") }),
+    input: Object.freeze({
+      prompt: requireText(operationInput.prompt, "model operation.input.prompt"),
+    }),
     options: normalizeImageOptions(operationOptions),
   });
 }
@@ -106,7 +150,9 @@ function normalizeImageArtifact(value, index) {
 }
 
 export function normalizeModelOperationResult(kind, input = {}) {
-  const operationKind = String(kind || "").trim().toLowerCase();
+  const operationKind = String(kind || "")
+    .trim()
+    .toLowerCase();
   if (!OPERATION_KINDS.has(operationKind)) {
     throw new TypeError(`unsupported model operation result: ${operationKind || "missing"}`);
   }
@@ -117,20 +163,33 @@ export function normalizeModelOperationResult(kind, input = {}) {
   }
   if (operationKind === MODEL_OPERATION_KIND.WEB_SEARCH) {
     rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
-    if (!Array.isArray(source.output)) throw new TypeError("model response.result.output must be an array");
+    if (!Array.isArray(source.output))
+      throw new TypeError("model response.result.output must be an array");
     return Object.freeze({
       rawText: String(source.rawText || "").trim(),
       output: Object.freeze([...source.output]),
     });
   }
-  rejectUnknownKeys(source, ["rawText", "imageArtifacts", "output", "taskId", "rawTask"], "model response.result");
+  if (operationKind === MODEL_OPERATION_KIND.MULTIMODAL_PARSE) {
+    rejectUnknownKeys(source, ["rawText", "output"], "model response.result");
+    return Object.freeze({
+      rawText: String(source.rawText || "").trim(),
+      output: Array.isArray(source.output) ? Object.freeze([...source.output]) : Object.freeze([]),
+    });
+  }
+  rejectUnknownKeys(
+    source,
+    ["rawText", "imageArtifacts", "output", "taskId", "rawTask"],
+    "model response.result",
+  );
   if (!Array.isArray(source.imageArtifacts)) {
     throw new TypeError("model response.result.imageArtifacts must be an array");
   }
   if (source.output !== undefined && !Array.isArray(source.output)) {
     throw new TypeError("model response.result.output must be an array");
   }
-  if (source.rawTask !== undefined) requirePlainObject(source.rawTask, "model response.result.rawTask");
+  if (source.rawTask !== undefined)
+    requirePlainObject(source.rawTask, "model response.result.rawTask");
   return Object.freeze({
     rawText: String(source.rawText || "").trim(),
     imageArtifacts: Object.freeze(source.imageArtifacts.map(normalizeImageArtifact)),

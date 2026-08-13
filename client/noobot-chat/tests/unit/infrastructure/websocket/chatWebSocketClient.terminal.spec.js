@@ -6,7 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { flushPromises, MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import {
+  flushPromises,
+  MockWebSocket,
+  setupWebSocketTestHooks,
+} from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();
 
@@ -138,33 +142,30 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     expect(resolved).toBe(true);
   });
 
-  it.each(["cancelled"])(
-    "resolves after %s terminal channel_state",
-    async (state) => {
-      const client = createChatWebSocketClient({
-        resolveWebSocketUrl: () => "ws://test",
-        terminalChannelStateGraceMs: 20,
-      });
-      client.connect();
-      const socket = MockWebSocket.instances[0];
-      let resolved = false;
+  it.each(["cancelled"])("resolves after %s terminal channel_state", async (state) => {
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => "ws://test",
+      terminalChannelStateGraceMs: 20,
+    });
+    client.connect();
+    const socket = MockWebSocket.instances[0];
+    let resolved = false;
 
-      const streamPromise = client.stream({ action: "chat" }, vi.fn()).then(() => {
-        resolved = true;
-      });
+    const streamPromise = client.stream({ action: "chat" }, vi.fn()).then(() => {
+      resolved = true;
+    });
 
-      socket.emit(StreamEventEnum.CHANNEL_STATE, {
-        sessionId: "s-1",
-        dialogProcessId: "dp-1",
-        state,
-        seq: 2,
-      });
+    socket.emit(StreamEventEnum.CHANNEL_STATE, {
+      sessionId: "s-1",
+      dialogProcessId: "dp-1",
+      state,
+      seq: 2,
+    });
 
-      await vi.advanceTimersByTimeAsync(20);
-      await streamPromise;
-      expect(resolved).toBe(true);
-    },
-  );
+    await vi.advanceTimersByTimeAsync(20);
+    await streamPromise;
+    expect(resolved).toBe(true);
+  });
 
   it("keeps DONE as the immediate stream terminator", async () => {
     const client = createChatWebSocketClient({
@@ -217,8 +218,14 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
   it.each([
     [StreamEventEnum.DONE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
     [StreamEventEnum.USER_STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
-    [StreamEventEnum.ERROR, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "doc2data failed" }],
-    [StreamEventEnum.CHANNEL_STATE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "user_stopped" }],
+    [
+      StreamEventEnum.ERROR,
+      { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "multimodal_parse failed" },
+    ],
+    [
+      StreamEventEnum.CHANNEL_STATE,
+      { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "user_stopped" },
+    ],
   ])("does not settle current stream for unrelated %s events", async (event, data) => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
@@ -283,5 +290,4 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     await streamPromise;
     expect(resolved).toBe(true);
   });
-
 });

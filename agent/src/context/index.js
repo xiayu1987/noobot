@@ -12,7 +12,6 @@ import {
 import {
   resolveRuntimeBasePath,
   buildStaticInfo,
-  buildSandboxViewStaticInfo,
   buildDynamicInfo,
 } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
@@ -293,11 +292,10 @@ export class ContextBuilder {
     const effectiveConfig = this._getEffectiveConfig();
     const runtimeStaticInfo = applyIdentityToStaticPathInfo(
       {
-        ...buildSandboxViewStaticInfo({
+        ...buildStaticInfo({
           runtimeBasePath: resolvedRuntimeBasePath,
           userId: this.userId,
           globalConfig: this.globalConfig,
-          effectiveConfig,
         }),
         identity: {
           userId: String(this.userId || "").trim(),
@@ -482,11 +480,10 @@ export class ContextBuilder {
     const staticInfo = includeSystemRuntime
       ? applyIdentityToStaticPathInfo(
           {
-            ...buildSandboxViewStaticInfo({
+            ...buildStaticInfo({
               runtimeBasePath,
               userId: this.userId,
               globalConfig: this.globalConfig,
-              effectiveConfig,
             }),
             identity: identityInfo,
           },

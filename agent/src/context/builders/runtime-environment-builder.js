@@ -25,11 +25,6 @@ import {
   createCurrentTurnTasksStore,
 } from "../session/current-turn-store.js";
 import {
-  resolveAttachmentDisplayPath,
-  resolveHostPath,
-  resolveSandboxPath,
-} from "@noobot/path-resolver";
-import {
   resolveRuntimeTransferIdentity,
   transferSemanticContent,
 } from "../../transfer-adapter/index.js";
@@ -206,67 +201,6 @@ function initializeSemanticTransfer(runtimeContext = {}, sharedTools = {}) {
   };
 }
 
-function initializeSandboxPathResolver(runtimeContext = {}, sharedTools = {}) {
-  const existingResolver =
-    typeof sharedTools.resolveSandboxPath === "function" ? sharedTools.resolveSandboxPath : null;
-  const resolver =
-    existingResolver ||
-    ((payload = {}) =>
-      resolveSandboxPath({
-        ...payload,
-        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
-        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
-      }));
-  sharedTools.resolveSandboxPath = resolver;
-  if (typeof sharedTools.resolveAttachmentDisplayPath !== "function") {
-    sharedTools.resolveAttachmentDisplayPath = (payload = {}) =>
-      resolveAttachmentDisplayPath({
-        ...(payload && typeof payload === "object" ? payload : { path: String(payload || "") }),
-        runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
-        agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
-      });
-  }
-  if (typeof sharedTools.toSandboxPath !== "function") {
-    sharedTools.toSandboxPath = (payload = {}) =>
-      resolver(payload && typeof payload === "object" ? payload : { path: String(payload || "") });
-  }
-  const hostResolver =
-    typeof sharedTools.resolveHostPath === "function"
-      ? sharedTools.resolveHostPath
-      : (payload = {}) =>
-          resolveHostPath({
-            ...(payload && typeof payload === "object"
-              ? payload
-              : { path: String(payload || ""), sandboxPath: String(payload || "") }),
-            runtime: resolveSharedToolRuntime(runtimeContext, payload?.runtime),
-            agentContext: resolveSharedToolAgentContext(runtimeContext, payload),
-          });
-  sharedTools.resolveHostPath = hostResolver;
-  if (typeof sharedTools.toHostPath !== "function") {
-    sharedTools.toHostPath = (payload = {}) =>
-      hostResolver(
-        payload && typeof payload === "object"
-          ? payload
-          : { path: String(payload || ""), sandboxPath: String(payload || "") },
-      );
-  }
-  const currentPathMapper =
-    sharedTools.pathMapper && typeof sharedTools.pathMapper === "object"
-      ? sharedTools.pathMapper
-      : {};
-  sharedTools.pathMapper = {
-    ...currentPathMapper,
-    toSandboxPath:
-      typeof currentPathMapper.toSandboxPath === "function"
-        ? currentPathMapper.toSandboxPath
-        : sharedTools.toSandboxPath,
-    toHostPath:
-      typeof currentPathMapper.toHostPath === "function"
-        ? currentPathMapper.toHostPath
-        : sharedTools.toHostPath,
-  };
-}
-
 function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools = {}) {
   const bridge = runtimeContext?.userInteractionBridge;
   if (!bridge || typeof bridge.requestUserInteraction !== "function") return;
@@ -337,7 +271,6 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeTextCleaner(sharedTools);
   initializeSessionCrypto(sharedTools, { sessionId });
   initializeSemanticTransfer(runtimeContext, sharedTools);
-  initializeSandboxPathResolver(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
   initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
   await initializeBrowserRuntime(runtimeContext, sharedTools);

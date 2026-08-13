@@ -90,8 +90,8 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
 
   const joined = sections.join("\n\n");
   assert.equal(joined.includes("2026-08-05T12:00:00.000Z"), true);
-  assert.equal(joined.includes("\"caller\": \"user\""), true);
-  assert.equal(joined.includes("\"allowUserInteraction\": false"), true);
+  assert.equal(joined.includes('"caller": "user"'), true);
+  assert.equal(joined.includes('"allowUserInteraction": false'), true);
   for (const forbidden of [
     "session-secret",
     "dialogProcessId",
@@ -115,7 +115,7 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
   }
 });
 
-test("composeSystemInfoSections adds concise path guidance for only the active path view", () => {
+test("composeSystemInfoSections keeps sandbox out of the general path protocol", () => {
   const regularSandboxSections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
@@ -130,8 +130,8 @@ test("composeSystemInfoSections adds concise path guidance for only the active p
   });
   const regularSandboxText = regularSandboxSections.join("\n\n");
   assert.equal(regularSandboxText.includes("# Path rules"), true);
-  assert.equal(regularSandboxText.includes("Sandbox view"), true);
-  assert.equal(regularSandboxText.includes("host absolute paths"), false);
+  assert.equal(regularSandboxText.includes("workspace logical view"), true);
+  assert.equal(regularSandboxText.includes("Regular users cannot use host absolute paths"), true);
   assert.equal(regularSandboxText.includes("Super user"), false);
   assert.equal(regularSandboxText.includes("Extra mounts"), false);
   assert.equal(regularSandboxText.includes("Sandbox is disabled"), false);
@@ -150,10 +150,9 @@ test("composeSystemInfoSections adds concise path guidance for only the active p
     },
   });
   const mountedSandboxText = mountedSandboxSections.join("\n\n");
-  assert.equal(mountedSandboxText.includes("Sandbox view"), true);
-  assert.equal(mountedSandboxText.includes("Extra mounts"), true);
-  assert.equal(mountedSandboxText.includes("Super user"), false);
-  assert.equal(mountedSandboxText.includes("Host view"), false);
+  assert.equal(mountedSandboxText.includes("workspace logical view"), true);
+  assert.equal(mountedSandboxText.includes("Extra mounts"), false);
+  assert.equal(mountedSandboxText.includes("Super user"), true);
 
   const superHostSections = composeSystemInfoSections({
     locale: "en-US",
@@ -163,9 +162,12 @@ test("composeSystemInfoSections adds concise path guidance for only the active p
     },
   });
   const superHostText = superHostSections.join("\n\n");
-  assert.equal(superHostText.includes("Host view"), true);
+  assert.equal(superHostText.includes("workspace logical view"), true);
   assert.equal(superHostText.includes("Super user"), true);
-  assert.equal(superHostText.includes("sandbox"), false);
+  assert.equal(superHostText.includes("Sandbox is only"), true);
+  assert.equal(superHostText.includes("task-local paths last for one call"), true);
+  assert.equal(superHostText.includes("output names are not paths"), true);
+  assert.equal(superHostText.includes("never construct workspace or host paths"), true);
 });
 
 test("composeSystemInfoSections uses attachments as attachment context", () => {
@@ -177,4 +179,20 @@ test("composeSystemInfoSections uses attachments as attachment context", () => {
 
   const joined = sections.join("\n\n");
   assert.equal(joined.includes("input_att"), true);
+});
+
+test("attachment context documents the workspace layout and keeps identity authoritative", () => {
+  const sections = composeSystemInfoSections({
+    locale: "en-US",
+    systemPrompt: "base",
+    workspaceDirectories: ["runtime", "runtime/attach", "runtime/ops_workdir"],
+    attachments: [{ attachmentId: "input_att", sessionId: "s1", attachmentSource: "user" }],
+  });
+
+  const joined = sections.join("\n\n");
+  assert.equal(joined.includes("input_att"), true);
+  assert.equal(joined.includes("runtime/attach/scoped/<sessionId>/<attachmentSource>/"), true);
+  assert.equal(joined.includes("workspace-relative path for search or audit"), true);
+  assert.equal(joined.includes("complete attachment identity for cross-tool transfer"), true);
+  assert.equal(joined.includes("/workspace/"), false);
 });

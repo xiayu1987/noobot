@@ -5,6 +5,7 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { useLocale } from "../i18n/useLocale.js";
 
 const props = defineProps({
   eventText: { type: String, default: "" },
@@ -19,12 +20,13 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["toggle"]);
+const { translate } = useLocale();
 const eventLabel = computed(() => {
   if (!props.tool) return "";
   const eventName = String(props.eventText || "").trim().toLowerCase();
-  if (eventName === "tool_call") return "调用";
-  if (eventName === "tool_result") return "返回";
-  return "工具";
+  if (eventName === "tool_call") return translate("message.toolCallEvent");
+  if (eventName === "tool_result") return translate("message.toolResultEvent");
+  return translate("message.toolEvent");
 });
 const contentWithoutEventPrefix = computed(() => {
   const content = String(props.contentText || "");

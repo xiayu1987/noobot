@@ -449,8 +449,8 @@ test("harness full engineering capability flow plans, guides, accepts and review
     userId: "flow-user",
     sessionId: "flow-session",
     dialogProcessId: "flow-dp",
-    toolName: "doc_to_data",
-    call: { name: "doc_to_data" },
+    toolName: "multimodal_parse",
+    call: { name: "multimodal_parse" },
     success: true,
     agentContext,
   });

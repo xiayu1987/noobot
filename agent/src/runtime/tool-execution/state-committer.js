@@ -17,25 +17,23 @@ import {
 } from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 
-const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set([
-  "doc_to_data_tool",
-  "media_to_data_tool",
-  "tool_result_overflow",
-]);
+const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
-  const systemRuntime = runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : {};
-  const runConfig = runtime?.runConfig && typeof runtime.runConfig === "object"
-    ? runtime.runConfig
-    : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
-      ? systemRuntime.runConfig
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
       : {};
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object"
+      ? runtime.runConfig
+      : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
+        ? systemRuntime.runConfig
+        : {};
   const turnScopeId = String(
     systemRuntime?.turnScopeId ||
       systemRuntime?.config?.turnScopeId ||
@@ -43,9 +41,7 @@ function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
       "",
   ).trim();
   const resolvedDialogProcessId = String(
-    dialogProcessId ||
-      systemRuntime?.dialogProcessId ||
-      "",
+    dialogProcessId || systemRuntime?.dialogProcessId || "",
   ).trim();
   const sessionId = String(systemRuntime?.sessionId || "").trim();
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
@@ -61,13 +57,7 @@ export function createStateCommitter({
   agentContext = null,
 } = {}) {
   const resolveCallId = (call = {}) =>
-    String(
-      call?.id ??
-        call?.tool_call_id ??
-        call?.toolCallId ??
-        call?.call_id ??
-        "",
-    ).trim();
+    String(call?.id ?? call?.tool_call_id ?? call?.toolCallId ?? call?.call_id ?? "").trim();
 
   const resolveCallName = (call = {}) =>
     String(call?.name ?? call?.tool_name ?? call?.toolName ?? "").trim();
@@ -104,7 +94,9 @@ export function createStateCommitter({
         output: String(content || ""),
       };
       const canonicalActivityTimeline = [
-        ...(Array.isArray(pendingProjection.activityTimeline) ? pendingProjection.activityTimeline : []),
+        ...(Array.isArray(pendingProjection.activityTimeline)
+          ? pendingProjection.activityTimeline
+          : []),
         ...(type === "tool_call" && String(content || "").trim()
           ? [{ ...canonicalModelContent, log: canonicalModelContent }]
           : []),
@@ -126,8 +118,12 @@ export function createStateCommitter({
           ? { transferEnvelopes }
           : {}),
         ...(Array.isArray(attachments) && attachments.length ? { attachments } : {}),
-        ...(canonicalActivityTimeline.length ? { activityTimeline: canonicalActivityTimeline } : {}),
-        ...(pendingProjection.toolTimeline.length ? { toolTimeline: pendingProjection.toolTimeline } : {}),
+        ...(canonicalActivityTimeline.length
+          ? { activityTimeline: canonicalActivityTimeline }
+          : {}),
+        ...(pendingProjection.toolTimeline.length
+          ? { toolTimeline: pendingProjection.toolTimeline }
+          : {}),
         rawModelContent:
           typeof rawModelContent === "string" || Array.isArray(rawModelContent)
             ? rawModelContent
@@ -146,7 +142,10 @@ export function createStateCommitter({
             : null,
       };
       assistantMessage = applyAuthoritativeMessageId(assistantMessage, messageId);
-      if (!assistantMessage.additional_kwargs || typeof assistantMessage.additional_kwargs !== "object") {
+      if (
+        !assistantMessage.additional_kwargs ||
+        typeof assistantMessage.additional_kwargs !== "object"
+      ) {
         assistantMessage.additional_kwargs = {};
       }
       assistantMessage.additional_kwargs.noobotMessageId = canonicalMessageUid;

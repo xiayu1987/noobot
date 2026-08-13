@@ -53,8 +53,8 @@ export const TOOL_NAME = Object.freeze({
   SEARCH: "search",
   PATCH_FILE: "patch_file",
   EXECUTE_SCRIPT: "execute_script",
+  EXECUTE_NATIVE_SCRIPT: "execute_native_script",
   LIST_SKILLS: "list_skills",
-  SET_SKILL_TASK: "set_skill_task",
   CALL_SERVICE: "call_service",
   CALL_MCP_TASK: "call_mcp_task",
   DELEGATE_TASK_ASYNC: "delegate_task_async",
@@ -62,15 +62,12 @@ export const TOOL_NAME = Object.freeze({
   PLAN_MULTI_TASK_COLLABORATION: "plan_multi_task_collaboration",
   SWITCH_MODEL: "switch_model",
   USER_INTERACTION: "user_interaction",
-  WEB_TO_DATA: "web_to_data",
-  DOC_TO_DATA: "doc_to_data",
-  MEDIA_TO_DATA: "media_to_data",
-  PROCESS_CONTENT_TASK: "process_content_task",
   PROCESS_CONNECTOR_TOOL: "process_connector_tool",
   ACCESS_CONNECTOR: "access_connector",
   INSPECT_CONNECTORS: "inspect_connectors",
   WEB_SEARCH: "web_search",
   MULTIMODAL_GENERATE: "multimodal_generate",
+  MULTIMODAL_PARSE: "multimodal_parse",
   TASK_SUMMARY: "task_summary",
   TASK_CHECK: "task_check",
   REQUEST_HELP: "request_help",
@@ -116,9 +113,7 @@ export const TOOL_ATTACHMENT_SOURCE = Object.freeze({
 
 export const ARTIFACT_GENERATION_SOURCE = Object.freeze({
   MULTIMODAL_GENERATE_TOOL: "multimodal_generate_tool",
-  DOC_TO_DATA_TOOL: "doc_to_data_tool",
-  MEDIA_TO_DATA_TOOL: "media_to_data_tool",
-  WEB_TO_DATA_TOOL: "web_to_data_tool",
+  MULTIMODAL_PARSE_TOOL: "multimodal_parse_tool",
   EMAIL_CONNECTOR_READ: "email_connector_read",
 });
 
@@ -135,6 +130,7 @@ export const IMAGE_GENERATION_API_TYPE = Object.freeze({
 export const TOOL_DATA_MODE = Object.freeze({
   DIRECT_TEXT: "direct_text",
   IMAGE_MODEL: "image_model",
+  MULTIMODAL_MODEL: "multimodal_model",
   DIRECT: "direct",
   BROWSER_SIMULATE: "browser_simulate",
 });

@@ -46,10 +46,7 @@ export const GUIDANCE_REASON = Object.freeze({
 
 export const TOOL_NAME_SET = Object.freeze({
   CALL_SERVICE: "call_service",
-  WEB_TO_DATA: "web_to_data",
-  MEDIA_TO_DATA: "media_to_data",
-  DOC_TO_DATA: "doc_to_data",
-  PROCESS_CONTENT_TASK: "process_content_task",
+  MULTIMODAL_PARSE: "multimodal_parse",
   DELEGATE_TASK_ASYNC: "delegate_task_async",
   PLAN_MULTI_TASK_COLLABORATION: "plan_multi_task_collaboration",
   WAIT_ASYNC_TASK_RESULT: "wait_async_task_result",

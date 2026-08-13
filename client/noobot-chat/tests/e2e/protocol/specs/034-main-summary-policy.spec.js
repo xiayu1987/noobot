@@ -165,7 +165,9 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
       "nextAction",
       "state",
     ]);
-    expect(result.message).toBe("请根据小结后的状态、摘要和下一步处理后续流程。");
+    expect(result.message).toContain("小结回执是后续流程的权威阶段状态");
+    expect(result.message).toContain("已完成事项不得重新执行");
+    expect(result.message).toContain("summary.nextAction");
     expect(resultMessage.content.includes(fullSummaryContent)).toBe(false);
     expect(result.summary.details).toBeUndefined();
     const attachmentRefs = (resultMessage.transferEnvelopes || [])

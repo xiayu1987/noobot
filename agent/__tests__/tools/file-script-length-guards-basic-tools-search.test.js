@@ -32,7 +32,14 @@ test("search: 支持搜索文件和文本", async () => {
   assert.ok(tool);
 
   const fileResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js", maxResults: 5 }),
+    await tool.invoke({
+      riskLevel: "low",
+      source: "files",
+      query: "alpha",
+      path: "src",
+      glob: "*.js",
+      maxResults: 5,
+    }),
   );
   assert.equal(fileResult.ok, true);
   assert.equal(fileResult.matches.length, 2);
@@ -41,11 +48,33 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(fileResult.matches[1].line, 3);
 
   const textResult = parseToolResult(
-    await tool.invoke({ riskLevel: "low", source: "text", query: "b.t", isRegex: true, text: "aa\nbet\ncc" }),
+    await tool.invoke({
+      riskLevel: "low",
+      source: "text",
+      query: "b.t",
+      isRegex: true,
+      text: "aa\nbet\ncc",
+    }),
   );
   assert.equal(textResult.ok, true);
   assert.equal(textResult.matches.length, 1);
   assert.equal(textResult.matches[0].line, 2);
+});
+
+test("search: query schema rejects an empty string before tool execution", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-schema-"));
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const searchTool = tools.find((item) => item?.name === "search");
+  assert.ok(searchTool);
+
+  const parsed = searchTool.schema.safeParse({
+    source: "files",
+    query: "",
+    riskLevel: "low",
+  });
+
+  assert.equal(parsed.success, false);
+  assert.match(searchTool.schema.shape.query.description, /不能为空|non-empty/i);
 });
 
 test("search: files search rejects promptly when runtime abort signal is already aborted", async () => {
@@ -63,8 +92,10 @@ test("search: files search rejects promptly when runtime abort signal is already
   assert.ok(tool);
 
   await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" }),
-    (error) => error?.name === "AbortError" || /stop requested|aborted/i.test(String(error?.message || error)),
+    () =>
+      tool.invoke({ riskLevel: "low", source: "files", query: "alpha", path: "src", glob: "*.js" }),
+    (error) =>
+      error?.name === "AbortError" ||
+      /stop requested|aborted/i.test(String(error?.message || error)),
   );
 });
-

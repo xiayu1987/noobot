@@ -147,7 +147,7 @@ export default {
   "ws.unauthorized": "未授权",
   "ws.unknownError": "未知错误",
   "ws.userInteractionTimeout": "用户交互超时",
-  "agent.phaseSummaryPrompt": "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短摘要\n[DETAILS]\n整合之前小结后的完整详细内容，覆盖目标、已完成事项、关键结果、遗留问题；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
+  "agent.phaseSummaryPrompt": "上下文已达到阶段小结阈值。本轮只能调用 task_summary，summaryContent 必须严格使用唯一文本协议：NOOBOT_TASK_SUMMARY/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n已完成阶段的简短事实摘要\n[DETAILS]\n整合之前小结后的权威阶段状态，明确区分已完成事项、关键结果、剩余事项和阻塞；编程模式须含文件路径、函数名和行号\n[NEXT_ACTION]\n尚未完成且紧接着要执行的唯一明确动作。所有段落必须非空，不得增加、重复或调整段落。尚有任务可执行时使用 CONTINUE，后续只从 NEXT_ACTION 继续且不得重做已完成事项；任务已完成时使用 COMPLETE，确实无法继续时使用 BLOCKED。",
   "agent.taskCheckPrompt": "已达到周期任务检查阈值。本次模型调用可按需调用 task_check 留下任务检查切片，但不强制调用；本提示只出现本次。调用时 checkContent 必须严格使用唯一文本协议：NOOBOT_TASK_CHECK/1\n[STATE]\nCONTINUE|COMPLETE|BLOCKED\n[ABSTRACT]\n简短任务检查摘要\n[DETAILS]\n当前目标、进展、偏移风险和遗漏\n[NEXT_ACTION]\n明确的下一步动作。所有段落必须非空，不得增加、重复或调整段落。",
   "agent.abortError": "对话已被用户停止"
 };

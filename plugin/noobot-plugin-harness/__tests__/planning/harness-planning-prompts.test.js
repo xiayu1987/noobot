@@ -31,8 +31,8 @@ test("harness planning prompt includes current tool names and descriptions", asy
           registry: [
             { name: "read_file", description: "读取文件内容", invoke: async () => ({ ok: true }) },
             {
-              name: "web_to_data",
-              description: "抓取网页并提取结构化信息",
+              name: "execute_native_script",
+              description: "使用 Playwright 浏览网页并提取信息",
               invoke: async () => ({ ok: true }),
             },
           ],
@@ -59,7 +59,7 @@ test("harness planning prompt includes current tool names and descriptions", asy
   assert.match(toolsPromptText, /可用工具（name\/description）/);
   assert.match(toolsPromptText, /"name": "read_file"/);
   assert.match(toolsPromptText, /"description": "读取文件内容"/);
-  assert.match(toolsPromptText, /"name": "web_to_data"/);
+  assert.match(toolsPromptText, /"name": "execute_native_script"/);
 });
 
 test("harness initial planning keeps scenario policy out of text protocol and responsibility", async () => {

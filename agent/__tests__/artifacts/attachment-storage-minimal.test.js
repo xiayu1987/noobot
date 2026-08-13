@@ -10,20 +10,23 @@ import path from "node:path";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../src/artifacts/service/attachment-service.js";
-import { resolveCanonicalUserSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
+import { resolveCanonicalSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
 import { BUILTIN_ATTACHMENT_POLICY } from "../../src/config/index.js";
-import {
-  readAttachIndex,
-  writeAttachIndex,
-} from "../../src/artifacts/index-manager.js";
+import { readAttachIndex, writeAttachIndex } from "../../src/artifacts/index-manager.js";
 import {
   resolveAttachmentPolicy,
   isMimeTypeAllowed,
   isExtensionAllowed,
   validateAttachmentPolicy,
 } from "../../src/artifacts/policy/policy-validator.js";
-import { getMimeTypeFromExtension, isValidMimeType } from "../../src/artifacts/policy/mime-utils.js";
-import { readSessionArtifact, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  getMimeTypeFromExtension,
+  isValidMimeType,
+} from "../../src/artifacts/policy/mime-utils.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
@@ -63,29 +66,35 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
     assert.ok(loaded);
     assert.equal(loaded.attachmentId, saved[0].attachmentId);
     assert.equal(loaded.size, Buffer.from("hello-attach", "utf8").length);
-    assert.ok(String(loaded.absolutePath).includes(path.join("runtime", "attach", "scoped", "s1", "user")));
+    assert.ok(
+      String(loaded.absolutePath).includes(path.join("runtime", "attach", "scoped", "s1", "user")),
+    );
   });
 });
 
 test("AttachmentService concurrent model artifact writes preserve one canonical index", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
-    const batches = Array.from({ length: 8 }, (_, batch) => service.ingestGeneratedArtifacts({
-      userId: "u1",
-      sessionId: "concurrent-session",
-      attachmentSource: "model",
-      artifacts: [{
-        name: `result-${batch}.txt`,
-        mimeType: "text/plain",
-        contentBase64: Buffer.from(`result-${batch}`, "utf8").toString("base64"),
-      }],
-    }));
+    const batches = Array.from({ length: 8 }, (_, batch) =>
+      service.ingestGeneratedArtifacts({
+        userId: "u1",
+        sessionId: "concurrent-session",
+        attachmentSource: "model",
+        artifacts: [
+          {
+            name: `result-${batch}.txt`,
+            mimeType: "text/plain",
+            contentBase64: Buffer.from(`result-${batch}`, "utf8").toString("base64"),
+          },
+        ],
+      }),
+    );
     const saved = (await Promise.all(batches)).flat();
     assert.equal(saved.length, 8);
-    const index = await readAttachIndex(
-      path.join(workspaceRoot, "u1"),
-      { sessionId: "concurrent-session", attachmentSource: "model" },
-    );
+    const index = await readAttachIndex(path.join(workspaceRoot, "u1"), {
+      sessionId: "concurrent-session",
+      attachmentSource: "model",
+    });
     assert.equal(Object.keys(index.attachments).length, 8);
     for (const record of saved) {
       assert.ok(index.attachments[record.attachmentId]);
@@ -100,32 +109,38 @@ test("AttachmentService.resolveSourceAttachment requires the complete scoped ide
       userId: "u1",
       sessionId: "s1",
       attachmentSource: "user",
-      attachments: [{
-        clientAttachmentId: "client-source",
-        name: "same-name.txt",
-        mimeType: "text/plain",
-        contentBase64: Buffer.from("source", "utf8").toString("base64"),
-      }],
+      attachments: [
+        {
+          clientAttachmentId: "client-source",
+          name: "same-name.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("source", "utf8").toString("base64"),
+        },
+      ],
     });
     const [otherSource] = await service.ingest({
       userId: "u1",
       sessionId: "s2",
       attachmentSource: "user",
-      attachments: [{
-        name: "same-name.txt",
-        mimeType: "text/plain",
-        contentBase64: Buffer.from("other session", "utf8").toString("base64"),
-      }],
+      attachments: [
+        {
+          name: "same-name.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("other session", "utf8").toString("base64"),
+        },
+      ],
     });
     const [sameSessionOtherSource] = await service.ingest({
       userId: "u1",
       sessionId: "s1",
       attachmentSource: "user",
-      attachments: [{
-        name: "other.txt",
-        mimeType: "text/plain",
-        contentBase64: Buffer.from("same session other", "utf8").toString("base64"),
-      }],
+      attachments: [
+        {
+          name: "other.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("same session other", "utf8").toString("base64"),
+        },
+      ],
     });
 
     const byId = await service.resolveSourceAttachment({
@@ -160,18 +175,20 @@ test("AttachmentService.resolveSourceAttachment requires the complete scoped ide
   });
 });
 
-test("resolveCanonicalUserSourceAttachment resolves by attachment identity", async () => {
+test("resolveCanonicalSourceAttachment resolves an exact attachment identity", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const [source] = await service.ingest({
       userId: "u1",
       sessionId: "s1",
       attachmentSource: "user",
-      attachments: [{
-        name: "source.docx",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        contentBase64: Buffer.from("source", "utf8").toString("base64"),
-      }],
+      attachments: [
+        {
+          name: "source.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          contentBase64: Buffer.from("source", "utf8").toString("base64"),
+        },
+      ],
     });
     const runtime = {
       userId: "u1",
@@ -199,8 +216,12 @@ test("resolveCanonicalUserSourceAttachment resolves by attachment identity", asy
       environment: { workspace: { basePath: workspaceRoot } },
     });
 
-    const resolved = await resolveCanonicalUserSourceAttachment({
-      attachmentId: source.attachmentId,
+    const resolved = await resolveCanonicalSourceAttachment({
+      attachmentIdentity: {
+        attachmentId: source.attachmentId,
+        sessionId: "s1",
+        attachmentSource: "user",
+      },
       agentContext,
     });
 
@@ -215,12 +236,14 @@ test("AttachmentService.ingest is idempotent by clientAttachmentId", async () =>
       userId: "u1",
       sessionId: "s1",
       attachmentSource: "user",
-      attachments: [{
-        clientAttachmentId: "client-1",
-        name: "note.txt",
-        mimeType: "text/plain",
-        contentBase64: Buffer.from("same", "utf8").toString("base64"),
-      }],
+      attachments: [
+        {
+          clientAttachmentId: "client-1",
+          name: "note.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("same", "utf8").toString("base64"),
+        },
+      ],
     };
 
     const first = await service.ingest(basePayload);
@@ -231,10 +254,12 @@ test("AttachmentService.ingest is idempotent by clientAttachmentId", async () =>
     await assert.rejects(
       service.ingest({
         ...basePayload,
-        attachments: [{
-          ...basePayload.attachments[0],
-          contentBase64: Buffer.from("different", "utf8").toString("base64"),
-        }],
+        attachments: [
+          {
+            ...basePayload.attachments[0],
+            contentBase64: Buffer.from("different", "utf8").toString("base64"),
+          },
+        ],
       }),
       (error) => error?.code === "CLIENT_ATTACHMENT_ID_CONFLICT",
     );
@@ -257,11 +282,13 @@ test("AttachmentService links parsed results to one attachment identity only", a
     const [parsed] = await service.ingestGeneratedArtifacts({
       userId: "u1",
       sessionId: "s1",
-      artifacts: [{
-        name: "parsed.md",
-        mimeType: "text/markdown",
-        contentBase64: Buffer.from("parsed", "utf8").toString("base64"),
-      }],
+      artifacts: [
+        {
+          name: "parsed.md",
+          mimeType: "text/markdown",
+          contentBase64: Buffer.from("parsed", "utf8").toString("base64"),
+        },
+      ],
     });
 
     await service.linkParsedResultToAttachment({
@@ -270,7 +297,7 @@ test("AttachmentService links parsed results to one attachment identity only", a
       sourceSessionId: "s1",
       sourceAttachmentSource: "user",
       parsedAttachmentMeta: parsed,
-      toolName: "doc_to_data",
+      toolName: "multimodal_parse",
     });
 
     const otherAttachment = await service.getAttachmentById({
@@ -334,7 +361,13 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
       userId,
       sessionId: rootSessionId,
       attachmentSource: "user",
-      attachments: [{ name: "raw.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", contentBase64: sourceContent }],
+      attachments: [
+        {
+          name: "raw.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          contentBase64: sourceContent,
+        },
+      ],
     });
     const [parsedAttachment] = await service.ingestGeneratedArtifacts({
       userId,
@@ -344,8 +377,18 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     });
 
     const basePath = path.join(workspaceRoot, userId);
-    const runtimeSessionFile = path.join(basePath, "runtime/session", rootSessionId, "session.json");
-    const runtimeSummaryFile = path.join(basePath, "runtime/session", rootSessionId, "session-summary.json");
+    const runtimeSessionFile = path.join(
+      basePath,
+      "runtime/session",
+      rootSessionId,
+      "session.json",
+    );
+    const runtimeSummaryFile = path.join(
+      basePath,
+      "runtime/session",
+      rootSessionId,
+      "session-summary.json",
+    );
     const pluginSessionFile = path.join(
       basePath,
       "runtime/plugin/session",
@@ -377,16 +420,30 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
         },
       ],
     };
-    await writeSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile), sessionPayload: snapshotPayload });
-    await writeFile(runtimeSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 2, messages: [] }, null, 2)}\n`, "utf8");
-    await writeSessionArtifact({ sessionDir: path.dirname(pluginSessionFile), sessionPayload: snapshotPayload });
-    await writeFile(pluginSummaryFile, `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 3, messages: [] }, null, 2)}\n`, "utf8");
+    await writeSessionArtifact({
+      sessionDir: path.dirname(runtimeSessionFile),
+      sessionPayload: snapshotPayload,
+    });
+    await writeFile(
+      runtimeSummaryFile,
+      `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 2, messages: [] }, null, 2)}\n`,
+      "utf8",
+    );
+    await writeSessionArtifact({
+      sessionDir: path.dirname(pluginSessionFile),
+      sessionPayload: snapshotPayload,
+    });
+    await writeFile(
+      pluginSummaryFile,
+      `${JSON.stringify({ schemaVersion: 5, sessionId: rootSessionId, depth: 3, messages: [] }, null, 2)}\n`,
+      "utf8",
+    );
 
     const linked = await service.linkParsedResultToAttachment({
       userId,
       sourceAttachmentId: sourceAttachment.attachmentId,
       parsedAttachmentMeta: parsedAttachment,
-      toolName: "doc_to_data",
+      toolName: "multimodal_parse",
       sourceSessionId: rootSessionId,
       sourceAttachmentSource: "user",
     });
@@ -396,14 +453,18 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     assert.equal(linked.parsedResult?.sessionId, parsedAttachment.sessionId);
     assert.equal(linked.parsedResult?.attachmentSource, parsedAttachment.attachmentSource);
 
-    const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
-    const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });
+    const runtimeSnapshot = await readSessionArtifact({
+      sessionDir: path.dirname(runtimeSessionFile),
+    });
+    const pluginSnapshot = await readSessionArtifact({
+      sessionDir: path.dirname(pluginSessionFile),
+    });
     const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachments?.[0] || {};
     const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachments?.[0] || {};
     assert.equal(runtimeAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
     assert.equal(pluginAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(runtimeAttachment.parsedResult?.tool, "doc_to_data");
-    assert.equal(pluginAttachment.parsedResult?.tool, "doc_to_data");
+    assert.equal(runtimeAttachment.parsedResult?.tool, "multimodal_parse");
+    assert.equal(pluginAttachment.parsedResult?.tool, "multimodal_parse");
 
     const runtimeSummary = JSON.parse(await readFile(runtimeSummaryFile, "utf8"));
     const pluginSummary = JSON.parse(await readFile(pluginSummaryFile, "utf8"));
@@ -411,10 +472,16 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
     assert.equal(pluginSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
     assert.equal("depth" in runtimeSummary, false);
     assert.equal("depth" in pluginSummary, false);
-    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.tool, "doc_to_data");
-    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.tool, "doc_to_data");
+    assert.equal(
+      runtimeSummary.messages[0].attachments[0].parsedResult?.attachmentId,
+      parsedAttachment.attachmentId,
+    );
+    assert.equal(
+      pluginSummary.messages[0].attachments[0].parsedResult?.attachmentId,
+      parsedAttachment.attachmentId,
+    );
+    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.tool, "multimodal_parse");
+    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.tool, "multimodal_parse");
   });
 });
 
@@ -459,22 +526,29 @@ test("index-manager migrates protocol records and isolates every attachment scop
     );
     const canonicalLoaded = await readAttachIndex(basePath, scope);
     assert.equal(canonicalLoaded.attachments.a2?.name, "x.txt");
-    assert.equal(canonicalLoaded.attachments.a2?.sandboxPath, "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt");
+    assert.equal(
+      canonicalLoaded.attachments.a2?.sandboxPath,
+      "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt",
+    );
     assert.equal(canonicalLoaded.attachments.a2?.previewUrl, "/preview/a2");
 
     const otherScope = { sessionId: "s2", attachmentSource: "user" };
-    await writeAttachIndex(basePath, {
-      attachments: {
-        a2: {
-          attachmentId: "a2",
-          sessionId: "s2",
-          attachmentSource: "user",
-          name: "other.txt",
-          mimeType: "text/plain",
-          relativePath: "runtime/attach/scoped/s2/user/a2/other.txt",
+    await writeAttachIndex(
+      basePath,
+      {
+        attachments: {
+          a2: {
+            attachmentId: "a2",
+            sessionId: "s2",
+            attachmentSource: "user",
+            name: "other.txt",
+            mimeType: "text/plain",
+            relativePath: "runtime/attach/scoped/s2/user/a2/other.txt",
+          },
         },
       },
-    }, otherScope);
+      otherScope,
+    );
     const isolated = await readAttachIndex(basePath, otherScope);
     assert.equal(isolated.attachments.a2?.sessionId, "s2");
     assert.equal(isolated.attachments.a2?.attachmentSource, "user");

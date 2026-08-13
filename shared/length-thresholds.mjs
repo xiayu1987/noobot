@@ -15,6 +15,7 @@ function deepFreeze(value) {
 
 const KiB = 1024;
 const MiB = 1024 * KiB;
+const MB = 1000 * 1000;
 
 const LENGTH_TIERS = deepFreeze({
   chars: {
@@ -59,6 +60,7 @@ const LENGTH_TIERS = deepFreeze({
   },
   bytes: {
     connectorCommandFile: 256 * KiB,
+    nativeScriptSource: 100 * KiB,
     batchPayload: Math.floor(0.8 * MiB),
     clientNonImagePreview: 1 * MiB,
     jsonlBuffer: 5 * MiB,
@@ -67,6 +69,8 @@ const LENGTH_TIERS = deepFreeze({
     desktopLogFile: 10 * MiB,
     searchBuffer: 16 * MiB,
     attachmentTotal: 30 * MiB,
+    responsesFileInput: 50 * MB,
+    nativeScriptArtifact: 200 * MiB,
     libreOfficeTempBaseline: 512 * MiB,
   },
 });
@@ -124,8 +128,18 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     webMinTagTextChars: LENGTH_TIERS.extractionChars.minTagText,
   },
 
+  nativeScript: {
+    sourceBytes: LENGTH_TIERS.bytes.nativeScriptSource,
+    textReadBytes: LENGTH_TIERS.bytes.directText,
+    processOutputBytes: LENGTH_TIERS.bytes.directText,
+    inputTotalBytes: LENGTH_TIERS.bytes.nativeScriptArtifact,
+    artifactTotalBytes: LENGTH_TIERS.bytes.nativeScriptArtifact,
+  },
+
   dataProcessing: {
     batchBytes: LENGTH_TIERS.bytes.batchPayload,
+
+    responsesFileInputBytes: LENGTH_TIERS.bytes.responsesFileInput,
 
     directTextBytes: LENGTH_TIERS.bytes.directText,
 
@@ -210,10 +224,8 @@ export const LENGTH_THRESHOLDS = deepFreeze({
     attachmentExtensionChars: LENGTH_TIERS.displayChars.extensionName,
     sessionSummaryObjectFieldChars: LENGTH_TIERS.displayChars.shortTrace,
     sessionSummaryArrayItemChars: LENGTH_TIERS.displayChars.sessionSummaryArrayItem,
-    sessionSummaryDefaultJsonStringChars:
-      LENGTH_TIERS.displayChars.sessionSummaryDefaultJsonString,
-    sessionSummarySmallJsonStringChars:
-      LENGTH_TIERS.displayChars.sessionSummarySmallJsonString,
+    sessionSummaryDefaultJsonStringChars: LENGTH_TIERS.displayChars.sessionSummaryDefaultJsonString,
+    sessionSummarySmallJsonStringChars: LENGTH_TIERS.displayChars.sessionSummarySmallJsonString,
     sessionSummaryFileNameChars: LENGTH_TIERS.displayChars.sessionSummaryFileName,
     mcpTaskResultPreviewChars: LENGTH_TIERS.displayChars.shortTrace,
     memoryParserCandidatePreviewChars: LENGTH_TIERS.displayChars.memoryParserCandidatePreview,

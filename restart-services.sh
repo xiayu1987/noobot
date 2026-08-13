@@ -5,6 +5,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$ROOT_DIR/scripts/runtime-process-config.sh"
 CLIENT_DIR="$ROOT_DIR/client/noobot-chat"
 SERVICE_DIR="$ROOT_DIR/service"
 AGENT_PROXY_DIR="$ROOT_DIR/agent-proxy"
@@ -14,16 +15,13 @@ PM2_LOG_ROTATE_ENABLED="${PM2_LOG_ROTATE_ENABLED:-true}"
 PM2_LOG_ROTATE_MAX_SIZE="${PM2_LOG_ROTATE_MAX_SIZE:-20M}"
 PM2_LOG_ROTATE_RETAIN="${PM2_LOG_ROTATE_RETAIN:-14}"
 PM2_LOG_ROTATE_WORKER_INTERVAL="${PM2_LOG_ROTATE_WORKER_INTERVAL:-3600}"
-CLIENT_APP_NAME="noobot-client"
-SERVICE_APP_NAME="noobot-service"
-AGENT_PROXY_APP_NAME="noobot-agent-proxy"
-MODEL_PROXY_APP_NAME="noobot-model-proxy"
 CADDY_ADDR="${CADDY_ADDR:-:10060}"
 AGENT_PROXY_UPSTREAM="${AGENT_PROXY_UPSTREAM:-127.0.0.1:10062}"
+PORT="${PORT:-10061}"
 AGENT_PROXY_PORT="${AGENT_PROXY_PORT:-10062}"
 AGENT_PROXY_HOST="${AGENT_PROXY_HOST:-127.0.0.1}"
-AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:10061/chat/ws}"
-AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:10061}"
+AGENT_PROXY_UPSTREAM_WS_URL="${AGENT_PROXY_UPSTREAM_WS_URL:-ws://127.0.0.1:${PORT}/chat/ws}"
+AGENT_PROXY_UPSTREAM_HTTP_BASE="${AGENT_PROXY_UPSTREAM_HTTP_BASE:-http://127.0.0.1:${PORT}}"
 
 run_pm2() {
   (cd "$SERVICE_DIR" && PM2_HOME="$PM2_HOME_DIR" npx pm2 "$@")
@@ -63,9 +61,7 @@ wait_for_runtime_ready() {
   while ((elapsed < 30)); do
     if apps_json="$(run_pm2 jlist 2>/dev/null)" \
       && echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR" >/dev/null 2>&1 \
-      && ss -lnt | grep -q ':10060 ' \
-      && ss -lnt | grep -q ':10061 ' \
-      && ss -lnt | grep -q ':10062 '; then
+      && noobot_ports_are_listening; then
       echo "$apps_json" | node "$ROOT_DIR/scripts/validate-pm2-processes.mjs" "$ROOT_DIR"
       return 0
     fi
@@ -74,20 +70,24 @@ wait_for_runtime_ready() {
   done
   echo "Noobot 重启后 30 秒内未就绪" >&2
   run_pm2 ls >&2 || true
-  ss -lntp | grep -E ':10060|:10061|:10062' >&2 || true
+  local port
+  while IFS= read -r port; do
+    ss -lntp | grep ":${port} " >&2 || true
+  done < <(noobot_runtime_ports)
   return 1
 }
 
 [[ -d "$CLIENT_DIR" ]] || { echo "前端目录不存在: $CLIENT_DIR" >&2; exit 1; }
 [[ -d "$SERVICE_DIR" ]] || { echo "后端目录不存在: $SERVICE_DIR" >&2; exit 1; }
 [[ -d "$AGENT_PROXY_DIR" ]] || { echo "代理目录不存在: $AGENT_PROXY_DIR" >&2; exit 1; }
+[[ -d "$MODEL_PROXY_DIR" ]] || { echo "模型代理目录不存在: $MODEL_PROXY_DIR" >&2; exit 1; }
 mkdir -p "$PM2_HOME_DIR"
 ensure_pm2_log_rotation
 
-export CADDY_ADDR AGENT_PROXY_UPSTREAM
+export CADDY_ADDR AGENT_PROXY_UPSTREAM PORT
 export AGENT_PROXY_PORT AGENT_PROXY_HOST AGENT_PROXY_UPSTREAM_WS_URL AGENT_PROXY_UPSTREAM_HTTP_BASE
 [[ -f "$PM2_ECOSYSTEM_FILE" ]] || { echo "PM2 ecosystem 配置不存在: $PM2_ECOSYSTEM_FILE" >&2; exit 1; }
-run_pm2 delete "$SERVICE_APP_NAME" "$AGENT_PROXY_APP_NAME" "$MODEL_PROXY_APP_NAME" "$CLIENT_APP_NAME" >/dev/null 2>&1 || true
+run_pm2 delete "${NOOBOT_PM2_APP_NAMES[@]}" >/dev/null 2>&1 || true
 run_pm2 start "$PM2_ECOSYSTEM_FILE" --update-env
 wait_for_runtime_ready
 

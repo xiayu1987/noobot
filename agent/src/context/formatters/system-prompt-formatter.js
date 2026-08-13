@@ -38,7 +38,9 @@ function resolveWorkspaceDescription(
   workspaceDirectoryDescriptions = {},
   defaultWorkspaceDescription = "",
 ) {
-  const normalizedPath = String(dirPath || "").trim().replaceAll("\\", "/");
+  const normalizedPath = String(dirPath || "")
+    .trim()
+    .replaceAll("\\", "/");
   if (!normalizedPath) return String(defaultWorkspaceDescription || "").trim();
   if (workspaceDirectoryDescriptions[normalizedPath]) {
     return workspaceDirectoryDescriptions[normalizedPath];
@@ -70,33 +72,17 @@ function buildWorkspaceDirectorySection({
 
 function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
   const pathGuidanceI18n =
-    contextPromptI18n?.pathGuidance &&
-    typeof contextPromptI18n.pathGuidance === "object"
+    contextPromptI18n?.pathGuidance && typeof contextPromptI18n.pathGuidance === "object"
       ? contextPromptI18n.pathGuidance
       : {};
-  const sandbox = staticInfo?.sandbox && typeof staticInfo.sandbox === "object"
-    ? staticInfo.sandbox
-    : {};
-  const identity = staticInfo?.identity && typeof staticInfo.identity === "object"
-    ? staticInfo.identity
-    : {};
-  const sandboxEnabled = sandbox?.enabled === true;
+  const identity =
+    staticInfo?.identity && typeof staticInfo.identity === "object" ? staticInfo.identity : {};
   const lines = [
     pathGuidanceI18n.preferRelative,
-    sandboxEnabled
-      ? pathGuidanceI18n.sandboxView
-      : pathGuidanceI18n.hostView,
-    sandboxEnabled &&
-    Array.isArray(sandbox?.extraMountTargets) &&
-    sandbox.extraMountTargets.length
-      ? pathGuidanceI18n.sandboxMounts
-      : "",
-    !sandboxEnabled && identity?.isSuperUser === true
-      ? pathGuidanceI18n.superUserHost
-      : "",
-    !sandboxEnabled && identity?.isSuperUser !== true
-      ? pathGuidanceI18n.regularHost
-      : "",
+    pathGuidanceI18n.workspaceView,
+    pathGuidanceI18n.taskLocalView,
+    identity?.isSuperUser === true ? pathGuidanceI18n.superUserHost : "",
+    identity?.isSuperUser !== true ? pathGuidanceI18n.regularHost : "",
     pathGuidanceI18n.patchRoot,
   ]
     .map((item) => String(item || "").trim())
@@ -111,7 +97,6 @@ function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(no
     hasValue(value) ? JSON.stringify(value, null, 2) : String(emptyValueText || "(none)"),
   );
 }
-
 
 function hasConnectorData(connectorStatusSection = {}) {
   const currentConnectors =
@@ -142,7 +127,9 @@ function normalizeDynamicInfoForSystem(dynamicInfo = {}) {
     return {};
   }
   const config =
-    dynamicInfo.config && typeof dynamicInfo.config === "object" && !Array.isArray(dynamicInfo.config)
+    dynamicInfo.config &&
+    typeof dynamicInfo.config === "object" &&
+    !Array.isArray(dynamicInfo.config)
       ? dynamicInfo.config
       : {};
   return {
@@ -159,10 +146,7 @@ function hasMcpServerData(mcpServers = []) {
 }
 
 function hasAttachmentData(normalizedAttachmentMetas = []) {
-  return (
-    Array.isArray(normalizedAttachmentMetas) &&
-    normalizedAttachmentMetas.length > 0
-  );
+  return Array.isArray(normalizedAttachmentMetas) && normalizedAttachmentMetas.length > 0;
 }
 
 export function composeSystemInfoSections({
@@ -182,9 +166,7 @@ export function composeSystemInfoSections({
 }) {
   const i18n = resolveSystemPromptFormatterI18n(locale);
   const contextPromptI18n =
-    i18n?.contextPrompt && typeof i18n.contextPrompt === "object"
-      ? i18n.contextPrompt
-      : {};
+    i18n?.contextPrompt && typeof i18n.contextPrompt === "object" ? i18n.contextPrompt : {};
   const sections = contextPromptI18n?.sections || {};
   const workspaceDirectoryDescriptions =
     contextPromptI18n?.workspaceDirectoryDescriptions &&
@@ -210,12 +192,17 @@ export function composeSystemInfoSections({
     normalizedSystemPrompt,
     toJsonSection(String(sections?.staticInfo || "").trim(), staticInfo, { emptyValueText }),
     hasValue(normalizedPathGuidance)
+      ? toSystemSection(String(sections?.pathGuidance || "").trim(), normalizedPathGuidance)
+      : "",
+    hasValue(contextPromptI18n?.executionEvidence)
       ? toSystemSection(
-          String(sections?.pathGuidance || "").trim(),
-          normalizedPathGuidance,
+          String(sections?.executionEvidence || "").trim(),
+          String(contextPromptI18n.executionEvidence).trim(),
         )
       : "",
-    toJsonSection(String(sections?.dynamicInfo || "").trim(), normalizedDynamicInfo, { emptyValueText }),
+    toJsonSection(String(sections?.dynamicInfo || "").trim(), normalizedDynamicInfo, {
+      emptyValueText,
+    }),
     toJsonSection(String(sections?.scenario || "").trim(), scenarioSection, { emptyValueText }),
     hasValue(normalizedWorkspaceSection)
       ? toSystemSection(
@@ -226,18 +213,12 @@ export function composeSystemInfoSections({
     hasValue(longMemory)
       ? toSystemSection(
           String(sections?.longMemory || "").trim(),
-          typeof longMemory === "string"
-            ? longMemory
-            : JSON.stringify(longMemory, null, 2),
+          typeof longMemory === "string" ? longMemory : JSON.stringify(longMemory, null, 2),
         )
       : "",
     toJsonSection(String(sections?.models || "").trim(), modelSection, { emptyValueText }),
     toJsonSection(String(sections?.skills || "").trim(), skills, { emptyValueText }),
-    toJsonSection(
-      String(sections?.services || "").trim(),
-      services,
-      { emptyValueText },
-    ),
+    toJsonSection(String(sections?.services || "").trim(), services, { emptyValueText }),
     hasMcpServerData(mcpServers)
       ? toJsonSection(String(sections?.mcpServers || "").trim(), mcpServers, { emptyValueText })
       : "",

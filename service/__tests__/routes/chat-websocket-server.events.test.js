@@ -7,7 +7,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
-import { startServerWithWs, closeServer, callChatWs } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  callChatWs,
+} from "./chat-websocket-server.test-helpers.js";
 
 test("authority outbox publishes child lifecycle under the persisted child session identity", async () => {
   const envelope = createTurnLifecycleEnvelope({
@@ -63,8 +67,14 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   });
 
   assert.deepEqual(result, { dispatched: true, delivered: 1 });
-  assert.equal(identities.every((identity) => identity.sessionId === "child-session"), true);
-  assert.equal(identities.every((identity) => identity.parentSessionId === "parent-session"), true);
+  assert.equal(
+    identities.every((identity) => identity.sessionId === "child-session"),
+    true,
+  );
+  assert.equal(
+    identities.every((identity) => identity.parentSessionId === "parent-session"),
+    true,
+  );
   assert.equal(events.length, 1);
   assert.equal(events[0]?.event, "turn_lifecycle");
   assert.equal(events[0]?.data?.sessionId, "child-session");
@@ -166,12 +176,14 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
         data: {
           dialogProcessId: "dp-attachments",
           sessionId: "sub-session-from-parser",
-          attachments: [{
-            attachmentId: "att-1",
-            sessionId: "s1",
-            attachmentSource: "user",
-            name: "a.txt",
-          }],
+          attachments: [
+            {
+              attachmentId: "att-1",
+              sessionId: "s1",
+              attachmentSource: "user",
+              name: "a.txt",
+            },
+          ],
         },
       });
       eventListener?.onEvent?.({
@@ -214,19 +226,19 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
     const attachmentsEvent = events.find((item) => item?.event === "attachment_parsed");
     assert.equal(attachmentsEvent?.data?.sessionId, "s1");
     assert.equal(attachmentsEvent?.data?.turnScopeId, "turn-parent");
-    assert.deepEqual(attachmentsEvent?.data?.attachments, [{
-      attachmentId: "att-1",
-      sessionId: "s1",
-      attachmentSource: "user",
-      name: "a.txt",
-    }]);
+    assert.deepEqual(attachmentsEvent?.data?.attachments, [
+      {
+        attachmentId: "att-1",
+        sessionId: "s1",
+        attachmentSource: "user",
+        name: "a.txt",
+      },
+    ]);
 
     const deltaEvent = events.find((item) => item?.event === "delta");
     assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");
 
-    const subagentDeltaEvent = events.find(
-      (item) => item?.event === "subagent_llm_delta",
-    );
+    const subagentDeltaEvent = events.find((item) => item?.event === "subagent_llm_delta");
     assert.equal(subagentDeltaEvent?.data?.sessionId, "s1");
     assert.equal(subagentDeltaEvent?.data?.dialogProcessId, "dp-root");
     assert.equal(subagentDeltaEvent?.data?.childSessionId, "sub-session-1");
@@ -249,7 +261,7 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
         data: {
           dialogProcessId: "dp-parent",
           sessionId: "s1",
-          tool: "process_content_task",
+          tool: "execute_native_script",
         },
       });
       eventListener?.onEvent?.({
@@ -300,10 +312,14 @@ test("chat-websocket-server: child run system events are owned by parent dialog 
       },
     });
 
-    const childSystemEvents = events.filter((item) =>
-      item?.data?.childSessionId === "child-session-1" &&
-      ["subagent_session_starting", "subagent_workspace_ready", "subagent_tool_call_start"]
-        .includes(item?.event),
+    const childSystemEvents = events.filter(
+      (item) =>
+        item?.data?.childSessionId === "child-session-1" &&
+        [
+          "subagent_session_starting",
+          "subagent_workspace_ready",
+          "subagent_tool_call_start",
+        ].includes(item?.event),
     );
     assert.equal(childSystemEvents.length, 3);
     assert.deepEqual(
@@ -399,8 +415,12 @@ test("chat-websocket-server preserves authoritative identity for workflow child 
       },
     });
     const messageEvents = events.filter((item) => item?.event === "subagent_message_event");
-    const thinking = messageEvents.find((item) => item?.data?.event?.eventType === "main_model_content");
-    const toolResult = messageEvents.find((item) => item?.data?.event?.eventType === "tool_call_end");
+    const thinking = messageEvents.find(
+      (item) => item?.data?.event?.eventType === "main_model_content",
+    );
+    const toolResult = messageEvents.find(
+      (item) => item?.data?.event?.eventType === "tool_call_end",
+    );
     assert.deepEqual(thinking?.data?.event, {
       ...identity,
       eventId: "evt-thinking",
@@ -507,7 +527,6 @@ test("chat-websocket-server: global streaming=true should allow delta", async ()
     await closeServer(server);
   }
 });
-
 
 test("chat-websocket-server: explicit streaming=false should override global streaming=true", async () => {
   const server = await startServerWithWs({

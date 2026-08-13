@@ -151,6 +151,7 @@ export function createServiceTool({ agentContext }) {
       }
       const result = await invokeServiceHandler({
         agentContext,
+        runtime,
         globalConfig,
         userId,
         serviceName: normalizedServiceName,

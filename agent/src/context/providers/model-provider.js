@@ -6,7 +6,6 @@
 import { resolveDefaultModelSpec } from "../../models/index.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
 
-
 function normalizeModelMultimodalInfo(modelSpec = {}) {
   const multimodalGeneration = isPlainObject(modelSpec?.multimodal_generation)
     ? modelSpec.multimodal_generation
@@ -20,11 +19,20 @@ function normalizeModelMultimodalInfo(modelSpec = {}) {
         .filter(Boolean)
     : [];
   return {
-    support_understanding: multimodalGeneration?.support_understanding === true,
     support_generation: {
       enabled: supportGeneration?.enabled === true,
       support_scope: supportScope,
     },
+  };
+}
+
+function normalizeModelMultimodalParsing(modelSpec = {}) {
+  const parsing = isPlainObject(modelSpec?.multimodal_parsing) ? modelSpec.multimodal_parsing : {};
+  return {
+    enabled: parsing?.enabled === true,
+    input_modalities: Array.isArray(parsing?.input_modalities)
+      ? parsing.input_modalities.map((item) => String(item || "").trim()).filter(Boolean)
+      : [],
   };
 }
 
@@ -33,8 +41,7 @@ export function resolveModelSection({
   userConfig = {},
   effectiveConfig = {},
 } = {}) {
-  const currentModelSpec =
-    resolveDefaultModelSpec({ globalConfig, userConfig }) || {};
+  const currentModelSpec = resolveDefaultModelSpec({ globalConfig, userConfig }) || {};
   const providers = effectiveConfig?.providers || {};
   return {
     current: {
@@ -46,6 +53,7 @@ export function resolveModelSection({
           ? true
           : currentModelSpec?.used_for_conversation === true,
       multimodal_generation: normalizeModelMultimodalInfo(currentModelSpec),
+      multimodal_parsing: normalizeModelMultimodalParsing(currentModelSpec),
     },
     available: Object.entries(providers)
       .filter(([, providerConfig]) => providerConfig?.enabled !== false)
@@ -58,14 +66,12 @@ export function resolveModelSection({
             ? true
             : providerConfig?.used_for_conversation === true,
         multimodal_generation: normalizeModelMultimodalInfo(providerConfig),
+        multimodal_parsing: normalizeModelMultimodalParsing(providerConfig),
       })),
   };
 }
 
 export function resolveAllEnabledProviders(effectiveConfig = {}) {
   const providers = effectiveConfig?.providers || {};
-  return Object.fromEntries(
-    Object.entries(providers).filter(([, cfg]) => cfg?.enabled !== false),
-  );
+  return Object.fromEntries(Object.entries(providers).filter(([, cfg]) => cfg?.enabled !== false));
 }
-

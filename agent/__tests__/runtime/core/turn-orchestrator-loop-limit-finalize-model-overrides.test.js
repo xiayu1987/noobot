@@ -236,3 +236,54 @@ test("bound tool overrides use active model spec when it differs from default sp
   assert.equal(capturedNoToolInvokeOptions[0]?.preserve_thinking, undefined);
   assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
 });
+
+test("bound tool invocations are non-streaming across tool rounds", async () => {
+  const { modelPort, capturedInvocations } = createToolCallingModelPort([
+    { content: "", tool_calls: [] },
+    { content: "", tool_calls: [] },
+  ]);
+  const modelState = createModelState(modelPort);
+  modelState.runtime.runConfig.streaming = false;
+  modelState.globalConfig.streaming = true;
+  const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
+    adaptedBinding: { bindOptions: { tool_choice: "auto" } },
+    boundTools: [{ name: "execute_script" }],
+    messages: [],
+    modelState,
+    runtime: modelState.runtime,
+    abortSignal: null,
+  });
+
+  await invokeBoundLlmWithToolChoice();
+  await invokeBoundLlmWithToolChoice();
+
+  assert.deepEqual(
+    capturedInvocations.map((request) => request.options?.streaming),
+    [false, false],
+  );
+});
+
+test("bound tool invocations remain non-streaming when frontend enables streaming", async () => {
+  const { modelPort, capturedInvocations } = createToolCallingModelPort([
+    { content: "", tool_calls: [] },
+    { content: "", tool_calls: [] },
+  ]);
+  const modelState = createModelState(modelPort);
+  modelState.globalConfig.streaming = true;
+  const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
+    adaptedBinding: { bindOptions: { tool_choice: "auto" } },
+    boundTools: [{ name: "execute_script" }],
+    messages: [],
+    modelState,
+    runtime: modelState.runtime,
+    abortSignal: null,
+  });
+
+  await invokeBoundLlmWithToolChoice();
+  await invokeBoundLlmWithToolChoice();
+
+  assert.deepEqual(
+    capturedInvocations.map((request) => request.options?.streaming),
+    [false, false],
+  );
+});

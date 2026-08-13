@@ -133,13 +133,13 @@ watch(
       <div v-if="latestPluginAnalysisLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"
-          text="分析流程"
+          :text="translate('message.analysisFlow')"
         /><BaseNoteBlock :content="latestPluginAnalysisLog.output" />
       </div>
       <div v-if="latestMainModelContentLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"
-          text="模型分析"
+          :text="translate('message.modelAnalysis')"
         /><BaseNoteBlock :content="latestMainModelContentLog.output" />
       </div>
       <div

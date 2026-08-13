@@ -146,7 +146,9 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "search",
     "patch_file",
     "execute_script",
-    "process_content_task",
+    "execute_native_script",
+    "multimodal_generate",
+    "multimodal_parse",
     "user_interaction",
     "task_summary",
     "task_check",
@@ -205,9 +207,9 @@ test("custom_only should not inherit tools from any scenario", () => {
     globalConfig: {
       scenarios: {
         definitions: {
-          full: { tools: ["read_file", "process_content_task"] },
+          full: { tools: ["read_file", "multimodal_parse"] },
           programming: {
-            tools: ["read_file", "process_content_task"],
+            tools: ["read_file", "multimodal_parse"],
           },
           text: { tools: ["write_file", "call_mcp_task"] },
           custom: { tools: ["execute_script", "process_connector_tool"] },
@@ -230,7 +232,7 @@ test("custom_only should not inherit tools from any scenario", () => {
           customTool,
           { name: "read_file" },
           { name: "write_file" },
-          { name: "process_content_task" },
+          { name: "multimodal_parse" },
           { name: "call_mcp_task" },
           { name: "process_connector_tool" },
         ],
