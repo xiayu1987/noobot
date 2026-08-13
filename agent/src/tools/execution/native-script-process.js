@@ -5,9 +5,8 @@
  */
 import { execFile } from "node:child_process";
 import { rm } from "node:fs/promises";
-
-const NATIVE_TASK_CLEANUP_MAX_RETRIES = 10;
-const NATIVE_TASK_CLEANUP_RETRY_DELAY_MS = 100;
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const WINDOWS_PROCESS_ENV_KEYS = Object.freeze([
   "SystemRoot",
@@ -67,7 +66,7 @@ export async function cleanupNativeTaskDirectory(directory, { rmImpl = rm } = {}
   await rmImpl(directory, {
     recursive: true,
     force: true,
-    maxRetries: NATIVE_TASK_CLEANUP_MAX_RETRIES,
-    retryDelay: NATIVE_TASK_CLEANUP_RETRY_DELAY_MS,
+    maxRetries: TURN_THRESHOLDS.tools.nativeTaskCleanupMaxRetries,
+    retryDelay: TIME_THRESHOLDS.tools.nativeTaskCleanupRetryDelayMs,
   });
 }

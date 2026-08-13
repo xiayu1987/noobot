@@ -6,7 +6,7 @@
 
 ## 1) Requirements
 
-- Node.js 20.18.1+
+- Node.js 22.22.2+
 - npm 9+
 - Optional system dependencies:
   - `libreoffice` (Office document conversion)

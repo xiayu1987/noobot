@@ -5,6 +5,8 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import {
   buildNativeProcessEnv,
@@ -24,8 +26,8 @@ test("native task cleanup applies the cross-platform lock retry contract", async
       options: {
         recursive: true,
         force: true,
-        maxRetries: 10,
-        retryDelay: 100,
+        maxRetries: TURN_THRESHOLDS.tools.nativeTaskCleanupMaxRetries,
+        retryDelay: TIME_THRESHOLDS.tools.nativeTaskCleanupRetryDelayMs,
       },
     },
   ]);

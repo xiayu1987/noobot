@@ -22,7 +22,7 @@
     "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",
     "@noobot/authoritative-state": "file:../authoritative-state",
     "@noobot/session-protocol": "file:../session-protocol",
-    "ws": "^8.21.1",
+    "ws": "^8.21.3",
     "noobot-i18n": "file:../i18n",
     "@noobot/shared": "file:../shared",
     "@noobot/runtime-events": "file:../runtime-events",
