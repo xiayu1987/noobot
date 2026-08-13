@@ -65,6 +65,7 @@ function settleTurn(store, { sessionId, turnScopeId, state }) {
     sessionId,
     turnScopeId,
     resolved: true,
+    aggregateVersion: 1,
     turn: { sessionId, turnScopeId, state, phase: state === "stop_completed" ? "stop" : "completion",
       revision, sequence: revision, completionCommitId, summaryVersion: revision,
       capabilities: { actionLocked: false, canStop: false } },

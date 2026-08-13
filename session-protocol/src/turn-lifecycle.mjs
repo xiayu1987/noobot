@@ -14,7 +14,7 @@ export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
-export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 1;
+export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
 export const ATTACHMENT_PARSED_EVENT = "attachment_parsed";
 
@@ -442,7 +442,7 @@ const TERMINAL_STATE_VALUES = new Set([
 export function createTurnTerminalResolution({
   commandId = "", sessionId = "", turnScopeId = "", resolved = false,
   retryable = false, reason = "", retryAfterMs = 0, turn = null,
-  materialization = null, generatedAt = new Date().toISOString(),
+  materialization = null, aggregateVersion = null, generatedAt = new Date().toISOString(),
 } = {}) {
   const resolvedTurn = turn
     ? {
@@ -456,6 +456,7 @@ export function createTurnTerminalResolution({
     commandId: clean(commandId), sessionId: clean(sessionId), turnScopeId: canonicalizeTurnScopeId(turnScopeId),
     resolved: resolved === true, retryable: retryable === true, reason: clean(reason),
     retryAfterMs: Math.max(0, Number(retryAfterMs || 0)),
+    aggregateVersion: aggregateVersion == null ? null : Number(aggregateVersion),
     turn: resolvedTurn ? { ...snapshotTurn(resolvedTurn), sessionId: clean(resolvedTurn.sessionId || sessionId) } : null,
     materialization: materialization && typeof materialization === "object" ? materialization : null,
     generatedAt: clean(generatedAt),
@@ -479,6 +480,7 @@ export function validateTurnTerminalResolution(response = {}) {
     if (!Number.isInteger(Number(turn.revision)) || Number(turn.revision) < 1) errors.push("invalid_turn_revision");
     if (!Number.isInteger(Number(turn.sequence)) || Number(turn.sequence) < 1) errors.push("invalid_turn_sequence");
     if (!terminalStatus || typeof terminalStatus !== "object") errors.push("missing_terminal_status");
+    if (!Number.isInteger(response.aggregateVersion) || response.aggregateVersion < 0) errors.push("invalid_aggregate_version");
     if ([TURN_STATE.ACTION_FAILED, TURN_STATE.PROCESSING_FAILED, TURN_STATE.COMPLETION_FAILED, TURN_STATE.STOP_FAILED].includes(clean(turn.state)) &&
         (!turn.failure || typeof turn.failure !== "object")) errors.push("missing_terminal_failure");
   } else if (!clean(response.reason)) errors.push("missing_unresolved_reason");

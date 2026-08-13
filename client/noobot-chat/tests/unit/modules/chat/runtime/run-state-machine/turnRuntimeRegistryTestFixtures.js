@@ -109,8 +109,9 @@ export function settleTerminal(
     createTurnTerminalResolution({
       commandId: `terminal-resolution-${terminalResolutionSequence}`,
       sessionId,
-      turnScopeId,
-      resolved: true,
+    turnScopeId,
+    resolved: true,
+    aggregateVersion: 1,
       turn: {
         turnScopeId,
         dialogProcessId,

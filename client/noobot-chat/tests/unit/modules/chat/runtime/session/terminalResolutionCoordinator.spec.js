@@ -25,7 +25,7 @@ function response({
   summaryVersion = 2,
 } = {}) {
   return {
-    protocolVersion: 1,
+    protocolVersion: 2,
     eventType: "turn.terminal_resolved",
     commandId: "resolve-1",
     sessionId: "s-1",
@@ -34,6 +34,7 @@ function response({
     retryable,
     reason: resolved ? "" : "terminal_materialization_not_ready",
     retryAfterMs: 0,
+    aggregateVersion: 1,
     revision,
     sequence,
     completionCommitId,
@@ -279,6 +280,7 @@ describe("terminalResolutionCoordinator", () => {
       sessionId: "s-1",
       turnScopeId: "t-1",
       resolved: true,
+      aggregateVersion: 1,
       turn: {
         sessionId: "s-1",
         turnScopeId: "t-1",

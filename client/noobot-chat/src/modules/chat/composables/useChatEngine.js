@@ -23,6 +23,7 @@ import {
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
+import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
 
 const DEFAULT_MONOTONIC_ACTION_STOP_TIMEOUT_MS =
   TIME_THRESHOLDS.client.monotonicActionStopTimeoutMs;
@@ -128,6 +129,10 @@ export function useChatEngine({
         }));
       }
       if (result?.applied) {
+        const targetSession = activeSession?.value;
+        if (String(targetSession?.sessionId || "").trim() === sessionId) {
+          applyLatestSessionAggregateVersion(targetSession, response);
+        }
         const projected = selectSessionTurnRuntime(
           turnRuntimeRegistry?.value,
           sessionId,

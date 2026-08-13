@@ -19,6 +19,7 @@ function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
     sessionId,
     turnScopeId,
     resolved: true,
+    aggregateVersion: 1,
     turn: { sessionId, turnScopeId, state: "completed", phase: "completion", revision, sequence: revision,
       completionCommitId, summaryVersion: revision, updatedAt, capabilities: { actionLocked: false, canStop: false } },
     materialization: { completionCommitId, summaryVersion: revision, revision, sequence: revision,

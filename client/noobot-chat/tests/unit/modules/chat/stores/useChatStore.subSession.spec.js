@@ -212,10 +212,11 @@ describe("sub-session realtime message projection", () => {
     expect(store.selectSubSessionMessages("child-session").status).toBe("completed");
 
     const terminal = store.applyTurnTerminalResolution({
-      protocolVersion: 1,
+      protocolVersion: 2,
       eventType: "turn.terminal_resolved",
       commandId: "resolve-child-terminal",
       resolved: true,
+      aggregateVersion: 1,
       sessionId: identity.sessionId,
       turnScopeId: identity.turnScopeId,
       turn: {

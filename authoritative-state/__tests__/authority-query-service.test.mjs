@@ -81,8 +81,15 @@ test("authority owns terminal readiness decisions", () => {
   assert.equal(resolveAuthoritativeTurnTerminal({ lifecycle, commandId: "resolve-1", sessionId: "s1", turnScopeId: "turn-1" }).reason, "turn_not_terminal");
 
   lifecycle.turns.active = turn({ state: "completed", phase: "completion", terminalStatus: { status: "completed" } });
-  const resolved = resolveAuthoritativeTurnTerminal({ lifecycle, commandId: "resolve-1", sessionId: "s1", turnScopeId: "turn-1" });
+  const resolved = resolveAuthoritativeTurnTerminal({
+    lifecycle,
+    aggregateVersion: 12,
+    commandId: "resolve-1",
+    sessionId: "s1",
+    turnScopeId: "turn-1",
+  });
   assert.equal(resolved.resolved, true);
+  assert.equal(resolved.aggregateVersion, 12);
   assert.equal(resolved.turn.terminalStatus.status, "completed");
 });
 

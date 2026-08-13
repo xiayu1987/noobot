@@ -106,7 +106,7 @@ function terminalResolution({
   const summaryVersion = 1;
   return {
     ok: true,
-    protocolVersion: 1,
+    protocolVersion: 2,
     eventType: "turn.terminal_resolved",
     commandId: `resolve:${sessionId}:${turnScopeId}`,
     sessionId,
@@ -115,6 +115,7 @@ function terminalResolution({
     retryable: false,
     reason: "",
     retryAfterMs: 0,
+    aggregateVersion: 1,
     turn: {
       sessionId,
       turnScopeId,

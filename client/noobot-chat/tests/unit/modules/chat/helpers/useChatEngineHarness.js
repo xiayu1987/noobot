@@ -37,7 +37,7 @@ const terminalResolutionFromUrl = (
     ? { stage: state.slice(0, -"_failed".length), retryable: false, message: "terminal failure" }
     : null;
   return {
-    protocolVersion: 1,
+    protocolVersion: 2,
     eventType: "turn.terminal_resolved",
     commandId: `resolve:${sessionId}:${turnScopeId}`,
     sessionId,
@@ -46,6 +46,7 @@ const terminalResolutionFromUrl = (
     retryable: false,
     reason: "",
     retryAfterMs: 0,
+    aggregateVersion: 1,
     turn: {
       sessionId,
       turnScopeId,

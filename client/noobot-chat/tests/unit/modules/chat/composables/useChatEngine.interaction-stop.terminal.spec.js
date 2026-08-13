@@ -79,7 +79,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     turnRuntimeRegistry.value = { ...turnRuntimeRegistry.value };
     releaseResponse({
       ok: true,
-      protocolVersion: 1,
+      protocolVersion: 2,
       eventType: "turn.terminal_resolved",
       commandId: "terminal-resolution:real:1",
       sessionId,
@@ -88,6 +88,7 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       retryable: false,
       reason: "",
       retryAfterMs: 0,
+      aggregateVersion: 7,
       turn: terminalTurn,
       materialization: null,
     });
@@ -114,13 +115,14 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        protocolVersion: 1,
+        protocolVersion: 2,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:identity-promotion",
         sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
+        aggregateVersion: 1,
         turn: {
           sessionId,
           turnScopeId,
@@ -169,13 +171,14 @@ describe("useChatEngine.interaction-stop: terminal", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        protocolVersion: 1,
+        protocolVersion: 2,
         eventType: "turn.terminal_resolved",
         commandId: "terminal-resolution:refresh-e2e",
         sessionId,
         turnScopeId,
         resolved: true,
         retryable: false,
+        aggregateVersion: 1,
         turn: {
           sessionId,
           turnScopeId,

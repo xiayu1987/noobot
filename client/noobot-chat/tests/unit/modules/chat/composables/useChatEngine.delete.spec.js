@@ -30,6 +30,7 @@ function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messag
     sessionId,
     turnScopeId,
     resolved: true,
+    aggregateVersion: 1,
     turn: {
       sessionId,
       turnScopeId,
