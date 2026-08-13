@@ -5,7 +5,7 @@
  */
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import os from "node:os";
 import {
   TASK_PATH_KINDS,
@@ -32,6 +32,8 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
 const FORBIDDEN_IDENTIFIERS = new Set(["require", "process", "globalThis", "global", "eval", "Function", "WebAssembly", "Buffer", "fetch", "module", "Reflect", "Proxy", "constructor", "prototype", "__proto__"]);
 const FORBIDDEN_PROPERTIES = new Set(["constructor", "__proto__", "prototype"]);
+const NATIVE_TASK_CLEANUP_MAX_RETRIES = 10;
+const NATIVE_TASK_CLEANUP_RETRY_DELAY_MS = 100;
 
 function projectNativeOutput(value, { inputRoot = "", outputRoot = "", tempRoot = "" } = {}) {
   return projectTaskPathText(value, [
@@ -81,6 +83,30 @@ function validateScriptBody(value) {
   return body;
 }
 
+function terminateProcessTree(child, signal = "SIGTERM", { platform = process.platform, execFileImpl = execFile } = {}) {
+  const pid = Number(child?.pid || 0);
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  if (platform === "win32") {
+    execFileImpl("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true }, () => {});
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    child.kill(signal);
+  }
+}
+
+export async function cleanupNativeTaskDirectory(directory, { rmImpl = rm } = {}) {
+  if (!String(directory || "").trim()) return;
+  await rmImpl(directory, {
+    recursive: true,
+    force: true,
+    maxRetries: NATIVE_TASK_CLEANUP_MAX_RETRIES,
+    retryDelay: NATIVE_TASK_CLEANUP_RETRY_DELAY_MS,
+  });
+}
+
 function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [scriptPath], { cwd, env, shell: false, detached: process.platform !== "win32", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
@@ -89,13 +115,12 @@ function runGeneratedScript({ scriptPath, cwd, env, timeoutMs, abortSignal }) {
     child.stdout.on("data", (chunk) => capture(stdout, chunk));
     child.stderr.on("data", (chunk) => capture(stderr, chunk));
     let forceKillTimer = null;
-    const kill = (signal) => { if (process.platform !== "win32") { try { process.kill(-child.pid, signal); return; } catch {} } child.kill(signal); };
     const terminate = (reason) => {
       timedOut = reason === "timeout";
       aborted = reason === "abort";
-      kill("SIGTERM");
+      terminateProcessTree(child, "SIGTERM");
       if (!forceKillTimer) {
-        forceKillTimer = setTimeout(() => kill("SIGKILL"), 2000);
+        forceKillTimer = setTimeout(() => terminateProcessTree(child, "SIGKILL"), 2000);
         forceKillTimer.unref?.();
       }
     };
@@ -145,6 +170,8 @@ export function createNativeScriptTool({ agentContext }) {
       const outputRoot = path.join(taskRoot, "output");
       const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-native-"));
       await Promise.all([mkdir(inputRoot, { recursive: true }), mkdir(outputRoot, { recursive: true })]);
+      let resultPayload;
+      let cleanupFailures = [];
       try {
         const inputMap = {};
         let totalInputBytes = 0;
@@ -184,9 +211,9 @@ export function createNativeScriptTool({ agentContext }) {
           const persisted = await persistTransferArtifacts({ runtime, agentContext, userId: String(runtime?.userId || ""), artifacts, attachmentSource: "model", generationSource: "execute_native_script", source: "tool", reason: "execute_native_script_output", identity, intent: { source: "tool", reason: "execute_native_script_output", scenario: "tool", strategy: "tool_output" } });
           transferEnvelopes = persisted.transferEnvelopes;
         }
-        return toToolJsonResult(TOOL_NAME.EXECUTE_NATIVE_SCRIPT, { ok: result.code === 0, status: result.code === 0 ? "completed" : "failed", isolation: "host_restricted", path_view: TASK_PATH_VIEW, code: result.code, stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }), stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }), output_file_count: outputFiles.length, output_bytes: outputBytes, transferEnvelopes });
+        resultPayload = { ok: result.code === 0, status: result.code === 0 ? "completed" : "failed", isolation: "host_restricted", path_view: TASK_PATH_VIEW, code: result.code, stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }), stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }), output_file_count: outputFiles.length, output_bytes: outputBytes, transferEnvelopes };
       } catch (error) {
-        return toToolJsonResult(TOOL_NAME.EXECUTE_NATIVE_SCRIPT, {
+        resultPayload = {
           ok: false,
           status: "failed",
           isolation: "host_restricted",
@@ -197,13 +224,23 @@ export function createNativeScriptTool({ agentContext }) {
           output_file_count: 0,
           output_bytes: 0,
           transferEnvelopes: [],
-        });
+        };
       } finally {
-        await Promise.all([
-          rm(taskRoot, { recursive: true, force: true }),
-          rm(tempRoot, { recursive: true, force: true }),
+        const cleanupResults = await Promise.allSettled([
+          cleanupNativeTaskDirectory(taskRoot),
+          cleanupNativeTaskDirectory(tempRoot),
         ]);
+        cleanupFailures = cleanupResults
+          .filter((item) => item.status === "rejected")
+          .map((item) => String(item.reason?.code || "cleanup_failed"));
       }
+      if (cleanupFailures.length) {
+        resultPayload.cleanup = {
+          status: "failed",
+          codes: [...new Set(cleanupFailures)],
+        };
+      }
+      return toToolJsonResult(TOOL_NAME.EXECUTE_NATIVE_SCRIPT, resultPayload);
     },
   });
   return [tool];

@@ -8,7 +8,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
+import {
+  cleanupNativeTaskDirectory,
+  createNativeScriptTool,
+} from "../../src/tools/execution/native-script-tool.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 const IDENTITY = Object.freeze({
@@ -18,6 +21,23 @@ const IDENTITY = Object.freeze({
   turnScopeId: "turn:native-script",
   runId: "run:native-script",
   producer: { type: "tool", id: "call:native-script" },
+});
+
+test("native task cleanup delegates Windows lock retries to recursive rm", async () => {
+  const calls = [];
+  await cleanupNativeTaskDirectory("C:/runtime/native_tasks/task-1", {
+    rmImpl: async (directory, options) => calls.push({ directory, options }),
+  });
+
+  assert.deepEqual(calls, [{
+    directory: "C:/runtime/native_tasks/task-1",
+    options: {
+      recursive: true,
+      force: true,
+      maxRetries: 10,
+      retryDelay: 100,
+    },
+  }]);
 });
 
 function createRuntime(basePath, patch = {}) {

@@ -30,9 +30,10 @@ import {
 } from "../../transfer-adapter/index.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+import { fetch as undiciFetch } from "undici";
 
 async function defaultSharedFetch(url, init = {}) {
-  return await globalThis.fetch(url, init);
+  return await undiciFetch(url, init);
 }
 
 function createDefaultTextCleaner() {
@@ -130,7 +131,7 @@ function ensureSharedTools(runtimeContext = {}) {
 
 function initializeSharedFetch(sharedTools = {}) {
   if (typeof sharedTools.fetch !== "function") {
-    sharedTools.fetch = typeof globalThis.fetch === "function" ? defaultSharedFetch : null;
+    sharedTools.fetch = defaultSharedFetch;
   }
 }
 
