@@ -63,8 +63,10 @@ const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow } = cre
 });
 
 function sendStatus(status) {
-  writeStartupLog("main", "status", { phase: status?.phase, dependency: status?.dependency, message: String(status?.message || "").slice(0, 500) });
-  startupStatuses.push(status);
+  const language = desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
+  const localizedStatus = { ...status, language };
+  writeStartupLog("main", "status", { phase: localizedStatus?.phase, dependency: localizedStatus?.dependency, message: String(localizedStatus?.message || "").slice(0, 500) });
+  startupStatuses.push(localizedStatus);
   if (startupStatuses.length > 300) startupStatuses.shift();
   if (status?.message) {
     if (status.phase !== "service-log" && status.phase !== "agent-proxy-log") {
@@ -83,7 +85,7 @@ function sendStatus(status) {
         writeStartupLog("main", "status:ipc-no-window", { phase: status?.phase }, { debug: true });
         return;
       }
-      targetWindow.webContents.send("noobot:startup-status", status);
+      targetWindow.webContents.send("noobot:startup-status", localizedStatus);
     } catch (error) {
       writeStartupLog("main", "status:error", { error });
     }

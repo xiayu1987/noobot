@@ -140,7 +140,9 @@ export function buildLibreOfficeUserInstallationUrl(tempRoot) {
 }
 
 export function resolveLibreOfficeOutputFormat(outputFormat) {
-  const format = String(outputFormat || "").trim().toLowerCase();
+  const format = String(outputFormat || "")
+    .trim()
+    .toLowerCase();
   if (!/^[a-z0-9_-]{1,32}$/i.test(format)) {
     throw new Error("LibreOffice output format is invalid");
   }
@@ -318,6 +320,9 @@ export async function createNativeScriptRuntime({
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
   const taskRoots = { input: inputRoot, output: outputRoot, temp: tempRoot };
+  const declaredDirectoryTokens = new Set([
+    createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }),
+  ]);
   const capabilityTimeoutMs = Math.max(1, Number(timeoutMs || 0) - 5000);
   await Promise.all([mkdir(outputRoot, { recursive: true }), mkdir(tempRoot, { recursive: true })]);
   const inputRelative = (reference) => {
@@ -366,6 +371,33 @@ export async function createNativeScriptRuntime({
     await resolveChild(tempRoot, relative, "temporary path");
     return createTaskPath({ kind: TASK_PATH_KINDS.TEMP, relative });
   };
+  const tempDirectory = async (relative) => {
+    const token = createTaskPath({ kind: TASK_PATH_KINDS.TEMP, relative });
+    const target = resolveTaskPath({ token, roots: taskRoots, kind: TASK_PATH_KINDS.TEMP }).path;
+    await mkdir(target, { recursive: true });
+    declaredDirectoryTokens.add(token);
+    return token;
+  };
+  const resolveWritableTaskPath = async (reference, { allowRoot = false, label }) => {
+    const value = String(reference || "").trim();
+    const kind = isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT, allowRoot })
+      ? TASK_PATH_KINDS.OUTPUT
+      : isTaskPath(value, { kind: TASK_PATH_KINDS.TEMP, allowRoot })
+        ? TASK_PATH_KINDS.TEMP
+        : null;
+    if (!kind) {
+      throw new Error(`${label} requires an output:// or temp:// task path`);
+    }
+    const parsed = parseTaskPath(value, { kind, allowRoot });
+    const target = resolveTaskPath({
+      token: parsed.token,
+      roots: taskRoots,
+      kind,
+      allowRoot,
+    }).path;
+    await mkdir(path.dirname(target), { recursive: true });
+    return { kind, target, token: parsed.token };
+  };
   const resolveReadableFile = async (reference, label) => {
     const value = String(reference || "").trim();
     let target;
@@ -396,14 +428,11 @@ export async function createNativeScriptRuntime({
   const readText = async (reference) => readFile(await resolveReadable(reference), "utf8");
   const readJson = async (reference) => JSON.parse(await readText(reference));
   const writeText = async (reference, content) => {
-    const value = String(reference || "").trim();
-    if (!isTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT })) {
-      throw new Error("files.writeText requires an output:// task path");
-    }
-    const target = await resolveOutput(value);
-    await mkdir(path.dirname(target), { recursive: true });
+    const { target, token } = await resolveWritableTaskPath(reference, {
+      label: "files.writeText",
+    });
     await writeFile(target, redactCapabilityText(content, pathRoots), "utf8");
-    return parseTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT }).token;
+    return token;
   };
   const writeJson = (reference, value) =>
     writeText(reference, `${JSON.stringify(redactCapabilityValue(value, pathRoots), null, 2)}\n`);
@@ -423,7 +452,25 @@ export async function createNativeScriptRuntime({
         );
       }
       const { target: source } = await resolveReadableFile(inputPath, "libreoffice.convert input");
-      const targetDir = await resolveOutput(outputDirectory);
+      const outputDirectoryValue = String(outputDirectory || "").trim();
+      if (
+        !["", "."].includes(outputDirectoryValue) &&
+        !declaredDirectoryTokens.has(outputDirectoryValue)
+      ) {
+        throw new Error(
+          "libreoffice.convert outputDirectory requires output.directory or output.tempDirectory(...) token",
+        );
+      }
+      const targetDirectory = ["", "."].includes(outputDirectoryValue)
+        ? {
+            kind: TASK_PATH_KINDS.OUTPUT,
+            target: outputRoot,
+          }
+        : await resolveWritableTaskPath(outputDirectoryValue, {
+            allowRoot: true,
+            label: "libreoffice.convert outputDirectory",
+          });
+      const targetDir = targetDirectory.target;
       await mkdir(targetDir, { recursive: true });
       const format = resolveLibreOfficeOutputFormat(outputFormat);
       const result = await runCapability(
@@ -458,8 +505,8 @@ export async function createNativeScriptRuntime({
       return {
         ...redactProcessResult(result, pathRoots),
         output: createTaskPath({
-          kind: TASK_PATH_KINDS.OUTPUT,
-          relative: path.relative(outputRoot, expected),
+          kind: targetDirectory.kind,
+          relative: path.relative(taskRoots[targetDirectory.kind], expected),
         }),
         outputBytes: outputStat.size,
       };
@@ -542,6 +589,7 @@ export async function createNativeScriptRuntime({
     output: opaqueFacade({
       file: outputFile,
       tempFile,
+      tempDirectory,
       directory: createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }),
     }),
     libreoffice,

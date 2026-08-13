@@ -383,15 +383,14 @@ export function createDesktopServiceManager({
   async function ensureServiceStarted() {
     if (serviceStartupPromise) return serviceStartupPromise;
     serviceStartupPromise = (async () => {
-      sendStatus({ phase: "checking", message: `Checking ${healthUrl}` });
-      const serviceAlreadyHealthy = await isServiceHealthy();
-
       setDesktopConfigState(
         ensureDesktopGlobalConfig({
           isPackaged: app.isPackaged,
           userDataPath: app.getPath("userData"),
         }),
       );
+      sendStatus({ phase: "checking", message: `Checking ${healthUrl}` });
+      const serviceAlreadyHealthy = await isServiceHealthy();
       if (getDesktopConfigState().superAdmin?.missing) {
         await requestSuperAdminConfig(getDesktopConfigState().superAdmin);
         setDesktopConfigState(

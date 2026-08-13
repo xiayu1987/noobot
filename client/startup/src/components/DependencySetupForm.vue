@@ -5,7 +5,7 @@
 -->
 <template>
   <section class="setup-form">
-    <p>Install missing optional dependencies now, or continue without them.</p>
+    <p>{{ messages.dependencies.intro }}</p>
     <el-checkbox-group
       :model-value="selectedDependencies"
       class="dependency-list"
@@ -19,12 +19,13 @@
         border
       >
         <strong>{{ item.name }}</strong>
-        <span>{{ item.description }}</span>
+        <span>{{
+          messages.dependencies[item.key] || messages.dependencies.optionalDescription
+        }}</span>
       </el-checkbox>
     </el-checkbox-group>
     <small>
-      Existing installations are detected automatically. Skipping only affects this startup; this
-      choice will be offered again while dependencies remain missing.
+      {{ messages.dependencies.existingHelp }}
     </small>
     <el-alert
       v-if="error"
@@ -41,9 +42,11 @@
         :disabled="selectedDependencies.length === 0"
         @click="$emit('install')"
       >
-        Install selected
+        {{ messages.dependencies.install }}
       </el-button>
-      <el-button :loading="skipping" @click="$emit('skip')">Skip for now</el-button>
+      <el-button :loading="skipping" @click="$emit('skip')">{{
+        messages.dependencies.skip
+      }}</el-button>
     </div>
   </section>
 </template>
@@ -55,6 +58,7 @@ defineProps({
   error: { type: String, default: "" },
   installing: { type: Boolean, default: false },
   skipping: { type: Boolean, default: false },
+  messages: { type: Object, required: true },
 });
 defineEmits(["install", "skip", "update:selectedDependencies"]);
 </script>

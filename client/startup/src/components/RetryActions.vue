@@ -4,10 +4,17 @@
   SPDX-License-Identifier: MIT
 -->
 <template>
-  <div class="actions"><el-button v-if="show" type="primary" plain @click="$emit('retry')">Retry</el-button></div>
+  <div class="actions">
+    <el-button v-if="show" type="primary" plain @click="$emit('retry')">{{
+      messages.actions.retry
+    }}</el-button>
+  </div>
 </template>
 
 <script setup>
-defineProps({ show: { type: Boolean, default: false } });
+defineProps({
+  show: { type: Boolean, default: false },
+  messages: { type: Object, required: true },
+});
 defineEmits(["retry"]);
 </script>

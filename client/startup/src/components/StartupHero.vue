@@ -6,7 +6,7 @@
 <template>
   <div class="hero">
     <el-tag class="brand-badge" effect="dark" round>Noobot Desktop</el-tag>
-    <h1>Starting Noobot</h1>
+    <h1>{{ messages.hero.title }}</h1>
     <div class="status-line">
       <el-icon class="status-spinner"><Loading /></el-icon>
       <p>{{ message }}</p>
@@ -19,5 +19,6 @@ import { Loading } from "@element-plus/icons-vue";
 
 defineProps({
   message: { type: String, default: "" },
+  messages: { type: Object, required: true },
 });
 </script>
