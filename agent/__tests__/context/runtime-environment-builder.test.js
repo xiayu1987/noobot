@@ -119,6 +119,25 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
   }
 });
 
+test("initializeRuntimeEnvironment provides fetch independently of the Node global", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = undefined;
+    const runtime = buildRuntimeContext({
+      userId: "u1",
+      basePath: "/host/users/u1",
+      runConfig: {},
+      systemRuntime: { sessionId: "s1", rootSessionId: "s1" },
+    });
+
+    await initializeRuntimeEnvironment(runtime);
+
+    assert.equal(typeof runtime.sharedTools.fetch, "function");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePath when caller passes partial runtime", async () => {
   const overflowContent = "x".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolInputOverflowChars + 1);
   const runtime = buildRuntimeContext({
