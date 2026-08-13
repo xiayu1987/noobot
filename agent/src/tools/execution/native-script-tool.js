@@ -32,6 +32,7 @@ import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   buildNativeProcessEnv,
   cleanupNativeTaskDirectory,
+  resolveNativeLibreOfficeExecutable,
   terminateNativeProcessTree,
 } from "./native-script-process.js";
 
@@ -281,7 +282,8 @@ export function createNativeScriptTool({ agentContext }) {
         if (!browserExecutableStat.isFile()) {
           throw new Error("configured Playwright Chromium executable is not a file");
         }
-        const generated = `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)} });\ntry { await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
+        const libreOfficeExecutable = resolveNativeLibreOfficeExecutable();
+        const generated = `import { createNativeScriptRuntime, executeNativeScriptBody } from ${JSON.stringify(new URL("./native-script-runtime.js", import.meta.url).href)};\nconst runtime = await createNativeScriptRuntime({ inputRoot: ${JSON.stringify(inputRoot)}, outputRoot: ${JSON.stringify(outputRoot)}, tempRoot: ${JSON.stringify(tempRoot)}, inputMap: ${JSON.stringify(inputMap)}, args: ${JSON.stringify(scriptArguments)}, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs}, browserExecutablePath: ${JSON.stringify(browserExecutablePath)}, libreOfficeExecutable: ${JSON.stringify(libreOfficeExecutable)} });\ntry { await executeNativeScriptBody({ body: ${JSON.stringify(body)}, capabilities: runtime.capabilities, timeoutMs: ${BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs} }); } catch (error) { console.error(String(error?.message || "native script failed")); process.exitCode = 1; } finally { await runtime.close(); }`;
         await writeFile(scriptPath, generated, "utf8");
         const result = await runGeneratedScript({
           scriptPath,
