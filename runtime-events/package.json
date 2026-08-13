@@ -1,6 +1,6 @@
 {
   "name": "@noobot/runtime-events",
-  "version": "4.1.6",
+  "version": "4.1.7",
   "private": true,
   "type": "module",
   "description": "Noobot runtime event center for startup, session runtime, and system runtime events.",
