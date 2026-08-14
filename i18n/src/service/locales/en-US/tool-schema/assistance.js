@@ -49,10 +49,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "text": "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results."
     },
     "params": {
-      "api_type": {
-        "key": "tools.multimodal.fieldApiType",
-        "text": "Image generation API type (optional), supports openai_responses and images_async."
-      },
       "generation_content": {
         "key": "tools.multimodal.fieldGenerationContent",
         "text": "Generation content description."
@@ -101,7 +97,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskIdMissing": "image generation task id missing",
       "tools.multimodal.taskTimeout": (params = {}) =>
     `image generation task timeout: ${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType": "Try switching api_type, for example openai_responses or images_async."
+      "tools.multimodal.trySwitchApiType": "Check the image generation API type configured for this model."
     }
   },
   "switch_model": {

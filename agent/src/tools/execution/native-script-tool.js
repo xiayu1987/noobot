@@ -11,6 +11,7 @@ import {
   TASK_PATH_KINDS,
   TASK_PATH_VIEW,
   PATH_CAPABILITIES,
+  createResourceRef,
   createTaskPath,
   filePath as path,
   projectTaskPathText,
@@ -267,6 +268,7 @@ export function createNativeScriptTool({ agentContext }) {
       let cleanupFailures = [];
       try {
         const inputMap = {};
+        const inputResources = [];
         let totalInputBytes = 0;
         for (const [index, value] of (Array.isArray(inputs) ? inputs : []).entries()) {
           const resolvedInput = await resolveFileInput({
@@ -276,6 +278,7 @@ export function createNativeScriptTool({ agentContext }) {
             capability: PATH_CAPABILITIES.NATIVE_INPUT,
           });
           const source = resolvedInput.executionPath;
+          if (resolvedInput.resourceRef) inputResources.push(resolvedInput.resourceRef);
           const sourceStat = await stat(source);
           if (!sourceStat.isFile()) throw new Error("native script inputs must be files");
           totalInputBytes += Number(sourceStat.size || 0);
@@ -312,6 +315,7 @@ export function createNativeScriptTool({ agentContext }) {
         if (outputBytes > LENGTH_THRESHOLDS.nativeScript.artifactTotalBytes)
           throw new Error("native script output exceeds 200 MB");
         let transferEnvelopes = [];
+        let resources = [];
         if (outputFiles.length) {
           const artifacts = await Promise.all(
             outputFiles.map(async (relative) => ({
@@ -340,6 +344,20 @@ export function createNativeScriptTool({ agentContext }) {
             },
           });
           transferEnvelopes = persisted.transferEnvelopes;
+          const persistedAttachments = persisted.transferEnvelopes.flatMap(
+            (envelope) => envelope?.payload?.attachments || [],
+          );
+          resources = persistedAttachments.map((attachment) =>
+            createResourceRef({
+              owner: String(runtime?.userId || ""),
+              source: "attachment",
+              logical: { view: "attachment", path: attachment.name || "output" },
+              attachment: attachment.identity || attachment,
+              size: attachment.size,
+              mimeType: attachment.mimeType || DEFAULT_MIME_TYPE,
+              capabilities: { read: true, write: false, scriptInput: true },
+            }),
+          );
         }
         resultPayload = {
           ok: result.code === 0,
@@ -352,6 +370,8 @@ export function createNativeScriptTool({ agentContext }) {
           output_file_count: outputFiles.length,
           output_bytes: outputBytes,
           transferEnvelopes,
+          resources,
+          input_resources: inputResources,
         };
       } catch (error) {
         resultPayload = {
@@ -369,6 +389,8 @@ export function createNativeScriptTool({ agentContext }) {
           output_file_count: 0,
           output_bytes: 0,
           transferEnvelopes: [],
+          resources: [],
+          input_resources: [],
         };
       } finally {
         const cleanupResults = await Promise.allSettled([

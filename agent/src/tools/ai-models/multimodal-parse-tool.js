@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, stat } from "node:fs/promises";
-import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
+import {
+  createResourceRef,
+  PATH_CAPABILITIES,
+  TOOL_PATH_CONTRACTS,
+  filePath as path,
+} from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
@@ -203,7 +208,8 @@ export function createMultimodalParseTool({ agentContext }) {
           return {
             mimeType,
             data: `data:${mimeType};base64,${(await readFile(inputFile)).toString("base64")}`,
-            fileName: path.basename(inputFile),
+            fileName:
+              String(sourceAttachmentMetas[index]?.name || "").trim() || path.basename(inputFile),
           };
         }),
       );
@@ -237,6 +243,17 @@ export function createMultimodalParseTool({ agentContext }) {
         identity: toolConfig?.configurable?.transferIdentity,
       });
       const attachments = normalizePersistedAttachments(persistedOutput);
+      const outputResources = attachments.map((attachment) =>
+        createResourceRef({
+          owner: String(runtime?.userId || ""),
+          source: "attachment",
+          logical: { view: "attachment", path: attachment.name || "parsed.txt" },
+          attachment: attachment.identity || attachment,
+          size: attachment.size,
+          mimeType: attachment.mimeType || DEFAULT_MIME_TYPE,
+          capabilities: { read: true, write: false, scriptInput: true },
+        }),
+      );
       const updatedSourceAttachments = (
         await Promise.all(
           sourceAttachmentMetas.map(async (sourceAttachmentMeta) =>
@@ -257,6 +274,7 @@ export function createMultimodalParseTool({ agentContext }) {
           status: TOOL_RESULT_STATUS.COMPLETED,
           mode: "openai_responses_api",
           inputs,
+          resources: [...resolvedInputs.map((item) => item.resourceRef), ...outputResources],
           ...persistedOutput.resultFields,
           model: { alias: modelSpec.alias || "", name: modelSpec.model || "" },
           summary: {

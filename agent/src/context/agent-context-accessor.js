@@ -47,7 +47,7 @@ export function getChildRunParentSessionIdFromAgentContext(scope = {}) {
 }
 
 export function getBasePathFromAgentContext(scope = {}) {
-  return String(getAgentContextEnvelope(scope)?.environment?.workspace?.basePath || "").trim();
+  return String(getRuntimeFromAgentContext(scope)?.basePath || "").trim();
 }
 
 export function getDialogProcessIdFromAgentContext(scope = {}) {

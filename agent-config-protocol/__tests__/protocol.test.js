@@ -21,20 +21,6 @@ test("config snapshot is versioned and validated", () => {
   assert.equal(snapshot.protocol, "noobot.agent-config");
   assert.equal(validateConfigSnapshot(snapshot), snapshot);
 });
-test("configuration adapter maps readable execute_script sandbox fields once", () => {
-  const normalized = normalizeKnownConfigKeys({
-    tools: {
-      execute_script: {
-        sandbox_mode: false,
-        sandbox_provider: { default: "bubblewrap" },
-      },
-    },
-  });
-  assert.deepEqual(normalized.tools.execute_script, {
-    execution: { view: "host", sandboxProvider: { default: "bubblewrap" } },
-  });
-});
-
 test("config snapshot owns immutable metadata arrays", () => {
   const metadata = { migrations: ["v0"], warnings: ["legacy"], source: "test" };
   const snapshot = createConfigSnapshot({ metadata });

@@ -10,6 +10,7 @@ const requiredBackendRuntimeFiles = [
   "service/app.js",
   "node_modules/noobot-agent/package.json",
   "node_modules/@noobot/agent-config-protocol/package.json",
+  "node_modules/@noobot/execution-isolation-protocol/package.json",
   "node_modules/@noobot/plugin-runtime/package.json",
   "node_modules/@noobot/event-protocol/package.json",
   "node_modules/@noobot/authoritative-state/package.json",

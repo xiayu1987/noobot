@@ -6,7 +6,12 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
-import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import {
+  BUILTIN_THRESHOLDS,
+  hasOwnConfigKey,
+  mergeConfig,
+  normalizeBooleanLike,
+} from "../../config/index.js";
 import {
   getSessionIdsFromAgentContext,
   getRuntimeFromAgentContext,
@@ -22,7 +27,7 @@ import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js"
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
-  SANDBOX_CONFIG,
+  TOOL_POLICY_MODE,
   TOOL_EVENT_NAME,
   TOOL_NAME,
   TOOL_RESULT_STATUS,
@@ -41,10 +46,9 @@ export function createMcpTool({ agentContext }) {
       const normalizedMcpName = String(mcpName || "").trim();
       const normalizedTask = String(task || "").trim();
       if (!normalizedMcpName) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.mcp.errorMcpNameRequired"),
-          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.mcp.errorMcpNameRequired"), {
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+        });
       }
       if (!normalizedTask) {
         throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
@@ -66,8 +70,7 @@ export function createMcpTool({ agentContext }) {
       const sessionId = contextIdentity.sessionId;
       const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
       const parentDialogProcessId = contextIdentity.dialogProcessId;
-      const allowUserInteraction =
-        systemRuntime?.config?.allowUserInteraction !== false;
+      const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
       const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
       const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.callMcpTaskMaxToolLoopTurns;
       try {
@@ -85,18 +88,16 @@ export function createMcpTool({ agentContext }) {
           mcpName: normalizedMcpName,
           signal,
           fetchImpl:
-            typeof runtime?.sharedTools?.fetch === "function"
-              ? runtime.sharedTools.fetch
-              : null,
+            typeof runtime?.sharedTools?.fetch === "function" ? runtime.sharedTools.fetch : null,
         });
         if (!Array.isArray(mcpToolset?.tools) || !mcpToolset.tools.length) {
           throw recoverableToolError(tTool(runtime, "mcp.noToolsAvailable"), {
             code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
           });
         }
-        const subTaskMessage = [
-          `${tTool(runtime, "bot.taskPrefix")}: ${normalizedTask}`,
-        ].join("\n");
+        const subTaskMessage = [`${tTool(runtime, "bot.taskPrefix")}: ${normalizedTask}`].join(
+          "\n",
+        );
         const detachedRun = await botManager.runDetachedSubSession({
           parentExecutionScope: agentContext,
           message: subTaskMessage,
@@ -120,7 +121,7 @@ export function createMcpTool({ agentContext }) {
               runtime?.systemRuntime?.config?.selectedConnectors || {},
             ),
             toolPolicy: {
-              mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
+              mode: TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: mcpToolset.tools,
             },
             maxToolLoopTurns:
@@ -137,15 +138,9 @@ export function createMcpTool({ agentContext }) {
         const subResult = detachedRun?.result || {};
         const subAnswer = String(subResult?.answer || "").trim();
         const subTraces = Array.isArray(subResult?.traces) ? subResult.traces : [];
-        const subMessages = Array.isArray(subResult?.messages)
-          ? subResult.messages
-          : [];
+        const subMessages = Array.isArray(subResult?.messages) ? subResult.messages : [];
         const traceToolNames = Array.from(
-          new Set(
-            subTraces
-              .map((item) => String(item?.tool || "").trim())
-              .filter(Boolean),
-          ),
+          new Set(subTraces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
         );
         return toToolJsonResult(
           TOOL_NAME.CALL_MCP_TASK,
@@ -183,10 +178,7 @@ export function createMcpTool({ agentContext }) {
             event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
             message: error?.message || String(error),
             stack: error?.stack || "",
-            details:
-              error?.details && typeof error.details === "object"
-                ? error.details
-                : {},
+            details: error?.details && typeof error.details === "object" ? error.details : {},
           }).catch(() => {});
         }
         throw recoverableToolError(error?.message || String(error), {

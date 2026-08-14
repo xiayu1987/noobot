@@ -43,7 +43,7 @@ test("search: 支持搜索文件和文本", async () => {
   );
   assert.equal(fileResult.ok, true);
   assert.equal(fileResult.matches.length, 2);
-  assert.equal(fileResult.matches[0].filePath, "src/a.js");
+  assert.equal(fileResult.matches[0].filePath, path.join(basePath, "src/a.js"));
   assert.equal(fileResult.matches[0].line, 1);
   assert.equal(fileResult.matches[1].line, 3);
 

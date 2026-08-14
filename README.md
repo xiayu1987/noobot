@@ -157,7 +157,7 @@ Optional system deps:
 
 - `libreoffice` (Office document conversion)
 - `ffmpeg` (audio/video processing)
-- `docker` / `bubblewrap` / `firejail` (script sandbox)
+- `docker` (programmable workspace compute sandbox)
 
 ## Desktop Packaging
 

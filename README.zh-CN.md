@@ -156,7 +156,7 @@ npm run build
 
 - `libreoffice`（Office 文档转换）
 - `ffmpeg`（音视频处理）
-- `docker` / `bubblewrap` / `firejail`（脚本沙箱）
+- `docker`（可编程工作区计算沙箱）
 
 ## 桌面端打包
 

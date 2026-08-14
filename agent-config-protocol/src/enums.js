@@ -36,28 +36,6 @@ export const CONNECTOR_TYPE_ALIASES = {
   email: [CONNECTOR_TYPE.EMAIL, "mail", "smtp_imap"],
 };
 
-export const SANDBOX_PROVIDER = {
-  DOCKER: "docker",
-  FIREJAIL: "firejail",
-  BUBBLEWRAP: "bubblewrap",
-};
-
-export const SANDBOX_PROVIDER_ALIASES = {
-  docker: [SANDBOX_PROVIDER.DOCKER],
-  firejail: [SANDBOX_PROVIDER.FIREJAIL, "fj"],
-  bubblewrap: [SANDBOX_PROVIDER.BUBBLEWRAP, "bwrap"],
-};
-
-export const DOCKER_CONTAINER_SCOPE = {
-  GLOBAL: "global",
-  USER: "user",
-};
-
-export const DOCKER_CONTAINER_SCOPE_ALIASES = {
-  global: [DOCKER_CONTAINER_SCOPE.GLOBAL],
-  user: [DOCKER_CONTAINER_SCOPE.USER, "per_user", "per-user"],
-};
-
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
   DASHSCOPE: "dashscope",
@@ -172,16 +150,6 @@ export function normalizeTerminalType(input = "") {
 
 export function normalizeConnectorType(input = "") {
   return normalizeWithAliases(input, CONNECTOR_TYPE_ALIASES);
-}
-
-export function normalizeSandboxProvider(input = "") {
-  const result = normalizeWithAliases(input, SANDBOX_PROVIDER_ALIASES);
-  return result || SANDBOX_PROVIDER.DOCKER;
-}
-
-export function normalizeDockerContainerScope(input = "") {
-  const result = normalizeWithAliases(input, DOCKER_CONTAINER_SCOPE_ALIASES);
-  return result || DOCKER_CONTAINER_SCOPE.GLOBAL;
 }
 
 export function normalizeProviderFormat(input = "") {

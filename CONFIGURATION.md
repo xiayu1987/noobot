@@ -89,38 +89,41 @@ Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProces
 
 > All tools support: `tools.<tool_name>.enabled`.
 
-| Key                                                                        | Type         | Description                                                                                          |
-| -------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
-| `tools.read_file.enabled`                                                  | boolean      | Enable file read tool                                                                                |
-| `tools.write_file.enabled`                                                 | boolean      | Enable file write tool                                                                               |
-| `tools.list_skills.enabled`                                                | boolean      | Enable skill listing tool                                                                            |
-| `tools.call_service.enabled`                                               | boolean      | Enable external service call tool                                                                    |
-| `tools.call_mcp_task.enabled`                                              | boolean      | Enable MCP task tool                                                                                 |
-| `tools.delegate_task_async.enabled`                                        | boolean      | Enable async delegation tool                                                                         |
-| `tools.delegate_task_async.wait_timeout_ms`                                | number       | Async task wait timeout                                                                              |
-| `tools.delegate_task_async.poll_interval_ms`                               | number       | Async task poll interval                                                                             |
-| `tools.delegate_task_async.max_sub_agent_depth`                            | number       | Max sub-agent depth                                                                                  |
-| `tools.wait_async_task_result.enabled`                                     | boolean      | Enable wait async result tool                                                                        |
-| `tools.wait_async_task_result.poll_interval_ms`                            | number       | Poll interval for wait tool                                                                          |
-| `tools.plan_multi_task_collaboration.enabled`                              | boolean      | Enable task planning tool                                                                            |
-| `tools.switch_model.enabled`                                               | boolean      | Enable model switch tool                                                                             |
-| `tools.user_interaction.enabled`                                           | boolean      | Enable user interaction tool                                                                         |
-| `tools.execute_native_script.enabled`                                      | boolean      | Enable controlled Playwright, LibreOffice, FFmpeg and FFprobe execution                              |
-| `tools.execute_script.enabled`                                             | boolean      | Enable script execution tool                                                                         |
-| `tools.execute_script.sandbox_mode`                                        | boolean      | Run scripts in the configured sandbox provider when `true`; run on the host when `false`             |
-| `tools.execute_script.script_timeout_ms`                                   | number       | Script timeout                                                                                       |
-| `tools.execute_script.sandbox_provider.default`                            | enum         | `docker` / `bubblewrap` / `firejail`                                                                 |
-| `tools.execute_script.sandbox_provider.docker.docker_container_scope`      | enum         | `global` / `user`                                                                                    |
-| `tools.execute_script.sandbox_provider.docker.docker_container_name`       | string       | Docker sandbox container base name                                                                   |
-| `tools.execute_script.sandbox_provider.docker.docker_image`                | string       | Docker image for sandbox                                                                             |
-| `tools.execute_script.sandbox_provider.docker.docker_lock_wait_timeout_ms` | number       | Max queue wait time (ms) when concurrent calls share one Docker container name                       |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts`               | object[]     | Extra host->container mount list (optional)                                                          |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].source`      | string(path) | Host path to mount                                                                                   |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].target`      | string(path) | Container target path (auto-normalized to `/xxx`)                                                    |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string       | Human-readable mapping note (optional)                                                               |
-| `tools.execute_native_script.enabled`                                      | boolean      | Enable the host-restricted Node.js capability tool (default `true`; global admin configuration only) |
+| Key                                                         | Type         | Description                                                                                                 |
+| ----------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| `tools.read_file.enabled`                                   | boolean      | Enable file read tool                                                                                       |
+| `tools.write_file.enabled`                                  | boolean      | Enable file write tool                                                                                      |
+| `tools.list_skills.enabled`                                 | boolean      | Enable skill listing tool                                                                                   |
+| `tools.call_service.enabled`                                | boolean      | Enable external service call tool                                                                           |
+| `tools.call_mcp_task.enabled`                               | boolean      | Enable MCP task tool                                                                                        |
+| `tools.delegate_task_async.enabled`                         | boolean      | Enable async delegation tool                                                                                |
+| `tools.delegate_task_async.wait_timeout_ms`                 | number       | Async task wait timeout                                                                                     |
+| `tools.delegate_task_async.poll_interval_ms`                | number       | Async task poll interval                                                                                    |
+| `tools.delegate_task_async.max_sub_agent_depth`             | number       | Max sub-agent depth                                                                                         |
+| `tools.wait_async_task_result.enabled`                      | boolean      | Enable wait async result tool                                                                               |
+| `tools.wait_async_task_result.poll_interval_ms`             | number       | Poll interval for wait tool                                                                                 |
+| `tools.plan_multi_task_collaboration.enabled`               | boolean      | Enable task planning tool                                                                                   |
+| `tools.switch_model.enabled`                                | boolean      | Enable model switch tool                                                                                    |
+| `tools.user_interaction.enabled`                            | boolean      | Enable user interaction tool                                                                                |
+| `tools.execute_native_script.enabled`                       | boolean      | Enable controlled Playwright, LibreOffice, FFmpeg and FFprobe execution                                     |
+| `tools.execute_script.enabled`                              | boolean      | Enable script execution tool                                                                                |
+| `tools.execute_script.script_timeout_ms`                    | number       | Script timeout                                                                                              |
+| `security.execution_isolation.mode`                         | enum         | `sandbox` isolates programmable workspace compute in Docker; fixed workspace file I/O stays host-controlled |
+| `security.execution_isolation.sandbox.provider`             | enum         | Workspace sandbox provider (`docker`)                                                                       |
+| `security.execution_isolation.sandbox.scope`                | enum         | Container scope (`user`)                                                                                    |
+| `security.execution_isolation.sandbox.container_name`       | string       | Per-user workspace sandbox container base name                                                              |
+| `security.execution_isolation.sandbox.image`                | string       | Docker image used by programmable workspace compute                                                         |
+| `security.execution_isolation.sandbox.mounts`               | object[]     | Additional explicitly authorized host-to-container mounts                                                   |
+| `security.execution_isolation.sandbox.mounts[].source`      | string(path) | Absolute host path; Linux, macOS, Windows drive, and UNC paths are supported                                |
+| `security.execution_isolation.sandbox.mounts[].target`      | string(path) | Absolute container path outside the managed `/workspace` tree                                               |
+| `security.execution_isolation.sandbox.mounts[].description` | string       | Optional mount description                                                                                  |
+| `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | Mount read-only when `true`; defaults to writable to preserve the existing mount behavior                   |
+| `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | Queue timeout for calls sharing the same container; minimum `100` ms                                        |
+| `tools.execute_native_script.enabled`                       | boolean      | Enable the host-restricted Node.js capability tool (default `true`; global admin configuration only)        |
 
 `execute_native_script` injects controlled Playwright, LibreOffice, FFmpeg/FFprobe, declared-input, and task-output capabilities. Its unique file protocol is `files.input`, `files.readText`, `files.readJson`, `files.writeText`, `files.writeJson`, `output.file`, `output.tempFile`, and `output.directory`. Reads accept `input://`, `output://`, and `temp://` task paths; writes accept only `output://`. Capability wrappers resolve task paths internally. It does not expose imports, shell commands, environment variables, executable selection, or arbitrary host paths. Browser access is limited to loopback HTTP(S). Outputs are persisted through semantic-transfer. This host-restricted mode is intended for trusted local/admin automation; it is not an operating-system security sandbox for hostile code.
+
+Execution isolation is defined by the `@noobot/execution-isolation-protocol` workspace. Extra mounts are global-admin configuration only. Changing their source, target, or read-only state causes the managed Docker container to be recreated before the next script execution. Extra mounts do not widen file-tool authorization and cannot replace `/workspace`.
 | `tools.process_connector_tool.enabled` | boolean | Enable connector processing tool |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
 | `tools.access_connector.enabled` | boolean | Enable connector access tool |
@@ -161,8 +164,8 @@ Length thresholds are centralized in `@noobot/shared/length-thresholds` (`shared
 
 Notes:
 
-- If `docker_mounts` is missing or empty, no extra mount is added.
-- A mount entry is applied only when both `source` and `target` are non-empty.
+- If `security.execution_isolation.sandbox.mounts` is missing or empty, no extra mount is added.
+- Every configured mount must provide both an absolute host `source` and an absolute container `target`.
 - Current defaults in repo:
   - `service/config/global.config.json`: mounts this project to `/project`
   - `service/config/global.config.example.json`: no default project mount

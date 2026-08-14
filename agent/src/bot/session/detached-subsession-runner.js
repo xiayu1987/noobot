@@ -9,6 +9,7 @@ import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor
 import { CALLER_ROLE } from "../config/constants.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
+import { readSelectedModelValue } from "../execution/runner/debug-utils.js";
 
 async function transferCanonicalAttachmentsToSubSession({
   attachmentService = null,
@@ -201,6 +202,14 @@ export function createDetachedSubSessionRunner({
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
     });
+    const childRuntimeModel = String(runConfigPatch?.runtimeModel || "").trim();
+    const selectedModel = readSelectedModelValue(mergedRunConfig?.selectedModel);
+    const parentRuntimeModel = String(inheritedRunConfig?.runtimeModel || "").trim();
+    const inheritedRuntimeModel = String(inheritedRuntime?.runtimeModel || "").trim();
+    const effectiveRuntimeModel =
+      childRuntimeModel || selectedModel || parentRuntimeModel || inheritedRuntimeModel;
+    if (effectiveRuntimeModel) mergedRunConfig.runtimeModel = effectiveRuntimeModel;
+    else delete mergedRunConfig.runtimeModel;
     mergedRunConfig.executionId = executionId;
     mergedRunConfig.executionKind = "agent";
     mergedRunConfig.parentExecutionId = String(

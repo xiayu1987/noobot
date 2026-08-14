@@ -90,14 +90,6 @@ const PACKAGE_SCRIPT_RULES = [
 ];
 const SOURCE_ALLOWLIST = new Map([
   [
-    "agent/src/sandbox/bubblewrap-sandbox.js",
-    new Map([
-      ["unix-temp-path", [/^"\/(?:var\/)?tmp",$/]],
-      ["bash-shell", [/^"(?:bash|-lc)",$/]],
-    ]),
-  ],
-  ["agent/src/sandbox/firejail-sandbox.js", new Map([["bash-shell", [/^"(?:bash|-lc)",$/]]])],
-  [
     "agent/src/tools/execution/script-tool/process-exec.js",
     new Map([["shell-spawn", [/^shell: true,$/]]]),
   ],

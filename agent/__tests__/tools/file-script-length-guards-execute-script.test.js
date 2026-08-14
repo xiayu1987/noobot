@@ -20,8 +20,43 @@ import {
   parseToolResult,
   buildAttachmentService,
 } from "./helpers/file-script-length-guards-helper.js";
+
+function buildHostScriptAgentContext(basePath, userId, overrides = {}) {
+  const runtime = overrides?.runtime && typeof overrides.runtime === "object"
+    ? overrides.runtime
+    : {};
+  return buildAgentContext(basePath, userId, {
+    ...overrides,
+    runtime: {
+      ...runtime,
+      systemRuntime: {
+        ...(runtime.systemRuntime || {}),
+        isSuperUser: true,
+      },
+    },
+  });
+}
+
+test("execute_script: ordinary users require sandbox isolation", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-authorization-"));
+  assert.deepEqual(createScriptTool({
+    agentContext: buildAgentContext(basePath, "regular-user"),
+  }), []);
+
+  const sandboxTools = createScriptTool({
+    agentContext: buildAgentContext(basePath, "regular-user", {
+      runtime: {
+        globalConfig: {
+          security: { executionIsolation: { mode: "sandbox" } },
+        },
+      },
+    }),
+  });
+  assert.equal(sandboxTools.some((item) => item?.name === "execute_script"), true);
+});
 import { run } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
+import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 
 const TEST_TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:execute-script:output",
@@ -86,7 +121,7 @@ test("execute_script: host 执行返回逻辑 workspace 与独立 execution 视�
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-path-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
   const tools = createScriptTool({
-    agentContext: buildAgentContext(basePath, "primary-user", {
+    agentContext: buildHostScriptAgentContext(basePath, "primary-user", {
       runtime: {
         globalConfig: {
           tools: {
@@ -117,8 +152,11 @@ test("execute_script: host 执行返回逻辑 workspace 与独立 execution 视�
   assert.equal(result.toolName, "execute_script");
   assert.equal(result.ok, true);
   assert.equal(result.mode, "local");
-  assert.deepEqual(result.workspace, { path: "runtime/ops_workdir", view: "workspace" });
-  assert.deepEqual(result.execution, { view: "host", provider: "host" });
+  assert.deepEqual(result.workspace, {
+    path: path.join(basePath, "runtime/ops_workdir"),
+    view: "host",
+  });
+  assert.deepEqual(result.execution, { view: "service_host_restricted", provider: "host" });
   assert.equal(result.runtime, undefined);
   assert.equal(result.mounts, undefined);
   assert.equal(result.stdout, "ok");
@@ -127,15 +165,9 @@ test("execute_script: host 执行返回逻辑 workspace 与独立 execution 视�
 test("execute_script: 可选给 stdout/stderr 加行号", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-lines-"));
   const tools = createScriptTool({
-    agentContext: buildAgentContext(basePath, "primary-user", {
+    agentContext: buildHostScriptAgentContext(basePath, "primary-user", {
       runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: {
-              sandboxMode: false,
-            },
-          },
-        },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
       },
     }),
   });
@@ -165,15 +197,9 @@ test("execute_script: 可选给 stdout/stderr 加行号", async () => {
 test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退出码语义", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-spawn-semantics-"));
   const tools = createScriptTool({
-    agentContext: buildAgentContext(basePath, "primary-user", {
+    agentContext: buildHostScriptAgentContext(basePath, "primary-user", {
       runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: {
-              sandboxMode: false,
-            },
-          },
-        },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
       },
     }),
   });
@@ -203,15 +229,9 @@ test("execute_script: foreground 模式保留 shell 管道、stderr 与非零退
 test("execute_script: foreground 大输出通过 V2 附件身份保留", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-large-output-"));
   const tools = createScriptTool({
-    agentContext: buildAgentContext(basePath, "primary-user", {
+    agentContext: buildHostScriptAgentContext(basePath, "primary-user", {
       runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: {
-              sandboxMode: false,
-            },
-          },
-        },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
         attachmentService: buildAttachmentService(),
       },
     }),
@@ -267,15 +287,9 @@ test("execute_script: background 模式将 stdout/stderr 交给附件层并返�
       );
     },
   };
-  const agentContext = buildAgentContext(basePath, "primary-user", {
+  const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     runtime: {
-      globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: false,
-          },
-        },
-      },
+      globalConfig: { security: { executionIsolation: { mode: "host" } } },
       attachmentService,
     },
   });
@@ -337,15 +351,9 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
       );
     },
   };
-  const agentContext = buildAgentContext(basePath, "primary-user", {
+  const agentContext = buildHostScriptAgentContext(basePath, "primary-user", {
     runtime: {
-      globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: false,
-          },
-        },
-      },
+      globalConfig: { security: { executionIsolation: { mode: "host" } } },
       attachmentService,
     },
   });
@@ -365,13 +373,7 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
     runtime: {
       basePath,
       systemRuntime: { userId: "primary-user", sessionId: "s-script-large-output" },
-      globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: false,
-          },
-        },
-      },
+      globalConfig: { security: { executionIsolation: { mode: "host" } } },
       userConfig: {},
       attachmentService,
     },
@@ -456,51 +458,47 @@ test("execute_script: aborted Docker queue entry never starts after lock release
   assert.equal(secondInvoked, false);
 });
 
-test("execute_script: sandbox 不改变公开 workspace 逻辑视角", async () => {
+test("execute_script: sandbox 返回当前 workspace 执行路径", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-sandbox-view-"));
   const runtimeOpsWorkdir = path.join(basePath, "runtime/ops_workdir");
   const meta = buildExecutionWorkspaceMeta({
-    sandboxEnabled: true,
-    sandboxProvider: "docker",
+    executionPolicy: resolveToolExecutionPolicy({
+      toolName: "execute_script",
+      globalConfig: { security: { executionIsolation: { mode: "sandbox" } } },
+    }),
     workspace: runtimeOpsWorkdir,
-    runtime: {
-      userId: "primary-user",
-      sharedTools: {
-        resolveSandboxPath(payload = {}) {
-          const hostPath = String(payload?.hostPath || payload?.path || "").trim();
-          if (hostPath === runtimeOpsWorkdir) return "/workspace/primary-user/runtime/ops_workdir";
-          return "";
-        },
-      },
-    },
-    dockerConfig: {
-      dockerMounts: [{ source: "/host/project", target: "/project" }],
-    },
+    runtime: { userId: "primary-user" },
+    pathContext: { opsWorkdir: "/workspace/primary-user/runtime/ops_workdir" },
   });
 
-  assert.deepEqual(meta, { path: "runtime/ops_workdir", view: "workspace" });
+  assert.deepEqual(meta, {
+    path: "/workspace/primary-user/runtime/ops_workdir",
+    view: "sandbox",
+  });
 });
 
 test("execute_script: Docker 返回仅保留镜像名和当前 workspace 视角", async () => {
   const meta = buildScriptExecutionMeta({
-    sandboxEnabled: true,
-    sandboxProvider: "docker",
+    executionPolicy: resolveToolExecutionPolicy({
+      toolName: "execute_script",
+      globalConfig: { security: { executionIsolation: { mode: "sandbox" } } },
+    }),
     workspace: "/host/primary-user/runtime/ops_workdir",
-    dockerConfig: {
-      dockerMounts: [{ source: "/host/project", target: "/project" }],
-    },
     docker: {
       image: "example/script:latest",
       containerName: "noobot-script-sandbox",
       scope: "global",
       workdir: "/workspace/primary-user/runtime/ops_workdir",
-      dockerMounts: [{ source: "/host/project", target: "/project" }],
+      mounts: [{ source: "/host/project", target: "/project" }],
     },
   });
 
   assert.equal(meta.execution.image, "example/script:latest");
-  assert.equal(meta.execution.view, "sandbox");
+  assert.equal(meta.execution.view, "workspace_sandbox");
   assert.equal(meta.execution.provider, "docker");
   assert.equal(meta.mounts, undefined);
-  assert.deepEqual(meta.workspace, { path: "runtime/ops_workdir", view: "workspace" });
+  assert.deepEqual(meta.workspace, {
+    path: "/workspace/primary-user/runtime/ops_workdir",
+    view: "sandbox",
+  });
 });

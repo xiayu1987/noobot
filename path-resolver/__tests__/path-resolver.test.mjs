@@ -97,7 +97,7 @@ test("task-local projection replaces only declared runtime roots", () => {
   );
 });
 
-test("logical path contracts keep sandbox exclusive to script execution", () => {
+test("logical path contracts keep sandbox as execution view only", () => {
   for (const contract of Object.values(TOOL_PATH_CONTRACTS))
     assert.doesNotThrow(() => assertToolPathContract(contract));
   assert.throws(
@@ -116,9 +116,9 @@ test("logical path contracts keep sandbox exclusive to script execution", () => 
         capability: "file.read",
         accepted: ["workspace"],
         execution: ["sandbox"],
-        display: "logical",
+        display: "runtime",
       }),
-    /script.input/,
+    /script\.input/,
   );
   assert.throws(
     () => resolvePathRef({ input: { view: "sandbox", path: "/workspace/a.txt" } }),
@@ -142,8 +142,8 @@ test("built-in path policy is complete and aligned with every tool contract", ()
   assert.deepEqual(resolvePathPolicy({}, { platform: "windows" }), BUILTIN_PATH_POLICY);
   assert.deepEqual(PLATFORM_PROTECTED_ROOTS.linux, ["/proc", "/sys", "/dev"]);
   assert.deepEqual(BUILTIN_PATH_POLICY.display, {
-    fileTools: "logical",
-    scriptTools: "logical",
+    fileTools: "runtime",
+    scriptTools: "runtime",
     nativeScript: "task-local",
     attachments: "identity",
     errors: "logical",
@@ -158,10 +158,11 @@ test("built-in path policy is complete and aligned with every tool contract", ()
 });
 
 test("built-in protected roots follow the service execution platform", () => {
-  assert.deepEqual(
-    resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots,
-    ["/proc", "/sys", "/dev"],
-  );
+  assert.deepEqual(resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots, [
+    "/proc",
+    "/sys",
+    "/dev",
+  ]);
   assert.deepEqual(
     resolvePathPolicy({}, { platform: "win32" }).roles.superAdmin.host.deniedRoots,
     [],
@@ -171,32 +172,38 @@ test("built-in protected roots follow the service execution platform", () => {
     ["/dev"],
   );
   assert.deepEqual(
-    resolvePathPolicy({
-      security: {
-        pathPolicy: {
-          roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
+    resolvePathPolicy(
+      {
+        security: {
+          pathPolicy: {
+            roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
+          },
         },
       },
-    }, { platform: "windows" }).roles.superAdmin.host.deniedRoots,
+      { platform: "windows" },
+    ).roles.superAdmin.host.deniedRoots,
     ["C:/Windows/System32"],
   );
 });
 
 test("global path policy recursively overrides only configured values", () => {
-  const policy = resolvePathPolicy({
-    security: {
-      path_policy: {
-        roles: {
-          regular_user: { workspace: { others: "read_only" } },
-          super_admin: { host: { allowed_roots: ["/srv/shared"] } },
+  const policy = resolvePathPolicy(
+    {
+      security: {
+        path_policy: {
+          roles: {
+            regular_user: { workspace: { others: "read_only" } },
+            super_admin: { host: { allowed_roots: ["/srv/shared"] } },
+          },
+          capabilities: {
+            "file.read": { host_requires_role: "deny" },
+          },
+          display: { file_tools: "none" },
         },
-        capabilities: {
-          "file.read": { host_requires_role: "deny" },
-        },
-        display: { file_tools: "none" },
       },
     },
-  }, { platform: "linux" });
+    { platform: "linux" },
+  );
 
   assert.equal(policy.roles.regularUser.workspace.own, "read_write");
   assert.equal(policy.roles.regularUser.workspace.others, "read_only");
@@ -206,7 +213,7 @@ test("global path policy recursively overrides only configured values", () => {
   assert.equal(policy.capabilities["file.read"].hostRequiresRole, "deny");
   assert.equal(policy.capabilities["file.write"].hostRequiresRole, "super_admin");
   assert.equal(policy.display.fileTools, "none");
-  assert.equal(policy.display.scriptTools, "logical");
+  assert.equal(policy.display.scriptTools, "runtime");
   assert.equal(Object.hasOwn(policy.capabilities["file.read"], "host_requires_role"), false);
   assert.equal(Object.hasOwn(policy.roles.superAdmin.host, "allowed_roots"), false);
 });

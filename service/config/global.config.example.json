@@ -9,6 +9,18 @@
       "image": "gpt_5_6_sol"
     }
   },
+  "security": {
+    "execution_isolation": {
+      "mode": "sandbox",
+      "sandbox": {
+        "provider": "docker",
+        "scope": "user",
+        "container_name": "noobot-workspace-sandbox",
+        "image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
+        "mounts": []
+      }
+    }
+  },
   "tools": {
     "read_file": {
       "enabled": true
@@ -41,25 +53,7 @@
       "enabled": true
     },
     "execute_script": {
-      "enabled": true,
-      "sandbox_mode": true,
-      "sandbox_provider": {
-        "default": "docker",
-        "docker": {
-          "docker_container_scope": "global",
-          "docker_container_name": "noobot-script-sandbox",
-          "docker_image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
-          "docker_mounts": [
-            {
-              "source": "",
-              "target": "/project",
-              "description": "目录映射配置示例：source 与 target 同时非空才会生效；不配置或留空 source 则不映射"
-            }
-          ]
-        },
-        "bubblewrap": {},
-        "firejail": {}
-      }
+      "enabled": true
     },
     "execute_native_script": {
       "enabled": true

@@ -18,9 +18,9 @@ import {
 } from "../../src/context/agent-context-accessor.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-test("agent context accessors read only canonical scope paths", () => {
+test("agent context accessors separate the runtime execution root from the logical display root", () => {
   const systemRuntime = { sessionId: "runtime-session" };
-  const runtime = { id: "runtime", systemRuntime };
+  const runtime = { id: "runtime", basePath: "/host/workspaces/u1", systemRuntime };
   const tools = [{ name: "read_file" }];
   const scope = createTestAgentExecutionScope(runtime, {
     identity: {
@@ -31,13 +31,14 @@ test("agent context accessors read only canonical scope paths", () => {
       dialogProcessId: "d1",
       turnScopeId: "t1",
     },
-    environment: { workspace: { basePath: "/workspace/u1" } },
+    environment: { workspace: { basePath: "/workspace" } },
     tools,
   });
   assert.equal(getRuntimeFromAgentContext(scope), runtime);
   assert.equal(getSystemRuntimeFromAgentContext(scope), systemRuntime);
   assert.equal(getToolsFromAgentContext(scope), tools);
-  assert.equal(getBasePathFromAgentContext(scope), "/workspace/u1");
+  assert.equal(getBasePathFromAgentContext(scope), "/host/workspaces/u1");
+  assert.equal(scope.context.environment.workspace.basePath, "/workspace");
   assert.equal(getDialogProcessIdFromAgentContext(scope), "d1");
   assert.equal(getChildRunParentSessionIdFromAgentContext(scope), "r1");
   assert.deepEqual(getSessionIdsFromAgentContext(scope), scope.context.identity);

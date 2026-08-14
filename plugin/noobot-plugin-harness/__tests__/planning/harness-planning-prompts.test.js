@@ -342,19 +342,11 @@ test("harness planning operation directory uses sandbox view without losing host
             basePath: hostBasePath,
             userId: "user-a",
             globalConfig: {
-              tools: {
-                execute_script: {
-                  sandbox_mode: true,
-                  sandbox_provider: { default: "docker" },
+              security: {
+                executionIsolation: {
+                  mode: "sandbox",
+                  sandbox: { provider: "docker", scope: "global" },
                 },
-              },
-            },
-            sharedTools: {
-              resolveSandboxPath: ({ hostPath = "", relativePath = "" } = {}) => {
-                if (hostPath === `${hostBasePath}/runtime/ops_workdir`) {
-                  return `${sandboxBasePath}/runtime/ops_workdir`;
-                }
-                return relativePath ? `${sandboxBasePath}/${relativePath}` : "";
               },
             },
           },
@@ -406,7 +398,7 @@ test("harness separate-model plan relay includes operation directory for main ag
             basePath,
             userId: "user-b",
             systemRuntime: { userId: "user-b", sessionId: "s-user-b" },
-            globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+            globalConfig: { security: { executionIsolation: { mode: "host" } } },
           },
         },
       },

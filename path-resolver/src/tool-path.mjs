@@ -12,12 +12,17 @@ import {
   normalizeSlashPath,
 } from "./platform.mjs";
 import { resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.mjs";
+import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
 
 function normalizeWorkspaceRootAlias(value = "") {
   const normalized = normalizeSlashPath(value);
-  if (normalized === "/workspace" || normalized.startsWith("/workspace/")) return "workspace";
+  if (
+    normalized === WORKSPACE_SANDBOX_PATHS.ROOT ||
+    normalized.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)
+  )
+    return "workspace";
   if (normalized === "/project" || normalized.startsWith("/project/")) return "project";
   return "";
 }
@@ -141,13 +146,13 @@ export function resolveToolInputPath({
     if (classified.sandboxRoot === "workspace" && normalizedWorkspaceRoot) {
       const normalizedSandboxPath = normalizeSlashPath(classified.normalized);
       const sandboxUserRoot = normalizeSlashPath(resolveSandboxUserRoot(runtime));
-      if (sandboxUserRoot === "/workspace" && normalizedWorkspace) {
+      if (sandboxUserRoot === WORKSPACE_SANDBOX_PATHS.ROOT && normalizedWorkspace) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspace
             : filePath.resolve(
                 normalizedWorkspace,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,
@@ -159,13 +164,13 @@ export function resolveToolInputPath({
           hint: "",
         };
       }
-      if (sandboxUserRoot.startsWith("/workspace/")) {
+      if (sandboxUserRoot.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspaceRoot
             : filePath.resolve(
                 normalizedWorkspaceRoot,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,
@@ -179,11 +184,11 @@ export function resolveToolInputPath({
       }
       if (!sandboxUserRoot) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspaceRoot
             : filePath.resolve(
                 normalizedWorkspaceRoot,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,

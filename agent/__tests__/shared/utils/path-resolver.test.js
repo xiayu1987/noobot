@@ -214,13 +214,10 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
     runtime: {
       ...runtime,
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "user" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
@@ -265,6 +262,7 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
     userId: "u1",
   });
   assert.equal(hostContext.view, "host");
+  assert.equal(hostContext.currentDirectory, "/host/workspaces/u1/runtime/ops_workdir");
   assert.equal(hostContext.directories.rootDirectory, "/host/workspaces/u1");
   assert.equal(hostContext.directories.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
   assert.deepEqual(hostContext.directories.allowedRoots, ["/host/workspaces/u1"]);
@@ -273,15 +271,14 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
     runtimeBasePath: "/host/workspaces/u1",
     workspaceRoot: "/host/workspaces",
     userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: {
-        view: "sandbox",
-        sandboxProvider: {
-          default: "docker",
-          docker: {
-            dockerContainerScope: "user",
-            dockerMounts: [{ source: "/host/data", target: "/data" }],
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: {
+            provider: "docker",
+            scope: "user",
+            mounts: [{ source: "/host/data", target: "/data" }],
           },
         },
       },
@@ -298,11 +295,12 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
     runtimeBasePath: "/host/workspaces/primary-user",
     workspaceRoot: "/host/workspaces",
     userId: "primary-user",
-    executionContext: {
-      view: "sandbox",
-      config: {
-        view: "sandbox",
-        sandboxProvider: { default: "docker", docker: { dockerContainerScope: "global" } },
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "global" },
+        },
       },
     },
   });
@@ -313,30 +311,6 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
     dockerGlobalContext.directories.opsWorkdir,
     "/workspace/primary-user/runtime/ops_workdir",
   );
-
-  const bubblewrapContext = resolveRuntimePathContext({
-    runtimeBasePath: "/host/workspaces/u1",
-    userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: { view: "sandbox", sandboxProvider: { default: "bubblewrap", bubblewrap: {} } },
-    },
-  });
-  assert.equal(bubblewrapContext.sandboxProvider, "bubblewrap");
-  assert.equal(bubblewrapContext.directories.rootDirectory, "/workspace");
-  assert.equal(bubblewrapContext.directories.opsWorkdir, "/workspace/runtime/sandbox/persist");
-
-  const firejailContext = resolveRuntimePathContext({
-    runtimeBasePath: "/host/workspaces/u1",
-    userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: { view: "sandbox", sandboxProvider: { default: "firejail", firejail: {} } },
-    },
-  });
-  assert.equal(firejailContext.sandboxProvider, "firejail");
-  assert.equal(firejailContext.directories.rootDirectory, "$HOME");
-  assert.equal(firejailContext.directories.opsWorkdir, "$HOME/runtime/sandbox/persist");
 });
 
 test("resolves agent path contract from system directories without mixing sandbox and host views", () => {
@@ -366,13 +340,10 @@ test("resolves agent path contract from system directories without mixing sandbo
     runtime: {
       basePath: "/host/workspaces/u1",
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "global" },
           },
         },
       },
@@ -403,11 +374,7 @@ test("ordinary tool paths never interpret /project through execute_script config
     workspaceRoot: "/host/workspaces",
     runtime: {
       basePath: "/host/workspaces/u1",
-      globalConfig: {
-        tools: {
-          execute_script: { sandboxMode: false },
-        },
-      },
+      globalConfig: { security: { executionIsolation: { mode: "host" } } },
     },
   });
   assert.equal(hostProject.ok, false);
@@ -420,13 +387,10 @@ test("ordinary tool paths never interpret /project through execute_script config
     runtime: {
       basePath: "/host/workspaces/u1/noobot",
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "global" },
           },
         },
       },

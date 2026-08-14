@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import {
+  TOOL_EXECUTION_VIEW,
+  WORKSPACE_SANDBOX_PATHS,
+  assertToolExecutionPolicy,
+} from "@noobot/execution-isolation-protocol";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
-import {
-  EXECUTE_SCRIPT_TOOL_NAME,
-  SANDBOX_PROVIDER_NAME,
-  SCRIPT_EXECUTION_MODE,
-  SCRIPT_WORKDIR_RELATIVE_PATH,
-} from "./constants.js";
+import { EXECUTE_SCRIPT_TOOL_NAME, SCRIPT_EXECUTION_MODE } from "./constants.js";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
@@ -24,57 +24,53 @@ function compactObject(value = {}) {
 }
 
 export function buildExecutionWorkspaceMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  executionPolicy = {},
   workspace = "",
   runtime = {},
   agentContext = null,
-  dockerConfig = {},
   docker = {},
   pathContext = {},
 } = {}) {
-  void sandboxEnabled;
-  void sandboxProvider;
-  void workspace;
   void runtime;
   void agentContext;
-  void dockerConfig;
-  void docker;
-  void pathContext;
-  return { path: SCRIPT_WORKDIR_RELATIVE_PATH, view: "workspace" };
+  const policy = assertToolExecutionPolicy(executionPolicy);
+  const sandboxEnabled = policy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  const currentPath = String(
+    sandboxEnabled
+      ? pathContext?.opsWorkdir || pathContext?.directories?.opsWorkdir || docker?.workdir || ""
+      : workspace,
+  ).trim();
+  return {
+    path: currentPath || WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE,
+    view: sandboxEnabled ? "sandbox" : "host",
+  };
 }
 
-function buildExecutionMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
-  docker = {},
-} = {}) {
+function buildExecutionMeta({ executionPolicy = {}, docker = {} } = {}) {
+  const policy = assertToolExecutionPolicy(executionPolicy);
+  const sandboxEnabled = policy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
   return compactObject({
-    view: sandboxEnabled ? "sandbox" : "host",
-    provider: sandboxEnabled ? sandboxProvider : "host",
+    view: policy.view,
+    provider: sandboxEnabled ? policy.isolation.sandbox.provider : "host",
     image: String(docker?.image || "").trim(),
   });
 }
 
 export function buildScriptExecutionMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  executionPolicy = {},
   workspace = "",
   runtime = {},
   agentContext = null,
-  dockerConfig = {},
   docker = {},
   pathContext = {},
 } = {}) {
   return compactObject({
-    execution: buildExecutionMeta({ sandboxEnabled, sandboxProvider, docker }),
+    execution: buildExecutionMeta({ executionPolicy, docker }),
     workspace: buildExecutionWorkspaceMeta({
-      sandboxEnabled,
-      sandboxProvider,
+      executionPolicy,
       workspace,
       runtime,
       agentContext,
-      dockerConfig,
       docker,
       pathContext,
     }),

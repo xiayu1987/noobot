@@ -120,12 +120,6 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.script.bubblewrap.line1": "- Host root filesystem is used as lowerdir",
-      "tools.script.bubblewrap.line2":
-        "- Use runtime/sandbox/bubblewrap/overlay-upper|overlay-work under user directory as writable layer",
-      "tools.script.bubblewrap.line3":
-        "- Commands run in persistent directory /workspace/runtime/sandbox/persist, files can accumulate",
-      "tools.script.bubblewrap.title": "Bubblewrap + overlayfs notes:",
       "tools.script.commandNotInstalled": (params = {}) =>
         `${String(params.commandName || "").trim()} is not installed. Please install ${String(params.commandName || "").trim()} first.`,
       "tools.script.criticalCancelled":
@@ -146,43 +140,21 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.docker.scope.user": "one container per user",
       "tools.script.docker.title": "Docker notes:",
       "tools.script.docker.mounts.title": "- Extra mounts:",
-      "tools.script.docker.mounts.none":
-        "- No extra mounts configured (no mapping when docker_mounts is empty)",
+      "tools.script.docker.mounts.none": "- No extra mounts configured.",
       "tools.script.docker.mounts.item": (params = {}) =>
         `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? ` (${String(params.description || "").trim()})` : ""}`,
-      "tools.script.fallbackOverlaySrc":
-        "Current bubblewrap version does not support --overlay-src. Automatically fell back to docker.",
-      "tools.script.fallbackUserxattr":
-        "Current kernel/distribution does not support bubblewrap overlay(userxattr). Automatically fell back to docker.",
-      "tools.script.firejail.line1":
-        "- Use runtime/sandbox/firejail/home under user directory as persistent HOME",
-      "tools.script.firejail.line2":
-        "- Commands run in $HOME/runtime/sandbox/persist, files can accumulate",
-      "tools.script.firejail.title": "Firejail notes:",
       "tools.script.localModePathHint":
         "Use relative paths under this directory for input/output files.",
       "tools.script.localModeTitle": "Execute script (local mode).",
       "tools.script.localModeWorkspacePrefix": "Command runs in local directory: ",
-      "tools.script.overlayDirNotWritable": (params = {}) =>
-        `bubblewrap overlay directory is not writable. Check permissions (suggestion: sudo chown -R $(id -u):$(id -g) "${String(params.sandboxRoot || "").trim()}"). ${String(params.reason || "").trim()}`,
-      "tools.script.overlaySrcUnsupported":
-        "Current bubblewrap version does not support --overlay-src. Upgrade bubblewrap, or switch tools.execute_script.sandbox_provider.default to docker.",
-      "tools.script.sandboxModeTitlePrefix": "Execute script (sandbox mode, provider=",
-      "tools.script.sandboxModeTitleSuffix": ").",
-      "tools.script.userxattrUnsupported": (params = {}) =>
-        `${String(params.stderr || "")}\nCurrent system does not support bubblewrap overlay(userxattr). Use tools.execute_script.sandbox_provider.default=docker, or upgrade kernel with CONFIG_OVERLAY_FS_USERXATTR enabled.`,
-      "tools.script.workdir.bubblewrap.line1":
-        "- Default working directory: /workspace/runtime/sandbox/persist",
+      "tools.script.workspaceSandboxTitlePrefix": "Execute script (workspace sandbox, provider=",
+      "tools.script.workspaceSandboxTitleSuffix": ").",
       "tools.script.workdir.commonPathHint":
         "Use relative paths under this directory or paths under /workspace for input/output files.",
       "tools.script.workdir.docker.global.line1":
         "- Default working directory: /workspace/<userId>/runtime/ops_workdir",
       "tools.script.workdir.docker.user.line1":
         "- Default working directory: /workspace/runtime/ops_workdir",
-      "tools.script.workdir.firejail.line1":
-        "- Default working directory: $HOME/runtime/sandbox/persist",
-      "tools.script.workdir.firejail.line2":
-        "Use relative paths under this directory or paths under $HOME for input/output files.",
     },
   },
   execute_native_script: {
@@ -193,11 +165,11 @@ export const INVOCATION_TOOL_SCHEMA = {
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "Async function body. Available bindings: browser, libreoffice, ffmpeg, ffprobe, files, output, args, and log(message). Exact signatures: await ffmpeg.run({ args: [...] }); await ffprobe.run({ args: [...] }); await libreoffice.convert({ input, outputDirectory, outputFormat }). First obtain input:// tokens with await files.input(index). Create formal files with output.file(...), temporary files with output.tempFile(...), and temporary directories with output.tempDirectory(...). LibreOffice input may be an existing input://, output://, or temp:// file from this task; outputDirectory accepts output.directory or a temp:// directory from output.tempDirectory(...). browser.newPage() returns a restricted page supporting goto, setContent, title, url, content, DOM operations, screenshot, and close; evaluate is unavailable. files.readText/readJson read all three token kinds; files.writeText/writeJson write output:// and temp:// file tokens. Only output:// files are returned as formal attachments. Script return values are not file outputs.",
+        text: "Async function body. Available bindings: browser, libreoffice, ffmpeg, ffprobe, files, output, args, and log(message). Exact signatures: await ffmpeg.run({ args: [...] }); await ffprobe.run({ args: [...] }); await libreoffice.convert({ input, outputDirectory, outputFormat }). First obtain input:// tokens with await files.input(index). Create tokens with const file = await output.file(...), const tempFile = await output.tempFile(...), or const tempDirectory = await output.tempDirectory(...). LibreOffice input may be an existing input://, output://, or temp:// file from this task; outputDirectory accepts output.directory or an awaited temp:// directory token. browser.newPage() returns a restricted page supporting goto, setContent, title, url, content, DOM operations, screenshot, and close; evaluate is unavailable. files.readText/readJson read all three token kinds; files.writeText/writeJson write output:// and temp:// file tokens. Only output:// files are returned as formal attachments. Script return values are not file outputs.",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
-        text: "Read-only inputs. source is a logical workspace/host path or complete attachment identity, accessed through files.input(index). For Native Script artifacts, pass the complete attachment identity, not a name, output:// token, or task-local path.",
+        text: "Read-only inputs. source is a logical workspace path or a complete attachment identity. files.input(index) is only the Native Script execution token; never pass output:// or temp:// across tool calls.",
       },
       filePath: {
         key: "tools.nativeScript.fieldFilePath",
@@ -205,7 +177,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       attachmentIdentity: {
         key: "tools.nativeScript.fieldAttachmentIdentity",
-        text: "When source is an object, it must contain the complete attachmentId, sessionId, and attachmentSource identity.",
+        text: "An attachment object must contain the complete attachmentId, sessionId, and attachmentSource identity.",
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",
