@@ -66,7 +66,7 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });
 
-test("write_file: 返回 workspace 逻辑路径并在 host 执行", async () => {
+test("write_file: host 模式返回宿主正常路径并在 host 执行", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-path-view-"));
   const attachmentService = buildAttachmentService();
   const tools = createFileTool({
@@ -111,10 +111,10 @@ test("write_file: 返回 workspace 逻辑路径并在 host 执行", async () => 
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "write_file");
-  assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, "runtime/ops_workdir/write-ok.txt");
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.resolvedPath, path.join(basePath, "runtime/ops_workdir/write-ok.txt"));
   assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "host");
+  assert.equal(result.executionView, "service_host");
 });
 
 test("write_file: successful output is published as a canonical attachment", async () => {
@@ -149,7 +149,7 @@ test("write_file: successful output is published as a canonical attachment", asy
   );
 });
 
-test("write_file: execute_script sandbox 配置不改变文件工具视角", async () => {
+test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示路径", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-sandbox-view-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   await fs.mkdir(basePath, { recursive: true });
@@ -159,15 +159,11 @@ test("write_file: execute_script sandbox 配置不改变文件工具视角", asy
       runtime: {
         attachmentService,
         globalConfig: {
-          tools: {
-            execute_script: {
-              execution: {
-                view: "sandbox",
-                sandboxProvider: {
-                  default: "docker",
-                  docker: { dockerContainerScope: "global" },
-                },
-              },
+          workspaceRoot,
+          security: {
+            executionIsolation: {
+              mode: "sandbox",
+              sandbox: { provider: "docker", scope: "user", image: "missing-node-runtime" },
             },
           },
         },
@@ -181,15 +177,11 @@ test("write_file: execute_script sandbox 配置不改变文件工具视角", asy
     runtime: {
       attachmentService,
       globalConfig: {
-        tools: {
-          execute_script: {
-            execution: {
-              view: "sandbox",
-              sandboxProvider: {
-                default: "docker",
-                docker: { dockerContainerScope: "global" },
-              },
-            },
+        workspaceRoot,
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user", image: "missing-node-runtime" },
           },
         },
       },
@@ -208,11 +200,102 @@ test("write_file: execute_script sandbox 配置不改变文件工具视角", asy
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "write_file");
-  assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, "runtime/ops_workdir/write-ok.txt");
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.resolvedPath, "/workspace/runtime/ops_workdir/write-ok.txt");
   assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "host");
+  assert.equal(result.executionView, "service_host");
   assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
+});
+
+test("workspace I/O: file tools keep one sandbox display path end to end", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-file-sandbox-e2e-"));
+  const basePath = path.join(workspaceRoot, "primary-user");
+  await fs.mkdir(basePath, { recursive: true });
+  const agentContext = buildAgentContext(basePath, "primary-user", {
+    runtime: {
+      globalConfig: {
+        workspaceRoot,
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "user",
+              containerName: "noobot-file-tools-integration",
+            },
+          },
+        },
+      },
+    },
+  });
+  const tools = new Map(createFileTool({ agentContext }).map((tool) => [tool.name, tool]));
+  const filePath = "/workspace/runtime/ops_workdir/sandbox-flow.txt";
+
+  const written = parseToolResult(
+    await tools.get("write_file").invoke({
+      filePath,
+      content: "alpha\nbeta\n",
+      riskLevel: "low",
+    }),
+  );
+  assert.equal(written.ok, true, JSON.stringify(written));
+  assert.equal(written.resolvedPath, filePath);
+  assert.equal(written.executionView, "service_host");
+
+  const firstRead = parseToolResult(
+    await tools.get("read_file").invoke({
+      filePath,
+      includeLineNumbers: false,
+      riskLevel: "low",
+    }),
+  );
+  assert.equal(firstRead.content, "alpha\nbeta");
+  assert.equal(firstRead.executionView, "service_host");
+
+  const searched = parseToolResult(
+    await tools.get("search").invoke({
+      source: "files",
+      path: "/workspace/runtime/ops_workdir",
+      query: "beta",
+      glob: "**/*.txt",
+      riskLevel: "low",
+    }),
+  );
+  assert.equal(searched.ok, true, JSON.stringify(searched));
+  assert.equal(searched.matches.length, 1);
+  assert.equal(searched.matches[0].filePath, filePath);
+
+  const patched = parseToolResult(
+    await tools.get("patch_file").invoke({
+      format: "apply_patch",
+      patch: [
+        "*** Begin Patch",
+        "*** Update File: runtime/ops_workdir/sandbox-flow.txt",
+        "@@",
+        " alpha",
+        "-beta",
+        "+gamma",
+        "*** End Patch",
+        "",
+      ].join("\n"),
+      riskLevel: "low",
+    }),
+  );
+  assert.equal(patched.ok, true, JSON.stringify(patched));
+  assert.deepEqual(patched.changedFiles, [filePath]);
+
+  const finalRead = parseToolResult(
+    await tools.get("read_file").invoke({
+      filePath,
+      includeLineNumbers: false,
+      riskLevel: "low",
+    }),
+  );
+  assert.equal(finalRead.content, "alpha\ngamma");
+  assert.equal(
+    await fs.readFile(path.join(basePath, "runtime/ops_workdir/sandbox-flow.txt"), "utf8"),
+    "alpha\ngamma\n",
+  );
 });
 
 test("write_file: super user can write an absolute file outside workspace root", async () => {

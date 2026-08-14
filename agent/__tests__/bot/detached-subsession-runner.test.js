@@ -164,7 +164,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   const events = [];
   const runner = createDetachedSubSessionRunner(deps);
   const result = await runner({
-    parentExecutionScope: createParentExecutionScope(),
+    parentExecutionScope: createParentExecutionScope({ runtimeModel: "gpt_5_4" }),
     parentContext: createParentContext(),
     message: "hello",
     attachments: [{ name: "a.txt" }],
@@ -210,6 +210,7 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(payload.runConfig.executionKind, "agent");
   assert.equal(payload.runConfig.parentExecutionId, "workflow:root");
   assert.equal(payload.runConfig.rootExecutionId, "workflow:root");
+  assert.equal(payload.runConfig.runtimeModel, "gpt_5_4");
   assert.equal(payload.runConfig.systemRuntimePatch, undefined);
   assert.equal(payload.parentAsyncResultContainer, null);
   assert.ok(payload.persistenceContext);
@@ -281,6 +282,52 @@ test("detached sub-session delegates execution and persistence to the main runne
   assert.equal(result.result.answer, "agent answer");
   assert.deepEqual(result.result.messages, [{ role: "assistant", content: "agent answer" }]);
   assert.deepEqual(result.result.turnTasks, [{ taskId: "t1" }]);
+});
+
+test("detached sub-session uses the selected parent model over a stale runtime model", async () => {
+  const { calls, deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
+    parentContext: createParentContext({
+      runConfig: { selectedModel: { value: "gpt_5_4" }, runtimeModel: "parent_override" },
+    }),
+    message: "hello",
+    strategy: createCompleteStrategy(),
+  });
+
+  assert.equal(calls.runSessionPayloads[0].runConfig.runtimeModel, "gpt_5_4");
+});
+
+test("detached sub-session explicit model override wins over the selected parent model", async () => {
+  const { calls, deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
+    parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
+    message: "hello",
+    runConfigPatch: { runtimeModel: "child_model" },
+    strategy: createCompleteStrategy(),
+  });
+
+  assert.equal(calls.runSessionPayloads[0].runConfig.runtimeModel, "child_model");
+});
+
+test("detached sub-session empty model override preserves the selected parent model", async () => {
+  const { calls, deps } = createDeps();
+  const runner = createDetachedSubSessionRunner(deps);
+
+  await runner({
+    parentExecutionScope: createParentExecutionScope({ runtimeModel: "stale_model" }),
+    parentContext: createParentContext({ runConfig: { selectedModel: "gpt_5_4" } }),
+    message: "hello",
+    runConfigPatch: { runtimeModel: "  " },
+    strategy: createCompleteStrategy(),
+  });
+
+  assert.equal(calls.runSessionPayloads[0].runConfig.runtimeModel, "gpt_5_4");
 });
 
 test("detached sub-session transfers canonical parent attachments into child ownership", async () => {

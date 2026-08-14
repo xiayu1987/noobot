@@ -11,6 +11,7 @@ import {
   normalizePathForPlatform,
   resolvePathPolicy,
   resolvePathRef,
+  resolveSandboxPath,
   resolveToolInputPath,
   buildToolPathScopeErrorDetails,
 } from "@noobot/path-resolver";
@@ -24,6 +25,10 @@ import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
+import {
+  EXECUTION_ISOLATION_MODE,
+  resolveExecutionIsolation,
+} from "@noobot/execution-isolation-protocol";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -83,14 +88,31 @@ function resolveWorkspaceRoot(agentContext = {}) {
   return workspaceRoot ? path.resolve(workspaceRoot) : "";
 }
 
+function resolveRuntimeIsolation(runtime = {}) {
+  return resolveExecutionIsolation(runtime?.globalConfig || {});
+}
+
+export function canUseHostPathsForWorkspaceTools(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  return (
+    isSuperUserAgentContext(agentContext) &&
+    resolveRuntimeIsolation(runtime).mode === EXECUTION_ISOLATION_MODE.HOST
+  );
+}
+
 export function projectResolvedFilePath({ resolvedPath = "", agentContext = {} } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const pathRef = resolvePathRef({
-    input: resolvedPath,
-    workspaceRoot: resolveUserWorkspacePath(agentContext),
-    owner: String(runtime?.userId || ""),
-  });
-  return pathRef.view === "attachment" ? pathRef.identity : pathRef.path;
+  const isolation = resolveRuntimeIsolation(runtime);
+  if (isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX) {
+    return (
+      resolveSandboxPath({
+        hostPath: resolvedPath,
+        runtime,
+        agentContext,
+      }) || ""
+    );
+  }
+  return path.resolve(resolvedPath);
 }
 
 function resolveSessionContext(agentContext = {}) {
@@ -249,6 +271,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
 
   const workspacePath = resolveUserWorkspacePath(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
+  const isolation = resolveRuntimeIsolation(runtime);
   const isSuperUser = isSuperUserAgentContext(agentContext);
   const workspaceRoot = resolveWorkspaceRoot(agentContext);
   const resolvedToolPath = resolveToolInputPath({
@@ -258,7 +281,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
     workspaceRoot,
     agentContext,
     allowHostAbsolute: true,
-    allowSandbox: false,
+    allowSandbox: isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX,
     allowVirtualRelative: false,
   });
   if (!resolvedToolPath.ok) {
@@ -288,6 +311,17 @@ export async function assertAndResolveUserWorkspaceFilePath({
     workspaceRoot: workspacePath,
     owner: String(runtime?.userId || ""),
   });
+  if (isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX && logicalPathRef.view === "host") {
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "pathOutOfScope")}`, {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: fieldName,
+        filePath: normalizedPath,
+        pathView: logicalPathRef.view,
+        error: "host_path_unavailable_in_sandbox",
+      },
+    });
+  }
   const configuredPathPolicy = resolvePathPolicy(runtime?.globalConfig || {});
   const principal = {
     userId: String(runtime?.userId || ""),

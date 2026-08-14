@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import {
   filePath as path,
   isAbsolutePathAnyPlatform,
@@ -16,20 +15,22 @@ import { z } from "zod";
 import {
   assertAndResolveUserWorkspaceFilePath,
   assertValidFileNameFromPath,
+  canUseHostPathsForWorkspaceTools,
   projectResolvedFilePath,
 } from "../core/check-tool-input.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
+import { registerResource } from "../core/resource-broker.js";
+import { createWorkspaceIoExecutor } from "../core/workspace-io-executor.js";
+import { resolveFileInput } from "../core/file-input.js";
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
-import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
 import {
   DEFAULT_MAX_SEARCH_FILES,
   DEFAULT_READ_MAX_LINES,
   DEFAULT_SEARCH_CONTEXT_LINES,
   DEFAULT_SEARCH_MAX_RESULTS,
-  exists,
   formatLinesWithNumbers,
   splitLines,
   toPositiveInt,
@@ -40,6 +41,7 @@ import {
   searchFilesWithRipgrep,
   searchInText,
 } from "./file-search.js";
+import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 import {
   classifyFileToolRisk,
   confirmCriticalToolOperation,
@@ -103,17 +105,17 @@ function toFileToolDisplayPath({ resolvedPath = "", agentContext = {} } = {}) {
 }
 
 function buildPatchFieldDescription(agentContext = {}, fieldName = "") {
-  const isSuperUser = isSuperUserAgentContext(agentContext);
+  const hostPathsAllowed = canUseHostPathsForWorkspaceTools(agentContext);
   const baseText = tTool(agentContext, `tools.patch_file.${fieldName}`);
   const modeText = (() => {
     if (fieldName === "fieldPatch") {
-      if (isSuperUser) {
+      if (hostPathsAllowed) {
         return tTool(agentContext, "tools.patch_file.fieldPatchPathHintSuperHost");
       }
       return tTool(agentContext, "tools.patch_file.fieldPatchPathHintHost");
     }
     if (fieldName === "fieldRoot") {
-      if (isSuperUser) {
+      if (hostPathsAllowed) {
         return tTool(agentContext, "tools.patch_file.fieldRootPathHintSuperHost");
       }
       return tTool(agentContext, "tools.patch_file.fieldRootPathHintHost");
@@ -168,12 +170,18 @@ async function preparePatchExecution({
 export function createFileTool({ agentContext }) {
   const runtime = agentContext?.bindings?.runtime || {};
   const abortSignal = runtime?.abortSignal || null;
+  const workspaceIo = createWorkspaceIoExecutor({
+    executionPolicy: resolveToolExecutionPolicy({
+      toolName: TOOL_NAME.READ_FILE,
+      globalConfig: runtime.globalConfig || {},
+    }),
+  });
   const readFileTool = new DynamicStructuredTool({
     name: TOOL_NAME.READ_FILE,
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileRead },
     description: tTool(agentContext, "tools.file.readDescriptionWithLineNumbers"),
     schema: z.object({
-      filePath: z.string().describe(tTool(agentContext, "tools.file.readFilePathField")),
+      filePath: z.string().min(1).describe(tTool(agentContext, "tools.file.readFilePathField")),
       startLine: z
         .number()
         .int()
@@ -205,14 +213,16 @@ export function createFileTool({ agentContext }) {
       maxLines = DEFAULT_READ_MAX_LINES,
       riskLevel,
     }) => {
-      assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
-      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
-        filePath,
+      if (typeof filePath === "string")
+        assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
+      const resolvedInput = await resolveFileInput({
+        source: filePath,
         agentContext,
         fieldName: "filePath",
         mustExist: true,
         capability: PATH_CAPABILITIES.FILE_READ,
       });
+      const resolvedPath = resolvedInput.executionPath;
       const pathRef = resolvePathRef({
         input: resolvedPath,
         workspaceRoot: runtime?.basePath || "",
@@ -228,9 +238,9 @@ export function createFileTool({ agentContext }) {
         target: toFileToolDisplayPath({ resolvedPath, agentContext }),
         reason: "The final normalized resource requires confirmation under the server path policy.",
       });
-      await stat(resolvedPath);
+      await workspaceIo.stat(resolvedPath);
       const hasRange = Number.isFinite(Number(startLine)) || Number.isFinite(Number(endLine));
-      const rawContent = await readFile(resolvedPath, "utf8");
+      const rawContent = await workspaceIo.readText(resolvedPath);
       const allLines = splitLines(rawContent);
       if (rawContent.endsWith("\n")) allLines.pop();
       const totalLines = allLines.length;
@@ -245,12 +255,18 @@ export function createFileTool({ agentContext }) {
         ? formatLinesWithNumbers(selectedLines, start)
         : selectedLines.join("\n");
       const truncated = end < requestedEnd || end < totalLines;
+      const resource = await registerResource({
+        agentContext,
+        executionPath: resolvedPath,
+        capabilities: { read: true, write: false, scriptInput: true },
+      });
       return toToolJsonResult(TOOL_NAME.READ_FILE, {
         ok: true,
         resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         pathView: pathRef.view,
-        executionView: "host",
+        executionView: workspaceIo.view,
+        resources: [resolvedInput.resourceRef || resource],
         startLine: start,
         endLine: end,
         totalLines,
@@ -266,7 +282,7 @@ export function createFileTool({ agentContext }) {
     metadata: { pathContract: TOOL_PATH_CONTRACTS.fileWrite },
     description: tTool(agentContext, "tools.file.writeDescription"),
     schema: z.object({
-      filePath: z.string().describe(tTool(agentContext, "tools.file.writeFilePathField")),
+      filePath: z.string().min(1).describe(tTool(agentContext, "tools.file.writeFilePathField")),
       content: z.string().describe(tTool(agentContext, "tools.file.writeContentField")),
       overwrite: z
         .boolean()
@@ -276,13 +292,16 @@ export function createFileTool({ agentContext }) {
       riskLevel: createRiskLevelSchema(agentContext, "tools.file.writeRiskLevelField"),
     }),
     func: async ({ filePath, content, overwrite = true, riskLevel }) => {
-      assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
-      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
-        filePath,
+      if (typeof filePath === "string")
+        assertValidFileNameFromPath({ filePath, fieldName: "filePath" });
+      const resolvedInput = await resolveFileInput({
+        source: filePath,
         agentContext,
         fieldName: "filePath",
+        mustExist: false,
         capability: PATH_CAPABILITIES.FILE_WRITE,
       });
+      const resolvedPath = resolvedInput.executionPath;
       const pathRef = resolvePathRef({
         input: resolvedPath,
         workspaceRoot: runtime?.basePath || "",
@@ -298,25 +317,30 @@ export function createFileTool({ agentContext }) {
         target: toFileToolDisplayPath({ resolvedPath, agentContext }),
         reason: "The final normalized resource requires confirmation under the server path policy.",
       });
-      if (overwrite === false && (await exists(resolvedPath))) {
+      if (overwrite === false && (await workspaceIo.exists(resolvedPath))) {
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           message: "file exists; set overwrite=true to replace it",
           resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
           fileName: path.basename(resolvedPath),
           pathView: pathRef.view,
-          executionView: "host",
+          executionView: workspaceIo.view,
         });
       }
-      await mkdir(path.dirname(resolvedPath), { recursive: true });
-      await writeFile(resolvedPath, content, "utf8");
+      await workspaceIo.writeText(resolvedPath, content);
+      const resource = await registerResource({
+        agentContext,
+        executionPath: resolvedPath,
+        capabilities: { read: true, write: true, scriptInput: true },
+      });
       return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
         ok: true,
         state: TOOL_RESULT_STATE.OK,
         resolvedPath: toFileToolDisplayPath({ resolvedPath, agentContext }),
         fileName: path.basename(resolvedPath),
         pathView: pathRef.view,
-        executionView: "host",
+        executionView: workspaceIo.view,
+        resources: [resource],
         outputArtifacts: [
           {
             type: "text",
@@ -406,6 +430,7 @@ export function createFileTool({ agentContext }) {
           ok: true,
           source: "text",
           query: normalizedQuery,
+          resources: [],
           ...result,
         });
       }
@@ -475,7 +500,7 @@ export function createFileTool({ agentContext }) {
           if (matches.length >= maxCount) break;
           let content = "";
           try {
-            content = await readFile(file.filePath, "utf8");
+            content = await workspaceIo.readText(file.filePath);
           } catch {
             continue;
           }
@@ -492,6 +517,47 @@ export function createFileTool({ agentContext }) {
         }
         truncated = matches.length >= maxCount;
       }
+      matches = await Promise.all(
+        matches.map(async (match) => {
+          const matchedPath = String(match?.filePath || "").trim();
+          if (!matchedPath) return match;
+          const resolvedMatch = await assertAndResolveUserWorkspaceFilePath({
+            filePath: matchedPath,
+            agentContext,
+            fieldName: "match.filePath",
+            mustExist: true,
+            capability: PATH_CAPABILITIES.FILE_READ,
+          });
+          return {
+            ...match,
+            filePath: toFileToolDisplayPath({ resolvedPath: resolvedMatch, agentContext }),
+          };
+        }),
+      );
+      const resourcePaths = Array.from(
+        new Set(matches.map((item) => String(item?.filePath || "").trim()).filter(Boolean)),
+      );
+      const resources = [];
+      for (const resourcePath of resourcePaths) {
+        try {
+          const resolvedMatch = await assertAndResolveUserWorkspaceFilePath({
+            filePath: resourcePath,
+            agentContext,
+            fieldName: "match.filePath",
+            mustExist: true,
+            capability: PATH_CAPABILITIES.FILE_READ,
+          });
+          resources.push(
+            await registerResource({
+              agentContext,
+              executionPath: resolvedMatch,
+              capabilities: { read: true, write: false, scriptInput: true },
+            }),
+          );
+        } catch {
+          // Search results remain authoritative text; an inaccessible match is not published as a resource.
+        }
+      }
       return toToolJsonResult(TOOL_NAME.SEARCH, {
         ok: true,
         source: "files",
@@ -499,6 +565,7 @@ export function createFileTool({ agentContext }) {
         path: inputPath || ".",
         glob: String(glob || ""),
         matches,
+        resources,
         truncated,
       });
     },
@@ -569,7 +636,7 @@ export function createFileTool({ agentContext }) {
       const deletePlans = [];
       for (const item of targets) {
         if (item.mode === "add") {
-          if (await exists(item.resolvedNewPath)) {
+          if (await workspaceIo.exists(item.resolvedNewPath)) {
             throw recoverableToolError(`target file already exists: ${item.newPath}`, {
               code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
               details: { field: "patch", filePath: item.newPath },
@@ -585,7 +652,7 @@ export function createFileTool({ agentContext }) {
           deletePlans.push({ filePath: item.resolvedOldPath, displayPath: item.oldPath });
           continue;
         }
-        const original = await readFile(item.resolvedOldPath, "utf8");
+        const original = await workspaceIo.readText(item.resolvedOldPath);
         let nextContent = "";
         try {
           nextContent =
@@ -619,14 +686,24 @@ export function createFileTool({ agentContext }) {
       }
       if (!dryRun) {
         for (const plan of writePlans) {
-          await mkdir(path.dirname(plan.filePath), { recursive: true });
-          await writeFile(plan.filePath, plan.content, "utf8");
+          await workspaceIo.writeText(plan.filePath, plan.content);
         }
         for (const plan of deletePlans) {
           if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
-          await unlink(plan.filePath);
+          await workspaceIo.remove(plan.filePath);
         }
       }
+      const resources = dryRun
+        ? []
+        : await Promise.all(
+            writePlans.map((item) =>
+              registerResource({
+                agentContext,
+                executionPath: item.filePath,
+                capabilities: { read: true, write: true, scriptInput: true },
+              }),
+            ),
+          );
       return toToolJsonResult(TOOL_NAME.PATCH_FILE, {
         ok: true,
         format: normalizedFormat,
@@ -652,6 +729,7 @@ export function createFileTool({ agentContext }) {
             action: "delete",
           })),
         ],
+        resources,
       });
     },
   });

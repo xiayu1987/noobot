@@ -195,17 +195,15 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
       basePath: workspaceRoot,
       attachmentService: service,
       userMessageAttachments: [],
-      userConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "user" },
-            },
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
+      userConfig: {},
       systemRuntime: {
         sessionId: "s1",
         config: {},

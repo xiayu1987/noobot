@@ -23,15 +23,18 @@ export function buildStaticInfo({ runtimeBasePath = "", userId = "", globalConfi
     globalConfig,
   });
   return {
-    cwd: process.cwd(),
+    cwd: pathContext.currentDirectory,
     userId: userId || "",
-    basePath: normalizedBasePath,
+    basePath: pathContext.rootDirectory,
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
     globalDefaults: {
-      workspaceRoot: globalConfig?.workspaceRoot || "",
+      workspaceRoot:
+        pathContext.view === "sandbox"
+          ? pathContext.sandboxRoot
+          : globalConfig?.workspaceRoot || "",
     },
     directories: pathContext.directories,
   };

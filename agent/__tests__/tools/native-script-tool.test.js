@@ -99,6 +99,9 @@ test("execute_native_script injects capabilities and persists task output", asyn
     },
   });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  assert.match(tool.schema.shape.script_body.description, /await output\.file\(/);
+  assert.match(tool.schema.shape.script_body.description, /await output\.tempFile\(/);
+  assert.match(tool.schema.shape.script_body.description, /await output\.tempDirectory\(/);
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -152,7 +155,20 @@ test("execute_native_script rejects host runtime escape syntax before execution"
 
 test("execute_native_script reports the source location of forbidden dynamic property access", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-location-"));
-  const runtime = createRuntime(basePath);
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `resource-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
 
   await assert.rejects(
@@ -750,6 +766,91 @@ await files.writeText(target, await files.readText(source));
   );
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.output_file_count, 1);
+});
+
+test("execute_native_script accepts a logical workspace path", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-resource-ref-"));
+  const inputPath = path.join(basePath, "resource-input.txt");
+  await fs.writeFile(inputPath, "resource identity", "utf8");
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `resource-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const scope = createTestAgentExecutionScope(runtime);
+  const [tool] = createNativeScriptTool({ agentContext: scope });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "resource-input.txt" }],
+        script_body: `
+const input = await files.input(0);
+const target = await output.file("resource-copy.txt");
+await files.writeText(target, await files.readText(input));
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.resources.length, 1);
+  assert.equal(result.resources[0].source, "attachment");
+});
+
+test("execute_native_script projects a sandbox workspace path into task-local input", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-sandbox-input-"));
+  await fs.writeFile(path.join(basePath, "sandbox-input.txt"), "shared resource", "utf8");
+  const runtime = createRuntime(basePath, {
+    globalConfig: {
+      tools: { execute_native_script: { enabled: true } },
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
+        },
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `sandbox-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime),
+  });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "/workspace/sandbox-input.txt" }],
+        script_body: `
+const input = await files.input(0);
+const target = await output.file("sandbox-copy.txt");
+await files.writeText(target, await files.readText(input));
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal(result.path_view, "task-local");
 });
 
 test("execute_native_script browser rejects non-HTTP navigation protocols", async () => {

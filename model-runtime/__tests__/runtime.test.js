@@ -440,6 +440,37 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
 });
 
+test("direct GPT image models default to their configured Images transport", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const inferred = normalizeRuntimeModelSpec({
+    model: "gpt-image-2",
+    format: "openai_compatible",
+    multimodal_generation: {
+      support_generation: { enabled: true, support_scope: ["image"] },
+    },
+  });
+  assert.equal(
+    inferred.multimodal_generation.support_generation.api_type,
+    "images_async",
+  );
+
+  const explicit = normalizeRuntimeModelSpec({
+    model: "gpt-image-2",
+    format: "openai_compatible",
+    multimodal_generation: {
+      support_generation: {
+        enabled: true,
+        support_scope: ["image"],
+        api_type: "openai_responses",
+      },
+    },
+  });
+  assert.equal(
+    explicit.multimodal_generation.support_generation.api_type,
+    "openai_responses",
+  );
+});
+
 test("model identity and defaults layer operator, family, concrete model, then explicit config", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const proxiedGpt = normalizeRuntimeModelSpec({

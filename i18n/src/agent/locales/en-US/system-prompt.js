@@ -69,13 +69,17 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     pathGuidance: {
       preferRelative:
         "General file paths use the workspace logical view; relative paths are always based on the current user's workspace.",
-      workspaceView:
-        "Sandbox is only the execute_script execution view and cannot be passed to other tools as a file path.",
+      sandboxWorkspaceView:
+        "Sandbox mode is active. Workspace tools share the sandbox workspace view; use only the logical paths and mount targets listed in the system runtime environment.",
+      hostWorkspaceView:
+        "Host mode is active. Workspace tools use the service workspace view.",
       taskLocalView:
         "execute_native_script task-local paths last for one call, and output names are not paths. Across tools, pass only the complete attachment identity; never construct workspace or host paths.",
       superUserHost:
         "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
       regularHost: "Regular users cannot use host absolute paths.",
+      sandboxHostAccess:
+        "Sandbox mode does not expose host paths or add mounts for super administrators; only fixed restricted-host tools may use authorized host capabilities.",
       patchRoot:
         "For patch_file, usually omit root; if set, root must be a workspace-relative child directory.",
     },

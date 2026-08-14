@@ -241,6 +241,10 @@ async function main() {
     "Prepared backend dependency @noobot/agent-config-protocol",
   );
   await assertExists(
+    path.join(backendRoot, "node_modules/@noobot/execution-isolation-protocol/package.json"),
+    "Prepared backend dependency @noobot/execution-isolation-protocol",
+  );
+  await assertExists(
     path.join(backendRoot, "node_modules/@noobot/plugin-runtime/package.json"),
     "Prepared backend dependency @noobot/plugin-runtime",
   );

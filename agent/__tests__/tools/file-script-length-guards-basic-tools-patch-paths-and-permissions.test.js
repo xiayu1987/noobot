@@ -304,7 +304,11 @@ test("patch_file: 拒绝 /project 沙箱绝对路径视角", async () => {
 
   await assert.rejects(
     () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
-    /sandbox|沙箱/i,
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.match(String(error.message || ""), /范围|scope|path/i);
+      return true;
+    },
   );
 });
 
@@ -327,15 +331,13 @@ test("patch_file: execute_script 挂载不能授权 workspace 外项目", async 
         userId: "admin",
         globalConfig: {
           workspaceRoot: path.join(rootPath, "workspace"),
-          tools: {
-            execute_script: {
-              sandboxMode: true,
-              sandboxProvider: {
-                default: "docker",
-                docker: {
-                  dockerContainerScope: "global",
-                  dockerMounts: [{ source: projectPath, target: "/project" }],
-                },
+          security: {
+            executionIsolation: {
+              mode: "sandbox",
+              sandbox: {
+                provider: "docker",
+                scope: "global",
+                mounts: [{ source: projectPath, target: "/project" }],
               },
             },
           },
@@ -360,7 +362,11 @@ test("patch_file: execute_script 挂载不能授权 workspace 外项目", async 
 
   await assert.rejects(
     () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
-    /sandbox|沙箱/i,
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.match(String(error.message || ""), /范围|scope|path/i);
+      return true;
+    },
   );
   assert.equal(await fs.readFile(targetFile, "utf8"), "function existing() {\n  return true;\n}\n");
 });
@@ -400,11 +406,7 @@ test("patch_file: root 参数 host 错误提示不暗示沙箱路径", async () 
   const tools = createFileTool({
     agentContext: buildAgentContext(basePath, "u-test", {
       runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: { sandboxMode: false },
-          },
-        },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
       },
     }),
   });
@@ -473,7 +475,7 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
-        globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
       },
     }),
   });
@@ -527,7 +529,7 @@ test("patch_file: 普通用户必须显式提供 workspace 子项目路径", asy
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["noobot/client/noobot-chat/src/a.txt"]);
+  assert.deepEqual(result.changedFiles, [path.join(repoPath, "client/noobot-chat/src/a.txt")]);
   assert.equal(
     await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"),
     "one\nTWO\n",

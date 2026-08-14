@@ -180,14 +180,8 @@ print_missing_dependency_hints() {
         echo "- ripgrep(rg)：未安装不影响系统启动，但会降低 search 工具在大项目中的搜索性能。"
         ;;
       docker)
-        echo "- docker：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=docker 时，执行脚本的 Docker 沙箱模式才不可用。"
+        echo "- docker：未安装本身不影响系统启动；当 security.execution_isolation.mode=sandbox 时，工作区文件与脚本工具不可用。"
         echo "  官方安装文档: https://docs.docker.com/engine/install/"
-        ;;
-      bubblewrap)
-        echo "- bubblewrap(bwrap)：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=bubblewrap 时，执行脚本的 Bubblewrap+overlayfs 沙箱模式才不可用。"
-        ;;
-      firejail)
-        echo "- firejail：未安装本身不影响系统启动；仅当 tools.execute_script.sandbox_mode=true 且 tools.execute_script.sandbox_provider.default=firejail 时，执行脚本的 Firejail 沙箱模式才不可用。"
         ;;
     esac
   done
@@ -196,23 +190,23 @@ print_missing_dependency_hints() {
   log "$(msg install_hint_title)"
   case "$pm" in
     apt)
-      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
+      echo "  sudo apt-get update && sudo apt-get install -y libreoffice ffmpeg ripgrep"
       ;;
     dnf)
-      echo "  sudo dnf install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
+      echo "  sudo dnf install -y libreoffice ffmpeg ripgrep"
       ;;
     yum)
-      echo "  sudo yum install -y libreoffice ffmpeg ripgrep bubblewrap firejail"
+      echo "  sudo yum install -y libreoffice ffmpeg ripgrep"
       ;;
     pacman)
-      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg ripgrep bubblewrap firejail"
+      echo "  sudo pacman -Sy --noconfirm libreoffice-fresh ffmpeg ripgrep"
       ;;
     brew)
       echo "  brew install --cask libreoffice"
-      echo "  brew install ffmpeg ripgrep bubblewrap firejail"
+      echo "  brew install ffmpeg ripgrep"
       ;;
     *)
-      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg ripgrep bubblewrap firejail"
+      echo "  请使用你的系统包管理器安装：libreoffice ffmpeg ripgrep"
       ;;
   esac
   echo ""
@@ -529,8 +523,6 @@ main() {
   command -v ffmpeg >/dev/null 2>&1 || missing_deps+=("ffmpeg")
   command -v rg >/dev/null 2>&1 || missing_deps+=("ripgrep")
   command -v docker >/dev/null 2>&1 || missing_deps+=("docker")
-  command -v bwrap >/dev/null 2>&1 || missing_deps+=("bubblewrap")
-  command -v firejail >/dev/null 2>&1 || missing_deps+=("firejail")
 
   [[ -d "$CLIENT_DIR" ]] || { echo "$(msg client_dir_missing "$CLIENT_DIR")" >&2; exit 1; }
   [[ -d "$SERVICE_DIR" ]] || { echo "$(msg service_dir_missing "$SERVICE_DIR")" >&2; exit 1; }

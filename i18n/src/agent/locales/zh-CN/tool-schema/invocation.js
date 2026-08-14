@@ -117,12 +117,6 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
     },
     texts: {
-      "tools.script.bubblewrap.line1": "- 宿主根文件系统作为 lowerdir",
-      "tools.script.bubblewrap.line2":
-        "- 用户目录下 runtime/sandbox/bubblewrap/overlay-upper|overlay-work 作为可写层",
-      "tools.script.bubblewrap.line3":
-        "- 命令固定在持久目录 /workspace/runtime/sandbox/persist 执行，文件可累加",
-      "tools.script.bubblewrap.title": "Bubblewrap + overlayfs 说明：",
       "tools.script.commandNotInstalled": (params = {}) =>
         `${String(params.commandName || "").trim()} 未安装，请先安装 ${String(params.commandName || "").trim()}`,
       "tools.script.criticalCancelled": "用户未确认最高风险脚本，已取消执行。",
@@ -142,37 +136,20 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.docker.scope.user": "按用户独立容器",
       "tools.script.docker.title": "Docker 说明：",
       "tools.script.docker.mounts.title": "- 额外挂载目录：",
-      "tools.script.docker.mounts.none": "- 未配置额外挂载目录（docker_mounts 为空时不挂载）",
+      "tools.script.docker.mounts.none": "- 未配置额外挂载目录。",
       "tools.script.docker.mounts.item": (params = {}) =>
         `  - ${String(params.source || "").trim()} -> ${String(params.target || "").trim()}${String(params.description || "").trim() ? `（${String(params.description || "").trim()}）` : ""}`,
-      "tools.script.fallbackOverlaySrc":
-        "当前 bubblewrap 版本不支持 --overlay-src，已自动回退到 docker。",
-      "tools.script.fallbackUserxattr":
-        "当前内核/发行版不支持 bubblewrap overlay(userxattr)，已自动回退到 docker。",
-      "tools.script.firejail.line1": "- 使用用户目录下 runtime/sandbox/firejail/home 作为持久 HOME",
-      "tools.script.firejail.line2": "- 命令固定在 $HOME/runtime/sandbox/persist 执行，文件可累加",
-      "tools.script.firejail.title": "Firejail 说明：",
       "tools.script.localModePathHint": "输入输出文件请使用该目录下相对路径。",
       "tools.script.localModeTitle": "执行脚本（local 模式）。",
       "tools.script.localModeWorkspacePrefix": "命令在本机目录执行：",
-      "tools.script.overlayDirNotWritable": (params = {}) =>
-        `bubblewrap overlay 目录不可写，请检查权限（建议执行：sudo chown -R $(id -u):$(id -g) "${String(params.sandboxRoot || "").trim()}"）。${String(params.reason || "").trim()}`,
-      "tools.script.overlaySrcUnsupported":
-        "当前 bubblewrap 版本不支持 --overlay-src。请升级 bubblewrap，或将 tools.execute_script.sandbox_provider.default 改为 docker。",
-      "tools.script.sandboxModeTitlePrefix": "执行脚本（沙箱模式，provider=",
-      "tools.script.sandboxModeTitleSuffix": "）。",
-      "tools.script.userxattrUnsupported": (params = {}) =>
-        `${String(params.stderr || "")}\n当前系统不支持 bubblewrap overlay(userxattr)。请改用 tools.execute_script.sandbox_provider.default=docker，或升级内核开启 CONFIG_OVERLAY_FS_USERXATTR。`,
-      "tools.script.workdir.bubblewrap.line1":
-        "- 命令默认工作目录为 /workspace/runtime/sandbox/persist",
+      "tools.script.workspaceSandboxTitlePrefix": "执行脚本（工作区沙箱，provider=",
+      "tools.script.workspaceSandboxTitleSuffix": "）。",
       "tools.script.workdir.commonPathHint":
         "输入输出文件请使用该目录相对路径或 /workspace 下路径。",
       "tools.script.workdir.docker.global.line1":
         "- 命令默认工作目录为 /workspace/<userId>/runtime/ops_workdir",
       "tools.script.workdir.docker.user.line1":
         "- 命令默认工作目录为 /workspace/runtime/ops_workdir",
-      "tools.script.workdir.firejail.line1": "- 命令默认工作目录为 $HOME/runtime/sandbox/persist",
-      "tools.script.workdir.firejail.line2": "输入输出文件请使用该目录相对路径或 $HOME 下路径。",
     },
   },
   execute_native_script: {
@@ -183,11 +160,11 @@ export const INVOCATION_TOOL_SCHEMA = {
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })。先用 await files.input(index) 获取 input:// 令牌；用 output.file(...) 创建正式文件，用 output.tempFile(...) 创建临时文件，用 output.tempDirectory(...) 创建临时目录。LibreOffice 输入可使用本轮存在的 input://、output:// 或 temp:// 文件；outputDirectory 接受 output.directory 或 output.tempDirectory(...) 返回的 temp:// 目录。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 可写 output:// 和 temp:// 文件令牌。只有 output:// 文件会作为正式附件返回，脚本 return 值不作为文件输出。",
+        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })。先用 await files.input(index) 获取 input:// 令牌；用 const file = await output.file(...)、const tempFile = await output.tempFile(...) 或 const tempDirectory = await output.tempDirectory(...) 创建令牌。LibreOffice 输入可使用本轮存在的 input://、output:// 或 temp:// 文件；outputDirectory 接受 output.directory 或已 await 的 temp:// 目录令牌。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 可写 output:// 和 temp:// 文件令牌。只有 output:// 文件会作为正式附件返回，脚本 return 值不作为文件输出。",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
-        text: "只读输入。source 是逻辑 workspace/host 路径或完整附件身份，通过 files.input(index) 访问。原生脚本产物须传完整附件身份，不能传 name、output:// 或 task-local 路径。",
+        text: "只读输入。source 使用 workspace 逻辑路径或完整附件身份。files.input(index) 只属于本次原生脚本执行；禁止跨工具传 output:// 或 temp://。",
       },
       filePath: {
         key: "tools.nativeScript.fieldFilePath",
@@ -195,7 +172,7 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       attachmentIdentity: {
         key: "tools.nativeScript.fieldAttachmentIdentity",
-        text: "source 为对象时，必须是包含 attachmentId、sessionId 和 attachmentSource 的完整附件身份。",
+        text: "附件身份必须包含完整的 attachmentId、sessionId 和 attachmentSource。",
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",

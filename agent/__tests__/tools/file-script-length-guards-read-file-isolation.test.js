@@ -49,10 +49,10 @@ test("read_file: reads own workspace through the logical workspace view", async 
   assert.equal(result.ok, true);
   assert.equal(result.content, '1 | {"ok":true}');
   assert.equal(result.includeLineNumbers, true);
-  assert.equal(result.resolvedPath, "runtime/ops_workdir/result.json");
+  assert.equal(result.resolvedPath, filePath);
   assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "host");
-  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
+  assert.equal(result.executionView, "service_host");
+  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), true);
 });
 
 test("read_file: regular user cannot read another user workspace through /workspace", async () => {
@@ -66,13 +66,10 @@ test("read_file: regular user cannot read another user workspace through /worksp
     runtime: {
       globalConfig: {
         workspaceRoot,
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "global" },
           },
         },
       },
@@ -184,15 +181,7 @@ test("read_file: configured super user can read another user workspace through h
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
-          },
-        },
+        security: { executionIsolation: { mode: "host" } },
       },
     },
   });
@@ -238,13 +227,10 @@ test("read_file: sandboxed super user in docker user scope cannot read another u
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "user" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
@@ -347,7 +333,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
   assert.equal(result.resolvedPath, outsideFile);
 });
 
-test("read_file: execute_script sandbox does not reduce super user host authorization", async () => {
+test("read_file: global sandbox forbids super user host paths without widening mounts", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-sandbox-outside-root-"));
   const basePath = path.join(workspaceRoot, "super-root-user");
@@ -367,13 +353,10 @@ test("read_file: execute_script sandbox does not reduce super user host authoriz
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
@@ -395,10 +378,8 @@ test("read_file: execute_script sandbox does not reduce super user host authoriz
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, true);
-  assert.equal(result.content, "1 | hidden-outside");
-  assert.equal(result.pathView, "host");
-  assert.equal(result.executionView, "host");
+  assert.equal(result.ok, false);
+  assert.match(String(result.message || result.error || ""), /sandbox|scope|path|沙箱|范围/i);
 });
 
 test("read_file: configured super user cross-workspace read still respects mustExist", async () => {
@@ -418,15 +399,7 @@ test("read_file: configured super user cross-workspace read still respects mustE
       globalConfig: {
         workspaceRoot,
         super_admin: { user_id: "super-root-user" },
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
-          },
-        },
+        security: { executionIsolation: { mode: "host" } },
       },
     },
   });
@@ -507,20 +480,13 @@ test("read_file: execute_script docker mounts cannot grant file access", async (
   const agentContext = buildAgentContext(basePath, "primary-user", {
     runtime: {
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: {
-                dockerContainerScope: "global",
-                dockerMounts: [
-                  {
-                    source: projectRoot,
-                    target: "/project",
-                  },
-                ],
-              },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "global",
+              mounts: [{ source: projectRoot, target: "/project" }],
             },
           },
         },

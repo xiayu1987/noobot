@@ -86,6 +86,25 @@ test("executeToolCall gives tools an output transfer identity named after the ca
   assert.equal(identity.transferId.includes(":output:execute_script"), false);
 });
 
+test("executeToolCall keeps resource identity internal to the runtime result", async () => {
+  const result = await executeToolCall({
+    call: { id: "call-resource", name: "read_file", args: {} },
+    tool: {
+      invoke: async () =>
+        JSON.stringify({
+          toolName: "read_file",
+          ok: true,
+          resolvedPath: "src/index.js",
+          resources: [{ resourceId: "res_internal", source: "workspace" }],
+        }),
+    },
+  });
+  const publicResult = JSON.parse(result.toolResultText);
+  assert.equal(publicResult.resolvedPath, "src/index.js");
+  assert.equal("resources" in publicResult, false);
+  assert.equal(result.internalResources[0].resourceId, "res_internal");
+});
+
 function attachmentEnvelope({
   callId,
   attachmentId,
@@ -561,14 +580,11 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: {
-                dockerContainerScope: "global",
-              },
-            },
+        },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "global" },
           },
         },
       },
@@ -794,8 +810,11 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
-          execute_script: {
-            sandboxMode: true,
+        },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },

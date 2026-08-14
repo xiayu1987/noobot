@@ -4,15 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
+import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.mjs";
 import {
-  resolveSandboxPathMappings,
-  resolveRuntimeUserId,
-  sanitizeSandboxUserPart,
-  normalizeDockerContainerScope,
-  normalizeSandboxProvider,
-} from "./sandbox-mapping.mjs";
-
-const OPS_WORKDIR_RELATIVE_PATH = "runtime/ops_workdir";
+  EXECUTION_ISOLATION_MODE,
+  WORKSPACE_SANDBOX_PATHS,
+  resolveExecutionIsolation,
+  resolveWorkspaceSandboxLayout,
+} from "@noobot/execution-isolation-protocol";
 
 function resolveRuntimeHostRoot({
   runtime = {},
@@ -33,34 +31,6 @@ function resolveRuntimeWorkspaceRoot({ runtime = {}, globalConfig = {}, workspac
   return String(
     workspaceRoot || globalConfig?.workspaceRoot || runtime?.globalConfig?.workspaceRoot || "",
   ).trim();
-}
-
-function resolveSandboxProviderContext(scriptConfig = {}) {
-  const sandboxProviderCfg =
-    (scriptConfig?.sandboxProvider && typeof scriptConfig.sandboxProvider === "object"
-      ? scriptConfig.sandboxProvider
-      : null) ||
-    (scriptConfig?.sandbox_provider && typeof scriptConfig.sandbox_provider === "object"
-      ? scriptConfig.sandbox_provider
-      : null) ||
-    {};
-  const provider = normalizeSandboxProvider(sandboxProviderCfg?.default || "docker");
-  const providerDetail =
-    sandboxProviderCfg?.[provider] && typeof sandboxProviderCfg[provider] === "object"
-      ? sandboxProviderCfg[provider]
-      : {};
-  return { provider, providerDetail, providerConfig: sandboxProviderCfg };
-}
-
-function resolveRuntimePathMappingRuntime({ runtime = {}, effectiveConfig = {} } = {}) {
-  if (effectiveConfig?.tools && typeof effectiveConfig.tools === "object") {
-    return {
-      ...runtime,
-      globalConfig: effectiveConfig,
-      userConfig: {},
-    };
-  }
-  return runtime;
 }
 
 function uniqueNormalizedPaths(paths = []) {
@@ -89,7 +59,6 @@ export function resolveRuntimePathContext({
   workspaceRoot = "",
   userId = "",
   globalConfig = {},
-  effectiveConfig = {},
   executionContext = {},
 } = {}) {
   const resolvedUserId = resolveRuntimeUserId({ runtime, agentContext, userId });
@@ -105,24 +74,23 @@ export function resolveRuntimePathContext({
     workspaceRoot,
   });
   const hostOpsWorkdir = hostRootDirectory
-    ? filePath.join(hostRootDirectory, OPS_WORKDIR_RELATIVE_PATH)
+    ? filePath.join(hostRootDirectory, WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE)
     : "";
-  const executionView = String(executionContext?.view || "host")
+  const resolvedGlobalConfig = Object.keys(globalConfig).length
+    ? globalConfig
+    : objectOrEmpty(runtime?.globalConfig);
+  const isolation = resolveExecutionIsolation(resolvedGlobalConfig);
+  const executionView = String(executionContext?.view || isolation.mode)
     .trim()
     .toLowerCase();
-  const sandboxEnabled = executionView === "sandbox";
-  const scriptConfig =
-    sandboxEnabled && executionContext?.config && typeof executionContext.config === "object"
-      ? executionContext.config
-      : {};
-  const { provider: sandboxProvider, providerDetail } = resolveSandboxProviderContext(scriptConfig);
-  const mappingRuntime = sandboxEnabled
-    ? resolveRuntimePathMappingRuntime({
-        runtime,
-        effectiveConfig: { tools: { execute_script: { execution: scriptConfig } } },
-      })
-    : { ...runtime, userConfig: {}, globalConfig: { ...(runtime?.globalConfig || {}), tools: {} } };
-  const sandboxPathMappings = resolveSandboxPathMappings(mappingRuntime);
+  const sandboxEnabled = executionView === EXECUTION_ISOLATION_MODE.SANDBOX;
+  const sandboxProvider = sandboxEnabled ? isolation.sandbox.provider : "";
+  const mappingRuntime = {
+    ...runtime,
+    globalConfig: resolvedGlobalConfig,
+    userConfig: {},
+  };
+  const sandboxPathMappings = sandboxEnabled ? resolveSandboxPathMappings(mappingRuntime) : [];
   const hostMountSources = uniqueNormalizedPaths(
     sandboxPathMappings.map((item = {}) => item.source),
   );
@@ -131,7 +99,7 @@ export function resolveRuntimePathContext({
   );
   const hostDirectories = {
     view: "host",
-    currentDirectory: process.cwd(),
+    currentDirectory: hostOpsWorkdir,
     rootDirectory: hostRootDirectory,
     opsWorkdir: hostOpsWorkdir,
     relativePathBase: "rootDirectory",
@@ -162,72 +130,12 @@ export function resolveRuntimePathContext({
   };
   if (!sandboxEnabled) return hostContext;
 
-  if (sandboxProvider === "firejail") {
-    const sandboxRoot = "$HOME";
-    const opsWorkdir = "$HOME/runtime/sandbox/persist";
-    const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
-    const directories = {
-      view: "sandbox",
-      currentDirectory: opsWorkdir,
-      rootDirectory: sandboxRoot,
-      opsWorkdir,
-      relativePathBase: "rootDirectory",
-      allowedRoots,
-      ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
-    };
-    return {
-      ...hostContext,
-      view: "sandbox",
-      sandboxEnabled: true,
-      sandboxProvider,
-      currentDirectory: opsWorkdir,
-      rootDirectory: sandboxRoot,
-      opsWorkdir,
-      sandboxRoot,
-      userRoot: sandboxRoot,
-      allowedRoots,
-      extraMountTargets: sandboxMountTargets,
-      directories,
-    };
-  }
-
-  if (sandboxProvider === "bubblewrap") {
-    const sandboxRoot = "/workspace";
-    const opsWorkdir = "/workspace/runtime/sandbox/persist";
-    const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
-    const directories = {
-      view: "sandbox",
-      currentDirectory: opsWorkdir,
-      rootDirectory: sandboxRoot,
-      opsWorkdir,
-      relativePathBase: "rootDirectory",
-      allowedRoots,
-      ...(sandboxMountTargets.length ? { extraMountTargets: sandboxMountTargets } : {}),
-    };
-    return {
-      ...hostContext,
-      view: "sandbox",
-      sandboxEnabled: true,
-      sandboxProvider,
-      currentDirectory: opsWorkdir,
-      rootDirectory: sandboxRoot,
-      opsWorkdir,
-      sandboxRoot,
-      userRoot: sandboxRoot,
-      allowedRoots,
-      extraMountTargets: sandboxMountTargets,
-      directories,
-    };
-  }
-
-  const sandboxScope = normalizeDockerContainerScope(
-    providerDetail?.dockerContainerScope || providerDetail?.docker_container_scope || "global",
-  );
-  const userPart = sanitizeSandboxUserPart(resolvedUserId || "user") || "user";
-  const sandboxRoot = "/workspace";
-  const isDockerGlobal = sandboxScope !== "user";
-  const userRoot = isDockerGlobal ? `/workspace/${userPart}` : "/workspace";
-  const opsWorkdir = `${userRoot}/${OPS_WORKDIR_RELATIVE_PATH}`;
+  const layout = resolveWorkspaceSandboxLayout({ isolation, userId: resolvedUserId });
+  const sandboxScope = isolation.sandbox.scope;
+  const sandboxRoot = layout.root;
+  const isDockerGlobal = !layout.userIsolated;
+  const userRoot = layout.userRoot;
+  const opsWorkdir = layout.opsWorkdir;
   const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
   const directories = {
     view: "sandbox",
@@ -264,7 +172,6 @@ export function resolveAgentPathContext({
   workspaceRoot = "",
   userId = "",
   globalConfig = {},
-  effectiveConfig = {},
   executionContext = {},
 } = {}) {
   const baseContext = resolveRuntimePathContext({
@@ -275,7 +182,6 @@ export function resolveAgentPathContext({
     workspaceRoot,
     userId,
     globalConfig,
-    effectiveConfig,
     executionContext,
   });
   const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });

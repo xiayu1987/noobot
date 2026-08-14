@@ -136,7 +136,7 @@ test("harness summary triggers complete revised plan and acceptance uses latest 
         runtime: {
           basePath,
           userId: "summary-user",
-          globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+          globalConfig: { security: { executionIsolation: { mode: "host" } } },
           systemRuntime: { userId: "summary-user", sessionId: "summary-session" },
         },
       },

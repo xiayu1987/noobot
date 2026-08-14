@@ -18,6 +18,7 @@ import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import {
   assertAndResolveUserWorkspaceFilePath,
   assertValidFileNameFromPath,
+  canUseHostPathsForWorkspaceTools,
 } from "../../core/check-tool-input.js";
 import { tTool } from "../../core/tool-i18n.js";
 import {
@@ -30,7 +31,6 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
-import { isSuperUserAgentContext } from "../../../shared/utils/super-user.js";
 
 function normalizePatchPathInput(rawPath = "") {
   const trimmed = String(rawPath || "").trim();
@@ -53,7 +53,7 @@ function resolvePatchDefaultRoot(agentContext = {}) {
 }
 
 function resolvePatchRootInvalidHint(agentContext = {}) {
-  return isSuperUserAgentContext(agentContext)
+  return canUseHostPathsForWorkspaceTools(agentContext)
     ? tTool(agentContext, "tools.patch_file.rootInvalidHintSuperHost")
     : tTool(agentContext, "tools.patch_file.rootInvalidHintHost");
 }

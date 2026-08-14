@@ -38,7 +38,7 @@ export function buildScriptToolDescription({
       : [];
 
   return [
-    `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
+    `${tTool(runtime, "tools.script.workspaceSandboxTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.workspaceSandboxTitleSuffix")}`,
     tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.lineRelativeBase", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),

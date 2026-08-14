@@ -146,7 +146,12 @@ test("buildTools: every path-aware tool declares an authoritative path contract"
     const contract = tool?.metadata?.pathContract;
     assert.ok(contract, `${tool.name} must declare pathContract`);
     assert.equal(contract.accepted.includes("sandbox"), false);
-    if (contract.execution.includes("sandbox")) assert.equal(tool.name, "execute_script");
+    if (contract.execution.includes("sandbox")) {
+      assert.equal(
+        ["read_file", "write_file", "search", "patch_file", "execute_script"].includes(tool.name),
+        true,
+      );
+    }
   }
 });
 

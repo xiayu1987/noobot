@@ -115,23 +115,20 @@ test("composeSystemInfoSections projects only model-owned execution context", ()
   }
 });
 
-test("composeSystemInfoSections keeps sandbox out of the general path protocol", () => {
+test("composeSystemInfoSections describes the active workspace execution view", () => {
   const regularSandboxSections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
     staticInfo: {
-      sandbox: {
-        enabled: true,
-        allowedRoots: ["/runtime-root"],
-        defaultWorkdir: "/runtime-root/work",
-      },
+      directories: { view: "sandbox", allowedRoots: ["/workspace"] },
       identity: { isSuperUser: false },
     },
   });
   const regularSandboxText = regularSandboxSections.join("\n\n");
   assert.equal(regularSandboxText.includes("# Path rules"), true);
   assert.equal(regularSandboxText.includes("workspace logical view"), true);
-  assert.equal(regularSandboxText.includes("Regular users cannot use host absolute paths"), true);
+  assert.equal(regularSandboxText.includes("Sandbox mode is active"), true);
+  assert.equal(regularSandboxText.includes("does not expose host paths"), true);
   assert.equal(regularSandboxText.includes("Super user"), false);
   assert.equal(regularSandboxText.includes("Extra mounts"), false);
   assert.equal(regularSandboxText.includes("Sandbox is disabled"), false);
@@ -141,8 +138,8 @@ test("composeSystemInfoSections keeps sandbox out of the general path protocol",
     locale: "en-US",
     systemPrompt: "base",
     staticInfo: {
-      sandbox: {
-        enabled: true,
+      directories: {
+        view: "sandbox",
         allowedRoots: ["/workspace", "/data"],
         extraMountTargets: ["/data"],
       },
@@ -152,19 +149,21 @@ test("composeSystemInfoSections keeps sandbox out of the general path protocol",
   const mountedSandboxText = mountedSandboxSections.join("\n\n");
   assert.equal(mountedSandboxText.includes("workspace logical view"), true);
   assert.equal(mountedSandboxText.includes("Extra mounts"), false);
-  assert.equal(mountedSandboxText.includes("Super user"), true);
+  assert.equal(mountedSandboxText.includes("does not expose host paths"), true);
+  assert.equal(mountedSandboxText.includes("host absolute paths are allowed"), false);
 
   const superHostSections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
     staticInfo: {
+      directories: { view: "host" },
       identity: { isSuperUser: true },
     },
   });
   const superHostText = superHostSections.join("\n\n");
   assert.equal(superHostText.includes("workspace logical view"), true);
   assert.equal(superHostText.includes("Super user"), true);
-  assert.equal(superHostText.includes("Sandbox is only"), true);
+  assert.equal(superHostText.includes("Host mode is active"), true);
   assert.equal(superHostText.includes("task-local paths last for one call"), true);
   assert.equal(superHostText.includes("output names are not paths"), true);
   assert.equal(superHostText.includes("never construct workspace or host paths"), true);

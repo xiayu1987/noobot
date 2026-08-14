@@ -5,33 +5,13 @@
  */
 import { isPlainObject } from "./utils.js";
 
-function configValuesEqual(left, right) {
-  if (Object.is(left, right)) return true;
-  if (Array.isArray(left) || Array.isArray(right)) {
-    return (
-      Array.isArray(left) &&
-      Array.isArray(right) &&
-      left.length === right.length &&
-      left.every((value, index) => configValuesEqual(value, right[index]))
-    );
-  }
-  if (!isPlainObject(left) || !isPlainObject(right)) return false;
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  return (
-    leftKeys.length === rightKeys.length &&
-    leftKeys.every((key) => Object.hasOwn(right, key) && configValuesEqual(left[key], right[key]))
-  );
-}
-
 export const SNAKE_TO_CANONICAL_KEY_MAP = {
   workspace_root: "workspaceRoot",
   workspace_template_path: "workspaceTemplatePath",
   memory_max_items: "memoryMaxItems",
   max_tool_loop_turns: "maxToolLoopTurns",
   switch_web_mode: "switchWebMode",
-  sandbox_mode: "sandboxMode",
-  sandbox_provider: "sandboxProvider",
+  execution_isolation: "executionIsolation",
   path_policy: "pathPolicy",
   regular_user: "regularUser",
   accepted_views: "acceptedViews",
@@ -47,16 +27,11 @@ export const SNAKE_TO_CANONICAL_KEY_MAP = {
   script_tools: "scriptTools",
   native_script: "nativeScript",
   task_local: "taskLocal",
-  docker_container_scope: "dockerContainerScope",
-  docker_container_name: "dockerContainerName",
-  docker_image: "dockerImage",
-  docker_mounts: "dockerMounts",
-  mount_source: "mountSource",
-  mount_target: "mountTarget",
-  mount_description: "mountDescription",
-  docker_project_mount_source: "dockerProjectMountSource",
-  docker_project_mount_target: "dockerProjectMountTarget",
-  docker_lock_wait_timeout_ms: "dockerLockWaitTimeoutMs",
+  container_name: "containerName",
+  read_only: "readOnly",
+  lock_wait_timeout_ms: "lockWaitTimeoutMs",
+  image: "image",
+  mounts: "mounts",
   wait_timeout_ms: "waitTimeoutMs",
   poll_interval_ms: "pollIntervalMs",
   max_sub_agent_depth: "maxSubAgentDepth",
@@ -91,32 +66,6 @@ export function normalizeKnownConfigKeys(input, path = []) {
       ? rawKey
       : SNAKE_TO_CANONICAL_KEY_MAP[rawKey] || rawKey;
     out[normalizedKey] = normalizeKnownConfigKeys(value, [...currentPath, normalizedKey]);
-  }
-  if (currentPath[0] === "tools" && currentPath[1] === "execute_script") {
-    const hasMode = Object.hasOwn(out, "sandboxMode");
-    const hasProvider = Object.hasOwn(out, "sandboxProvider");
-    const execution = isPlainObject(out.execution) ? { ...out.execution } : {};
-    if (hasMode) {
-      const mappedView = out.sandboxMode === true ? "sandbox" : "host";
-      if (execution.view !== undefined && execution.view !== mappedView) {
-        throw new Error("tools.execute_script sandbox_mode conflicts with execution.view");
-      }
-      execution.view = mappedView;
-      delete out.sandboxMode;
-    }
-    if (hasProvider) {
-      if (
-        execution.sandboxProvider !== undefined &&
-        !configValuesEqual(execution.sandboxProvider, out.sandboxProvider)
-      ) {
-        throw new Error(
-          "tools.execute_script sandbox_provider conflicts with execution.sandboxProvider",
-        );
-      }
-      execution.sandboxProvider = out.sandboxProvider;
-      delete out.sandboxProvider;
-    }
-    if (hasMode || hasProvider || Object.hasOwn(out, "execution")) out.execution = execution;
   }
   return out;
 }

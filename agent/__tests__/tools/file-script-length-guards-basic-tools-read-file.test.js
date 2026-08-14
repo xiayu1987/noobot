@@ -148,11 +148,7 @@ test("read_file: 不接受 execute_script 的 /project 执行路径", async () =
   const tools = createFileTool({
     agentContext: buildAgentContext(workspacePath, "u-test", {
       runtime: {
-        globalConfig: {
-          tools: {
-            execute_script: { sandboxMode: false },
-          },
-        },
+        globalConfig: { security: { executionIsolation: { mode: "host" } } },
         systemRuntime: {
           staticInfo: {
             directories: {

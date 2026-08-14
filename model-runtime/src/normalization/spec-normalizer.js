@@ -203,8 +203,29 @@ function resolveConcreteModelDefaults(model = "") {
   return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
+function normalizeMultimodalGenerationDefaults(modelSpec = {}) {
+  const multimodalGeneration = modelSpec.multimodal_generation;
+  const supportGeneration = multimodalGeneration?.support_generation;
+  if (!supportGeneration || supportGeneration.enabled !== true || supportGeneration.api_type) {
+    return modelSpec;
+  }
+  if (!/^gpt[-_.]?image(?:[-_.]|$)/i.test(String(modelSpec.model || "").trim())) {
+    return modelSpec;
+  }
+  return {
+    ...modelSpec,
+    multimodal_generation: {
+      ...multimodalGeneration,
+      support_generation: {
+        ...supportGeneration,
+        api_type: "images_async",
+      },
+    },
+  };
+}
+
 export function normalizeRuntimeModelSpec(input = {}) {
-  const out = { ...input };
+  let out = { ...input };
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();
   out.format = String(out.format || "")
@@ -263,5 +284,6 @@ export function normalizeRuntimeModelSpec(input = {}) {
   if (out.format === "dashscope") {
     out.enable_thinking = normalizeBoolean(out.enable_thinking, false);
   }
+  out = normalizeMultimodalGenerationDefaults(out);
   return out;
 }

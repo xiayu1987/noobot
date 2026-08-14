@@ -6,11 +6,14 @@
 import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
 
-export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog = () => {} } = {}) {
-  const desktopConfigSyncSkipTopLevelKeys = new Set([
+export function createDesktopConfigManager({
+  repoRoot,
+  packagedBackendRoot,
+  appendDesktopLog = () => {},
+} = {}) {
+  const deploymentOwnedConfigRoots = new Set([
     "workspace_root",
     "workspace_template_path",
-    "streaming",
     "super_admin",
   ]);
 
@@ -113,7 +116,9 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
       "skills",
     ];
     for (const relativePath of relativePaths) {
-      appendDesktopLog(`[main:config] template path status; relative=${relativePath}; bundled=${JSON.stringify(describePath(path.join(bundledTemplatePath, relativePath)))}; workspace=${JSON.stringify(describePath(path.join(workspaceTemplatePath, relativePath)))}`);
+      appendDesktopLog(
+        `[main:config] template path status; relative=${relativePath}; bundled=${JSON.stringify(describePath(path.join(bundledTemplatePath, relativePath)))}; workspace=${JSON.stringify(describePath(path.join(workspaceTemplatePath, relativePath)))}`,
+      );
     }
   }
 
@@ -138,7 +143,6 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     }
     node[segments[segments.length - 1]] = value;
   }
-
 
   function getNestedObject(root, segments) {
     let node = root;
@@ -176,7 +180,8 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const alias = String(selectedModel || "").trim();
     if (!alias || !isPlainObject(payload)) return payload;
     const providers = isPlainObject(payload.providers) ? payload.providers : {};
-    if (!isPlainObject(providers[alias])) throw new Error(`Selected model provider not found: ${alias}`);
+    if (!isPlainObject(providers[alias]))
+      throw new Error(`Selected model provider not found: ${alias}`);
 
     payload.default_provider = alias;
     for (const [providerKey, provider] of Object.entries(providers)) {
@@ -193,7 +198,8 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const scenarioDefinitions = getNestedObject(payload, ["scenarios", "definitions"]);
     if (scenarioDefinitions) {
       for (const definition of Object.values(scenarioDefinitions)) {
-        if (isPlainObject(definition) && Object.prototype.hasOwnProperty.call(definition, "model")) definition.model = alias;
+        if (isPlainObject(definition) && Object.prototype.hasOwnProperty.call(definition, "model"))
+          definition.model = alias;
       }
     }
 
@@ -201,15 +207,25 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     if (webSearchResponses) webSearchResponses.model = alias;
 
     const requestHelp = getNestedObject(payload, ["tools", "request_help"]);
-    if (requestHelp && Object.prototype.hasOwnProperty.call(requestHelp, "help_model") && String(requestHelp.help_model || "").trim()) requestHelp.help_model = alias;
+    if (
+      requestHelp &&
+      Object.prototype.hasOwnProperty.call(requestHelp, "help_model") &&
+      String(requestHelp.help_model || "").trim()
+    )
+      requestHelp.help_model = alias;
 
     const harnessStepModels = getNestedObject(payload, ["plugins", "harness", "stepModels"]);
     setObjectStringValues(harnessStepModels, alias);
-    const capabilityModels = getNestedObject(payload, ["plugins", "harness", "capabilityModelByPurpose"]);
+    const capabilityModels = getNestedObject(payload, [
+      "plugins",
+      "harness",
+      "capabilityModelByPurpose",
+    ]);
     setObjectStringValues(capabilityModels, alias);
 
     const workflow = getNestedObject(payload, ["plugins", "workflow"]);
-    if (workflow && Object.prototype.hasOwnProperty.call(workflow, "semanticModel")) workflow.semanticModel = alias;
+    if (workflow && Object.prototype.hasOwnProperty.call(workflow, "semanticModel"))
+      workflow.semanticModel = alias;
 
     return payload;
   }
@@ -218,17 +234,21 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return JSON.parse(JSON.stringify(input));
   }
 
-  function mergeIncremental({ template, target, pathDepth = 0, skipTopLevelKeys = new Set() } = {}) {
+  function mergeIncremental({ template, target, rootDepth = 0 } = {}) {
     if (Array.isArray(template)) return target === undefined ? deepClone(template) : target;
     if (!isPlainObject(template)) return target === undefined ? template : target;
     const output = isPlainObject(target) ? deepClone(target) : {};
     const targetObject = isPlainObject(target) ? target : {};
     for (const [key, templateValue] of Object.entries(template)) {
-      if (pathDepth === 0 && skipTopLevelKeys.has(key)) continue;
+      if (rootDepth === 0 && deploymentOwnedConfigRoots.has(key)) continue;
       if (!Object.prototype.hasOwnProperty.call(targetObject, key)) {
         output[key] = deepClone(templateValue);
       } else if (isPlainObject(templateValue) && isPlainObject(targetObject[key])) {
-        output[key] = mergeIncremental({ template: templateValue, target: targetObject[key], pathDepth: pathDepth + 1, skipTopLevelKeys });
+        output[key] = mergeIncremental({
+          template: templateValue,
+          target: targetObject[key],
+          rootDepth: rootDepth + 1,
+        });
       } else {
         output[key] = targetObject[key];
       }
@@ -238,7 +258,9 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
 
   function copyDirectoryContents({ from, to }) {
     if (!fs.existsSync(from)) {
-      appendDesktopLog(`[main:config] bundled template directory missing; skipped directory sync: ${from}`);
+      appendDesktopLog(
+        `[main:config] bundled template directory missing; skipped directory sync: ${from}`,
+      );
       return false;
     }
     try {
@@ -250,13 +272,19 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
       appendDesktopLog(`[main:config] synced desktop template directory: ${from} -> ${to}`);
       return true;
     } catch (error) {
-      appendDesktopLog(`[main:config] desktop template directory sync failed: ${from} -> ${to}; error=${error?.stack || error?.message || String(error)}`);
+      appendDesktopLog(
+        `[main:config] desktop template directory sync failed: ${from} -> ${to}; error=${error?.stack || error?.message || String(error)}`,
+      );
       try {
         copyDirectoryContentsManually({ from, to });
-        appendDesktopLog(`[main:config] synced desktop template directory with manual fallback: ${from} -> ${to}`);
+        appendDesktopLog(
+          `[main:config] synced desktop template directory with manual fallback: ${from} -> ${to}`,
+        );
         return true;
       } catch (fallbackError) {
-        throw new Error(`failed to sync desktop template directory: ${from} -> ${to}`, { cause: fallbackError });
+        throw new Error(`failed to sync desktop template directory: ${from} -> ${to}`, {
+          cause: fallbackError,
+        });
       }
     }
   }
@@ -264,9 +292,13 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
   function ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath }) {
     const bundledExamplePath = path.join(bundledTemplatePath, "config.example.json");
     const workspaceExamplePath = path.join(workspaceTemplatePath, "config.example.json");
-    appendDesktopLog(`[main:config] checking desktop default user template example; bundled=${bundledExamplePath}; bundledStatus=${JSON.stringify(describePath(bundledExamplePath))}; workspace=${workspaceExamplePath}; workspaceStatus=${JSON.stringify(describePath(workspaceExamplePath))}`);
+    appendDesktopLog(
+      `[main:config] checking desktop default user template example; bundled=${bundledExamplePath}; bundledStatus=${JSON.stringify(describePath(bundledExamplePath))}; workspace=${workspaceExamplePath}; workspaceStatus=${JSON.stringify(describePath(workspaceExamplePath))}`,
+    );
     if (!isJsonObjectFile(bundledExamplePath)) {
-      throw new Error(`desktop bundled default user config example is missing or invalid: ${bundledExamplePath}`);
+      throw new Error(
+        `desktop bundled default user config example is missing or invalid: ${bundledExamplePath}`,
+      );
     }
     if (!isJsonObjectFile(workspaceExamplePath)) {
       replaceFileFromBundledTemplate({
@@ -320,8 +352,17 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const dependencyProxyUrl = getNestedString(payload, ["desktop", "dependency_proxy_url"]);
     const model = getDefaultModelAlias(payload);
     const modelOptions = collectModelOptionsFromConfig(payload);
-    const missing = !userId || !connectCode || userId === "admin" || connectCode === "change-your-connect-code";
-    return { missing, userId: userId === "admin" ? "" : userId, connectCode: connectCode === "change-your-connect-code" ? "" : connectCode, language, model, modelOptions, dependencyProxyUrl };
+    const missing =
+      !userId || !connectCode || userId === "admin" || connectCode === "change-your-connect-code";
+    return {
+      missing,
+      userId: userId === "admin" ? "" : userId,
+      connectCode: connectCode === "change-your-connect-code" ? "" : connectCode,
+      language,
+      model,
+      modelOptions,
+      dependencyProxyUrl,
+    };
   }
 
   function normalizeDesktopLanguage(language) {
@@ -331,7 +372,15 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return "zh-CN";
   }
 
-  function saveSuperAdminConfig({ globalConfigPath, userConfigPath, userId, connectCode, language, model, dependencyProxyUrl } = {}) {
+  function saveSuperAdminConfig({
+    globalConfigPath,
+    userConfigPath,
+    userId,
+    connectCode,
+    language,
+    model,
+    dependencyProxyUrl,
+  } = {}) {
     const normalizedUserId = String(userId ?? "").trim();
     const normalizedConnectCode = String(connectCode ?? "").trim();
     const normalizedLanguage = normalizeDesktopLanguage(language);
@@ -339,8 +388,10 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const normalizedDependencyProxyUrl = normalizeProxyUrl(dependencyProxyUrl);
     if (!normalizedUserId) throw new Error("Super admin username is required.");
     if (!normalizedConnectCode) throw new Error("Super admin connect code is required.");
-    if (normalizedUserId === "admin") throw new Error("Please change the default super admin username.");
-    if (normalizedConnectCode === "change-your-connect-code") throw new Error("Please change the default connect code.");
+    if (normalizedUserId === "admin")
+      throw new Error("Please change the default super admin username.");
+    if (normalizedConnectCode === "change-your-connect-code")
+      throw new Error("Please change the default connect code.");
     const payload = readJsonFile(globalConfigPath, {}) || {};
     setNestedValue(payload, ["super_admin", "user_id"], normalizedUserId);
     setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
@@ -364,20 +415,23 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     const currentValues = isPlainObject(payload.values) ? { ...payload.values } : {};
     const descriptions = isPlainObject(payload.descriptions) ? { ...payload.descriptions } : {};
     for (const [key, value] of Object.entries(values || {})) {
-      const normalizedKey = String(key || "").trim().toUpperCase();
+      const normalizedKey = String(key || "")
+        .trim()
+        .toUpperCase();
       if (!normalizedKey) continue;
       currentValues[normalizedKey] = String(value ?? "").trim();
-      if (!Object.prototype.hasOwnProperty.call(descriptions, normalizedKey)) descriptions[normalizedKey] = "";
+      if (!Object.prototype.hasOwnProperty.call(descriptions, normalizedKey))
+        descriptions[normalizedKey] = "";
     }
     writeJsonFile(filePath, { values: currentValues, descriptions });
   }
 
-  function syncJsonFileIncremental({ templateFilePath, targetFilePath, skipTopLevelKeys = new Set() } = {}) {
+  function syncJsonFileIncremental({ templateFilePath, targetFilePath } = {}) {
     const templateJson = readJsonFile(templateFilePath, null);
     if (!isPlainObject(templateJson)) return false;
     const targetExists = fs.existsSync(targetFilePath);
     const targetJson = targetExists ? readJsonFile(targetFilePath, {}) : {};
-    const merged = mergeIncremental({ template: templateJson, target: targetJson, skipTopLevelKeys });
+    const merged = mergeIncremental({ template: templateJson, target: targetJson });
     if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
       writeJsonFile(targetFilePath, merged);
       return true;
@@ -385,53 +439,66 @@ export function createDesktopConfigManager({ repoRoot, packagedBackendRoot, appe
     return false;
   }
 
-  function forceExecuteScriptNonSandbox(configPath) {
-    const payload = readJsonFile(configPath, null);
-    if (!isPlainObject(payload)) return false;
-    setNestedValue(payload, ["tools", "execute_script", "sandbox_mode"], false);
-    writeJsonFile(configPath, payload);
-    return true;
-  }
-
   function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
     const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
-    const targetPath = process.env.NOOBOT_GLOBAL_CONFIG_PATH || path.join(configDir, "global.config.json");
+    const targetPath =
+      process.env.NOOBOT_GLOBAL_CONFIG_PATH || path.join(configDir, "global.config.json");
     const examplePath = isPackaged
       ? path.join(packagedBackendRoot, "service", "config", "global.config.example.json")
       : path.join(repoRoot, "service", "config", "global.config.example.json");
     const bundledTemplatePath = isPackaged
       ? path.join(packagedBackendRoot, "user-template", "default-user")
       : path.join(repoRoot, "user-template", "default-user");
-    const workspaceRootPath = process.env.NOOBOT_WORKSPACE_ROOT || path.join(userDataPath, "workspace");
-    const workspaceTemplatePath = process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH || path.join(userDataPath, "user-template", "default-user");
+    const workspaceRootPath =
+      process.env.NOOBOT_WORKSPACE_ROOT || path.join(userDataPath, "workspace");
+    const workspaceTemplatePath =
+      process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH ||
+      path.join(userDataPath, "user-template", "default-user");
 
     const exampleConfig = readJsonFile(examplePath, null);
-    if (!isPlainObject(exampleConfig)) throw new Error(`invalid global config example: ${examplePath}`);
+    if (!isPlainObject(exampleConfig))
+      throw new Error(`invalid global config example: ${examplePath}`);
     const isFirstGlobalConfig = !fs.existsSync(targetPath);
     const currentConfig = isFirstGlobalConfig ? {} : readJsonFile(targetPath, {});
-    const mergedConfig = mergeIncremental({ template: exampleConfig, target: currentConfig, skipTopLevelKeys: desktopConfigSyncSkipTopLevelKeys });
+    const hasConfiguredExecutionIsolationMode = Boolean(
+      String(currentConfig?.security?.execution_isolation?.mode || "").trim(),
+    );
+    const mergedConfig = mergeIncremental({ template: exampleConfig, target: currentConfig });
     mergedConfig.workspace_root = workspaceRootPath;
     mergedConfig.workspace_template_path = workspaceTemplatePath;
-    if (isFirstGlobalConfig) setNestedValue(mergedConfig, ["tools", "execute_script", "sandbox_mode"], false);
-    if (!fs.existsSync(targetPath) || JSON.stringify(currentConfig) !== JSON.stringify(mergedConfig)) {
+    if (!hasConfiguredExecutionIsolationMode)
+      setNestedValue(mergedConfig, ["security", "execution_isolation", "mode"], "host");
+    if (
+      !fs.existsSync(targetPath) ||
+      JSON.stringify(currentConfig) !== JSON.stringify(mergedConfig)
+    ) {
       writeJsonFile(targetPath, mergedConfig);
-      appendDesktopLog(`[main:config] synced global config from example: ${examplePath} -> ${targetPath}`);
+      appendDesktopLog(
+        `[main:config] synced global config from example: ${examplePath} -> ${targetPath}`,
+      );
     }
 
-    const templateExamplePath = ensureWorkspaceTemplateExample({ bundledTemplatePath, workspaceTemplatePath });
+    const templateExamplePath = ensureWorkspaceTemplateExample({
+      bundledTemplatePath,
+      workspaceTemplatePath,
+    });
     copyDirectoryContents({ from: bundledTemplatePath, to: workspaceTemplatePath });
     logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath });
     const templateConfigPath = path.join(workspaceTemplatePath, "config.json");
     if (fs.existsSync(templateExamplePath)) {
-      const isFirstUserConfig = !fs.existsSync(templateConfigPath);
-      syncJsonFileIncremental({ templateFilePath: templateExamplePath, targetFilePath: templateConfigPath, skipTopLevelKeys: desktopConfigSyncSkipTopLevelKeys });
-      if (isFirstUserConfig) {
-        forceExecuteScriptNonSandbox(templateConfigPath);
-        appendDesktopLog(`[main:config] initialized desktop default user config with non-sandbox execute_script: ${templateConfigPath}`);
-      }
+      syncJsonFileIncremental({
+        templateFilePath: templateExamplePath,
+        targetFilePath: templateConfigPath,
+      });
     }
-    if (!isJsonObjectFile(templateExamplePath)) throw new Error(`desktop workspace default user config example is missing or invalid: ${templateExamplePath}`);
-    if (!isJsonObjectFile(templateConfigPath)) throw new Error(`desktop workspace default user config is missing or invalid: ${templateConfigPath}`);
+    if (!isJsonObjectFile(templateExamplePath))
+      throw new Error(
+        `desktop workspace default user config example is missing or invalid: ${templateExamplePath}`,
+      );
+    if (!isJsonObjectFile(templateConfigPath))
+      throw new Error(
+        `desktop workspace default user config is missing or invalid: ${templateConfigPath}`,
+      );
     fs.mkdirSync(workspaceRootPath, { recursive: true });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,

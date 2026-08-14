@@ -12,11 +12,7 @@ function normalizeString(value = "") {
 
 function isCanonicalBase64(value = "") {
   const normalized = normalizeString(value);
-  if (
-    !normalized ||
-    normalized.length % 4 !== 0 ||
-    !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)
-  )
+  if (!normalized || normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized))
     return false;
   return Buffer.from(normalized, "base64").toString("base64") === normalized;
 }
@@ -34,13 +30,7 @@ const COMMON_RESULT_FIELDS = [
   "tools",
 ];
 
-const OUTPUT_ARTIFACT_FIELDS = new Set([
-  "type",
-  "name",
-  "mimeType",
-  "content",
-  "contentBase64",
-]);
+const OUTPUT_ARTIFACT_FIELDS = new Set(["type", "name", "mimeType", "content", "contentBase64"]);
 
 export function parseToolOutputArtifacts(value = null) {
   const source =
@@ -53,11 +43,9 @@ export function parseToolOutputArtifacts(value = null) {
           }
         })()
       : value;
-  if (!isPlainObject(source) || !Array.isArray(source.outputArtifacts))
-    return [];
+  if (!isPlainObject(source) || !Array.isArray(source.outputArtifacts)) return [];
   return source.outputArtifacts.map((artifact, index) => {
-    if (!isPlainObject(artifact))
-      throw new Error("invalid_tool_output_artifact");
+    if (!isPlainObject(artifact)) throw new Error("invalid_tool_output_artifact");
     for (const key of Object.keys(artifact)) {
       if (!OUTPUT_ARTIFACT_FIELDS.has(key))
         throw new Error(`unknown_tool_output_artifact_field:${key}`);
@@ -68,14 +56,11 @@ export function parseToolOutputArtifacts(value = null) {
     const hasContent = typeof artifact.content === "string";
     const hasContentBase64 = typeof artifact.contentBase64 === "string";
     const content = hasContent ? artifact.content : "";
-    const contentBase64 = hasContentBase64
-      ? normalizeString(artifact.contentBase64)
-      : "";
+    const contentBase64 = hasContentBase64 ? normalizeString(artifact.contentBase64) : "";
     if (!["text", "attachment_url", "attachment_bytes"].includes(type))
       throw new Error(`invalid_tool_output_artifact_type:${index}`);
     if (!name) throw new Error(`invalid_tool_output_artifact_name:${index}`);
-    if (!mimeType)
-      throw new Error(`invalid_tool_output_artifact_mime_type:${index}`);
+    if (!mimeType) throw new Error(`invalid_tool_output_artifact_mime_type:${index}`);
     if (!hasContent && !hasContentBase64)
       throw new Error(`invalid_tool_output_artifact_content:${index}`);
     if (hasContent && hasContentBase64)
@@ -110,13 +95,34 @@ export function stripToolOutputArtifacts(toolResultText = "") {
   return JSON.stringify(publicResult);
 }
 
+// ResourceRef is the runtime/audit identity.  It is deliberately removed at
+// the single model-result boundary so tools can share it without adding a new
+// protocol the model has to learn.
+export function stripInternalResourceFields(toolResultText = "") {
+  let source;
+  try {
+    source = JSON.parse(String(toolResultText || ""));
+  } catch {
+    return String(toolResultText || "");
+  }
+  if (!isPlainObject(source)) return String(toolResultText || "");
+  const visit = (value) => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!isPlainObject(value)) return value;
+    const out = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "resources" || key === "input_resources" || key === "resourceId") continue;
+      out[key] = visit(child);
+    }
+    return out;
+  };
+  return JSON.stringify(visit(source));
+}
+
 function normalizeCommonFieldValue(key, value) {
   if (value === undefined || value === null) return undefined;
   if (key === "ok") return Boolean(value);
-  if (
-    key === "status" &&
-    (typeof value === "string" || typeof value === "number")
-  ) {
+  if (key === "status" && (typeof value === "string" || typeof value === "number")) {
     return value;
   }
   if (
@@ -132,9 +138,7 @@ function normalizeCommonFieldValue(key, value) {
   }
   if (key === "tools") {
     if (!Array.isArray(value)) return undefined;
-    const list = Array.from(
-      new Set(value.map((item) => normalizeString(item)).filter(Boolean)),
-    );
+    const list = Array.from(new Set(value.map((item) => normalizeString(item)).filter(Boolean)));
     return list.length ? list : undefined;
   }
   if (key === "summary") {

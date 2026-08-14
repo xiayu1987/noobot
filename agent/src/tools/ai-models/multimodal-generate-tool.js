@@ -24,19 +24,6 @@ import {
 const MULTIMODAL_FLOW_NAME = "agent.multimodal_generate";
 const MULTIMODAL_PURPOSE_NAME = "multimodal_generate";
 const MULTIMODAL_DOMAIN_NAME = "tool";
-const AVAILABLE_GENERATION_API_TYPES = Object.freeze([
-  IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES,
-  IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC,
-]);
-const GENERATION_API_TYPE_ALIASES = Object.freeze({
-  [IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES]: [
-    "responses",
-    "responses_api",
-    "openai_responses_api",
-  ],
-  [IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC]: ["image_async", "images_generations", "images"],
-});
-
 function tMultimodal(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.multimodal.${String(key || "").trim()}`, params);
 }
@@ -107,21 +94,18 @@ function buildFailureDetails({
   message = "",
   modelAlias = "",
   model = "",
-  requestedApiType = "",
   generationApiType = "",
   effectiveImageSize = "",
   modelSpec = {},
   requestUrl = "",
   requestMethod = "",
 } = {}) {
-  const resolvedApiType =
-    generationApiType || resolveGenerationApiType(modelSpec || {}, requestedApiType);
+  const resolvedApiType = generationApiType || resolveGenerationApiType(modelSpec || {});
   return {
     ...(message ? { message } : {}),
     modelAlias,
     model,
     apiType: resolvedApiType,
-    requestedApiType: String(requestedApiType || "").trim(),
     callMode: generationApiTypeToCallMode(resolvedApiType),
     baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
     requestUrl: describeBaseUrlForDiagnostics(requestUrl),
@@ -129,8 +113,6 @@ function buildFailureDetails({
       .trim()
       .toUpperCase(),
     imageSize: String(effectiveImageSize || "").trim(),
-    availableApiTypes: [...AVAILABLE_GENERATION_API_TYPES],
-    apiTypeAliases: GENERATION_API_TYPE_ALIASES,
     platform: process.platform,
     proxyEnv: collectProxyEnvDiagnostics(),
   };
@@ -197,30 +179,16 @@ function normalizeGenerationApiType(apiType = "") {
   const normalizedApiType = String(apiType || "")
     .trim()
     .toLowerCase();
-  if (["images_async", "image_async", "images_generations", "images"].includes(normalizedApiType)) {
-    return IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC;
-  }
-  if (
-    ["openai_responses", "responses", "responses_api", "openai_responses_api"].includes(
-      normalizedApiType,
-    )
-  ) {
-    return IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES;
-  }
+  if (normalizedApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC) return normalizedApiType;
+  if (normalizedApiType === IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES) return normalizedApiType;
   return "";
 }
 
-function resolveGenerationApiType(modelSpec = {}, requestedApiType = "") {
-  const normalizedRequestedApiType = normalizeGenerationApiType(requestedApiType);
-  if (normalizedRequestedApiType) return normalizedRequestedApiType;
+function resolveGenerationApiType(modelSpec = {}) {
   const supportGeneration = modelSpec?.multimodal_generation?.support_generation || {};
   return (
     normalizeGenerationApiType(
-      supportGeneration?.api_type ||
-        supportGeneration?.apiType ||
-        supportGeneration?.endpoint ||
-        supportGeneration?.generation_api ||
-        "",
+      supportGeneration?.api_type || "",
     ) || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES
   );
 }
@@ -354,7 +322,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
         .array(z.string())
         .optional()
         .describe(tTool(runtime, "tools.multimodal.fieldImageUrls")),
-      api_type: z.string().optional().describe(tTool(runtime, "tools.multimodal.fieldApiType")),
     }),
     func: async ({
       generation_content,
@@ -365,13 +332,11 @@ export function createMultimodalGenerateTool({ agentContext }) {
       n = 1,
       quality = "",
       image_urls = [],
-      api_type = "",
     }) => {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
       let generationApiType = "";
       let effectiveImageSize = "";
-      const requestedApiType = String(api_type || "").trim();
       if (!generationContent) {
         throw recoverableToolError(tMultimodal(runtime, "generationContentRequired"), {
           code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
@@ -409,7 +374,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const modelNameForGeneration = String(
           resolvedModelSpec?.model || resolvedModelName || "",
         ).trim();
-        generationApiType = resolveGenerationApiType(resolvedModelSpec || {}, requestedApiType);
+        generationApiType = resolveGenerationApiType(resolvedModelSpec || {});
         effectiveImageSize =
           String(size || image_size || "").trim() ||
           (generationApiType === IMAGE_GENERATION_API_TYPE.IMAGES_ASYNC ? "1:1" : "1024x1024");
@@ -502,7 +467,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
               message: hintMessage,
               modelAlias,
               model: modelName,
-              requestedApiType,
               generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
@@ -517,7 +481,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
             details: buildFailureDetails({
               modelAlias,
               model: modelName,
-              requestedApiType,
               generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
@@ -536,7 +499,6 @@ export function createMultimodalGenerateTool({ agentContext }) {
             message: hintMessage,
             modelAlias,
             model: modelName,
-            requestedApiType,
             generationApiType,
             effectiveImageSize,
             modelSpec: resolvedModelSpec || {},

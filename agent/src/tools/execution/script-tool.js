@@ -11,17 +11,21 @@ import {
 } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
-  buildBubblewrapCommand,
-  bwrapSupportsOption,
-  ensureBubblewrapOverlayReady,
-} from "../../sandbox/bubblewrap-sandbox.js";
-import { buildFirejailCommand } from "../../sandbox/firejail-sandbox.js";
+  BUILTIN_THRESHOLDS,
+  TOOL_EXECUTION_VIEW,
+  resolveToolExecutionPolicy,
+} from "../../config/index.js";
+import {
+  WORKSPACE_SANDBOX_PATHS,
+  resolveToolExecutionAuthorization,
+} from "@noobot/execution-isolation-protocol";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
 import { tTool } from "../core/tool-i18n.js";
 import {
   EXECUTE_SCRIPT_TOOL_NAME,
+  ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   SANDBOX_COMMAND,
   SANDBOX_PROVIDER_NAME,
   SCRIPT_EXECUTION_MODE,
@@ -33,19 +37,14 @@ import {
   hasCommand,
   normalizeExecutionMode,
 } from "./script-tool/process-exec.js";
-import {
-  resolveSandboxProviderConfig,
-  resolveDockerScriptConfig,
-} from "./script-tool/sandbox-config.js";
-import { tScript } from "./script-tool/script-i18n.js";
-import { missingCommandError, scriptRuntimeError } from "./script-tool/script-errors.js";
+import { missingCommandError } from "./script-tool/script-errors.js";
 import { toolExecResult } from "./script-tool/result-format.js";
 import {
   buildExecutionWorkspaceMeta,
   buildScriptExecutionMeta,
   toolFileBackedExecResult,
 } from "./script-tool/workspace-meta.js";
-import { runDockerCommand, tryDockerFallback } from "./script-tool/docker-runner.js";
+import { runDockerCommand } from "./script-tool/docker-runner.js";
 import { buildScriptToolDescription } from "./script-tool/description.js";
 
 export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
@@ -55,29 +54,24 @@ export function createScriptTool({ agentContext }) {
   const basePath =
     agentContext?.context?.environment?.workspace?.basePath || runtime.basePath || "";
   const globalConfig = runtime.globalConfig || {};
-  const effectiveConfig = mergeConfig(globalConfig, runtime.userConfig || {});
   if (!basePath) return [];
 
-  const workspace = path.join(basePath, "runtime/ops_workdir");
+  const workspace = path.join(basePath, WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE);
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
-  const scriptConfig =
-    effectiveConfig?.tools?.[EXECUTE_SCRIPT_TOOL_NAME] &&
-    typeof effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME] === "object" &&
-    !Array.isArray(effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME])
-      ? effectiveConfig.tools[EXECUTE_SCRIPT_TOOL_NAME]
-      : {};
-  const executionConfig =
-    scriptConfig?.execution && typeof scriptConfig.execution === "object"
-      ? scriptConfig.execution
-      : {};
-  const sandboxEnabled =
-    String(executionConfig?.view || "host")
-      .trim()
-      .toLowerCase() === "sandbox";
-  const { provider: sandboxProvider, providerDetail } =
-    resolveSandboxProviderConfig(executionConfig);
-  const dockerConfig = resolveDockerScriptConfig(executionConfig, providerDetail);
+  const executionPolicy = resolveToolExecutionPolicy({
+    toolName: EXECUTE_SCRIPT_TOOL_NAME,
+    globalConfig,
+  });
+  const executionAuthorization = resolveToolExecutionAuthorization({
+    policy: executionPolicy,
+    isSuperAdmin: isSuperUserAgentContext(agentContext),
+  });
+  if (!executionAuthorization.allowed) return [];
+  const sandboxEnabled = executionPolicy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  const sandboxConfig = executionPolicy.isolation.sandbox;
+  const sandboxProvider = sandboxConfig.provider;
+  const lockWaitTimeoutMs = sandboxConfig.lockWaitTimeoutMs || ENV_DOCKER_LOCK_WAIT_TIMEOUT_MS;
   const pathContext = resolveRuntimePathContext({
     runtime,
     agentContext,
@@ -85,8 +79,7 @@ export function createScriptTool({ agentContext }) {
     workspaceRoot: globalConfig?.workspaceRoot || "",
     userId,
     globalConfig,
-    effectiveConfig,
-    executionContext: { view: sandboxEnabled ? "sandbox" : "host", config: executionConfig },
+    executionContext: { view: sandboxEnabled ? "sandbox" : "host" },
   });
   const description = buildScriptToolDescription({
     runtime,
@@ -153,7 +146,7 @@ export function createScriptTool({ agentContext }) {
             "local",
             runResult,
             buildScriptExecutionMeta({
-              sandboxEnabled: false,
+              executionPolicy,
               workspace,
               runtime,
               agentContext,
@@ -166,7 +159,7 @@ export function createScriptTool({ agentContext }) {
           "local",
           runResult,
           buildScriptExecutionMeta({
-            sandboxEnabled: false,
+            executionPolicy,
             workspace,
             runtime,
             agentContext,
@@ -182,187 +175,41 @@ export function createScriptTool({ agentContext }) {
         );
       }
 
-      let sandboxCmd = "";
-      let mode = SANDBOX_PROVIDER_NAME.DOCKER;
+      const mode = SANDBOX_PROVIDER_NAME.DOCKER;
       let extra = buildScriptExecutionMeta({
-        sandboxEnabled: true,
-        sandboxProvider,
+        executionPolicy,
         workspace,
         runtime,
         agentContext,
-        dockerConfig,
         pathContext,
       });
-      let dockerRunInput = null;
-
-      if (sandboxProvider === SANDBOX_PROVIDER_NAME.BUBBLEWRAP) {
-        const bwrapInstalled = await hasCommand(SANDBOX_COMMAND.BUBBLEWRAP);
-        if (!bwrapInstalled) {
-          throw missingCommandError(
-            SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
-            SANDBOX_COMMAND.BUBBLEWRAP,
-            runtime,
-          );
-        }
-
-        const supportsOverlaySrc = await bwrapSupportsOption("--overlay-src");
-        if (!supportsOverlaySrc) {
-          const fallbackResult = await tryDockerFallback({
-            userRoot,
-            userId,
-            command: normalizedCommand,
-            workspace,
-            timeout,
-            scriptConfig: dockerConfig,
-            runtime,
-            agentContext,
-            pathContext,
-            fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
-            warning: tScript(runtime, "fallbackOverlaySrc"),
-            executionMode: requestedExecutionMode,
-            abortSignal,
-            identity,
-          });
-          if (fallbackResult) return fallbackResult;
-          throw scriptRuntimeError(tScript(runtime, "overlaySrcUnsupported"), {
-            code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_SRC_UNSUPPORTED,
-            details: {
-              mode: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
-              code: 2,
-            },
-          });
-        }
-
-        const built = buildBubblewrapCommand({ userRoot, command: normalizedCommand });
-        try {
-          await ensureBubblewrapOverlayReady({
-            overlayUpper: built.overlayUpper,
-            overlayWork: built.overlayWork,
-          });
-        } catch (err) {
-          throw scriptRuntimeError(
-            tScript(runtime, "overlayDirNotWritable", {
-              sandboxRoot: built.sandboxRoot,
-              reason: err?.message || String(err),
-            }),
-            {
-              code: ERROR_CODE.RECOVERABLE_BWRAP_OVERLAY_NOT_WRITABLE,
-              details: {
-                mode: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
-                code: 13,
-                sandboxRoot: built.sandboxRoot,
-                overlayUpper: built.overlayUpper,
-                overlayWork: built.overlayWork,
-              },
-            },
-          );
-        }
-        sandboxCmd = built.cmd;
-        mode = SANDBOX_PROVIDER_NAME.BUBBLEWRAP;
-        extra = buildScriptExecutionMeta({
-          sandboxEnabled: true,
-          sandboxProvider: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
+      const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
+      if (!dockerInstalled) {
+        throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, SANDBOX_COMMAND.DOCKER, runtime);
+      }
+      const { result: runResult, docker: built } = await runDockerCommand({
+        userRoot,
+        userId,
+        command: normalizedCommand,
+        workspace,
+        timeout,
+        isolation: executionPolicy.isolation,
+        workdir: pathContext.opsWorkdir,
+        lockWaitTimeoutMs,
+        abortSignal,
+        runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
+      });
+      extra = {
+        ...extra,
+        ...buildScriptExecutionMeta({
+          executionPolicy,
+          docker: built,
           workspace,
           runtime,
           agentContext,
-          dockerConfig,
           pathContext,
-        });
-      } else if (sandboxProvider === SANDBOX_PROVIDER_NAME.FIREJAIL) {
-        const firejailInstalled = await hasCommand(SANDBOX_COMMAND.FIREJAIL);
-        if (!firejailInstalled) {
-          throw missingCommandError(
-            SANDBOX_PROVIDER_NAME.FIREJAIL,
-            SANDBOX_COMMAND.FIREJAIL,
-            runtime,
-          );
-        }
-
-        const built = buildFirejailCommand({ userRoot, command: normalizedCommand });
-        sandboxCmd = built.cmd;
-        mode = SANDBOX_PROVIDER_NAME.FIREJAIL;
-        extra = buildScriptExecutionMeta({
-          sandboxEnabled: true,
-          sandboxProvider: SANDBOX_PROVIDER_NAME.FIREJAIL,
-          workspace,
-          runtime,
-          agentContext,
-          dockerConfig,
-          pathContext,
-        });
-      } else {
-        const dockerInstalled = await hasCommand(SANDBOX_COMMAND.DOCKER);
-        if (!dockerInstalled) {
-          throw missingCommandError(SANDBOX_PROVIDER_NAME.DOCKER, SANDBOX_COMMAND.DOCKER, runtime);
-        }
-        dockerRunInput = {
-          userRoot,
-          userId,
-          command: normalizedCommand,
-          workspace,
-          timeout,
-          scriptConfig: dockerConfig,
-          abortSignal,
-        };
-      }
-
-      let runResult = null;
-      if (mode === SANDBOX_PROVIDER_NAME.DOCKER && dockerRunInput) {
-        const { result: dockerResult, docker: built } = await runDockerCommand({
-          ...dockerRunInput,
-          runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
-        });
-        runResult = dockerResult;
-        extra = {
-          ...extra,
-          ...buildScriptExecutionMeta({
-            sandboxEnabled: true,
-            sandboxProvider: SANDBOX_PROVIDER_NAME.DOCKER,
-            dockerConfig,
-            docker: built,
-            workspace,
-            runtime,
-            agentContext,
-            pathContext,
-          }),
-        };
-      } else {
-        runResult =
-          requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-            ? await runFileBacked(sandboxCmd, workspace, timeout, abortSignal)
-            : await run(sandboxCmd, workspace, timeout, abortSignal);
-      }
-      if (
-        mode === SANDBOX_PROVIDER_NAME.BUBBLEWRAP &&
-        Number(runResult?.code || 0) !== 0 &&
-        /Can't make overlay mount|userxattr:\s*Invalid argument/i.test(
-          String(runResult?.stderr || ""),
-        )
-      ) {
-        const fallbackResult = await tryDockerFallback({
-          userRoot,
-          userId,
-          command: normalizedCommand,
-          workspace,
-          timeout,
-          scriptConfig: dockerConfig,
-          runtime,
-          agentContext,
-          fallbackFrom: SANDBOX_PROVIDER_NAME.BUBBLEWRAP,
-          warning: tScript(runtime, "fallbackUserxattr"),
-          includeLineNumbers: shouldIncludeLineNumbers,
-          executionMode: requestedExecutionMode,
-          abortSignal,
-          identity,
-        });
-        if (fallbackResult) return fallbackResult;
-        runResult = {
-          ...runResult,
-          stderr: tScript(runtime, "userxattrUnsupported", {
-            stderr: String(runResult?.stderr || ""),
-          }),
-        };
-      }
+        }),
+      };
       if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
         return toolFileBackedExecResult(mode, runResult, extra, {
           runtime,

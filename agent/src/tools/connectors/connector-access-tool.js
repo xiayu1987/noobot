@@ -5,7 +5,12 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import {
+  BUILTIN_THRESHOLDS,
+  hasOwnConfigKey,
+  mergeConfig,
+  normalizeBooleanLike,
+} from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
@@ -19,19 +24,11 @@ import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
-import {
-  SANDBOX_CONFIG,
-  TOOL_NAME,
-  TOOL_RESULT_STATUS,
-} from "../constants/index.js";
-
+import { TOOL_POLICY_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
 
 export function createConnectorAccessTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const effectiveConfig = mergeConfig(
-    runtime?.globalConfig || {},
-    runtime?.userConfig || {},
-  );
+  const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const processConnectorTaskEnabled =
     effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.enabled !== false;
   if (!processConnectorTaskEnabled) return [];
@@ -44,8 +41,7 @@ export function createConnectorAccessTool({ agentContext }) {
   const sessionId = String(systemRuntime?.sessionId || "").trim();
   const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
   const parentDialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
-  const allowUserInteraction =
-    systemRuntime?.config?.allowUserInteraction !== false;
+  const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
   const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
   const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.processConnectorToolMaxToolLoopTurns;
   const connectorSubSessionSystemPrompt = tTool(
@@ -78,9 +74,7 @@ export function createConnectorAccessTool({ agentContext }) {
           },
         );
       }
-      const subTools = [
-        ...createConnectorTools({ agentContext }),
-      ];
+      const subTools = [...createConnectorTools({ agentContext })];
       if (!subTools.length) {
         throw recoverableToolError(
           tTool(runtime, "tools.process_connector.errorToolsUnavailable"),
@@ -116,11 +110,13 @@ export function createConnectorAccessTool({ agentContext }) {
                 ? systemRuntime.config.selectedConnectors
                 : {},
             toolPolicy: {
-              mode: SANDBOX_CONFIG.TOOL_POLICY_MODE.CUSTOM_ONLY,
+              mode: TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: subTools,
               forceIncludeUserInteraction: false,
             },
-            runtimeModel: String(modelName || "").trim(),
+            ...(String(modelName || "").trim()
+              ? { runtimeModel: String(modelName || "").trim() }
+              : {}),
             maxToolLoopTurns:
               Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
                 ? Math.floor(maxToolLoopTurns)
@@ -139,11 +135,7 @@ export function createConnectorAccessTool({ agentContext }) {
           ? subResult.transferEnvelopes
           : [];
         const usedTools = Array.from(
-          new Set(
-            traces
-              .map((item) => String(item?.tool || "").trim())
-              .filter(Boolean),
-          ),
+          new Set(traces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
         );
         return toToolJsonResult(
           TOOL_NAME.PROCESS_CONNECTOR_TOOL,

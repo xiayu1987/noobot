@@ -10,6 +10,7 @@ import { isFatalError } from "../../shared/errors/index.js";
 import {
   parseToolOutputArtifacts,
   stripToolOutputArtifacts,
+  stripInternalResourceFields,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
 import { isAbortError } from "../utils/error-utils.js";
@@ -100,6 +101,15 @@ function transferEnvelopesFromStructuredResult(rawResult = null) {
   const value = typeof rawResult === "string" ? parseJsonObjectSafely(rawResult) : rawResult;
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   return Array.isArray(value.transferEnvelopes) ? value.transferEnvelopes : [];
+}
+
+function resourceRefsFromResult(value = null) {
+  const parsed = typeof value === "string" ? parseJsonObjectSafely(value) : value;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  return [
+    ...(Array.isArray(parsed.resources) ? parsed.resources : []),
+    ...(Array.isArray(parsed.input_resources) ? parsed.input_resources : []),
+  ];
 }
 
 async function materializeToolOutputArtifacts({
@@ -491,6 +501,8 @@ export async function executeToolCall({
   if (String(call?.name || "").trim() === "task_summary") {
     toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
   }
+  const internalResources = resourceRefsFromResult(rawToolResultText || toolResultText);
+  toolResultText = stripInternalResourceFields(toolResultText);
   await runAgentRuntimeHook({
     runtime,
     point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
@@ -507,7 +519,8 @@ export async function executeToolCall({
       args: call?.args || {},
       success: failureState.success,
       failureReason: failureState.reason || "",
-      toolResultText,
+      toolResultText: rawToolResultText || toolResultText,
+      internalResources,
       agentContext,
     }),
   });
@@ -523,6 +536,7 @@ export async function executeToolCall({
   return {
     call,
     toolResultText,
+    internalResources,
     transferEnvelopes: uniqueTransferEnvelopes,
     success: failureState.success,
     failureReason: failureState.reason,

@@ -74,13 +74,10 @@ test("patch_file: schema path hints only describe the active path view", async (
         globalConfig: {
           workspaceRoot,
           super_admin: { user_id: "super-root-user" },
-          tools: {
-            execute_script: {
-              sandboxMode: true,
-              sandboxProvider: {
-                default: "docker",
-                docker: { dockerContainerScope: "global" },
-              },
+          security: {
+            executionIsolation: {
+              mode: "sandbox",
+              sandbox: { provider: "docker", scope: "global" },
             },
           },
         },
@@ -88,7 +85,8 @@ test("patch_file: schema path hints only describe the active path view", async (
     }),
   }).find((item) => item?.name === "patch_file");
   const sandboxDescription = sandboxTool?.schema?.shape?.patch?.description || "";
-  assert.equal(sandboxDescription, superHostDescription);
+  assert.equal(sandboxDescription, regularHostDescription);
+  assert.doesNotMatch(sandboxDescription, /超级管理员/);
 });
 
 test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
@@ -296,7 +294,9 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   );
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
-  assert.deepEqual(dryRunResult.changedFiles, ["noobot/service/ws/chat-websocket-server.js"]);
+  assert.deepEqual(dryRunResult.changedFiles, [
+    path.join(repoPath, "service/ws/chat-websocket-server.js"),
+  ]);
   assert.equal(dryRunResult.resolvedFiles[0]?.path, "noobot/service/ws/chat-websocket-server.js");
   assert.equal(
     await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
@@ -352,7 +352,9 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
     }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, ["app/service/ws/chat-websocket-server.js"]);
+  assert.deepEqual(result.changedFiles, [
+    path.join(appPath, "service/ws/chat-websocket-server.js"),
+  ]);
   assert.equal(
     await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"),
     "one\nTWO\n",

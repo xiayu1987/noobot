@@ -28,6 +28,12 @@ const eventLabel = computed(() => {
   if (eventName === "tool_result") return translate("message.toolResultEvent");
   return translate("message.toolEvent");
 });
+const eventClass = computed(() => {
+  const eventName = String(props.eventText || "").trim().toLowerCase();
+  if (eventName === "tool_call") return "is-tool-call";
+  if (eventName === "tool_result") return "is-tool-result";
+  return "is-tool-event";
+});
 const contentWithoutEventPrefix = computed(() => {
   const content = String(props.contentText || "");
   if (!props.tool) return content;
@@ -64,7 +70,7 @@ function handleToggle() {
     :style="{ marginLeft: `${Math.max(0, Number(indent || 0))}px` }"
   >
     <span v-if="prefixText" class="base-thinking-log-line__prefix">{{ prefixText }}</span>
-    <span v-if="eventLabel" class="base-thinking-log-line__event" :class="`is-${String(eventText).toLowerCase()}`">{{ eventLabel }}</span>
+    <span v-if="eventLabel" class="base-thinking-log-line__event" :class="eventClass">{{ eventLabel }}</span>
     <span
       class="base-thinking-log-line__text"
       :class="{ 'is-expandable': expandable }"

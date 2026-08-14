@@ -42,6 +42,16 @@ const EXPECTED_TOOLS = Object.freeze([
 ]);
 const REALTIME_EXECUTION_WINDOW_SIZE = 10;
 const GENERATED_FILE_NAME = "case036.txt";
+const EXTERNAL_AND_NATIVE_TOOLS = Object.freeze([
+  "execute_native_script",
+  "multimodal_parse",
+  "multimodal_generate",
+  "call_service",
+  "web_search",
+  "request_help",
+  "process_connector_tool",
+  "call_mcp_task",
+]);
 
 async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScopeId }) {
   let executionResults = [];
@@ -197,4 +207,70 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
       .slice(-REALTIME_EXECUTION_WINDOW_SIZE)
       .map(({ event, summary }) => ({ event, summary })),
   ).toEqual(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })));
+});
+
+test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", async ({
+  noobot,
+  protocolCapture,
+}, testInfo) => {
+  test.setTimeout(900000);
+  await selectPlugins(noobot.page, []);
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(
+      testInfo,
+      [
+        "严格按顺序且每种只调用一次以下八个工具；即使某个外部服务失败，也必须继续后续步骤，不得调用 switch_model：",
+        "1) execute_native_script 不传输入，执行 await files.writeText(output.file('case036-native.txt'), 'CASE036-NATIVE');；",
+        "2) multimodal_parse 解析 runtime/ops_workdir/case036.txt，提示词为 Extract the exact text；",
+        "3) multimodal_generate 生成一张简洁的红色正方形图片，n=1；",
+        "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
+        "5) web_search 搜索 Noobot GitHub；",
+        "6) request_help 使用 requestType=experience，helpContent=Summarize relevant tool-testing experience；",
+        "7) process_connector_tool 使用 modelName=gpt_5_4，检查当前可用连接器并只返回连接器名称，不执行写操作；",
+        "8) call_mcp_task 调用 china-railway，任务为查询上海到苏州的可用能力；",
+        "每一步必须等到工具返回后再继续。最终按八个工具的真实返回逐项报告成功或失败，不得把未调用的工具报告为已执行。",
+      ].join(" "),
+    ),
+  );
+  const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: command.identity.turnScopeId,
+    timeoutMs: 720000,
+  });
+
+  let events = [];
+  await expect
+    .poll(
+      async () => {
+        const records = await readSessionExecutionEvents(noobot.userId, noobot.sessionId);
+        events = toolEventsForTurn(records, command.identity.turnScopeId);
+        return [...new Set(
+          events
+            .filter((event) => event.event === "tool_call_start")
+            .map((event) => event.data?.tool),
+        )].sort();
+      },
+      { timeout: 30000 },
+    )
+    .toEqual([...EXTERNAL_AND_NATIVE_TOOLS].sort());
+
+  const calls = events.filter((event) => event.event === "tool_call_start");
+  const results = events.filter((event) => event.event === "tool_call_end");
+  expect(calls).toHaveLength(EXTERNAL_AND_NATIVE_TOOLS.length);
+  expect(results).toHaveLength(calls.length);
+  expect(calls.some((event) => event.data?.tool === "switch_model")).toBe(false);
+  const connectorCall = calls.find(
+    (event) => event.data?.tool === "process_connector_tool",
+  );
+  expect(connectorCall?.data?.args?.modelName).toBe("gpt_5_4");
+  for (const call of calls) {
+    const result = results.find((event) => event.data?.toolCallId === call.data?.toolCallId);
+    expect(result, `missing tool result for ${call.data?.tool}`).toBeTruthy();
+    expect(result.data?.tool).toBe(call.data?.tool);
+    expect(String(result.data?.result || result.data?.error || "").trim()).toBeTruthy();
+  }
 });
