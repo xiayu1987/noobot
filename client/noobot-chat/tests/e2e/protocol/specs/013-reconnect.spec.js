@@ -99,7 +99,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     send.identity.turnScopeId,
   );
   await expect(thinkingShell).not.toHaveClass(/is-running/);
-  await expect(thinkingShell.locator(".thinking-detail-action-button")).toContainText("1");
+  await expect(thinkingShell.locator(".thinking-detail-action-button")).toContainText("2");
   await noobot.page.keyboard.press("Escape");
   await expect(detailsDrawer.locator(".thinking-details-panel")).toBeHidden();
   if ((await thinkingHeader.getAttribute("aria-expanded")) !== "true") {

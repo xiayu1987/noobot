@@ -55,9 +55,7 @@ export function resolveEffectiveModelSpec({
       userConfig,
     });
     if (!selectedOrDefaultModelSpec) {
-      throw new Error(
-        `selected model not found and no configured default model is available: ${normalizedSelectedModel}`,
-      );
+      throw new Error(`selected model not found: ${normalizedSelectedModel}`);
     }
     return selectedOrDefaultModelSpec;
   }

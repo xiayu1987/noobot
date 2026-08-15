@@ -58,14 +58,14 @@ export function resolveModelSpecOrConfiguredDefault({
   globalConfig,
   userConfig,
 }) {
+  const requestedModel = String(modelName || name || "").trim();
+  if (!requestedModel) return resolveDefaultModelSpec({ globalConfig, userConfig });
   const requestedModelSpec = resolveModelSpecByName({
-    name,
-    modelName,
+    modelName: requestedModel,
     globalConfig,
     userConfig,
   });
-  if (requestedModelSpec) return requestedModelSpec;
-  return resolveDefaultModelSpec({ globalConfig, userConfig });
+  return requestedModelSpec;
 }
 
 export function resolveSkillModelSpec({ skillConfig, globalConfig, userConfig }) {

@@ -301,12 +301,23 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec, null, "精确 modelName 解析不负责默认模型选择");
     });
 
-    it("选择策略在 modelName 不存在时应使用配置默认模型", () => {
+    it("显式 modelName 不存在时不得回退到配置默认模型", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
       const userConfig = createBaseUserConfig({});
 
       const spec = resolveModelSpecOrConfiguredDefault({
         modelName: "nonexistent-model",
+        globalConfig,
+        userConfig,
+      });
+      assert.equal(spec, null);
+    });
+
+    it("未提供 modelName 时应使用配置默认模型", () => {
+      const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
+      const userConfig = createBaseUserConfig({});
+
+      const spec = resolveModelSpecOrConfiguredDefault({
         globalConfig,
         userConfig,
       });

@@ -66,31 +66,16 @@ test("resolveEffectiveModelSpec accepts selectedModel object before scenario def
   assert.equal(spec.model, "selected-model");
 });
 
-test("resolveEffectiveModelSpec uses the configured default when selectedModel is invalid", () => {
-  const spec = resolveEffectiveModelSpec({
-    globalConfig,
-    userConfig: {},
-    selectedModel: "missing_alias",
-    scenario: "programming",
-  });
-
-  assert.equal(spec.alias, "scenario_default");
-  assert.equal(spec.model, "scenario-default-model");
-});
-
-test("resolveEffectiveModelSpec rejects an invalid selection when no configured default exists", () => {
+test("resolveEffectiveModelSpec rejects an invalid explicit selection even when defaults exist", () => {
   assert.throws(
     () =>
       resolveEffectiveModelSpec({
-        globalConfig: {
-          ...globalConfig,
-          defaultProvider: "",
-        },
+        globalConfig,
         userConfig: {},
         selectedModel: "missing_alias",
         scenario: "programming",
       }),
-    /selected model not found and no configured default model is available: missing_alias/,
+    /selected model not found: missing_alias/,
   );
 });
 

@@ -20,8 +20,9 @@ import {
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 17);
+  assert.equal(options.length, 18);
   assert.equal(options[0].key, "gpt_5_6_sol");
+  assert.equal(options.some((item) => item.key === "gpt_5_4"), true);
   assert.equal(
     options.some((item) => item.key === "gemini_3_7_flash"),
     true,

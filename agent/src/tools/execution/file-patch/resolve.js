@@ -11,7 +11,6 @@ import {
   normalizePathForPlatform,
   isPathWithinRoot,
   resolvePathRef,
-  resolvePathUnderRoot,
   PATH_CAPABILITIES,
   TOOL_PATH_VIEWS,
 } from "@noobot/path-resolver";
@@ -141,7 +140,7 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
   const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
   const candidatePath = normalizePatchPathInput(filePath);
   const inputPath = explicitRootPath
-    ? resolvePathUnderRoot(explicitRootPath, candidatePath)
+    ? normalizeSlash(path.join(rootInfo.inputPath, candidatePath))
     : candidatePath;
   return [
     {

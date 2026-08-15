@@ -64,6 +64,27 @@
         }
       }
     },
+    "gpt_5_4": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-5.4",
+      "format": "openai_compatible",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "low",
+      "description": "OpenAI general-purpose model for reasoning, coding, and agent workflows",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "claude_fable_5": {
       "enabled": true,
       "used_for_conversation": true,
