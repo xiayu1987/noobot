@@ -514,7 +514,6 @@ export function useChatSession({
     upsertCanonicalAssistantMessage,
     makeViewMessage,
     foldMessagesForView,
-    fetchSessionDetail: chatList.fetchSessionDetail,
     applySessionDetail: chatList.applySessionDetail,
     deleteSessionMessagesFromApi,
     replaceSessionTurnApi,

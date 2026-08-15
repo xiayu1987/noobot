@@ -163,7 +163,6 @@ export function createResendMessageTransaction({
   messageOperationStore,
   prepareMonotonicMessageAction,
   replaceSessionTurnApi,
-  fetchSessionDetail,
   resolveMonotonicUserTarget,
   send,
   userId,
@@ -182,8 +181,6 @@ export function createResendMessageTransaction({
 
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
-    fetchSessionDetail,
-    applySessionDetail,
     log: (event, payload) =>
       logResendDebug(`resend.${event}`, () => ({
         ...payload,

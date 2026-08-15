@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, beforeEach, vi } from "vitest";
+import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
 
 export class MockWebSocket {
   static CONNECTING = 0;
@@ -39,6 +40,15 @@ export class MockWebSocket {
 }
 
 export const flushPromises = () => Promise.resolve();
+
+export function streamCommand(identity = {}) {
+  return createTurnRunCommand({
+    commandType: AGENT_COMMAND.SEND,
+    commandId: `test-stream:${identity.turnScopeId || "unscoped"}`,
+    identity,
+    input: { message: "test", attachments: [] },
+  });
+}
 
 export function setupWebSocketTestHooks() {
   let originalWebSocket;

@@ -10,6 +10,7 @@ import {
   flushPromises,
   MockWebSocket,
   setupWebSocketTestHooks,
+  streamCommand,
 } from "./chatWebSocketClientTestFixtures.js";
 import {
   createTurnLifecycleEnvelope,
@@ -43,11 +44,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("settles a deleted Turn stream as an intentional cancellation", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "session-delete",
         turnScopeId: "turn-delete",
-      },
+      }),
       vi.fn(),
     );
 
@@ -68,11 +68,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     });
     const onEvent = vi.fn();
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "session-transport-log",
         turnScopeId: "turn-transport-log",
-      },
+      }),
       onEvent,
     );
     const socket = MockWebSocket.instances[0];
@@ -137,11 +136,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "session-receipt-1",
         turnScopeId: "turn-receipt-1",
-      },
+      }),
       onEvent,
     );
     const socket = MockWebSocket.instances[0];
@@ -186,11 +184,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       throw new Error("reducer failed");
     });
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "session-receipt-before-reducer",
         turnScopeId: "turn-receipt-before-reducer",
-      },
+      }),
       onEvent,
     );
     const socket = MockWebSocket.instances[0];
@@ -234,11 +231,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "session-receipt-failure",
         turnScopeId: "turn-receipt-failure",
-      },
+      }),
       onEvent,
     );
     const socket = MockWebSocket.instances[0];
@@ -299,7 +295,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("records transport_ready without forwarding it into a business stream", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream({ action: "chat", turnScopeId: "turn-ready" }, onEvent);
+    const streamPromise = client.stream(streamCommand({ turnScopeId: "turn-ready" }), onEvent);
     const socket = MockWebSocket.instances[0];
 
     socket.emit("transport_ready", { serverInstanceId: "proxy-instance-1", protocolVersion: 2 });
@@ -314,11 +310,10 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("extracts a readable message from structured stream errors", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const streamPromise = client.stream(
-      {
-        action: "chat",
+      streamCommand({
         sessionId: "s-error-object",
         turnScopeId: "turn-error-object",
-      },
+      }),
       vi.fn(),
     );
     const socket = MockWebSocket.instances[0];
@@ -357,7 +352,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       resolveWebSocketUrl: () => `ws://test?apikey=${apiKey}`,
       refreshAuthentication,
     });
-    const payload = { action: "chat", sessionId: "s-auth-retry", turnScopeId: "turn-auth-retry" };
+    const payload = streamCommand({ sessionId: "s-auth-retry", turnScopeId: "turn-auth-retry" });
     const streamPromise = client.stream(payload, vi.fn());
     const failedSocket = MockWebSocket.instances[0];
 
@@ -373,8 +368,8 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     expect(recoveredSocket.sent.map((item) => JSON.parse(item))).toEqual([payload]);
 
     recoveredSocket.emit(StreamEventEnum.DONE, {
-      sessionId: payload.sessionId,
-      turnScopeId: payload.turnScopeId,
+      sessionId: payload.identity.sessionId,
+      turnScopeId: payload.identity.turnScopeId,
     });
     await expect(streamPromise).resolves.toBeUndefined();
   });
@@ -387,7 +382,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     };
 
     await expect(
-      client.stream({ action: "chat", turnScopeId: "turn-send-failed" }, vi.fn()),
+      client.stream(streamCommand({ turnScopeId: "turn-send-failed" }), vi.fn()),
     ).rejects.toMatchObject({ name: "InvalidStateError" });
     expect(client.getActiveSocket()).toBe(null);
     expect(socket.readyState).toBe(MockWebSocket.CLOSED);

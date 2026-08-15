@@ -28,6 +28,12 @@ export function isSessionAggregateVersionConflict(result, payload) {
   );
 }
 
+function selectAggregateVersionConflict(result, payload) {
+  if (isSessionAggregateVersionConflict(null, payload)) return payload;
+  if (isSessionAggregateVersionConflict(result, null)) return result;
+  return null;
+}
+
 export function isNewerSessionAggregateVersion(nextVersion, currentVersion) {
   if (!hasValue(nextVersion)) return false;
   if (!hasValue(currentVersion)) return true;
@@ -47,43 +53,28 @@ export function applyLatestSessionAggregateVersion(session, source = {}) {
 
 export function createSessionAggregateVersionManager({
   activeSession,
-  fetchSessionDetail,
-  applySessionDetail,
   log = null,
 } = {}) {
   function getVersion() {
     return getCurrentSessionAggregateVersion(activeSession);
   }
 
-  async function refreshAfterConflict({
+  function applyConflictVersion({
     sessionId,
     previousVersion,
-    detailOptions = {},
+    conflict = {},
     logContext = {},
   } = {}) {
-    if (typeof fetchSessionDetail !== "function" || typeof applySessionDetail !== "function")
-      return false;
-    const detail = await fetchSessionDetail(sessionId, {
-      source: "versionConflict",
-      force: true,
-      reuseRecentlyLoaded: false,
-      ...detailOptions,
+    const currentVersion = conflict?.currentVersion;
+    const changed = applyLatestSessionAggregateVersion(activeSession?.value || activeSession, {
+      aggregateVersion: currentVersion,
     });
-    if (!detail) return false;
-    log?.("versionConflict.detail.apply.before", {
+    log?.("versionConflict.version.apply", {
       sessionId,
       ...logContext,
-      aggregateVersion: getVersion(),
-    });
-    applySessionDetail(detail);
-    const nextVersion = getVersion();
-    const changed = isNewerSessionAggregateVersion(nextVersion, previousVersion);
-    log?.("versionConflict.detail.apply.after", {
-      sessionId,
-      ...logContext,
-      aggregateVersion: nextVersion,
+      currentVersion,
       previousVersion,
-      versionChanged: changed,
+      applied: changed,
     });
     return changed;
   }
@@ -91,7 +82,7 @@ export function createSessionAggregateVersionManager({
   async function runAggregateVersionedMutation({
     mutate,
     shouldRetry = true,
-    refreshOptions = {},
+    conflictOptions = {},
   } = {}) {
     if (typeof mutate !== "function") return null;
     let attempt = 1;
@@ -103,11 +94,13 @@ export function createSessionAggregateVersionManager({
       failed() &&
       isSessionAggregateVersionConflict(response?.result, response?.payload)
     ) {
-      const refreshed = await refreshAfterConflict({
+      const conflict = selectAggregateVersionConflict(response?.result, response?.payload);
+      const versionApplied = applyConflictVersion({
         previousVersion: expectedAggregateVersion,
-        ...refreshOptions,
+        conflict,
+        ...conflictOptions,
       });
-      if (refreshed) {
+      if (versionApplied) {
         attempt = 2;
         expectedAggregateVersion = getVersion();
         response = await mutate({ expectedAggregateVersion, attempt });
@@ -116,7 +109,7 @@ export function createSessionAggregateVersionManager({
     return { ...response, expectedAggregateVersion, attempt };
   }
 
-  async function runAggregateVersionedStream({ buildPayload, stream, refreshOptions = {} } = {}) {
+  async function runAggregateVersionedStream({ buildPayload, stream, conflictOptions = {} } = {}) {
     if (typeof buildPayload !== "function" || typeof stream !== "function") return null;
     let attempt = 1;
     let expectedAggregateVersion = getVersion();
@@ -126,11 +119,12 @@ export function createSessionAggregateVersionManager({
     } catch (error) {
       const errorData = error?.data || {};
       if (!isSessionAggregateVersionConflict(errorData, errorData)) throw error;
-      const refreshed = await refreshAfterConflict({
+      const versionApplied = applyConflictVersion({
         previousVersion: expectedAggregateVersion,
-        ...refreshOptions,
+        conflict: errorData,
+        ...conflictOptions,
       });
-      if (!refreshed) throw error;
+      if (!versionApplied) throw error;
       attempt = 2;
       expectedAggregateVersion = getVersion();
       payload = buildPayload({ expectedAggregateVersion, attempt });
@@ -141,7 +135,7 @@ export function createSessionAggregateVersionManager({
 
   return {
     getVersion,
-    refreshAfterConflict,
+    applyConflictVersion,
     runAggregateVersionedMutation,
     runAggregateVersionedStream,
   };

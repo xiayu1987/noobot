@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { flushPromises, MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import { flushPromises, MockWebSocket, setupWebSocketTestHooks, streamCommand } from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();
 
@@ -135,11 +135,10 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onStreamEvent = vi.fn();
     const onReconnectData = vi.fn();
-    const streamPromise = client.stream({
-      action: "chat",
+    const streamPromise = client.stream(streamCommand({
       sessionId: "s-live-owner",
       turnScopeId: "turn-live-owner",
-    }, onStreamEvent);
+    }), onStreamEvent);
     const socket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(socket.sent[0]).requestId;
     const reconnectPromise = client.reconnect({
@@ -231,7 +230,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
   it("multiplexes reconnect on the active stream socket without opening another connection", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, onEvent);
+    const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), onEvent);
     const socket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(socket.sent[0]).requestId;
 
@@ -258,7 +257,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     client.connect();
     const streamSocket = MockWebSocket.instances[0];
     const onEvent = vi.fn();
-    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, onEvent);
+    const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), onEvent);
     const streamRequestId = JSON.parse(streamSocket.sent[0]).requestId;
     streamSocket.readyState = MockWebSocket.CLOSING;
 
@@ -295,7 +294,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
   it("keeps the permanent transport dispatcher on a replacement socket", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, vi.fn());
+    const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), vi.fn());
     const firstSocket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
     firstSocket.readyState = MockWebSocket.CLOSING;
@@ -318,7 +317,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
   it("resolves command responses through the permanent dispatcher after reconnect", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const streamPromise = client.stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-1" }, vi.fn());
+    const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), vi.fn());
     const firstSocket = MockWebSocket.instances[0];
     const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
     firstSocket.readyState = MockWebSocket.CLOSING;
