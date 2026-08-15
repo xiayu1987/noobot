@@ -5,8 +5,45 @@
  */
 
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+export { projectToolFileDisplay } from "@noobot/event-protocol/tool-presentation";
 
 const TOOL_LOG_SUMMARY_LIMIT = QUANTITY_THRESHOLDS.toolIO.logSummaryLimit;
+const FAILED_TOOL_STATUSES = new Set(["failed", "failure", "error", "errored"]);
+
+function parseToolResultValue(value) {
+  if (!value || typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+export function isToolResultFailure({ success, status, result, detailText } = {}) {
+  if (success === false) return true;
+  if (
+    FAILED_TOOL_STATUSES.has(
+      String(status || "")
+        .trim()
+        .toLowerCase(),
+    )
+  )
+    return true;
+  for (const value of [result, detailText]) {
+    const parsed = parseToolResultValue(value);
+    if (!parsed || typeof parsed !== "object") continue;
+    if (parsed.ok === false || parsed.success === false) return true;
+    if (
+      FAILED_TOOL_STATUSES.has(
+        String(parsed.status || "")
+          .trim()
+          .toLowerCase(),
+      )
+    )
+      return true;
+  }
+  return false;
+}
 
 export function stringifyToolValue(value) {
   if (value === undefined || value === null) return "";
@@ -25,13 +62,8 @@ function truncateToolSummary(value) {
     : text;
 }
 
-export function buildToolCallSummary(
-  toolCall = {},
-  fallbackToolName = "unknown_tool",
-) {
-  const toolName = String(
-    toolCall?.function?.name || toolCall?.name || fallbackToolName,
-  ).trim();
+export function buildToolCallSummary(toolCall = {}, fallbackToolName = "unknown_tool") {
+  const toolName = String(toolCall?.function?.name || toolCall?.name || fallbackToolName).trim();
   const argsText = truncateToolSummary(
     stringifyToolValue(toolCall?.function?.arguments ?? toolCall?.args ?? ""),
   );
@@ -49,13 +81,14 @@ export function buildToolResultSummary(
 
   try {
     const parsed = JSON.parse(contentText);
-    const toolName = String(
-      parsed?.toolName || parsed?.name || normalizedFallback,
-    ).trim();
+    const toolName = String(parsed?.toolName || parsed?.name || normalizedFallback).trim();
     const status = String(parsed?.status || "").trim();
-    const okText = typeof parsed?.ok === "boolean"
-      ? `ok=${parsed.ok}`
-      : (typeof success === "boolean" ? `ok=${success}` : "");
+    const okText =
+      typeof parsed?.ok === "boolean"
+        ? `ok=${parsed.ok}`
+        : typeof success === "boolean"
+          ? `ok=${success}`
+          : "";
     return [toolName, status, okText].filter(Boolean).join(" ");
   } catch {
     return [normalizedFallback, typeof success === "boolean" ? `ok=${success}` : ""]
@@ -70,9 +103,7 @@ export function buildToolNameByCallId(messages = []) {
     const toolCalls = Array.isArray(message?.tool_calls) ? message.tool_calls : [];
     for (const toolCall of toolCalls) {
       const callId = String(toolCall?.id || "").trim();
-      const toolName = String(
-        toolCall?.function?.name || toolCall?.name || "",
-      ).trim();
+      const toolName = String(toolCall?.function?.name || toolCall?.name || "").trim();
       if (callId && toolName) toolNameByCallId.set(callId, toolName);
     }
   }

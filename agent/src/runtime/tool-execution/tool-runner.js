@@ -29,6 +29,12 @@ import {
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { sanitizeToolResultText } from "@noobot/sanitize";
 import { getToolOutputPolicy, hasToolInputPolicy } from "@noobot/semantic-transfer-protocol";
+import { registerTransferAttachmentResources } from "../../tools/core/resource-broker.js";
+import {
+  createToolRiskAssessment,
+  getToolRiskLevel,
+  runWithToolRiskAssessment,
+} from "../../tools/execution/tool-risk.js";
 
 function shouldTransferToolInput(call = {}) {
   const toolName = String(call?.name || "").trim();
@@ -228,6 +234,7 @@ export async function executeToolCall({
 } = {}) {
   const toolStartedAtMs = Date.now();
   const toolStartedAt = new Date(toolStartedAtMs).toISOString();
+  const riskAssessment = createToolRiskAssessment(call);
   let toolResultText = "";
   let invokeError = null;
   if (!tool) {
@@ -262,6 +269,8 @@ export async function executeToolCall({
       transferEnvelopes: [],
       success: false,
       failureReason: "tool_not_found",
+      riskLevel: getToolRiskLevel(riskAssessment),
+      securityAssessment: riskAssessment.current,
     };
   }
   let rawResult = null;
@@ -344,6 +353,8 @@ export async function executeToolCall({
           transferEnvelopes: inputTransfer.transferEnvelopes || [],
           success: true,
           failureReason: "",
+          riskLevel: getToolRiskLevel(riskAssessment),
+          securityAssessment: riskAssessment.current,
         };
       }
     } catch (error) {
@@ -351,31 +362,33 @@ export async function executeToolCall({
     }
   }
   try {
-    rawResult = await tool.invoke(call?.args || {}, {
-      signal: abortSignal,
-      configurable: {
-        transferIdentity: resolveRuntimeTransferIdentity({
-          runtime,
-          agentContext,
-          sessionId,
-          producer: toolProducer(call),
-          direction: "output",
-          strategy: String(call?.name || "tool_output").trim() || "tool_output",
-        }),
-        noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
-          phase: "tool_call",
-          executionScope,
-          turn,
-          status: "running",
-          startedAt: toolStartedAt,
-          call,
-          toolName: call?.name || "",
-          args: call?.args || {},
-          agentContext,
-        }),
-        noobotHookMeta: resolveToolHookMeta(runtime),
-      },
-    });
+    rawResult = await runWithToolRiskAssessment(riskAssessment, () =>
+      tool.invoke(call?.args || {}, {
+        signal: abortSignal,
+        configurable: {
+          transferIdentity: resolveRuntimeTransferIdentity({
+            runtime,
+            agentContext,
+            sessionId,
+            producer: toolProducer(call),
+            direction: "output",
+            strategy: String(call?.name || "tool_output").trim() || "tool_output",
+          }),
+          noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
+            phase: "tool_call",
+            executionScope,
+            turn,
+            status: "running",
+            startedAt: toolStartedAt,
+            call,
+            toolName: call?.name || "",
+            args: call?.args || {},
+            agentContext,
+          }),
+          noobotHookMeta: resolveToolHookMeta(runtime),
+        },
+      }),
+    );
     toolResultText = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
     toolResultText = mergeToolResultWithInputTransferPayload(
       toolResultText,
@@ -501,7 +514,28 @@ export async function executeToolCall({
   if (String(call?.name || "").trim() === "task_summary") {
     toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
   }
-  const internalResources = resourceRefsFromResult(rawToolResultText || toolResultText);
+  const transferEnvelopes = [
+    ...(toolInputTransferPayload.transferEnvelopes || []),
+    ...structuredTransferEnvelopes,
+    ...outputArtifactTransferEnvelopes,
+    ...(overflowNormalized.transferEnvelopes || []),
+  ];
+  const uniqueTransferEnvelopes = Array.from(
+    new Map(transferEnvelopes.map((envelope) => [envelope.transferId, envelope])).values(),
+  );
+  const internalResources = Array.from(
+    new Map(
+      [
+        ...resourceRefsFromResult(rawToolResultText || toolResultText),
+        ...registerTransferAttachmentResources({
+          agentContext,
+          runtime,
+          owner: userId,
+          transferEnvelopes: uniqueTransferEnvelopes,
+        }),
+      ].map((resource) => [resource.resourceId, resource]),
+    ).values(),
+  );
   toolResultText = stripInternalResourceFields(toolResultText);
   await runAgentRuntimeHook({
     runtime,
@@ -524,15 +558,6 @@ export async function executeToolCall({
       agentContext,
     }),
   });
-  const transferEnvelopes = [
-    ...(toolInputTransferPayload.transferEnvelopes || []),
-    ...structuredTransferEnvelopes,
-    ...outputArtifactTransferEnvelopes,
-    ...(overflowNormalized.transferEnvelopes || []),
-  ];
-  const uniqueTransferEnvelopes = Array.from(
-    new Map(transferEnvelopes.map((envelope) => [envelope.transferId, envelope])).values(),
-  );
   return {
     call,
     toolResultText,
@@ -540,6 +565,8 @@ export async function executeToolCall({
     transferEnvelopes: uniqueTransferEnvelopes,
     success: failureState.success,
     failureReason: failureState.reason,
+    riskLevel: getToolRiskLevel(riskAssessment),
+    securityAssessment: riskAssessment.current,
   };
 }
 
@@ -549,11 +576,15 @@ export async function executeToolCallInTurn(options = {}) {
   const eventListener = options?.eventListener || null;
   const turn = Number(options?.turn || 1);
   const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
+  const initialRiskAssessment = createToolRiskAssessment(call);
+  const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
   emitMessageEvent(eventListener, runtime, "tool_call_start", {
     turn,
     tool: call?.name,
     args: call?.args || {},
     toolCallId,
+    riskLevel: initialRiskLevel,
+    securityAssessment: initialRiskAssessment.current,
   });
   const result = await executeToolCall(options);
   emitMessageEvent(eventListener, runtime, "tool_call_end", {
@@ -562,6 +593,8 @@ export async function executeToolCallInTurn(options = {}) {
     result: String(result?.toolResultText || ""),
     success: result?.success === true,
     toolCallId,
+    riskLevel: result?.riskLevel,
+    securityAssessment: result?.securityAssessment,
     ...(Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
       ? { transferEnvelopes: result.transferEnvelopes }
       : {}),

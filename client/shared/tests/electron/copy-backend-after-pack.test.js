@@ -10,6 +10,17 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import copyBackendAfterPack from "../../scripts/copy-backend-after-pack.mjs";
 
+const runtimeWorkspacePackages = Object.freeze([
+  ["agent", "noobot-agent"],
+  ["agent-config-protocol", "@noobot/agent-config-protocol"],
+  ["execution-isolation-protocol", "@noobot/execution-isolation-protocol"],
+  ["security-assessment-protocol", "@noobot/security-assessment-protocol"],
+  ["plugin-runtime", "@noobot/plugin-runtime"],
+  ["event-protocol", "@noobot/event-protocol"],
+  ["authoritative-state", "@noobot/authoritative-state"],
+  ["sanitize", "@noobot/sanitize"],
+]);
+
 async function writeRuntimeFile(rootDir, relativePath, content = "test") {
   const filePath = path.join(rootDir, relativePath);
   await mkdir(path.dirname(filePath), { recursive: true });
@@ -23,26 +34,26 @@ async function createFixture() {
   const appOutDir = path.join(projectDir, "dist", "win-unpacked");
   const frontendSource = path.join(rootDir, "client", "noobot-chat", "dist");
 
+  await writeRuntimeFile(
+    backendSource,
+    "package.json",
+    JSON.stringify({
+      workspaces: runtimeWorkspacePackages.map(([workspacePath]) => workspacePath),
+    }),
+  );
+  for (const [workspacePath, packageName] of runtimeWorkspacePackages) {
+    await writeRuntimeFile(
+      backendSource,
+      path.join(workspacePath, "package.json"),
+      JSON.stringify({ name: packageName }),
+    );
+    await writeRuntimeFile(
+      backendSource,
+      path.join("node_modules", ...packageName.split("/"), "package.json"),
+      "{}",
+    );
+  }
   await writeRuntimeFile(backendSource, "service/app.js");
-  await writeRuntimeFile(backendSource, "node_modules/noobot-agent/package.json", "{}");
-  await writeRuntimeFile(
-    backendSource,
-    "node_modules/@noobot/agent-config-protocol/package.json",
-    "{}",
-  );
-  await writeRuntimeFile(
-    backendSource,
-    "node_modules/@noobot/execution-isolation-protocol/package.json",
-    "{}",
-  );
-  await writeRuntimeFile(backendSource, "node_modules/@noobot/plugin-runtime/package.json", "{}");
-  await writeRuntimeFile(backendSource, "node_modules/@noobot/event-protocol/package.json", "{}");
-  await writeRuntimeFile(
-    backendSource,
-    "node_modules/@noobot/authoritative-state/package.json",
-    "{}",
-  );
-  await writeRuntimeFile(backendSource, "node_modules/@noobot/sanitize/package.json", "{}");
   await writeRuntimeFile(
     backendSource,
     "node_modules/noobot-agent/src/prompts/base.md",
@@ -158,7 +169,7 @@ test("copyBackendAfterPack copies plugin-runtime into packaged resources", async
   }
 });
 
-test("copyBackendAfterPack copies authoritative lifecycle protocol packages", async () => {
+test("copyBackendAfterPack copies required backend protocol packages", async () => {
   const fixture = await createFixture();
   try {
     await copyBackendAfterPack(fixture.context);
@@ -175,7 +186,11 @@ test("copyBackendAfterPack copies authoritative lifecycle protocol packages", as
       path.join(fixture.appOutDir, "resources", "backend"),
       path.join(fixture.appOutDir, "Noobot.app", "Contents", "Resources", "backend"),
     ]) {
-      for (const packageName of ["event-protocol", "authoritative-state"]) {
+      for (const packageName of [
+        "event-protocol",
+        "authoritative-state",
+        "security-assessment-protocol",
+      ]) {
         assert.equal(
           await readFile(
             path.join(backendDestination, "node_modules", "@noobot", packageName, "package.json"),
@@ -185,6 +200,23 @@ test("copyBackendAfterPack copies authoritative lifecycle protocol packages", as
         );
       }
     }
+  } finally {
+    await rm(fixture.rootDir, { recursive: true, force: true });
+  }
+});
+
+test("copyBackendAfterPack fails when security assessment protocol is missing", async () => {
+  const fixture = await createFixture();
+  try {
+    await rm(
+      path.join(fixture.backendSource, "node_modules", "@noobot", "security-assessment-protocol"),
+      { recursive: true, force: true },
+    );
+
+    await assert.rejects(
+      () => copyBackendAfterPack(fixture.context),
+      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/security-assessment-protocol\/package\.json/,
+    );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
   }
@@ -200,7 +232,7 @@ test("copyBackendAfterPack fails when the prepared runtime is missing plugin-run
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/@noobot\/plugin-runtime\/package\.json/,
+      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/plugin-runtime\/package\.json/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });
@@ -217,7 +249,7 @@ test("copyBackendAfterPack fails when the prepared runtime is missing sanitize",
 
     await assert.rejects(
       () => copyBackendAfterPack(fixture.context),
-      /Missing required backend runtime file after prepare: node_modules\/@noobot\/sanitize\/package\.json/,
+      /Missing required backend runtime workspace after prepare: node_modules\/@noobot\/sanitize\/package\.json/,
     );
   } finally {
     await rm(fixture.rootDir, { recursive: true, force: true });

@@ -20,10 +20,17 @@ function normalizeTaskPathKind(kind = "") {
   return normalized;
 }
 
-function normalizeTaskPathRelative(relative = "", { allowRoot = false } = {}) {
-  const normalized = normalizeSlashPath(relative).replace(/^\/+/, "");
-  if ((!normalized && !allowRoot) || normalized.split("/").includes("..")) {
-    throw new Error("task path is invalid");
+export function normalizeTaskPathRelative(
+  relative = "",
+  { allowRoot = false, label = "task path" } = {},
+) {
+  const source = normalizeSlashPath(relative);
+  const segments = source.split("/");
+  const isAbsolute = source.startsWith("/") || /^[a-z]:\//i.test(source);
+  const hasParentTraversal = segments.includes("..");
+  const normalized = segments.filter((segment) => segment && segment !== ".").join("/");
+  if (isAbsolute || hasParentTraversal || (!normalized && !allowRoot)) {
+    throw new Error(`${String(label || "task path").trim()} must be a safe relative path without parent traversal`);
   }
   return normalized;
 }

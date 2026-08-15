@@ -321,11 +321,13 @@ export function useChatSession({
 
   const sessionLogWebSocketClient = createSessionLogWebSocketClient({
     resolveWebSocketUrl: () => buildLogWebSocketUrl({ apiKey: apiKey.value || "" }),
+    resolveTransportOwner: () => String(userId.value || "").trim(),
     source: "frontend",
     refreshAuthentication,
   });
   const chatWebSocketClient = createChatWebSocketClient({
     resolveWebSocketUrl: () => buildChatWebSocketUrl({ apiKey: apiKey.value || "" }),
+    resolveTransportOwner: () => String(userId.value || "").trim(),
     translateText: translate,
     refreshAuthentication,
     sessionLogSink: sessionLogWebSocketClient,

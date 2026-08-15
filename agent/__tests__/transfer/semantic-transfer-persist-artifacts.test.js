@@ -46,7 +46,43 @@ test("persistTransferArtifacts maps storage records to canonical attachment refe
 
 test("persistence requires an attachment service instead of returning a direct fallback", async () => {
   await assert.rejects(
-    () => persistTransferArtifacts({ userId: "u1", sessionId: "session-test-1", identity: identity(), intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" }, artifacts: [{ name: "a.txt", contentBase64: "YQ==" }] }),
+    () =>
+      persistTransferArtifacts({
+        userId: "u1",
+        sessionId: "session-test-1",
+        identity: identity(),
+        intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+        artifacts: [{ name: "a.txt", contentBase64: "YQ==" }],
+      }),
     /semantic_transfer_attachment_service_required/,
+  );
+});
+
+test("persistence rejects any attachment cardinality drift", async () => {
+  await assert.rejects(
+    () =>
+      persistTransferArtifacts({
+        attachmentService: {
+          async ingestGeneratedArtifacts() {
+            return [
+              {
+                attachmentId: "att-only-one",
+                sessionId: "session-test-1",
+                attachmentSource: "model",
+                name: "a.txt",
+                mimeType: "text/plain",
+                size: 1,
+              },
+            ];
+          },
+        },
+        userId: "u1",
+        identity: identity(),
+        artifacts: [
+          { name: "a.txt", mimeType: "text/plain", contentBase64: "YQ==" },
+          { name: "empty.bin", mimeType: "application/octet-stream", contentBase64: "" },
+        ],
+      }),
+    /semantic_transfer_attachment_cardinality_mismatch:2:1/,
   );
 });

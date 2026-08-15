@@ -65,6 +65,40 @@ describe("BaseThinkingLogLine", () => {
     expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("Return");
   });
 
+  it("uses an error state class for failed tool results", () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_result",
+        contentText: "read_file failed",
+        tool: true,
+        tone: "error",
+      },
+    });
+
+    expect(wrapper.classes()).toContain("is-tool-result-failed");
+    expect(wrapper.find(".base-thinking-log-line__event").classes()).toContain(
+      "is-tool-result-failed",
+    );
+  });
+
+  it("renders the localized risk level immediately after the tool name", () => {
+    const wrapper = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_call",
+        contentText: "patch_file · src/index.js · dry-run",
+        toolName: "patch_file",
+        riskLevel: "high",
+        tool: true,
+      },
+    });
+
+    expect(wrapper.find(".base-thinking-log-line__tool-name").text()).toBe("patch_file");
+    expect(wrapper.find(".base-thinking-log-line__risk").text()).toBe("High risk");
+    expect(wrapper.find(".base-thinking-log-line__summary").text()).toBe(
+      "· src/index.js · dry-run",
+    );
+  });
+
   it("uses the same detail block when an expanded item has no separate detail", () => {
     const wrapper = mount(BaseThinkingLogLine, {
       props: {
@@ -75,11 +109,7 @@ describe("BaseThinkingLogLine", () => {
       },
     });
 
-    expect(wrapper.find(".base-thinking-log-line__detail").text()).toBe(
-      "执行命令：npm test",
-    );
-    expect(wrapper.find(".base-thinking-log-line__text").classes()).not.toContain(
-      "is-expanded",
-    );
+    expect(wrapper.find(".base-thinking-log-line__detail").text()).toBe("执行命令：npm test");
+    expect(wrapper.find(".base-thinking-log-line__text").classes()).not.toContain("is-expanded");
   });
 });

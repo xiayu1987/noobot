@@ -87,6 +87,21 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
   });
 
+  it("uses the error presentation for failed tool results in details mode", () => {
+    const failedTimeline = toolTimeline();
+    failedTimeline[0] = {
+      ...failedTimeline[0],
+      status: "failed",
+      result: { ok: false, error: "access denied" },
+    };
+    const wrapper = mountThinkingPanel({
+      role: "assistant",
+      toolTimeline: failedTimeline,
+    }, { variant: "details" });
+
+    expect(wrapper.findAll(".execution-log-line.is-tool-result-failed")).toHaveLength(1);
+  });
+
   it("renders available canonical details while the turn is running", () => {
     const wrapper = mountThinkingPanel({
       role: "assistant",

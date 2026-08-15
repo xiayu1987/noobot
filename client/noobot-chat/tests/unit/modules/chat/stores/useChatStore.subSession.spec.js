@@ -76,6 +76,7 @@ describe("sub-session realtime message projection", () => {
       role: "tool",
       toolCallId: "call-1",
       result: "ok",
+      success: true,
     }));
 
     const session = store.selectSubSessionMessages("child-session");
@@ -111,6 +112,7 @@ describe("sub-session realtime message projection", () => {
       toolCallId: "call-2",
       content: "result",
       result: "result",
+      success: true,
       messageId: "msg-assistant-2",
       sequence: 1,
     }));

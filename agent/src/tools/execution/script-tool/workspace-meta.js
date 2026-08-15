@@ -5,9 +5,8 @@
  */
 import { readFile } from "node:fs/promises";
 import {
-  TOOL_EXECUTION_VIEW,
-  WORKSPACE_SANDBOX_PATHS,
   assertToolExecutionPolicy,
+  projectToolExecutionMeta,
 } from "@noobot/execution-isolation-protocol";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
@@ -33,27 +32,19 @@ export function buildExecutionWorkspaceMeta({
 } = {}) {
   void runtime;
   void agentContext;
-  const policy = assertToolExecutionPolicy(executionPolicy);
-  const sandboxEnabled = policy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
-  const currentPath = String(
-    sandboxEnabled
-      ? pathContext?.opsWorkdir || pathContext?.directories?.opsWorkdir || docker?.workdir || ""
-      : workspace,
-  ).trim();
+  assertToolExecutionPolicy(executionPolicy);
+  void workspace;
+  void docker;
+  void pathContext;
   return {
-    path: currentPath || WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE,
-    view: sandboxEnabled ? "sandbox" : "host",
+    view: "workspace",
+    path: ".",
   };
 }
 
 function buildExecutionMeta({ executionPolicy = {}, docker = {} } = {}) {
-  const policy = assertToolExecutionPolicy(executionPolicy);
-  const sandboxEnabled = policy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
-  return compactObject({
-    view: policy.view,
-    provider: sandboxEnabled ? policy.isolation.sandbox.provider : "host",
-    image: String(docker?.image || "").trim(),
-  });
+  void docker;
+  return compactObject(projectToolExecutionMeta({ policy: executionPolicy }));
 }
 
 export function buildScriptExecutionMeta({

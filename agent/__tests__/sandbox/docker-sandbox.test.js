@@ -34,22 +34,30 @@ test("buildDockerCommand validates mounts through docker inspect template equali
     }),
   });
 
-  assert.doesNotMatch(built.cmd, /_NOOBOT_MOUNT_LINES/);
-  assert.match(built.cmd, /eq \.Source \\"\/home\/xiayu\/projects\/noobot\/workspace\\"/);
-  assert.match(built.cmd, /eq \.Destination \\"\/workspace\\"/);
-  assert.match(built.cmd, /eq \.Source \\"\/home\/xiayu\/projects\/noobot\\"/);
-  assert.match(built.cmd, /eq \.Destination \\"\/project\\"/);
-  assert.match(built.cmd, /eq \.RW false/);
-  assert.match(built.cmd, /:\"\/project\":ro/);
-  assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_0__"/);
-  assert.match(built.cmd, /grep -Fqx "__NOOBOT_MOUNT_1__"/);
-  assert.match(built.cmd, /docker create --init --name "noobot-script-sandbox"/);
-  assert.match(built.cmd, /-e NOOBOT_EXECUTION_TOKEN=/);
+  assert.equal(built.executable, "docker");
+  assert.deepEqual(built.createArgs, [
+    "create",
+    "--init",
+    "--name",
+    "noobot-script-sandbox",
+    "--mount",
+    "type=bind,source=/home/xiayu/projects/noobot/workspace,target=/workspace",
+    "--mount",
+    "type=bind,source=/home/xiayu/projects/noobot,target=/project,readonly",
+    "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
+    "sleep",
+    "infinity",
+  ]);
+  assert.deepEqual(built.inspectArgs, ["container", "inspect", "noobot-script-sandbox"]);
+  assert.deepEqual(built.startArgs, ["start", "noobot-script-sandbox"]);
+  assert.equal(built.execArgs[0], "exec");
+  assert.equal(built.execArgs[7], "noobot-script-sandbox");
+  assert.match(built.execArgs[4], /^NOOBOT_EXECUTION_TOKEN=/);
   assert.match(
     built.executionToken,
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );
-  assert.match(built.cmd, new RegExp(built.executionToken));
+  assert.ok(built.execArgs.includes(`NOOBOT_EXECUTION_TOKEN=${built.executionToken}`));
 });
 
 test("buildDockerCommand uses protocol-owned user and global workspace projections", () => {
@@ -70,7 +78,7 @@ test("buildDockerCommand uses protocol-owned user and global workspace projectio
   assert.equal(userBuilt.containerName, "noobot-script-sandbox-alice");
   assert.equal(userBuilt.workspaceSource, "/srv/workspaces/alice");
   assert.equal(userBuilt.workspaceTarget, "/workspace");
-  assert.equal(userBuilt.workdir, "/workspace/runtime/ops_workdir");
+  assert.equal(userBuilt.workdir, "/workspace");
 
   const globalIsolation = resolveExecutionIsolation({
     security: {
@@ -89,5 +97,5 @@ test("buildDockerCommand uses protocol-owned user and global workspace projectio
   assert.equal(globalBuilt.containerName, "noobot-script-sandbox");
   assert.equal(globalBuilt.workspaceSource, "/srv/workspaces");
   assert.equal(globalBuilt.workspaceTarget, "/workspace");
-  assert.equal(globalBuilt.workdir, "/workspace/alice/runtime/ops_workdir");
+  assert.equal(globalBuilt.workdir, "/workspace/alice");
 });

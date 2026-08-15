@@ -48,6 +48,42 @@ test("patch_file: unified_diff 保留 Windows 绝对路径与 file URL 语义", 
   assert.equal(fileUrlPatch.newPath, "C:/work/src/a.txt");
 });
 
+test("patch_file: unified_diff 在 strip 后保留父目录组件供权威路径解析器拒绝", () => {
+  const oneParent = parseUnifiedDiff(
+    ["--- /dev/null", "+++ b/../escape.txt", "@@ -0,0 +1 @@", "+escape", ""].join("\n"),
+    1,
+  )[0];
+  assert.equal(oneParent.newPath, "../escape.txt");
+
+  const twoParents = parseUnifiedDiff(
+    ["--- /dev/null", "+++ b/../../escape.txt", "@@ -0,0 +1 @@", "+escape", ""].join("\n"),
+    1,
+  )[0];
+  assert.equal(twoParents.newPath, "../../escape.txt");
+});
+
+test("patch_file: strip 不得消除 unified_diff 中的父目录穿越语义", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-strip-traversal-"));
+  const tool = createFileTool({ agentContext: buildAgentContext(basePath, "u-test") }).find(
+    (item) => item?.name === "patch_file",
+  );
+  assert.ok(tool);
+
+  for (const target of ["b/../patch_escape.txt", "b/../../actual_patch_escape.txt"]) {
+    const diff = ["--- /dev/null", `+++ ${target}`, "@@ -0,0 +1 @@", "+escape", ""].join("\n");
+    await assert.rejects(
+      () => tool.invoke({ riskLevel: "medium", format: "unified_diff", patch: diff, strip: 1 }),
+      (error) => {
+        assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+        return true;
+      },
+    );
+  }
+
+  await assert.rejects(() => fs.access(path.join(basePath, "patch_escape.txt")));
+  await assert.rejects(() => fs.access(path.join(basePath, "actual_patch_escape.txt")));
+});
+
 test("patch_file: 普通用户不能修改 workspace 外绝对路径", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-workspace-root-"));
   const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-outside-root-"));
@@ -122,7 +158,9 @@ test("patch_file: super user can patch an absolute file outside workspace root",
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
   );
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedFiles[0]?.resolvedPath, outsideFile);
+  assert.deepEqual(result.changes, [
+    { path: { view: "host", path: outsideFile }, action: "write" },
+  ]);
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
 });
 
@@ -265,7 +303,7 @@ test("patch_file: 拒绝 root=.. 和 project 虚拟相对前缀", async () => {
   );
 });
 
-test("patch_file: 拒绝 /project 沙箱绝对路径视角", async () => {
+test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-sandbox-"));
   await fs.mkdir(path.join(basePath, "i18n/src/client/locales"), { recursive: true });
   const localeFile = path.join(basePath, "i18n/src/client/locales/en-US.js");
@@ -312,7 +350,7 @@ test("patch_file: 拒绝 /project 沙箱绝对路径视角", async () => {
   );
 });
 
-test("patch_file: execute_script 挂载不能授权 workspace 外项目", async () => {
+test("patch_file: 全局 sandbox 挂载可授权 workspace 外项目", async () => {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-project-mount-"));
   const userWorkspacePath = path.join(rootPath, "workspace/admin");
   const projectPath = path.join(rootPath, "noobot");
@@ -360,15 +398,14 @@ test("patch_file: execute_script 挂载不能授权 workspace 外项目", async 
     "",
   ].join("\n");
 
-  await assert.rejects(
-    () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
-    (error) => {
-      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
-      assert.match(String(error.message || ""), /范围|scope|path/i);
-      return true;
-    },
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
   );
-  assert.equal(await fs.readFile(targetFile, "utf8"), "function existing() {\n  return true;\n}\n");
+  assert.equal(result.ok, true);
+  assert.equal(
+    await fs.readFile(targetFile, "utf8"),
+    'function existing() {\n  return "sandbox-project";\n}\n',
+  );
 });
 
 test("patch_file: root 参数拒绝沙箱路径并返回明确提示", async () => {
@@ -455,7 +492,7 @@ test("patch_file: 路径不存在时诊断使用当前 workspace 执行审计路
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
 
-      assert.equal(error.details?.basePath, workspacePath);
+      assert.deepEqual(error.details?.basePath, { view: "workspace", path: "." });
       assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
       assert.match(error.details?.hint || "", /root/);
       assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
@@ -497,9 +534,52 @@ test("patch_file: host 视角下路径不存在时诊断保留真实工作区根
     (error) => {
       assert.equal(error.code, "RECOVERABLE_FILE_NOT_FOUND");
 
-      assert.equal(error.details?.basePath, workspacePath);
+      assert.deepEqual(error.details?.basePath, { view: "workspace", path: "." });
       assert.equal(error.details?.filePath, "service/ws/chat-websocket-server.js");
       assert.equal(error.details?.attemptedPaths?.[0]?.path, "service/ws/chat-websocket-server.js");
+      return true;
+    },
+  );
+});
+
+test("patch_file: sandbox 虚拟相对路径沿用权威路径解析错误", async () => {
+  const workspacePath = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-patch-diagnostics-sandbox-"),
+  );
+  const agentContext = buildAgentContext(workspacePath, "u-test", {
+    runtime: {
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
+          },
+        },
+      },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "patch_file");
+  const diff = [
+    "--- a/workspace/runtime/ops_workdir/missing.txt",
+    "+++ b/workspace/runtime/ops_workdir/missing.txt",
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+    "",
+  ].join("\n");
+
+  await assert.rejects(
+    () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
+      assert.equal(error.details?.error, "virtual_relative_path_ambiguous");
+      assert.equal(error.details?.pathView, "virtual-relative");
+      assert.equal(error.details?.suggestedPath, "runtime/ops_workdir/missing.txt");
+      assert.equal(
+        error.details?.suggestedSandboxPath,
+        "/workspace/runtime/ops_workdir/missing.txt",
+      );
+      assert.doesNotMatch(JSON.stringify(error.details), new RegExp(workspacePath));
       return true;
     },
   );
@@ -529,7 +609,9 @@ test("patch_file: 普通用户必须显式提供 workspace 子项目路径", asy
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changedFiles, [path.join(repoPath, "client/noobot-chat/src/a.txt")]);
+  assert.deepEqual(result.changes, [
+    { path: { view: "workspace", path: "noobot/client/noobot-chat/src/a.txt" }, action: "write" },
+  ]);
   assert.equal(
     await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"),
     "one\nTWO\n",
@@ -700,6 +782,11 @@ test("patch_file: 超级管理员也不扫描项目根解析虚拟路径", async
 
   await assert.rejects(
     () => tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
-    /not found|invalid/i,
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_INVALID_INPUT");
+      assert.equal(error.details?.error, "virtual_relative_path_ambiguous");
+      assert.equal(error.details?.pathView, "virtual-relative");
+      return true;
+    },
   );
 });

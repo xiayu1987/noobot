@@ -25,19 +25,5 @@ export function mergeRunConfigWithPluginStrategy({
     : [];
   merged.selectedPlugins = normalizeTrimmedStringList(selectedPlugins)
     .filter((item) => !disabledSet.has(item));
-  const plugins = merged?.plugins && typeof merged.plugins === "object" ? merged.plugins : {};
-  const nextPlugins = { ...plugins };
-  for (const pluginName of disabledSet) {
-    const current =
-      nextPlugins?.[pluginName] && typeof nextPlugins[pluginName] === "object"
-        ? nextPlugins[pluginName]
-        : {};
-    nextPlugins[pluginName] = {
-      ...current,
-      enabled: false,
-      mode: "off",
-    };
-  }
-  merged.plugins = nextPlugins;
   return merged;
 }

@@ -40,7 +40,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
     }),
     BaseThinkingLogLine: defineComponent({
       name: "BaseThinkingLogLine",
-      props: ["eventText", "contentText", "detailText", "tool", "expandable", "expanded"],
+      props: ["eventText", "contentText", "detailText", "tool", "tone", "expandable", "expanded"],
       emits: ["toggle"],
       setup(props, { emit }) {
         return () => h("div", {
@@ -116,9 +116,9 @@ export function mountThinkingPanel(messageItem, props = {}) {
         },
         BaseTabPanelBody: { template: '<div class="tab-body"><slot /></div>' },
         BaseThinkingLogLine: {
-          props: ["eventText", "contentText", "detailText", "tool", "expandable", "expanded"],
+          props: ["eventText", "contentText", "detailText", "tool", "tone", "expandable", "expanded"],
           emits: ["toggle"],
-          template: '<div class="execution-log-line" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && detailText" class="execution-log-detail">{{ detailText }}</pre></div>',
+          template: '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && detailText" class="execution-log-detail">{{ detailText }}</pre></div>',
         },
         BaseSectionHeader: { props: ["title"], template: '<header><span>{{ title }}</span><slot name="extra" /></header>' },
         BaseEmptyHint: { props: ["text"], template: '<p class="empty-hint">{{ text }}</p>' },

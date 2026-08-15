@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
-  MESSAGE_EVENT_TYPE,
-  projectMessageEventToolFacets,
-  resolveMessageEventSequenceIdentity,
-} from "@noobot/event-protocol/message-event";
+  reduceCanonicalToolTimeline,
+  resolveCanonicalToolTimelineStatus,
+} from "@noobot/event-protocol/tool-timeline";
 import {
   compareTimelineFacts,
   preferTimelineFact,
@@ -16,6 +16,9 @@ import {
 } from "./timelineFact.js";
 import { parseTaskCheckReceipt } from "@noobot/context-protocol/task-check-receipt";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
+import { isToolResultFailure } from "../../model/toolLogFormatting.js";
+import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
@@ -91,71 +94,21 @@ function stringifyToolDetail(value) {
   }
 }
 
-function parseStructuredValue(value) {
-  if (value && typeof value === "object" && !Array.isArray(value)) return value;
-  if (typeof value !== "string") return {};
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function compactSummaryValue(value, maxLength = 96) {
-  const normalized = String(value ?? "")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}...` : normalized;
-}
-
-function fileSummary(value = {}) {
-  const candidate = value.filePath || value.path || value.fileName || value.resolvedPath || "";
-  return compactSummaryValue(candidate);
-}
-
-export function buildToolOperationSummary(tool = "", detail, { result = false } = {}) {
-  const toolName = text(tool) || "tool";
-  const value = parseStructuredValue(detail);
-  let subject = "";
-  if (["write_file", "read_file"].includes(toolName)) {
-    subject = fileSummary(value);
-  } else if (toolName === "patch_file") {
-    const changedFiles = Array.isArray(value.changedFiles) ? value.changedFiles : [];
-    subject = compactSummaryValue(changedFiles[0] || value.root || "");
-  } else if (["execute_script", "execute_command"].includes(toolName)) {
-    subject = compactSummaryValue(value.command || value.script || value.stdout || "");
-  } else if (toolName === "search") {
-    const matchCount = Array.isArray(value.matches) ? `${value.matches.length} matches` : "";
-    subject = compactSummaryValue(
-      [value.query, value.path || value.source, matchCount].filter(Boolean).join(" · "),
-    );
-  } else if (toolName === "list_skills") {
-    const itemCount = Array.isArray(value.items) ? `${value.items.length} items` : "";
-    subject = compactSummaryValue(value.parentSkill || itemCount);
-  } else if (toolName === "user_interaction") {
-    subject = compactSummaryValue(value.content || value.message || "");
-  } else {
-    subject =
-      fileSummary(value) ||
-      compactSummaryValue(
-        value.command || value.query || value.content || value.message || value.stdout || "",
-      );
-  }
-  if (!subject && result && typeof detail === "string" && !Object.keys(value).length) {
-    const rawResult = compactSummaryValue(detail);
-    if (rawResult && rawResult !== toolName) subject = rawResult;
-  }
-  return subject ? `${toolName} · ${subject}` : toolName;
-}
-
 function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
   if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
+  const persistedSummary = text(facet.summary);
   const summary =
-    text(facet.summary) ||
-    buildToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
+    persistedSummary ||
+    projectToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
+  const failed =
+    !isCall &&
+    isToolResultFailure({
+      success: entry.success,
+      status: entry.status,
+      result: canonicalDetail,
+    });
   return {
     eventId: text(facet.eventId),
     event: isCall ? "tool_call" : "tool_result",
@@ -164,14 +117,18 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
     category: "tool",
     toolCallId: text(entry.toolCallId),
     tool: text(entry.tool),
+    riskLevel: normalizeSecurityRiskLevel(entry.riskLevel),
     text: summary,
     ...(isCall ? { args: canonicalDetail } : { result: canonicalDetail }),
     ...(isCall
       ? {}
       : {
-          success: entry.success !== false,
-          status: entry.success === false ? "failed" : "completed",
+          success: !failed,
+          status: failed ? "failed" : "completed",
         }),
+    presentation: {
+      tone: isCall ? "primary" : failed ? "error" : "success",
+    },
     ...(Array.isArray(facet.attachments) && facet.attachments.length
       ? { attachments: facet.attachments }
       : {}),
@@ -185,54 +142,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
 }
 
 export function reduceToolTimeline(timeline = [], envelope = {}) {
-  if (
-    ![MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
-      envelope?.eventType,
-    )
-  ) {
-    return Array.isArray(timeline) ? timeline : [];
-  }
-  const key = timelineKey(envelope);
-  if (!key) return Array.isArray(timeline) ? timeline : [];
-  const next = Array.isArray(timeline) ? timeline.map((item) => ({ ...item })) : [];
-  const index = next.findIndex((item) => item.key === key);
-  const current = index >= 0 ? next[index] : { key, toolCallId: toolCallIdOf(envelope) };
-  const { toolCall, toolResult } = projectMessageEventToolFacets(envelope);
-  const sequenceIdentity = resolveMessageEventSequenceIdentity(envelope);
-  const eventFact = {
-    eventId: text(envelope.eventId),
-    sequence: sequenceOf(envelope),
-    sequenceScopeId: sequenceIdentity.sequenceScopeId,
-    authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
-    sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
-    timestamp: text(envelope.timestamp),
-    sessionId: text(envelope.sessionId),
-    dialogProcessId: text(envelope.dialogProcessId),
-    turnScopeId: text(envelope.turnScopeId),
-    ...(Array.isArray(envelope?.attachments) && envelope.attachments.length
-      ? { attachments: envelope.attachments }
-      : {}),
-  };
-  const updated =
-    envelope.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
-      ? {
-          ...current,
-          tool: text(envelope.tool || toolCall?.name || current.tool),
-          args: toolCall?.args ?? envelope.args ?? current.args,
-          call: eventFact,
-          status: current.result ? "completed" : "running",
-        }
-      : {
-          ...current,
-          tool: text(envelope.tool || toolResult?.name || current.tool),
-          result: toolResult?.output ?? envelope.result,
-          success: toolResult?.success ?? envelope.success !== false,
-          resultEvent: eventFact,
-          status: "completed",
-        };
-  if (index >= 0) next[index] = updated;
-  else next.push(updated);
-  return next.sort((left, right) =>
+  return reduceCanonicalToolTimeline(timeline, envelope).sort((left, right) =>
     compareTimelineFacts(left.call || left.resultEvent, right.call || right.resultEvent),
   );
 }
@@ -329,7 +239,7 @@ export function mergeToolTimelines(...timelines) {
       const normalizedRight = normalizeFacetMetadata(right);
       return preferTimelineFact(normalizedLeft, normalizedRight);
     };
-    merged.set(key, {
+    const mergedEntry = {
       ...previous,
       ...candidate,
       key,
@@ -341,10 +251,10 @@ export function mergeToolTimelines(...timelines) {
         previous.resultEvent && candidate?.resultEvent
           ? newerFacet(previous.resultEvent, candidate.resultEvent)
           : candidate?.resultEvent || previous.resultEvent,
-      status:
-        previous.resultEvent || candidate?.resultEvent
-          ? "completed"
-          : candidate?.status || previous.status,
+    };
+    merged.set(key, {
+      ...mergedEntry,
+      status: resolveCanonicalToolTimelineStatus(mergedEntry),
     });
   }
   return [...merged.values()].sort((left, right) =>

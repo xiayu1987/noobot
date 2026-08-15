@@ -118,8 +118,8 @@ export const BUILTIN_PATH_POLICY = deepFreeze({
     caseSensitivity: "platform",
   },
   display: {
-    fileTools: "runtime",
-    scriptTools: "runtime",
+    fileTools: "logical",
+    scriptTools: "logical",
     nativeScript: "task-local",
     attachments: "identity",
     errors: "logical",
@@ -298,7 +298,7 @@ export function resolvePathRef({ input = "", workspaceRoot = "", owner = "" } = 
   });
 }
 
-function within(root, candidate) {
+export function isPathWithinRoot(root, candidate) {
   const relative = filePath.relative(filePath.resolve(root), filePath.resolve(candidate));
   return (
     relative === "" ||
@@ -358,6 +358,7 @@ export function authorizePathRef({
   pathPolicy = {},
   executionPath = "",
   workspaceRoot = "",
+  executionRoots = [],
 } = {}) {
   const effectivePolicy =
     isPlainObject(pathPolicy) && Object.keys(pathPolicy).length
@@ -409,9 +410,11 @@ export function authorizePathRef({
         capability,
       });
     const candidate = executionPath || pathRef.path;
-    const denied = (hostRule.deniedRoots || []).some((root) => within(root, candidate));
+    const denied = (hostRule.deniedRoots || []).some((root) =>
+      isPathWithinRoot(root, candidate),
+    );
     const allowed = (hostRule.allowedRoots || []).some(
-      (root) => root === "<host-filesystem>" || within(root, candidate),
+      (root) => root === "<host-filesystem>" || isPathWithinRoot(root, candidate),
     );
     if (denied || !allowed)
       return Object.freeze({
@@ -424,8 +427,9 @@ export function authorizePathRef({
   if (
     pathRef.view === "workspace" &&
     executionPath &&
-    workspaceRoot &&
-    !within(workspaceRoot, executionPath)
+    ![workspaceRoot, ...executionRoots]
+      .filter(Boolean)
+      .some((root) => isPathWithinRoot(root, executionPath))
   )
     return Object.freeze({
       allowed: false,

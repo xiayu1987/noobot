@@ -49,10 +49,8 @@ test("read_file: reads own workspace through the logical workspace view", async 
   assert.equal(result.ok, true);
   assert.equal(result.content, '1 | {"ok":true}');
   assert.equal(result.includeLineNumbers, true);
-  assert.equal(result.resolvedPath, filePath);
-  assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "service_host");
-  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), true);
+  assert.deepEqual(result.path, { view: "workspace", path: "runtime/ops_workdir/result.json" });
+  assert.equal("resolvedPath" in result, false);
 });
 
 test("read_file: regular user cannot read another user workspace through /workspace", async () => {
@@ -204,7 +202,7 @@ test("read_file: configured super user can read another user workspace through h
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | visible");
-  assert.equal(result.resolvedPath, otherUserFile);
+  assert.deepEqual(result.path, { view: "host", path: otherUserFile });
 });
 
 test("read_file: sandboxed super user in docker user scope cannot read another user through /workspace", async () => {
@@ -330,7 +328,7 @@ test("read_file: super user can read an absolute file outside workspace root", a
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | visible-outside");
-  assert.equal(result.resolvedPath, outsideFile);
+  assert.deepEqual(result.path, { view: "host", path: outsideFile });
 });
 
 test("read_file: global sandbox forbids super user host paths without widening mounts", async () => {
@@ -469,7 +467,7 @@ test("read_file: runtime sandbox mappings cannot grant file access", async () =>
   assert.match(String(result.message || result.error || ""), /sandbox|沙箱|scope|范围/i);
 });
 
-test("read_file: execute_script docker mounts cannot grant file access", async () => {
+test("read_file: global sandbox mounts extend the logical workspace view", async () => {
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workspace-root-"));
   const basePath = path.join(workspaceRoot, "primary-user");
   const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-project-root-"));
@@ -510,8 +508,9 @@ test("read_file: execute_script docker mounts cannot grant file access", async (
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(result.toolName, "read_file");
-  assert.equal(result.ok, false);
-  assert.match(String(result.message || result.error || ""), /sandbox|沙箱|scope|范围/i);
+  assert.equal(result.ok, true);
+  assert.equal(result.content, "1 | project-mounted-ok");
+  assert.deepEqual(result.path, { view: "workspace", path: "/project/agent/src/tools/execution/file-tool.js" });
 });
 
 test("file tools reject direct and nested symbolic-link escapes", async () => {
@@ -533,6 +532,24 @@ test("file tools reject direct and nested symbolic-link escapes", async () => {
   await assert.rejects(
     () => readTool.invoke({ filePath: "nested/escape/secret.txt", riskLevel: "low" }),
     /scope|范围|允许|path/i,
+  );
+});
+
+test("file tools classify a broken symbolic link as out of scope", async () => {
+  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-broken-symlink-workspace-"));
+  await fs.symlink("missing-target.txt", path.join(workspacePath, "broken-link.txt"));
+  const context = buildAgentContext(workspacePath, "u-test");
+  const readTool = createFileTool({ agentContext: context }).find(
+    (item) => item?.name === "read_file",
+  );
+
+  await assert.rejects(
+    () => readTool.invoke({ filePath: "broken-link.txt", riskLevel: "low" }),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error?.details?.reason, "symbolic_link_not_allowed");
+      return true;
+    },
   );
 });
 
@@ -583,6 +600,52 @@ test("read_file: 默认返回行号且可关闭行号", async () => {
   assert.equal(withoutLines.includeLineNumbers, false);
 });
 
+test("read_file: 起始行超过 EOF 时返回明确范围错误而不是最后一行", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-line-range-"));
+  await fs.writeFile(path.join(basePath, "lines.txt"), "a\nb\nc\n", "utf8");
+  const tools = createFileTool({ agentContext: buildAgentContext(basePath) });
+  const tool = tools.find((item) => item?.name === "read_file");
+  assert.ok(tool);
+
+  await assert.rejects(
+    () =>
+      tool.invoke({
+        riskLevel: "low",
+        filePath: "lines.txt",
+        startLine: 20,
+        endLine: 20,
+      }),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS");
+      assert.deepEqual(error?.details, {
+        field: "startLine",
+        reason: "start_line_after_eof",
+        requestedStartLine: 20,
+        requestedEndLine: 20,
+        totalLines: 3,
+      });
+      assert.match(String(error?.message || ""), /20-20/);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    () =>
+      tool.invoke({
+        riskLevel: "low",
+        filePath: "lines.txt",
+        startLine: 3,
+        endLine: 2,
+      }),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_LINE_RANGE_OUT_OF_BOUNDS");
+      assert.equal(error?.details?.field, "endLine");
+      assert.equal(error?.details?.reason, "end_line_before_start_line");
+      return true;
+    },
+  );
+});
+
 test("read_file: 默认读取行数阈值为 1000", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-default-lines-"));
   const content = Array.from({ length: 1001 }, (_, index) => `line-${index + 1}`).join("\n");
@@ -602,4 +665,39 @@ test("read_file: 默认读取行数阈值为 1000", async () => {
   assert.equal(result.truncated, true);
   assert.equal(result.content.split("\n").length, 1000);
   assert.equal(result.content.endsWith("line-1000"), true);
+});
+
+test("read_file: endLine 超过 EOF 但内容完整时不标记 truncated", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-read-complete-range-"));
+  await fs.writeFile(path.join(basePath, "short.txt"), "line01\nline02\nline03\n", "utf8");
+  const agentContext = buildAgentContext(basePath, "u-test", {
+    runtime: {
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
+          },
+        },
+      },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
+
+  const result = parseToolResult(
+    await tool.invoke({
+      riskLevel: "low",
+      filePath: "/workspace/short.txt",
+      startLine: 1,
+      endLine: 10,
+      maxLines: 10,
+      includeLineNumbers: false,
+    }),
+  );
+
+  assert.equal(result.content, "line01\nline02\nline03");
+  assert.equal(result.endLine, 3);
+  assert.equal(result.totalLines, 3);
+  assert.equal(result.truncated, false);
+  assert.equal(result.hasMore, false);
 });

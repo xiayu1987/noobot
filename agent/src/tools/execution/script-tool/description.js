@@ -24,7 +24,8 @@ export function buildScriptToolDescription({
     pathContext?.directories && typeof pathContext.directories === "object"
       ? pathContext.directories
       : {};
-  const sandboxWorkdir = directories.opsWorkdir || pathContext?.opsWorkdir || workspace;
+  const sandboxWorkdir =
+    directories.currentDirectory || pathContext?.currentDirectory || workspace;
   const sandboxRoot = pathContext?.sandboxRoot || directories.rootDirectory || "";
   const allowedRoots = Array.isArray(directories.allowedRoots)
     ? directories.allowedRoots

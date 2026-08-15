@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { BUILTIN_THRESHOLDS, hasOwnConfigKey, mergeConfig, normalizeBooleanLike } from "../../config/index.js";
+import {
+  BUILTIN_THRESHOLDS,
+  hasOwnConfigKey,
+  mergeConfig,
+  normalizeBooleanLike,
+} from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
   getSystemRuntimeFromRuntime,
@@ -17,6 +22,10 @@ import { createWaitAsyncTaskResultTool } from "./agent-collab/tool-wait-async-re
 import { createPlanMultiTaskCollaborationTool } from "./agent-collab/tool-plan-collab.js";
 import { cloneData } from "./agent-collab/collab-task-utils.js";
 import { TOOL_NAME } from "../constants/index.js";
+import {
+  SECURITY_RISK_LEVEL,
+  normalizeSecurityRiskLevel,
+} from "@noobot/security-assessment-protocol";
 
 function tAgentCollab(runtime = {}, key = "", params = {}) {
   return tTool(runtime, `tools.agent_collab.${String(key || "").trim()}`, params);
@@ -48,7 +57,10 @@ export function createAgentCollabTool({ agentContext }) {
   const runConfig = {
     allowUserInteraction: systemRuntime?.config?.allowUserInteraction !== false,
     safeConfirm: systemRuntime?.config?.safeConfirm !== false,
-    safeConfirmLevel: String(systemRuntime?.config?.safeConfirmLevel || "low"),
+    safeConfirmLevel: normalizeSecurityRiskLevel(
+      systemRuntime?.config?.safeConfirmLevel,
+      SECURITY_RISK_LEVEL.LOW,
+    ),
     sanitizeOutput: systemRuntime?.config?.sanitizeOutput !== false,
     ...(hasParentStreamingConfig
       ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
@@ -58,9 +70,7 @@ export function createAgentCollabTool({ agentContext }) {
     ),
     runtimeModel: String(runtime?.runtimeModel || "").trim(),
     sharedTools:
-      runtime?.sharedTools && typeof runtime.sharedTools === "object"
-        ? runtime.sharedTools
-        : {},
+      runtime?.sharedTools && typeof runtime.sharedTools === "object" ? runtime.sharedTools : {},
     ...(passthroughToolPolicy && parentToolPolicy ? { toolPolicy: parentToolPolicy } : {}),
   };
 
@@ -133,9 +143,5 @@ export function createAgentCollabTool({ agentContext }) {
     userConfig,
   });
 
-  return [
-    delegateTaskAsync,
-    waitAsyncTaskResult,
-    planMultiTaskCollaboration,
-  ];
+  return [delegateTaskAsync, waitAsyncTaskResult, planMultiTaskCollaboration];
 }

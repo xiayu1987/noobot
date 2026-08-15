@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-const CONFIRMATION_LEVELS = new Set(["low", "medium", "high", "critical"]);
+import {
+  SECURITY_RISK_LEVEL,
+  normalizeSecurityRiskLevel,
+} from "@noobot/security-assessment-protocol";
 const CONNECTOR_KEYS = Object.freeze(["database", "terminal", "email"]);
-const SUMMARY_POLICY_KEYS = Object.freeze([
-  "phaseSummaryLoopTurns",
-  "taskCheckLoopTurns",
-]);
+const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
   "sanitizeOutput",
@@ -40,10 +40,12 @@ function selectedConnectors(value) {
 
 function pluginModelConfig(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value).filter(([key, item]) => (
-    clean(key) && item && typeof item === "object" && !Array.isArray(item)
-  ));
-  return entries.length ? Object.fromEntries(entries.map(([key, item]) => [clean(key), { ...item }])) : undefined;
+  const entries = Object.entries(value).filter(
+    ([key, item]) => clean(key) && item && typeof item === "object" && !Array.isArray(item),
+  );
+  return entries.length
+    ? Object.fromEntries(entries.map(([key, item]) => [clean(key), { ...item }]))
+    : undefined;
 }
 
 function summaryPolicy(value) {
@@ -61,7 +63,10 @@ function summaryPolicy(value) {
 }
 
 export function createRunPreferences(input = {}) {
-  const confirmationLevel = clean(input.confirmationLevel).toLowerCase();
+  const confirmationLevel = normalizeSecurityRiskLevel(
+    input.confirmationLevel,
+    SECURITY_RISK_LEVEL.LOW,
+  );
   const normalizedPluginModelConfig = pluginModelConfig(input.pluginModelConfig);
   const normalizedSummaryPolicy = summaryPolicy(input.summaryPolicy);
   return {
@@ -71,7 +76,7 @@ export function createRunPreferences(input = {}) {
       ? { streaming: input.streaming === true }
       : {}),
     frontendThresholdsEnabled: input.frontendThresholdsEnabled === true,
-    confirmationLevel: CONFIRMATION_LEVELS.has(confirmationLevel) ? confirmationLevel : "low",
+    confirmationLevel,
     locale: clean(input.locale),
     scenario: clean(input.scenario),
     selectedModel: clean(input.selectedModel),
@@ -94,19 +99,29 @@ export function validateRunPreferences(preferences) {
   for (const key of ["allowUserInteraction", "sanitizeOutput"]) {
     if (typeof preferences[key] !== "boolean") errors.push(`invalid_${key}`);
   }
-  if (Object.prototype.hasOwnProperty.call(preferences, "streaming") && typeof preferences.streaming !== "boolean") {
+  if (
+    Object.prototype.hasOwnProperty.call(preferences, "streaming") &&
+    typeof preferences.streaming !== "boolean"
+  ) {
     errors.push("invalid_streaming");
   }
   if (typeof preferences.frontendThresholdsEnabled !== "boolean") {
     errors.push("invalid_frontend_thresholds_enabled");
   }
-  if (!CONFIRMATION_LEVELS.has(clean(preferences.confirmationLevel).toLowerCase())) {
+  if (!normalizeSecurityRiskLevel(preferences.confirmationLevel)) {
     errors.push("invalid_confirmation_level");
   }
-  if (!Array.isArray(preferences.selectedPlugins) || preferences.selectedPlugins.some((item) => typeof item !== "string")) {
+  if (
+    !Array.isArray(preferences.selectedPlugins) ||
+    preferences.selectedPlugins.some((item) => typeof item !== "string")
+  ) {
     errors.push("invalid_selected_plugins");
   }
-  if (!preferences.selectedConnectors || typeof preferences.selectedConnectors !== "object" || Array.isArray(preferences.selectedConnectors)) {
+  if (
+    !preferences.selectedConnectors ||
+    typeof preferences.selectedConnectors !== "object" ||
+    Array.isArray(preferences.selectedConnectors)
+  ) {
     errors.push("invalid_selected_connectors");
   } else {
     for (const key of Object.keys(preferences.selectedConnectors)) {
@@ -116,8 +131,12 @@ export function validateRunPreferences(preferences) {
       errors.push("invalid_selected_connectors");
     }
   }
-  if (Object.prototype.hasOwnProperty.call(preferences, "pluginModelConfig") &&
-      (!preferences.pluginModelConfig || typeof preferences.pluginModelConfig !== "object" || Array.isArray(preferences.pluginModelConfig))) {
+  if (
+    Object.prototype.hasOwnProperty.call(preferences, "pluginModelConfig") &&
+    (!preferences.pluginModelConfig ||
+      typeof preferences.pluginModelConfig !== "object" ||
+      Array.isArray(preferences.pluginModelConfig))
+  ) {
     errors.push("invalid_plugin_model_config");
   }
   if (Object.prototype.hasOwnProperty.call(preferences, "summaryPolicy")) {
@@ -128,12 +147,16 @@ export function validateRunPreferences(preferences) {
       for (const key of Object.keys(policy)) {
         if (!SUMMARY_POLICY_KEYS.includes(key)) errors.push(`unknown_summary_policy_field:${key}`);
       }
-      if (Object.prototype.hasOwnProperty.call(policy, "phaseSummaryLoopTurns") &&
-          (!Number.isInteger(policy.phaseSummaryLoopTurns) || policy.phaseSummaryLoopTurns <= 0)) {
+      if (
+        Object.prototype.hasOwnProperty.call(policy, "phaseSummaryLoopTurns") &&
+        (!Number.isInteger(policy.phaseSummaryLoopTurns) || policy.phaseSummaryLoopTurns <= 0)
+      ) {
         errors.push("invalid_phase_summary_loop_turns");
       }
-      if (Object.prototype.hasOwnProperty.call(policy, "taskCheckLoopTurns") &&
-          (!Number.isInteger(policy.taskCheckLoopTurns) || policy.taskCheckLoopTurns <= 0)) {
+      if (
+        Object.prototype.hasOwnProperty.call(policy, "taskCheckLoopTurns") &&
+        (!Number.isInteger(policy.taskCheckLoopTurns) || policy.taskCheckLoopTurns <= 0)
+      ) {
         errors.push("invalid_task_check_loop_turns");
       }
       if (!Object.keys(policy).length) errors.push("empty_summary_policy");

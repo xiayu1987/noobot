@@ -77,6 +77,7 @@ test("chat-run-service maps a validated transport command without a compat confi
     email: "",
   });
   assert.deepEqual(request.runConfig.selectedPlugins, ["planning"]);
+  assert.equal("plugins" in request.runConfig, false);
   assert.equal(request.runConfig.safeConfirm, true);
   assert.equal("config" in request.runConfig, false);
   assert.equal("runTimeoutMs" in request.runConfig, false);

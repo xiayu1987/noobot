@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile, stat } from "node:fs/promises";
-import {
-  createResourceRef,
-  PATH_CAPABILITIES,
-  TOOL_PATH_CONTRACTS,
-  filePath as path,
-} from "@noobot/path-resolver";
+import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
@@ -18,6 +13,7 @@ import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/ind
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { getEnabledProviders, resolveModelSpecByName } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
+import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -243,17 +239,10 @@ export function createMultimodalParseTool({ agentContext }) {
         identity: toolConfig?.configurable?.transferIdentity,
       });
       const attachments = normalizePersistedAttachments(persistedOutput);
-      const outputResources = attachments.map((attachment) =>
-        createResourceRef({
-          owner: String(runtime?.userId || ""),
-          source: "attachment",
-          logical: { view: "attachment", path: attachment.name || "parsed.txt" },
-          attachment: attachment.identity || attachment,
-          size: attachment.size,
-          mimeType: attachment.mimeType || DEFAULT_MIME_TYPE,
-          capabilities: { read: true, write: false, scriptInput: true },
-        }),
-      );
+      const outputResources = registerTransferAttachmentResources({
+        agentContext,
+        transferEnvelopes: persistedOutput?.transferEnvelopes || [],
+      });
       const updatedSourceAttachments = (
         await Promise.all(
           sourceAttachmentMetas.map(async (sourceAttachmentMeta) =>

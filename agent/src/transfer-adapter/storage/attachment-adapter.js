@@ -43,7 +43,12 @@ function requireIdentity(identity = {}) {
   };
 }
 
-function encodeContentBase64({ content = "", encodedContent = "", bytes = null, contentEncoding = "utf8" } = {}) {
+function encodeContentBase64({
+  content = "",
+  encodedContent = "",
+  bytes = null,
+  contentEncoding = "utf8",
+} = {}) {
   if (text(encodedContent)) return text(encodedContent);
   if (Buffer.isBuffer(bytes)) return bytes.toString("base64");
   if (bytes instanceof Uint8Array) return Buffer.from(bytes).toString("base64");
@@ -62,10 +67,7 @@ function serviceFrom(runtime, attachmentService) {
 
 function resolveAttachmentUserId({ runtime = {}, agentContext = null, userId = "" } = {}) {
   const resolved = text(
-    runtime?.userId
-      || runtime?.systemRuntime?.userId
-      || agentContext?.userId
-      || userId,
+    runtime?.userId || runtime?.systemRuntime?.userId || agentContext?.userId || userId,
   );
   if (!resolved) throw new Error("semantic_transfer_user_id_required");
   return resolved;
@@ -83,7 +85,13 @@ function recordIdentity(record = {}, sessionId = "") {
   return identity;
 }
 
-export function createDirectTransferEnvelope({ identity, direction = TRANSFER_DIRECTION.OUTPUT, content, intent = {}, meta = {} } = {}) {
+export function createDirectTransferEnvelope({
+  identity,
+  direction = TRANSFER_DIRECTION.OUTPUT,
+  content,
+  intent = {},
+  meta = {},
+} = {}) {
   const ids = requireIdentity(identity);
   return directTransfer({ ...ids, direction, content: String(content ?? ""), intent, meta });
 }
@@ -105,7 +113,8 @@ export async function persistTransferArtifacts({
 } = {}) {
   const ids = requireIdentity(identity);
   const resolvedUserId = resolveAttachmentUserId({ runtime, agentContext, userId });
-  if (!Array.isArray(artifacts) || artifacts.length === 0) throw new Error("semantic_transfer_artifacts_required");
+  if (!Array.isArray(artifacts) || artifacts.length === 0)
+    throw new Error("semantic_transfer_artifacts_required");
   const service = serviceFrom(runtime, attachmentService);
   const records = await service.ingestGeneratedArtifacts({
     userId: resolvedUserId,
@@ -119,16 +128,20 @@ export async function persistTransferArtifacts({
     turnScopeId: ids.identity.turnScopeId,
     artifacts,
   });
-  if (!Array.isArray(records) || records.length === 0) {
-    throw new Error("semantic_transfer_attachment_persistence_empty");
+  if (!Array.isArray(records) || records.length !== artifacts.length) {
+    throw new Error(
+      `semantic_transfer_attachment_cardinality_mismatch:${artifacts.length}:${Array.isArray(records) ? records.length : 0}`,
+    );
   }
-  const attachments = records.map((record, index) => createAttachmentReference({
-    identity: recordIdentity(record, ids.identity.sessionId),
-    role: index === 0 ? "primary" : "secondary",
-    name: text(record.name) || `attachment-${index + 1}`,
-    mimeType: text(record.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
-    size: Number.isSafeInteger(record.size) && record.size >= 0 ? record.size : undefined,
-  }));
+  const attachments = records.map((record, index) =>
+    createAttachmentReference({
+      identity: recordIdentity(record, ids.identity.sessionId),
+      role: index === 0 ? "primary" : "secondary",
+      name: text(record.name) || `attachment-${index + 1}`,
+      mimeType: text(record.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+      size: Number.isSafeInteger(record.size) && record.size >= 0 ? record.size : undefined,
+    }),
+  );
   const envelope = createTransferEnvelope({
     ...ids,
     direction,
@@ -147,16 +160,47 @@ export async function persistTransferArtifacts({
 }
 
 export async function persistTransferFile({
-  runtime = {}, agentContext = null, attachmentService = null, userId = "", content = "", contentBase64: encodedContent = "", bytes = null,
-  contentEncoding = "utf8", name = "output.txt", mimeType = DEFAULT_TRANSFER_MIME_TYPE,
-  attachmentSource = "model", generationSource = "semantic_transfer_output", source = "service",
-  reason = "semantic_transfer_output", identity, direction = TRANSFER_DIRECTION.OUTPUT, intent = null, meta = {},
+  runtime = {},
+  agentContext = null,
+  attachmentService = null,
+  userId = "",
+  content = "",
+  contentBase64: encodedContent = "",
+  bytes = null,
+  contentEncoding = "utf8",
+  name = "output.txt",
+  mimeType = DEFAULT_TRANSFER_MIME_TYPE,
+  attachmentSource = "model",
+  generationSource = "semantic_transfer_output",
+  source = "service",
+  reason = "semantic_transfer_output",
+  identity,
+  direction = TRANSFER_DIRECTION.OUTPUT,
+  intent = null,
+  meta = {},
 } = {}) {
   const encoded = encodeContentBase64({ content, encodedContent, bytes, contentEncoding });
   if (!encoded) throw new Error("semantic_transfer_content_required");
   return persistTransferArtifacts({
-    runtime, agentContext, attachmentService, userId, identity, direction, attachmentSource, generationSource, source, reason, intent, meta,
-    artifacts: [{ name: text(name) || "output.txt", mimeType: text(mimeType) || DEFAULT_TRANSFER_MIME_TYPE, contentBase64: encoded }],
+    runtime,
+    agentContext,
+    attachmentService,
+    userId,
+    identity,
+    direction,
+    attachmentSource,
+    generationSource,
+    source,
+    reason,
+    intent,
+    meta,
+    artifacts: [
+      {
+        name: text(name) || "output.txt",
+        mimeType: text(mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
+        contentBase64: encoded,
+      },
+    ],
   });
 }
 
@@ -176,7 +220,10 @@ export function createExistingAttachmentTransferEnvelope({
     role: "primary",
     name: text(attachmentMeta.name) || "attachment",
     mimeType: text(attachmentMeta.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
-    size: Number.isSafeInteger(attachmentMeta.size) && attachmentMeta.size >= 0 ? attachmentMeta.size : undefined,
+    size:
+      Number.isSafeInteger(attachmentMeta.size) && attachmentMeta.size >= 0
+        ? attachmentMeta.size
+        : undefined,
   });
   return createTransferEnvelope({
     ...ids,

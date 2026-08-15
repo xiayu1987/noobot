@@ -136,7 +136,7 @@
   "plugins": {
     "harness": {
       "enabled": true,
-      "mode": "off",
+      "mode": "on",
       "stepModels": {
         "planning": "gpt_5_6_sol",
         "guidance": "gpt_5_6_sol",

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
 
 export const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
@@ -41,7 +41,8 @@ export async function resolveDesktopBackendRuntimeWorkspaces({
     const workspacePath = pending.shift();
     if (included.has(workspacePath)) continue;
     const packageJson = packagesByPath.get(workspacePath);
-    if (!packageJson) throw new Error(`Desktop backend entry workspace is not declared: ${workspacePath}`);
+    if (!packageJson)
+      throw new Error(`Desktop backend entry workspace is not declared: ${workspacePath}`);
     included.add(workspacePath);
     const runtimeDependencies = {
       ...(packageJson.dependencies || {}),
@@ -56,4 +57,63 @@ export async function resolveDesktopBackendRuntimeWorkspaces({
   }
 
   return workspacePaths.filter((workspacePath) => included.has(workspacePath));
+}
+
+function assertRuntimeWorkspacePath(value) {
+  const workspacePath = String(value || "").trim();
+  const segments = workspacePath.split(/[\\/]+/).filter(Boolean);
+  if (
+    !workspacePath ||
+    path.isAbsolute(workspacePath) ||
+    segments.some((segment) => segment === "." || segment === "..")
+  ) {
+    throw new Error(
+      `Invalid prepared backend runtime workspace path: ${workspacePath || "<empty>"}`,
+    );
+  }
+  return workspacePath;
+}
+
+function installedPackageJsonPath(packageName) {
+  const name = String(packageName || "").trim();
+  const segments = name.split("/").filter(Boolean);
+  if (!name || segments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error(`Invalid prepared backend runtime package name: ${name || "<empty>"}`);
+  }
+  return path.join("node_modules", ...segments, "package.json");
+}
+
+export async function assertPreparedBackendRuntimeWorkspaces({ backendRoot, label } = {}) {
+  const runtimePackage = await readPackageJson(path.join(backendRoot, "package.json"));
+  if (!Array.isArray(runtimePackage.workspaces) || runtimePackage.workspaces.length === 0) {
+    throw new Error("Prepared backend runtime workspace manifest is required");
+  }
+  const requiredFiles = [];
+  for (const value of runtimePackage.workspaces) {
+    const workspacePath = assertRuntimeWorkspacePath(value);
+    const sourcePackagePath = path.join(workspacePath, "package.json");
+    let workspacePackage;
+    try {
+      workspacePackage = await readPackageJson(path.join(backendRoot, sourcePackagePath));
+    } catch (error) {
+      throw new Error(
+        `Missing required backend runtime workspace after ${label}: ${sourcePackagePath}`,
+        { cause: error },
+      );
+    }
+    requiredFiles.push(sourcePackagePath, installedPackageJsonPath(workspacePackage.name));
+  }
+  await Promise.all(
+    requiredFiles.map(async (relativePath) => {
+      try {
+        await stat(path.join(backendRoot, relativePath));
+      } catch (error) {
+        throw new Error(
+          `Missing required backend runtime workspace after ${label}: ${relativePath}`,
+          { cause: error },
+        );
+      }
+    }),
+  );
+  return Object.freeze([...requiredFiles]);
 }

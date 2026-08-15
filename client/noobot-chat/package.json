@@ -42,6 +42,7 @@
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
     "@noobot/session-protocol": "file:../../session-protocol",
+    "@noobot/security-assessment-protocol": "file:../../security-assessment-protocol",
     "@noobot/shared": "file:../../shared",
     "element-plus": "^2.14.4",
     "markdown-it": "^15.0.0",

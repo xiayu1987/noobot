@@ -155,6 +155,7 @@ describe("useChatStore sub session projection", () => {
       tool: "search",
       toolCallId: "call-search",
       result: "ok",
+      success: true,
       content: "",
     }));
     store.applyWorkflowRuntimeEvent({

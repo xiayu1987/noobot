@@ -87,8 +87,8 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   );
   const frontendThresholdsEnabled = ref(false);
   const summaryPolicy = ref({});
-  const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys());
-  const selectedPlugins = ref(loadSelectedPluginKeys());
+  const hasStoredSelectedPlugins = ref(hasStoredSelectedPluginKeys(userId.value));
+  const selectedPlugins = ref(loadSelectedPluginKeys(userId.value));
 
   const availableBotScenarios = computed(() => normalizeAvailableBotScenarios(
     currentScenarioConfig.value?.definitions,
@@ -120,7 +120,11 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   });
 
   function persistSelectedPlugins() {
-    persistSelectedPluginsState({ selectedPlugins, hasStoredSelectedPlugins });
+    persistSelectedPluginsState({
+      userId: userId.value,
+      selectedPlugins,
+      hasStoredSelectedPlugins,
+    });
   }
 
   function syncSelectedPluginsWithConfig() {
@@ -128,6 +132,7 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
       pluginOptions: availablePlugins.value,
       selectedPlugins,
       hasStoredSelectedPlugins,
+      userId: userId.value,
     });
   }
 
@@ -224,7 +229,12 @@ export function useAppShellPreferences({ scenarioConfig } = {}) {
   }
 
   function onUserIdUpdate(value = "") {
-    userId.value = String(value || "");
+    const nextUserId = String(value || "").trim();
+    if (nextUserId === userId.value) return;
+    userId.value = nextUserId;
+    hasStoredSelectedPlugins.value = hasStoredSelectedPluginKeys(nextUserId);
+    selectedPlugins.value = loadSelectedPluginKeys(nextUserId);
+    syncSelectedPluginsWithConfig();
   }
 
   function bindScenarioConfig(nextScenarioConfig) {

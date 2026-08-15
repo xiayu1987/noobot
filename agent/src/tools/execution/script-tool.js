@@ -16,11 +16,11 @@ import {
   TOOL_EXECUTION_VIEW,
   resolveToolExecutionPolicy,
 } from "../../config/index.js";
+import { resolveToolExecutionAuthorization } from "@noobot/execution-isolation-protocol";
 import {
-  WORKSPACE_SANDBOX_PATHS,
-  resolveToolExecutionAuthorization,
-} from "@noobot/execution-isolation-protocol";
-import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+  getBasePathFromAgentContext,
+  getRuntimeFromAgentContext,
+} from "../../context/agent-context-accessor.js";
 import { isSuperUserAgentContext } from "../../shared/utils/super-user.js";
 import { tTool } from "../core/tool-i18n.js";
 import {
@@ -30,7 +30,11 @@ import {
   SANDBOX_PROVIDER_NAME,
   SCRIPT_EXECUTION_MODE,
 } from "./script-tool/constants.js";
-import { confirmCriticalToolOperation, createRiskLevelSchema } from "./tool-risk.js";
+import {
+  classifyToolExecutionRisk,
+  SECURITY_EVIDENCE_SOURCE,
+} from "@noobot/security-assessment-protocol";
+import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import {
   run,
   runFileBacked,
@@ -51,12 +55,11 @@ export { buildExecutionWorkspaceMeta, buildScriptExecutionMeta };
 
 export function createScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const basePath =
-    agentContext?.context?.environment?.workspace?.basePath || runtime.basePath || "";
+  const basePath = getBasePathFromAgentContext(agentContext);
   const globalConfig = runtime.globalConfig || {};
   if (!basePath) return [];
 
-  const workspace = path.join(basePath, WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE);
+  const workspace = basePath;
   const userRoot = basePath;
   const userId = String(runtime?.userId || "").trim();
   const executionPolicy = resolveToolExecutionPolicy({
@@ -79,7 +82,7 @@ export function createScriptTool({ agentContext }) {
     workspaceRoot: globalConfig?.workspaceRoot || "",
     userId,
     globalConfig,
-    executionContext: { view: sandboxEnabled ? "sandbox" : "host" },
+    executionPolicy,
   });
   const description = buildScriptToolDescription({
     runtime,
@@ -128,9 +131,16 @@ export function createScriptTool({ agentContext }) {
         throw new Error("semantic_transfer_script_identity_required");
       }
 
-      await confirmCriticalToolOperation({
+      await confirmToolOperation({
         runtime,
-        riskLevel,
+        declaredRiskLevel: riskLevel,
+        serverEvidence: {
+          source: SECURITY_EVIDENCE_SOURCE.EXECUTION_VIEW,
+          riskLevel: classifyToolExecutionRisk({
+            toolName: EXECUTE_SCRIPT_TOOL_NAME,
+            executionView: executionPolicy.view,
+          }),
+        },
         toolName: EXECUTE_SCRIPT_TOOL_NAME,
         operation: "execute script",
         reason: "The command may make destructive or security-sensitive changes.",
@@ -194,7 +204,7 @@ export function createScriptTool({ agentContext }) {
         workspace,
         timeout,
         isolation: executionPolicy.isolation,
-        workdir: pathContext.opsWorkdir,
+        workdir: pathContext.currentDirectory,
         lockWaitTimeoutMs,
         abortSignal,
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,

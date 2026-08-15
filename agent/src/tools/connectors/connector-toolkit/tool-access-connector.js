@@ -5,17 +5,14 @@
  */
 import {
   filePath as path,
-  authorizePathRef,
-  buildToolPathScopeErrorDetails,
+  isPathWithinRoot,
   PATH_CAPABILITIES,
-  resolvePathPolicy,
-  resolvePathRef,
-  resolveToolInputPath,
 } from "@noobot/path-resolver";
 import { access, readFile, realpath, stat } from "node:fs/promises";
 import { BUILTIN_THRESHOLDS, normalizeConnectorType } from "../../../config/index.js";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
+import { resolveAuthorizedUserWorkspaceFilePath } from "../../core/check-tool-input.js";
 import { tToolDescription, tToolParamDescription } from "../../core/tool-schema-i18n.js";
 import { tTool } from "../../core/tool-i18n.js";
 import { collectNonSensitiveDefaults } from "./connector-fields.js";
@@ -32,7 +29,6 @@ import {
   canonicalAttachmentIdentityKey,
   mapAttachmentRecordsToMetas,
 } from "../../../artifacts/meta-ops.js";
-import { isSuperUserRuntime } from "../../../shared/utils/super-user.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -70,12 +66,6 @@ function normalizeExtensionList(input = [], fallback = []) {
     set.add(normalized.startsWith(".") ? normalized : `.${normalized}`);
   }
   return Array.from(set);
-}
-
-function isPathUnderRoot(rootPath = "", targetPath = "") {
-  const rel = path.relative(rootPath, targetPath);
-  if (!rel) return true;
-  return !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
 function resolveWorkspaceBasePath(runtime = {}) {
@@ -153,7 +143,6 @@ function resolveAccessConnectorFilePolicy({
     enabled: normalizeBoolean(commandFileConfig?.enabled ?? commandFileConfig?.enable, true),
     maxBytes: BUILTIN_THRESHOLDS.connectorCommandFile.maxBytes,
     allowedRoots: uniquePaths(configuredAllowedRoots),
-    relativeHostRoot: workspaceBasePath,
     allowedExtensions: normalizeExtensionList(defaultExtensionsByType, defaultExtensionsByType),
   };
 }
@@ -186,74 +175,30 @@ async function resolveCommandFromFile({
     agentContext,
     connectorType,
   });
-  const isSuperUser = isSuperUserRuntime(runtime);
   if (!policy.enabled) {
     throw recoverableToolError("command_file_path is disabled by config", {
       code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
       details: { field: "command_file_path", reason: "disabled" },
     });
   }
-  const resolvedToolPath = resolveToolInputPath({
-    inputPath: normalizedFilePath,
-    runtime,
+  const resolution = await resolveAuthorizedUserWorkspaceFilePath({
+    filePath: normalizedFilePath,
     agentContext,
-    workspacePath: policy.relativeHostRoot || resolveWorkspaceBasePath(runtime),
-    workspaceRoot: String(runtime?.globalConfig?.workspaceRoot || "").trim(),
-    allowHostAbsolute: true,
-    allowSandbox: false,
-    allowVirtualRelative: false,
-  });
-  if (!resolvedToolPath.ok) {
-    throw recoverableToolError(resolvedToolPath.hint || "command_file_path invalid", {
-      code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-      details: {
-        field: "command_file_path",
-        file_path: normalizedFilePath,
-        path_view: resolvedToolPath.view,
-        error: resolvedToolPath.error,
-      },
-    });
-  }
-  const resolvedInputPath = path.resolve(resolvedToolPath.resolvedPath);
-  const workspaceBasePath = resolveWorkspaceBasePath(runtime);
-  const pathRef = resolvePathRef({
-    input: resolvedInputPath,
-    workspaceRoot: workspaceBasePath,
-    owner: String(runtime?.userId || ""),
-  });
-  const authorization = authorizePathRef({
-    pathRef,
-    principal: {
-      userId: String(runtime?.userId || ""),
-      role: isSuperUser ? "super_admin" : "regular_user",
-      isSuperUser,
-    },
     capability: PATH_CAPABILITIES.DOCUMENT_INPUT,
-    pathPolicy: resolvePathPolicy(runtime?.globalConfig || {}),
-    executionPath: resolvedInputPath,
-    workspaceRoot: workspaceBasePath,
+    mustExist: true,
   });
-  if (!authorization.allowed) {
-    throw recoverableToolError("command_file_path out of allowed roots", {
-      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
-      details: {
-        ...buildToolPathScopeErrorDetails({
-          field: "command_file_path",
-          pathView: resolvedToolPath.view,
-        }),
-      },
-    });
-  }
+  const resolvedInputPath = resolution.executionPath;
   const inConfiguredRoots =
     !policy.allowedRoots.length ||
-    policy.allowedRoots.some((rootPath) => isPathUnderRoot(rootPath, resolvedInputPath));
+    policy.allowedRoots.some((rootPath) => isPathWithinRoot(rootPath, resolvedInputPath));
   if (!inConfiguredRoots) {
     throw recoverableToolError("command_file_path out of connector scope", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
-      details: buildToolPathScopeErrorDetails({
+      details: {
         field: "command_file_path",
-        pathView: pathRef.view,
-      }),
+        pathView: resolution.pathRef.view,
+        scope: "connector_allowed_roots",
+      },
     });
   }
 
@@ -270,29 +215,16 @@ async function resolveCommandFromFile({
     realpath(resolvedInputPath),
     stat(resolvedInputPath),
   ]);
-  const realAuthorization = authorizePathRef({
-    pathRef,
-    principal: {
-      userId: String(runtime?.userId || ""),
-      role: isSuperUser ? "super_admin" : "regular_user",
-      isSuperUser,
-    },
-    capability: PATH_CAPABILITIES.DOCUMENT_INPUT,
-    pathPolicy: resolvePathPolicy(runtime?.globalConfig || {}),
-    executionPath: resolvedRealPath,
-    workspaceRoot: workspaceBasePath,
-  });
   const realInConfiguredRoots =
     !policy.allowedRoots.length ||
-    policy.allowedRoots.some((rootPath) => isPathUnderRoot(rootPath, resolvedRealPath));
-  if (!realAuthorization.allowed || !realInConfiguredRoots) {
+    policy.allowedRoots.some((rootPath) => isPathWithinRoot(rootPath, resolvedRealPath));
+  if (!realInConfiguredRoots) {
     throw recoverableToolError("command_file_path out of allowed roots", {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
       details: {
-        ...buildToolPathScopeErrorDetails({
-          field: "command_file_path",
-          pathView: resolvedToolPath.view,
-        }),
+        field: "command_file_path",
+        pathView: resolution.pathRef.view,
+        scope: "connector_allowed_roots",
       },
     });
   }

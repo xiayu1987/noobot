@@ -4,17 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { parseAttachmentIdentity } from "@noobot/attachment-protocol";
-import { filePath as path, isResourceRef } from "@noobot/path-resolver";
+import { filePath as path, resolvePathRef } from "@noobot/path-resolver";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
 import { resolveCanonicalSourceAttachment } from "../../artifacts/index.js";
 import { getBasePathFromAgentContext } from "../../context/agent-context-accessor.js";
-import { assertAndResolveUserWorkspaceFilePath } from "./check-tool-input.js";
-import {
-  getRegisteredResource,
-  registerResolvedResource,
-  registerResource,
-} from "./resource-broker.js";
+import { resolveAuthorizedUserWorkspaceFilePath } from "./check-tool-input.js";
+import { registerResource } from "./resource-broker.js";
 
 export const attachmentIdentitySchema = z
   .object({
@@ -24,41 +20,19 @@ export const attachmentIdentitySchema = z
   })
   .strict();
 
-export const resourceRefSchema = z
-  .object({
-    version: z.number().int().optional(),
-    resourceId: z.string().min(1),
-    kind: z.literal("file"),
-    owner: z.string().min(1),
-    source: z.enum(["workspace", "attachment", "host"]),
-    logical: z
-      .object({ view: z.enum(["workspace", "attachment", "host"]), path: z.string().min(1) })
-      .strict(),
-    attachment: attachmentIdentitySchema.nullable(),
-    size: z.number().nullable(),
-    mimeType: z.string().min(1),
-    capabilities: z
-      .object({ read: z.boolean(), write: z.boolean(), scriptInput: z.boolean() })
-      .strict(),
-  })
-  .strict();
-
-export function createFileInputSchema({ filePathDescription, attachmentIdentityDescription } = {}) {
+export function createFileSourceSchema({ filePathDescription, attachmentIdentityDescription } = {}) {
   return z
-    .object({
-      source: z
-        .union([
-          z
-            .string()
-            .min(1)
-            .describe(filePathDescription || "Logical file path."),
-          attachmentIdentitySchema.describe(
-            attachmentIdentityDescription || "Complete attachment identity.",
-          ),
-        ])
-        .describe("Logical file path or complete attachment identity."),
-    })
-    .strict();
+    .union([
+      z.string().min(1).describe(filePathDescription || "Logical file path."),
+      attachmentIdentitySchema.describe(
+        attachmentIdentityDescription || "Complete attachment identity.",
+      ),
+    ])
+    .describe("Logical file path or complete attachment identity.");
+}
+
+export function createFileInputSchema(options = {}) {
+  return z.object({ source: createFileSourceSchema(options) }).strict();
 }
 
 export async function resolveFileInput({
@@ -68,49 +42,18 @@ export async function resolveFileInput({
   capability,
   mustExist = true,
 } = {}) {
-  const resourceInput = isResourceRef(source) ? source : null;
-  if (resourceInput) {
-    if (capability === "file.write" && resourceInput.capabilities?.write !== true)
-      throw new Error("resource is not writable");
-    if (
-      ["script.input", "native.input", "multimodal.input"].includes(capability) &&
-      resourceInput.capabilities?.scriptInput !== true
-    )
-      throw new Error("resource cannot be used as script input");
-  }
-  const registered = resourceInput
-    ? getRegisteredResource({ agentContext, resourceId: resourceInput.resourceId })
-    : null;
-  if (registered) {
-    const publicInput =
-      registered.ref.source === "attachment"
-        ? registered.ref.attachment
-        : registered.ref.logical.path;
-    return {
-      executionPath: registered.executionPath,
-      displayInput: publicInput,
-      resourceRef: registered.ref,
-      sourceAttachmentMeta:
-        registered.ref.source === "attachment" ? registered.ref.attachment : null,
-    };
-  }
   const attachmentIdentity =
     source && typeof source === "object" && !Array.isArray(source)
-      ? resourceInput
-        ? parseAttachmentIdentity(resourceInput.attachment)
-        : parseAttachmentIdentity(source)
+      ? parseAttachmentIdentity(source)
       : null;
   let sourceAttachmentMeta = null;
-  let authorizationInput = resourceInput
-    ? ["workspace", "host"].includes(resourceInput.source)
-      ? resourceInput.logical.path
-      : ""
-    : attachmentIdentity
-      ? ""
-      : String(source || "").trim();
+  let authorizationInput = attachmentIdentity ? "" : String(source || "").trim();
   if (!attachmentIdentity && !authorizationInput)
     throw new TypeError(`${fieldName} source is required`);
   if (attachmentIdentity) {
+    if (["file.write", "file.patch"].includes(capability)) {
+      throw new Error("attachment resources are read-only");
+    }
     sourceAttachmentMeta = await resolveCanonicalSourceAttachment({
       attachmentIdentity,
       agentContext,
@@ -123,41 +66,41 @@ export async function resolveFileInput({
     authorizationInput = path.relative(getBasePathFromAgentContext(agentContext), executionPath);
   }
 
-  const executionPath = await assertAndResolveUserWorkspaceFilePath({
+  const resolution = await resolveAuthorizedUserWorkspaceFilePath({
     filePath: authorizationInput,
     agentContext,
     fieldName,
     mustExist,
     capability,
   });
+  const executionPath = resolution.executionPath;
   if (!mustExist && !(await stat(executionPath).catch(() => null))) {
     return {
       executionPath,
-      displayInput: resourceInput
-        ? resourceInput.source === "attachment"
-          ? resourceInput.attachment
-          : resourceInput.logical.path
-        : attachmentIdentity || String(source || "").trim(),
-      resourceRef: resourceInput || null,
+      displayInput: attachmentIdentity || String(source || "").trim(),
+      resourceRef: null,
+      pathRef: resolution.pathRef,
       sourceAttachmentMeta,
     };
   }
-  const resourceRef = resourceInput
-    ? registerResolvedResource({ agentContext, resourceRef: resourceInput, executionPath })
-    : await registerResource({
-        agentContext,
-        executionPath,
-        source: sourceAttachmentMeta ? "attachment" : "workspace",
-        attachment: sourceAttachmentMeta ? attachmentIdentity : null,
-        logicalPath: sourceAttachmentMeta?.name || path.basename(executionPath),
-        capabilities: { read: true, write: false, scriptInput: true },
-      });
+  const resourceRef = await registerResource({
+    agentContext,
+    executionPath,
+    source: sourceAttachmentMeta ? "attachment" : "workspace",
+    attachment: sourceAttachmentMeta ? attachmentIdentity : null,
+    logicalPath: sourceAttachmentMeta?.name || path.basename(executionPath),
+    logicalPathRef: sourceAttachmentMeta ? null : resolution.pathRef,
+    capabilities: { read: true, write: false, scriptInput: true },
+  });
   return {
     executionPath,
     displayInput: sourceAttachmentMeta
       ? attachmentIdentity
       : String(resourceRef.logical?.path || authorizationInput || "").trim(),
     resourceRef,
+    pathRef: sourceAttachmentMeta
+      ? resolvePathRef({ input: { view: "attachment", identity: attachmentIdentity } })
+      : resourceRef.logical,
     sourceAttachmentMeta,
   };
 }

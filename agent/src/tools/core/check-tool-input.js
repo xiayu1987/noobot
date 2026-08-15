@@ -11,9 +11,10 @@ import {
   normalizePathForPlatform,
   resolvePathPolicy,
   resolvePathRef,
-  resolveSandboxPath,
   resolveToolInputPath,
   buildToolPathScopeErrorDetails,
+  isToolPathScopeError,
+  isPathWithinRoot,
 } from "@noobot/path-resolver";
 import {
   getBasePathFromAgentContext,
@@ -51,12 +52,6 @@ function isUuid(value = "") {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     String(value || "").trim(),
   );
-}
-
-function isWithinBasePath(basePath = "", targetPath = "") {
-  const rel = path.relative(basePath, targetPath);
-  if (!rel) return true;
-  return !rel.startsWith("..") && !path.isAbsolute(rel);
 }
 
 async function resolveExistingParent(targetPath = "") {
@@ -100,19 +95,15 @@ export function canUseHostPathsForWorkspaceTools(agentContext = {}) {
   );
 }
 
-export function projectResolvedFilePath({ resolvedPath = "", agentContext = {} } = {}) {
-  const runtime = getRuntimeFromAgentContext(agentContext);
-  const isolation = resolveRuntimeIsolation(runtime);
-  if (isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX) {
-    return (
-      resolveSandboxPath({
-        hostPath: resolvedPath,
-        runtime,
-        agentContext,
-      }) || ""
-    );
+export function projectToolPathRef(pathRef = {}) {
+  const resolved = resolvePathRef({ input: pathRef });
+  if (resolved.view === "attachment") {
+    return Object.freeze({ view: resolved.view, identity: resolved.identity });
   }
-  return path.resolve(resolvedPath);
+  return Object.freeze({
+    view: resolved.view,
+    path: resolved.view === "workspace" && !resolved.path ? "." : resolved.path,
+  });
 }
 
 function resolveSessionContext(agentContext = {}) {
@@ -254,12 +245,13 @@ export async function assertValidParentDialogProcessId({
   };
 }
 
-export async function assertAndResolveUserWorkspaceFilePath({
+export async function resolveAuthorizedUserWorkspaceFilePath({
   filePath = "",
   agentContext = {},
   fieldName = "filePath",
   mustExist = false,
   capability = PATH_CAPABILITIES.FILE_READ,
+  requiredExecutionRoot = "",
 }) {
   const normalizedPath = String(filePath || "").trim();
   if (!normalizedPath) {
@@ -288,11 +280,9 @@ export async function assertAndResolveUserWorkspaceFilePath({
     throw recoverableToolError(
       resolvedToolPath.hint || `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
       {
-        code:
-          resolvedToolPath.error === "host_absolute_not_allowed" ||
-          resolvedToolPath.error === "sandbox_path_not_allowed"
-            ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
-            : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+        code: isToolPathScopeError(resolvedToolPath.error)
+          ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
+          : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
         details: {
           field: fieldName,
           filePath: normalizedPath,
@@ -300,17 +290,43 @@ export async function assertAndResolveUserWorkspaceFilePath({
           error: resolvedToolPath.error,
           hint: resolvedToolPath.hint,
           suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
-          suggestedSandboxPath: resolvedToolPath.candidateSandboxPath || "",
+          ...(resolvedToolPath.candidateSandboxPath
+            ? { suggestedSandboxPath: resolvedToolPath.candidateSandboxPath }
+            : {}),
         },
       },
     );
   }
   const resolvedTargetPath = resolvedToolPath.resolvedPath;
-  const logicalPathRef = resolvePathRef({
-    input: resolvedTargetPath,
-    workspaceRoot: workspacePath,
-    owner: String(runtime?.userId || ""),
-  });
+  const normalizedRequiredExecutionRoot = String(requiredExecutionRoot || "").trim()
+    ? path.resolve(requiredExecutionRoot)
+    : "";
+  if (
+    normalizedRequiredExecutionRoot &&
+    !isPathWithinRoot(normalizedRequiredExecutionRoot, resolvedTargetPath)
+  ) {
+    throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: fieldName,
+        scope: "required_execution_root",
+        reason: "path_outside_required_root",
+      },
+    });
+  }
+  const logicalPathRef = resolvedToolPath.mountTarget
+    ? resolvePathRef({
+        input: {
+          view: "workspace",
+          path: resolvedToolPath.logicalPath,
+          owner: String(runtime?.userId || ""),
+        },
+      })
+    : resolvePathRef({
+        input: resolvedTargetPath,
+        workspaceRoot: workspacePath,
+        owner: String(runtime?.userId || ""),
+      });
   if (isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX && logicalPathRef.view === "host") {
     throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "pathOutOfScope")}`, {
       code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
@@ -319,6 +335,20 @@ export async function assertAndResolveUserWorkspaceFilePath({
         filePath: normalizedPath,
         pathView: logicalPathRef.view,
         error: "host_path_unavailable_in_sandbox",
+      },
+    });
+  }
+  if (
+    resolvedToolPath.mountReadOnly === true &&
+    [PATH_CAPABILITIES.FILE_WRITE, PATH_CAPABILITIES.FILE_PATCH].includes(capability)
+  ) {
+    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "pathOutOfScope")}`, {
+      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+      details: {
+        field: fieldName,
+        filePath: normalizedPath,
+        pathView: logicalPathRef.view,
+        reason: "sandbox_mount_read_only",
       },
     });
   }
@@ -335,6 +365,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
     pathPolicy: configuredPathPolicy,
     executionPath: resolvedTargetPath,
     workspaceRoot: workspacePath,
+    executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
   });
 
   if (!authorization.allowed) {
@@ -347,20 +378,6 @@ export async function assertAndResolveUserWorkspaceFilePath({
         }),
       },
     });
-  }
-
-  if (mustExist) {
-    try {
-      await access(resolvedTargetPath);
-    } catch {
-      throw recoverableToolError(
-        `${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`,
-        {
-          code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
-          details: { field: fieldName, filePath: normalizedPath },
-        },
-      );
-    }
   }
 
   const existingInfo = await lstat(resolvedTargetPath).catch(() => null);
@@ -376,8 +393,37 @@ export async function assertAndResolveUserWorkspaceFilePath({
       },
     });
   }
+  if (mustExist) {
+    try {
+      await access(resolvedTargetPath);
+    } catch {
+      throw recoverableToolError(
+        `${tCheckInput(agentContext, "fileNotFound")}: ${normalizedPath}`,
+        {
+          code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
+          details: { field: fieldName, filePath: normalizedPath },
+        },
+      );
+    }
+  }
   if (existingInfo && resolutionPolicy.requireRealPathForExistingTargets !== false) {
     const realTarget = await realpath(resolvedTargetPath);
+    if (
+      normalizedRequiredExecutionRoot &&
+      !isPathWithinRoot(
+        await realpath(normalizedRequiredExecutionRoot).catch(() => normalizedRequiredExecutionRoot),
+        realTarget,
+      )
+    ) {
+      throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
+        code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
+        details: {
+          field: fieldName,
+          scope: "required_execution_root",
+          reason: "real_path_outside_required_root",
+        },
+      });
+    }
     const realDecision = authorizePathRef({
       pathRef: logicalPathRef,
       principal,
@@ -385,6 +431,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
       pathPolicy: configuredPathPolicy,
       executionPath: realTarget,
       workspaceRoot: workspacePath,
+      executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
     });
     if (!realDecision.allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
@@ -412,6 +459,7 @@ export async function assertAndResolveUserWorkspaceFilePath({
       pathPolicy: configuredPathPolicy,
       executionPath: projectedTarget,
       workspaceRoot: workspacePath,
+      executionRoots: [resolvedToolPath.executionRoot].filter(Boolean),
     });
     if (!parentDecision.allowed)
       throw recoverableToolError(tCheckInput(agentContext, "pathOutOfScope"), {
@@ -425,5 +473,9 @@ export async function assertAndResolveUserWorkspaceFilePath({
       });
   }
 
-  return resolvedTargetPath;
+  return Object.freeze({
+    executionPath: resolvedTargetPath,
+    pathRef: logicalPathRef,
+    toolPath: Object.freeze({ ...resolvedToolPath }),
+  });
 }

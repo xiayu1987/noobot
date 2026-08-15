@@ -70,14 +70,14 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       preferRelative:
         "General file paths use the workspace logical view; relative paths are always based on the current user's workspace.",
       sandboxWorkspaceView:
-        "Sandbox mode is active. Workspace tools share the sandbox workspace view; use only the logical paths and mount targets listed in the system runtime environment.",
-      hostWorkspaceView:
-        "Host mode is active. Workspace tools use the service workspace view.",
+        "Sandbox mode is active. Workspace logical paths and extra mount targets listed in the system runtime environment are available to every file-related tool. Mount paths are governed uniformly by their global read-only setting and path policy.",
+      hostWorkspaceView: "Host mode is active. Workspace tools use the service workspace view.",
       taskLocalView:
         "execute_native_script task-local paths last for one call, and output names are not paths. Across tools, pass only the complete attachment identity; never construct workspace or host paths.",
       superUserHost:
         "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
-      regularHost: "Regular users cannot use host absolute paths.",
+      regularHost:
+        "Regular users cannot access paths that remain in the host view after normalization; absolute inputs inside their own workspace normalize to the workspace view.",
       sandboxHostAccess:
         "Sandbox mode does not expose host paths or add mounts for super administrators; only fixed restricted-host tools may use authorized host capabilities.",
       patchRoot:

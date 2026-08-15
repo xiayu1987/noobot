@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 export const SELECTED_PLUGINS_STORAGE_KEY = "noobot_selected_plugins";
-export const DEFAULT_ON_PLUGINS_STORAGE_KEY = "noobot_default_on_plugins";
+
+export function selectedPluginsStorageKey(userId = "") {
+  const owner = String(userId || "").trim();
+  return owner ? `${SELECTED_PLUGINS_STORAGE_KEY}:${encodeURIComponent(owner)}` : "";
+}
 
 export function safeParseStringArray(rawValue = "") {
   try {
@@ -17,12 +21,14 @@ export function safeParseStringArray(rawValue = "") {
   }
 }
 
-export function hasStoredSelectedPluginKeys() {
-  return localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY) !== null;
+export function hasStoredSelectedPluginKeys(userId = "") {
+  const storageKey = selectedPluginsStorageKey(userId);
+  return Boolean(storageKey) && localStorage.getItem(storageKey) !== null;
 }
 
-export function loadSelectedPluginKeys() {
-  return safeParseStringArray(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY));
+export function loadSelectedPluginKeys(userId = "") {
+  const storageKey = selectedPluginsStorageKey(userId);
+  return storageKey ? safeParseStringArray(localStorage.getItem(storageKey)) : [];
 }
 
 export function normalizeAvailablePlugins(pluginDefinitions = {}) {
@@ -37,46 +43,31 @@ export function normalizeAvailablePlugins(pluginDefinitions = {}) {
         label: String(source?.label || source?.name || pluginKey || "").trim(),
         description: String(source?.description || "").trim(),
         enabled: source?.enabled === true,
-        mode:
+        selectedByDefault:
           String(source?.mode || "")
             .trim()
-            .toLowerCase() === "on"
-            ? "on"
-            : "off",
+            .toLowerCase() === "on",
       };
     })
     .filter((pluginItem) => Boolean(pluginItem.key) && pluginItem.enabled === true);
 }
 
-export function getDefaultOnPluginKeys(pluginOptions = []) {
-  return (Array.isArray(pluginOptions) ? pluginOptions : [])
-    .filter(
-      (pluginItem) =>
-        pluginItem?.enabled === true && String(pluginItem?.mode || "").toLowerCase() === "on",
-    )
-    .map((pluginItem) => String(pluginItem?.key || "").trim())
-    .filter(Boolean);
-}
-
-export function persistDefaultOnPluginKeys(pluginKeys = []) {
-  const normalizedPluginKeys = (Array.isArray(pluginKeys) ? pluginKeys : [])
-    .map((pluginKey) => String(pluginKey || "").trim())
-    .filter(Boolean);
-  localStorage.setItem(
-    DEFAULT_ON_PLUGINS_STORAGE_KEY,
-    JSON.stringify(Array.from(new Set(normalizedPluginKeys))),
-  );
-}
-
-export function persistSelectedPlugins({ selectedPlugins, hasStoredSelectedPlugins } = {}) {
+export function persistSelectedPlugins({
+  userId = "",
+  selectedPlugins,
+  hasStoredSelectedPlugins,
+} = {}) {
+  const storageKey = selectedPluginsStorageKey(userId);
+  if (!storageKey) return;
   if (hasStoredSelectedPlugins) hasStoredSelectedPlugins.value = true;
-  localStorage.setItem(SELECTED_PLUGINS_STORAGE_KEY, JSON.stringify(selectedPlugins?.value));
+  localStorage.setItem(storageKey, JSON.stringify(selectedPlugins?.value));
 }
 
 export function syncSelectedPluginsWithConfig({
   pluginOptions = [],
   selectedPlugins,
   hasStoredSelectedPlugins,
+  userId = "",
 } = {}) {
   const normalizedPluginOptions = Array.isArray(pluginOptions) ? pluginOptions : [];
   if (!normalizedPluginOptions.length) {
@@ -86,13 +77,11 @@ export function syncSelectedPluginsWithConfig({
   const enabledPluginKeySet = new Set(
     normalizedPluginOptions.filter((item) => item.enabled === true).map((item) => item.key),
   );
-  const defaultOnPluginKeys = getDefaultOnPluginKeys(normalizedPluginOptions);
-  const previousDefaultOnPluginKeySet = new Set(
-    safeParseStringArray(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)),
-  );
   if (!hasStoredSelectedPlugins?.value) {
-    selectedPlugins.value = defaultOnPluginKeys;
-    persistDefaultOnPluginKeys(defaultOnPluginKeys);
+    selectedPlugins.value = normalizedPluginOptions
+      .filter((pluginItem) => pluginItem.enabled === true && pluginItem.selectedByDefault === true)
+      .map((pluginItem) => pluginItem.key);
+    persistSelectedPlugins({ userId, selectedPlugins, hasStoredSelectedPlugins });
     return;
   }
   const selectedPluginKeySet = new Set(
@@ -100,12 +89,6 @@ export function syncSelectedPluginsWithConfig({
       (pluginKey) => availablePluginKeySet.has(pluginKey) && enabledPluginKeySet.has(pluginKey),
     ),
   );
-  for (const pluginKey of defaultOnPluginKeys) {
-    if (!previousDefaultOnPluginKeySet.has(pluginKey)) {
-      selectedPluginKeySet.add(pluginKey);
-    }
-  }
   selectedPlugins.value = Array.from(selectedPluginKeySet);
-  persistDefaultOnPluginKeys(defaultOnPluginKeys);
-  persistSelectedPlugins({ selectedPlugins, hasStoredSelectedPlugins });
+  persistSelectedPlugins({ userId, selectedPlugins, hasStoredSelectedPlugins });
 }

@@ -57,6 +57,7 @@
     "@noobot/context-protocol": "file:../context-protocol",
     "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
+    "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",
     "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/model-runtime": "file:../model-runtime",
     "@noobot/hook-protocol": "file:../hook-protocol",

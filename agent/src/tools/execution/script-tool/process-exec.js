@@ -16,6 +16,15 @@ const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultIn
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 
+function resolveProcessCommand(command) {
+  if (command && typeof command === "object" && !Array.isArray(command)) {
+    const executable = String(command.command || "").trim();
+    if (!executable) throw new TypeError("process command executable is required");
+    return { executable, args: Array.isArray(command.args) ? command.args.map(String) : [], shell: false };
+  }
+  return { executable: String(command || ""), args: [], shell: true };
+}
+
 function appendCapture(chunks, chunk, state, maxBytes) {
   if (state.bytes >= maxBytes) return;
   const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
@@ -35,9 +44,10 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return new Promise((resolve) => {
-    const child = spawn(cmd, {
+    const processCommand = resolveProcessCommand(cmd);
+    const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
-      shell: true,
+      shell: processCommand.shell,
       detached: process.platform !== "win32",
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -176,9 +186,10 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return await new Promise((resolve) => {
-    const child = spawn(cmd, {
+    const processCommand = resolveProcessCommand(cmd);
+    const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
-      shell: true,
+      shell: processCommand.shell,
       detached: process.platform !== "win32",
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],

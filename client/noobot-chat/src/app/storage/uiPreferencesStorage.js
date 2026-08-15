@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  SECURITY_RISK_LEVEL,
+  normalizeSecurityRiskLevel,
+} from "@noobot/security-assessment-protocol";
+
 export const UI_PREFERENCE_STORAGE_KEYS = Object.freeze({
   userId: "noobot_user_id",
   allowUserInteraction: "noobot_allow_user_interaction",
@@ -126,12 +131,12 @@ export function normalizePluginModelConfig(value = {}) {
 
 export function applyFrontendPluginModelConfigDefaults(value = {}) {
   const normalized = normalizePluginModelConfig(value);
-  const harness = normalized?.harness && typeof normalized.harness === "object"
-    ? normalized.harness
-    : {};
-  const capabilityProfile = harness?.capabilityProfile && typeof harness.capabilityProfile === "object"
-    ? harness.capabilityProfile
-    : {};
+  const harness =
+    normalized?.harness && typeof normalized.harness === "object" ? normalized.harness : {};
+  const capabilityProfile =
+    harness?.capabilityProfile && typeof harness.capabilityProfile === "object"
+      ? harness.capabilityProfile
+      : {};
   return {
     ...normalized,
     harness: {
@@ -184,8 +189,7 @@ export function loadBooleanPreference(key, defaultValue = true) {
 }
 
 export function normalizeSafeConfirmLevel(value) {
-  const normalized = normalizePreferenceString(value).toLowerCase();
-  return ["low", "medium", "high", "critical"].includes(normalized) ? normalized : "low";
+  return normalizeSecurityRiskLevel(value, SECURITY_RISK_LEVEL.LOW);
 }
 
 export function persistBooleanPreference(key, value) {
@@ -193,13 +197,20 @@ export function persistBooleanPreference(key, value) {
 }
 
 export function loadUiPreferences() {
-  const botScenario = normalizePreferenceString(readStorageValue(UI_PREFERENCE_STORAGE_KEYS.botScenario, ""));
+  const botScenario = normalizePreferenceString(
+    readStorageValue(UI_PREFERENCE_STORAGE_KEYS.botScenario, ""),
+  );
   const selectedModelByScenario = loadSelectedModelByScenarioPreference();
   return {
     userId: readStorageValue(UI_PREFERENCE_STORAGE_KEYS.userId, "user-001") || "user-001",
-    allowUserInteraction: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction, true),
+    allowUserInteraction: loadBooleanPreference(
+      UI_PREFERENCE_STORAGE_KEYS.allowUserInteraction,
+      true,
+    ),
     safeConfirm: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.safeConfirm, true),
-    safeConfirmLevel: normalizeSafeConfirmLevel(readStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, "low")),
+    safeConfirmLevel: normalizeSafeConfirmLevel(
+      readStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, SECURITY_RISK_LEVEL.LOW),
+    ),
     sanitizeOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.sanitizeOutput, true),
     streamOutput: loadBooleanPreference(UI_PREFERENCE_STORAGE_KEYS.streamOutput, false),
     botScenario,
@@ -211,7 +222,10 @@ export function loadUiPreferences() {
 }
 
 export function persistBotScenarioPreference(value = "") {
-  return writeStorageValue(UI_PREFERENCE_STORAGE_KEYS.botScenario, normalizePreferenceString(value));
+  return writeStorageValue(
+    UI_PREFERENCE_STORAGE_KEYS.botScenario,
+    normalizePreferenceString(value),
+  );
 }
 
 export function loadSelectedModelByScenarioPreference() {
@@ -272,8 +286,12 @@ export function readMemoryModelPreference(scenarioKey = "") {
 
 export function persistMemoryModelPreference(value = "", scenarioKey = "") {
   const memoryModelByScenario = loadMemoryModelByScenarioPreference();
-  memoryModelByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = normalizePreferenceString(value);
-  return writeJsonStorageValue(UI_PREFERENCE_STORAGE_KEYS.memoryModelByScenario, memoryModelByScenario);
+  memoryModelByScenario[normalizeScenarioPreferenceKey(scenarioKey)] =
+    normalizePreferenceString(value);
+  return writeJsonStorageValue(
+    UI_PREFERENCE_STORAGE_KEYS.memoryModelByScenario,
+    memoryModelByScenario,
+  );
 }
 
 export function persistPluginModelConfigPreference(value = {}) {
@@ -312,7 +330,8 @@ export function readPluginModelConfigPreference(scenarioKey = "") {
 
 export function persistPluginModelConfigPreferenceByScenario(value = {}, scenarioKey = "") {
   const pluginModelConfigByScenario = loadPluginModelConfigByScenarioPreference();
-  pluginModelConfigByScenario[normalizeScenarioPreferenceKey(scenarioKey)] = normalizePluginModelConfig(value);
+  pluginModelConfigByScenario[normalizeScenarioPreferenceKey(scenarioKey)] =
+    normalizePluginModelConfig(value);
   return writeJsonStorageValue(
     UI_PREFERENCE_STORAGE_KEYS.pluginModelConfigByScenario,
     pluginModelConfigByScenario,
@@ -330,14 +349,21 @@ export function normalizeAvailableBotScenarios(definitions = {}) {
       description: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.description),
       model: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.model),
       defaultModel: scenarioDefinitions?.[scenarioKey]?.defaultModel,
-      defaultModelAlias: normalizePreferenceString(scenarioDefinitions?.[scenarioKey]?.defaultModelAlias),
+      defaultModelAlias: normalizePreferenceString(
+        scenarioDefinitions?.[scenarioKey]?.defaultModelAlias,
+      ),
       enabledModels: Array.isArray(scenarioDefinitions?.[scenarioKey]?.enabledModels)
         ? scenarioDefinitions[scenarioKey].enabledModels
         : [],
     }));
 }
 
-export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selectedModel = "", pluginModelConfig = {}, memoryModel = "") {
+export function normalizeModelOptionsFromEnabledModels(
+  enabledModels = [],
+  selectedModel = "",
+  pluginModelConfig = {},
+  memoryModel = "",
+) {
   const optionMap = new Map();
   const addOption = (rawOption = {}) => {
     const value = normalizePreferenceString(
@@ -346,19 +372,31 @@ export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selec
         : rawOption?.value || rawOption?.alias || rawOption?.key || rawOption?.model || "",
     );
     if (!value || optionMap.has(value)) return;
-    const label = normalizePreferenceString(
-      typeof rawOption === "string"
-        ? rawOption
-        : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
-    ) || value;
+    const label =
+      normalizePreferenceString(
+        typeof rawOption === "string"
+          ? rawOption
+          : rawOption?.label || rawOption?.name || rawOption?.alias || rawOption?.model || value,
+      ) || value;
     optionMap.set(value, {
       value,
       label,
-      alias: normalizePreferenceString(typeof rawOption === "string" ? value : rawOption?.alias || value) || value,
-      key: normalizePreferenceString(typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value) || value,
-      name: normalizePreferenceString(typeof rawOption === "string" ? label : rawOption?.name || label) || label,
+      alias:
+        normalizePreferenceString(
+          typeof rawOption === "string" ? value : rawOption?.alias || value,
+        ) || value,
+      key:
+        normalizePreferenceString(
+          typeof rawOption === "string" ? value : rawOption?.key || rawOption?.alias || value,
+        ) || value,
+      name:
+        normalizePreferenceString(
+          typeof rawOption === "string" ? label : rawOption?.name || label,
+        ) || label,
       model: normalizePreferenceString(typeof rawOption === "string" ? "" : rawOption?.model || ""),
-      description: normalizePreferenceString(typeof rawOption === "string" ? "" : rawOption?.description || ""),
+      description: normalizePreferenceString(
+        typeof rawOption === "string" ? "" : rawOption?.description || "",
+      ),
     });
   };
   (Array.isArray(enabledModels) ? enabledModels : []).forEach(addOption);
@@ -367,7 +405,11 @@ export function normalizeModelOptionsFromEnabledModels(enabledModels = [], selec
   return Array.from(optionMap.values());
 }
 
-export function normalizeModelOptionsFromScenarios(availableBotScenarios = [], selectedModel = "", pluginModelConfig = {}) {
+export function normalizeModelOptionsFromScenarios(
+  availableBotScenarios = [],
+  selectedModel = "",
+  pluginModelConfig = {},
+) {
   const scenarioModels = (Array.isArray(availableBotScenarios) ? availableBotScenarios : [])
     .map((scenarioItem) => scenarioItem?.model)
     .filter(Boolean);
@@ -406,7 +448,9 @@ export function resolveBotScenarioWithConfig({
   }
 
   return {
-    value: (defaultScenario && availableScenarioKeySet.has(defaultScenario) ? defaultScenario : "") || "",
+    value:
+      (defaultScenario && availableScenarioKeySet.has(defaultScenario) ? defaultScenario : "") ||
+      "",
     persist: true,
   };
 }
@@ -455,7 +499,8 @@ export function updateSafeConfirmPreference({ preferenceRef, value } = {}) {
 
 export function updateSafeConfirmLevelPreference({ preferenceRef, value } = {}) {
   const nextValue = normalizeSafeConfirmLevel(value);
-  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) preferenceRef.value = nextValue;
+  if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef)
+    preferenceRef.value = nextValue;
   writeStorageValue(UI_PREFERENCE_STORAGE_KEYS.safeConfirmLevel, nextValue);
   return nextValue;
 }
@@ -483,7 +528,8 @@ export function updateBotScenarioPreference({
 } = {}) {
   const nextScenario = normalizePreferenceString(value);
   const availableScenarioKeySet = getAvailableScenarioKeySet(availableBotScenarios);
-  const resolvedScenario = nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
+  const resolvedScenario =
+    nextScenario && availableScenarioKeySet.has(nextScenario) ? nextScenario : "";
   if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
     preferenceRef.value = resolvedScenario;
   }
@@ -491,7 +537,11 @@ export function updateBotScenarioPreference({
   return resolvedScenario;
 }
 
-export function updateSelectedModelPreference({ preferenceRef, value = "", scenarioKey = "" } = {}) {
+export function updateSelectedModelPreference({
+  preferenceRef,
+  value = "",
+  scenarioKey = "",
+} = {}) {
   const nextModel = normalizePreferenceString(value);
   if (preferenceRef && typeof preferenceRef === "object" && "value" in preferenceRef) {
     preferenceRef.value = nextModel;
