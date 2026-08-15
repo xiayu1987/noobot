@@ -1,6 +1,6 @@
 {
   "name": "@noobot/plugin-protocol",
-  "version": "4.1.7",
+  "version": "4.1.8",
   "private": true,
   "type": "module",
   "description": "Authoritative Noobot plugin manifest and activation protocol",
