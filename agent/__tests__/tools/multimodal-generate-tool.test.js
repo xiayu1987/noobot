@@ -162,6 +162,7 @@ test("multimodal_generate: model configuration is the only image API type author
 
 test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {
   const requestedUrls = [];
+  const requestedHeaders = [];
   const port = 12345;
 
   const runtime = {
@@ -190,6 +191,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
     sharedTools: {
       async fetch(url, init = {}) {
         requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
+        requestedHeaders.push({ ...init.headers });
         if (String(url || "").endsWith("/v1/images/generations")) {
           return {
             ok: true,
@@ -241,6 +243,15 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
     `POST http://127.0.0.1:${port}/v1/images/generations`,
     `GET http://127.0.0.1:${port}/v1/tasks/task-1`,
   ]);
+  assert.equal(requestedHeaders.length, 2);
+  for (const headers of requestedHeaders) {
+    assert.equal(headers.Authorization, "Bearer test-key");
+    assert.equal(headers["X-Model-Name"], "gpt-image-2");
+    assert.equal(headers["X-Plugin-Flow"], "agent.multimodal_generate");
+    assert.equal(headers["X-Plugin-Purpose"], "multimodal_generate");
+    assert.equal(headers["X-Plugin-Domain"], "tool");
+    assert.equal(headers["X-Plugin-Session-Id"], "multimodal-test-session");
+  }
 });
 
 test("multimodal_generate: images_async follows official aicodewith root base url example", async () => {

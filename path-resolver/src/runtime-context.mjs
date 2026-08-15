@@ -6,9 +6,9 @@
 import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
 import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.mjs";
 import {
-  EXECUTION_ISOLATION_MODE,
   WORKSPACE_SANDBOX_PATHS,
-  resolveExecutionIsolation,
+  TOOL_EXECUTION_VIEW,
+  assertToolExecutionPolicy,
   resolveWorkspaceSandboxLayout,
 } from "@noobot/execution-isolation-protocol";
 
@@ -59,7 +59,7 @@ export function resolveRuntimePathContext({
   workspaceRoot = "",
   userId = "",
   globalConfig = {},
-  executionContext = {},
+  executionPolicy,
 } = {}) {
   const resolvedUserId = resolveRuntimeUserId({ runtime, agentContext, userId });
   const hostRootDirectory = resolveRuntimeHostRoot({
@@ -79,11 +79,9 @@ export function resolveRuntimePathContext({
   const resolvedGlobalConfig = Object.keys(globalConfig).length
     ? globalConfig
     : objectOrEmpty(runtime?.globalConfig);
-  const isolation = resolveExecutionIsolation(resolvedGlobalConfig);
-  const executionView = String(executionContext?.view || isolation.mode)
-    .trim()
-    .toLowerCase();
-  const sandboxEnabled = executionView === EXECUTION_ISOLATION_MODE.SANDBOX;
+  const resolvedExecutionPolicy = assertToolExecutionPolicy(executionPolicy);
+  const isolation = resolvedExecutionPolicy.isolation;
+  const sandboxEnabled = resolvedExecutionPolicy.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
   const sandboxProvider = sandboxEnabled ? isolation.sandbox.provider : "";
   const mappingRuntime = {
     ...runtime,
@@ -99,7 +97,7 @@ export function resolveRuntimePathContext({
   );
   const hostDirectories = {
     view: "host",
-    currentDirectory: hostOpsWorkdir,
+    currentDirectory: hostRootDirectory,
     rootDirectory: hostRootDirectory,
     opsWorkdir: hostOpsWorkdir,
     relativePathBase: "rootDirectory",
@@ -139,7 +137,7 @@ export function resolveRuntimePathContext({
   const allowedRoots = uniqueNormalizedPaths([sandboxRoot, ...sandboxMountTargets]);
   const directories = {
     view: "sandbox",
-    currentDirectory: opsWorkdir,
+    currentDirectory: userRoot,
     rootDirectory: userRoot,
     opsWorkdir,
     relativePathBase: "rootDirectory",
@@ -153,7 +151,7 @@ export function resolveRuntimePathContext({
     sandboxProvider,
     sandboxScope,
     isDockerGlobal,
-    currentDirectory: opsWorkdir,
+    currentDirectory: userRoot,
     rootDirectory: userRoot,
     opsWorkdir,
     sandboxRoot,
@@ -172,7 +170,7 @@ export function resolveAgentPathContext({
   workspaceRoot = "",
   userId = "",
   globalConfig = {},
-  executionContext = {},
+  executionPolicy,
 } = {}) {
   const baseContext = resolveRuntimePathContext({
     runtime,
@@ -182,7 +180,7 @@ export function resolveAgentPathContext({
     workspaceRoot,
     userId,
     globalConfig,
-    executionContext,
+    executionPolicy,
   });
   const staticDirectories = resolveStaticPathDirectories({ runtime, agentContext });
   if (!Object.keys(staticDirectories).length) return baseContext;

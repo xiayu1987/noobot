@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import {
   TOOL_EXECUTION_CLASS,
@@ -22,6 +22,7 @@ export function createWorkspaceIoExecutor({ executionPolicy } = {}) {
   return Object.freeze({
     view: policy.view,
     stat: (filePath) => stat(filePath),
+    readDirectory: (directoryPath) => readdir(directoryPath, { withFileTypes: true }),
     readText: (filePath) => readFile(filePath, "utf8"),
     async writeText(filePath, content) {
       await mkdir(path.dirname(filePath), { recursive: true });

@@ -391,6 +391,7 @@ test("chat-websocket-server preserves authoritative identity for workflow child 
           toolCallId: "call-1",
           tool: "read_file",
           result: { ok: true },
+          success: true,
         },
       });
       return {
@@ -436,6 +437,7 @@ test("chat-websocket-server preserves authoritative identity for workflow child 
       toolCallId: "call-1",
       tool: "read_file",
       result: { ok: true },
+      success: true,
     });
     assert.equal(toolResult?.data?.route?.scope, "sub_session");
     assert.equal(toolResult?.data?.route?.workflowRunId, "workflow-1");

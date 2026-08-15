@@ -66,6 +66,28 @@ test("write_file: content 超过 semantic-transfer 阈值时保存附件并直�
   await assert.rejects(() => fs.access(path.join(basePath, filePath)));
 });
 
+test("write_file: overwrite=false uses the canonical failed result protocol", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-existing-"));
+  await fs.writeFile(path.join(basePath, "existing.txt"), "original", "utf8");
+  const agentContext = buildAgentContext(basePath, "u-test");
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
+
+  const result = parseToolResult(
+    await tool.invoke({
+      riskLevel: "low",
+      filePath: "existing.txt",
+      content: "replacement",
+      overwrite: false,
+    }),
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "failed");
+  assert.equal(result.code, "RECOVERABLE_FILE_ALREADY_EXISTS");
+  assert.equal(result.error, "file exists; set overwrite=true to replace it");
+  assert.equal(await fs.readFile(path.join(basePath, "existing.txt"), "utf8"), "original");
+});
+
 test("write_file: host 模式返回宿主正常路径并在 host 执行", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-path-view-"));
   const attachmentService = buildAttachmentService();
@@ -112,9 +134,8 @@ test("write_file: host 模式返回宿主正常路径并在 host 执行", async 
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.resolvedPath, path.join(basePath, "runtime/ops_workdir/write-ok.txt"));
-  assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "service_host");
+  assert.deepEqual(result.path, { view: "workspace", path: "runtime/ops_workdir/write-ok.txt" });
+  assert.equal("resolvedPath" in result, false);
 });
 
 test("write_file: successful output is published as a canonical attachment", async () => {
@@ -141,12 +162,50 @@ test("write_file: successful output is published as a canonical attachment", asy
   assert.equal(runnerResult.transferEnvelopes?.length, 1);
   assert.equal(runnerResult.transferEnvelopes[0]?.version, 2);
   assert.equal(runnerResult.transferEnvelopes[0]?.payload?.attachments?.[0]?.name, "result.md");
+  assert.equal("resources" in result, false);
+  assert.equal(runnerResult.internalResources.length, 2);
+  const workspaceResource = runnerResult.internalResources.find(
+    (resource) => resource.source === "workspace",
+  );
+  const attachmentResource = runnerResult.internalResources.find(
+    (resource) => resource.source === "attachment",
+  );
+  assert.equal(workspaceResource.logical.path, "runtime/ops_workdir/result.md");
+  assert.equal(attachmentResource.logical.path, "result.md");
+  assert.equal(
+    attachmentResource.attachment.attachmentId,
+    runnerResult.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+  );
   assert.equal("attachments" in result, false);
   assert.equal("outputArtifacts" in result, false);
   assert.equal(
     await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"),
     "# result",
   );
+});
+
+test("file tools retain one internal ResourceRef for repeated logical path inputs", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-file-resource-input-"));
+  const agentContext = buildAgentContext(basePath, "primary-user");
+  const tools = createFileTool({ agentContext });
+  const writeTool = tools.find((item) => item?.name === "write_file");
+  const readTool = tools.find((item) => item?.name === "read_file");
+  const written = parseToolResult(
+    await writeTool.invoke({
+      riskLevel: "low",
+      filePath: "reports/resource.txt",
+      content: "resource-round-trip",
+    }),
+  );
+
+  assert.equal(written.ok, true, JSON.stringify(written));
+  assert.equal(written.resources.length, 1);
+  const read = parseToolResult(
+    await readTool.invoke({ riskLevel: "low", filePath: written.path.path }),
+  );
+  assert.equal(read.ok, true, JSON.stringify(read));
+  assert.equal(read.content, "1 | resource-round-trip");
+  assert.equal(read.resources[0].resourceId, written.resources[0].resourceId);
 });
 
 test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示路径", async () => {
@@ -201,10 +260,8 @@ test("write_file: sandbox 模式使用宿主受控 I/O 并返回 sandbox 展示�
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.resolvedPath, "/workspace/runtime/ops_workdir/write-ok.txt");
-  assert.equal(result.pathView, "workspace");
-  assert.equal(result.executionView, "service_host");
-  assert.equal(String(result.resolvedPath || "").includes(workspaceRoot), false);
+  assert.deepEqual(result.path, { view: "workspace", path: "runtime/ops_workdir/write-ok.txt" });
+  assert.equal("resolvedPath" in result, false);
 });
 
 test("workspace I/O: file tools keep one sandbox display path end to end", async () => {
@@ -239,8 +296,10 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     }),
   );
   assert.equal(written.ok, true, JSON.stringify(written));
-  assert.equal(written.resolvedPath, filePath);
-  assert.equal(written.executionView, "service_host");
+  assert.deepEqual(written.path, {
+    view: "workspace",
+    path: "runtime/ops_workdir/sandbox-flow.txt",
+  });
 
   const firstRead = parseToolResult(
     await tools.get("read_file").invoke({
@@ -250,7 +309,7 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     }),
   );
   assert.equal(firstRead.content, "alpha\nbeta");
-  assert.equal(firstRead.executionView, "service_host");
+  assert.deepEqual(firstRead.path, written.path);
 
   const searched = parseToolResult(
     await tools.get("search").invoke({
@@ -263,7 +322,7 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
   );
   assert.equal(searched.ok, true, JSON.stringify(searched));
   assert.equal(searched.matches.length, 1);
-  assert.equal(searched.matches[0].filePath, filePath);
+  assert.deepEqual(searched.matches[0].path, written.path);
 
   const patched = parseToolResult(
     await tools.get("patch_file").invoke({
@@ -282,7 +341,7 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     }),
   );
   assert.equal(patched.ok, true, JSON.stringify(patched));
-  assert.deepEqual(patched.changedFiles, [filePath]);
+  assert.deepEqual(patched.changes, [{ path: written.path, action: "write" }]);
 
   const finalRead = parseToolResult(
     await tools.get("read_file").invoke({
@@ -339,6 +398,57 @@ test("write_file: super user can write an absolute file outside workspace root",
 
   assert.equal(result.toolName, "write_file");
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, outsideFile);
+  assert.deepEqual(result.path, { view: "host", path: outsideFile });
   assert.equal(await fs.readFile(outsideFile, "utf8"), "write-outside");
+});
+
+test("write_file: global sandbox mounts enforce their protocol readOnly flag", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-mount-workspace-"));
+  const writableRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-mount-rw-"));
+  const readOnlyRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-mount-ro-"));
+  const agentContext = buildAgentContext(basePath, "u-test", {
+    runtime: {
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "user",
+              mounts: [
+                { source: writableRoot, target: "/shared-write" },
+                { source: readOnlyRoot, target: "/shared-readonly", readOnly: true },
+              ],
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "write_file");
+
+  const written = parseToolResult(
+    await tool.invoke({
+      riskLevel: "low",
+      filePath: "/shared-write/result.txt",
+      content: "mounted-write",
+    }),
+  );
+  assert.equal(written.ok, true);
+  assert.deepEqual(written.path, { view: "workspace", path: "/shared-write/result.txt" });
+  assert.equal(await fs.readFile(path.join(writableRoot, "result.txt"), "utf8"), "mounted-write");
+
+  await assert.rejects(
+    () =>
+      tool.invoke({
+        riskLevel: "low",
+        filePath: "/shared-readonly/result.txt",
+        content: "blocked",
+      }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error.details?.reason, "sandbox_mount_read_only");
+      return true;
+    },
+  );
 });

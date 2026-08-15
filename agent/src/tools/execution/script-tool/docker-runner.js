@@ -6,12 +6,15 @@
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { buildDockerCommand } from "../../../sandbox/docker-sandbox.js";
 import { logWarn } from "../../../observability/console/logger.js";
 import { DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS, SANDBOX_PROVIDER_NAME } from "./constants.js";
 import { enqueueDockerContainerTask } from "./docker-queue.js";
 import { run } from "./process-exec.js";
 import { scriptRuntimeError } from "./script-errors.js";
+
+const execFileAsync = promisify(execFile);
 
 const DOCKER_FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
 const DOCKER_CLEANUP_SCRIPT = `
@@ -58,6 +61,56 @@ function signalDockerExecution({ containerName, executionToken }, signal) {
   });
 }
 
+async function ensureDockerContainer(built) {
+  const inspect = () => execFileAsync(built.executable, built.inspectArgs, { windowsHide: true });
+  let exists = true;
+  try {
+    await inspect();
+  } catch {
+    exists = false;
+  }
+  if (exists) {
+    let mounts = [];
+    try {
+      const result = await execFileAsync(built.executable, built.inspectMountsArgs, {
+        windowsHide: true,
+      });
+      mounts = JSON.parse(String(result.stdout || "[]"));
+    } catch {
+      mounts = [];
+    }
+    const expected = [
+      { source: built.workspaceSource, destination: built.workspaceTarget, rw: true },
+      ...built.mounts.map((item) => ({
+        source: item.source,
+        destination: item.target,
+        rw: item.readOnly !== true,
+      })),
+    ];
+    const actual = mounts.map((item) => ({
+      source: item.Source,
+      destination: item.Destination,
+      rw: item.RW,
+    }));
+    const matches = expected.every((item) =>
+      actual.some(
+        (candidate) =>
+          candidate.source === item.source &&
+          candidate.destination === item.destination &&
+          candidate.rw === item.rw,
+      ),
+    );
+    if (!matches || actual.length !== expected.length) {
+      await execFileAsync(built.executable, built.removeArgs, { windowsHide: true }).catch(() => undefined);
+      exists = false;
+    }
+  }
+  if (!exists) {
+    await execFileAsync(built.executable, built.createArgs, { windowsHide: true });
+  }
+  await execFileAsync(built.executable, built.startArgs, { windowsHide: true });
+}
+
 export function terminateDockerExecution(built) {
   void signalDockerExecution(built, "TERM");
   const forceKillTimer = setTimeout(
@@ -84,10 +137,12 @@ export async function runDockerCommand({
   try {
     result = await enqueueDockerContainerTask({
       containerName: built.containerName,
-      task: async () =>
-        runner(built.cmd, workspace, timeout, abortSignal, {
+      task: async () => {
+        await ensureDockerContainer(built);
+        return runner({ command: built.executable, args: built.execArgs }, workspace, timeout, abortSignal, {
           onTerminate: () => terminateDockerExecution(built),
-        }),
+        });
+      },
       lockWaitTimeoutMs,
       abortSignal,
     });

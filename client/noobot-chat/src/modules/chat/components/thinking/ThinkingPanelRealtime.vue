@@ -75,13 +75,13 @@ watch(
     logToolLogWindowDebug("frontend.toolLogWindow.rendererReceived", () => {
       const executionLogs = props.executionLogs;
       return {
-      sessionId: String(props.messageItem?.sessionId || ""),
-      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
-      turnScopeId: String(props.messageItem?.turnScopeId || ""),
-      running: props.isRunning,
-      declaredExecutionLogCount: props.executionLogCount,
-      receivedCount: Array.isArray(executionLogs) ? executionLogs.length : 0,
-      received: summarizeToolLogWindow(executionLogs),
+        sessionId: String(props.messageItem?.sessionId || ""),
+        dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+        turnScopeId: String(props.messageItem?.turnScopeId || ""),
+        running: props.isRunning,
+        declaredExecutionLogCount: props.executionLogCount,
+        receivedCount: Array.isArray(executionLogs) ? executionLogs.length : 0,
+        received: summarizeToolLogWindow(executionLogs),
       };
     });
     logStateMachineDebug("frontend.thinkingReplay.realtimeRendererProjected", () => ({
@@ -93,7 +93,8 @@ watch(
       declaredExecutionLogCount: props.executionLogCount,
       receivedCount: Array.isArray(props.executionLogs) ? props.executionLogs.length : 0,
       received: summarizeToolLogWindow(props.executionLogs),
-      items: (Array.isArray(props.executionLogs) ? props.executionLogs : []).slice(-32)
+      items: (Array.isArray(props.executionLogs) ? props.executionLogs : [])
+        .slice(-32)
         .map((item = {}) => {
           const key = detailKey(item);
           const expandable = isExpandable(item);
@@ -153,15 +154,15 @@ watch(
         /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
       </div>
       <div class="thinking-realtime-log-stream">
-        <div
-          v-for="logItem in executionLogs"
-          :key="executionLogKey(logItem)"
-        >
+        <div v-for="logItem in executionLogs" :key="executionLogKey(logItem)">
           <BaseThinkingLogLine
             :event-text="logItem.event"
             :content-text="logItem.text"
             :detail-text="logItem.detailText"
             :tool="isToolLog(logItem)"
+            :tone="logItem.presentation?.tone"
+            :tool-name="logItem.tool"
+            :risk-level="logItem.riskLevel"
             :expandable="isExpandable(logItem)"
             :expanded="isExpanded(messageItem, detailKey(logItem))"
             @toggle="toggleExpanded(messageItem, detailKey(logItem))"
@@ -184,9 +185,7 @@ watch(
       </div>
     </BaseTabPanelBody>
     <template #footer
-      ><BasePillButton
-        :label="translate('message.collapse')"
-        @click="emit('collapse')"
+      ><BasePillButton :label="translate('message.collapse')" @click="emit('collapse')"
     /></template>
   </BaseThinkingPanelShell>
 </template>

@@ -51,17 +51,29 @@ function parseApplyPatchHunk(lines, startIndex) {
 }
 
 function stripDiffPath(rawPath = "", strip = 1) {
-  const withoutTimestamp = normalizePatchPathInput(
+  const pathToken =
     String(rawPath || "")
       .trim()
-      .split(/\s+/)[0] || "",
-  );
-  if (!withoutTimestamp || withoutTimestamp === "/dev/null") return withoutTimestamp;
-  const parts = withoutTimestamp.split("/").filter(Boolean);
-  if (/^[A-Za-z]:$/.test(parts[0] || "")) return withoutTimestamp;
-  if (withoutTimestamp.startsWith("/")) return withoutTimestamp;
+      .split(/\s+/)[0] || "";
+  const normalizedPath = normalizePatchPathInput(pathToken);
+  if (!normalizedPath || normalizedPath === "/dev/null") return normalizedPath;
+  if (isAbsoluteDiffPath(pathToken)) return normalizedPath;
+
+  // Strip operates on lexical diff components. Normalizing first can erase a
+  // remaining ".." component and change the patch target before authorization.
+  const parts = pathToken.replaceAll("\\", "/").split("/").filter(Boolean);
   const stripCount = toPositiveInt(strip, 1, 0, 10);
-  return parts.slice(stripCount).join("/") || withoutTimestamp;
+  return normalizePatchPathInput(parts.slice(stripCount).join("/") || pathToken);
+}
+
+function isAbsoluteDiffPath(value = "") {
+  const source = String(value || "").trim();
+  return (
+    source.startsWith("/") ||
+    /^file:/i.test(source) ||
+    /^[A-Za-z]:[\\/]/.test(source) ||
+    /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/.test(source)
+  );
 }
 
 function normalizePatchText(patch = "") {

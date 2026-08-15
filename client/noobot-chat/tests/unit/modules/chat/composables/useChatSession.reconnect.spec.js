@@ -152,7 +152,7 @@ describe("useChatSession reconnect replay", () => {
     });
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData(envelope("tool_call_start", 1, { args: { filePath: "notes.txt" } }));
-      onReconnectData(envelope("tool_call_end", 2, { result: { ok: true } }));
+      onReconnectData(envelope("tool_call_end", 2, { result: { ok: true }, success: true }));
     });
 
     const session = createChatSession({ classifyRealtimeLog });

@@ -99,6 +99,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       nodeExecutionId: "node-execution-1",
       toolCallId: "call-1",
       toolResult: { tool_call_id: "call-1", output: "ok" },
+      success: true,
     }));
 
     expect(frames).toHaveLength(2);

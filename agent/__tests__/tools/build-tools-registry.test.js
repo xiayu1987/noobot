@@ -60,7 +60,12 @@ test("buildTools: execute_native_script requires explicit global enablement", as
   );
   const tool = enabled.find((item) => item?.name === "execute_native_script");
   assert.ok(tool);
-  assert.deepEqual(Object.keys(tool.schema.shape).sort(), ["arguments", "inputs", "script_body"]);
+  assert.deepEqual(Object.keys(tool.schema.shape).sort(), [
+    "arguments",
+    "inputs",
+    "riskLevel",
+    "script_body",
+  ]);
 });
 
 test("buildTools: 重组后应注册关键工具", async () => {

@@ -11,10 +11,35 @@ import {
   TOOL_PATH_VIEWS,
   normalizeSlashPath,
 } from "./platform.mjs";
-import { resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.mjs";
+import {
+  resolveSandboxMount,
+  resolveSandboxUserRoot,
+  resolveHostPath,
+} from "./sandbox-mapping.mjs";
 import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
+import { isPathWithinRoot } from "./path-contract.mjs";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
+
+export const TOOL_PATH_RESOLUTION_ERROR = Object.freeze({
+  EMPTY_PATH: "empty_path",
+  HOST_ABSOLUTE_NOT_ALLOWED: "host_absolute_not_allowed",
+  SANDBOX_PATH_NOT_ALLOWED: "sandbox_path_not_allowed",
+  SANDBOX_PATH_NOT_MAPPED: "sandbox_path_not_mapped",
+  VIRTUAL_RELATIVE_PATH_AMBIGUOUS: "virtual_relative_path_ambiguous",
+  WORKSPACE_PATH_OUT_OF_SCOPE: "workspace_path_out_of_scope",
+});
+
+const TOOL_PATH_SCOPE_ERRORS = new Set([
+  TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED,
+  TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED,
+  TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
+  TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE,
+]);
+
+export function isToolPathScopeError(error = "") {
+  return TOOL_PATH_SCOPE_ERRORS.has(String(error || "").trim());
+}
 
 function normalizeWorkspaceRootAlias(value = "") {
   const normalized = normalizeSlashPath(value);
@@ -105,7 +130,7 @@ export function resolveToolInputPath({
     return {
       ...classified,
       ok: false,
-      error: "empty_path",
+      error: TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH,
       resolvedPath: "",
       workspaceRelativePath: "",
       hint: "Path is required.",
@@ -119,26 +144,25 @@ export function resolveToolInputPath({
         ok: false,
         resolvedPath: "",
         workspaceRelativePath: "",
-        error: "sandbox_path_not_allowed",
+        error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED,
         hint: "Sandbox paths are not allowed here.",
       };
     }
-    if (
-      classified.sandboxRoot === "project" &&
-      normalizedWorkspace &&
-      !resolveSandboxUserRoot(runtime)
-    ) {
-      const normalizedProjectPath = normalizeSlashPath(classified.normalized);
-      const resolvedPath =
-        normalizedProjectPath === "/project"
-          ? normalizedWorkspace
-          : filePath.resolve(normalizedWorkspace, normalizedProjectPath.slice("/project/".length));
+    const mountedPath = resolveSandboxMount({
+      sandboxPath: classified.normalized,
+      runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
+    });
+    if (mountedPath) {
       return {
         ...classified,
         ok: true,
-        resolvedPath,
+        resolvedPath: filePath.resolve(mountedPath.hostPath),
         workspaceRelativePath: "",
         mapped: true,
+        logicalPath: mountedPath.sandboxPath,
+        executionRoot: mountedPath.source,
+        mountTarget: mountedPath.target,
+        mountReadOnly: mountedPath.readOnly,
         error: "",
         hint: "",
       };
@@ -223,19 +247,42 @@ export function resolveToolInputPath({
       ok: false,
       resolvedPath: "",
       workspaceRelativePath: "",
-      error: "sandbox_path_not_mapped",
+      error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
       hint: "Sandbox path is not mapped to a host path.",
     };
   }
 
   if (classified.view === TOOL_PATH_VIEWS.HOST_ABSOLUTE) {
+    if (allowSandbox) {
+      const mountedPath = resolveSandboxMount({
+        sandboxPath: classified.normalized,
+        runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
+      });
+      if (mountedPath) {
+        return {
+          ...classified,
+          view: TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+          sandboxRoot: "mount",
+          ok: true,
+          resolvedPath: filePath.resolve(mountedPath.hostPath),
+          workspaceRelativePath: "",
+          mapped: true,
+          logicalPath: mountedPath.sandboxPath,
+          executionRoot: mountedPath.source,
+          mountTarget: mountedPath.target,
+          mountReadOnly: mountedPath.readOnly,
+          error: "",
+          hint: "",
+        };
+      }
+    }
     if (!allowHostAbsolute) {
       return {
         ...classified,
         ok: false,
         resolvedPath: "",
         workspaceRelativePath: "",
-        error: "host_absolute_not_allowed",
+        error: TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED,
         hint: "Host absolute paths are only allowed for super users.",
       };
     }
@@ -252,22 +299,41 @@ export function resolveToolInputPath({
 
   if (classified.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE && !allowVirtualRelative) {
     const relativeWithoutVirtualRoot = classified.normalized.split("/").slice(1).join("/");
+    const sandboxHint = allowSandbox
+      ? `Use /${classified.virtualRoot}/... for sandbox paths, or remove '${classified.virtualRoot}/' for workspace-relative paths.`
+      : `Remove '${classified.virtualRoot}/' for a workspace-relative path.`;
     return {
       ...classified,
       ok: false,
       resolvedPath: "",
       workspaceRelativePath: "",
       candidateWorkspaceRelativePath: relativeWithoutVirtualRoot,
-      candidateSandboxPath: `/${classified.normalized}`,
-      error: "virtual_relative_path_ambiguous",
-      hint: `Use /${classified.virtualRoot}/... for sandbox paths, or remove '${classified.virtualRoot}/' for workspace-relative paths.`,
+      ...(allowSandbox ? { candidateSandboxPath: `/${classified.normalized}` } : {}),
+      error: TOOL_PATH_RESOLUTION_ERROR.VIRTUAL_RELATIVE_PATH_AMBIGUOUS,
+      hint: sandboxHint,
+    };
+  }
+
+  const resolvedWorkspacePath = filePath.resolve(
+    normalizedWorkspace || ".",
+    classified.normalized,
+  );
+  if (normalizedWorkspace && !isPathWithinRoot(normalizedWorkspace, resolvedWorkspacePath)) {
+    return {
+      ...classified,
+      ok: false,
+      resolvedPath: "",
+      workspaceRelativePath: classified.normalized,
+      mapped: false,
+      error: TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE,
+      hint: "Workspace-relative path resolves outside the workspace root.",
     };
   }
 
   return {
     ...classified,
     ok: true,
-    resolvedPath: filePath.resolve(normalizedWorkspace || ".", classified.normalized),
+    resolvedPath: resolvedWorkspacePath,
     workspaceRelativePath: classified.normalized,
     mapped: false,
     error: "",

@@ -20,6 +20,7 @@ test("desktop backend runtime follows the complete production workspace dependen
     "context-protocol",
     "agent-config-protocol",
     "execution-isolation-protocol",
+    "security-assessment-protocol",
     "service",
     "agent",
     "agent-proxy",

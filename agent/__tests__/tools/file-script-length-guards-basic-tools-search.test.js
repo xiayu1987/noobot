@@ -43,7 +43,7 @@ test("search: 支持搜索文件和文本", async () => {
   );
   assert.equal(fileResult.ok, true);
   assert.equal(fileResult.matches.length, 2);
-  assert.equal(fileResult.matches[0].filePath, path.join(basePath, "src/a.js"));
+  assert.deepEqual(fileResult.matches[0].path, { view: "workspace", path: "src/a.js" });
   assert.equal(fileResult.matches[0].line, 1);
   assert.equal(fileResult.matches[1].line, 3);
 
@@ -59,6 +59,42 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(textResult.ok, true);
   assert.equal(textResult.matches.length, 1);
   assert.equal(textResult.matches[0].line, 2);
+});
+
+test("search: global sandbox mount is searched through its logical target", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-workspace-"));
+  const mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-mounted-"));
+  await fs.mkdir(path.join(mountedRoot, "src"), { recursive: true });
+  await fs.writeFile(path.join(mountedRoot, "src/a.js"), "mounted-search-token\n", "utf8");
+  const agentContext = buildAgentContext(basePath, "u-test", {
+    runtime: {
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "user",
+              mounts: [{ source: mountedRoot, target: "/shared-code" }],
+            },
+          },
+        },
+      },
+    },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "search");
+  const result = parseToolResult(
+    await tool.invoke({
+      riskLevel: "low",
+      source: "files",
+      query: "mounted-search-token",
+      path: "/shared-code",
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.matches.length, 1);
+  assert.deepEqual(result.matches[0].path, { view: "workspace", path: "/shared-code/src/a.js" });
 });
 
 test("search: query schema rejects an empty string before tool execution", async () => {

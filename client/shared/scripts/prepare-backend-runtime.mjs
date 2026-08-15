@@ -11,7 +11,10 @@ import {
   getDesktopRipgrepPackages,
   getRipgrepBinaryRelativePath,
 } from "./desktop-ripgrep-packages.mjs";
-import { resolveDesktopBackendRuntimeWorkspaces } from "./backend-runtime-workspaces.mjs";
+import {
+  assertPreparedBackendRuntimeWorkspaces,
+  resolveDesktopBackendRuntimeWorkspaces,
+} from "./backend-runtime-workspaces.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "../../..");
@@ -232,38 +235,7 @@ async function main() {
     path.join(backendRoot, "agent/src/prompts/base.en-US.md"),
     "Prepared backend English system prompt",
   );
-  await assertExists(
-    path.join(backendRoot, "node_modules/noobot-agent/package.json"),
-    "Prepared backend dependency noobot-agent",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/agent-config-protocol/package.json"),
-    "Prepared backend dependency @noobot/agent-config-protocol",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/execution-isolation-protocol/package.json"),
-    "Prepared backend dependency @noobot/execution-isolation-protocol",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/plugin-runtime/package.json"),
-    "Prepared backend dependency @noobot/plugin-runtime",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/context-protocol/package.json"),
-    "Prepared backend dependency @noobot/context-protocol",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/event-protocol/package.json"),
-    "Prepared backend dependency @noobot/event-protocol",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/authoritative-state/package.json"),
-    "Prepared backend dependency @noobot/authoritative-state",
-  );
-  await assertExists(
-    path.join(backendRoot, "node_modules/@noobot/sanitize/package.json"),
-    "Prepared backend dependency @noobot/sanitize",
-  );
+  await assertPreparedBackendRuntimeWorkspaces({ backendRoot, label: "prepare" });
   await assertExists(
     path.join(backendRoot, "node_modules/express/package.json"),
     "Prepared backend dependency express",

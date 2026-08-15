@@ -123,3 +123,57 @@ test("derives the single selected execution intent from Manifest", () => {
   assert.equal(intent.executionKind, "workflow");
   assert.deepEqual(intent.origin, { type: "workflow", workflowRunId: "workflow:turn-1" });
 });
+
+test("configuration mode cannot select a workflow omitted from the turn protocol", () => {
+  const workflow = entry({
+    id: "workflow",
+    hooks: ["bot.before_agent_dispatch"],
+    executionIntent: {
+      kind: "workflow",
+      idPrefix: "workflow",
+      originType: "workflow",
+      originIdKey: "workflowRunId",
+      stage: "planning",
+    },
+    activate: activation("workflow"),
+  });
+  const instance = new RunConfigPluginPreparer({
+    globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
+    loadedDynamicPlugins: { registry: new Map([["workflow", workflow]]) },
+    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
+    createPluginResolveModelMessages: () => () => [],
+  });
+
+  const intent = instance.resolveExecutionIntent({
+    runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },
+  });
+  const prepared = instance.prepareRunConfig({
+    runConfig: { selectedPlugins: [], turnScopeId: "turn-plain" },
+  });
+
+  assert.equal(intent.executionId, "agent:turn-plain");
+  assert.equal(intent.executionKind, "agent");
+  assert.equal(prepared.plugins.workflow, undefined);
+  assert.equal(prepared.botHookManager.list("bot.before_agent_dispatch").length, 0);
+});
+
+test("an unavailable plugin cannot be activated by selectedPlugins", () => {
+  const demo = entry({
+    id: "demo",
+    hooks: ["agent.before_turn"],
+    activate: activation("demo"),
+  });
+  const instance = new RunConfigPluginPreparer({
+    globalConfig: { plugins: { demo: { enabled: false, mode: "on" } } },
+    loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
+    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
+    createPluginResolveModelMessages: () => () => [],
+  });
+
+  const prepared = instance.prepareRunConfig({
+    runConfig: { selectedPlugins: ["demo"] },
+  });
+
+  assert.equal(prepared.plugins.demo, undefined);
+  assert.equal(prepared.hookManager.list("agent.before_turn").length, 0);
+});

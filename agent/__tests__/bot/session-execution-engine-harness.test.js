@@ -104,6 +104,7 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
   const prepared = engine.runConfigPluginPreparer.prepareRunConfig({
     userId: "u1",
     runConfig: {
+      selectedPlugins: ["harness"],
       plugins: {
         harness: {
           enabled: true,
@@ -218,6 +219,7 @@ test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager inste
     userId: "u1",
     runConfig: {
       hookManager,
+      selectedPlugins: ["harness"],
       plugins: { harness: { enabled: true, mode: "on", basePath: "/tmp/noobot-test/u1" } },
     },
   });
@@ -230,19 +232,24 @@ test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager inste
   assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 });
 
-test("globalConfig.plugins.harness.mode=on enables harness by default", () => {
+test("global plugin defaults do not activate a plugin absent from selectedPlugins", () => {
   const tempRoot = "/tmp/noobot-global-plugin-test";
   const engine = new SessionExecutionEngine({
     globalConfig: { plugins: { harness: { enabled: true, mode: "on", trace: false } } },
     workspaceService: createWorkspaceService(tempRoot),
   });
 
-  const prepared = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u2", runConfig: {} });
+  const unselected = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u2", runConfig: {} });
+  assert.equal(unselected.plugins.harness, undefined);
+  assert.equal(unselected.hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 0);
 
-  assert.ok(prepared.hookManager);
-  assert.equal(prepared.plugins.harness.enabled, true);
-  assert.equal(prepared.plugins.harness.trace, false);
-  assert.equal(prepared.plugins.harness.basePath, path.join(tempRoot, "u2"));
+  const selected = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u2",
+    runConfig: { selectedPlugins: ["harness"] },
+  });
+  assert.equal(selected.plugins.harness.enabled, true);
+  assert.equal(selected.plugins.harness.trace, false);
+  assert.equal(selected.plugins.harness.basePath, path.join(tempRoot, "u2"));
 });
 
 test("runSession smoke writes harness artifacts through full execution pipeline", async () => {
@@ -420,6 +427,7 @@ test("harness records tool call and state commit hook artifacts", async () => {
     userId: "u1",
     runConfig: {
       hookManager,
+      selectedPlugins: ["harness"],
       plugins: {
         harness: {
           enabled: true,

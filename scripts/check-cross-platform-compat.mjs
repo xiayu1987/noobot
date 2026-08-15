@@ -91,7 +91,12 @@ const PACKAGE_SCRIPT_RULES = [
 const SOURCE_ALLOWLIST = new Map([
   [
     "agent/src/tools/execution/script-tool/process-exec.js",
-    new Map([["shell-spawn", [/^shell: true,$/]]]),
+    new Map([
+      [
+        "shell-spawn",
+        [/^return \{ executable: String\(command \|\| ""\), args: \[\], shell: true \};$/],
+      ],
+    ]),
   ],
   [
     "service/services/openvscode/process.js",

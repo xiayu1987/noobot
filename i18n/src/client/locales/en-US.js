@@ -283,6 +283,12 @@ export const enUSMessages = {
     toolCallEvent: "Call",
     toolResultEvent: "Return",
     toolEvent: "Tool",
+    toolRiskLevel: {
+      low: "Low risk",
+      medium: "Medium risk",
+      high: "High risk",
+      critical: "Critical risk",
+    },
     detailsAfterDone: "Thinking details are available after completion",
     collapse: "Collapse",
     depthLabel: "Level#{depth}",

@@ -282,6 +282,12 @@ export const zhCNMessages = {
     toolCallEvent: "调用",
     toolResultEvent: "返回",
     toolEvent: "工具",
+    toolRiskLevel: {
+      low: "低风险",
+      medium: "中风险",
+      high: "高风险",
+      critical: "严重风险",
+    },
     detailsAfterDone: "执行完成后可查看思考明细",
     collapse: "收起",
     depthLabel: "层级#{depth}",

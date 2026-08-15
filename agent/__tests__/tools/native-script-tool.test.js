@@ -102,6 +102,7 @@ test("execute_native_script injects capabilities and persists task output", asyn
   assert.match(tool.schema.shape.script_body.description, /await output\.file\(/);
   assert.match(tool.schema.shape.script_body.description, /await output\.tempFile\(/);
   assert.match(tool.schema.shape.script_body.description, /await output\.tempDirectory\(/);
+  assert.match(tool.schema.shape.inputs.description, /\{ source:/);
   const result = JSON.parse(
     await tool.invoke(
       {
@@ -120,8 +121,11 @@ log("completed");
   );
 
   assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.isolation, "host_restricted");
-  assert.equal(result.path_view, "task-local");
+  assert.deepEqual(result.execution, {
+    view: "native_host_restricted",
+    provider: "host",
+  });
+  assert.equal("path_view" in result, false);
   assert.equal(result.output_file_count, 1);
   assert.match(result.stdout, /completed/);
   assert.equal(persistedRequest.generationSource, "execute_native_script");
@@ -557,6 +561,111 @@ log(await files.readText(temporaryText), (await files.readJson(temporaryJson)).s
   assert.deepEqual(result.transferEnvelopes, []);
 });
 
+test("execute_native_script joins a temp directory token with a file name exactly once", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-directory-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const directory = await output.tempDirectory("nested");
+const temporary = await output.tempFile(directory, "report.txt");
+await files.writeText(temporary, "ready");
+log(temporary, await files.readText(temporary));
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.match(result.stdout, /temp:\/\/nested\/report\.txt ready/);
+  assert.doesNotMatch(result.stdout, /temp:\/\/temp:\/\//);
+});
+
+test("execute_native_script rejects output traversal before creating parent directories", async () => {
+  const parentPath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-output-traversal-"));
+  const basePath = path.join(parentPath, "workspace");
+  await fs.mkdir(basePath);
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const target = await output.file("../../../unauthorized-parent/result.txt");
+await files.writeText(target, "must not exist");
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /output path must be a safe relative path without parent traversal/);
+  assert.equal(result.error, result.stderr.trim());
+  await assert.rejects(fs.access(path.join(parentPath, "unauthorized-parent")));
+});
+
+test("execute_native_script publishes zero-byte output with the same count as its attachments", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-empty-output-"));
+  const runtime = createRuntime(basePath, {
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `empty-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const target = await output.file("empty.bin");
+await files.writeText(target, "");
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal(result.output_bytes, 0);
+  assert.equal(result.transferEnvelopes[0].payload.attachments.length, 1);
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "empty.bin");
+  assert.equal(result.transferEnvelopes[0].payload.attachments[0].size, 0);
+});
+
+test("execute_native_script rejects reversed tempFile arguments", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-temp-order-"));
+  const runtime = createRuntime(basePath);
+  const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        script_body: `
+const directory = await output.tempDirectory("nested");
+await output.tempFile("report.txt", directory);
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /requires tempDirectoryToken before fileName/);
+  assert.doesNotMatch(result.stderr, /temp:\/\/report\.txt\/temp:\/\//);
+});
+
 test("execute_native_script converts into an explicit temporary LibreOffice directory", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-temp-"));
   await fs.writeFile(
@@ -850,7 +959,60 @@ await files.writeText(target, await files.readText(input));
   );
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.output_file_count, 1);
-  assert.equal(result.path_view, "task-local");
+  assert.equal("path_view" in result, false);
+});
+
+test("execute_native_script projects a global sandbox mount into task-local input", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-mount-workspace-"));
+  const mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-mount-source-"));
+  await fs.writeFile(path.join(mountedRoot, "mounted-input.txt"), "mounted resource", "utf8");
+  const runtime = createRuntime(basePath, {
+    globalConfig: {
+      tools: { execute_native_script: { enabled: true } },
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: {
+            provider: "docker",
+            scope: "user",
+            mounts: [{ source: mountedRoot, target: "/shared-native", readOnly: true }],
+          },
+        },
+      },
+    },
+    attachmentService: {
+      async ingestGeneratedArtifacts(request) {
+        return request.artifacts.map((artifact, index) => ({
+          attachmentId: `mounted-output-${index}`,
+          sessionId: "session-1",
+          attachmentSource: "model",
+          name: artifact.name,
+          mimeType: artifact.mimeType,
+          size: Buffer.from(artifact.contentBase64, "base64").length,
+        }));
+      },
+    },
+  });
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(runtime),
+  });
+  const result = JSON.parse(
+    await tool.invoke(
+      {
+        inputs: [{ source: "/shared-native/mounted-input.txt" }],
+        script_body: `
+const input = await files.input(0);
+const target = await output.file("mounted-copy.txt");
+await files.writeText(target, await files.readText(input));
+`,
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+  );
+
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.output_file_count, 1);
+  assert.equal("path_view" in result, false);
 });
 
 test("execute_native_script browser rejects non-HTTP navigation protocols", async () => {

@@ -10,11 +10,13 @@ import {
   EXECUTION_ISOLATION_PROTOCOL_NAME,
   EXECUTION_ISOLATION_PROTOCOL_VERSION,
   TOOL_EXECUTION_CLASS,
+  TOOL_EXECUTION_REGISTRY,
   TOOL_EXECUTION_VIEW,
   normalizeSandboxMounts,
   resolveExecutionIsolation,
   resolveSandboxMountMappings,
   resolveToolExecutionAuthorization,
+  resolveToolExecutionClass,
   resolveToolExecutionPolicy,
   resolveWorkspaceSandboxLayout,
   resolveWorkspaceSandboxMountProjection,
@@ -24,7 +26,7 @@ test("execution isolation owns tool classes and execution views", () => {
   const globalConfig = {
     security: { executionIsolation: { mode: "sandbox", sandbox: { provider: "docker" } } },
   };
-  for (const toolName of ["read_file", "write_file", "patch_file", "search"]) {
+  for (const toolName of ["read_file", "write_file", "patch_file", "search", "list_skills"]) {
     const policy = resolveToolExecutionPolicy({ toolName, globalConfig });
     assert.equal(policy.executionClass, TOOL_EXECUTION_CLASS.WORKSPACE_IO);
     assert.equal(policy.view, TOOL_EXECUTION_VIEW.SERVICE_HOST);
@@ -47,6 +49,9 @@ test("execution isolation owns tool classes and execution views", () => {
       }),
     /does not match/,
   );
+  assert.equal(TOOL_EXECUTION_REGISTRY.execute_native_script, TOOL_EXECUTION_CLASS.NATIVE_HOST);
+  assert.equal(TOOL_EXECUTION_REGISTRY.call_service, TOOL_EXECUTION_CLASS.SERVICE_CONTROL);
+  assert.throws(() => resolveToolExecutionClass("unregistered_tool"), /not registered/);
 });
 
 test("host workspace compute requires super-admin authority", () => {
@@ -150,8 +155,18 @@ test("execution isolation result is versioned and deeply owns canonical mounts",
     { source: "C:\\Media", target: "/media", description: "", readOnly: true },
   ]);
   assert.deepEqual(resolveSandboxMountMappings(isolation), [
-    { source: "/srv/project", target: "/project/data" },
-    { source: "C:\\Media", target: "/media" },
+    {
+      source: "/srv/project",
+      target: "/project/data",
+      description: "Project",
+      readOnly: false,
+    },
+    {
+      source: "C:\\Media",
+      target: "/media",
+      description: "",
+      readOnly: true,
+    },
   ]);
   assert.equal(Object.isFrozen(isolation.sandbox.mounts), true);
   assert.equal(Object.isFrozen(isolation.sandbox.mounts[0]), true);

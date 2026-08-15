@@ -295,6 +295,49 @@ test("connector-toolkit/access_connector: command_file_path 应可读取文件�
   }
 });
 
+test("connector-toolkit/access_connector: command_file_path accepts a global sandbox mount", async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-mount-workspace-"));
+  const mountedRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-mount-source-"));
+  try {
+    await writeFile(path.join(mountedRoot, "mounted.sql"), "select 7;", "utf8");
+    let executed = null;
+    const runtime = buildAccessConnectorRuntime({
+      basePath: workspaceRoot,
+      connectorType: "database",
+      connectorName: "db-main",
+      onExecute: (payload) => {
+        executed = payload;
+      },
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "user",
+              mounts: [{ source: mountedRoot, target: "/shared-queries", readOnly: true }],
+            },
+          },
+        },
+      },
+    });
+    const tools = createConnectorTools({ agentContext: { bindings: { runtime } } });
+    const accessTool = tools.find((tool) => tool?.name === "access_connector");
+
+    const result = parseToolJson(
+      await accessTool.invoke({
+        connector_type: "database",
+        command_file_path: "/shared-queries/mounted.sql",
+      }),
+    );
+    assert.equal(result.ok, true);
+    assert.equal(String(executed?.command || ""), "select 7;");
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+    await rm(mountedRoot, { recursive: true, force: true });
+  }
+});
+
 test("connector-toolkit/access_connector: command_file_path 相对路径固定基于 workspace", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-access-root-directory-"));
   try {

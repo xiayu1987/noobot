@@ -130,10 +130,16 @@ export default {
   "tools.file.readContentTooLong": "File content is too long. Please read in batches.",
   "tools.file.readDescriptionWithLineNumbers":
     "Read text file content (line numbers enabled by default).",
+  "tools.file.workspaceRelativePathRule":
+    "Relative paths are consistently resolved from the current user's workspace root.",
+  "tools.file.symbolicLinkRule":
+    "The current path policy does not allow file tools to use symbolic links.",
   "tools.file.readStartLineField": "Start line (1-based).",
   "tools.file.readEndLineField": "End line (1-based).",
   "tools.file.readIncludeLineNumbersField": "Whether content includes line numbers.",
   "tools.file.readMaxLinesField": "Maximum returned lines.",
+  "tools.file.readLineRangeOutOfBounds": (params = {}) =>
+    `Invalid read line range: requested ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}, file has ${Number(params.totalLines || 0)} lines`,
   "tools.file.readRiskLevelField":
     "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.file.writeOverwriteField": "Whether to overwrite when file exists.",
@@ -153,17 +159,17 @@ export default {
   "tools.search.fieldRiskLevel":
     "Operation risk level: low, medium, high, or critical. Searches that may retrieve or return privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.patch_file.description":
-    "Apply patches; tolerant of git/unified diff, apply_patch, common model-mixed formats, and path strip mistakes.",
+    "Apply git/unified diff or apply_patch content with deterministic path resolution.",
   "tools.patch_file.fieldFormat":
-    "Patch format hint; omit when unsure. The tool will try unified_diff/git diff and apply_patch.",
+    "Patch format; omit it to detect the format from the content. An explicit mismatch is rejected.",
   "tools.patch_file.fieldPatch":
     "Patch content; read the file first and use exact context. Follow the current path rules in system context. Do not write virtual root names as relative path prefixes.",
   "tools.patch_file.fieldPatchPathHintHost":
-    "Workspace logical view: use paths relative to the current user's workspace; regular users cannot use host absolute paths.",
+    "Workspace logical view: prefer paths relative to the current user's workspace. Regular users cannot access paths that remain in the host view after normalization; absolute inputs inside their own workspace normalize to the workspace view.",
   "tools.patch_file.fieldPatchPathHintSuperHost":
     "Workspace logical view: relative paths use the current user's workspace; super administrators may also use host absolute paths authorized by the global path policy.",
   "tools.patch_file.fieldStrip":
-    "Diff path strip hint; common a/, b/, no-prefix, and virtual-root mistakes are tried automatically. Omit when unsure.",
+    "Exact number of leading relative diff path components to remove (usually 1 for a/ and b/). No path guessing is performed; parent traversal remaining after stripping is rejected.",
   "tools.patch_file.fieldRoot":
     "Patch root directory (optional, workspace-relative child directory only). Usually omit it. Do not use parent-directory traversal.",
   "tools.patch_file.fieldRootPathHintSandbox":

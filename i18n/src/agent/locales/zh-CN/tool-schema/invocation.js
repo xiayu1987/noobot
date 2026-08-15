@@ -160,11 +160,11 @@ export const INVOCATION_TOOL_SCHEMA = {
     params: {
       script_body: {
         key: "tools.nativeScript.fieldScriptBody",
-        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })。先用 await files.input(index) 获取 input:// 令牌；用 const file = await output.file(...)、const tempFile = await output.tempFile(...) 或 const tempDirectory = await output.tempDirectory(...) 创建令牌。LibreOffice 输入可使用本轮存在的 input://、output:// 或 temp:// 文件；outputDirectory 接受 output.directory 或已 await 的 temp:// 目录令牌。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 可写 output:// 和 temp:// 文件令牌。只有 output:// 文件会作为正式附件返回，脚本 return 值不作为文件输出。",
+        text: "异步函数体。可用绑定：browser、libreoffice、ffmpeg、ffprobe、files、output、args、log(message)。精确签名：await ffmpeg.run({ args: [...] })；await ffprobe.run({ args: [...] })；await libreoffice.convert({ input, outputDirectory, outputFormat })；await output.file(relativePath)；await output.tempFile(relativePath)；await output.tempDirectory(relativePath)；await output.tempFile(tempDirectoryToken, fileName)。先用 await files.input(index) 获取 input:// 令牌。LibreOffice 输入可使用本轮存在的 input://、output:// 或 temp:// 文件；outputDirectory 接受 output.directory 或已 await 的 temp:// 目录令牌。browser.newPage() 返回受限页面，支持 goto、setContent、title、url、content、DOM 操作、screenshot、close，不支持 evaluate。files.readText/readJson 可读取三类令牌，files.writeText/writeJson 可写 output:// 和 temp:// 文件令牌。只有 output:// 文件会作为正式附件返回，脚本 return 值不作为文件输出。",
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
-        text: "只读输入。source 使用 workspace 逻辑路径或完整附件身份。files.input(index) 只属于本次原生脚本执行；禁止跨工具传 output:// 或 temp://。",
+        text: "只读输入对象数组，每项格式必须为 { source: workspace逻辑路径或完整附件身份 }，不能直接传字符串。files.input(index) 只属于本次原生脚本执行；禁止跨工具传 output:// 或 temp://。",
       },
       filePath: {
         key: "tools.nativeScript.fieldFilePath",

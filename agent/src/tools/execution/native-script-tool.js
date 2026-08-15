@@ -9,9 +9,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import {
   TASK_PATH_KINDS,
-  TASK_PATH_VIEW,
   PATH_CAPABILITIES,
-  createResourceRef,
   createTaskPath,
   filePath as path,
   projectTaskPathText,
@@ -23,8 +21,18 @@ import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { createFileInputSchema, resolveFileInput } from "../core/file-input.js";
+import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { confirmCriticalToolOperation, TOOL_RISK_LEVEL } from "./tool-risk.js";
+import {
+  projectToolExecutionMeta,
+  resolveToolExecutionPolicy,
+} from "@noobot/execution-isolation-protocol";
+import {
+  SECURITY_EVIDENCE_SOURCE,
+  SECURITY_RISK_LEVEL,
+  classifyToolExecutionRisk,
+} from "@noobot/security-assessment-protocol";
+import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import { persistTransferArtifacts } from "../../transfer-adapter/index.js";
 import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
@@ -212,6 +220,11 @@ async function collectOutputFiles(root, relative = "") {
 
 export function createNativeScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
+  const executionPolicy = resolveToolExecutionPolicy({
+    toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+    globalConfig: runtime?.globalConfig || {},
+  });
+  const execution = projectToolExecutionMeta({ policy: executionPolicy });
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const config = effectiveConfig?.tools?.[TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
   if (config?.enabled !== true || !String(runtime?.basePath || "").trim()) return [];
@@ -239,9 +252,12 @@ export function createNativeScriptTool({ agentContext }) {
         .optional()
         .default({})
         .describe(tTool(runtime, "tools.nativeScript.fieldArguments")),
+      riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel").default(
+        SECURITY_RISK_LEVEL.MEDIUM,
+      ),
     }),
     func: async (
-      { script_body, inputs = [], arguments: scriptArguments = {} },
+      { script_body, inputs = [], arguments: scriptArguments = {}, riskLevel },
       _runManager,
       toolConfig = {},
     ) => {
@@ -249,9 +265,16 @@ export function createNativeScriptTool({ agentContext }) {
       if (!identity || typeof identity !== "object")
         throw new Error("native_script_identity_required");
       const body = validateScriptBody(script_body);
-      await confirmCriticalToolOperation({
+      await confirmToolOperation({
         runtime,
-        riskLevel: TOOL_RISK_LEVEL.HIGH,
+        declaredRiskLevel: riskLevel,
+        serverEvidence: {
+          source: SECURITY_EVIDENCE_SOURCE.EXECUTION_VIEW,
+          riskLevel: classifyToolExecutionRisk({
+            toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+            executionView: executionPolicy.view,
+          }),
+        },
         toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
         operation: "execute native capability script",
         reason: "The script can invoke browser, LibreOffice, and FFmpeg capabilities.",
@@ -344,26 +367,15 @@ export function createNativeScriptTool({ agentContext }) {
             },
           });
           transferEnvelopes = persisted.transferEnvelopes;
-          const persistedAttachments = persisted.transferEnvelopes.flatMap(
-            (envelope) => envelope?.payload?.attachments || [],
-          );
-          resources = persistedAttachments.map((attachment) =>
-            createResourceRef({
-              owner: String(runtime?.userId || ""),
-              source: "attachment",
-              logical: { view: "attachment", path: attachment.name || "output" },
-              attachment: attachment.identity || attachment,
-              size: attachment.size,
-              mimeType: attachment.mimeType || DEFAULT_MIME_TYPE,
-              capabilities: { read: true, write: false, scriptInput: true },
-            }),
-          );
+          resources = registerTransferAttachmentResources({
+            agentContext,
+            transferEnvelopes,
+          });
         }
         resultPayload = {
           ok: result.code === 0,
           status: result.code === 0 ? "completed" : "failed",
-          isolation: "host_restricted",
-          path_view: TASK_PATH_VIEW,
+          execution,
           code: result.code,
           stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }),
           stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }),
@@ -377,8 +389,7 @@ export function createNativeScriptTool({ agentContext }) {
         resultPayload = {
           ok: false,
           status: "failed",
-          isolation: "host_restricted",
-          path_view: TASK_PATH_VIEW,
+          execution,
           code: Number(error?.code || 1) || 1,
           stdout: projectNativeOutput(error?.stdout || "", { inputRoot, outputRoot, tempRoot }),
           stderr: projectNativeOutput(error?.message || String(error || "native script failed"), {

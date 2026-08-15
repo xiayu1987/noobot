@@ -31,6 +31,7 @@ import {
 
 export function createChatWebSocketClient({
   resolveWebSocketUrl = () => "",
+  resolveTransportOwner = () => "",
   refreshAuthentication = null,
   sessionLogSink = null,
   terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
@@ -39,6 +40,7 @@ export function createChatWebSocketClient({
   const transport = createWebSocketTransportSupervisor({
     channelId: "chat",
     resolveWebSocketUrl,
+    resolveTransportOwner,
     refreshAuthentication,
   });
   let resolveCurrentStream = null;

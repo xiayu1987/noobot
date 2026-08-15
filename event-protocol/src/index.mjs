@@ -7,3 +7,5 @@ export * from "./authority-event-outbox.mjs";
 export * from "./replay-batch.mjs";
 export * from "./event-registry.mjs";
 export * from "./interaction.mjs";
+export * from "./tool-presentation.mjs";
+export * from "./tool-timeline.mjs";

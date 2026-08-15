@@ -5,6 +5,7 @@
  */
 import { Buffer } from "node:buffer";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -12,8 +13,7 @@ function normalizeString(value = "") {
 
 function isCanonicalBase64(value = "") {
   const normalized = normalizeString(value);
-  if (!normalized || normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized))
-    return false;
+  if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return false;
   return Buffer.from(normalized, "base64").toString("base64") === normalized;
 }
 
@@ -158,6 +158,13 @@ export function buildToolResultPayload(payload = {}) {
     if (COMMON_RESULT_FIELDS.includes(key)) continue;
     if (value === undefined) continue;
     out[key] = value;
+  }
+  if (out.ok === false) {
+    if (out.status === undefined) out.status = "failed";
+    if (out.error === undefined) {
+      out.error = out.message || normalizeString(out.stderr) || "tool execution failed";
+    }
+    if (out.code === undefined) out.code = ERROR_CODE.RECOVERABLE_TOOL_ERROR;
   }
   return out;
 }

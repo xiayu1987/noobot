@@ -53,7 +53,7 @@ test("buildStaticInfo exposes host default directories", () => {
   assert.equal(staticInfo.directories?.view, "host");
   assert.equal(staticInfo.directories?.rootDirectory, "/host/workspaces/u1");
   assert.equal(staticInfo.directories?.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
-  assert.equal(staticInfo.directories?.currentDirectory, "/host/workspaces/u1/runtime/ops_workdir");
+  assert.equal(staticInfo.directories?.currentDirectory, "/host/workspaces/u1");
   assert.deepEqual(staticInfo.directories?.allowedRoots, ["/host/workspaces/u1"]);
 });
 
@@ -76,7 +76,7 @@ test("buildStaticInfo exposes only the sandbox workspace view when isolation is 
     },
   });
 
-  assert.equal(staticInfo.cwd, "/workspace/runtime/ops_workdir");
+  assert.equal(staticInfo.cwd, "/workspace");
   assert.equal(staticInfo.basePath, "/workspace");
   assert.equal(staticInfo.globalDefaults.workspaceRoot, "/workspace");
   assert.equal(staticInfo.directories?.view, "sandbox");

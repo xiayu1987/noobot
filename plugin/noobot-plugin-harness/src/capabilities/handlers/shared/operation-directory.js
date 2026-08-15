@@ -9,6 +9,7 @@ import {
   EXECUTION_ISOLATION_MODE,
   WORKSPACE_SANDBOX_PATHS,
   resolveExecutionIsolation,
+  resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
 
 const DEFAULT_OPERATION_RELATIVE_PATH = WORKSPACE_SANDBOX_PATHS.OPS_WORKDIR_RELATIVE;
@@ -49,7 +50,10 @@ export function resolveOperationDirectoryContext(ctx = {}) {
     runtimeBasePath: hostBasePath,
     userId: runtime?.userId || runtime?.systemRuntime?.userId || "",
     globalConfig: runtime.globalConfig || {},
-    executionContext: { view: isolation.mode },
+    executionPolicy: resolveToolExecutionPolicy({
+      toolName: "execute_script",
+      globalConfig: runtime.globalConfig || {},
+    }),
   });
   const sandboxWorkdir = sandboxEnabled ? normalizePath(pathContext.opsWorkdir) : "";
   const activeView = sandboxEnabled ? "sandbox" : "non_sandbox";

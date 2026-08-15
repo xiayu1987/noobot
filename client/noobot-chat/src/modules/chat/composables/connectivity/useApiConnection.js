@@ -29,8 +29,8 @@ export function useApiConnection({
     canUseIDE: false,
   });
   const connecting = ref(false);
-  let authenticationPromise = null;
-  let connectedCallbackPromise = null;
+  let activeAuthentication = null;
+  let activeConnectedCallback = null;
   let activeConnectCallCount = 0;
 
   const connected = computed(
@@ -89,6 +89,24 @@ export function useApiConnection({
       canUseIDE: false,
     };
     persistApiAuth();
+  }
+
+  function snapshotCredentials() {
+    const credentials = {
+      userId: String(userId.value || "").trim(),
+      connectCode: String(connectCode.value || "").trim(),
+    };
+    return {
+      ...credentials,
+      key: JSON.stringify([credentials.userId, credentials.connectCode]),
+    };
+  }
+
+  if (
+    apiKey.value &&
+    String(apiKeyUserId.value || "").trim() !== String(userId.value || "").trim()
+  ) {
+    clearApiAuth();
   }
 
   function isPlainObject(value) {
@@ -225,18 +243,23 @@ export function useApiConnection({
     return res;
   }
 
-  async function authenticate() {
+  async function authenticate(credentials) {
     const res = await connectApi({
-      userId: userId.value.trim(),
-      connectCode: connectCode.value.trim(),
+      userId: credentials.userId,
+      connectCode: credentials.connectCode,
       locale: String(locale.value || "").trim(),
     });
     const data = await res.json();
     if (!res.ok || !data.ok || !data.apiKey) {
       throw new Error(data.error || translate("infra.connectFailed"));
     }
+    const authenticatedUserId = String(data.userId || "").trim();
+    if (!authenticatedUserId || authenticatedUserId !== credentials.userId) {
+      throw new Error("authentication_identity_mismatch");
+    }
+    if (snapshotCredentials().key !== credentials.key) return false;
     apiKey.value = String(data.apiKey || "");
-    apiKeyUserId.value = String(userId.value || "").trim();
+    apiKeyUserId.value = authenticatedUserId;
     apiRole.value = String(data.role || "user");
     scenarioConfig.value = normalizeScenarioConfig({
       ...(data?.scenarios || {}),
@@ -255,45 +278,73 @@ export function useApiConnection({
     return true;
   }
 
-  function acquireAuthentication() {
-    if (authenticationPromise) return authenticationPromise;
-    authenticationPromise = authenticate().finally(() => {
-      authenticationPromise = null;
+  function acquireAuthentication(credentials) {
+    if (activeAuthentication?.key === credentials.key) {
+      return activeAuthentication.promise;
+    }
+    const authentication = { key: credentials.key, promise: null };
+    authentication.promise = authenticate(credentials).finally(() => {
+      if (activeAuthentication === authentication) activeAuthentication = null;
     });
-    return authenticationPromise;
+    activeAuthentication = authentication;
+    return authentication.promise;
   }
 
-  function runConnectedCallback() {
-    if (connectedCallbackPromise) return connectedCallbackPromise;
-    connectedCallbackPromise = Promise.resolve().then(() => onConnected()).finally(() => {
-      connectedCallbackPromise = null;
-    });
-    return connectedCallbackPromise;
+  function runConnectedCallback(credentials) {
+    if (activeConnectedCallback?.key === credentials.key) {
+      return activeConnectedCallback.promise;
+    }
+    const previous = activeConnectedCallback?.promise.catch(() => false) || Promise.resolve();
+    const callback = { key: credentials.key, promise: null };
+    callback.promise = previous
+      .then(async () => {
+        if (
+          snapshotCredentials().key !== credentials.key ||
+          String(apiKeyUserId.value || "").trim() !== credentials.userId
+        ) {
+          return false;
+        }
+        await onConnected();
+        return (
+          snapshotCredentials().key === credentials.key &&
+          String(apiKeyUserId.value || "").trim() === credentials.userId
+        );
+      })
+      .finally(() => {
+        if (activeConnectedCallback === callback) activeConnectedCallback = null;
+      });
+    activeConnectedCallback = callback;
+    return callback.promise;
   }
 
   async function connectBackend({ silent = false, runConnected = true } = {}) {
-    if (!userId.value.trim()) {
+    const credentials = snapshotCredentials();
+    if (!credentials.userId) {
       if (!silent) notify({ type: "warning", message: translate("infra.inputUserFirst") });
       return false;
     }
-    if (!connectCode.value.trim()) {
+    if (!credentials.connectCode) {
       if (!silent) notify({ type: "warning", message: translate("infra.inputConnectCodeFirst") });
       return false;
     }
     activeConnectCallCount += 1;
     connecting.value = true;
     try {
-      await acquireAuthentication();
+      const authenticated = await acquireAuthentication(credentials);
+      if (!authenticated || snapshotCredentials().key !== credentials.key) return false;
       if (!silent) {
         notify({
           type: "success",
           message: `${translate("infra.connectSuccess")} (role=${apiRole.value || "user"})`,
         });
       }
-      if (runConnected) await runConnectedCallback();
-      return true;
+      if (runConnected && !(await runConnectedCallback(credentials))) return false;
+      return (
+        snapshotCredentials().key === credentials.key &&
+        String(apiKeyUserId.value || "").trim() === credentials.userId
+      );
     } catch (error) {
-      if (runConnected) clearApiAuth();
+      if (runConnected && snapshotCredentials().key === credentials.key) clearApiAuth();
       if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
     } finally {
@@ -313,6 +364,7 @@ export function useApiConnection({
   }
 
   watch([userId, connectCode], () => {
+    clearApiAuth();
     persistConnectProfile();
   });
 

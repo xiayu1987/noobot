@@ -5,6 +5,9 @@
  */
 
 import path from "node:path";
+import { TOOL_EXECUTION_VIEW } from "./execution-views.js";
+
+export { TOOL_EXECUTION_VIEW } from "./execution-views.js";
 
 export const EXECUTION_ISOLATION_PROTOCOL_NAME = "noobot.execution-isolation";
 export const EXECUTION_ISOLATION_PROTOCOL_VERSION = 1;
@@ -30,13 +33,6 @@ export const TOOL_EXECUTION_CLASS = Object.freeze({
   SERVICE_CONTROL: "service_control",
 });
 
-export const TOOL_EXECUTION_VIEW = Object.freeze({
-  WORKSPACE_SANDBOX: "workspace_sandbox",
-  SERVICE_HOST: "service_host",
-  SERVICE_HOST_RESTRICTED: "service_host_restricted",
-  NATIVE_HOST_RESTRICTED: "native_host_restricted",
-});
-
 export const EXECUTION_ISOLATION_DEFAULTS = Object.freeze({
   mode: EXECUTION_ISOLATION_MODE.HOST,
   sandbox: Object.freeze({
@@ -52,17 +48,35 @@ export const WORKSPACE_SANDBOX_PATHS = Object.freeze({
   OPS_WORKDIR_RELATIVE: "runtime/ops_workdir",
 });
 
-const TOOL_EXECUTION_CLASSES = Object.freeze({
+export const TOOL_EXECUTION_REGISTRY = Object.freeze({
   read_file: TOOL_EXECUTION_CLASS.WORKSPACE_IO,
   write_file: TOOL_EXECUTION_CLASS.WORKSPACE_IO,
   patch_file: TOOL_EXECUTION_CLASS.WORKSPACE_IO,
   search: TOOL_EXECUTION_CLASS.WORKSPACE_IO,
   execute_script: TOOL_EXECUTION_CLASS.WORKSPACE_COMPUTE,
   execute_native_script: TOOL_EXECUTION_CLASS.NATIVE_HOST,
+
   multimodal_parse: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   multimodal_generate: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   call_service: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   call_mcp_task: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  list_skills: TOOL_EXECUTION_CLASS.WORKSPACE_IO,
+  delegate_task_async: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  wait_async_task_result: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  plan_multi_task_collaboration: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  switch_model: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  user_interaction: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  process_connector_tool: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  access_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  inspect_connectors: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  web_search: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  task_summary: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  task_check: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  request_help: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  final_answer: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  database_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  terminal_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
+  email_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
 });
 
 function objectOrEmpty(value) {
@@ -223,6 +237,12 @@ export function assertExecutionIsolationProtocol(isolation) {
 }
 
 function resolveExecutionView({ executionClass, isolation }) {
+  if (
+    executionClass === TOOL_EXECUTION_CLASS.WORKSPACE_IO ||
+    executionClass === TOOL_EXECUTION_CLASS.SERVICE_CONTROL
+  ) {
+    return TOOL_EXECUTION_VIEW.SERVICE_HOST;
+  }
   if (executionClass === TOOL_EXECUTION_CLASS.NATIVE_HOST) {
     return TOOL_EXECUTION_VIEW.NATIVE_HOST_RESTRICTED;
   }
@@ -231,7 +251,7 @@ function resolveExecutionView({ executionClass, isolation }) {
       ? TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX
       : TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED;
   }
-  return TOOL_EXECUTION_VIEW.SERVICE_HOST;
+  throw new Error(`unsupported tool execution class: ${executionClass}`);
 }
 
 export function assertToolExecutionPolicy(policy) {
@@ -307,15 +327,18 @@ export function resolveSandboxMountMappings(isolation = {}) {
       Object.freeze({
         source: mount.source,
         target: mount.target,
+        description: mount.description,
+        readOnly: mount.readOnly,
       }),
     ),
   );
 }
 
 export function resolveToolExecutionClass(toolName = "") {
-  return (
-    TOOL_EXECUTION_CLASSES[String(toolName || "").trim()] || TOOL_EXECUTION_CLASS.SERVICE_CONTROL
-  );
+  const normalizedName = String(toolName || "").trim();
+  const executionClass = TOOL_EXECUTION_REGISTRY[normalizedName];
+  if (!executionClass) throw new Error(`tool execution class is not registered: ${normalizedName}`);
+  return executionClass;
 }
 
 export function resolveToolExecutionPolicy({ toolName = "", globalConfig = {} } = {}) {
@@ -323,4 +346,14 @@ export function resolveToolExecutionPolicy({ toolName = "", globalConfig = {} } 
   const executionClass = resolveToolExecutionClass(toolName);
   const view = resolveExecutionView({ executionClass, isolation });
   return Object.freeze({ executionClass, view, isolation });
+}
+
+export function projectToolExecutionMeta({ policy } = {}) {
+  const resolved = assertToolExecutionPolicy(policy);
+  const sandboxed = resolved.view === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX;
+  return Object.freeze({
+    view: resolved.view,
+    provider: sandboxed ? resolved.isolation.sandbox.provider : "host",
+    ...(sandboxed ? { image: resolved.isolation.sandbox.image } : {}),
+  });
 }

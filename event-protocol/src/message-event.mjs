@@ -3,6 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  normalizeSecurityRiskLevel,
+  validateSecurityAssessment,
+} from "@noobot/security-assessment-protocol";
 
 export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
 export const MESSAGE_EVENT_ENVELOPE_VERSION = 2;
@@ -20,13 +24,13 @@ export const MESSAGE_EVENT_TYPE = Object.freeze({
 
 export const MESSAGE_EVENT_TYPES = Object.freeze(new Set(Object.values(MESSAGE_EVENT_TYPE)));
 
-export const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(new Set([
-  MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
-]));
+export const AUTHORITATIVE_FINAL_CONTENT_EVENT_TYPES = Object.freeze(
+  new Set([MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT]),
+);
 
-export const REPLACE_MESSAGE_CONTENT_EVENT_TYPES = Object.freeze(new Set([
-  MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT,
-]));
+export const REPLACE_MESSAGE_CONTENT_EVENT_TYPES = Object.freeze(
+  new Set([MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT]),
+);
 
 export const MESSAGE_CONTENT_EFFECT = Object.freeze({
   NONE: "none",
@@ -35,6 +39,24 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 });
 
 const text = (value) => String(value || "").trim();
+
+function validateToolSecurityAssessment(value = {}) {
+  const errors = [];
+  const hasRiskLevel = value?.riskLevel !== undefined;
+  const hasAssessment = value?.securityAssessment !== undefined;
+  if (hasRiskLevel !== hasAssessment) {
+    errors.push(hasRiskLevel ? "missing_security_assessment" : "missing_tool_risk_level");
+  }
+  if (!hasRiskLevel) return errors;
+  if (!normalizeSecurityRiskLevel(value.riskLevel)) errors.push("invalid_tool_risk_level");
+  if (!hasAssessment) return errors;
+  const assessmentValidation = validateSecurityAssessment(value.securityAssessment);
+  if (!assessmentValidation.valid) errors.push("invalid_security_assessment");
+  if (value.securityAssessment?.effectiveRiskLevel !== value.riskLevel) {
+    errors.push("security_assessment_risk_mismatch");
+  }
+  return errors;
+}
 
 export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
@@ -49,9 +71,7 @@ export function resolveMessageEventSequenceIdentity(value = {}) {
     sequenceScopeKind: MESSAGE_EVENT_SEQUENCE_SCOPE_KIND,
     sequenceScopeId,
     sequence,
-    sequenceKey: sequenceDomain && sequenceScopeId
-      ? `${sequenceDomain}:${sequenceScopeId}`
-      : "",
+    sequenceKey: sequenceDomain && sequenceScopeId ? `${sequenceDomain}:${sequenceScopeId}` : "",
   });
 }
 
@@ -59,18 +79,18 @@ export function isMessageEventEnvelope(value = {}) {
   const envelopeVersion = Number(value?.envelopeVersion);
   return Boolean(
     value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      value.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND &&
-      envelopeVersion === MESSAGE_EVENT_ENVELOPE_VERSION &&
-      text(value.eventId) &&
-      text(value.eventType) &&
-      text(value.sessionId) &&
-      text(value.messageId) &&
-      text(value.presentationMessageId) &&
-      Number.isInteger(Number(value.sequence)) &&
-      Number(value.sequence) > 0 &&
-      text(value.timestamp),
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    value.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND &&
+    envelopeVersion === MESSAGE_EVENT_ENVELOPE_VERSION &&
+    text(value.eventId) &&
+    text(value.eventType) &&
+    text(value.sessionId) &&
+    text(value.messageId) &&
+    text(value.presentationMessageId) &&
+    Number.isInteger(Number(value.sequence)) &&
+    Number(value.sequence) > 0 &&
+    text(value.timestamp),
   );
 }
 
@@ -101,12 +121,11 @@ export function validateMessageEventEnvelope(value = {}) {
     errors.push("missing_text");
   }
   if (
-    (
-      REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)
-    ) &&
+    REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) &&
     typeof value?.text !== "string" &&
     typeof value?.output !== "string"
-  ) errors.push("missing_content");
+  )
+    errors.push("missing_content");
   if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
     if (value?.attachments !== undefined && !Array.isArray(value.attachments)) {
       errors.push("invalid_attachments");
@@ -121,15 +140,38 @@ export function validateMessageEventEnvelope(value = {}) {
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {
     if (!text(value?.tool)) errors.push("missing_tool");
     if (!text(value?.toolCallId || value?.tool_call_id)) errors.push("missing_tool_call_id");
-    if (value?.args !== undefined && (typeof value.args !== "object" || value.args === null || Array.isArray(value.args))) {
+    if (
+      value?.args !== undefined &&
+      (typeof value.args !== "object" || value.args === null || Array.isArray(value.args))
+    ) {
       errors.push("invalid_tool_args");
     }
+    if ((value?.toolCall ?? value?.tool_call)?.riskLevel !== undefined) {
+      errors.push("noncanonical_nested_tool_risk");
+    }
+    errors.push(...validateToolSecurityAssessment(value));
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END) {
     if (!text(value?.toolCallId || value?.tool_call_id)) errors.push("missing_tool_call_id");
-    if (!("result" in (value || {})) && !("toolResult" in (value || {})) && !("tool_result" in (value || {}))) {
+    if (
+      !("result" in (value || {})) &&
+      !("toolResult" in (value || {})) &&
+      !("tool_result" in (value || {}))
+    ) {
       errors.push("missing_tool_result");
     }
+    if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
+    const explicitToolResult = value?.toolResult ?? value?.tool_result;
+    if (
+      explicitToolResult?.success !== undefined &&
+      explicitToolResult.success !== value?.success
+    ) {
+      errors.push("conflicting_tool_success");
+    }
+    if (explicitToolResult?.riskLevel !== undefined) {
+      errors.push("noncanonical_nested_tool_risk");
+    }
+    errors.push(...validateToolSecurityAssessment(value));
   }
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
@@ -137,7 +179,9 @@ export function validateMessageEventEnvelope(value = {}) {
 export function assertMessageEventEnvelope(value = {}) {
   const validation = validateMessageEventEnvelope(value);
   if (!validation.valid) {
-    throw new TypeError(`invalid authoritative message event envelope: ${validation.errors.join(",")}`);
+    throw new TypeError(
+      `invalid authoritative message event envelope: ${validation.errors.join(",")}`,
+    );
   }
   return value;
 }
@@ -153,9 +197,12 @@ export function projectMessageEventContent(event = {}) {
   if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)) {
     return Object.freeze({
       effect: MESSAGE_CONTENT_EFFECT.REPLACE,
-      content: typeof event?.text === "string"
-        ? event.text
-        : (typeof event?.output === "string" ? event.output : ""),
+      content:
+        typeof event?.text === "string"
+          ? event.text
+          : typeof event?.output === "string"
+            ? event.output
+            : "",
     });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
@@ -173,9 +220,12 @@ export function projectMessageEventMetadata(event = {}) {
 export function projectAuthoritativeFinalMessage(event = {}) {
   if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
   const projection = {
-    content: typeof event?.text === "string"
-      ? event.text
-      : (typeof event?.output === "string" ? event.output : ""),
+    content:
+      typeof event?.text === "string"
+        ? event.text
+        : typeof event?.output === "string"
+          ? event.output
+          : "",
   };
   if (Array.isArray(event?.attachments) && event.attachments.length > 0) {
     projection.attachments = Object.freeze([...event.attachments]);
@@ -196,27 +246,44 @@ export function projectMessageEventToolFacets(event = {}) {
   const toolCallId = text(event?.toolCallId || event?.tool_call_id);
   const explicitToolCall = event?.toolCall ?? event?.tool_call;
   const explicitToolResult = event?.toolResult ?? event?.tool_result;
-  const toolCall = explicitToolCall ?? (
-    eventType === "tool_call_start" && text(event?.tool)
+  const withoutRiskLevel = (value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    const projected = { ...value };
+    delete projected.riskLevel;
+    return projected;
+  };
+  const assessedRiskLevel = normalizeSecurityRiskLevel(
+    event?.securityAssessment?.effectiveRiskLevel,
+  );
+  const toolCall = explicitToolCall
+    ? {
+        ...withoutRiskLevel(explicitToolCall),
+        ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
+      }
+    : eventType === "tool_call_start" && text(event?.tool)
       ? {
           id: toolCallId,
           name: text(event.tool),
-          args: event?.args && typeof event.args === "object" && !Array.isArray(event.args)
-            ? event.args
-            : {},
+          args:
+            event?.args && typeof event.args === "object" && !Array.isArray(event.args)
+              ? event.args
+              : {},
+          ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
         }
-      : undefined
-  );
-  const toolResult = explicitToolResult ?? (
-    eventType === "tool_call_end" && event?.result !== undefined
+      : undefined;
+  const toolResult =
+    eventType === "tool_call_end" && (explicitToolResult || event?.result !== undefined)
       ? {
-          toolCallId,
-          name: text(event?.tool),
-          output: event.result,
-          success: event?.success !== false,
+          ...withoutRiskLevel(explicitToolResult),
+          toolCallId: text(
+            explicitToolResult?.toolCallId || explicitToolResult?.tool_call_id || toolCallId,
+          ),
+          name: text(explicitToolResult?.name || event?.tool),
+          output: explicitToolResult?.output ?? event.result,
+          success: event.success,
+          ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
         }
-      : undefined
-  );
+      : undefined;
   return Object.freeze({ toolCall, toolResult });
 }
 

@@ -75,9 +75,27 @@ export function resolveSandboxPathMappings(runtime = {}) {
     .map((item) => ({
       source: normalizeSlashPath(item?.source || ""),
       target: normalizeSlashPath(item?.target || ""),
+      readOnly: item?.readOnly === true,
     }))
     .filter((item) => Boolean(item.source && item.target))
     .sort((leftItem, rightItem) => rightItem.source.length - leftItem.source.length);
+}
+
+export function resolveSandboxMount({ sandboxPath = "", runtime = {} } = {}) {
+  const normalizedPath = normalizeSlashPath(sandboxPath);
+  if (!normalizedPath) return null;
+  const mapping = resolveSandboxPathMappings(runtime)
+    .sort((leftItem, rightItem) => rightItem.target.length - leftItem.target.length)
+    .find((item) => normalizedPath === item.target || normalizedPath.startsWith(`${item.target}/`));
+  if (!mapping) return null;
+  return Object.freeze({
+    ...mapping,
+    sandboxPath: normalizedPath,
+    hostPath:
+      normalizedPath === mapping.target
+        ? mapping.source
+        : `${mapping.source}${normalizedPath.slice(mapping.target.length)}`,
+  });
 }
 
 export function resolveSandboxPath({

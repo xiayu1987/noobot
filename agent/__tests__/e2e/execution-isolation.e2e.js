@@ -13,6 +13,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 
 import { createScriptTool } from "../../src/tools/execution/script-tool.js";
+import { createFileTool } from "../../src/tools/execution/file-tools.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +35,7 @@ function buildAgentContext({
   scope,
   containerName,
   isSuperUser = false,
+  mounts = [],
 }) {
   return createTestAgentExecutionScope(
     {
@@ -49,6 +51,7 @@ function buildAgentContext({
               scope,
               containerName,
               image: TEST_IMAGE,
+              mounts,
             },
           },
         },
@@ -59,7 +62,7 @@ function buildAgentContext({
         sessionId: "session:e2e:execution-isolation",
         rootSessionId: "session:e2e:execution-isolation",
         isSuperUser,
-        config: {},
+        config: { safeConfirm: false },
       },
     },
     { identity: { userId } },
@@ -82,6 +85,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
   let workspaceRoot;
   let aliceRoot;
   let containerBase;
+  let mountedRoot;
 
   before(async () => {
     await execFileAsync("docker", ["version", "--format", "{{.Server.Version}}"]);
@@ -93,6 +97,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     await fs.mkdir(path.join(bobRoot, "runtime/ops_workdir"), { recursive: true });
     await fs.writeFile(path.join(bobRoot, "runtime/ops_workdir/secret.txt"), "BOB-SECRET", "utf8");
     containerBase = `noobot-isolation-e2e-${randomUUID()}`;
+    mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-isolation-mounted-"));
   });
 
   after(async () => {
@@ -101,6 +106,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
       await execFileAsync("docker", ["rm", "-f", containerName]).catch(() => undefined);
     }
     if (workspaceRoot) await fs.rm(workspaceRoot, { recursive: true, force: true });
+    if (mountedRoot) await fs.rm(mountedRoot, { recursive: true, force: true });
   });
 
   test("ordinary user host mode does not expose execute_script", () => {
@@ -130,7 +136,7 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     const result = await invokeScript(tool, "printf 'HOST-PWD=%s' \"$PWD\"");
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.execution?.view, "service_host_restricted");
-    assert.equal(result.stdout, `HOST-PWD=${path.join(aliceRoot, "runtime/ops_workdir")}`);
+    assert.equal(result.stdout, `HOST-PWD=${aliceRoot}`);
   });
 
   test("ordinary user sandbox user scope gets a private container and workspace mount", async () => {
@@ -154,8 +160,69 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     );
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.execution?.view, "workspace_sandbox");
-    assert.equal(result.workspace?.path, "/workspace/runtime/ops_workdir");
-    assert.equal(result.stdout, "SANDBOX-PWD=/workspace/runtime/ops_workdir\nOTHER-USER=hidden");
+    assert.deepEqual(result.workspace, { view: "workspace", path: "." });
+    assert.equal(result.stdout, "SANDBOX-PWD=/workspace\nOTHER-USER=hidden");
+  });
+
+  test("file tools and execute_script share workspace and configured mount projections", async () => {
+    const agentContext = buildAgentContext({
+      basePath: aliceRoot,
+      workspaceRoot,
+      userId: "alice",
+      mode: "sandbox",
+      scope: "user",
+      containerName: containerBase,
+      mounts: [{ source: mountedRoot, target: "/shared" }],
+    });
+    const tools = new Map(createFileTool({ agentContext }).map((tool) => [tool.name, tool]));
+    const script = scriptTool(agentContext);
+    assert.ok(script);
+
+    const workspaceWrite = JSON.parse(
+      await tools.get("write_file").invoke({
+        filePath: "runtime/ops_workdir/from-file-tool.txt",
+        content: "workspace-from-file-tool",
+        riskLevel: "low",
+      }),
+    );
+    const mountWrite = JSON.parse(
+      await tools.get("write_file").invoke({
+        filePath: "/shared/from-file-tool.txt",
+        content: "mount-from-file-tool",
+        riskLevel: "low",
+      }),
+    );
+    assert.equal(workspaceWrite.ok, true, JSON.stringify(workspaceWrite));
+    assert.equal(mountWrite.ok, true, JSON.stringify(mountWrite));
+
+    const scriptResult = await invokeScript(
+      script,
+      [
+        "cat runtime/ops_workdir/from-file-tool.txt",
+        "cat /shared/from-file-tool.txt",
+        "printf 'workspace-from-script' > runtime/ops_workdir/from-script.txt",
+        "printf 'mount-from-script' > /shared/from-script.txt",
+      ].join("; "),
+    );
+    assert.equal(scriptResult.ok, true, JSON.stringify(scriptResult));
+    assert.equal(scriptResult.stdout, "workspace-from-file-toolmount-from-file-tool");
+
+    const workspaceRead = JSON.parse(
+      await tools.get("read_file").invoke({
+        filePath: "runtime/ops_workdir/from-script.txt",
+        includeLineNumbers: false,
+        riskLevel: "low",
+      }),
+    );
+    const mountRead = JSON.parse(
+      await tools.get("read_file").invoke({
+        filePath: "/shared/from-script.txt",
+        includeLineNumbers: false,
+        riskLevel: "low",
+      }),
+    );
+    assert.equal(workspaceRead.content, "workspace-from-script");
+    assert.equal(mountRead.content, "mount-from-script");
   });
 
   test("ordinary user sandbox global scope intentionally shares the workspace mount", async () => {
@@ -175,10 +242,10 @@ describe("execution isolation E2E", { concurrency: false }, () => {
     );
     assert.equal(result.ok, true, JSON.stringify(result));
     assert.equal(result.execution?.view, "workspace_sandbox");
-    assert.equal(result.workspace?.path, "/workspace/alice/runtime/ops_workdir");
+    assert.deepEqual(result.workspace, { view: "workspace", path: "." });
     assert.equal(
       result.stdout,
-      "SANDBOX-PWD=/workspace/alice/runtime/ops_workdir\nOTHER-USER=BOB-SECRET",
+      "SANDBOX-PWD=/workspace/alice\nOTHER-USER=BOB-SECRET",
     );
   });
 });
