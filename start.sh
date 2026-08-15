@@ -539,6 +539,7 @@ main() {
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
   if node -e "const p=require(process.argv[1]); process.exit(Array.isArray(p.workspaces)&&p.workspaces.length>0?0:1)" "$ROOT_DIR/package.json" >/dev/null 2>&1; then
     npm --prefix "$ROOT_DIR" install --workspaces
+    (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
   else
     npm --prefix "$CLIENT_DIR" install
     npm --prefix "$SERVICE_DIR" install
