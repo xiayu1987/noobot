@@ -12,6 +12,7 @@ const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
   providers: "deep",
   attachments: "deep",
+  multimodal: "deep",
   session: "deep",
   context: "deep",
   services: "deep",

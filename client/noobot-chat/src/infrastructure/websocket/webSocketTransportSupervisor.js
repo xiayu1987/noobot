@@ -15,12 +15,15 @@ export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
 export function createWebSocketTransportSupervisor({
   channelId = "websocket",
   resolveWebSocketUrl = () => "",
+  resolveTransportOwner = () => "",
   createWebSocket = (url) => new WebSocket(url),
   refreshAuthentication = null,
   reconnectBaseDelayMs = 0,
   reconnectMaxDelayMs = reconnectBaseDelayMs,
 } = {}) {
   let socket = null;
+  let connectionUrl = "";
+  let transportOwner = "";
   let generation = 0;
   let phase = WEB_SOCKET_TRANSPORT_PHASE.IDLE;
   let reconnectAttempt = 0;
@@ -48,19 +51,27 @@ export function createWebSocketTransportSupervisor({
     reconnectTimer = null;
   }
 
-  function createAttempt() {
-    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED) return null;
-    clearReconnectTimer();
-    let url = "";
+  function resolveConnectionUrl() {
     try {
-      url = String(resolveWebSocketUrl() || "").trim();
+      return String(resolveWebSocketUrl() || "").trim();
     } catch (error) {
       reconnectAttempt += 1;
       lastFailureReason = String(error?.name || "websocket_url_resolution_failed").trim();
-      return null;
+      return "";
     }
+  }
+
+  function resolveOwner() {
+    return String(resolveTransportOwner() || "").trim();
+  }
+
+  function createAttempt(resolvedUrl = "", resolvedOwner = resolveOwner()) {
+    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED) return null;
+    clearReconnectTimer();
+    const url = resolvedUrl || resolveConnectionUrl();
     if (!url) return null;
     const previousSocket = socket;
+    const previousOwner = transportOwner;
     let nextSocket = null;
     try {
       nextSocket = createWebSocket(url);
@@ -76,20 +87,40 @@ export function createWebSocketTransportSupervisor({
     }
     generation += 1;
     socket = nextSocket;
+    connectionUrl = url;
+    transportOwner = resolvedOwner;
     authenticationRecoveryAttempted = false;
     serverInstanceId = "";
     lastFailureReason = "";
     phase = nextSocket?.readyState === WebSocket.OPEN
       ? WEB_SOCKET_TRANSPORT_PHASE.OPEN
       : WEB_SOCKET_TRANSPORT_PHASE.CONNECTING;
-    return { socket: nextSocket, previousSocket, generation };
+    return { socket: nextSocket, previousSocket, previousOwner, transportOwner, generation };
   }
 
   function acquire() {
-    if (socket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)) {
+    const resolvedUrl = resolveConnectionUrl();
+    const resolvedOwner = resolveOwner();
+    if (!resolvedUrl) return null;
+    if (
+      socket &&
+      connectionUrl === resolvedUrl &&
+      [WebSocket.OPEN, WebSocket.CONNECTING].includes(socket.readyState)
+    ) {
       return { socket, previousSocket: null, generation, reused: true };
     }
-    return createAttempt();
+    const attempt = createAttempt(resolvedUrl, resolvedOwner);
+    if (!attempt?.socket) return attempt;
+    if (attempt.previousSocket && attempt.previousSocket !== attempt.socket) {
+      try { attempt.previousSocket.close?.(1000, "transport_identity_changed"); } catch {}
+    }
+    return {
+      ...attempt,
+      credentialsChanged: Boolean(attempt.previousSocket),
+      identityChanged: Boolean(
+        attempt.previousSocket && attempt.previousOwner !== attempt.transportOwner
+      ),
+    };
   }
 
   function replace() {
@@ -115,6 +146,8 @@ export function createWebSocketTransportSupervisor({
     if (!isCurrent(candidate)) return false;
     generation += 1;
     socket = null;
+    connectionUrl = "";
+    transportOwner = "";
     phase = WEB_SOCKET_TRANSPORT_PHASE.IDLE;
     return true;
   }
@@ -179,6 +212,8 @@ export function createWebSocketTransportSupervisor({
     generation += 1;
     clearReconnectTimer();
     socket = null;
+    connectionUrl = "";
+    transportOwner = "";
     phase = WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED;
     return true;
   }
@@ -200,6 +235,8 @@ export function createWebSocketTransportSupervisor({
     generation += 1;
     clearReconnectTimer();
     socket = null;
+    connectionUrl = "";
+    transportOwner = "";
     phase = WEB_SOCKET_TRANSPORT_PHASE.DISPOSED;
     try { currentSocket?.close?.(code, reason); } catch {}
   }

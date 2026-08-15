@@ -32,15 +32,10 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
       basePath,
       userId,
       globalConfig: {
-        tools: {
-          execute_script: {
-            execution: {
-              view: "sandbox",
-              sandboxProvider: {
-                default: "docker",
-                docker: { dockerContainerScope: "global" },
-              },
-            },
+        security: {
+          executionIsolation: {
+            mode: "host",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },

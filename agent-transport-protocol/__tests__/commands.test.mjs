@@ -148,6 +148,24 @@ test("protocol rejects ambiguous boolean strings", () => {
   });
   command.preferences.streaming = "false";
   assert.throws(() => parseAgentCommand(command), /invalid_streaming/);
+  command.preferences.streaming = false;
+  command.preferences.safeConfirm = "false";
+  assert.throws(() => parseAgentCommand(command), /invalid_safeConfirm/);
+});
+
+test("run preferences preserve an explicit disabled safety confirmation", () => {
+  const command = createTurnRunCommand({
+    commandType: AGENT_COMMAND.SEND,
+    commandId: "turn-no-confirm",
+    identity: { sessionId: "session-1", turnScopeId: "turn-no-confirm" },
+    input: { message: "hello", attachments: [] },
+    preferences: { safeConfirm: false },
+    presentation: {},
+    concurrency: {},
+  });
+
+  assert.equal(command.preferences.safeConfirm, false);
+  assert.equal(parseAgentCommand(command), command);
 });
 
 test("run summary and task-check policy has one strict per-run transport shape", () => {

@@ -65,7 +65,10 @@ async function exists(filePath) {
 
 async function makeServiceRoot() {
   const serviceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-project-launcher-"));
-  await writeJson(path.join(serviceRoot, "config", "global.config.example.json"), minimalGlobalExample);
+  await writeJson(
+    path.join(serviceRoot, "config", "global.config.example.json"),
+    minimalGlobalExample,
+  );
   return serviceRoot;
 }
 
@@ -110,7 +113,10 @@ test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global conf
   assert.equal(customConfig.workspace_template_path, "./custom-template");
   assert.ok(customConfig.providers?.example_openai);
   assert.equal(await exists(path.join(serviceRoot, "config", "global.config.json")), false);
-  assert.equal(await exists(path.join(serviceRoot, "custom-workspace", "config-params.json")), true);
+  assert.equal(
+    await exists(path.join(serviceRoot, "custom-workspace", "config-params.json")),
+    true,
+  );
 });
 
 test("project launcher initializes openai compatible provider with tool_reasoning_effort", async (t) => {
@@ -154,4 +160,97 @@ test("project launcher resolves camelCase workspace config keys for existing con
 
   assert.equal(await exists(path.join(serviceRoot, "camel-workspace", "config-params.json")), true);
   assert.equal(await exists(path.join(serviceRoot, "workspace", "config-params.json")), false);
+});
+
+test("project launcher recursively adds new global nodes without replacing configured values", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const examplePath = path.join(serviceRoot, "config", "global.config.example.json");
+  const example = await readJson(examplePath);
+  example.security = {
+    execution_isolation: {
+      mode: "sandbox",
+      sandbox: {
+        provider: "docker",
+        scope: "user",
+        image: "example/default-image",
+        mounts: [],
+      },
+    },
+  };
+  example.super_admin = {
+    user_id: "admin",
+    connect_code: "change-your-connect-code",
+  };
+  example.streaming = { enabled: true, transport: "sse" };
+  example.multimodal = {
+    parsing: {
+      default_models: {
+        audio: "example_openai",
+        video: "example_openai",
+        image: "example_openai",
+        document: "example_openai",
+      },
+    },
+    generation: { default_models: { image: "example_openai" } },
+  };
+  await writeJson(examplePath, example);
+  await writeJson(path.join(serviceRoot, "default-template", "config.example.json"), {});
+  await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
+    workspace_root: "./workspace",
+    workspace_template_path: "./default-template",
+    preferences: { language: "en-US" },
+    security: {
+      execution_isolation: {
+        mode: "host",
+        sandbox: {
+          scope: "global",
+          mounts: [{ source: "/srv/custom", target: "/custom" }],
+        },
+      },
+    },
+    super_admin: {
+      user_id: "owner",
+      connect_code: "configured-secret",
+    },
+    attachments: {
+      attachment_models: { image: "legacy" },
+      limits: { max_file_size_bytes: 4096 },
+    },
+    session: {
+      use_last_running_task_range: false,
+      use_last_completed_task_range: false,
+    },
+    tools: {
+      set_skill_task: { enabled: true },
+      execute_script: {
+        enabled: true,
+        sandbox_mode: true,
+        sandbox_provider: { default: "docker" },
+      },
+    },
+    streaming: { enabled: false },
+  });
+
+  await runLauncher(serviceRoot);
+
+  const config = await readJson(path.join(serviceRoot, "config", "global.config.json"));
+  assert.equal(config.security.execution_isolation.mode, "host");
+  assert.equal(config.security.execution_isolation.sandbox.scope, "global");
+  assert.deepEqual(config.security.execution_isolation.sandbox.mounts, [
+    { source: "/srv/custom", target: "/custom" },
+  ]);
+  assert.equal(config.security.execution_isolation.sandbox.provider, "docker");
+  assert.equal(config.security.execution_isolation.sandbox.image, "example/default-image");
+  assert.equal(config.super_admin.user_id, "owner");
+  assert.equal(config.super_admin.connect_code, "configured-secret");
+  assert.equal(config.streaming.enabled, false);
+  assert.equal(config.streaming.transport, "sse");
+  assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
+  assert.equal(config.attachments.limits.max_file_size_bytes, 4096);
+  assert.equal(Object.hasOwn(config, "session"), false);
+  assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);
+  assert.deepEqual(config.tools.execute_script, { enabled: true });
+  assert.equal(config.multimodal.parsing.default_models.document, "example_openai");
+  assert.equal(config.multimodal.generation.default_models.image, "example_openai");
 });

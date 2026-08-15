@@ -19,9 +19,6 @@ function resolveSshConnection(connectionInfo = {}) {
     password: String(source?.password || "").trim(),
     timeoutMs: resolveTimeMs(source, {
       key: "timeoutMs",
-      legacyKeys: ["timeout_ms"],
-      sourceTag: "connectors.terminal.ssh",
-      warnLegacy: true,
       fallback: TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
       min: 1000,
     }),

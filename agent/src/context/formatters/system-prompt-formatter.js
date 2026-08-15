@@ -77,12 +77,16 @@ function buildPathGuidanceSection(staticInfo = {}, contextPromptI18n = {}) {
       : {};
   const identity =
     staticInfo?.identity && typeof staticInfo.identity === "object" ? staticInfo.identity : {};
+  const sandboxView = String(staticInfo?.directories?.view || "").trim() === "sandbox";
   const lines = [
     pathGuidanceI18n.preferRelative,
-    pathGuidanceI18n.workspaceView,
+    sandboxView ? pathGuidanceI18n.sandboxWorkspaceView : pathGuidanceI18n.hostWorkspaceView,
     pathGuidanceI18n.taskLocalView,
-    identity?.isSuperUser === true ? pathGuidanceI18n.superUserHost : "",
-    identity?.isSuperUser !== true ? pathGuidanceI18n.regularHost : "",
+    sandboxView
+      ? pathGuidanceI18n.sandboxHostAccess
+      : identity?.isSuperUser === true
+        ? pathGuidanceI18n.superUserHost
+        : pathGuidanceI18n.regularHost,
     pathGuidanceI18n.patchRoot,
   ]
     .map((item) => String(item || "").trim())

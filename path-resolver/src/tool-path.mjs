@@ -11,13 +11,43 @@ import {
   TOOL_PATH_VIEWS,
   normalizeSlashPath,
 } from "./platform.mjs";
-import { resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.mjs";
+import {
+  resolveSandboxMount,
+  resolveSandboxUserRoot,
+  resolveHostPath,
+} from "./sandbox-mapping.mjs";
+import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
+import { isPathWithinRoot } from "./path-contract.mjs";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
 
+export const TOOL_PATH_RESOLUTION_ERROR = Object.freeze({
+  EMPTY_PATH: "empty_path",
+  HOST_ABSOLUTE_NOT_ALLOWED: "host_absolute_not_allowed",
+  SANDBOX_PATH_NOT_ALLOWED: "sandbox_path_not_allowed",
+  SANDBOX_PATH_NOT_MAPPED: "sandbox_path_not_mapped",
+  VIRTUAL_RELATIVE_PATH_AMBIGUOUS: "virtual_relative_path_ambiguous",
+  WORKSPACE_PATH_OUT_OF_SCOPE: "workspace_path_out_of_scope",
+});
+
+const TOOL_PATH_SCOPE_ERRORS = new Set([
+  TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED,
+  TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED,
+  TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
+  TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE,
+]);
+
+export function isToolPathScopeError(error = "") {
+  return TOOL_PATH_SCOPE_ERRORS.has(String(error || "").trim());
+}
+
 function normalizeWorkspaceRootAlias(value = "") {
   const normalized = normalizeSlashPath(value);
-  if (normalized === "/workspace" || normalized.startsWith("/workspace/")) return "workspace";
+  if (
+    normalized === WORKSPACE_SANDBOX_PATHS.ROOT ||
+    normalized.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)
+  )
+    return "workspace";
   if (normalized === "/project" || normalized.startsWith("/project/")) return "project";
   return "";
 }
@@ -100,10 +130,9 @@ export function resolveToolInputPath({
     return {
       ...classified,
       ok: false,
-      error: "empty_path",
+      error: TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH,
       resolvedPath: "",
       workspaceRelativePath: "",
-      hint: "Path is required.",
     };
   }
 
@@ -114,40 +143,37 @@ export function resolveToolInputPath({
         ok: false,
         resolvedPath: "",
         workspaceRelativePath: "",
-        error: "sandbox_path_not_allowed",
-        hint: "Sandbox paths are not allowed here.",
+        error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED,
       };
     }
-    if (
-      classified.sandboxRoot === "project" &&
-      normalizedWorkspace &&
-      !resolveSandboxUserRoot(runtime)
-    ) {
-      const normalizedProjectPath = normalizeSlashPath(classified.normalized);
-      const resolvedPath =
-        normalizedProjectPath === "/project"
-          ? normalizedWorkspace
-          : filePath.resolve(normalizedWorkspace, normalizedProjectPath.slice("/project/".length));
+    const mountedPath = resolveSandboxMount({
+      sandboxPath: classified.normalized,
+      runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
+    });
+    if (mountedPath) {
       return {
         ...classified,
         ok: true,
-        resolvedPath,
+        resolvedPath: filePath.resolve(mountedPath.hostPath),
         workspaceRelativePath: "",
         mapped: true,
+        logicalPath: mountedPath.sandboxPath,
+        executionRoot: mountedPath.source,
+        mountTarget: mountedPath.target,
+        mountReadOnly: mountedPath.readOnly,
         error: "",
-        hint: "",
       };
     }
     if (classified.sandboxRoot === "workspace" && normalizedWorkspaceRoot) {
       const normalizedSandboxPath = normalizeSlashPath(classified.normalized);
       const sandboxUserRoot = normalizeSlashPath(resolveSandboxUserRoot(runtime));
-      if (sandboxUserRoot === "/workspace" && normalizedWorkspace) {
+      if (sandboxUserRoot === WORKSPACE_SANDBOX_PATHS.ROOT && normalizedWorkspace) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspace
             : filePath.resolve(
                 normalizedWorkspace,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,
@@ -156,16 +182,15 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
-      if (sandboxUserRoot.startsWith("/workspace/")) {
+      if (sandboxUserRoot.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspaceRoot
             : filePath.resolve(
                 normalizedWorkspaceRoot,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,
@@ -174,16 +199,15 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
       if (!sandboxUserRoot) {
         const resolvedPath =
-          normalizedSandboxPath === "/workspace"
+          normalizedSandboxPath === WORKSPACE_SANDBOX_PATHS.ROOT
             ? normalizedWorkspaceRoot
             : filePath.resolve(
                 normalizedWorkspaceRoot,
-                normalizedSandboxPath.slice("/workspace/".length),
+                normalizedSandboxPath.slice(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`.length),
               );
         return {
           ...classified,
@@ -192,7 +216,6 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
     }
@@ -210,7 +233,6 @@ export function resolveToolInputPath({
         workspaceRelativePath: "",
         mapped: true,
         error: "",
-        hint: "",
       };
     }
     return {
@@ -218,20 +240,50 @@ export function resolveToolInputPath({
       ok: false,
       resolvedPath: "",
       workspaceRelativePath: "",
-      error: "sandbox_path_not_mapped",
-      hint: "Sandbox path is not mapped to a host path.",
+      error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
     };
   }
 
   if (classified.view === TOOL_PATH_VIEWS.HOST_ABSOLUTE) {
+    if (allowSandbox) {
+      const mountedPath = resolveSandboxMount({
+        sandboxPath: classified.normalized,
+        runtime: { ...runtime, basePath: runtime?.basePath || normalizedWorkspace },
+      });
+      if (mountedPath) {
+        return {
+          ...classified,
+          view: TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+          sandboxRoot: "mount",
+          ok: true,
+          resolvedPath: filePath.resolve(mountedPath.hostPath),
+          workspaceRelativePath: "",
+          mapped: true,
+          logicalPath: mountedPath.sandboxPath,
+          executionRoot: mountedPath.source,
+          mountTarget: mountedPath.target,
+          mountReadOnly: mountedPath.readOnly,
+          error: "",
+        };
+      }
+      return {
+        ...classified,
+        view: TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+        sandboxRoot: "",
+        ok: false,
+        resolvedPath: "",
+        workspaceRelativePath: "",
+        mapped: false,
+        error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
+      };
+    }
     if (!allowHostAbsolute) {
       return {
         ...classified,
         ok: false,
         resolvedPath: "",
         workspaceRelativePath: "",
-        error: "host_absolute_not_allowed",
-        hint: "Host absolute paths are only allowed for super users.",
+        error: TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED,
       };
     }
     return {
@@ -241,7 +293,6 @@ export function resolveToolInputPath({
       workspaceRelativePath: "",
       mapped: false,
       error: "",
-      hint: "",
     };
   }
 
@@ -253,20 +304,33 @@ export function resolveToolInputPath({
       resolvedPath: "",
       workspaceRelativePath: "",
       candidateWorkspaceRelativePath: relativeWithoutVirtualRoot,
-      candidateSandboxPath: `/${classified.normalized}`,
-      error: "virtual_relative_path_ambiguous",
-      hint: `Use /${classified.virtualRoot}/... for sandbox paths, or remove '${classified.virtualRoot}/' for workspace-relative paths.`,
+      ...(allowSandbox ? { candidateSandboxPath: `/${classified.normalized}` } : {}),
+      error: TOOL_PATH_RESOLUTION_ERROR.VIRTUAL_RELATIVE_PATH_AMBIGUOUS,
+    };
+  }
+
+  const resolvedWorkspacePath = filePath.resolve(
+    normalizedWorkspace || ".",
+    classified.normalized,
+  );
+  if (normalizedWorkspace && !isPathWithinRoot(normalizedWorkspace, resolvedWorkspacePath)) {
+    return {
+      ...classified,
+      ok: false,
+      resolvedPath: "",
+      workspaceRelativePath: classified.normalized,
+      mapped: false,
+      error: TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE,
     };
   }
 
   return {
     ...classified,
     ok: true,
-    resolvedPath: filePath.resolve(normalizedWorkspace || ".", classified.normalized),
+    resolvedPath: resolvedWorkspacePath,
     workspaceRelativePath: classified.normalized,
     mapped: false,
     error: "",
-    hint: "",
   };
 }
 

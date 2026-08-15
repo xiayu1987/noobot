@@ -79,7 +79,7 @@ export default {
   "common.notFound": "未找到",
   "common.notFoundInParentSessionMessages": "在父会话消息中未找到",
   "common.parentSessionNotFound": "未找到父会话",
-  "common.pathIsNotFile": "path 不是文件",
+  "common.pathIsNotFile": "路径不是文件",
   "common.pathOutOfScope": "路径超出允许范围",
   "common.pathRequired": "必须提供 path",
   "common.pathSeparatorsNotAllowed": "不能包含路径分隔符",

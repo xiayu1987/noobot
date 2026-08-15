@@ -3,11 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 
 const clean = (value = "") => String(value ?? "").trim();
-const stringList = (value = []) => Array.isArray(value)
-  ? value.map(clean).filter(Boolean)
-  : [];
+const stringList = (value = []) => (Array.isArray(value) ? value.map(clean).filter(Boolean) : []);
 
 function selectedModelValue(value) {
   if (typeof value === "string") return clean(value);
@@ -63,8 +62,12 @@ export function buildAgentTransportConsumption({
       requestedMessageLength,
       persistedMessageLength,
       messageConsumed: requestedMessageLength === persistedMessageLength,
-      requestedAttachmentCount: Array.isArray(requestedAttachments) ? requestedAttachments.length : 0,
-      canonicalAttachmentCount: Array.isArray(canonicalAttachments) ? canonicalAttachments.length : 0,
+      requestedAttachmentCount: Array.isArray(requestedAttachments)
+        ? requestedAttachments.length
+        : 0,
+      canonicalAttachmentCount: Array.isArray(canonicalAttachments)
+        ? canonicalAttachments.length
+        : 0,
       persistedAttachmentCount: Array.isArray(currentUserMessage?.attachments)
         ? currentUserMessage.attachments.length
         : 0,
@@ -75,14 +78,15 @@ export function buildAgentTransportConsumption({
       streaming: Object.hasOwn(resolvedRunConfig || {}, "streaming")
         ? resolvedRunConfig.streaming === true
         : null,
-      confirmationLevel: clean(resolvedRunConfig?.safeConfirmLevel).toLowerCase(),
+      confirmationLevel: normalizeSecurityRiskLevel(resolvedRunConfig?.safeConfirmLevel),
       locale: clean(resolvedRunConfig?.locale),
       scenario: clean(resolvedRunConfig?.scenario),
       selectedModel: selectedModelValue(resolvedRunConfig?.selectedModel),
       memoryModel: clean(resolvedRunConfig?.memoryModel),
       selectedPlugins: stringList(resolvedRunConfig?.selectedPlugins),
       pluginModelConfigKeys: Object.keys(
-        resolvedRunConfig?.pluginModelConfig && typeof resolvedRunConfig.pluginModelConfig === "object"
+        resolvedRunConfig?.pluginModelConfig &&
+          typeof resolvedRunConfig.pluginModelConfig === "object"
           ? resolvedRunConfig.pluginModelConfig
           : {},
       ).sort(),
@@ -91,17 +95,20 @@ export function buildAgentTransportConsumption({
     presentation: {
       requestedUserMessageId,
       persistedUserMessageId,
-      userMessageIdConsumed: Boolean(requestedUserMessageId) && requestedUserMessageId === persistedUserMessageId,
+      userMessageIdConsumed:
+        Boolean(requestedUserMessageId) && requestedUserMessageId === persistedUserMessageId,
       requestedAssistantMessageId,
       boundAssistantMessageId,
-      assistantMessageIdConsumed: Boolean(requestedAssistantMessageId) &&
+      assistantMessageIdConsumed:
+        Boolean(requestedAssistantMessageId) &&
         requestedAssistantMessageId === boundAssistantMessageId,
     },
     concurrency: {
       commandId: clean(turnCommand?.commandId || resolvedRunConfig?.commandId),
       commandIdConsumed: Boolean(clean(turnCommand?.commandId)),
       expectedAggregateVersion: expectedAggregateVersion ?? null,
-      expectedAggregateVersionConsumed: expectedAggregateVersion === commandExpectedAggregateVersion,
+      expectedAggregateVersionConsumed:
+        expectedAggregateVersion === commandExpectedAggregateVersion,
       committedAggregateVersion: Number(committedTurnResult?.aggregateVersion || 0) || null,
     },
   };

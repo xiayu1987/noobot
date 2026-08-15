@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
-import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../models/index.js";
+import {
+  resolveDefaultModelSpec,
+  resolveModelSpecByName,
+  resolveModelSpecOrConfiguredDefault,
+} from "../../models/index.js";
 export function resolvePhaseSummaryLoopTurns({ runConfig = {} } = {}) {
   const runtimeThreshold = Number(runConfig?.summaryPolicy?.phaseSummaryLoopTurns);
   if (runConfig?.frontendThresholdsEnabled === true && Number.isInteger(runtimeThreshold) && runtimeThreshold > 0) {
@@ -45,13 +49,15 @@ export function resolveEffectiveModelSpec({
 } = {}) {
   const normalizedSelectedModel = normalizeModelCandidate(readModelValue(selectedModel));
   if (normalizedSelectedModel) {
-    const selectedModelSpec = resolveModelSpecByName({
+    const selectedOrDefaultModelSpec = resolveModelSpecOrConfiguredDefault({
       name: normalizedSelectedModel,
       globalConfig,
       userConfig,
-      fallbackToDefault: false,
     });
-    if (selectedModelSpec) return selectedModelSpec;
+    if (!selectedOrDefaultModelSpec) {
+      throw new Error(`selected model not found: ${normalizedSelectedModel}`);
+    }
+    return selectedOrDefaultModelSpec;
   }
   const scenarioModelSpec = resolveScenarioDefaultModelSpec({
     globalConfig,
@@ -78,12 +84,6 @@ function readModelValue(modelConfig = {}) {
   );
 }
 
-function readFirstEnabledModelValue(enabledModels = []) {
-  const models = Array.isArray(enabledModels) ? enabledModels : [];
-  if (!models.length) return "";
-  return readModelValue(models[0]);
-}
-
 function readScenarioDefinition(sourceConfig = {}, scenarioKey = "") {
   const definitions =
     sourceConfig?.scenarios?.definitions &&
@@ -97,13 +97,6 @@ function readScenarioDefinition(sourceConfig = {}, scenarioKey = "") {
     : {};
 }
 
-function pushScenarioCandidateGroup(candidates = [], definitions = [], reader = () => "") {
-  for (const definition of definitions) {
-    const value = reader(definition || {});
-    if (normalizeModelCandidate(value)) candidates.push(value);
-  }
-}
-
 function resolveScenarioDefaultModelSpec({
   globalConfig = {},
   userConfig = {},
@@ -113,38 +106,12 @@ function resolveScenarioDefaultModelSpec({
   if (!scenarioKey) return null;
 
   const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  const scenarioDefinitions = [
-    readScenarioDefinition(userConfig, scenarioKey),
-    readScenarioDefinition(globalConfig, scenarioKey),
-    readScenarioDefinition(effectiveConfig, scenarioKey),
-  ];
-  const candidates = [];
-  pushScenarioCandidateGroup(candidates, scenarioDefinitions, (definition) => definition?.defaultModelAlias);
-  pushScenarioCandidateGroup(candidates, scenarioDefinitions, (definition) => readModelValue(definition?.defaultModel));
-  pushScenarioCandidateGroup(candidates, scenarioDefinitions, (definition) => definition?.model);
-  pushScenarioCandidateGroup(candidates, scenarioDefinitions, (definition) => readFirstEnabledModelValue(definition?.enabledModels));
-  candidates.push(
-    userConfig?.defaultModelAlias,
-    globalConfig?.defaultModelAlias,
-    effectiveConfig?.defaultModelAlias,
-    readModelValue(userConfig?.defaultModel),
-    readModelValue(globalConfig?.defaultModel),
-    readModelValue(effectiveConfig?.defaultModel),
-    readFirstEnabledModelValue(userConfig?.enabledModels),
-    readFirstEnabledModelValue(globalConfig?.enabledModels),
-    readFirstEnabledModelValue(effectiveConfig?.enabledModels),
-  );
-
-  for (const candidate of candidates) {
-    const modelName = normalizeModelCandidate(candidate);
-    if (!modelName) continue;
-    const modelSpec = resolveModelSpecByName({
-      name: modelName,
-      globalConfig,
-      userConfig,
-      fallbackToDefault: false,
-    });
-    if (modelSpec) return modelSpec;
-  }
-  return null;
+  const scenarioDefinition = readScenarioDefinition(effectiveConfig, scenarioKey);
+  const modelName = normalizeModelCandidate(scenarioDefinition?.model);
+  if (!modelName) return null;
+  return resolveModelSpecByName({
+    name: modelName,
+    globalConfig,
+    userConfig,
+  });
 }

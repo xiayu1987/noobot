@@ -49,10 +49,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "text": "生成图片内容。输入 generation_content（可选 model_name、image_size）。返回生成图片结果。"
     },
     "params": {
-      "api_type": {
-        "key": "tools.multimodal.fieldApiType",
-        "text": "图片生成接口类型（可选），支持 openai_responses、images_async。"
-      },
       "generation_content": {
         "key": "tools.multimodal.fieldGenerationContent",
         "text": "生成内容描述。"
@@ -101,7 +97,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
       "tools.multimodal.taskTimeout": (params = {}) =>
     `图片生成任务超时：${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType": "请尝试更换 api_type，例如 openai_responses 或 images_async。"
+      "tools.multimodal.trySwitchApiType": "请检查该模型配置的图片生成接口类型。"
     }
   },
   "switch_model": {

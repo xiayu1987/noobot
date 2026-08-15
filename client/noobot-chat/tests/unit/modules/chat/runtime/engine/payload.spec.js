@@ -200,6 +200,7 @@ describe("buildChatPayload model preferences", () => {
         attachments: [{ attachmentId: "att-1", name: "a.txt" }],
       },
       preferences: {
+        safeConfirm: false,
         streaming: false,
         scenario: "programming",
         selectedModel: "main-model",

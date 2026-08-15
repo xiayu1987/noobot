@@ -225,7 +225,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   assert.equal(agentResult.workflow.nodeSessions.length, 1);
   assert.equal(agentResult.workflow.nodeSessions[0]?.rootSessionId, "s1");
   assert.equal(agentResult.workflow.nodeSessions[0]?.sessionId, "wf-node-session-1");
-  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.stepStatus, undefined);
+  assert.equal(agentResult.workflow?.execution?.nodeAgentRuns?.[0]?.status, undefined);
   assert.equal(agentResult.workflow?.attachments, undefined);
   assert.equal(agentResult.workflow.nodeSessions[0]?.attachments, undefined);
 
@@ -262,10 +262,10 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     undefined,
   );
   assert.equal(
-    workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.stepStatus,
+    workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.status,
     undefined,
   );
-  assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.stepStatus, undefined);
+  assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.status, undefined);
   const hasPayloadBuiltEvent = eventLogCalls.some(
     (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",
   );

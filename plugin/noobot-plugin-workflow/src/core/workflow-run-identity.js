@@ -57,7 +57,7 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
       nodeName: String(node?.name || identity.nodeId).trim(),
       nodeType: node?.type ?? "",
       dependencies,
-      stepStatus: executable ? (dependencies.length ? "pending" : "ready") : "pending",
+      status: executable ? (dependencies.length ? "pending" : "ready") : "pending",
       revision: 1,
       sequence: index + 1,
       eventId: `workflow-plan:${identity.nodeExecutionId}`,

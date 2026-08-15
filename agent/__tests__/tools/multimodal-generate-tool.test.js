@@ -102,7 +102,7 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
         assert.equal(error?.details?.apiType, "images_async");
         assert.equal(error?.details?.callMode, "images_async_api");
         assert.equal(error?.details?.baseUrl, "https://models.example.com/v1");
-        assert.deepEqual(error?.details?.availableApiTypes, ["openai_responses", "images_async"]);
+        assert.equal(error?.details?.availableApiTypes, undefined);
         assert.equal(error?.details?.proxyEnv?.HTTPS_PROXY, "http://***:***@127.0.0.1:7890/");
         assert.equal(JSON.stringify(error?.details?.proxyEnv || {}).includes("secret"), false);
         return true;
@@ -114,8 +114,8 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
   }
 });
 
-test("multimodal_generate: explicit images_async overrides provider default api type", async () => {
-  const requestedUrls = [];
+test("multimodal_generate: model configuration is the only image API type authority", async () => {
+  let modelRequest = null;
   const runtime = {
     globalConfig: {
       providers: {
@@ -139,44 +139,30 @@ test("multimodal_generate: explicit images_async overrides provider default api 
       },
     },
     userConfig: {},
-    sharedTools: {
-      async fetch(url) {
-        requestedUrls.push(String(url || ""));
-        return {
-          ok: false,
-          status: 500,
-          async text() {
-            return "synthetic failure";
-          },
-        };
+    modelPort: {
+      async invoke(request) {
+        modelRequest = request;
+        return { result: { rawText: "", imageArtifacts: [], output: [] } };
       },
     },
   };
   const tool = getMultimodalGenerateTool(runtime);
 
-  await assert.rejects(
-    tool.invoke({
-      api_type: "images_async",
+  assert.equal("api_type" in tool.schema.shape, false);
+  const result = JSON.parse(
+    await tool.invoke({
       generation_content: "draw a bird",
       model_name: "gpt-image-2",
       size: "1:1",
     }),
-    (error) => {
-      assert.equal(error?.details?.apiType, "images_async");
-      assert.equal(error?.details?.requestMethod, "POST");
-      assert.equal(error?.details?.requestUrl, "https://models.example.com/v1/images/generations");
-      return true;
-    },
   );
-  assert.deepEqual(requestedUrls, [
-    "https://models.example.com/v1/images/generations",
-    "https://models.example.com/v1/images/generations",
-    "https://models.example.com/v1/images/generations",
-  ]);
+  assert.equal(result.ok, true);
+  assert.equal(modelRequest.operation.options.apiType, "openai_responses");
 });
 
 test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {
   const requestedUrls = [];
+  const requestedHeaders = [];
   const port = 12345;
 
   const runtime = {
@@ -205,6 +191,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
     sharedTools: {
       async fetch(url, init = {}) {
         requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
+        requestedHeaders.push({ ...init.headers });
         if (String(url || "").endsWith("/v1/images/generations")) {
           return {
             ok: true,
@@ -242,7 +229,6 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
 
   const payload = JSON.parse(
     await tool.invoke({
-      api_type: "images_async",
       generation_content: "draw a bird",
       model_name: "gpt-image-2",
       size: "1:1",
@@ -257,6 +243,15 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
     `POST http://127.0.0.1:${port}/v1/images/generations`,
     `GET http://127.0.0.1:${port}/v1/tasks/task-1`,
   ]);
+  assert.equal(requestedHeaders.length, 2);
+  for (const headers of requestedHeaders) {
+    assert.equal(headers.Authorization, "Bearer test-key");
+    assert.equal(headers["X-Model-Name"], "gpt-image-2");
+    assert.equal(headers["X-Plugin-Flow"], "agent.multimodal_generate");
+    assert.equal(headers["X-Plugin-Purpose"], "multimodal_generate");
+    assert.equal(headers["X-Plugin-Domain"], "tool");
+    assert.equal(headers["X-Plugin-Session-Id"], "multimodal-test-session");
+  }
 });
 
 test("multimodal_generate: images_async follows official aicodewith root base url example", async () => {
@@ -334,7 +329,6 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
 
   const payload = JSON.parse(
     await tool.invoke({
-      api_type: "images_async",
       generation_content: "一只可爱的猫咪在阳光下打盹",
       model_name: "gpt-image-2",
       size: "1:1",
@@ -416,7 +410,6 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
 
   await assert.rejects(
     tool.invoke({
-      api_type: "images_async",
       generation_content: "draw a bird",
       model_name: "gpt-image-2",
       size: "1:1",
@@ -486,14 +479,12 @@ test("multimodal_generate: images_async applies official parameter defaults and 
   const tool = getMultimodalGenerateTool(runtime);
 
   await tool.invoke({
-    api_type: "images_async",
     generation_content: "draw a landscape",
     model_name: "gpt_image_2_beta",
     size: "16:9",
     n: 8,
   });
   await tool.invoke({
-    api_type: "images_async",
     generation_content: "draw a square",
     model_name: "gpt_image_2_beta",
     size: "1024x1024",
@@ -557,7 +548,6 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
 
   await assert.rejects(
     tool.invoke({
-      api_type: "images_async",
       generation_content: "draw a bird",
       model_name: "gpt-image-2",
       size: "auto",

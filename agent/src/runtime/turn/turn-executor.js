@@ -30,7 +30,7 @@ import { createBoundLlmToolChoiceInvoker } from "./tool-invoke-strategy.js";
 import { normalizeToolTurnAi } from "./tool-turn-normalizer.js";
 import { finalizeNoToolsStreamingTurn } from "./no-tools-final-stream-stage.js";
 import { commitNoToolsTurnState } from "./no-tools-commit-stage.js";
-import { maybeCreateRequiredToolChoiceUnsupportedFallbackAi } from "./tool-choice-fallback-stage.js";
+import { applyRequiredToolChoiceUnsupportedRetryDecision } from "./tool-choice-retry-stage.js";
 import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stage.js";
 import {
   appendContextMessage as appendMessage,
@@ -168,7 +168,6 @@ export async function invokeNoToolsTurn({
       messages: filterForModelContext(messages),
       options: {
         streaming: false,
-        callbacks: runtime?.modelCallbacks,
         signal: abortSignal,
         invoke: {
           ...(forceToolChoiceNone ? { tool_choice: "none" } : {}),
@@ -373,26 +372,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   try {
     ai = await invokeBoundLlmWithToolChoice();
   } catch (error) {
-    await runAgentRuntimeHook({
-      runtime,
-      point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
-      context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
-        phase: "llm_call",
-        turn,
-        modelLoopRound,
-        mode: "with_tools",
-        status: "error",
-        startedAt: llmStartedAt,
-        endedAt: new Date(Date.now()).toISOString(),
-        durationMs: Date.now() - llmStartedAtMs,
-        toolChoice: configuredToolChoice || "",
-        error,
-        modelContext,
-        maxTurns: Number(loopState?.maxTurns || 0),
-        agentContext: modelState?.agentContext || null,
-      }),
-    });
-    ai = maybeCreateRequiredToolChoiceUnsupportedFallbackAi({
+    const retryRequiredToolChoice = applyRequiredToolChoiceUnsupportedRetryDecision({
       error,
       configuredToolChoice,
       runtime,
@@ -400,8 +380,51 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
       turn,
       modelState,
     });
-    if (!ai) {
+    if (!retryRequiredToolChoice) {
+      await runAgentRuntimeHook({
+        runtime,
+        point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
+        context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
+          phase: "llm_call",
+          turn,
+          modelLoopRound,
+          mode: "with_tools",
+          status: "error",
+          startedAt: llmStartedAt,
+          endedAt: new Date(Date.now()).toISOString(),
+          durationMs: Date.now() - llmStartedAtMs,
+          toolChoice: configuredToolChoice || "",
+          error,
+          modelContext,
+          maxTurns: Number(loopState?.maxTurns || 0),
+          agentContext: modelState?.agentContext || null,
+        }),
+      });
       throw error;
+    }
+    try {
+      ai = await invokeBoundLlmWithToolChoice("auto", null, "with_tools_required_retry");
+    } catch (retryError) {
+      await runAgentRuntimeHook({
+        runtime,
+        point: HOOK_POINT.AGENT.LLM_CALL_ERROR,
+        context: buildHookContext(HOOK_POINT.AGENT.LLM_CALL_ERROR, runtime, {
+          phase: "llm_call",
+          turn,
+          modelLoopRound,
+          mode: "with_tools_required_retry",
+          status: "error",
+          startedAt: llmStartedAt,
+          endedAt: new Date(Date.now()).toISOString(),
+          durationMs: Date.now() - llmStartedAtMs,
+          toolChoice: "auto",
+          error: retryError,
+          modelContext,
+          maxTurns: Number(loopState?.maxTurns || 0),
+          agentContext: modelState?.agentContext || null,
+        }),
+      });
+      throw retryError;
     }
   }
 

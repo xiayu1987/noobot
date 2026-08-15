@@ -210,7 +210,6 @@ function resolveHelpModelSpec({
       modelName: configuredHelpModel,
       globalConfig,
       userConfig,
-      fallbackToDefault: false,
     });
     if (!spec) throw new Error(`configured help model not found: ${configuredHelpModel}`);
     return spec;
@@ -221,7 +220,6 @@ function resolveHelpModelSpec({
       modelName: runtimeModel,
       globalConfig,
       userConfig,
-      fallbackToDefault: false,
     });
     if (!spec) throw new Error(`runtime help model not found: ${runtimeModel}`);
     return spec;

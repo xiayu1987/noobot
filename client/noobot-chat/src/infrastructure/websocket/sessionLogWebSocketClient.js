@@ -36,6 +36,7 @@ function logDiagnostic(message, data = {}) {
 
 export function createSessionLogWebSocketClient({
   resolveWebSocketUrl = () => "",
+  resolveTransportOwner = () => "",
   source = "frontend",
   refreshAuthentication = null,
 } = {}) {
@@ -57,6 +58,7 @@ export function createSessionLogWebSocketClient({
   const transport = createWebSocketTransportSupervisor({
     channelId: "session-log",
     resolveWebSocketUrl,
+    resolveTransportOwner,
     refreshAuthentication,
     reconnectBaseDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectBaseDelayMs,
     reconnectMaxDelayMs: TIME_THRESHOLDS.client.sessionLogReconnectMaxDelayMs,
@@ -137,14 +139,27 @@ export function createSessionLogWebSocketClient({
 
   function connect() {
     if (disposed || isSuspended()) return null;
-    const current = transport.current();
-    if (current && [WebSocket.OPEN, WebSocket.CONNECTING].includes(current.readyState)) return current;
     const attempt = transport.acquire();
     if (!attempt?.socket) {
       logDiagnostic("connect skipped", { reason: "empty-url", queueLength: reliableQueue.length + debugQueue.length });
       return null;
     }
     const currentSocket = attempt.socket;
+    if (attempt.identityChanged) {
+      const nextOwner = String(attempt.transportOwner || "").trim();
+      const retainOwner = (entry) => String(entry?.record?.userId || "").trim() === nextOwner;
+      const retainedReliable = reliableQueue.filter(retainOwner);
+      const retainedDebug = debugQueue.filter(retainOwner);
+      rejectedReliableCount += reliableQueue.length - retainedReliable.length;
+      droppedDebugCount += debugQueue.length - retainedDebug.length;
+      reliableQueue.splice(0, reliableQueue.length, ...retainedReliable);
+      debugQueue.splice(0, debugQueue.length, ...retainedDebug);
+      debugQueueBytes = retainedDebug.reduce((total, entry) => total + entry.bytes, 0);
+      rejectedReliableCount += inFlight.filter((entry) => entry.reliable).length;
+      droppedDebugCount += inFlight.filter((entry) => !entry.reliable).length;
+      inFlight.length = 0;
+    }
+    if (attempt.reused) return currentSocket;
     logDiagnostic("connecting", { queueLength: reliableQueue.length + debugQueue.length, generation: attempt.generation });
     currentSocket.onopen = () => {
       if (!transport.markOpen(currentSocket) || disposed) return;

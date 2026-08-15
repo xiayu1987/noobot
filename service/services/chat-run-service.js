@@ -51,49 +51,13 @@ export function createChatRunService({
       : [];
   }
 
-  function normalizePlugins(inputPlugins = {}, selectedPlugins = []) {
-    const sourcePlugins =
-      inputPlugins && typeof inputPlugins === "object" && !Array.isArray(inputPlugins)
-        ? inputPlugins
-        : {};
-    const normalizedPlugins = {};
-    for (const [pluginKey, pluginValue] of Object.entries(sourcePlugins)) {
-      const normalizedPluginKey = String(pluginKey || "").trim();
-      if (!normalizedPluginKey) continue;
-      const sourcePlugin =
-        pluginValue && typeof pluginValue === "object" && !Array.isArray(pluginValue)
-          ? pluginValue
-          : {};
-      const normalizedMode = String(sourcePlugin?.mode ?? "off")
-        .trim()
-        .toLowerCase();
-      normalizedPlugins[normalizedPluginKey] = {
-        ...sourcePlugin,
-        mode: normalizedMode === "on" ? "on" : "off",
-      };
-    }
-    for (const pluginKey of normalizeStringArray(selectedPlugins)) {
-      const current =
-        normalizedPlugins[pluginKey] && typeof normalizedPlugins[pluginKey] === "object"
-          ? normalizedPlugins[pluginKey]
-          : {};
-      if (current?.enabled === false) continue;
-      normalizedPlugins[pluginKey] = {
-        ...current,
-        enabled: true,
-        mode: "on",
-      };
-    }
-    return normalizedPlugins;
-  }
-
   function mapAgentRunCommand(command, { userId = "" } = {}) {
     const identity = command.identity;
     const preferences = command.preferences;
     const selectedPlugins = normalizeStringArray(preferences.selectedPlugins);
     const runConfig = {
       allowUserInteraction: preferences.allowUserInteraction,
-      safeConfirm: true,
+      safeConfirm: preferences.safeConfirm,
       safeConfirmLevel: preferences.confirmationLevel,
       sanitizeOutput: preferences.sanitizeOutput,
       ...(Object.prototype.hasOwnProperty.call(preferences, "streaming")
@@ -108,7 +72,6 @@ export function createChatRunService({
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
       selectedConnectors: normalizeSelectedConnectors(preferences.selectedConnectors),
       selectedPlugins,
-      plugins: normalizePlugins({}, selectedPlugins),
       turnScopeId: identity.turnScopeId,
       userMessageId: String(command.presentation?.userMessageId || "").trim(),
       presentationMessageId: String(command.presentation?.assistantMessageId || "").trim(),

@@ -22,11 +22,6 @@ const SCAN_EXTENSIONS = new Set([".js", ".vue"]);
 const LEGACY_FIELD_PATTERN = /\b(?:dialogId|nodeDialogId)\b/;
 const OLD_ENTRYPOINT_PATTERN = /\b(?:workflowDialogId|selectedDialogId|selectedGraphDialogId|stepDialogIds|_stepDialogIds|nodeRunByDialogId)\b|selected-dialog-id|selected-graph-dialog-id/;
 
-const ALLOWED_LEGACY_FIELD_FILES = new Set([
-  path.normalize("src/core/dialog-process-compat.js"),
-  path.normalize("frontend/utils/workflowDialogProcessIdCompat.js"),
-]);
-
 const AGENT_COMPAT_FILES = [
   path.join(projectRoot, "agent/src/session/session-summary-builders.js"),
   path.join(projectRoot, "agent/src/session/services/session-message-service.js"),
@@ -67,21 +62,18 @@ function formatHit(filePath, hit) {
   return `${path.relative(projectRoot, filePath)}:${hit.lineNumber}: ${hit.line.trim()}`;
 }
 
-test("workflow dialog process legacy field usage stays inside compatibility boundaries", async () => {
+test("workflow dialog process identity uses only canonical fields", async () => {
   const files = (await Promise.all(SCAN_ROOTS.map((root) => listSourceFiles(root)))).flat();
   const legacyFieldViolations = [];
   const oldEntrypointViolations = [];
 
   for (const filePath of files) {
-    const relativeToPlugin = path.normalize(path.relative(pluginRoot, filePath));
     const content = await readFile(filePath, "utf8");
-    if (!ALLOWED_LEGACY_FIELD_FILES.has(relativeToPlugin)) {
-      legacyFieldViolations.push(...matchingLines(content, LEGACY_FIELD_PATTERN).map((hit) => formatHit(filePath, hit)));
-    }
+    legacyFieldViolations.push(...matchingLines(content, LEGACY_FIELD_PATTERN).map((hit) => formatHit(filePath, hit)));
     oldEntrypointViolations.push(...matchingLines(content, OLD_ENTRYPOINT_PATTERN).map((hit) => formatHit(filePath, hit)));
   }
 
-  assert.deepEqual(legacyFieldViolations, [], "dialogId/nodeDialogId may only appear in workflow compatibility helpers");
+  assert.deepEqual(legacyFieldViolations, [], "workflow source must use canonical dialog process identity fields");
   assert.deepEqual(oldEntrypointViolations, [], "old workflow dialog entrypoint names must not reappear");
 });
 

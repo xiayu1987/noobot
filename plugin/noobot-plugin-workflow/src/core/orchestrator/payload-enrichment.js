@@ -8,7 +8,7 @@ import {
   normalizeWorkflowTransferPayload,
 } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
-import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
+import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 
 export function buildWorkflowNodeSessions({
   ctx = {},

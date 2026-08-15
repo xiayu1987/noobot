@@ -9,16 +9,14 @@ export const DEFAULT_TEMPLATE_PATH = "../user-template/default-user";
 export const DEFAULT_SUPER_ADMIN_USER_ID = "admin";
 export const DEFAULT_SUPER_ADMIN_CONNECT_CODE = "change-your-connect-code";
 export const MODEL_FORMAT_VALUES = new Set(["dashscope", "openai_compatible"]);
-export const CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS = new Set([
+export const DEPLOYMENT_OWNED_CONFIG_ROOTS = new Set([
   "workspace_root",
   "workspaceRoot",
   "workspace_template_path",
   "workspaceTemplatePath",
-  "streaming",
   "super_admin",
   "superAdmin",
 ]);
-
 export const BUILTIN_CONFIG_PRUNE_PATHS = Object.freeze([
   ["memory_max_items"],
   ["memoryMaxItems"],

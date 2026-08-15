@@ -365,7 +365,6 @@ export function createAgentCapabilityModelInvoker({
           modelName: normalizedModelName,
           globalConfig,
           userConfig,
-          fallbackToDefault: false,
         })
       : resolveDefaultModelSpecFn({ globalConfig, userConfig });
     const modelPort = runtime?.modelPort;

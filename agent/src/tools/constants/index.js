@@ -4,25 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const SANDBOX_CONFIG = Object.freeze({
-  PROVIDERS: Object.freeze({
-    DOCKER: "docker",
-    BUBBLEWRAP: "bubblewrap",
-    FIREJAIL: "firejail",
-  }),
-  DOCKER: Object.freeze({
-    DEFAULT_CONTAINER_SCOPE: "global",
-    DEFAULT_CONTAINER_NAME: "noobot-script-sandbox",
-    DEFAULT_IMAGE: "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
-  }),
-  COMMANDS: Object.freeze({
-    DOCKER: "docker",
-    FIREJAIL: "firejail",
-    BUBBLEWRAP: "bwrap",
-  }),
-  TOOL_POLICY_MODE: Object.freeze({
-    CUSTOM_ONLY: "custom_only",
-  }),
+export const TOOL_POLICY_MODE = Object.freeze({
+  CUSTOM_ONLY: "custom_only",
 });
 
 export const CONNECTOR_TYPE = Object.freeze({

@@ -9,12 +9,15 @@
     "./outbox": "./src/authority-event-outbox.mjs",
     "./package.json": "./package.json",
     "./message-event": "./src/message-event.mjs",
+    "./tool-presentation": "./src/tool-presentation.mjs",
+    "./tool-timeline": "./src/tool-timeline.mjs",
     "./workflow-runtime-event": "./src/workflow-runtime-event.mjs"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
+    "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",
     "@noobot/shared": "file:../shared",
     "@noobot/session-protocol": "file:../session-protocol"
   }

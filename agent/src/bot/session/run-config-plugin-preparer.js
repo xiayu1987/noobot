@@ -47,11 +47,8 @@ function pluginIsSelected({ pluginId, runConfig, effectiveConfig }) {
   const disabled = new Set(normalizeTrimmedStringList(runConfig?.disabledPlugins));
   if (disabled.has(pluginId)) return false;
   const selected = new Set(normalizeTrimmedStringList(runConfig?.selectedPlugins));
-  if (selected.has(pluginId)) return true;
-  return (
-    pluginConfig(runConfig, pluginId).mode === "on" ||
-    pluginConfig(effectiveConfig, pluginId).mode === "on"
-  );
+  if (!selected.has(pluginId)) return false;
+  return pluginConfig(effectiveConfig, pluginId).enabled !== false;
 }
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {

@@ -7,7 +7,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { BaseEmptyHint, BaseMessageErrorAlert } from "noobot-chat/plugin-api/ui";
 import { AgentExecutionView } from "noobot-chat/plugin-api/chat-ui";
-import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
 
 function resolveDialogProcessId(item = {}) {
   return resolveWorkflowDialogProcessId(item);
@@ -176,9 +176,9 @@ watch(
     sessionId: String(props.selectedNodeSessionId || ""),
     executionId: String(props.selectedExecutionId || ""),
     nodeExecutionId: String(props.selectedRuntimeNode?.nodeExecutionId || ""),
-    nodeStatus: String(props.selectedRuntimeNode?.status || props.selectedRuntimeNode?.stepStatus || ""),
+    nodeStatus: String(props.selectedRuntimeNode?.status || ""),
     selectedStepId: String(props.selectedRuntimeStep?.stepId || ""),
-    selectedStepStatus: String(props.selectedRuntimeStep?.status || props.selectedRuntimeStep?.stepStatus || ""),
+    selectedStepStatus: String(props.selectedRuntimeStep?.status || ""),
     runtimeBoxCount: props.selectedRuntimeBoxes.length,
     runtimeStepCount: props.selectedRuntimeBoxes.reduce(
       (count, box = {}) => count + (Array.isArray(box?.steps) ? box.steps.length : 0),

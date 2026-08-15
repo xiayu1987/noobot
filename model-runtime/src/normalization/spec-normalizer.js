@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveModelAdapterId, resolveModelOperatorId } from "@noobot/model-protocol";
 
 export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
   openai_compatible: Object.freeze({
@@ -163,27 +164,7 @@ function normalizeBoolean(value, fallback = false) {
   return fallback;
 }
 
-function inferOperatorId(modelSpec = {}) {
-  const model = String(modelSpec.model || "").toLowerCase();
-  const format = String(modelSpec.format || "").trim().toLowerCase();
-  const baseUrl = String(modelSpec.base_url || modelSpec.baseUrl || "").toLowerCase();
-  // `format` is the wire protocol selected by configuration. DashScope is
-  // Alibaba's protocol, so it takes precedence over a model-brand prefix
-  // such as ZHIPU/GLM and over unresolved endpoint placeholders.
-  if (format === "dashscope") return "alibaba";
-  if (/dashscope|aliyun|alibaba/.test(baseUrl)) return "alibaba";
-  if (/openai/.test(baseUrl)) return "openai";
-  if (/zhipu|bigmodel/.test(baseUrl)) return "zhipu";
-  if (baseUrl && !/^\$\{[^}]+\}$/.test(baseUrl)) return "generic";
-  if (/glm|zhipu/.test(model)) return "zhipu";
-  if (/claude|anthropic/.test(model) || /anthropic/.test(baseUrl)) return "anthropic";
-  if (/gemini|nano[-_.]?banana/.test(model) || /generativelanguage|gemini|google/.test(baseUrl)) return "google";
-  if (/deepseek/.test(model) || /deepseek/.test(baseUrl)) return "deepseek";
-  if (/openai_api|openai/.test(baseUrl) || /\bgpt|\bcodex|\bo[1-9]/.test(model)) return "openai";
-  return "generic";
-}
-
-function inferModelFamily(modelSpec = {}) {
+function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
   if (/claude|anthropic/.test(model)) return "claude";
   if (/gemini|nano[-_.]?banana/.test(model)) return "gemini";
@@ -194,34 +175,27 @@ function inferModelFamily(modelSpec = {}) {
   return "generic";
 }
 
-function inferAdapterId(format = "") {
-  return String(format || "").trim().toLowerCase() === "dashscope" ? "dashscope" : "openai-compatible";
-}
-
 function resolveConcreteModelDefaults(model = "") {
   const normalized = String(model || "").trim().toLowerCase();
   return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
 export function normalizeRuntimeModelSpec(input = {}) {
-  const out = { ...input };
+  let out = { ...input };
+  delete out.providerId;
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();
   out.format = String(out.format || "")
     .trim()
     .toLowerCase();
-  // Provider and adapter are runtime-derived identities, not user-tunable
-  // model parameters. Legacy configured values are intentionally ignored.
-  out.operatorId = inferOperatorId(out);
-  out.modelFamily = inferModelFamily(out);
-  // providerId remains an internal protocol compatibility field; it is never
-  // read from configuration and mirrors the inferred operator.
-  out.providerId = out.operatorId;
-  out.adapterId = inferAdapterId(out.format);
   if (!out.model) throw new TypeError("model spec.model is required");
   if (!out.format) throw new TypeError("model spec.format is required");
-  if (!out.providerId) throw new TypeError("model spec.providerId is required");
-  if (!out.adapterId) throw new TypeError("model spec.adapterId is required");
+  out.operatorId = resolveModelOperatorId({
+    format: out.format,
+    baseUrl: out.base_url || out.baseUrl || "",
+  });
+  out.modelFamily = classifyModelFamily(out);
+  out.adapterId = resolveModelAdapterId(out.format);
   const defaults = getRuntimeModelDefaultFields(out);
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});

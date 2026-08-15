@@ -195,6 +195,7 @@ async function requestJson({
 async function executeImagesAsync({
   modelSpec,
   credential,
+  headers,
   input,
   options,
   signal,
@@ -205,14 +206,14 @@ async function executeImagesAsync({
   const localized = IMAGES_ASYNC_FALLBACKS[normalizeLocale(locale)];
   const baseUrl = normalizeBaseUrl(modelSpec.base_url);
   const createUrl = buildApiUrl(baseUrl, "/v1/images/generations");
-  const headers = { Authorization: `Bearer ${credential}`, ...(options.headers || {}) };
+  const requestHeaders = { ...headers, Authorization: `Bearer ${credential}` };
   const size = String(options.size || "1:1").trim() || "1:1";
   const resolution = String(options.resolution || "").trim() || (RATIO_SIZE.test(size) ? "1K" : "");
   const created = await requestJson({
     fetchImpl,
     url: createUrl,
     method: "POST",
-    headers,
+    headers: requestHeaders,
     signal,
     locale,
     body: {
@@ -237,7 +238,7 @@ async function executeImagesAsync({
   const startedAt = Date.now();
   while (Date.now() - startedAt < Number(options.timeoutMs || TIMEOUT_MS)) {
     const task = normalizeTask(
-      await requestJson({ fetchImpl, url: taskUrl, headers, signal, locale }),
+      await requestJson({ fetchImpl, url: taskUrl, headers: requestHeaders, signal, locale }),
     );
     const status = String(task.status || "")
       .trim()
@@ -302,6 +303,7 @@ export async function executeOpenAiOperation({
     return executeImagesAsync({
       modelSpec,
       credential,
+      headers,
       input: operation.input,
       options: operation.options,
       signal,

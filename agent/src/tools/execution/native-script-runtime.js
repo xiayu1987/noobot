@@ -12,6 +12,7 @@ import {
   createTaskPath,
   filePath as path,
   isTaskPath,
+  normalizeTaskPathRelative,
   parseTaskPath,
   projectTaskPathText,
   resolveTaskPath,
@@ -37,13 +38,11 @@ function inside(root, candidate) {
   );
 }
 
-async function resolveChild(root, relative, label) {
-  const value = String(relative || "").trim();
-  if (!value || path.isAbsolute(value) || value.split(/[\\/]+/).includes("..")) {
-    throw new Error(`${label} must be a relative path`);
-  }
+async function resolveChild(root, relative, label, { createParent = false } = {}) {
+  const value = normalizeTaskPathRelative(relative, { label });
   const candidate = path.resolve(root, value);
   if (candidate === path.resolve(root)) return candidate;
+  if (createParent) await mkdir(path.dirname(candidate), { recursive: true });
   const parent = await realpath(path.dirname(candidate));
   if (!inside(root, parent) || !inside(root, candidate))
     throw new Error(`${label} is outside the task directory`);
@@ -351,24 +350,36 @@ export async function createNativeScriptRuntime({
       ? parseTaskPath(value, { kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }).relative
       : value;
     if (!String(relative || "")) return outputRoot;
-    await mkdir(path.dirname(path.resolve(outputRoot, String(relative || ""))), {
-      recursive: true,
-    });
-    return resolveChild(outputRoot, relative, "output path");
+    return resolveChild(outputRoot, relative, "output path", { createParent: true });
   };
   const outputFile = async (relative) => {
     if (isTaskPath(relative, { kind: TASK_PATH_KINDS.OUTPUT, allowRoot: false })) {
       return parseTaskPath(relative, { kind: TASK_PATH_KINDS.OUTPUT }).token;
     }
-    const target = path.resolve(outputRoot, String(relative || ""));
-    await mkdir(path.dirname(target), { recursive: true });
-    await resolveChild(outputRoot, relative, "output path");
+    await resolveChild(outputRoot, relative, "output path", { createParent: true });
     return createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative });
   };
-  const tempFile = async (relative) => {
-    const target = path.resolve(tempRoot, String(relative || ""));
-    await mkdir(path.dirname(target), { recursive: true });
-    await resolveChild(tempRoot, relative, "temporary path");
+  const tempFile = async (parentOrRelative, name = "") => {
+    const parent = String(parentOrRelative || "").trim();
+    const child = String(name || "").trim();
+    if (child && isTaskPath(child, { allowRoot: true })) {
+      throw new Error("output.tempFile requires tempDirectoryToken before fileName");
+    }
+    const parentToken = isTaskPath(parent, { kind: TASK_PATH_KINDS.TEMP, allowRoot: true });
+    if (parentToken && !child) {
+      throw new Error("output.tempFile requires a file name after a temp directory token");
+    }
+    if (!parentToken && child) {
+      throw new Error("output.tempFile first argument must be a tempDirectory token when a fileName is provided");
+    }
+    const directory = parentToken
+      ? parseTaskPath(parent, {
+          kind: TASK_PATH_KINDS.TEMP,
+          allowRoot: true,
+        }).relative
+      : "";
+    const relative = parentToken ? (directory ? `${directory}/${child}` : child) : parent;
+    await resolveChild(tempRoot, relative, "temporary path", { createParent: true });
     return createTaskPath({ kind: TASK_PATH_KINDS.TEMP, relative });
   };
   const tempDirectory = async (relative) => {

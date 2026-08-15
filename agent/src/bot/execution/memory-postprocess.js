@@ -34,9 +34,6 @@ export class MemoryPostProcessService {
   resolveMemorySummaryTimeoutMs(userConfig = {}) {
     const userMemoryTimeout = resolveTimeMs(userConfig?.memory, {
       key: "summarizeTimeoutMs",
-      legacyKeys: ["summarize_timeout_ms"],
-      sourceTag: "agent.memory.summary.user",
-      warnLegacy: true,
       fallback: 0,
       min: 1,
     });
@@ -50,9 +47,6 @@ export class MemoryPostProcessService {
 
     const globalMemoryTimeout = resolveTimeMs(this.globalConfig?.memory, {
       key: "summarizeTimeoutMs",
-      legacyKeys: ["summarize_timeout_ms"],
-      sourceTag: "agent.memory.summary.global",
-      warnLegacy: true,
       fallback: 0,
       min: 1,
     });
@@ -87,9 +81,6 @@ export class MemoryPostProcessService {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, userConfig || {});
     return resolveTimeMs(effectiveConfig?.session, {
       key: "executionBundleTimeoutMs",
-      legacyKeys: ["execution_bundle_timeout_ms"],
-      sourceTag: "agent.memory.execution-bundle",
-      warnLegacy: true,
       fallback: DEFAULT_EXECUTION_BUNDLE_TIMEOUT_MS,
       min: 1,
     });

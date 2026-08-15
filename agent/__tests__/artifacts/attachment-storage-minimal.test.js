@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../src/artifacts/service/attachment-service.js";
 import { resolveCanonicalSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
@@ -195,17 +195,15 @@ test("resolveCanonicalSourceAttachment resolves an exact attachment identity", a
       basePath: workspaceRoot,
       attachmentService: service,
       userMessageAttachments: [],
-      userConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "user" },
-            },
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
+      userConfig: {},
       systemRuntime: {
         sessionId: "s1",
         config: {},
@@ -345,6 +343,54 @@ test("AttachmentService.ingestGeneratedArtifacts preserves attachment owner meta
     });
     assert.equal(loaded.owner?.type, "plugin");
     assert.equal(loaded.owner?.id, "harness-plugin");
+  });
+});
+
+test("AttachmentService persists zero-byte generated artifacts as canonical attachments", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const [saved] = await service.ingestGeneratedArtifacts({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "model",
+      generationSource: "execute_native_script",
+      artifacts: [{ name: "empty.bin", mimeType: "application/octet-stream", contentBase64: "" }],
+    });
+
+    assert.equal(saved.name, "empty.bin");
+    assert.equal(saved.size, 0);
+    const loaded = await service.getAttachmentById({
+      userId: "u1",
+      attachmentId: saved.attachmentId,
+      sessionId: "s1",
+      attachmentSource: "model",
+    });
+    assert.equal(loaded.name, "empty.bin");
+    assert.equal(loaded.size, 0);
+    assert.equal((await stat(loaded.absolutePath)).size, 0);
+  });
+});
+
+test("AttachmentService rejects a malformed generated batch before persisting any item", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    await assert.rejects(
+      service.ingestGeneratedArtifacts({
+        userId: "u1",
+        sessionId: "atomic-session",
+        attachmentSource: "model",
+        artifacts: [
+          { name: "valid.txt", mimeType: "text/plain", contentBase64: "dmFsaWQ=" },
+          { name: "invalid.txt", mimeType: "text/plain" },
+        ],
+      }),
+      /artifacts\[1\]\.contentBase64 must be a string/,
+    );
+    const index = await readAttachIndex(path.join(workspaceRoot, "u1"), {
+      sessionId: "atomic-session",
+      attachmentSource: "model",
+    });
+    assert.equal(Object.keys(index.attachments).length, 0);
   });
 });
 

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
 import {
   fsAccess,
   fsMkdir,
@@ -12,17 +11,10 @@ import {
   fsRename,
   fsWriteFile,
 } from "../shared/storage/fs-adapter.js";
-
-const ATOMIC_RENAME_RETRY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
-const ATOMIC_RENAME_RETRY_DELAYS_MS = [25, 75, 150, 300, 600];
-
-function sleep(ms = 0) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRetryableAtomicRenameError(error) {
-  return ATOMIC_RENAME_RETRY_CODES.has(String(error?.code || ""));
-}
+import {
+  ATOMIC_RENAME_RETRY_DELAYS_MS,
+  writeFileAtomic,
+} from "../shared/storage/atomic-file-write.js";
 
 export class StorageService {
   constructor({ pathResolver, atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS } = {}) {
@@ -68,29 +60,13 @@ export class StorageService {
   }
 
   async writeJsonAtomic(filePath, data) {
-    const tempFile = `${filePath}.tmp-${process.pid}-${Date.now()}-${randomUUID()}`;
-    try {
-      await fsWriteFile(tempFile, JSON.stringify(data, null, 2), "utf8");
-      for (let attempt = 0; attempt <= this.atomicRenameRetryDelaysMs.length; attempt += 1) {
-        try {
-          await fsRename(tempFile, filePath);
-          return;
-        } catch (error) {
-          if (
-            attempt >= this.atomicRenameRetryDelaysMs.length ||
-            !isRetryableAtomicRenameError(error)
-          ) {
-            throw error;
-          }
-          await sleep(this.atomicRenameRetryDelaysMs[attempt]);
-        }
-      }
-    } catch (error) {
-      try {
-        await fsRm(tempFile, { force: true });
-      } catch {
-      }
-      throw error;
-    }
+    await writeFileAtomic({
+      filePath,
+      content: JSON.stringify(data, null, 2),
+      writeFile: fsWriteFile,
+      rename: fsRename,
+      remove: fsRm,
+      retryDelaysMs: this.atomicRenameRetryDelaysMs,
+    });
   }
 }

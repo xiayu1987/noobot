@@ -31,6 +31,7 @@ function createCommand(overrides = {}) {
     },
     input: { message: "hello", attachments: [] },
     preferences: {
+      safeConfirm: overrides.safeConfirm,
       locale: "en-US",
       streaming: true,
       selectedModel: "gpt-5.5",
@@ -77,6 +78,7 @@ test("chat-run-service maps a validated transport command without a compat confi
     email: "",
   });
   assert.deepEqual(request.runConfig.selectedPlugins, ["planning"]);
+  assert.equal("plugins" in request.runConfig, false);
   assert.equal(request.runConfig.safeConfirm, true);
   assert.equal("config" in request.runConfig, false);
   assert.equal("runTimeoutMs" in request.runConfig, false);
@@ -89,6 +91,14 @@ test("chat-run-service consumes explicit session provision intent", () => {
     { userId: "user-1" },
   );
   assert.equal(request.createSessionIfAbsent, true);
+});
+
+test("chat-run-service preserves disabled safety confirmation from transport preferences", () => {
+  const request = createService().mapAgentRunCommand(createCommand({ safeConfirm: false }), {
+    userId: "user-1",
+  });
+
+  assert.equal(request.runConfig.safeConfirm, false);
 });
 
 test("chat-run-service derives resend and continuation flags from commandType", () => {

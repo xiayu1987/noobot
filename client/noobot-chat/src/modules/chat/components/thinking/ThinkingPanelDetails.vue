@@ -27,28 +27,34 @@ const props = defineProps({
   isExpanded: { type: Function, required: true },
   toggleExpanded: { type: Function, required: true },
 });
-const rendererProjection = computed(() => (Array.isArray(props.groupedToolLogs)
-  ? props.groupedToolLogs
-  : []).flatMap((group = {}) => (Array.isArray(group.items) ? group.items : [])));
-const rendererProjectionSignature = computed(() => [
-  rendererProjection.value.map((item = {}) => [
-    item.eventId || "",
-    item.toolCallId || "",
-    item.detailText?.length || 0,
-  ].join(":")).join("|"),
-  props.thinkingContentItems.map((item = {}) => [
-    item.eventId || "",
-    item.sequence || 0,
-    String(item.content || "").length,
-  ].join(":")).join("|"),
-].join("::"));
-const taskCheckItems = computed(() => props.taskCheckReceipts
-  .map((receipt = {}, index) => ({
-    key: `${String(receipt.contentHash || "task-check")}-${index}`,
-    title: `${index + 1}. ${props.translate("message.taskCheck")}${receipt.timestamp ? ` · ${receipt.timestamp}` : ""}`,
-    content: String(receipt.abstract || "").trim(),
-  }))
-  .filter((item) => item.content));
+const rendererProjection = computed(() =>
+  (Array.isArray(props.groupedToolLogs) ? props.groupedToolLogs : []).flatMap((group = {}) =>
+    Array.isArray(group.items) ? group.items : [],
+  ),
+);
+const rendererProjectionSignature = computed(() =>
+  [
+    rendererProjection.value
+      .map((item = {}) =>
+        [item.eventId || "", item.toolCallId || "", item.detailText?.length || 0].join(":"),
+      )
+      .join("|"),
+    props.thinkingContentItems
+      .map((item = {}) =>
+        [item.eventId || "", item.sequence || 0, String(item.content || "").length].join(":"),
+      )
+      .join("|"),
+  ].join("::"),
+);
+const taskCheckItems = computed(() =>
+  props.taskCheckReceipts
+    .map((receipt = {}, index) => ({
+      key: `${String(receipt.contentHash || "task-check")}-${index}`,
+      title: `${index + 1}. ${props.translate("message.taskCheck")}${receipt.timestamp ? ` · ${receipt.timestamp}` : ""}`,
+      content: String(receipt.abstract || "").trim(),
+    }))
+    .filter((item) => item.content),
+);
 const expandedDetailKeys = ref(new Set());
 function isDetailExpanded(detailKey = "") {
   return Boolean(detailKey) && expandedDetailKeys.value.has(detailKey);
@@ -65,115 +71,107 @@ function formatThinkingContentTitle(item = {}, index = 0) {
   const timestamp = String(item?.timestamp || item?.timelineTimestamp || "").trim();
   return `${index + 1}. ${source}${timestamp ? ` · ${timestamp}` : ""}`;
 }
-watch(rendererProjectionSignature, () => {
-  const buildLogPayload = () => ({
-    sessionId: String(props.messageItem?.sessionId || ""),
-    presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
-    dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
-    turnScopeId: String(props.messageItem?.turnScopeId || ""),
-    itemCount: rendererProjection.value.length,
-    thinkingContentCount: props.thinkingContentItems.length,
-    thinkingContent: props.thinkingContentItems.slice(-32).map((item = {}) => ({
-      eventId: String(item.eventId || ""),
-      event: String(item.event || ""),
-      sequence: Number(item.sequence || 0),
-      contentLength: String(item.content || "").length,
-    })),
-    items: rendererProjection.value.slice(-32).map((item = {}, index) => {
-      const detailKey = props.getDetailKey({ key: "tool-timeline" }, item, index);
-      return {
+watch(
+  rendererProjectionSignature,
+  () => {
+    const buildLogPayload = () => ({
+      sessionId: String(props.messageItem?.sessionId || ""),
+      presentationMessageId: String(props.messageItem?.presentationMessageId || ""),
+      dialogProcessId: String(props.messageItem?.dialogProcessId || ""),
+      turnScopeId: String(props.messageItem?.turnScopeId || ""),
+      itemCount: rendererProjection.value.length,
+      thinkingContentCount: props.thinkingContentItems.length,
+      thinkingContent: props.thinkingContentItems.slice(-32).map((item = {}) => ({
         eventId: String(item.eventId || ""),
-        toolCallId: String(item.toolCallId || ""),
         event: String(item.event || ""),
-        hasArgs: item.args !== undefined,
-        hasResult: item.result !== undefined,
-        detailLength: String(item.detailText || "").length,
-        detailKey,
-        expanded: detailKey ? props.isExpanded(props.messageItem, detailKey) : false,
-      };
-    }),
-  });
-  logThinkingReplayDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
-  logStateMachineDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
-}, { immediate: true, flush: "post" });
+        sequence: Number(item.sequence || 0),
+        contentLength: String(item.content || "").length,
+      })),
+      items: rendererProjection.value.slice(-32).map((item = {}, index) => {
+        const detailKey = props.getDetailKey({ key: "tool-timeline" }, item, index);
+        return {
+          eventId: String(item.eventId || ""),
+          toolCallId: String(item.toolCallId || ""),
+          event: String(item.event || ""),
+          hasArgs: item.args !== undefined,
+          hasResult: item.result !== undefined,
+          detailLength: String(item.detailText || "").length,
+          detailKey,
+          expanded: detailKey ? props.isExpanded(props.messageItem, detailKey) : false,
+        };
+      }),
+    });
+    logThinkingReplayDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
+    logStateMachineDebug("frontend.thinkingReplay.detailRendererProjected", buildLogPayload);
+  },
+  { immediate: true, flush: "post" },
+);
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
     ><el-tabs class="thinking-details-tabs"
-        ><el-tab-pane
-          :label="translate('message.executionRecords', { count: detailCount })"
-          ><BaseTabPanelBody
-            class="thinking-details-scroll-body thinking-details-log-body"
-            ><div
-              v-for="(group, gi) in groupedToolLogs"
-              :key="`tool-group-${gi}`"
-              class="thinking-group"
-            >
-              <BaseMetaLabel
-                v-if="group.label"
-                class="thinking-group-title"
-                :text="group.label"
+      ><el-tab-pane :label="translate('message.executionRecords', { count: detailCount })"
+        ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-log-body"
+          ><div
+            v-for="(group, gi) in groupedToolLogs"
+            :key="`tool-group-${gi}`"
+            class="thinking-group"
+          >
+            <BaseMetaLabel v-if="group.label" class="thinking-group-title" :text="group.label" />
+            <div v-for="(item, ii) in group.items" :key="getDetailKey(group, item, ii)">
+              <BaseThinkingLogLine
+                :indent="Number(item.indent || 0)"
+                :prefix-text="getTreePrefix(item)"
+                :event-text="item.event"
+                :content-text="item.text"
+                :detail-text="item.detailText"
+                :tool="true"
+                :tone="item.presentation?.tone"
+                :tool-name="item.tool"
+                :risk-level="item.riskLevel"
+                :expandable="Boolean(getDetailKey(group, item, ii) && item.detailText)"
+                :expanded="isDetailExpanded(getDetailKey(group, item, ii))"
+                :title-text="item.text || ''"
+                @toggle="toggleDetail(getDetailKey(group, item, ii))"
               />
-              <div
-                v-for="(item, ii) in group.items"
-                :key="getDetailKey(group, item, ii)"
-              >
-                <BaseThinkingLogLine
-                  :indent="Number(item.indent || 0)"
-                  :prefix-text="getTreePrefix(item)"
-                  :event-text="item.event"
-                  :content-text="item.text"
-                  :detail-text="item.detailText"
-                  :tool="true"
-                  :expandable="Boolean(getDetailKey(group, item, ii) && item.detailText)"
-                  :expanded="
-                    isDetailExpanded(getDetailKey(group, item, ii))
-                  "
-                  :title-text="item.text || ''"
-                  @toggle="
-                    toggleDetail(getDetailKey(group, item, ii))
-                  "
-                />
-              </div>
             </div>
-            <BaseEmptyHint
-              v-if="!detailCount"
-              :text="
-                translate('message.noToolCalls')
-              " /></BaseTabPanelBody></el-tab-pane
-        ><el-tab-pane
-          :label="
-            translate('message.thinkingContent', {
-              count: thinkingContentItems.length,
-            })
-          "
-          ><BaseTabPanelBody
-            class="thinking-details-scroll-body thinking-details-content-body"
-            ><div
-              v-if="taskCheckItems.length"
-              class="thinking-task-check-block"
-              data-thinking-block="task-check"
-            >
-              <BaseMetaLabel
-                class="thinking-task-check-title"
-                :text="translate('message.taskCheck')"
-              />
-              <BaseNoteBlock
-                v-for="item in taskCheckItems"
-                :key="item.key"
-                class="thinking-task-check-item"
-                :title="item.title"
-                :content="item.content"
-              />
-            </div><BaseNoteBlock
-              v-for="(item, index) in thinkingContentItems"
-              :key="`thinking-content-${String(item.eventId || index)}`"
-              :title="formatThinkingContentTitle(item, index)"
-              :content="String(item.content || '')" /><BaseEmptyHint
-              v-if="!thinkingContentItems.length"
-              :text="
-                translate('message.noThinkingContent')
-              " /></BaseTabPanelBody></el-tab-pane></el-tabs
+          </div>
+          <BaseEmptyHint
+            v-if="!detailCount"
+            :text="translate('message.noToolCalls')" /></BaseTabPanelBody></el-tab-pane
+      ><el-tab-pane
+        :label="
+          translate('message.thinkingContent', {
+            count: thinkingContentItems.length,
+          })
+        "
+        ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-content-body"
+          ><div
+            v-if="taskCheckItems.length"
+            class="thinking-task-check-block"
+            data-thinking-block="task-check"
+          >
+            <BaseMetaLabel
+              class="thinking-task-check-title"
+              :text="translate('message.taskCheck')"
+            />
+            <BaseNoteBlock
+              v-for="item in taskCheckItems"
+              :key="item.key"
+              class="thinking-task-check-item"
+              :title="item.title"
+              :content="item.content"
+            />
+          </div>
+          <BaseNoteBlock
+            v-for="(item, index) in thinkingContentItems"
+            :key="`thinking-content-${String(item.eventId || index)}`"
+            :title="formatThinkingContentTitle(item, index)"
+            :content="String(item.content || '')" /><BaseEmptyHint
+            v-if="!thinkingContentItems.length"
+            :text="
+              translate('message.noThinkingContent')
+            " /></BaseTabPanelBody></el-tab-pane></el-tabs
   ></BaseTabPanelBody>
 </template>
 

@@ -12,7 +12,7 @@ import {
 } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
-import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },

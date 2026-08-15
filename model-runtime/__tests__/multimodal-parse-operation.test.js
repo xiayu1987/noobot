@@ -6,7 +6,39 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
 import { dashscopeAdapter } from "../src/adapters/dashscope-adapter.js";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+
+test("Responses image generation sends the prompt through the canonical input field", async () => {
+  let request;
+  await executeOpenAiOperation({
+    modelSpec: { model: "gpt-5.4", base_url: "https://example.test/v1" },
+    credential: "key",
+    operation: {
+      kind: MODEL_OPERATION_KIND.IMAGE_GENERATION,
+      input: { prompt: "draw a small red square" },
+      options: { apiType: IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES, size: "1024x1024" },
+    },
+    openAiClientFactory: () => ({
+      responses: {
+        create: async (value) => {
+          request = value;
+          return { output_text: "", output: [] };
+        },
+      },
+    }),
+  });
+
+  assert.deepEqual(request, {
+    model: "gpt-5.4",
+    input: [
+      {
+        role: "user",
+        content: [{ type: "input_text", text: "draw a small red square" }],
+      },
+    ],
+    tools: [{ type: "image_generation", size: "1024x1024" }],
+  });
+});
 
 test("multimodal parse maps multiple image and document attachments to one Responses API input", async () => {
   let request;

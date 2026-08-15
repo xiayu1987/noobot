@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tTool } from "../../core/tool-i18n.js";
+import { resolveCommandShell } from "@noobot/execution-isolation-protocol";
 
 export function buildScriptToolDescription({
   runtime,
@@ -11,10 +12,14 @@ export function buildScriptToolDescription({
   sandboxProvider,
   workspace,
   pathContext = {},
+  executionView,
+  platform = process.platform,
 }) {
+  const commandShell = resolveCommandShell({ executionView, platform });
   if (!sandboxEnabled) {
     return [
       tTool(runtime, "tools.script.localModeTitle"),
+      tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
       tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: workspace }),
       tTool(runtime, "tools.script.localModePathHint"),
     ].join("\n");
@@ -24,7 +29,8 @@ export function buildScriptToolDescription({
     pathContext?.directories && typeof pathContext.directories === "object"
       ? pathContext.directories
       : {};
-  const sandboxWorkdir = directories.opsWorkdir || pathContext?.opsWorkdir || workspace;
+  const sandboxWorkdir =
+    directories.currentDirectory || pathContext?.currentDirectory || workspace;
   const sandboxRoot = pathContext?.sandboxRoot || directories.rootDirectory || "";
   const allowedRoots = Array.isArray(directories.allowedRoots)
     ? directories.allowedRoots
@@ -38,7 +44,8 @@ export function buildScriptToolDescription({
       : [];
 
   return [
-    `${tTool(runtime, "tools.script.sandboxModeTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.sandboxModeTitleSuffix")}`,
+    `${tTool(runtime, "tools.script.workspaceSandboxTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.workspaceSandboxTitleSuffix")}`,
+    tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
     tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.lineRelativeBase", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),

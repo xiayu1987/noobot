@@ -56,10 +56,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       text: "生成图片内容。输入 generation_content（可选 model_name、image_size）。返回生成图片结果。",
     },
     params: {
-      api_type: {
-        key: "tools.multimodal.fieldApiType",
-        text: "图片生成接口类型（可选），支持 openai_responses、images_async。",
-      },
       generation_content: {
         key: "tools.multimodal.fieldGenerationContent",
         text: "生成内容描述。",
@@ -112,26 +108,26 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskTimeout": (params = {}) =>
         `图片生成任务超时：${String(params.taskId || "").trim()}`,
       "tools.multimodal.trySwitchApiType":
-        "请尝试更换 api_type，例如 openai_responses 或 images_async。",
+        "请检查该模型配置的图片生成接口类型。",
     },
   },
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "一起解析一个或多个图片、文档、音频或视频文件并保存结果。每项的 source 使用逻辑文件路径字符串或完整附件身份对象；附件显示名称不是路径。",
+      text: "一起解析一个或多个图片、文档、音频或视频文件并保存结果。每项 source 使用逻辑文件路径或完整附件身份。",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "一个或多个图片、文档、音频或视频输入；每项只包含一个 source 字段。",
+        text: "一个或多个图片、文档、音频或视频输入；每项包含逻辑文件路径或完整附件身份。",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
-        text: "source 为字符串时表示逻辑文件路径。",
+        text: "source 为字符串时表示由服务端解析的逻辑文件路径。",
       },
       attachmentIdentity: {
         key: "tools.multimodalParse.fieldAttachmentIdentity",
-        text: "source 为对象时必须包含 attachmentId、sessionId 和 attachmentSource。",
+        text: "附件对象必须包含 attachmentId、sessionId 和 attachmentSource。",
       },
       model_name: {
         key: "tools.multimodalParse.fieldModelName",
@@ -149,6 +145,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.defaultPrompt":
         "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
       "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型",
+      "tools.multimodalParse.defaultModelMissing": (params = {}) =>
+        `未配置以下输入类型的默认多模态解析模型：${String(params.modalities || "").trim()}`,
+      "tools.multimodalParse.defaultModelConflict":
+        "这些输入类型配置了不同的默认解析模型，请显式指定一个支持全部输入类型的 model_name",
     },
   },
   switch_model: {

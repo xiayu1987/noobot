@@ -4,99 +4,112 @@
  * SPDX-License-Identifier: MIT
  */
 import { z } from "zod";
+import { AsyncLocalStorage } from "node:async_hooks";
+import {
+  SECURITY_EVIDENCE_SOURCE,
+  SECURITY_RISK_LEVEL,
+  createSecurityAssessment,
+  normalizeSecurityRiskLevel,
+  raiseSecurityAssessment,
+  shouldRequireSecurityConfirmation,
+} from "@noobot/security-assessment-protocol";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "../core/tool-i18n.js";
 
-export const TOOL_RISK_LEVEL = Object.freeze({
-  LOW: "low",
-  MEDIUM: "medium",
-  HIGH: "high",
-  CRITICAL: "critical",
-});
+const toolRiskAssessmentStorage = new AsyncLocalStorage();
 
-const TOOL_RISK_ORDER = Object.freeze({ low: 0, medium: 1, high: 2, critical: 3 });
-const CONFIRMATION_MINIMUM_RISK = Object.freeze({ low: 3, medium: 2, high: 1, critical: 0 });
-
-export function normalizeSafeConfirmLevel(value) {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  return Object.hasOwn(TOOL_RISK_ORDER, normalized) ? normalized : TOOL_RISK_LEVEL.LOW;
+export function createToolRiskAssessment(call = {}) {
+  return {
+    current: createSecurityAssessment({
+      toolName: call?.name,
+      args: call?.args && typeof call.args === "object" ? call.args : {},
+    }),
+  };
 }
 
-export function shouldConfirmToolRisk({
-  safeConfirm = true,
-  safeConfirmLevel = "low",
-  riskLevel,
-} = {}) {
-  if (safeConfirm === false) return false;
-  const normalizedRiskLevel = String(riskLevel || "")
-    .trim()
-    .toLowerCase();
-  if (!Object.hasOwn(TOOL_RISK_ORDER, normalizedRiskLevel)) return false;
-  return (
-    TOOL_RISK_ORDER[normalizedRiskLevel] >=
-    CONFIRMATION_MINIMUM_RISK[normalizeSafeConfirmLevel(safeConfirmLevel)]
+export function getToolRiskLevel(assessment) {
+  return normalizeSecurityRiskLevel(
+    assessment?.current?.effectiveRiskLevel,
+    SECURITY_RISK_LEVEL.LOW,
   );
 }
 
-export function createRiskLevelSchema(runtimeOrContext, descriptionKey) {
-  return z.enum(Object.values(TOOL_RISK_LEVEL)).describe(tTool(runtimeOrContext, descriptionKey));
+export function runWithToolRiskAssessment(assessment, operation) {
+  return toolRiskAssessmentStorage.run(assessment, operation);
 }
 
-export function maxToolRiskLevel(...values) {
-  return values.reduce((highest, value) => {
-    const normalized = String(value || "")
-      .trim()
-      .toLowerCase();
-    if (!Object.hasOwn(TOOL_RISK_ORDER, normalized)) return highest;
-    return TOOL_RISK_ORDER[normalized] > TOOL_RISK_ORDER[highest] ? normalized : highest;
-  }, TOOL_RISK_LEVEL.LOW);
-}
-
-export function classifyFileToolRisk({ operation = "read", pathView = "workspace" } = {}) {
-  const normalizedOperation = String(operation || "read")
-    .trim()
-    .toLowerCase();
-  const hostResource =
-    String(pathView || "workspace")
-      .trim()
-      .toLowerCase() === "host";
-  if (["write", "patch", "delete"].includes(normalizedOperation)) {
-    return hostResource ? TOOL_RISK_LEVEL.CRITICAL : TOOL_RISK_LEVEL.HIGH;
+function assessToolOperation({ toolName, declaredRiskLevel, serverEvidence }) {
+  const activeAssessment = toolRiskAssessmentStorage.getStore();
+  const assessment =
+    activeAssessment ||
+    createToolRiskAssessment({ name: toolName, args: { riskLevel: declaredRiskLevel } });
+  if (assessment.current.toolName !== String(toolName || "").trim()) {
+    throw new TypeError("security assessment toolName does not match the active tool call");
   }
-  return hostResource ? TOOL_RISK_LEVEL.HIGH : TOOL_RISK_LEVEL.LOW;
+  if (
+    !serverEvidence ||
+    serverEvidence.source === SECURITY_EVIDENCE_SOURCE.MODEL_DECLARATION ||
+    serverEvidence.source === SECURITY_EVIDENCE_SOURCE.TOOL_PROFILE
+  ) {
+    throw new TypeError("tool operation requires one server-owned security evidence item");
+  }
+  assessment.current = raiseSecurityAssessment(assessment.current, serverEvidence);
+  return assessment;
+}
+
+export function createRiskLevelSchema(runtimeOrContext, descriptionKey) {
+  return z
+    .enum(Object.values(SECURITY_RISK_LEVEL))
+    .describe(tTool(runtimeOrContext, descriptionKey));
 }
 
 function confirmationContent(
   runtime,
   { toolName, operation, target = "", reason = "", riskLevel = "" },
 ) {
+  const formatTarget = (value) => {
+    if (Array.isArray(value)) return value.map(formatTarget).filter(Boolean).join(", ");
+    if (!value || typeof value !== "object") return String(value || "").trim();
+    if (value.view === "attachment" && value.identity) {
+      const identity = value.identity;
+      return `attachment:${String(identity.sessionId || "").trim()}/${String(identity.attachmentSource || "").trim()}/${String(identity.attachmentId || "").trim()}`;
+    }
+    if (value.view && value.path) return String(value.path).trim();
+    if (value.path) {
+      const pathText = formatTarget(value.path);
+      return [String(value.action || "").trim(), pathText].filter(Boolean).join(": ");
+    }
+    return "";
+  };
   return tTool(runtime, "tools.risk.criticalConfirmation", {
     toolName,
     operation,
-    target,
+    target: formatTarget(target),
     reason,
     riskLevel,
   });
 }
 
-export async function confirmCriticalToolOperation({
+export async function confirmToolOperation({
   runtime,
-  riskLevel,
+  declaredRiskLevel,
+  serverEvidence,
   toolName,
   operation,
   target = "",
   reason = "",
 }) {
+  const effectiveRiskLevel = getToolRiskLevel(
+    assessToolOperation({ toolName, declaredRiskLevel, serverEvidence }),
+  );
   const config = runtime?.systemRuntime?.config || {};
   if (
-    !shouldConfirmToolRisk({
-      safeConfirm: config.safeConfirm,
-      safeConfirmLevel: config.safeConfirmLevel,
-      riskLevel,
+    !shouldRequireSecurityConfirmation({
+      enabled: config.safeConfirm,
+      confirmationLevel: config.safeConfirmLevel,
+      riskLevel: effectiveRiskLevel,
     })
   )
     return;
@@ -108,7 +121,13 @@ export async function confirmCriticalToolOperation({
   }
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   const result = await bridge.requestUserInteraction({
-    content: confirmationContent(runtime, { toolName, operation, target, reason, riskLevel }),
+    content: confirmationContent(runtime, {
+      toolName,
+      operation,
+      target,
+      reason,
+      riskLevel: effectiveRiskLevel,
+    }),
     fields: [],
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     requireEncryption: false,

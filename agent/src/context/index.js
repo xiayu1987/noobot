@@ -190,11 +190,10 @@ export class ContextBuilder {
       userId: this.userId,
       globalConfig: this.globalConfig,
     });
-    const resolvedBasePath = staticInfo.basePath || runtimeBasePath || "";
     return {
       cwd: staticInfo.cwd || process.cwd(),
       userId: staticInfo.userId || "",
-      basePath: resolvedBasePath,
+      basePath: staticInfo.basePath || runtimeBasePath || "",
       platform: staticInfo.platform || process.platform,
       arch: staticInfo.arch || process.arch,
       nodeVersion: staticInfo.nodeVersion || process.version,
@@ -202,7 +201,7 @@ export class ContextBuilder {
       globalDefaults: staticInfo.globalDefaults || {
         workspaceRoot: this.globalConfig?.workspaceRoot || "",
       },
-      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(resolvedBasePath),
+      workspaceDirectories: await this._resolveWorkspaceDirectoriesCached(runtimeBasePath),
     };
   }
 

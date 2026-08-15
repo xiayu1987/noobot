@@ -7,34 +7,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyPrimaryModelReferencesToConfigFile,
+  ensureModelProviderInConfigFile,
   createConfigSnapshot,
   localizeBuiltinScenarios,
   mergeToolPolicyPatch,
+  migrateConfigFileToCurrentProtocol,
   resolveBuiltinScenarios,
   RunConfigResolver,
   resolveToolBindings,
   validateConfigSnapshot,
   normalizeKnownConfigKeys,
+  resolveMultimodalDefaultModelSelection,
 } from "../src/index.js";
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
   assert.equal(snapshot.protocol, "noobot.agent-config");
   assert.equal(validateConfigSnapshot(snapshot), snapshot);
 });
-test("configuration adapter maps readable execute_script sandbox fields once", () => {
-  const normalized = normalizeKnownConfigKeys({
-    tools: {
-      execute_script: {
-        sandbox_mode: false,
-        sandbox_provider: { default: "bubblewrap" },
-      },
-    },
-  });
-  assert.deepEqual(normalized.tools.execute_script, {
-    execution: { view: "host", sandboxProvider: { default: "bubblewrap" } },
-  });
-});
-
 test("config snapshot owns immutable metadata arrays", () => {
   const metadata = { migrations: ["v0"], warnings: ["legacy"], source: "test" };
   const snapshot = createConfigSnapshot({ metadata });
@@ -172,4 +162,144 @@ test("tool binding adds user interaction once and keeps deny authoritative", () 
     tools.map((tool) => tool.name),
     ["read_file", "write_file"],
   );
+});
+
+test("multimodal defaults resolve one explicit model across required modalities", () => {
+  const config = normalizeKnownConfigKeys({
+    multimodal: {
+      parsing: {
+        default_models: {
+          image: "vision",
+          document: "vision",
+          audio: "omni",
+        },
+      },
+    },
+  });
+  assert.deepEqual(
+    resolveMultimodalDefaultModelSelection(config, {
+      operation: "parsing",
+      modalities: ["image", "document"],
+    }),
+    {
+      operation: "parsing",
+      modalities: ["image", "document"],
+      alias: "vision",
+      configuredAliases: ["vision"],
+      missingModalities: [],
+      conflicting: false,
+    },
+  );
+  const conflict = resolveMultimodalDefaultModelSelection(config, {
+    operation: "parsing",
+    modalities: ["image", "audio"],
+  });
+  assert.equal(conflict.alias, "");
+  assert.equal(conflict.conflicting, true);
+});
+
+test("primary model alignment updates every config-file model reference", () => {
+  const config = {
+    default_provider: "old",
+    providers: { selected: { enabled: false, used_for_conversation: false } },
+    multimodal: {
+      parsing: { default_models: { audio: "old", image: "old", document: "old" } },
+      generation: { default_models: { image: "old" } },
+    },
+    scenarios: { definitions: { programming: { model: "old" }, text: { model: "old" } } },
+    tools: {
+      web_search: { responses_api: { model: "old" } },
+      request_help: { help_model: "" },
+    },
+    plugins: {
+      harness: { stepModels: { planning: "old" } },
+      workflow: { semanticModel: "old" },
+    },
+  };
+  applyPrimaryModelReferencesToConfigFile(config, "selected");
+  assert.equal(config.default_provider, "selected");
+  assert.equal(config.providers.selected.enabled, true);
+  assert.deepEqual(config.multimodal.parsing.default_models, {
+    audio: "selected",
+    image: "selected",
+    document: "selected",
+  });
+  assert.equal(config.multimodal.generation.default_models.image, "selected");
+  assert.equal(config.scenarios.definitions.programming.model, "selected");
+  assert.equal(config.tools.web_search.responses_api.model, "selected");
+  assert.equal(config.tools.request_help.help_model, "selected");
+  assert.equal(config.plugins.harness.stepModels.planning, "selected");
+  assert.equal(config.plugins.workflow.semanticModel, "selected");
+});
+
+test("model provider insertion uses the model library only when the alias is missing", () => {
+  const config = {
+    providers: {
+      gpt_5_6_sol: { model: "configured-model", api_key: "configured-key" },
+    },
+  };
+  const existing = ensureModelProviderInConfigFile(config, "gpt_5_6_sol");
+  assert.equal(existing.model, "configured-model");
+  assert.equal(existing.api_key, "configured-key");
+
+  const inserted = ensureModelProviderInConfigFile(config, "gemini_3_7_flash");
+  assert.equal(inserted.model, "gemini-3.7-flash");
+  assert.equal(inserted.api_key, "${GEMINI_API_KEY}");
+  inserted.model = "locally-mutated";
+  const otherConfig = {};
+  assert.equal(
+    ensureModelProviderInConfigFile(otherConfig, "gemini_3_7_flash").model,
+    "gemini-3.7-flash",
+  );
+  assert.throws(
+    () => ensureModelProviderInConfigFile({}, "not_in_library"),
+    /selected model provider not found/,
+  );
+});
+
+test("current config migration removes every retired config path and prunes empty parents", () => {
+  const config = {
+    attachments: {
+      attachment_models: { image: "legacy" },
+      limits: { max_file_size_bytes: 1024 },
+      storage: { root: "runtime/attachments" },
+    },
+    multimodal: {
+      parsing: { default_models: { image: "vision" } },
+    },
+    session: {
+      use_last_running_task_range: false,
+      use_last_completed_task_range: false,
+    },
+    tools: {
+      set_skill_task: { enabled: true },
+      web_to_data: { enabled: true },
+      doc_to_data: { enabled: true },
+      media_to_data: { enabled: true },
+      process_content_task: { enabled: true },
+      execute_script: {
+        enabled: true,
+        sandbox_mode: true,
+        sandbox_provider: { default: "docker" },
+      },
+      read_file: { enabled: true },
+    },
+  };
+
+  assert.equal(migrateConfigFileToCurrentProtocol(config), config);
+  assert.deepEqual(config, {
+    attachments: {
+      limits: { max_file_size_bytes: 1024 },
+      storage: { root: "runtime/attachments" },
+    },
+    multimodal: {
+      parsing: { default_models: { image: "vision" } },
+    },
+    tools: {
+      execute_script: { enabled: true },
+      read_file: { enabled: true },
+    },
+  });
+  assert.equal(migrateConfigFileToCurrentProtocol(config), config);
+  assert.deepEqual(config.attachments.limits, { max_file_size_bytes: 1024 });
 });

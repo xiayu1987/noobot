@@ -8,21 +8,32 @@
     <p>
       {{ messages.config.intro }}
     </p>
-    <div class="form-grid">
-      <el-form-item
-        v-for="item in requiredParams"
-        :key="item.key"
-        class="field-full"
-        :label="item.key"
-      >
-        <el-input
-          :model-value="values[item.key]"
-          autocomplete="off"
-          @update:model-value="updateValue(item.key, $event)"
+    <section v-if="modelParams.length" class="config-param-group">
+      <h3>{{ messages.config.modelParams }}</h3>
+      <div class="form-grid">
+        <ConfigParamField
+          v-for="item in modelParams"
+          :key="item.key"
+          :item="item"
+          :value="values[item.key]"
+          :fallback-description="messages.config.valueHelp"
+          @update:value="updateValue(item.key, $event)"
         />
-        <small>{{ item.description || messages.config.valueHelp }}</small>
-      </el-form-item>
-    </div>
+      </div>
+    </section>
+    <section v-if="generalParams.length" class="config-param-group">
+      <h3>{{ messages.config.otherParams }}</h3>
+      <div class="form-grid">
+        <ConfigParamField
+          v-for="item in generalParams"
+          :key="item.key"
+          :item="item"
+          :value="values[item.key]"
+          :fallback-description="messages.config.valueHelp"
+          @update:value="updateValue(item.key, $event)"
+        />
+      </div>
+    </section>
     <el-alert
       v-if="error"
       class="form-error"
@@ -41,6 +52,9 @@
 </template>
 
 <script setup>
+import { computed } from "vue";
+import ConfigParamField from "./ConfigParamField.vue";
+
 const props = defineProps({
   requiredParams: { type: Array, default: () => [] },
   values: { type: Object, required: true },
@@ -50,6 +64,10 @@ const props = defineProps({
   messages: { type: Object, required: true },
 });
 const emit = defineEmits(["submit", "skip", "update:values"]);
+const modelParams = computed(() => props.requiredParams.filter((item) => item?.group === "model"));
+const generalParams = computed(() =>
+  props.requiredParams.filter((item) => item?.group !== "model"),
+);
 
 function updateValue(key, value) {
   emit("update:values", { ...props.values, [key]: value });

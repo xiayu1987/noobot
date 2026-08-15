@@ -41,18 +41,19 @@ test("normalizeKnownConfigKeys: mcp_servers 子树内键名应保持原样", () 
 
 test("normalizeKnownConfigKeys: 数组和基础类型应被安全处理", () => {
   const input = {
-    docker_mounts: [{ mount_source: "/a", mount_target: "/b" }, "plain"],
+    mounts: [{ source: "/a", target: "/b", read_only: true }, "plain"],
     value: 1,
   };
   const out = normalizeKnownConfigKeys(input);
-  assert.equal(Array.isArray(out.dockerMounts), true);
-  assert.equal(out.dockerMounts[0].mountSource, "/a");
-  assert.equal(out.dockerMounts[0].mountTarget, "/b");
-  assert.equal(out.dockerMounts[1], "plain");
+  assert.equal(Array.isArray(out.mounts), true);
+  assert.equal(out.mounts[0].source, "/a");
+  assert.equal(out.mounts[0].target, "/b");
+  assert.equal(out.mounts[0].readOnly, true);
+  assert.equal(out.mounts[1], "plain");
   assert.equal(out.value, 1);
 });
 
-test("normalizeKnownConfigKeys: execute_script 外部沙箱配置映射为唯一内部执行协议", () => {
+test("normalizeKnownConfigKeys: 旧 execute_script 沙箱键不映射到全局隔离协议", () => {
   const out = normalizeKnownConfigKeys({
     tools: {
       execute_script: {
@@ -64,28 +65,32 @@ test("normalizeKnownConfigKeys: execute_script 外部沙箱配置映射为唯一
       },
     },
   });
-  assert.deepEqual(out.tools.execute_script, {
-    execution: {
-      view: "sandbox",
-      sandboxProvider: {
-        default: "docker",
-        docker: { dockerContainerScope: "global" },
+  assert.equal(out.security?.executionIsolation, undefined);
+  assert.equal(out.tools.execute_script.sandbox_mode, true);
+  assert.equal(out.tools.execute_script.sandbox_provider.default, "docker");
+});
+
+test("normalizeKnownConfigKeys: 全局隔离协议只规范化自己的配置树", () => {
+  const out = normalizeKnownConfigKeys({
+    security: {
+      execution_isolation: {
+        mode: "sandbox",
+        sandbox: {
+          provider: "docker",
+          scope: "user",
+          container_name: "noobot-test",
+          mounts: [{ source: "/a", target: "/data", read_only: true }],
+        },
       },
     },
   });
-});
-
-test("normalizeKnownConfigKeys: execute_script 外部和内部协议冲突时拒绝", () => {
-  assert.throws(
-    () =>
-      normalizeKnownConfigKeys({
-        tools: {
-          execute_script: {
-            sandbox_mode: true,
-            execution: { view: "host" },
-          },
-        },
-      }),
-    /conflicts/,
-  );
+  assert.deepEqual(out.security.executionIsolation, {
+    mode: "sandbox",
+    sandbox: {
+      provider: "docker",
+      scope: "user",
+      containerName: "noobot-test",
+      mounts: [{ source: "/a", target: "/data", readOnly: true }],
+    },
+  });
 });

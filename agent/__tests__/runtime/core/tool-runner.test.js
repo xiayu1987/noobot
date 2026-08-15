@@ -15,6 +15,8 @@ import {
 } from "../../../src/runtime/tool-execution/tool-runner.js";
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
+import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
+import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
 
 function executeToolCall(options = {}) {
   const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
@@ -84,6 +86,25 @@ test("executeToolCall gives tools an output transfer identity named after the ca
   });
   assert.match(identity.transferId, /:output:execute_native_script$/);
   assert.equal(identity.transferId.includes(":output:execute_script"), false);
+});
+
+test("executeToolCall keeps resource identity internal to the runtime result", async () => {
+  const result = await executeToolCall({
+    call: { id: "call-resource", name: "read_file", args: {} },
+    tool: {
+      invoke: async () =>
+        JSON.stringify({
+          toolName: "read_file",
+          ok: true,
+          resolvedPath: "src/index.js",
+          resources: [{ resourceId: "res_internal", source: "workspace" }],
+        }),
+    },
+  });
+  const publicResult = JSON.parse(result.toolResultText);
+  assert.equal(publicResult.resolvedPath, "src/index.js");
+  assert.equal("resources" in publicResult, false);
+  assert.equal(result.internalResources[0].resourceId, "res_internal");
 });
 
 function attachmentEnvelope({
@@ -349,6 +370,87 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
   assert.equal(completed?.presentationMessageId, "child-assistant-1");
 });
 
+test("canonical tool events publish the server-assessed maximum risk level", async () => {
+  const events = [];
+  const runtime = {
+    systemRuntime: {
+      config: { safeConfirm: false },
+    },
+  };
+  const result = await executeToolCall({
+    call: {
+      id: "call-risk",
+      name: "read_file",
+      args: { filePath: "notes.txt", riskLevel: "low" },
+    },
+    tool: {
+      async invoke() {
+        await confirmToolOperation({
+          runtime,
+          declaredRiskLevel: "low",
+          serverEvidence: {
+            source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
+            riskLevel: "high",
+          },
+          toolName: "read_file",
+          operation: "read file",
+        });
+        return { toolName: "read_file", ok: true };
+      },
+    },
+    runtime,
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  assert.equal(result.riskLevel, "high");
+  assert.equal(result.securityAssessment.effectiveRiskLevel, "high");
+  assert.deepEqual(
+    result.securityAssessment.evidence.map((item) => item.source),
+    ["model_declaration", "tool_profile", "normalized_resource"],
+  );
+  assert.deepEqual(
+    result.securityAssessment.evidence.map((item) => item.riskLevel),
+    ["low", "low", "high"],
+  );
+  assert.equal(
+    events.find((event = {}) => event.event === "tool_call_start")?.data?.riskLevel,
+    "low",
+  );
+  assert.equal(
+    events.find((event = {}) => event.event === "tool_call_end")?.data?.riskLevel,
+    "high",
+  );
+});
+
+test("tool operation baseline risk is published even when invocation fails before confirmation", async () => {
+  const events = [];
+  const result = await executeToolCall({
+    call: {
+      id: "call-native-static-rejection",
+      name: "execute_native_script",
+      args: { script_body: "require('fs')" },
+    },
+    tool: {
+      async invoke() {
+        throw new Error("script_body contains forbidden runtime capability: require");
+      },
+    },
+    runtime: { systemRuntime: { config: { safeConfirm: false } } },
+    eventListener: { onEvent: (event) => events.push(event) },
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.riskLevel, "medium");
+  assert.equal(
+    events.find((event = {}) => event.event === "tool_call_start")?.data?.riskLevel,
+    "medium",
+  );
+  assert.equal(
+    events.find((event = {}) => event.event === "tool_call_end")?.data?.riskLevel,
+    "medium",
+  );
+});
+
 test("canonical tool_call_end preserves a complete JSON tool result beyond 200 characters", async () => {
   const events = [];
   const resultPayload = JSON.stringify({
@@ -410,6 +512,24 @@ test("executeToolCall returns toToolJsonResult when tool invoke throws recoverab
   assert.equal(payload.code, "RECOVERABLE_INVALID_TOOL_ARGS");
   assert.equal(payload.error, "invalid tool args");
   assert.equal(payload.toolName, "demo_tool");
+});
+
+test("executeToolCall assigns the canonical invoke code when a thrown error has no code", async () => {
+  const result = await executeToolCall({
+    call: { id: "call_uncoded", name: "demo_tool", args: {} },
+    tool: {
+      invoke: async () => {
+        throw new Error("uncoded failure");
+      },
+    },
+    turn: 1,
+  });
+
+  const payload = JSON.parse(result.toolResultText);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.status, "failed");
+  assert.equal(payload.code, "RECOVERABLE_TOOL_INVOKE_ERROR");
+  assert.equal(payload.error, "uncoded failure");
 });
 
 test("executeToolCall includes error details from recoverable error", async () => {
@@ -561,14 +681,11 @@ test("executeToolCall: tool result too long should be persisted as a V2 attachme
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: {
-                dockerContainerScope: "global",
-              },
-            },
+        },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "global" },
           },
         },
       },
@@ -794,8 +911,11 @@ test("executeToolCall: overflow result never exposes sandbox or host paths", asy
       globalConfig: {
         tools: {
           maxToolResultChars: 120,
-          execute_script: {
-            sandboxMode: true,
+        },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },

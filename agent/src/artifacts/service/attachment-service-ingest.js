@@ -37,6 +37,20 @@ function resolveAttachmentIsSandbox(...sources) {
   return undefined;
 }
 
+function requireArtifactEntries(items, label) {
+  return items.map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new TypeError(`${label}[${index}] must be an object`);
+    }
+    const name = safeStr(item.name);
+    if (!name) throw new TypeError(`${label}[${index}].name is required`);
+    if (typeof item.contentBase64 !== "string") {
+      throw new TypeError(`${label}[${index}].contentBase64 must be a string`);
+    }
+    return { item, name, contentBase64: item.contentBase64 };
+  });
+}
+
 export async function saveAttachmentRecord({
   basePath,
   attachmentIndex,
@@ -95,6 +109,7 @@ export async function ingestAttachments(
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
   const policy = resolveAttachmentPolicy(attachmentPolicy);
+  const entries = requireArtifactEntries(attachments, "attachments");
 
   if (policy.maxFileCount > 0 && attachments.length > policy.maxFileCount) {
     throw recoverableToolError(
@@ -110,36 +125,61 @@ export async function ingestAttachments(
     );
   }
 
+  const prepared = entries.map(({ item, name, contentBase64 }) => {
+    const normalizedMime = safeStr(item.mimeType, DEFAULT_MIME_TYPE).toLowerCase();
+    if (!isMimeTypeAllowed(normalizedMime, policy.allowedMimeTypes)) {
+      throw recoverableToolError(`${tSystem("attach.mimeTypeNotAllowed")}: ${normalizedMime}`, {
+        code: ERROR_CODE.RECOVERABLE_ATTACHMENT_MIME_TYPE_NOT_ALLOWED,
+        details: { mimeType: normalizedMime },
+      });
+    }
+    if (!isExtensionAllowed(name, policy.allowedExtensions)) {
+      throw recoverableToolError(`${tSystem("attach.extensionNotAllowed")}: ${name}`, {
+        code: ERROR_CODE.RECOVERABLE_ATTACHMENT_EXTENSION_NOT_ALLOWED,
+        details: {
+          fileName: name,
+          allowedExtensions: policy.allowedExtensions,
+          hint: tSystem("attach.hintAddExtensionToAllowedExtensions"),
+        },
+      });
+    }
+    const bytes = Buffer.from(contentBase64, "base64");
+    if (policy.maxFileSizeBytes > 0 && bytes.length > policy.maxFileSizeBytes) {
+      throw recoverableToolError(
+        `${tSystem("attach.fileTooLarge")}: ${name}, ${bytes.length} > ${policy.maxFileSizeBytes}`,
+        {
+          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED,
+          details: {
+            fileName: name,
+            fileSizeBytes: bytes.length,
+            maxFileSizeBytes: policy.maxFileSizeBytes,
+            hint: tSystem("attach.hintIncreaseMaxFileSizeOrUploadSmaller"),
+          },
+        },
+      );
+    }
+    return { item, name, normalizedMime, bytes };
+  });
+  const totalBytes = prepared.reduce((sum, entry) => sum + entry.bytes.length, 0);
+  if (policy.maxTotalSizeBytes > 0 && totalBytes > policy.maxTotalSizeBytes) {
+    throw recoverableToolError(
+      `${tSystem("attach.totalSizeExceedsLimit")}: ${totalBytes} > ${policy.maxTotalSizeBytes}`,
+      {
+        code: ERROR_CODE.RECOVERABLE_ATTACHMENT_TOTAL_SIZE_LIMIT_EXCEEDED,
+        details: {
+          totalSizeBytes: totalBytes,
+          maxTotalSizeBytes: policy.maxTotalSizeBytes,
+          hint: tSystem("attach.hintIncreaseMaxTotalSizeOrReduceUpload"),
+        },
+      },
+    );
+  }
+
   return withAttachIndexLock(basePath, scope, async () => {
     const index = await readAttachIndex(basePath, scope);
     const saved = [];
-    let totalBytes = 0;
 
-    for (const item of attachments) {
-      const { name, contentBase64, mimeType = DEFAULT_MIME_TYPE } = item;
-      if (!name || !contentBase64) continue;
-
-      const normalizedMime = safeStr(mimeType, DEFAULT_MIME_TYPE).toLowerCase();
-
-      if (!isMimeTypeAllowed(normalizedMime, policy.allowedMimeTypes)) {
-        throw recoverableToolError(`${tSystem("attach.mimeTypeNotAllowed")}: ${normalizedMime}`, {
-          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_MIME_TYPE_NOT_ALLOWED,
-          details: { mimeType: normalizedMime },
-        });
-      }
-
-      if (!isExtensionAllowed(safeStr(name), policy.allowedExtensions)) {
-        throw recoverableToolError(`${tSystem("attach.extensionNotAllowed")}: ${safeStr(name)}`, {
-          code: ERROR_CODE.RECOVERABLE_ATTACHMENT_EXTENSION_NOT_ALLOWED,
-          details: {
-            fileName: safeStr(name),
-            allowedExtensions: policy.allowedExtensions,
-            hint: tSystem("attach.hintAddExtensionToAllowedExtensions"),
-          },
-        });
-      }
-
-      const bytes = Buffer.from(contentBase64, "base64");
+    for (const { item, name, normalizedMime, bytes } of prepared) {
       const clientAttachmentId = safeStr(item?.clientAttachmentId);
       const contentSha256 = createHash("sha256").update(bytes).digest("hex");
       if (clientAttachmentId) {
@@ -160,36 +200,6 @@ export async function ingestAttachments(
           saved.push(existing);
           continue;
         }
-      }
-
-      if (policy.maxFileSizeBytes > 0 && bytes.length > policy.maxFileSizeBytes) {
-        throw recoverableToolError(
-          `${tSystem("attach.fileTooLarge")}: ${safeStr(name)}, ${bytes.length} > ${policy.maxFileSizeBytes}`,
-          {
-            code: ERROR_CODE.RECOVERABLE_ATTACHMENT_FILE_SIZE_LIMIT_EXCEEDED,
-            details: {
-              fileName: safeStr(name),
-              fileSizeBytes: bytes.length,
-              maxFileSizeBytes: policy.maxFileSizeBytes,
-              hint: tSystem("attach.hintIncreaseMaxFileSizeOrUploadSmaller"),
-            },
-          },
-        );
-      }
-
-      totalBytes += bytes.length;
-      if (policy.maxTotalSizeBytes > 0 && totalBytes > policy.maxTotalSizeBytes) {
-        throw recoverableToolError(
-          `${tSystem("attach.totalSizeExceedsLimit")}: ${totalBytes} > ${policy.maxTotalSizeBytes}`,
-          {
-            code: ERROR_CODE.RECOVERABLE_ATTACHMENT_TOTAL_SIZE_LIMIT_EXCEEDED,
-            details: {
-              totalSizeBytes: totalBytes,
-              maxTotalSizeBytes: policy.maxTotalSizeBytes,
-              hint: tSystem("attach.hintIncreaseMaxTotalSizeOrReduceUpload"),
-            },
-          },
-        );
       }
 
       const record = await saveAttachmentRecord({
@@ -228,17 +238,14 @@ export async function ingestGeneratedArtifacts(
   const basePath = resolveBasePath(service.globalConfig, userId);
   const list = Array.isArray(artifacts) ? artifacts : [];
   if (!list.length) return [];
+  const entries = requireArtifactEntries(list, "artifacts");
 
   const scope = resolveAttachmentScope({ sessionId, attachmentSource, requireSessionId: true });
   return withAttachIndexLock(basePath, scope, async () => {
     const index = await readAttachIndex(basePath, scope);
     const saved = [];
 
-    for (const item of list) {
-      const artifactName = safeStr(item?.name);
-      const artifactContent = safeStr(item?.contentBase64);
-      if (!artifactName || !artifactContent) continue;
-
+    for (const { item, name: artifactName, contentBase64: artifactContent } of entries) {
       const record = await saveAttachmentRecord({
         basePath,
         attachmentIndex: index,

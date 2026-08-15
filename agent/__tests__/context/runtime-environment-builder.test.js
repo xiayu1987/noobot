@@ -53,8 +53,35 @@ test("buildStaticInfo exposes host default directories", () => {
   assert.equal(staticInfo.directories?.view, "host");
   assert.equal(staticInfo.directories?.rootDirectory, "/host/workspaces/u1");
   assert.equal(staticInfo.directories?.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
-  assert.equal(staticInfo.directories?.currentDirectory, process.cwd());
+  assert.equal(staticInfo.directories?.currentDirectory, "/host/workspaces/u1");
   assert.deepEqual(staticInfo.directories?.allowedRoots, ["/host/workspaces/u1"]);
+});
+
+test("buildStaticInfo exposes only the sandbox workspace view when isolation is enabled", () => {
+  const staticInfo = buildStaticInfo({
+    runtimeBasePath: "/host/workspaces/admin",
+    userId: "admin",
+    globalConfig: {
+      workspaceRoot: "/host/workspaces",
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: {
+            provider: "docker",
+            scope: "user",
+            mounts: [{ source: "/host/project", target: "/project" }],
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(staticInfo.cwd, "/workspace");
+  assert.equal(staticInfo.basePath, "/workspace");
+  assert.equal(staticInfo.globalDefaults.workspaceRoot, "/workspace");
+  assert.equal(staticInfo.directories?.view, "sandbox");
+  assert.deepEqual(staticInfo.directories?.allowedRoots, ["/workspace", "/project"]);
+  assert.equal(JSON.stringify(staticInfo).includes("/host/"), false);
 });
 
 test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {
@@ -62,9 +89,10 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
     userId: "u1",
     basePath: "/host/users/u1",
     globalConfig: {
-      tools: {
-        execute_script: {
-          execution: { view: "sandbox", sandboxProvider: { default: "docker" } },
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
         },
       },
     },
@@ -144,15 +172,13 @@ test("initializeRuntimeEnvironment shared semantic-transfer keeps runtime basePa
     userId: "primary-user",
     basePath: "/home/xiayu/projects/noobot/workspace/primary-user",
     globalConfig: {
-      tools: {
-        execute_script: {
-          sandboxMode: true,
-          sandboxProvider: {
-            default: "docker",
-            docker: {
-              dockerContainerScope: "global",
-              dockerMounts: [{ source: "/home/xiayu/projects/noobot", target: "/project" }],
-            },
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: {
+            provider: "docker",
+            scope: "global",
+            mounts: [{ source: "/home/xiayu/projects/noobot", target: "/project" }],
           },
         },
       },

@@ -10,4 +10,5 @@ export * from "./sandbox-mapping.mjs";
 export * from "./runtime-context.mjs";
 export * from "./task-path.mjs";
 export * from "./path-contract.mjs";
+export * from "./resource-ref.mjs";
 export { filePath as default } from "./platform.mjs";

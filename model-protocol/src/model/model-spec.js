@@ -13,7 +13,7 @@ export function requireModelSpec(input = {}) {
     model,
     alias: String(input.alias || "").trim(),
     format: provider.format,
-    providerId: provider.providerId,
+    operatorId: provider.operatorId,
     adapterId: provider.adapterId,
   });
 }

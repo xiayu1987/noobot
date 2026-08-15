@@ -32,7 +32,6 @@ export function resolveLlmForTurn(modelState) {
       modelName: runtimeModel,
       globalConfig,
       userConfig,
-      fallbackToDefault: false,
     });
     if (targetSpec?.model && targetSpec.model !== modelState.activeModelName) {
       shouldSwitch = true;

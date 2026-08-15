@@ -74,26 +74,24 @@ describe("workflow runtime identity projection", () => {
       status: "succeeded",
       sessionId: "child-session",
     });
-    expect(runtimeNodeSessions.value[0]).not.toHaveProperty("stepStatus");
   });
 
-  it("adapts legacy stepStatus only at the runtime input boundary", () => {
+  it("preserves canonical status at the runtime input boundary", () => {
     const runtimeNodeSessions = createRuntimeNodeSessions({
       workflowPayload: ref({ workflowRunId: "client-turn:main" }),
       nodeSessions: ref([{
-        nodeExecutionId: "node-execution-legacy",
-        dialogProcessId: "legacy-dialog",
-        stepStatus: "running",
+        nodeExecutionId: "node-execution-running",
+        dialogProcessId: "running-dialog",
+        status: "running",
       }]),
       executionMeta: ref({ nodeAgentRuns: [] }),
       workflowNodeStateRegistry: ref({ workflows: {} }),
     });
 
     expect(runtimeNodeSessions.value[0]).toMatchObject({
-      nodeExecutionId: "node-execution-legacy",
+      nodeExecutionId: "node-execution-running",
       status: "running",
     });
-    expect(runtimeNodeSessions.value[0]).not.toHaveProperty("stepStatus");
   });
 
   it("resolves the authoritative status for nodes with a stable execution identity", () => {

@@ -77,15 +77,17 @@ export async function assertRealtimeToolDetails(shell, expectedLineCount) {
   await expect(shell.locator(".thinking-analysis-block").first()).not.toBeEmpty();
   const toolLines = shell.locator(".base-thinking-log-line.is-tool");
   await expect(toolLines).toHaveCount(expectedLineCount);
-  await expect(
-    toolLines.locator(".base-thinking-log-line__event", { hasText: "调用" }),
-  ).toHaveCount(expectedLineCount / 2);
-  await expect(
-    toolLines.locator(".base-thinking-log-line__event", { hasText: "返回" }),
-  ).toHaveCount(expectedLineCount / 2);
+  await expect(toolLines.locator(".base-thinking-log-line__event.is-tool-call")).toHaveCount(
+    expectedLineCount / 2,
+  );
+  await expect(toolLines.locator(".base-thinking-log-line__event.is-tool-result")).toHaveCount(
+    expectedLineCount / 2,
+  );
   for (let index = 0; index < expectedLineCount; index += 1) {
     const line = toolLines.nth(index);
-    await expect(line.locator(".base-thinking-log-line__event")).toHaveText(/^(调用|返回)$/);
+    await expect(line.locator(".base-thinking-log-line__event")).toHaveClass(
+      /\bis-tool-(?:call|result)\b/,
+    );
     await readExpandedToolLine(line);
   }
 }
