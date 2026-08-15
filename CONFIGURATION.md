@@ -75,15 +75,24 @@ Model history is fixed by the agent runtime: it keeps the latest 5 `dialogProces
 
 ### 3.3 Attachments
 
-| Key                                   | Type     | Description                            |
-| ------------------------------------- | -------- | -------------------------------------- |
-| `attachments.max_file_count`          | number   | Max files per request                  |
-| `attachments.max_file_size_bytes`     | number   | Max size per file                      |
-| `attachments.max_total_size_bytes`    | number   | Max total upload size                  |
-| `attachments.allowed_extensions`      | string[] | Allowed suffix whitelist               |
-| `attachments.attachment_models.audio` | string   | Provider alias for audio understanding |
-| `attachments.attachment_models.video` | string   | Provider alias for video understanding |
-| `attachments.attachment_models.image` | string   | Provider alias for image understanding |
+| Key                                | Type     | Description              |
+| ---------------------------------- | -------- | ------------------------ |
+| `attachments.max_file_count`       | number   | Max files per request    |
+| `attachments.max_file_size_bytes`  | number   | Max size per file        |
+| `attachments.max_total_size_bytes` | number   | Max total upload size    |
+| `attachments.allowed_extensions`   | string[] | Allowed suffix whitelist |
+
+#### Multimodal Defaults
+
+| Key                                          | Type   | Description                                 |
+| -------------------------------------------- | ------ | ------------------------------------------- |
+| `multimodal.parsing.default_models.audio`    | string | Default provider alias for audio parsing    |
+| `multimodal.parsing.default_models.video`    | string | Default provider alias for video parsing    |
+| `multimodal.parsing.default_models.image`    | string | Default provider alias for image parsing    |
+| `multimodal.parsing.default_models.document` | string | Default provider alias for document parsing |
+| `multimodal.generation.default_models.image` | string | Default provider alias for image generation |
+
+Every referenced provider must explicitly declare the corresponding capability. A parse request containing modalities mapped to different defaults must provide `model_name` for one model that supports all of them.
 
 ### 3.4 Tools
 
@@ -245,6 +254,8 @@ Current plugin defaults in repo:
 
 ### 3.7 Providers (`providers.<alias>`)
 
+Copy-ready current model entries are maintained in [`docs/model-library.json`](docs/model-library.json). Runtime capability checks still use only the provider entry copied into the active configuration.
+
 | Key                                                                        | Type        | Description                                                         |
 | -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------- |
 | `providers.<alias>.enabled`                                                | boolean     | Enable this provider                                                |
@@ -264,8 +275,10 @@ Current plugin defaults in repo:
 | `providers.<alias>.thinking_budget`                                        | number      | Optional (if supported)                                             |
 | `providers.<alias>.description`                                            | string      | Provider description                                                |
 | `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | Multi-modal parsing enabled                                         |
+| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | Explicit accepted inputs: `image`, `document`, `audio`, `video`     |
 | `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | Multi-modal generation enabled                                      |
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | e.g. `["image"]`                                                    |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | `openai_responses` / `images_async`; required when generation is on |
 
 ### 3.8 MCP Servers (`mcp_servers.<name>`)
 

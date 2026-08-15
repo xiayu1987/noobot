@@ -97,7 +97,7 @@ function createEventId({ workflowRunId, nodeExecutionId, revision }) {
 function createInitialNodeRecord({ node = {}, sequence = 0, timestamp = nowIso() } = {}) {
   const identity = normalizeIdentity(node);
   assertIdentity(identity);
-  const status = normalizeStatus(node.stepStatus || node.status) || WORKFLOW_NODE_STATUS.PENDING;
+  const status = normalizeStatus(node.status) || WORKFLOW_NODE_STATUS.PENDING;
   if (![WORKFLOW_NODE_STATUS.PENDING, WORKFLOW_NODE_STATUS.READY].includes(status)) {
     throw new Error(`invalid initial workflow node status: ${status}`);
   }

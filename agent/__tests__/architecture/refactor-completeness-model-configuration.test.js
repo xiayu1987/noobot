@@ -9,6 +9,7 @@ import {
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
   resolveModelSpecByName,
+  resolveModelSpecOrConfiguredDefault,
   resolveSkillModelSpec,
 } from "../../src/models/resolver/index.js";
 import {
@@ -27,8 +28,7 @@ function createBaseGlobalConfig(overrides = {}) {
     providers: {
       openai: {
         format: "openai_compatible",
-        providerId: "openai",
-        adapterId: "openai-compatible",
+        baseUrl: "https://api.openai.com/v1",
         apiKey: "${OPENAI_API_KEY}",
         enabled: true,
         model: "gpt-4",
@@ -40,9 +40,8 @@ function createBaseGlobalConfig(overrides = {}) {
         },
       },
       anthropic: {
-        format: "anthropic",
-        providerId: "anthropic",
-        adapterId: "anthropic",
+        format: "openai_compatible",
+        baseUrl: "https://api.anthropic.com/v1",
         apiKey: "${ANTHROPIC_API_KEY}",
         enabled: true,
         model: "claude-3-opus",
@@ -207,13 +206,12 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec.model, "claude-3-opus", "model 应为 claude-3-opus");
     });
 
-    it("无 defaultProvider 时应 fallback 到 firstEnabledAlias", () => {
+    it("无 defaultProvider 时不应推导第一个启用模型", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: null });
       const userConfig = createBaseUserConfig({});
 
       const spec = resolveDefaultModelSpec({ globalConfig, userConfig });
-      assert.ok(spec !== null, "应能 fallback 到第一个启用的 provider");
-      assert.ok(spec.alias === "openai" || spec.alias === "anthropic", "应为已启用的 provider");
+      assert.equal(spec, null, "没有配置默认模型时应返回 null");
     });
 
     it("无有效配置时应返回 null", () => {
@@ -239,7 +237,7 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec.alias, "anthropic", "alias 应为 anthropic");
     });
 
-    it("不存在的 alias 应 fallback 到默认", () => {
+    it("不存在的 alias 应返回 null", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
       const userConfig = createBaseUserConfig({});
 
@@ -248,11 +246,10 @@ describe("6. 配置获取完整性测试", () => {
         globalConfig,
         userConfig,
       });
-      assert.ok(spec !== null, "不存在的 alias 应 fallback 到默认");
-      assert.equal(spec.alias, "openai", "fallback 后 alias 应为 openai");
+      assert.equal(spec, null, "精确 alias 解析不负责默认模型选择");
     });
 
-    it("不存在的 alias 且 fallbackToDefault=false 时应返回 null", () => {
+    it("精确 alias 解析始终返回唯一结果或 null", () => {
       const globalConfig = createBaseGlobalConfig();
       const userConfig = createBaseUserConfig({});
 
@@ -260,9 +257,8 @@ describe("6. 配置获取完整性测试", () => {
         alias: "nonexistent",
         globalConfig,
         userConfig,
-        fallbackToDefault: false,
       });
-      assert.equal(spec, null, "不存在的 alias 且无 fallback 应返回 null");
+      assert.equal(spec, null, "不存在的 alias 应返回 null");
     });
   });
 
@@ -293,7 +289,7 @@ describe("6. 配置获取完整性测试", () => {
       assert.equal(spec.alias, "openai", "应匹配到 openai provider");
     });
 
-    it("不存在的 modelName 应 fallback 到默认", () => {
+    it("不存在的 modelName 应返回 null", () => {
       const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
       const userConfig = createBaseUserConfig({});
 
@@ -302,8 +298,19 @@ describe("6. 配置获取完整性测试", () => {
         globalConfig,
         userConfig,
       });
-      assert.ok(spec !== null, "应 fallback 到默认");
-      assert.equal(spec.alias, "openai", "fallback 后应为 openai");
+      assert.equal(spec, null, "精确 modelName 解析不负责默认模型选择");
+    });
+
+    it("选择策略在 modelName 不存在时应使用配置默认模型", () => {
+      const globalConfig = createBaseGlobalConfig({ defaultProvider: "openai" });
+      const userConfig = createBaseUserConfig({});
+
+      const spec = resolveModelSpecOrConfiguredDefault({
+        modelName: "nonexistent-model",
+        globalConfig,
+        userConfig,
+      });
+      assert.equal(spec?.alias, "openai");
     });
   });
 

@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HARNESS_RUN_STATUS } from "../core/constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
 export const HARNESS_FSM_STATES = Object.freeze({
@@ -53,15 +52,6 @@ export const HARNESS_FSM_EFFECTS = Object.freeze({
 export function normalizeFsmState(state = "") {
   const value = String(state || "").trim().toLowerCase();
   return HARNESS_FSM_STATE_SET.has(value) ? value : HARNESS_FSM_STATES.IDLE;
-}
-
-export function statusToFsmState(status = "") {
-  const normalized = String(status || "").trim().toLowerCase();
-  if (normalized === HARNESS_RUN_STATUS.SUCCESS) return HARNESS_FSM_STATES.DONE;
-  if (normalized === HARNESS_RUN_STATUS.ERROR || normalized === HARNESS_RUN_STATUS.ABORT) {
-    return HARNESS_FSM_STATES.FAILED;
-  }
-  return HARNESS_FSM_STATES.IDLE;
 }
 
 export function isAllowedFsmTransition(from, to) {
@@ -145,7 +135,7 @@ const FSM_TARGET_RULES = Object.freeze([
   },
 ]);
 
-export function inferFsmTarget(point, ctx = {}, currentState = HARNESS_FSM_STATES.IDLE) {
+export function resolveFsmTargetByHook(point, ctx = {}, currentState = HARNESS_FSM_STATES.IDLE) {
   for (const rule of FSM_TARGET_RULES) {
     if (!rule.points.has(point)) continue;
     return rule.resolve({ point, ctx, currentState }) ?? null;
@@ -168,7 +158,7 @@ export function buildFsmTransitionPlan(point, ctx = {}, currentState, resumed = 
     });
   }
 
-  const target = inferFsmTarget(point, ctx, currentState);
+  const target = resolveFsmTargetByHook(point, ctx, currentState);
   if (!target) {
     return {
       state: currentState,

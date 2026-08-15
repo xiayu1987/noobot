@@ -75,15 +75,24 @@ Session 日志 WebSocket：
 
 ### 3.3 附件策略
 
-| 键名                                  | 类型     | 说明                 |
-| ------------------------------------- | -------- | -------------------- |
-| `attachments.max_file_count`          | number   | 单次请求最大附件数   |
-| `attachments.max_file_size_bytes`     | number   | 单文件大小上限       |
-| `attachments.max_total_size_bytes`    | number   | 总上传大小上限       |
-| `attachments.allowed_extensions`      | string[] | 允许后缀白名单       |
-| `attachments.attachment_models.audio` | string   | 音频处理默认模型别名 |
-| `attachments.attachment_models.video` | string   | 视频处理默认模型别名 |
-| `attachments.attachment_models.image` | string   | 图片处理默认模型别名 |
+| 键名                               | 类型     | 说明               |
+| ---------------------------------- | -------- | ------------------ |
+| `attachments.max_file_count`       | number   | 单次请求最大附件数 |
+| `attachments.max_file_size_bytes`  | number   | 单文件大小上限     |
+| `attachments.max_total_size_bytes` | number   | 总上传大小上限     |
+| `attachments.allowed_extensions`   | string[] | 允许后缀白名单     |
+
+#### 多模态默认模型
+
+| 键名                                         | 类型   | 说明                 |
+| -------------------------------------------- | ------ | -------------------- |
+| `multimodal.parsing.default_models.audio`    | string | 音频解析默认模型别名 |
+| `multimodal.parsing.default_models.video`    | string | 视频解析默认模型别名 |
+| `multimodal.parsing.default_models.image`    | string | 图片解析默认模型别名 |
+| `multimodal.parsing.default_models.document` | string | 文档解析默认模型别名 |
+| `multimodal.generation.default_models.image` | string | 图片生成默认模型别名 |
+
+这里引用的 provider 必须显式声明对应能力。一次解析调用包含的多种输入若配置了不同默认模型，必须通过 `model_name` 显式指定一个同时支持全部输入类型的模型。
 
 ### 3.4 工具配置
 
@@ -245,27 +254,31 @@ Session 日志 WebSocket：
 
 ### 3.7 模型提供方（`providers.<alias>`）
 
-| 键名                                                                       | 类型        | 说明                                      |
-| -------------------------------------------------------------------------- | ----------- | ----------------------------------------- |
-| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                  |
-| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                            |
-| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）            |
-| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                              |
-| `providers.<alias>.model`                                                  | string      | 模型名                                    |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`         |
-| `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                    |
-| `providers.<alias>.enable_thinking`                                        | boolean     | 可选思考开关（常见于 dashscope 兼容模型） |
-| `providers.<alias>.temperature`                                            | number      | 采样温度                                  |
-| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                            |
-| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                |
-| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                          |
-| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                          |
-| `providers.<alias>.preserve_thinking`                                      | boolean     | 是否保留思考（模型支持时）                |
-| `providers.<alias>.thinking_budget`                                        | number      | 思考预算（模型支持时）                    |
-| `providers.<alias>.description`                                            | string      | 提供方说明                                |
-| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                        |
-| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                        |
-| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                |
+可直接复制的当前模型配置维护在 [`docs/model-library.json`](docs/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
+
+| 键名                                                                       | 类型        | 说明                                                  |
+| -------------------------------------------------------------------------- | ----------- | ----------------------------------------------------- |
+| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                              |
+| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                                        |
+| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）                        |
+| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                                          |
+| `providers.<alias>.model`                                                  | string      | 模型名                                                |
+| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`                     |
+| `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                                |
+| `providers.<alias>.enable_thinking`                                        | boolean     | 可选思考开关（常见于 dashscope 兼容模型）             |
+| `providers.<alias>.temperature`                                            | number      | 采样温度                                              |
+| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                                        |
+| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                            |
+| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                                      |
+| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                                      |
+| `providers.<alias>.preserve_thinking`                                      | boolean     | 是否保留思考（模型支持时）                            |
+| `providers.<alias>.thinking_budget`                                        | number      | 思考预算（模型支持时）                                |
+| `providers.<alias>.description`                                            | string      | 提供方说明                                            |
+| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                                    |
+| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | 明确支持的输入：`image`、`document`、`audio`、`video` |
+| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                                    |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                            |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填：`openai_responses` / `images_async`   |
 
 模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 

@@ -38,7 +38,7 @@ export function createModelRequestExecutor({
   const modelObservationStates = new Map();
   const resolveModelObservationState = (modelSpec = {}) => {
     const key = JSON.stringify([
-      modelSpec.providerId,
+      modelSpec.operatorId,
       modelSpec.adapterId,
       modelSpec.alias,
       modelSpec.model,
@@ -158,7 +158,7 @@ export function createModelRequestExecutor({
           attempts,
           model: requestBase.model,
           provider: {
-            providerId: requestBase.model.providerId,
+            operatorId: requestBase.model.operatorId,
             adapterId: adapter.id,
             format: requestBase.model.format,
           },
@@ -335,7 +335,7 @@ export function createModelRequestExecutor({
         attempts,
         model: requestBase.model,
         provider: {
-          providerId: requestBase.model.providerId,
+          operatorId: requestBase.model.operatorId,
           adapterId: adapter.id,
           format: requestBase.model.format,
         },

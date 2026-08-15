@@ -98,6 +98,33 @@ test("rejects workspace-relative traversal before it can be reclassified as a ho
   assert.equal(dotPrefixedInside.resolvedPath, "/srv/workspaces/alice/..reports/final.txt");
 });
 
+test("sandbox mode treats unmapped absolute paths as execution paths, never host refs", () => {
+  const runtime = {
+    basePath: "/srv/workspaces/alice",
+    userId: "alice",
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
+        },
+      },
+    },
+  };
+  const result = resolveToolInputPath({
+    inputPath: "/tmp/container-private.txt",
+    runtime,
+    workspacePath: runtime.basePath,
+    workspaceRoot: "/srv/workspaces",
+    allowHostAbsolute: true,
+    allowSandbox: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
+  assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED);
+  assert.equal(result.resolvedPath, "");
+});
+
 test("task-local paths have one token and resolution protocol", () => {
   assert.equal(TASK_PATH_VIEW, "task-local");
   const output = createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "media/result.mp4" });

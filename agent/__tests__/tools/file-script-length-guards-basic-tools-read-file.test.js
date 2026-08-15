@@ -164,6 +164,19 @@ test("read_file: 沙箱内相对路径穿越保留 workspace 视角", async () =
       return true;
     },
   );
+
+  await assert.rejects(
+    () => readTool.invoke({ riskLevel: "low", filePath: "/tmp/container-private.txt" }),
+    (error) => {
+      assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
+      assert.equal(error.details?.pathView, "sandbox-absolute");
+      assert.equal(error.details?.error, "sandbox_path_not_mapped");
+      assert.notEqual(error.details?.pathView, "host");
+      assert.equal(error.message, "该沙箱路径未映射到共享文件根目录。");
+      assert.equal(error.details?.hint, "该沙箱路径未映射到共享文件根目录。");
+      return true;
+    },
+  );
 });
 
 test("read_file: directory returns the canonical not-a-file error", async () => {

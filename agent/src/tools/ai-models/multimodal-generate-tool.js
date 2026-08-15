@@ -5,9 +5,19 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
-import { mergeConfig } from "../../config/index.js";
-import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../models/index.js";
+import {
+  MODEL_MULTIMODAL_MODALITY,
+  MODEL_OPERATION_KIND,
+  resolveModelMultimodalCapabilities,
+  supportsModelMultimodalGeneration,
+} from "@noobot/model-protocol";
+import {
+  MULTIMODAL_CONFIG_MODALITY,
+  MULTIMODAL_CONFIG_OPERATION,
+  mergeConfig,
+  resolveMultimodalDefaultModelSelection,
+} from "../../config/index.js";
+import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/mime-utils.js";
@@ -132,24 +142,6 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   return imageBytes.toString("base64");
 }
 
-function checkImageGenerationSupport(modelSpec = {}) {
-  const multimodalGeneration = modelSpec?.multimodal_generation || {};
-  const supportGeneration = multimodalGeneration?.support_generation || {};
-  const generationEnabled = supportGeneration?.enabled === true;
-  const supportScope = Array.isArray(supportGeneration?.support_scope)
-    ? supportGeneration.support_scope.map((scopeItem) =>
-        String(scopeItem || "")
-          .trim()
-          .toLowerCase(),
-      )
-    : [];
-  const supportImageGeneration = supportScope.includes("image");
-  return {
-    generationEnabled,
-    supportImageGeneration,
-  };
-}
-
 function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1.png") {
   const parsed = parseDataUrl(dataUrl);
   if (!parsed) return null;
@@ -185,12 +177,15 @@ function normalizeGenerationApiType(apiType = "") {
 }
 
 function resolveGenerationApiType(modelSpec = {}) {
-  const supportGeneration = modelSpec?.multimodal_generation?.support_generation || {};
-  return (
-    normalizeGenerationApiType(
-      supportGeneration?.api_type || "",
-    ) || IMAGE_GENERATION_API_TYPE.OPENAI_RESPONSES
+  const apiType = normalizeGenerationApiType(
+    resolveModelMultimodalCapabilities(modelSpec).generation.apiType,
   );
+  if (!apiType) {
+    throw new TypeError(
+      "multimodal generation requires configured multimodal_generation.support_generation.api_type",
+    );
+  }
+  return apiType;
 }
 
 function shouldAppendApiTypeHint(error = {}) {
@@ -209,21 +204,24 @@ function appendApiTypeHint(message = "", runtime = {}) {
 
 function resolveGenerationModelSpec({
   modelName = "",
-  runtimeModel = "",
+  effectiveConfig = {},
   globalConfig = {},
   userConfig = {},
 }) {
   const preferredModelName = String(modelName || "").trim();
-  const currentRuntimeModel = String(runtimeModel || "").trim();
-  const resolvedModelName = preferredModelName || currentRuntimeModel;
-  const resolvedModelSpec = resolvedModelName
-    ? resolveModelSpecByName({
-        modelName: resolvedModelName,
-        globalConfig,
-        userConfig,
-        fallbackToDefault: true,
-      })
-    : resolveDefaultModelSpec({ globalConfig, userConfig });
+  const configuredDefault = preferredModelName
+    ? ""
+    : resolveMultimodalDefaultModelSelection(effectiveConfig, {
+        operation: MULTIMODAL_CONFIG_OPERATION.GENERATION,
+        modalities: [MULTIMODAL_CONFIG_MODALITY.IMAGE],
+      }).alias;
+  const resolvedModelName = preferredModelName || configuredDefault;
+  if (!resolvedModelName) return { resolvedModelName: "", resolvedModelSpec: null };
+  const resolvedModelSpec = resolveModelSpecOrConfiguredDefault({
+    modelName: resolvedModelName,
+    globalConfig,
+    userConfig,
+  });
   return {
     resolvedModelName,
     resolvedModelSpec,
@@ -346,13 +344,16 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const { resolvedModelName, resolvedModelSpec: selectedModelSpec } =
           resolveGenerationModelSpec({
             modelName: model_name,
-            runtimeModel: runtime?.runtimeModel,
+            effectiveConfig,
             globalConfig,
             userConfig,
           });
         resolvedModelSpec = selectedModelSpec;
-        const generationSupport = checkImageGenerationSupport(resolvedModelSpec || {});
-        if (!generationSupport.generationEnabled || !generationSupport.supportImageGeneration) {
+        if (
+          !supportsModelMultimodalGeneration(resolvedModelSpec || {}, [
+            MODEL_MULTIMODAL_MODALITY.IMAGE,
+          ])
+        ) {
           const currentModelAlias = String(
             resolvedModelSpec?.alias || resolvedModelName || "",
           ).trim();

@@ -30,7 +30,7 @@ import {
   throwIfWorkflowAborted,
   withTimeout,
 } from "./runtime.js";
-import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
+import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},
@@ -78,7 +78,7 @@ export function buildWorkflowUpstreamAttachmentResults({
       const completed = completedStepResults.get(upstreamStepId) || {};
       const transferPayload = getWorkflowTransferPayloadFromResult(completed);
       const transferEnvelopes = transferPayload.transferEnvelopes;
-      const stepStatus = String(completed?.stepStatus || upstreamStep?.stepStatus || "").trim();
+      const status = String(completed?.status || upstreamStep?.status || "").trim();
       const stepFailure =
         completed?.stepFailure && typeof completed.stepFailure === "object"
           ? completed.stepFailure
@@ -89,7 +89,7 @@ export function buildWorkflowUpstreamAttachmentResults({
         { transferEnvelopes },
         {},
       );
-      if (!transferFiles.length && stepStatus !== "failed" && !stepFailure) return null;
+      if (!transferFiles.length && status !== "failed" && !stepFailure) return null;
       return {
         nodeId: upstreamNodeId,
         nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
@@ -104,7 +104,7 @@ export function buildWorkflowUpstreamAttachmentResults({
         transition: Number(completed?.transition || 0),
         nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
         nodeSessionId: String(completed?.nodeSessionId || "").trim(),
-        stepStatus,
+        status,
         stepFailure,
         transferEnvelopes,
       };
@@ -121,7 +121,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
   const failedResults = normalizedResults.filter((item = {}) => {
-    const status = String(item?.stepStatus || "").trim();
+    const status = String(item?.status || "").trim();
     return status === "failed" || (item?.stepFailure && typeof item.stepFailure === "object");
   });
   const hasTransferFiles = normalizedResults.some((item = {}) =>
@@ -159,7 +159,7 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
     ).trim();
     const nodeTask = String(result?.nodeTask || result?.task || "").trim();
     if (
-      String(result?.stepStatus || "").trim() === "failed" ||
+      String(result?.status || "").trim() === "failed" ||
       (result?.stepFailure && typeof result.stepFailure === "object")
     ) {
       const failureMessage = String(
@@ -320,9 +320,12 @@ export async function runNodeAgent({
 } = {}) {
   throwIfWorkflowAborted(ctx);
   const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : null;
-  const legacyDialogProcessId = `wf_node_${String(instanceId || "inst").replaceAll(/[^a-zA-Z0-9_-]/g, "_")}_${String(transition || 0)}`;
-  const nodeDialogProcessId = String(identity?.dialogProcessId || legacyDialogProcessId).trim();
-  const nodeTurnScopeId = String(identity?.turnScopeId || `workflow-node:${nodeDialogProcessId}`).trim();
+  if (!identity) throw new TypeError("workflow node identity is required");
+  const nodeDialogProcessId = String(identity.dialogProcessId || "").trim();
+  const nodeTurnScopeId = String(identity.turnScopeId || "").trim();
+  if (!nodeDialogProcessId || !nodeTurnScopeId) {
+    throw new TypeError("workflow node identity requires dialogProcessId and turnScopeId");
+  }
   const nodeCommandId = String(identity?.commandId || "").trim();
   const nodeExecutionId = String(identity?.nodeExecutionId || "").trim();
   const workflowRunId = String(identity?.workflowRunId || instanceId || "").trim();
@@ -616,7 +619,7 @@ export async function runNodeAgent({
       subSession,
       nodeDialogProcessId,
       nodeIdentity: resolvedNodeIdentity,
-      stepStatus: "failed",
+      status: "failed",
       stepFailure: subSessionFailure,
     };
   }

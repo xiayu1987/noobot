@@ -37,7 +37,7 @@ import {
   fetchWorkflowNodeThinkingDetail,
   hydrateExecutionSessionDetail,
 } from "../runtime/workflowNodeSessionDetail.js";
-import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
 import {
   buildUnifiedSessionDetail,

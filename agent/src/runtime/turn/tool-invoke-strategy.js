@@ -47,7 +47,6 @@ export function createBoundLlmToolChoiceInvoker({
       tools: boundTools,
       options: {
         streaming: false,
-        callbacks: runtime?.modelCallbacks,
         signal: abortSignal,
         invoke: {
           ...(effectiveToolChoice ? { tool_choice: effectiveToolChoice } : {}),

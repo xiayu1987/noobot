@@ -8,6 +8,8 @@ export * from "./protocol.js";
 export * from "./enums.js";
 export * from "./key-normalizer.js";
 export * from "./time-config-normalizer.js";
+export * from "./multimodal-config.js";
+export * from "./config-file-migration.js";
 export * from "./builtin-scenarios.js";
 export * from "./user-override-policy.js";
 export * from "./config-merge.js";

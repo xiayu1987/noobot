@@ -5,6 +5,12 @@
  */
 import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
+import {
+  applyPrimaryModelReferencesToConfigFile,
+  ensureModelProviderInConfigFile,
+  migrateConfigFileToCurrentProtocol,
+} from "@noobot/agent-config-protocol";
+import { listModelLibraryOptions } from "@noobot/model-protocol";
 
 export function createDesktopConfigManager({
   repoRoot,
@@ -144,24 +150,31 @@ export function createDesktopConfigManager({
     node[segments[segments.length - 1]] = value;
   }
 
-  function getNestedObject(root, segments) {
-    let node = root;
-    for (const segment of segments) node = isPlainObject(node) ? node[segment] : undefined;
-    return isPlainObject(node) ? node : null;
-  }
-
   function collectModelOptionsFromConfig(payload = {}) {
     const providers = isPlainObject(payload.providers) ? payload.providers : {};
-    return Object.entries(providers)
+    const configuredOptions = Object.entries(providers)
       .map(([key, value]) => ({
         key: String(key || "").trim(),
         model: String(value?.model || "").trim(),
+        format: String(value?.format || "").trim(),
         description: String(value?.description || "").trim(),
         enabled: value?.enabled !== false,
         usedForConversation: value?.used_for_conversation !== false,
       }))
       .filter((item) => item.key)
       .sort((a, b) => a.key.localeCompare(b.key));
+    const configuredByKey = new Map(configuredOptions.map((item) => [item.key, item]));
+    const options = listModelLibraryOptions().map((item) => ({
+      ...item,
+      ...(configuredByKey.get(item.key) || {}),
+      library: true,
+    }));
+    const libraryKeys = new Set(options.map((item) => item.key));
+    return options.concat(
+      configuredOptions
+        .filter((item) => !libraryKeys.has(item.key))
+        .map((item) => ({ ...item, library: false })),
+    );
   }
 
   function getDefaultModelAlias(payload = {}) {
@@ -171,63 +184,8 @@ export function createDesktopConfigManager({
     return Object.keys(providers)[0] || "";
   }
 
-  function setObjectStringValues(target, value) {
-    if (!isPlainObject(target)) return;
-    for (const key of Object.keys(target)) target[key] = value;
-  }
-
   function applySelectedModelToConfig(payload = {}, selectedModel = "") {
-    const alias = String(selectedModel || "").trim();
-    if (!alias || !isPlainObject(payload)) return payload;
-    const providers = isPlainObject(payload.providers) ? payload.providers : {};
-    if (!isPlainObject(providers[alias]))
-      throw new Error(`Selected model provider not found: ${alias}`);
-
-    payload.default_provider = alias;
-    for (const [providerKey, provider] of Object.entries(providers)) {
-      if (!isPlainObject(provider)) continue;
-      if (providerKey === alias) {
-        provider.enabled = true;
-        provider.used_for_conversation = true;
-      }
-    }
-
-    const attachmentModels = getNestedObject(payload, ["attachments", "attachment_models"]);
-    setObjectStringValues(attachmentModels, alias);
-
-    const scenarioDefinitions = getNestedObject(payload, ["scenarios", "definitions"]);
-    if (scenarioDefinitions) {
-      for (const definition of Object.values(scenarioDefinitions)) {
-        if (isPlainObject(definition) && Object.prototype.hasOwnProperty.call(definition, "model"))
-          definition.model = alias;
-      }
-    }
-
-    const webSearchResponses = getNestedObject(payload, ["tools", "web_search", "responses_api"]);
-    if (webSearchResponses) webSearchResponses.model = alias;
-
-    const requestHelp = getNestedObject(payload, ["tools", "request_help"]);
-    if (
-      requestHelp &&
-      Object.prototype.hasOwnProperty.call(requestHelp, "help_model") &&
-      String(requestHelp.help_model || "").trim()
-    )
-      requestHelp.help_model = alias;
-
-    const harnessStepModels = getNestedObject(payload, ["plugins", "harness", "stepModels"]);
-    setObjectStringValues(harnessStepModels, alias);
-    const capabilityModels = getNestedObject(payload, [
-      "plugins",
-      "harness",
-      "capabilityModelByPurpose",
-    ]);
-    setObjectStringValues(capabilityModels, alias);
-
-    const workflow = getNestedObject(payload, ["plugins", "workflow"]);
-    if (workflow && Object.prototype.hasOwnProperty.call(workflow, "semanticModel"))
-      workflow.semanticModel = alias;
-
-    return payload;
+    return applyPrimaryModelReferencesToConfigFile(payload, selectedModel);
   }
 
   function deepClone(input) {
@@ -336,12 +294,44 @@ export function createDesktopConfigManager({
     return filePath;
   }
 
-  function getMissingRequiredConfigParams(configParamsPath) {
+  function collectSelectedModelConfigParams(globalConfigPath) {
+    const globalConfig = readJsonFile(globalConfigPath, {}) || {};
+    const selectedAlias = getDefaultModelAlias(globalConfig);
+    const selectedProvider = isPlainObject(globalConfig.providers?.[selectedAlias])
+      ? globalConfig.providers[selectedAlias]
+      : {};
+    const fields = ["api_key", "base_url"];
+    const modelParams = new Map();
+    fields.forEach((field, fieldOrder) => {
+      for (const key of collectTemplateVariables(selectedProvider[field])) {
+        if (!modelParams.has(key)) modelParams.set(key, { field, fieldOrder });
+      }
+    });
+    return modelParams;
+  }
+
+  function getMissingRequiredConfigParams(configParamsPath, globalConfigPath) {
     const payload = readJsonFile(configParamsPath, {}) || {};
     const values = isPlainObject(payload.values) ? payload.values : {};
+    const modelParams = collectSelectedModelConfigParams(globalConfigPath);
     return Object.entries(values)
       .filter(([, value]) => String(value ?? "").trim() === "")
-      .map(([key]) => ({ key, description: String(payload.descriptions?.[key] || "") }));
+      .map(([key]) => {
+        const modelParam = modelParams.get(key);
+        return {
+          key,
+          description: String(payload.descriptions?.[key] || ""),
+          group: modelParam ? "model" : "general",
+          modelField: modelParam?.field || "",
+          order: modelParam?.fieldOrder ?? Number.MAX_SAFE_INTEGER,
+        };
+      })
+      .sort(
+        (left, right) =>
+          (left.group === "model" ? 0 : 1) - (right.group === "model" ? 0 : 1) ||
+          left.order - right.order ||
+          left.key.localeCompare(right.key),
+      );
   }
 
   function getSuperAdminRequirement(globalConfigPath) {
@@ -397,12 +387,18 @@ export function createDesktopConfigManager({
     setNestedValue(payload, ["super_admin", "connect_code"], normalizedConnectCode);
     setNestedValue(payload, ["preferences", "language"], normalizedLanguage);
     setNestedValue(payload, ["desktop", "dependency_proxy_url"], normalizedDependencyProxyUrl);
-    if (normalizedModel) applySelectedModelToConfig(payload, normalizedModel);
+    if (normalizedModel) {
+      ensureModelProviderInConfigFile(payload, normalizedModel);
+      applySelectedModelToConfig(payload, normalizedModel);
+    }
     writeJsonFile(globalConfigPath, payload);
 
     if (userConfigPath) {
       const userPayload = readJsonFile(userConfigPath, null);
       if (isPlainObject(userPayload) && normalizedModel) {
+        ensureModelProviderInConfigFile(userPayload, normalizedModel, {
+          providerTemplate: payload.providers[normalizedModel],
+        });
         applySelectedModelToConfig(userPayload, normalizedModel);
         writeJsonFile(userConfigPath, userPayload);
       }
@@ -431,12 +427,30 @@ export function createDesktopConfigManager({
     if (!isPlainObject(templateJson)) return false;
     const targetExists = fs.existsSync(targetFilePath);
     const targetJson = targetExists ? readJsonFile(targetFilePath, {}) : {};
-    const merged = mergeIncremental({ template: templateJson, target: targetJson });
+    const merged = migrateConfigFileToCurrentProtocol(
+      mergeIncremental({ template: templateJson, target: targetJson }),
+    );
     if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
       writeJsonFile(targetFilePath, merged);
       return true;
     }
     return false;
+  }
+
+  function migrateExistingUserConfigs({ workspaceRootPath } = {}) {
+    if (!fs.existsSync(workspaceRootPath)) return;
+    for (const entry of fs.readdirSync(workspaceRootPath, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      for (const fileName of ["config.json", "config.example.json"]) {
+        const filePath = path.join(workspaceRootPath, entry.name, fileName);
+        const payload = readJsonFile(filePath, null);
+        if (!isPlainObject(payload)) continue;
+        const migrated = migrateConfigFileToCurrentProtocol(deepClone(payload));
+        if (JSON.stringify(payload) !== JSON.stringify(migrated)) {
+          writeJsonFile(filePath, migrated);
+        }
+      }
+    }
   }
 
   function ensureDesktopGlobalConfig({ isPackaged, userDataPath }) {
@@ -463,7 +477,9 @@ export function createDesktopConfigManager({
     const hasConfiguredExecutionIsolationMode = Boolean(
       String(currentConfig?.security?.execution_isolation?.mode || "").trim(),
     );
-    const mergedConfig = mergeIncremental({ template: exampleConfig, target: currentConfig });
+    const mergedConfig = migrateConfigFileToCurrentProtocol(
+      mergeIncremental({ template: exampleConfig, target: currentConfig }),
+    );
     mergedConfig.workspace_root = workspaceRootPath;
     mergedConfig.workspace_template_path = workspaceTemplatePath;
     if (!hasConfiguredExecutionIsolationMode)
@@ -500,6 +516,7 @@ export function createDesktopConfigManager({
         `desktop workspace default user config is missing or invalid: ${templateConfigPath}`,
       );
     fs.mkdirSync(workspaceRootPath, { recursive: true });
+    migrateExistingUserConfigs({ workspaceRootPath });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,
       configFiles: [targetPath, templateConfigPath, templateExamplePath],
@@ -511,7 +528,7 @@ export function createDesktopConfigManager({
       templateConfigPath,
       configParamsPath,
       superAdmin: getSuperAdminRequirement(targetPath),
-      missingParams: getMissingRequiredConfigParams(configParamsPath),
+      missingParams: getMissingRequiredConfigParams(configParamsPath, targetPath),
     };
   }
 

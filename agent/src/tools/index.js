@@ -25,6 +25,11 @@ import { runBuildToolsAdapter } from "./adapter.js";
 import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
 import {
+  MODEL_MULTIMODAL_MODALITY,
+  supportsModelMultimodalGeneration,
+  supportsModelMultimodalParsing,
+} from "@noobot/model-protocol";
+import {
   getRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../context/agent-context-accessor.js";
@@ -108,38 +113,18 @@ function filterToolsByConfigEnabled(tools = [], effectiveConfig = {}) {
 
 function hasEnabledMultimodalGenerationProvider(effectiveConfig = {}) {
   const providers = effectiveConfig?.providers || {};
-  for (const providerConfig of Object.values(providers)) {
-    if (!providerConfig || typeof providerConfig !== "object") continue;
-    if (providerConfig.enabled === false) continue;
-    const multimodalGeneration =
-      providerConfig?.multimodal_generation &&
-      typeof providerConfig.multimodal_generation === "object"
-        ? providerConfig.multimodal_generation
-        : {};
-    const supportGeneration =
-      multimodalGeneration?.support_generation &&
-      typeof multimodalGeneration.support_generation === "object"
-        ? multimodalGeneration.support_generation
-        : {};
-    const generationEnabled = supportGeneration?.enabled === true;
-    if (!generationEnabled) continue;
-    const supportScope = Array.isArray(supportGeneration?.support_scope)
-      ? supportGeneration.support_scope.map((scopeItem) =>
-          String(scopeItem || "")
-            .trim()
-            .toLowerCase(),
-        )
-      : [];
-    if (supportScope.includes("image")) return true;
-  }
-  return false;
+  return Object.values(providers).some(
+    (providerConfig) =>
+      providerConfig?.enabled !== false &&
+      supportsModelMultimodalGeneration(providerConfig, [MODEL_MULTIMODAL_MODALITY.IMAGE]),
+  );
 }
 
 function hasEnabledMultimodalParsingProvider(effectiveConfig = {}) {
   const providers = effectiveConfig?.providers || {};
   return Object.values(providers).some(
     (providerConfig) =>
-      providerConfig?.enabled !== false && providerConfig?.multimodal_parsing?.enabled === true,
+      providerConfig?.enabled !== false && supportsModelMultimodalParsing(providerConfig),
   );
 }
 

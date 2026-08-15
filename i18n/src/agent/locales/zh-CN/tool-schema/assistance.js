@@ -145,6 +145,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.defaultPrompt":
         "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
       "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型",
+      "tools.multimodalParse.defaultModelMissing": (params = {}) =>
+        `未配置以下输入类型的默认多模态解析模型：${String(params.modalities || "").trim()}`,
+      "tools.multimodalParse.defaultModelConflict":
+        "这些输入类型配置了不同的默认解析模型，请显式指定一个支持全部输入类型的 model_name",
     },
   },
   switch_model: {

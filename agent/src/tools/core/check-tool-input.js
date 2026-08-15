@@ -12,6 +12,7 @@ import {
   resolvePathPolicy,
   resolvePathRef,
   resolveToolInputPath,
+  TOOL_PATH_RESOLUTION_ERROR,
   buildToolPathScopeErrorDetails,
   isToolPathScopeError,
   isPathWithinRoot,
@@ -46,6 +47,31 @@ function tCheckInput(agentContext = {}, key = "") {
     fileNotFound: "common.fileNotFound",
   };
   return tTool(agentContext, keyMap[String(key || "").trim()] || "");
+}
+
+function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName = "filePath") {
+  const keyMap = {
+    [TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH]: "tools.file.pathErrorRequired",
+    [TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED]:
+      "tools.file.pathErrorHostAbsoluteNotAllowed",
+    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED]:
+      "tools.file.pathErrorSandboxNotAllowed",
+    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED]:
+      "tools.file.pathErrorSandboxNotMapped",
+    [TOOL_PATH_RESOLUTION_ERROR.VIRTUAL_RELATIVE_PATH_AMBIGUOUS]:
+      "tools.file.pathErrorVirtualRelativeAmbiguous",
+    [TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE]:
+      "tools.file.pathErrorWorkspaceOutOfScope",
+  };
+  const key = keyMap[resolution?.error];
+  return key
+    ? tTool(agentContext, key, {
+        field: fieldName,
+        virtualRoot: String(resolution?.virtualRoot || ""),
+        suggestedPath: String(resolution?.candidateWorkspaceRelativePath || ""),
+        suggestedSandboxPath: String(resolution?.candidateSandboxPath || ""),
+      })
+    : tCheckInput(agentContext, "pathOutOfScope");
 }
 
 function isUuid(value = "") {
@@ -277,9 +303,8 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     allowVirtualRelative: false,
   });
   if (!resolvedToolPath.ok) {
-    throw recoverableToolError(
-      resolvedToolPath.hint || `${fieldName} ${tCheckInput(agentContext, "fieldRequired")}`,
-      {
+    const localizedHint = resolveToolPathErrorText(agentContext, resolvedToolPath, fieldName);
+    throw recoverableToolError(localizedHint, {
         code: isToolPathScopeError(resolvedToolPath.error)
           ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
           : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
@@ -288,14 +313,13 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
           filePath: normalizedPath,
           pathView: resolvedToolPath.view,
           error: resolvedToolPath.error,
-          hint: resolvedToolPath.hint,
+          hint: localizedHint,
           suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
           ...(resolvedToolPath.candidateSandboxPath
             ? { suggestedSandboxPath: resolvedToolPath.candidateSandboxPath }
             : {}),
         },
-      },
-    );
+      });
   }
   const resolvedTargetPath = resolvedToolPath.resolvedPath;
   const normalizedRequiredExecutionRoot = String(requiredExecutionRoot || "").trim()
@@ -327,17 +351,6 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
         workspaceRoot: workspacePath,
         owner: String(runtime?.userId || ""),
       });
-  if (isolation.mode === EXECUTION_ISOLATION_MODE.SANDBOX && logicalPathRef.view === "host") {
-    throw recoverableToolError(`${fieldName} ${tCheckInput(agentContext, "pathOutOfScope")}`, {
-      code: ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE,
-      details: {
-        field: fieldName,
-        filePath: normalizedPath,
-        pathView: logicalPathRef.view,
-        error: "host_path_unavailable_in_sandbox",
-      },
-    });
-  }
   if (
     resolvedToolPath.mountReadOnly === true &&
     [PATH_CAPABILITIES.FILE_WRITE, PATH_CAPABILITIES.FILE_PATCH].includes(capability)

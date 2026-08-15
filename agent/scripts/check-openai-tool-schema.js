@@ -346,7 +346,6 @@ async function main() {
         modelName: args.model,
         globalConfig,
         userConfig,
-        fallbackToDefault: false,
       })
     : resolveDefaultModelSpec({ globalConfig, userConfig });
   if (!modelSpec && args.model) {

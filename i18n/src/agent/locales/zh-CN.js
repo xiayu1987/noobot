@@ -79,7 +79,7 @@ export default {
   "common.notFound": "未找到",
   "common.notFoundInParentSessionMessages": "在父会话消息中未找到",
   "common.parentSessionNotFound": "未找到父会话",
-  "common.pathIsNotFile": "path 不是文件",
+  "common.pathIsNotFile": "路径不是文件",
   "common.pathOutOfScope": "路径超出允许范围",
   "common.pathRequired": "必须提供 path",
   "common.pathSeparatorsNotAllowed": "不能包含路径分隔符",
@@ -135,6 +135,20 @@ export default {
   "tools.file.readMaxLinesField": "最大返回行数。",
   "tools.file.readLineRangeOutOfBounds": (params = {}) =>
     `读取行范围无效：请求 ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}，文件共 ${Number(params.totalLines || 0)} 行`,
+  "tools.file.pathErrorRequired": (params = {}) =>
+    `必须提供 ${String(params.field || "filePath")}`,
+  "tools.file.pathErrorHostAbsoluteNotAllowed": "当前身份不允许访问宿主绝对路径。",
+  "tools.file.pathErrorSandboxNotAllowed": "当前执行视角不接受沙箱绝对路径。",
+  "tools.file.pathErrorSandboxNotMapped": "该沙箱路径未映射到共享文件根目录。",
+  "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
+    const relative = String(params.suggestedPath || "");
+    const sandbox = String(params.suggestedSandboxPath || "");
+    return sandbox
+      ? `路径含有歧义。工作区相对路径请使用 ${relative}，沙箱绝对路径请使用 ${sandbox}。`
+      : `路径含有歧义。工作区相对路径请使用 ${relative}。`;
+  },
+  "tools.file.pathErrorWorkspaceOutOfScope": "工作区相对路径超出了工作区根目录。",
+  "tools.file.writeAlreadyExists": "文件已存在；如需替换，请将 overwrite 设置为 true。",
   "tools.file.readRiskLevelField":
     "操作风险等级：low、medium、high 或 critical。读取可能涉及隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.file.writeOverwriteField": "文件存在时是否覆盖。",
@@ -143,6 +157,7 @@ export default {
   "tools.search.description": "搜索文件或文本，返回命中行与上下文。",
   "tools.search.fieldSource": "搜索来源：files 或 text。",
   "tools.search.fieldQuery": "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
+  "tools.search.queryRequired": "必须提供非空的搜索关键词或正则。",
   "tools.search.fieldIsRegex": "是否按正则搜索。",
   "tools.search.fieldCaseSensitive": "是否区分大小写。",
   "tools.search.fieldPath": "文件搜索路径。",

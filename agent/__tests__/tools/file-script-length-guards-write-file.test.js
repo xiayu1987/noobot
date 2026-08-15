@@ -84,7 +84,7 @@ test("write_file: overwrite=false uses the canonical failed result protocol", as
   assert.equal(result.ok, false);
   assert.equal(result.status, "failed");
   assert.equal(result.code, "RECOVERABLE_FILE_ALREADY_EXISTS");
-  assert.equal(result.error, "file exists; set overwrite=true to replace it");
+  assert.equal(result.error, "文件已存在；如需替换，请将 overwrite 设置为 true。");
   assert.equal(await fs.readFile(path.join(basePath, "existing.txt"), "utf8"), "original");
 });
 

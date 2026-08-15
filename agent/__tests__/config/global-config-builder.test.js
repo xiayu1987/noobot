@@ -142,7 +142,7 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
   assert.equal(built.rawConfig.providers.main.top_p, undefined);
 });
 
-test("createGlobalConfigBuilder: 自动推导供应商身份并忽略配置覆盖", async () => {
+test("createGlobalConfigBuilder: derives protocol identities and removes providerId overrides", async () => {
   const builder = createGlobalConfigBuilder({
     source: async () => ({
       providers: {
@@ -157,6 +157,7 @@ test("createGlobalConfigBuilder: 自动推导供应商身份并忽略配置覆�
   });
 
   const built = await builder.build();
-  assert.equal(built.rawConfig.providers.legacy.providerId, "openai");
+  assert.equal(built.rawConfig.providers.legacy.providerId, undefined);
+  assert.equal(built.rawConfig.providers.legacy.operatorId, "generic");
   assert.equal(built.rawConfig.providers.legacy.adapterId, "openai-compatible");
 });

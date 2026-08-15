@@ -44,7 +44,7 @@ test("createRuntimeNodeSessions merges committed node facts by workflowRunId and
         sessionId: "old-session",
         dialogProcessId: "old-dialog",
         turnScopeId: "old-turn",
-        stepStatus: "pending",
+        status: "pending",
       },
     ],
     registry: registryWith("run-1", {
@@ -75,7 +75,6 @@ test("createRuntimeNodeSessions merges committed node facts by workflowRunId and
   assert.equal(sessions[0].dialogProcessId, "dialog-1");
   assert.equal(sessions[0].turnScopeId, "turn-1");
   assert.equal(sessions[0].status, "running");
-  assert.equal(sessions[0].stepStatus, undefined);
   assert.equal(sessions[0].revision, 2);
   assert.equal(sessions[0].sequence, 5);
   assert.equal(sessions[0].eventId, "event-1");
@@ -90,7 +89,7 @@ test("createRuntimeNodeSessions isolates committed facts by workflowRunId", () =
         nodeExecutionId: "node-exec-1",
         commandId: "planned-command",
         sessionId: "planned-session",
-        stepStatus: "pending",
+        status: "pending",
       },
     ],
     registry: registryWith("run-other", {
@@ -108,7 +107,6 @@ test("createRuntimeNodeSessions isolates committed facts by workflowRunId", () =
   assert.equal(sessions[0].commandId, "planned-command");
   assert.equal(sessions[0].sessionId, "planned-session");
   assert.equal(sessions[0].status, "pending");
-  assert.equal(sessions[0].stepStatus, undefined);
 });
 
 test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
@@ -138,7 +136,6 @@ test("createRuntimeNodeSessions appends registry-only committed nodes", () => {
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].nodeExecutionId, "node-exec-orphan");
   assert.equal(sessions[0].status, "failed");
-  assert.equal(sessions[0].stepStatus, undefined);
   assert.deepEqual(sessions[0].stepFailure, { message: "boom" });
   assert.equal(sessions[0].sessionId, "session-orphan");
   assert.equal(sessions[0].nodeId, "node-orphan");
@@ -171,7 +168,7 @@ test("createRuntimeNodeSessions preserves enough identity to render a running re
   assert.equal(sessions[0].childExecutionId, "agent-exec-live");
 });
 
-test("createRuntimeNodeSessions prevents legacy nodeAgentRuns from overwriting authoritative nodeExecutionId entries", () => {
+test("createRuntimeNodeSessions prevents nodeAgentRuns from overwriting committed node facts", () => {
   const sessions = buildSessions({
     workflowPayload: { workflowRunId: "run-1" },
     nodeSessions: [
@@ -181,7 +178,7 @@ test("createRuntimeNodeSessions prevents legacy nodeAgentRuns from overwriting a
         commandId: "planned-command",
         sessionId: "planned-session",
         dialogProcessId: "planned-dialog",
-        stepStatus: "pending",
+        status: "pending",
       },
     ],
     executionMeta: {
@@ -192,7 +189,7 @@ test("createRuntimeNodeSessions prevents legacy nodeAgentRuns from overwriting a
           commandId: "legacy-command",
           nodeSessionId: "legacy-session",
           dialogProcessId: "legacy-dialog",
-          stepStatus: "succeeded",
+          status: "succeeded",
           step: { nodeId: "node-a" },
         },
       ],
@@ -214,10 +211,9 @@ test("createRuntimeNodeSessions prevents legacy nodeAgentRuns from overwriting a
   assert.equal(sessions[0].sessionId, "committed-session");
   assert.equal(sessions[0].dialogProcessId, "committed-dialog");
   assert.equal(sessions[0].status, "running");
-  assert.equal(sessions[0].stepStatus, undefined);
 });
 
-test("createRuntimeNodeSessions keeps legacy compatibility for entries without nodeExecutionId", () => {
+test("createRuntimeNodeSessions does not infer identity for runs without nodeExecutionId", () => {
   const sessions = buildSessions({
     workflowPayload: { workflowRunId: "legacy-run" },
     nodeSessions: [
@@ -225,7 +221,7 @@ test("createRuntimeNodeSessions keeps legacy compatibility for entries without n
         dialogProcessId: "legacy-dialog",
         sessionId: "legacy-session",
         stepId: "step-1",
-        stepStatus: "pending",
+        status: "pending",
       },
     ],
     executionMeta: {
@@ -233,7 +229,7 @@ test("createRuntimeNodeSessions keeps legacy compatibility for entries without n
         {
           dialogProcessId: "legacy-dialog",
           nodeSessionId: "legacy-session-2",
-          stepStatus: "succeeded",
+          status: "succeeded",
           step: { nodeId: "legacy-node", nodeName: "Legacy Node" },
         },
       ],
@@ -243,10 +239,9 @@ test("createRuntimeNodeSessions keeps legacy compatibility for entries without n
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].dialogProcessId, "legacy-dialog");
   assert.equal(sessions[0].sessionId, "legacy-session");
-  assert.equal(sessions[0].nodeId, "legacy-node");
-  assert.equal(sessions[0].nodeName, "Legacy Node");
+  assert.equal(sessions[0].nodeId, undefined);
+  assert.equal(sessions[0].nodeName, undefined);
   assert.equal(sessions[0].status, "pending");
-  assert.equal(sessions[0].stepStatus, undefined);
 });
 
 test("createRuntimeNodeSessions accepts Vue ref-like registry objects", () => {
@@ -256,7 +251,7 @@ test("createRuntimeNodeSessions accepts Vue ref-like registry objects", () => {
       {
         workflowRunId: "run-ref",
         nodeExecutionId: "node-ref",
-        stepStatus: "pending",
+        status: "pending",
       },
     ],
     registry: ref(registryWith("run-ref", {
@@ -271,6 +266,5 @@ test("createRuntimeNodeSessions accepts Vue ref-like registry objects", () => {
 
   assert.equal(sessions.length, 1);
   assert.equal(sessions[0].status, "succeeded");
-  assert.equal(sessions[0].stepStatus, undefined);
   assert.equal(sessions[0].sessionId, "session-ref");
 });

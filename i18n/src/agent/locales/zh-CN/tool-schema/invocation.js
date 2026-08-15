@@ -122,6 +122,8 @@ export const INVOCATION_TOOL_SCHEMA = {
       "tools.script.criticalCancelled": "用户未确认最高风险脚本，已取消执行。",
       "tools.script.concise.lineWorkdir": (params = {}) =>
         `默认工作目录：${String(params.workdir || "").trim()}`,
+      "tools.script.concise.lineShell": (params = {}) =>
+        `命令解释器：${String(params.shell || "").trim()}。必须使用该解释器的语法；Windows PowerShell 语法需显式调用 powershell 或 pwsh。`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>
         `相对路径基准：${String(params.workdir || "").trim()}`,
       "tools.script.concise.linePaths": (params = {}) =>

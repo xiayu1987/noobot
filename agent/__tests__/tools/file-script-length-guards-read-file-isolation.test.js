@@ -121,7 +121,7 @@ test("read_file: configured super user id does not bypass isolation when runtime
   });
   const result = parseToolResult(runnerResult.toolResultText);
   assert.equal(result.ok, false);
-  assert.match(String(result.message || result.error || ""), /scope|范围|允许|path/i);
+  assert.equal(result.message || result.error, "当前执行视角不接受沙箱绝对路径。");
 });
 
 test("read_file: non-true super user runtime flag does not bypass isolation", async () => {
@@ -157,7 +157,7 @@ test("read_file: non-true super user runtime flag does not bypass isolation", as
   });
   const result = parseToolResult(runnerResult.toolResultText);
   assert.equal(result.ok, false);
-  assert.match(String(result.message || result.error || ""), /scope|范围|允许|path/i);
+  assert.equal(result.message || result.error, "当前执行视角不接受沙箱绝对路径。");
 });
 
 test("read_file: configured super user can read another user workspace through host view", async () => {

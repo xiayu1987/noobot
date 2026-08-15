@@ -12,6 +12,7 @@ const CONNECTOR_KEYS = Object.freeze(["database", "terminal", "email"]);
 const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
+  "safeConfirm",
   "sanitizeOutput",
   "streaming",
   "frontendThresholdsEnabled",
@@ -71,6 +72,7 @@ export function createRunPreferences(input = {}) {
   const normalizedSummaryPolicy = summaryPolicy(input.summaryPolicy);
   return {
     allowUserInteraction: input.allowUserInteraction !== false,
+    safeConfirm: input.safeConfirm !== false,
     sanitizeOutput: input.sanitizeOutput !== false,
     ...(Object.prototype.hasOwnProperty.call(input, "streaming")
       ? { streaming: input.streaming === true }
@@ -96,7 +98,7 @@ export function validateRunPreferences(preferences) {
   for (const key of Object.keys(preferences)) {
     if (!PREFERENCE_KEYS.has(key)) errors.push(`unknown_preferences_field:${key}`);
   }
-  for (const key of ["allowUserInteraction", "sanitizeOutput"]) {
+  for (const key of ["allowUserInteraction", "safeConfirm", "sanitizeOutput"]) {
     if (typeof preferences[key] !== "boolean") errors.push(`invalid_${key}`);
   }
   if (

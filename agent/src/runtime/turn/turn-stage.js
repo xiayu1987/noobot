@@ -7,6 +7,7 @@ import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../config/index.js";
 import { emitEvent } from "../../events/index.js";
+import { createStreamingCallbacks } from "../../models/runtime/model-manager.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 
 function shouldUseFinalStreaming(modelState = {}) {
@@ -49,7 +50,7 @@ export async function maybeInvokeFinalStreamingNoTools({
       messages: modelMessages,
       options: {
         streaming: true,
-        callbacks: runtime?.modelCallbacks,
+        callbacks: createStreamingCallbacks(eventListener, runtime),
         signal: abortSignal,
         invoke: {
           ...resolveNonThinkingCallOverrides(runtime, "none", modelState?.defaultModelSpec || {}),

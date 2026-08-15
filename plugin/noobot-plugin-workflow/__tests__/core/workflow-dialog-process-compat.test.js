@@ -29,18 +29,13 @@ import {
   resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
-test("workflow dialog process compat helpers keep old dialog fields read-only", () => {
-  assert.equal(resolveWorkflowDialogProcessId({ dialogProcessId: "new-dialog" }), "new-dialog");
-  assert.equal(resolveWorkflowDialogProcessId({ dialogId: "legacy-dialog" }), "legacy-dialog");
-  assert.equal(resolveWorkflowDialogProcessId({ nodeDialogId: "legacy-node-dialog" }), "legacy-node-dialog");
-  assert.equal(
-    resolveWorkflowDialogProcessId({}, { dialogId: "fallback-dialog" }),
-    "fallback-dialog",
-  );
+test("workflow dialog process helpers read only canonical identity fields", () => {
+  assert.equal(resolveWorkflowDialogProcessId({ dialogProcessId: "dialog" }), "dialog");
+  assert.equal(resolveWorkflowDialogProcessId({}), "");
   assert.deepEqual(
-    collectWorkflowDialogProcessIds({ dialogProcessId: "new-dialog" }, { dialogId: "legacy-dialog" }),
-    ["new-dialog", "legacy-dialog"],
+    collectWorkflowDialogProcessIds({ dialogProcessId: "dialog-a" }, { dialogProcessId: "dialog-b" }),
+    ["dialog-a", "dialog-b"],
   );
-  assert.equal(resolveWorkflowNodeDialogProcessId({ nodeDialogProcessId: "new-node-dialog" }), "new-node-dialog");
-  assert.equal(resolveWorkflowNodeDialogProcessId({ nodeDialogId: "legacy-node-dialog" }), "legacy-node-dialog");
+  assert.equal(resolveWorkflowNodeDialogProcessId({ nodeDialogProcessId: "node-dialog" }), "node-dialog");
+  assert.equal(resolveWorkflowNodeDialogProcessId({}), "");
 });

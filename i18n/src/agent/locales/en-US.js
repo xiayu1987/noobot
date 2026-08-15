@@ -140,6 +140,25 @@ export default {
   "tools.file.readMaxLinesField": "Maximum returned lines.",
   "tools.file.readLineRangeOutOfBounds": (params = {}) =>
     `Invalid read line range: requested ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}, file has ${Number(params.totalLines || 0)} lines`,
+  "tools.file.pathErrorRequired": (params = {}) =>
+    `${String(params.field || "filePath")} is required.`,
+  "tools.file.pathErrorHostAbsoluteNotAllowed":
+    "The current principal cannot access host absolute paths.",
+  "tools.file.pathErrorSandboxNotAllowed":
+    "The current execution view does not accept sandbox absolute paths.",
+  "tools.file.pathErrorSandboxNotMapped":
+    "The sandbox path is not mapped to a shared file root.",
+  "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
+    const relative = String(params.suggestedPath || "");
+    const sandbox = String(params.suggestedSandboxPath || "");
+    return sandbox
+      ? `The path is ambiguous. Use ${relative} as a workspace-relative path or ${sandbox} as a sandbox absolute path.`
+      : `The path is ambiguous. Use ${relative} as a workspace-relative path.`;
+  },
+  "tools.file.pathErrorWorkspaceOutOfScope":
+    "The workspace-relative path resolves outside the workspace root.",
+  "tools.file.writeAlreadyExists":
+    "The file already exists; set overwrite to true to replace it.",
   "tools.file.readRiskLevelField":
     "Operation risk level: low, medium, high, or critical. Reads that may involve privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.file.writeOverwriteField": "Whether to overwrite when file exists.",
@@ -149,6 +168,7 @@ export default {
   "tools.search.fieldSource": "Search source: files or text.",
   "tools.search.fieldQuery":
     "Required non-empty keyword or regex. Do not call search with an empty string.",
+  "tools.search.queryRequired": "A non-empty search keyword or regex is required.",
   "tools.search.fieldIsRegex": "Search query as regex.",
   "tools.search.fieldCaseSensitive": "Case-sensitive search.",
   "tools.search.fieldPath": "Path for file search.",
