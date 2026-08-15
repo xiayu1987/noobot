@@ -1,6 +1,6 @@
 {
   "name": "@noobot/hook-protocol",
-  "version": "4.1.7",
+  "version": "4.1.8",
   "private": true,
   "type": "module",
   "description": "Authoritative Noobot hook protocol and in-process runtime",
