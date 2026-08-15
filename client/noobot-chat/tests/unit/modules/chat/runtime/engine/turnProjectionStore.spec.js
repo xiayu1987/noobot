@@ -34,7 +34,7 @@ const events = [
   }),
   envelope({
     eventId: "evt-3", eventType: "tool_call_end", sequence: 3,
-    tool: "read_file", toolCallId: "call-1", result: { ok: true },
+    tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
   }),
   envelope({ eventId: "evt-4", eventType: "llm_delta", sequence: 4, text: "world" }),
 ];
@@ -223,13 +223,13 @@ describe("turnProjectionStore convergence", () => {
         messageId: "assistant-tools-1", eventId: "tools-1-end-a",
         eventType: "tool_call_end", sequence: 3,
         timestamp: "2026-01-01T00:00:03.000Z",
-        tool: "read_file", toolCallId: "call-a", result: { ok: true },
+        tool: "read_file", toolCallId: "call-a", result: { ok: true }, success: true,
       }),
       envelope({
         messageId: "assistant-tools-1", eventId: "tools-1-end-b",
         eventType: "tool_call_end", sequence: 4,
         timestamp: "2026-01-01T00:00:04.000Z",
-        tool: "read_file", toolCallId: "call-b", result: { ok: true },
+        tool: "read_file", toolCallId: "call-b", result: { ok: true }, success: true,
       }),
       envelope({
         messageId: "assistant-tools-2", eventId: "tools-2-start",
@@ -241,7 +241,7 @@ describe("turnProjectionStore convergence", () => {
         messageId: "assistant-tools-2", eventId: "tools-2-end",
         eventType: "tool_call_end", sequence: 2,
         timestamp: "2026-01-01T00:00:06.000Z",
-        tool: "write_file", toolCallId: "call-c", result: { ok: true },
+        tool: "write_file", toolCallId: "call-c", result: { ok: true }, success: true,
       }),
       envelope({
         messageId: "assistant-final", eventId: "final-content",

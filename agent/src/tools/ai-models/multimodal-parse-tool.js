@@ -7,12 +7,23 @@ import { readFile, stat } from "node:fs/promises";
 import { PATH_CAPABILITIES, TOOL_PATH_CONTRACTS, filePath as path } from "@noobot/path-resolver";
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
-import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
+import {
+  MULTIMODAL_CONFIG_OPERATION,
+  mergeConfig,
+  resolveMultimodalDefaultModelSelection,
+} from "../../config/index.js";
+import {
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  MODEL_MULTIMODAL_MODALITY,
+  MODEL_OPERATION_KIND,
+  supportsModelMultimodalParsing,
+} from "@noobot/model-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
-import { getEnabledProviders, resolveModelSpecByName } from "../../models/index.js";
+import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
+import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -34,42 +45,14 @@ function resolveMimeType(filePath = "", sourceAttachment = null) {
   );
 }
 
-const MULTIMODAL_INPUT_MODALITY = Object.freeze({
-  IMAGE: "image",
-  DOCUMENT: "document",
-  AUDIO: "audio",
-  VIDEO: "video",
-});
-
 function resolveInputModality(mimeType = "") {
   const normalized = String(mimeType || "")
     .trim()
     .toLowerCase();
-  if (normalized.startsWith("image/")) return MULTIMODAL_INPUT_MODALITY.IMAGE;
-  if (normalized.startsWith("audio/")) return MULTIMODAL_INPUT_MODALITY.AUDIO;
-  if (normalized.startsWith("video/")) return MULTIMODAL_INPUT_MODALITY.VIDEO;
-  return MULTIMODAL_INPUT_MODALITY.DOCUMENT;
-}
-
-function resolveSupportedInputModalities(modelSpec = null) {
-  const configured = modelSpec?.multimodal_parsing?.input_modalities;
-  return new Set(
-    (Array.isArray(configured) ? configured : [])
-      .map((item) =>
-        String(item || "")
-          .trim()
-          .toLowerCase(),
-      )
-      .filter((item) => Object.values(MULTIMODAL_INPUT_MODALITY).includes(item)),
-  );
-}
-
-function supportsMultimodalParsing(modelSpec = null, requiredModalities = []) {
-  if (modelSpec?.multimodal_parsing?.enabled !== true) return false;
-  const supported = resolveSupportedInputModalities(modelSpec);
-  return (Array.isArray(requiredModalities) ? requiredModalities : []).every((item) =>
-    supported.has(item),
-  );
+  if (normalized.startsWith("image/")) return MODEL_MULTIMODAL_MODALITY.IMAGE;
+  if (normalized.startsWith("audio/")) return MODEL_MULTIMODAL_MODALITY.AUDIO;
+  if (normalized.startsWith("video/")) return MODEL_MULTIMODAL_MODALITY.VIDEO;
+  return MODEL_MULTIMODAL_MODALITY.DOCUMENT;
 }
 
 function resolveConfiguredParseModel({
@@ -79,34 +62,24 @@ function resolveConfiguredParseModel({
 } = {}) {
   const globalConfig = runtime?.globalConfig || {};
   const userConfig = runtime?.userConfig || {};
-  const requested = String(modelName || "").trim();
-  if (requested) {
-    const explicitModel = resolveModelSpecByName({
-      modelName: requested,
-      globalConfig,
-      userConfig,
-      fallbackToDefault: false,
-    });
-    return supportsMultimodalParsing(explicitModel, requiredModalities) ? explicitModel : null;
-  }
-  const runtimeModel = String(runtime?.runtimeModel || "").trim();
-  const currentModel = resolveModelSpecByName({
-    modelName: runtimeModel,
-    globalConfig: runtime?.globalConfig || {},
-    userConfig: runtime?.userConfig || {},
-    fallbackToDefault: false,
+  const explicitModel = String(modelName || "").trim();
+  const selection = explicitModel
+    ? null
+    : resolveMultimodalDefaultModelSelection(mergeConfig(globalConfig, userConfig), {
+        operation: MULTIMODAL_CONFIG_OPERATION.PARSING,
+        modalities: requiredModalities,
+      });
+  const requestedModel = explicitModel || selection?.alias || "";
+  if (!requestedModel) return { modelSpec: null, selection };
+  const modelSpec = resolveModelSpecOrConfiguredDefault({
+    modelName: requestedModel,
+    globalConfig,
+    userConfig,
   });
-  if (supportsMultimodalParsing(currentModel, requiredModalities)) return currentModel;
-  for (const [alias] of Object.entries(getEnabledProviders(globalConfig, userConfig))) {
-    const candidate = resolveModelSpecByName({
-      modelName: alias,
-      globalConfig,
-      userConfig,
-      fallbackToDefault: false,
-    });
-    if (supportsMultimodalParsing(candidate, requiredModalities)) return candidate;
-  }
-  return null;
+  return {
+    modelSpec: supportsModelMultimodalParsing(modelSpec, requiredModalities) ? modelSpec : null,
+    selection,
+  };
 }
 
 export function createMultimodalParseTool({ agentContext }) {
@@ -183,13 +156,20 @@ export function createMultimodalParseTool({ agentContext }) {
           },
         );
       }
-      const modelSpec = resolveConfiguredParseModel({
+      const { modelSpec, selection } = resolveConfiguredParseModel({
         modelName: model_name,
         requiredModalities,
         runtime,
       });
       if (!modelSpec) {
-        throw recoverableToolError(tTool(runtime, "tools.multimodalParse.modelNotFound"), {
+        const selectionError = selection?.conflicting
+          ? tTool(runtime, "tools.multimodalParse.defaultModelConflict")
+          : selection?.missingModalities?.length
+            ? tTool(runtime, "tools.multimodalParse.defaultModelMissing", {
+                modalities: selection.missingModalities.join(", "),
+              })
+            : tTool(runtime, "tools.multimodalParse.modelNotFound");
+        throw recoverableToolError(selectionError, {
           code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
         });
       }
@@ -203,7 +183,8 @@ export function createMultimodalParseTool({ agentContext }) {
           return {
             mimeType,
             data: `data:${mimeType};base64,${(await readFile(inputFile)).toString("base64")}`,
-            fileName: path.basename(inputFile),
+            fileName:
+              String(sourceAttachmentMetas[index]?.name || "").trim() || path.basename(inputFile),
           };
         }),
       );
@@ -237,6 +218,10 @@ export function createMultimodalParseTool({ agentContext }) {
         identity: toolConfig?.configurable?.transferIdentity,
       });
       const attachments = normalizePersistedAttachments(persistedOutput);
+      const outputResources = registerTransferAttachmentResources({
+        agentContext,
+        transferEnvelopes: persistedOutput?.transferEnvelopes || [],
+      });
       const updatedSourceAttachments = (
         await Promise.all(
           sourceAttachmentMetas.map(async (sourceAttachmentMeta) =>
@@ -257,6 +242,7 @@ export function createMultimodalParseTool({ agentContext }) {
           status: TOOL_RESULT_STATUS.COMPLETED,
           mode: "openai_responses_api",
           inputs,
+          resources: [...resolvedInputs.map((item) => item.resourceRef), ...outputResources],
           ...persistedOutput.resultFields,
           model: { alias: modelSpec.alias || "", name: modelSpec.model || "" },
           summary: {

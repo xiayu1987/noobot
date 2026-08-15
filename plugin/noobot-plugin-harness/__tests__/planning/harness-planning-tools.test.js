@@ -108,7 +108,7 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
         runtime: {
           basePath,
           userId: "u11-r",
-          globalConfig: { tools: { execute_script: { sandboxMode: false } } },
+          globalConfig: { security: { executionIsolation: { mode: "host" } } },
           systemRuntime: { userId: "u11-r", sessionId: "s11-r" },
         },
       },

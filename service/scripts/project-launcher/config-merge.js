@@ -30,7 +30,12 @@ export function pruneBuiltInConfigParams(payload = {}) {
   return output;
 }
 
-export function mergeIncremental({ template, target, pathDepth = 0, skipTopLevelKeys = new Set() } = {}) {
+export function mergeIncremental({
+  template,
+  target,
+  excludedRootKeys = new Set(),
+  rootDepth = 0,
+} = {}) {
   if (Array.isArray(template)) {
     return target === undefined ? deepClone(template) : target;
   }
@@ -42,7 +47,7 @@ export function mergeIncremental({ template, target, pathDepth = 0, skipTopLevel
   const targetObject = isPlainObject(target) ? target : {};
 
   for (const [key, templateValue] of Object.entries(template)) {
-    if (pathDepth === 0 && skipTopLevelKeys.has(key)) continue;
+    if (rootDepth === 0 && excludedRootKeys.has(key)) continue;
     if (!hasOwnProperty(targetObject, key)) {
       output[key] = deepClone(templateValue);
       continue;
@@ -52,8 +57,8 @@ export function mergeIncremental({ template, target, pathDepth = 0, skipTopLevel
       output[key] = mergeIncremental({
         template: templateValue,
         target: targetValue,
-        pathDepth: pathDepth + 1,
-        skipTopLevelKeys,
+        excludedRootKeys,
+        rootDepth: rootDepth + 1,
       });
       continue;
     }

@@ -5,10 +5,11 @@
  */
 import { normalizeSelectedConnectors } from "../../../session/model/sessionModel.js";
 import { normalizeTrimmedString } from "./utils.js";
+import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
 import {
-  AGENT_COMMAND,
-  createTurnRunCommand,
-} from "@noobot/agent-transport-protocol";
+  SECURITY_RISK_LEVEL,
+  normalizeSecurityRiskLevel,
+} from "@noobot/security-assessment-protocol";
 
 function normalizeSelectedPluginKeys(selectedPlugins) {
   const source = Array.isArray(selectedPlugins?.value)
@@ -16,9 +17,7 @@ function normalizeSelectedPluginKeys(selectedPlugins) {
     : Array.isArray(selectedPlugins)
       ? selectedPlugins
       : [];
-  return source
-    .map((pluginKey) => normalizeTrimmedString(pluginKey))
-    .filter(Boolean);
+  return source.map((pluginKey) => normalizeTrimmedString(pluginKey)).filter(Boolean);
 }
 
 export function buildChatPayload({
@@ -26,6 +25,7 @@ export function buildChatPayload({
   message,
   attachments = [],
   allowUserInteraction,
+  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   requestedTextStreaming = false,
@@ -76,20 +76,28 @@ export function buildChatPayload({
     },
     input: { message: message || uploadHint, attachments },
     preferences: {
-      allowUserInteraction: (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
+      allowUserInteraction:
+        (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
+      safeConfirm: (safeConfirm?.value ?? safeConfirm) === false ? false : true,
       sanitizeOutput: (sanitizeOutput?.value ?? sanitizeOutput) === false ? false : true,
-      confirmationLevel: ["low", "medium", "high", "critical"].includes(String((safeConfirmLevel?.value ?? safeConfirmLevel) || "").trim().toLowerCase())
-        ? String(safeConfirmLevel?.value ?? safeConfirmLevel).trim().toLowerCase()
-        : "low",
+      confirmationLevel: normalizeSecurityRiskLevel(
+        safeConfirmLevel?.value ?? safeConfirmLevel,
+        SECURITY_RISK_LEVEL.LOW,
+      ),
       streaming: requestedTextStreaming,
-      frontendThresholdsEnabled: (frontendThresholdsEnabled?.value ?? frontendThresholdsEnabled) === true,
+      frontendThresholdsEnabled:
+        (frontendThresholdsEnabled?.value ?? frontendThresholdsEnabled) === true,
       ...(normalizedScenario ? { scenario: normalizedScenario } : {}),
       ...(normalizedSelectedModel ? { selectedModel: normalizedSelectedModel } : {}),
       ...(normalizedMemoryModel ? { memoryModel: normalizedMemoryModel } : {}),
-      ...(normalizedPluginModelConfig && typeof normalizedPluginModelConfig === "object" && !Array.isArray(normalizedPluginModelConfig)
+      ...(normalizedPluginModelConfig &&
+      typeof normalizedPluginModelConfig === "object" &&
+      !Array.isArray(normalizedPluginModelConfig)
         ? { pluginModelConfig: normalizedPluginModelConfig }
         : {}),
-      ...(normalizedSummaryPolicy && typeof normalizedSummaryPolicy === "object" && !Array.isArray(normalizedSummaryPolicy)
+      ...(normalizedSummaryPolicy &&
+      typeof normalizedSummaryPolicy === "object" &&
+      !Array.isArray(normalizedSummaryPolicy)
         ? { summaryPolicy: normalizedSummaryPolicy }
         : {}),
       locale: normalizeTrimmedString(locale?.value ?? locale),
@@ -107,8 +115,7 @@ export function buildChatPayload({
       expectedAggregateVersion,
     },
     session: {
-      createIfAbsent:
-        commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true,
+      createIfAbsent: commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true,
     },
     continuation: {
       dialogProcessId: normalizedResumeDialogProcessId,

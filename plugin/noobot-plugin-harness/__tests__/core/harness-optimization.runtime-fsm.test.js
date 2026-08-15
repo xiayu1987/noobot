@@ -17,7 +17,7 @@ import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/cor
 import { appendJsonlBuffered, flushAllJsonlBuffers } from "../../src/store/store.js";
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { inferFsmTarget, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
+import { resolveFsmTargetByHook, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
 import { buildEvent } from "../../src/data/record-builders.js";
 import {
   createGuidanceHandler,
@@ -226,9 +226,9 @@ test("capability runtime skips disabled planning guidance and acceptance handler
   assert.deepEqual(ctx.toolPolicy, {});
 });
 
-test("inferFsmTarget uses rule table consistently", () => {
-  const toPlanning = inferFsmTarget(HOOK_POINT.AGENT.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
-  const toPlanned = inferFsmTarget(
+test("resolveFsmTargetByHook uses rule table consistently", () => {
+  const toPlanning = resolveFsmTargetByHook(HOOK_POINT.AGENT.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
+  const toPlanned = resolveFsmTargetByHook(
     HOOK_POINT.AGENT.AFTER_LLM_CALL,
     {
       agentContext: {
@@ -241,12 +241,12 @@ test("inferFsmTarget uses rule table consistently", () => {
     },
     HARNESS_FSM_STATES.PLANNING,
   );
-  const toolCallsToPlanned = inferFsmTarget(
+  const toolCallsToPlanned = resolveFsmTargetByHook(
     HOOK_POINT.AGENT.AFTER_LLM_CALL,
     { hasToolCalls: true, calls: [{ name: "read_file" }] },
     HARNESS_FSM_STATES.PLANNING,
   );
-  const toFailed = inferFsmTarget(HOOK_POINT.AGENT.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
+  const toFailed = resolveFsmTargetByHook(HOOK_POINT.AGENT.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
 
   assert.equal(toPlanning, HARNESS_FSM_STATES.PLANNING);
   assert.equal(toPlanned, HARNESS_FSM_STATES.PLANNED);

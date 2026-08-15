@@ -57,6 +57,8 @@ const enUS = {
   config: {
     intro:
       "The following configuration variables are optional. You can fill them now or skip this step.",
+    modelParams: "Model connection",
+    otherParams: "Other configuration",
     valueHelp: "Optional configuration value",
     save: "Save and continue",
     skip: "Skip",
@@ -123,6 +125,8 @@ const zhCN = {
   },
   config: {
     intro: "以下配置变量均为可选项，可现在填写或跳过此步骤。",
+    modelParams: "模型连接",
+    otherParams: "其他配置",
     valueHelp: "可选配置值",
     save: "保存并继续",
     skip: "跳过",

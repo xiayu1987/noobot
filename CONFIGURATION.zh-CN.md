@@ -75,52 +75,64 @@ Session 日志 WebSocket：
 
 ### 3.3 附件策略
 
-| 键名                                  | 类型     | 说明                 |
-| ------------------------------------- | -------- | -------------------- |
-| `attachments.max_file_count`          | number   | 单次请求最大附件数   |
-| `attachments.max_file_size_bytes`     | number   | 单文件大小上限       |
-| `attachments.max_total_size_bytes`    | number   | 总上传大小上限       |
-| `attachments.allowed_extensions`      | string[] | 允许后缀白名单       |
-| `attachments.attachment_models.audio` | string   | 音频处理默认模型别名 |
-| `attachments.attachment_models.video` | string   | 视频处理默认模型别名 |
-| `attachments.attachment_models.image` | string   | 图片处理默认模型别名 |
+| 键名                               | 类型     | 说明               |
+| ---------------------------------- | -------- | ------------------ |
+| `attachments.max_file_count`       | number   | 单次请求最大附件数 |
+| `attachments.max_file_size_bytes`  | number   | 单文件大小上限     |
+| `attachments.max_total_size_bytes` | number   | 总上传大小上限     |
+| `attachments.allowed_extensions`   | string[] | 允许后缀白名单     |
+
+#### 多模态默认模型
+
+| 键名                                         | 类型   | 说明                 |
+| -------------------------------------------- | ------ | -------------------- |
+| `multimodal.parsing.default_models.audio`    | string | 音频解析默认模型别名 |
+| `multimodal.parsing.default_models.video`    | string | 视频解析默认模型别名 |
+| `multimodal.parsing.default_models.image`    | string | 图片解析默认模型别名 |
+| `multimodal.parsing.default_models.document` | string | 文档解析默认模型别名 |
+| `multimodal.generation.default_models.image` | string | 图片生成默认模型别名 |
+
+这里引用的 provider 必须显式声明对应能力。一次解析调用包含的多种输入若配置了不同默认模型，必须通过 `model_name` 显式指定一个同时支持全部输入类型的模型。
 
 ### 3.4 工具配置
 
 > 所有工具统一支持：`tools.<tool_name>.enabled`
 
-| 键名                                                                       | 类型         | 说明                                                               |
-| -------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------ |
-| `tools.read_file.enabled`                                                  | boolean      | 启用文件读取工具                                                   |
-| `tools.write_file.enabled`                                                 | boolean      | 启用文件写入工具                                                   |
-| `tools.list_skills.enabled`                                                | boolean      | 启用技能列表工具                                                   |
-| `tools.call_service.enabled`                                               | boolean      | 启用外部服务调用工具                                               |
-| `tools.call_mcp_task.enabled`                                              | boolean      | 启用 MCP 任务工具                                                  |
-| `tools.delegate_task_async.enabled`                                        | boolean      | 启用异步委派工具                                                   |
-| `tools.delegate_task_async.wait_timeout_ms`                                | number       | 异步委派等待超时                                                   |
-| `tools.delegate_task_async.poll_interval_ms`                               | number       | 异步委派轮询间隔                                                   |
-| `tools.delegate_task_async.max_sub_agent_depth`                            | number       | 子任务最大深度                                                     |
-| `tools.wait_async_task_result.enabled`                                     | boolean      | 启用等待异步结果工具                                               |
-| `tools.wait_async_task_result.poll_interval_ms`                            | number       | 等待工具轮询间隔                                                   |
-| `tools.plan_multi_task_collaboration.enabled`                              | boolean      | 启用任务规划工具                                                   |
-| `tools.switch_model.enabled`                                               | boolean      | 启用模型切换工具                                                   |
-| `tools.user_interaction.enabled`                                           | boolean      | 启用用户交互工具                                                   |
-| `tools.execute_native_script.enabled`                                      | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力       |
-| `tools.execute_script.enabled`                                             | boolean      | 启用脚本执行工具                                                   |
-| `tools.execute_script.sandbox_mode`                                        | boolean      | `true` 时使用配置的沙箱提供者执行脚本，`false` 时在宿主执行        |
-| `tools.execute_script.script_timeout_ms`                                   | number       | 脚本超时                                                           |
-| `tools.execute_script.sandbox_provider.default`                            | enum         | `docker` / `bubblewrap` / `firejail`                               |
-| `tools.execute_script.sandbox_provider.docker.docker_container_scope`      | enum         | `global` / `user`                                                  |
-| `tools.execute_script.sandbox_provider.docker.docker_container_name`       | string       | Docker 沙箱容器名基础前缀                                          |
-| `tools.execute_script.sandbox_provider.docker.docker_image`                | string       | Docker 沙箱镜像                                                    |
-| `tools.execute_script.sandbox_provider.docker.docker_lock_wait_timeout_ms` | number       | 并发复用同名 Docker 容器时的最大排队等待时长（毫秒）               |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts`               | object[]     | 额外目录映射列表（可选）                                           |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].source`      | string(path) | 宿主机目录                                                         |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].target`      | string(path) | 容器内目录（会自动规范成 `/xxx`)                                   |
-| `tools.execute_script.sandbox_provider.docker.docker_mounts[].description` | string       | 映射说明（可选）                                                   |
-| `tools.execute_native_script.enabled`                                      | boolean      | 启用受限宿主 Node.js 能力工具（默认 `true`，仅允许全局管理员配置） |
+| 键名                                                        | 类型         | 说明                                                                      |
+| ----------------------------------------------------------- | ------------ | ------------------------------------------------------------------------- |
+| `tools.read_file.enabled`                                   | boolean      | 启用文件读取工具                                                          |
+| `tools.write_file.enabled`                                  | boolean      | 启用文件写入工具                                                          |
+| `tools.list_skills.enabled`                                 | boolean      | 启用技能列表工具                                                          |
+| `tools.call_service.enabled`                                | boolean      | 启用外部服务调用工具                                                      |
+| `tools.call_mcp_task.enabled`                               | boolean      | 启用 MCP 任务工具                                                         |
+| `tools.delegate_task_async.enabled`                         | boolean      | 启用异步委派工具                                                          |
+| `tools.delegate_task_async.wait_timeout_ms`                 | number       | 异步委派等待超时                                                          |
+| `tools.delegate_task_async.poll_interval_ms`                | number       | 异步委派轮询间隔                                                          |
+| `tools.delegate_task_async.max_sub_agent_depth`             | number       | 子任务最大深度                                                            |
+| `tools.wait_async_task_result.enabled`                      | boolean      | 启用等待异步结果工具                                                      |
+| `tools.wait_async_task_result.poll_interval_ms`             | number       | 等待工具轮询间隔                                                          |
+| `tools.plan_multi_task_collaboration.enabled`               | boolean      | 启用任务规划工具                                                          |
+| `tools.switch_model.enabled`                                | boolean      | 启用模型切换工具                                                          |
+| `tools.user_interaction.enabled`                            | boolean      | 启用用户交互工具                                                          |
+| `tools.execute_native_script.enabled`                       | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力              |
+| `tools.execute_script.enabled`                              | boolean      | 启用脚本执行工具                                                          |
+| `tools.execute_script.script_timeout_ms`                    | number       | 脚本超时                                                                  |
+| `security.execution_isolation.mode`                         | enum         | `sandbox` 在 Docker 中隔离可编程工作区计算；固定文件 I/O 仍由宿主受控执行 |
+| `security.execution_isolation.sandbox.provider`             | enum         | 工作区沙箱提供者（`docker`）                                              |
+| `security.execution_isolation.sandbox.scope`                | enum         | 容器范围（`user`）                                                        |
+| `security.execution_isolation.sandbox.container_name`       | string       | 用户级工作区沙箱容器名前缀                                                |
+| `security.execution_isolation.sandbox.image`                | string       | 可编程工作区计算使用的 Docker 镜像                                        |
+| `security.execution_isolation.sandbox.mounts`               | object[]     | 显式授权的额外宿主到容器挂载                                              |
+| `security.execution_isolation.sandbox.mounts[].source`      | string(path) | 宿主绝对路径，支持 Linux、macOS、Windows 盘符和 UNC 路径                  |
+| `security.execution_isolation.sandbox.mounts[].target`      | string(path) | `/workspace` 托管目录之外的容器绝对路径                                   |
+| `security.execution_isolation.sandbox.mounts[].description` | string       | 可选的挂载说明                                                            |
+| `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | `true` 时只读挂载；默认可写，以保留原有额外挂载行为                       |
+| `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | 复用同一容器时的排队超时，最小 `100` 毫秒                                 |
+| `tools.execute_native_script.enabled`                       | boolean      | 启用受限宿主 Node.js 能力工具（默认 `true`，仅允许全局管理员配置）        |
 
 `execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件和任务输出能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。浏览器只允许访问 loopback HTTP(S)，输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
+
+执行隔离规范由 `@noobot/execution-isolation-protocol` workspace 唯一维护。额外挂载只能通过全局管理员配置声明；挂载源、目标或只读状态变化后，托管 Docker 容器会在下一次脚本执行前重建。额外挂载不会扩大文件工具授权，也不能覆盖 `/workspace`。
 | `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
 | `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
@@ -161,8 +173,8 @@ Session 日志 WebSocket：
 
 说明：
 
-- `docker_mounts` 不配置或为空时，不添加额外挂载。
-- 单条映射仅在 `source` 与 `target` 同时非空时生效。
+- `security.execution_isolation.sandbox.mounts` 不配置或为空时，不添加额外挂载。
+- 每条挂载必须同时提供宿主绝对路径 `source` 和容器绝对路径 `target`。
 - 当前仓库默认值：
   - `service/config/global.config.json`：默认挂载本项目到 `/project`
   - `service/config/global.config.example.json`：不默认挂载项目目录
@@ -242,27 +254,31 @@ Session 日志 WebSocket：
 
 ### 3.7 模型提供方（`providers.<alias>`）
 
-| 键名                                                                       | 类型        | 说明                                      |
-| -------------------------------------------------------------------------- | ----------- | ----------------------------------------- |
-| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                  |
-| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                            |
-| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）            |
-| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                              |
-| `providers.<alias>.model`                                                  | string      | 模型名                                    |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`         |
-| `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                    |
-| `providers.<alias>.enable_thinking`                                        | boolean     | 可选思考开关（常见于 dashscope 兼容模型） |
-| `providers.<alias>.temperature`                                            | number      | 采样温度                                  |
-| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                            |
-| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                |
-| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                          |
-| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                          |
-| `providers.<alias>.preserve_thinking`                                      | boolean     | 是否保留思考（模型支持时）                |
-| `providers.<alias>.thinking_budget`                                        | number      | 思考预算（模型支持时）                    |
-| `providers.<alias>.description`                                            | string      | 提供方说明                                |
-| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                        |
-| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                        |
-| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                |
+可直接复制的当前模型配置维护在 [`docs/model-library.json`](docs/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
+
+| 键名                                                                       | 类型        | 说明                                                  |
+| -------------------------------------------------------------------------- | ----------- | ----------------------------------------------------- |
+| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                              |
+| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                                        |
+| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）                        |
+| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                                          |
+| `providers.<alias>.model`                                                  | string      | 模型名                                                |
+| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`                     |
+| `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                                |
+| `providers.<alias>.enable_thinking`                                        | boolean     | 可选思考开关（常见于 dashscope 兼容模型）             |
+| `providers.<alias>.temperature`                                            | number      | 采样温度                                              |
+| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                                        |
+| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                            |
+| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                                      |
+| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                                      |
+| `providers.<alias>.preserve_thinking`                                      | boolean     | 是否保留思考（模型支持时）                            |
+| `providers.<alias>.thinking_budget`                                        | number      | 思考预算（模型支持时）                                |
+| `providers.<alias>.description`                                            | string      | 提供方说明                                            |
+| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                                    |
+| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | 明确支持的输入：`image`、`document`、`audio`、`video` |
+| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                                    |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                            |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填：`openai_responses` / `images_async`   |
 
 模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 

@@ -21,6 +21,25 @@ import {
 setupWebSocketTestHooks();
 
 describe("chatWebSocketClient transport lifecycle and failures", () => {
+  it("does not reuse a websocket authenticated for a previous account", () => {
+    let owner = "admin";
+    let apiKey = "admin-key";
+    const client = createChatWebSocketClient({
+      resolveWebSocketUrl: () => `ws://test?apikey=${apiKey}`,
+      resolveTransportOwner: () => owner,
+    });
+
+    const adminSocket = client.connect();
+    owner = "xiayu";
+    apiKey = "xiayu-key";
+    const xiayuSocket = client.connect();
+
+    expect(xiayuSocket).not.toBe(adminSocket);
+    expect(adminSocket.readyState).toBe(MockWebSocket.CLOSED);
+    expect(xiayuSocket.url).toBe("ws://test?apikey=xiayu-key");
+    expect(client.getActiveSocket()).toBe(xiayuSocket);
+  });
+
   it("settles a deleted Turn stream as an intentional cancellation", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const streamPromise = client.stream(

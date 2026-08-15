@@ -10,8 +10,31 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_OPERATION_KIND,
   MODEL_PROTOCOL_VERSION,
+  listModelLibraryOptions,
+  resolveModelLibraryProvider,
+  resolveModelMultimodalCapabilities,
+  supportsModelMultimodalGeneration,
+  supportsModelMultimodalParsing,
   validateModelResponse,
 } from "../src/index.js";
+
+test("model library exposes copy-safe provider templates", () => {
+  const options = listModelLibraryOptions();
+  assert.equal(options.length, 18);
+  assert.equal(options[0].key, "gpt_5_6_sol");
+  assert.equal(options.some((item) => item.key === "gpt_5_4"), true);
+  assert.equal(
+    options.some((item) => item.key === "gemini_3_7_flash"),
+    true,
+  );
+  assert.equal(Object.isFrozen(options[0]), true);
+
+  const first = resolveModelLibraryProvider("gemini_3_7_flash");
+  const second = resolveModelLibraryProvider("gemini_3_7_flash");
+  first.enabled = false;
+  assert.equal(second.enabled, true);
+  assert.equal(resolveModelLibraryProvider("missing"), null);
+});
 
 const invocation = {
   requestId: "r",
@@ -29,14 +52,14 @@ const invocation = {
 const model = {
   model: "gpt-5",
   format: "openai_compatible",
-  providerId: "openai",
+  operatorId: "openai",
   adapterId: "openai-compatible",
 };
 
 test("model request has one versioned canonical shape", () => {
   const request = createModelRequest({ invocation, model, messages: [] });
   assert.equal(request.protocolVersion, MODEL_PROTOCOL_VERSION);
-  assert.equal(request.model.providerId, "openai");
+  assert.equal(request.model.operatorId, "openai");
   assert.equal(request.model.adapterId, "openai-compatible");
   assert.throws(() => {
     request.model = {};
@@ -138,7 +161,7 @@ test("model operation results are validated by operation kind", () => {
     result: { rawText: "answer", output: [{ type: "message" }] },
     attempts: [{ attempt: 1, status: "completed", kind: "web_search", streaming: false, output }],
     model,
-    provider: { providerId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
+    provider: { operatorId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
   });
   assert.equal(validateModelResponse(response), response);
   assert.throws(
@@ -164,7 +187,7 @@ test("model response accepts only the canonical protocol shape", () => {
     output,
     attempts: [{ attempt: 1, status: "completed", kind: "response", streaming: false, output }],
     model,
-    provider: { providerId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
+    provider: { operatorId: "openai", adapterId: "openai-compatible", format: "openai_compatible" },
   });
   assert.equal(validateModelResponse(response), response);
   assert.throws(
@@ -200,9 +223,42 @@ test("model request requires transport identity and derives provider/adapter ide
   );
   const derived = createModelRequest({
     invocation,
-    model: { ...model, providerId: "", adapterId: "", operatorId: "openai" },
+    model: { ...model, operatorId: "openai", adapterId: "ignored" },
     messages: [],
   });
-  assert.equal(derived.model.providerId, "openai");
+  assert.equal(derived.model.operatorId, "openai");
   assert.equal(derived.model.adapterId, "openai-compatible");
+});
+
+test("multimodal capabilities are governed only by explicit model configuration", () => {
+  const configured = {
+    model: "arbitrary-model-name",
+    multimodal_parsing: {
+      enabled: true,
+      input_modalities: ["IMAGE", "document", "unsupported", "image"],
+    },
+    multimodal_generation: {
+      support_generation: {
+        enabled: true,
+        support_scope: ["image"],
+        api_type: "openai_responses",
+      },
+    },
+  };
+  assert.deepEqual(resolveModelMultimodalCapabilities(configured), {
+    parsing: { enabled: true, inputModalities: ["image", "document"] },
+    generation: {
+      enabled: true,
+      outputModalities: ["image"],
+      apiType: "openai_responses",
+    },
+  });
+  assert.equal(supportsModelMultimodalParsing(configured, ["image", "document"]), true);
+  assert.equal(supportsModelMultimodalParsing(configured, ["audio"]), false);
+  assert.equal(supportsModelMultimodalGeneration(configured, ["image"]), true);
+  assert.equal(supportsModelMultimodalGeneration(configured, ["video"]), false);
+
+  const suggestiveNameOnly = { model: "omni-vision-image-video" };
+  assert.equal(supportsModelMultimodalParsing(suggestiveNameOnly, ["image"]), false);
+  assert.equal(supportsModelMultimodalGeneration(suggestiveNameOnly, ["image"]), false);
 });

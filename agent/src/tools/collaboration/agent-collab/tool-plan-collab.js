@@ -64,7 +64,6 @@ export function createPlanMultiTaskCollaborationTool({ runtime, globalConfig, us
             modelName: runtimeModel,
             globalConfig,
             userConfig,
-            fallbackToDefault: false,
           })
         : resolveDefaultModelSpec({ globalConfig, userConfig });
       if (!modelSpec) {

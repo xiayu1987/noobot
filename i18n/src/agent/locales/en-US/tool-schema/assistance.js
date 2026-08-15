@@ -56,10 +56,6 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       text: "Generate images from multimodal prompt. Input generation_content (optional model_name, image_size). Returns generated image results.",
     },
     params: {
-      api_type: {
-        key: "tools.multimodal.fieldApiType",
-        text: "Image generation API type (optional), supports openai_responses and images_async.",
-      },
       generation_content: {
         key: "tools.multimodal.fieldGenerationContent",
         text: "Generation content description.",
@@ -112,26 +108,26 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskTimeout": (params = {}) =>
         `image generation task timeout: ${String(params.taskId || "").trim()}`,
       "tools.multimodal.trySwitchApiType":
-        "Try switching api_type, for example openai_responses or images_async.",
+        "Check the image generation API type configured for this model.",
     },
   },
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "Parse one or more image, document, audio, or video files together and save the result. Each input source is a logical file path string or complete attachment identity object; an attachment display name is not a path.",
+      text: "Parse one or more image, document, audio, or video files together and save the result. Each input source is a logical file path or complete attachment identity.",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "One or more image, document, audio, or video inputs; each item contains one source field.",
+        text: "One or more image, document, audio, or video inputs; each item contains a logical file path or complete attachment identity.",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
-        text: "When source is a string, it is a logical file path.",
+        text: "When source is a string, it is a logical file path resolved by the server.",
       },
       attachmentIdentity: {
         key: "tools.multimodalParse.fieldAttachmentIdentity",
-        text: "When source is an object, it must contain attachmentId, sessionId, and attachmentSource.",
+        text: "An attachment object must contain attachmentId, sessionId, and attachmentSource.",
       },
       model_name: {
         key: "tools.multimodalParse.fieldModelName",
@@ -150,6 +146,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
       "tools.multimodalParse.modelNotFound":
         "No model is configured with multimodal parsing enabled",
+      "tools.multimodalParse.defaultModelMissing": (params = {}) =>
+        `No default multimodal parsing model is configured for: ${String(params.modalities || "").trim()}`,
+      "tools.multimodalParse.defaultModelConflict":
+        "The input types use different default parsing models; specify one model_name that supports every input type",
     },
   },
   switch_model: {

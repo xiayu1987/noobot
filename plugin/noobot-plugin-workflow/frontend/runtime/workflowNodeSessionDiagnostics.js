@@ -6,7 +6,7 @@
 import {
   resolveWorkflowDialogProcessId,
   summarizeWorkflowDialogProcessIdFields,
-} from "../utils/workflowDialogProcessIdCompat.js";
+} from "../utils/workflowDialogProcessId.js";
 import {
   resolveIsolatedNodeSessionId,
   resolveRuntimeNodeSession,

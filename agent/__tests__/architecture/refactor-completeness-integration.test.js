@@ -17,8 +17,7 @@ function createBaseGlobalConfig(overrides = {}) {
     providers: {
       openai: {
         format: "openai_compatible",
-        providerId: "openai",
-        adapterId: "openai-compatible",
+        baseUrl: "https://api.openai.com/v1",
         apiKey: "${OPENAI_API_KEY}",
         enabled: true,
         model: "gpt-4",
@@ -30,9 +29,8 @@ function createBaseGlobalConfig(overrides = {}) {
         },
       },
       anthropic: {
-        format: "anthropic",
-        providerId: "anthropic",
-        adapterId: "anthropic",
+        format: "openai_compatible",
+        baseUrl: "https://api.anthropic.com/v1",
         apiKey: "${ANTHROPIC_API_KEY}",
         enabled: true,
         model: "claude-3-opus",
@@ -110,7 +108,7 @@ describe("8. 综合集成测试", () => {
       const spec = resolveDefaultModelSpec({ globalConfig, userConfig });
       assert.ok(spec !== null, "应能解析到 spec");
 
-      const requiredSpecFields = ["alias", "format", "providerId", "adapterId", "model"];
+      const requiredSpecFields = ["alias", "format", "operatorId", "adapterId", "model"];
       for (const field of requiredSpecFields) {
         assert.ok(field in spec, `spec 应包含字段: ${field}`);
       }

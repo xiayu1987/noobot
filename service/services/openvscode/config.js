@@ -25,10 +25,10 @@ function resolveManagedOpenVSCodeCommand() {
   const candidate = path.resolve(CURRENT_DIR, "../../vendor/openvscode-server/bin/openvscode-server");
   return existsSync(candidate) ? candidate : "";
 }
-function resolveOpenVSCodeTimeMs({ envName, source, key, legacyKey, fallback, min }) {
+function resolveOpenVSCodeTimeMs({ envName, source, key, fallback, min }) {
   const envRaw = process.env[envName];
   if (envRaw !== undefined) return normalizeTimeMs(envRaw, { fallback, min, allowZero: min <= 0 });
-  return resolveTimeMs(source, { key, legacyKeys: legacyKey ? [legacyKey] : [], sourceTag: "service.openvscode", warnLegacy: true, fallback, min, allowZero: min <= 0 });
+  return resolveTimeMs(source, { key, fallback, min, allowZero: min <= 0 });
 }
 export function getOpenVSCodeConfig(globalConfig = {}) {
   const source = isPlainObject(globalConfig?.openVSCode) ? globalConfig.openVSCode : isPlainObject(globalConfig?.openvscode) ? globalConfig.openvscode : {};
@@ -39,8 +39,8 @@ export function getOpenVSCodeConfig(globalConfig = {}) {
     host: String(process.env.OPENVSCODE_SERVER_HOST || source.host || DEFAULT_HOST).trim() || DEFAULT_HOST,
     startTimeoutMs: DEFAULT_START_TIMEOUT_MS,
     idleTimeoutMs: DEFAULT_IDLE_TIMEOUT_MS,
-    cleanupIntervalMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS", source, key: "cleanupIntervalMs", legacyKey: "cleanup_interval_ms", fallback: DEFAULT_CLEANUP_INTERVAL_MS, min: 1000 }),
-    shutdownGraceMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS", source, key: "shutdownGraceMs", legacyKey: "shutdown_grace_ms", fallback: DEFAULT_SHUTDOWN_GRACE_MS, min: 0 }),
+    cleanupIntervalMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_CLEANUP_INTERVAL_MS", source, key: "cleanupIntervalMs", fallback: DEFAULT_CLEANUP_INTERVAL_MS, min: 1000 }),
+    shutdownGraceMs: resolveOpenVSCodeTimeMs({ envName: "OPENVSCODE_SERVER_SHUTDOWN_GRACE_MS", source, key: "shutdownGraceMs", fallback: DEFAULT_SHUTDOWN_GRACE_MS, min: 0 }),
     extraArgs: Array.isArray(source.extraArgs) ? source.extraArgs.map((item) => String(item || "").trim()).filter(Boolean) : envArgs ? envArgs.split(" ").map((item) => item.trim()).filter(Boolean) : [],
   };
 }

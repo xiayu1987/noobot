@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { mergeRunConfigWithPluginStrategy } from "../../src/bot/session/run-config-plugin-strategy.js";
 
-test("mergeRunConfigWithPluginStrategy persists disabled plugins across run-config preparation", () => {
+test("mergeRunConfigWithPluginStrategy filters selection without rewriting plugin configuration", () => {
   const merged = mergeRunConfigWithPluginStrategy({
     baseRunConfig: {
       disabledPlugins: ["existing-plugin"],
@@ -27,8 +27,8 @@ test("mergeRunConfigWithPluginStrategy persists disabled plugins across run-conf
   assert.deepEqual(merged.disabledPlugins, ["existing-plugin", "workflow"]);
   assert.deepEqual(merged.selectedPlugins, ["harness"]);
   assert.deepEqual(merged.plugins.workflow, {
-    enabled: false,
-    mode: "off",
+    enabled: true,
+    mode: "on",
     semanticModel: "planner",
   });
   assert.deepEqual(merged.plugins.harness, { enabled: true, mode: "on" });

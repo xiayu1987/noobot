@@ -4,22 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
+import { collectWorkflowDialogProcessIds, resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 
 function normalizeRuntimeStatusInput(item = {}) {
-  const { stepStatus: legacyStepStatus, ...canonical } = item && typeof item === "object" ? item : {};
-  return {
-    ...canonical,
-    status: String(canonical.status || legacyStepStatus || "").trim(),
-  };
+  const canonical = item && typeof item === "object" ? item : {};
+  return { ...canonical, status: String(canonical.status || "").trim() };
 }
 
 function makeNodeSessionFromRun(item = {}, workflowPayload) {
   const step = item?.step && typeof item.step === "object" ? item.step : {};
-  const dialogProcessId = resolveWorkflowDialogProcessId(item, step);
+  const dialogProcessId = String(item?.nodeDialogProcessId || "").trim();
   return {
     transition: Number(item?.transition || 0),
-    workflowRunId: String(item?.workflowRunId || workflowPayload.value?.workflowRunId || "").trim(),
+    workflowRunId: String(item?.workflowRunId || "").trim(),
     nodeExecutionId: String(item?.nodeExecutionId || "").trim(),
     commandId: String(item?.commandId || "").trim(),
     parentSessionId: String(item?.parentSessionId || "").trim(),
@@ -50,7 +47,7 @@ function makeNodeSessionFromRun(item = {}, workflowPayload) {
       : Array.isArray(item?.transferEnvelopes)
         ? item.transferEnvelopes
         : [],
-    status: String(item?.status || item?.stepStatus || "").trim(),
+    status: String(item?.status || "").trim(),
     stepFailure:
       item?.stepFailure && typeof item.stepFailure === "object"
         ? item.stepFailure
@@ -86,12 +83,12 @@ function normalizeCommittedNodeFact(item = {}) {
     commandId: String(item?.commandId || "").trim(),
     sessionId: String(item?.sessionId || item?.nodeSessionId || "").trim(),
     parentSessionId: String(item?.parentSessionId || "").trim(),
-    dialogProcessId: String(item?.dialogProcessId || item?.nodeDialogProcessId || "").trim(),
+    dialogProcessId: String(item?.dialogProcessId || "").trim(),
     turnScopeId: String(item?.turnScopeId || "").trim(),
     activeChildExecutionId: String(item?.activeChildExecutionId || item?.childExecutionId || "").trim(),
     childExecutionId: String(item?.childExecutionId || item?.activeChildExecutionId || "").trim(),
     attemptExecutionIds: Array.isArray(item?.attemptExecutionIds) ? item.attemptExecutionIds.map(String) : [],
-    status: String(item?.status || item?.stepStatus || "").trim(),
+    status: String(item?.status || "").trim(),
     stepFailure: item?.failure && typeof item.failure === "object"
       ? item.failure
       : item?.stepFailure && typeof item.stepFailure === "object"
@@ -115,7 +112,7 @@ function mergeCommittedNodeFact(base = {}, fact = {}) {
     stepFailure: canonicalFact.stepFailure || canonicalBase.stepFailure || null,
   };
   if (!canonicalFact.sessionId) merged.sessionId = String(canonicalBase.sessionId || canonicalBase.nodeSessionId || "").trim();
-  if (!canonicalFact.dialogProcessId) merged.dialogProcessId = String(canonicalBase.dialogProcessId || canonicalBase.nodeDialogProcessId || "").trim();
+  if (!canonicalFact.dialogProcessId) merged.dialogProcessId = String(canonicalBase.dialogProcessId || "").trim();
   if (!canonicalFact.turnScopeId) merged.turnScopeId = String(canonicalBase.turnScopeId || "").trim();
   if (!canonicalFact.nodeId) merged.nodeId = String(canonicalBase.nodeId || "").trim();
   if (!canonicalFact.nodeName) merged.nodeName = String(canonicalBase.nodeName || canonicalBase.nodeId || "").trim();
@@ -128,19 +125,6 @@ function mergeCommittedNodeFact(base = {}, fact = {}) {
     merged.childExecutionId = String(canonicalBase.childExecutionId || canonicalBase.activeChildExecutionId || "").trim();
   }
   return merged;
-}
-
-function makeRuntimeEntryKey(item = {}) {
-  return String(
-    item?.dialogProcessId ||
-      item?.nodeDialogProcessId ||
-      item?.sessionId ||
-      item?.nodeSessionId ||
-      item?.stepId ||
-      item?.actionNodeStateId ||
-      resolveWorkflowDialogProcessId(item) ||
-      "",
-  ).trim();
 }
 
 function rememberRuntimeEntryKeys(entryIndexByKey, item = {}, index = 0) {
@@ -172,22 +156,6 @@ function findRuntimeEntryIndex(entryIndexByKey, item = {}) {
     if (entryIndexByKey.has(key)) return entryIndexByKey.get(key);
   }
   return -1;
-}
-
-function mergeRuntimeEntry(base = {}, fallback = {}) {
-  const canonicalBase = normalizeRuntimeStatusInput(base);
-  const canonicalFallback = normalizeRuntimeStatusInput(fallback);
-  return {
-    ...canonicalFallback,
-    ...canonicalBase,
-    status: String(canonicalBase.status || canonicalFallback.status || "").trim(),
-    stepFailure:
-      canonicalBase?.stepFailure && typeof canonicalBase.stepFailure === "object"
-        ? canonicalBase.stepFailure
-        : canonicalFallback?.stepFailure && typeof canonicalFallback.stepFailure === "object"
-          ? canonicalFallback.stepFailure
-          : null,
-  };
 }
 
 export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, executionMeta, workflowNodeStateRegistry = null }) {
@@ -226,19 +194,11 @@ export function createRuntimeNodeSessions({ workflowPayload, nodeSessions, execu
       : [];
     for (const runItem of runs) {
       const fallback = makeNodeSessionFromRun(runItem, workflowPayload);
-      if (fallback.nodeExecutionId && workflowRunId && fallback.workflowRunId === workflowRunId) {
-        const key = `node:${fallback.nodeExecutionId}`;
-        if (entryIndexByKey.has(key)) continue;
-      }
-      if (!fallback.dialogProcessId && !fallback.sessionId && !fallback.stepId) continue;
-
-      const key = makeRuntimeEntryKey(fallback);
-      if (key && entryIndexByKey.has(key)) {
-        const index = entryIndexByKey.get(key);
-        entries[index] = mergeRuntimeEntry(entries[index], fallback);
-        rememberRuntimeEntryKeys(entryIndexByKey, entries[index], index);
+      if (!fallback.nodeExecutionId || !workflowRunId || fallback.workflowRunId !== workflowRunId) {
         continue;
       }
+      const nodeKey = `node:${fallback.nodeExecutionId}`;
+      if (entryIndexByKey.has(nodeKey)) continue;
 
       entries.push(fallback);
       rememberRuntimeEntryKeys(entryIndexByKey, fallback, entries.length - 1);

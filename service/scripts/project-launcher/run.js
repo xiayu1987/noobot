@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import process from "node:process";
+import { migrateConfigFileToCurrentProtocol } from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
 import {
   parseCliOptions,
@@ -14,7 +15,7 @@ import {
   resolveLauncherGlobalConfigPath,
 } from "./cli.js";
 import { mergeIncremental, pruneBuiltInConfigParams } from "./config-merge.js";
-import { CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS } from "./constants.js";
+import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
 import {
   ensureAgentProxyConfig,
   ensureModelProxyConfig,
@@ -65,7 +66,9 @@ async function initializeGlobalConfigWhenMissing({
     user_id: answers.superAdminUserId,
     connect_code: answers.superAdminConnectCode,
   };
-  const preferences = isPlainObject(globalConfig.preferences) ? { ...globalConfig.preferences } : {};
+  const preferences = isPlainObject(globalConfig.preferences)
+    ? { ...globalConfig.preferences }
+    : {};
   preferences.language = answers.configLanguage;
   globalConfig.preferences = preferences;
 
@@ -130,7 +133,11 @@ async function initializeGlobalConfigWhenMissing({
   console.log(t(answers.setupLocale, "logInitDone"));
 }
 
-async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath, serviceRoot } = {}) {
+async function syncWhenGlobalConfigExists({
+  globalExamplePath,
+  globalConfigPath,
+  serviceRoot,
+} = {}) {
   const [globalExampleConfig, globalConfig] = await Promise.all([
     readJsonStrict(globalExamplePath, t("zh", "labelGlobalExample")),
     readJsonStrict(globalConfigPath, t("zh", "labelGlobalConfig")),
@@ -138,11 +145,15 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
-  const mergedGlobal = pruneBuiltInConfigParams(mergeIncremental({
-    template: pruneBuiltInConfigParams(globalExampleConfig),
-    target: pruneBuiltInConfigParams(globalConfig),
-    skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
-  }));
+  const mergedGlobal = migrateConfigFileToCurrentProtocol(
+    pruneBuiltInConfigParams(
+      mergeIncremental({
+        template: pruneBuiltInConfigParams(globalExampleConfig),
+        target: pruneBuiltInConfigParams(globalConfig),
+        excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
+      }),
+    ),
+  );
 
   const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();
   const mergedGlobalLocalized = existingConfigLanguage
@@ -167,7 +178,10 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
     workspaceRootAbsolutePath,
     workspaceTemplateAbsolutePath,
     superAdminUserId,
-    locale: normalizeSetupLocale(process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG, "zh"),
+    locale: normalizeSetupLocale(
+      process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
+      "zh",
+    ),
   });
 
   await syncLanguageAcrossTemplateAndUsers({
@@ -175,7 +189,10 @@ async function syncWhenGlobalConfigExists({ globalExamplePath, globalConfigPath,
     workspaceTemplateAbsolutePath,
     superAdminUserId,
     language: String(mergedGlobalLocalized?.preferences?.language || "").trim(),
-    locale: normalizeSetupLocale(process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG, "zh"),
+    locale: normalizeSetupLocale(
+      process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
+      "zh",
+    ),
   });
 
   await ensureWorkspaceConfigParamsCatalog({

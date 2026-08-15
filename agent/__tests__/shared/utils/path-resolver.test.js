@@ -10,6 +10,7 @@ import {
   PATH_PLATFORMS,
   PATH_VIEWS,
   TOOL_PATH_VIEWS,
+  TOOL_PATH_RESOLUTION_ERROR,
   classifyToolInputPath,
   convertPathView,
   detectPathPlatform,
@@ -25,6 +26,11 @@ import {
   resolveRuntimePathContext,
   resolveToolInputPath,
 } from "@noobot/path-resolver";
+import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
+
+function executeScriptPolicy(globalConfig = {}) {
+  return resolveToolExecutionPolicy({ toolName: "execute_script", globalConfig });
+}
 
 test("detects foreign platform paths without using process.platform", () => {
   assert.equal(detectPathPlatform("C:\\Users\\张三\\file.txt"), PATH_PLATFORMS.WINDOWS);
@@ -214,13 +220,10 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
     runtime: {
       ...runtime,
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "user" },
-            },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: { provider: "docker", scope: "user" },
           },
         },
       },
@@ -242,7 +245,8 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
   assert.equal(virtualRelative.ok, false);
   assert.equal(virtualRelative.error, "virtual_relative_path_ambiguous");
   assert.equal(virtualRelative.candidateWorkspaceRelativePath, "src/a.js");
-  assert.equal(virtualRelative.candidateSandboxPath, "/project/src/a.js");
+  assert.equal(virtualRelative.candidateSandboxPath, undefined);
+  assert.equal(Object.hasOwn(virtualRelative, "hint"), false);
 
   const hostAbsolute = resolveToolInputPath({
     inputPath: "C:\\outside\\a.js",
@@ -258,34 +262,77 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
   assert.equal(hostAbsolute.resolvedPath, "C:/outside/a.js");
 });
 
+test("workspace-relative traversal retains its logical view when rejected", () => {
+  const result = resolveToolInputPath({
+    inputPath: "../outside.txt",
+    workspacePath: "/workspace-root/u1",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE);
+  assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE);
+});
+
+test("sandbox mode does not reinterpret an unmapped absolute path as host", () => {
+  const runtime = {
+    basePath: "/workspace-root/u1",
+    userId: "u1",
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
+        },
+      },
+    },
+  };
+  const result = resolveToolInputPath({
+    inputPath: "/etc/hosts",
+    runtime,
+    workspacePath: runtime.basePath,
+    workspaceRoot: "/workspace-root",
+    allowHostAbsolute: true,
+    allowSandbox: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
+  assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED);
+});
+
 test("resolves sandbox runtime paths only from explicit execution context", () => {
+  assert.throws(
+    () => resolveRuntimePathContext({ runtimeBasePath: "/host/workspaces/u1" }),
+    /resolved execution isolation protocol required/,
+  );
   const hostContext = resolveRuntimePathContext({
     runtimeBasePath: "/host/workspaces/u1",
     workspaceRoot: "/host/workspaces",
     userId: "u1",
+    executionPolicy: executeScriptPolicy(),
   });
   assert.equal(hostContext.view, "host");
+  assert.equal(hostContext.currentDirectory, "/host/workspaces/u1");
   assert.equal(hostContext.directories.rootDirectory, "/host/workspaces/u1");
   assert.equal(hostContext.directories.opsWorkdir, "/host/workspaces/u1/runtime/ops_workdir");
   assert.deepEqual(hostContext.directories.allowedRoots, ["/host/workspaces/u1"]);
 
+  const dockerUserGlobalConfig = {
+    security: {
+      executionIsolation: {
+        mode: "sandbox",
+        sandbox: {
+          provider: "docker",
+          scope: "user",
+          mounts: [{ source: "/host/data", target: "/data" }],
+        },
+      },
+    },
+  };
   const dockerUserContext = resolveRuntimePathContext({
     runtimeBasePath: "/host/workspaces/u1",
     workspaceRoot: "/host/workspaces",
     userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: {
-        view: "sandbox",
-        sandboxProvider: {
-          default: "docker",
-          docker: {
-            dockerContainerScope: "user",
-            dockerMounts: [{ source: "/host/data", target: "/data" }],
-          },
-        },
-      },
-    },
+    globalConfig: dockerUserGlobalConfig,
+    executionPolicy: executeScriptPolicy(dockerUserGlobalConfig),
   });
   assert.equal(dockerUserContext.view, "sandbox");
   assert.equal(dockerUserContext.isDockerGlobal, false);
@@ -294,17 +341,20 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
   assert.deepEqual(dockerUserContext.directories.allowedRoots.sort(), ["/data", "/workspace"]);
   assert.deepEqual(dockerUserContext.hostMountSources, ["/host/data"]);
 
+  const dockerGlobalConfig = {
+    security: {
+      executionIsolation: {
+        mode: "sandbox",
+        sandbox: { provider: "docker", scope: "global" },
+      },
+    },
+  };
   const dockerGlobalContext = resolveRuntimePathContext({
     runtimeBasePath: "/host/workspaces/primary-user",
     workspaceRoot: "/host/workspaces",
     userId: "primary-user",
-    executionContext: {
-      view: "sandbox",
-      config: {
-        view: "sandbox",
-        sandboxProvider: { default: "docker", docker: { dockerContainerScope: "global" } },
-      },
-    },
+    globalConfig: dockerGlobalConfig,
+    executionPolicy: executeScriptPolicy(dockerGlobalConfig),
   });
   assert.equal(dockerGlobalContext.isDockerGlobal, true);
   assert.equal(dockerGlobalContext.sandboxRoot, "/workspace");
@@ -313,30 +363,6 @@ test("resolves sandbox runtime paths only from explicit execution context", () =
     dockerGlobalContext.directories.opsWorkdir,
     "/workspace/primary-user/runtime/ops_workdir",
   );
-
-  const bubblewrapContext = resolveRuntimePathContext({
-    runtimeBasePath: "/host/workspaces/u1",
-    userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: { view: "sandbox", sandboxProvider: { default: "bubblewrap", bubblewrap: {} } },
-    },
-  });
-  assert.equal(bubblewrapContext.sandboxProvider, "bubblewrap");
-  assert.equal(bubblewrapContext.directories.rootDirectory, "/workspace");
-  assert.equal(bubblewrapContext.directories.opsWorkdir, "/workspace/runtime/sandbox/persist");
-
-  const firejailContext = resolveRuntimePathContext({
-    runtimeBasePath: "/host/workspaces/u1",
-    userId: "u1",
-    executionContext: {
-      view: "sandbox",
-      config: { view: "sandbox", sandboxProvider: { default: "firejail", firejail: {} } },
-    },
-  });
-  assert.equal(firejailContext.sandboxProvider, "firejail");
-  assert.equal(firejailContext.directories.rootDirectory, "$HOME");
-  assert.equal(firejailContext.directories.opsWorkdir, "$HOME/runtime/sandbox/persist");
 });
 
 test("resolves agent path contract from system directories without mixing sandbox and host views", () => {
@@ -356,26 +382,25 @@ test("resolves agent path contract from system directories without mixing sandbo
       },
     },
     runtimeBasePath: "/host/workspaces/u1",
+    executionPolicy: executeScriptPolicy(),
   });
   assert.equal(hostContext.view, "host");
   assert.equal(hostContext.rootDirectory, "/host/workspaces/u1/noobot");
   assert.equal(hostContext.hostRootDirectory, "/host/workspaces/u1/noobot");
   assert.deepEqual(hostContext.hostAllowedRoots, ["/host/workspaces/u1"]);
 
+  const sandboxGlobalConfig = {
+    security: {
+      executionIsolation: {
+        mode: "sandbox",
+        sandbox: { provider: "docker", scope: "global" },
+      },
+    },
+  };
   const sandboxContext = resolveAgentPathContext({
     runtime: {
       basePath: "/host/workspaces/u1",
-      globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
-            },
-          },
-        },
-      },
+      globalConfig: sandboxGlobalConfig,
       systemRuntime: {
         staticInfo: {
           directories: {
@@ -389,6 +414,7 @@ test("resolves agent path contract from system directories without mixing sandbo
     },
     runtimeBasePath: "/host/workspaces/u1",
     userId: "u1",
+    executionPolicy: executeScriptPolicy(sandboxGlobalConfig),
   });
   assert.equal(sandboxContext.view, "sandbox");
   assert.equal(sandboxContext.rootDirectory, "/workspace/u1");
@@ -396,18 +422,14 @@ test("resolves agent path contract from system directories without mixing sandbo
   assert.deepEqual(sandboxContext.hostAllowedRoots, []);
 });
 
-test("ordinary tool paths never interpret /project through execute_script configuration", () => {
+test("sandbox mount targets are shared by all file-related tools through global isolation config", () => {
   const hostProject = resolveToolInputPath({
     inputPath: "/project/client/noobot-chat/src/app/App.vue",
     workspacePath: "/host/workspaces/u1/noobot",
     workspaceRoot: "/host/workspaces",
     runtime: {
       basePath: "/host/workspaces/u1",
-      globalConfig: {
-        tools: {
-          execute_script: { sandboxMode: false },
-        },
-      },
+      globalConfig: { security: { executionIsolation: { mode: "host" } } },
     },
   });
   assert.equal(hostProject.ok, false);
@@ -417,23 +439,63 @@ test("ordinary tool paths never interpret /project through execute_script config
     inputPath: "/project/client/noobot-chat/src/app/App.vue",
     workspacePath: "/host/workspaces/u1/noobot",
     workspaceRoot: "/host/workspaces",
+    allowSandbox: true,
     runtime: {
       basePath: "/host/workspaces/u1/noobot",
       globalConfig: {
-        tools: {
-          execute_script: {
-            sandboxMode: true,
-            sandboxProvider: {
-              default: "docker",
-              docker: { dockerContainerScope: "global" },
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "global",
+              mounts: [
+                {
+                  source: "/host/projects/noobot",
+                  target: "/project",
+                  readOnly: true,
+                },
+              ],
             },
           },
         },
       },
     },
   });
-  assert.equal(sandboxProject.ok, false);
-  assert.equal(sandboxProject.error, "sandbox_path_not_allowed");
+  assert.equal(sandboxProject.ok, true);
+  assert.equal(
+    sandboxProject.resolvedPath,
+    "/host/projects/noobot/client/noobot-chat/src/app/App.vue",
+  );
+  assert.equal(sandboxProject.logicalPath, "/project/client/noobot-chat/src/app/App.vue");
+  assert.equal(sandboxProject.executionRoot, "/host/projects/noobot");
+  assert.equal(sandboxProject.mountTarget, "/project");
+  assert.equal(sandboxProject.mountReadOnly, true);
+
+  const arbitraryMount = resolveToolInputPath({
+    inputPath: "/shared-assets/images/a.png",
+    workspacePath: "/host/workspaces/u1/noobot",
+    workspaceRoot: "/host/workspaces",
+    allowSandbox: true,
+    runtime: {
+      basePath: "/host/workspaces/u1/noobot",
+      globalConfig: {
+        security: {
+          executionIsolation: {
+            mode: "sandbox",
+            sandbox: {
+              provider: "docker",
+              scope: "global",
+              mounts: [{ source: "/host/assets", target: "/shared-assets" }],
+            },
+          },
+        },
+      },
+    },
+  });
+  assert.equal(arbitraryMount.ok, true);
+  assert.equal(arbitraryMount.resolvedPath, "/host/assets/images/a.png");
+  assert.equal(arbitraryMount.logicalPath, "/shared-assets/images/a.png");
 });
 
 test("sandbox paths require an explicit sandbox-capable caller", () => {

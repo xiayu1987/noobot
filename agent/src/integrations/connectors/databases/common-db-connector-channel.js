@@ -66,9 +66,6 @@ export function normalizeTimeoutMs(
 ) {
   return resolveTimeMs(source, {
     key: "timeoutMs",
-    legacyKeys: ["timeout_ms"],
-    sourceTag: "connectors.database",
-    warnLegacy: true,
     fallback,
     min: 1000,
   });

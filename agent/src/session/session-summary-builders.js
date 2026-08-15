@@ -6,6 +6,7 @@
 
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
+import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   compactAttachmentRef,
@@ -16,7 +17,7 @@ import {
 } from "./transfer-attachment-refs.js";
 import { projectThinkingTimeline } from "./thinking-timeline-projection.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 19;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 22;
 export const SESSIONS_SUMMARY_SCHEMA_VERSION = 2;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
@@ -27,40 +28,27 @@ const SUMMARY_DEFAULT_JSON_STRING_CHARS =
 const SUMMARY_SMALL_JSON_STRING_CHARS =
   LENGTH_THRESHOLDS.display.sessionSummarySmallJsonStringChars;
 
-function compactToolSummary(tool = "", detail) {
-  const name = String(tool || "").trim() || "tool";
-  let value = detail;
-  if (typeof value === "string") {
-    try { value = JSON.parse(value); } catch { value = {}; }
-  }
-  if (!value || typeof value !== "object" || Array.isArray(value)) value = {};
-  const text = (input) => String(input ?? "").replaceAll(/\s+/g, " ").trim();
-  const compact = (input) => {
-    const normalized = text(input);
-    return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
-  };
-  let subject = "";
-  if (["write_file", "read_file"].includes(name)) subject = compact(value.filePath || value.path || value.fileName || value.resolvedPath);
-  else if (name === "patch_file") subject = compact((Array.isArray(value.changedFiles) ? value.changedFiles[0] : "") || value.root);
-  else if (["execute_script", "execute_command"].includes(name)) subject = compact(value.command || value.script || value.stdout);
-  else if (name === "search") subject = compact([value.query, value.path || value.source, Array.isArray(value.matches) ? `${value.matches.length} matches` : ""].filter(Boolean).join(" · "));
-  else if (name === "list_skills") subject = compact(value.parentSkill || (Array.isArray(value.items) ? `${value.items.length} items` : ""));
-  else if (name === "user_interaction") subject = compact(value.content || value.message);
-  else subject = compact(value.command || value.query || value.content || value.message || value.stdout);
-  return subject ? `${name} · ${subject}` : name;
-}
-
 function compactThinkingTimeline(items = []) {
   const compactFact = (fact = {}, summary = "") => ({
     eventId: String(fact.eventId || "").trim(),
     sequence: fact.sequence,
-    ...(String(fact.sequenceScopeId || "").trim() ? { sequenceScopeId: String(fact.sequenceScopeId).trim() } : {}),
+    ...(String(fact.sequenceScopeId || "").trim()
+      ? { sequenceScopeId: String(fact.sequenceScopeId).trim() }
+      : {}),
     ...(String(fact.authority || "").trim() ? { authority: String(fact.authority).trim() } : {}),
-    ...(String(fact.sequenceDomain || "").trim() ? { sequenceDomain: String(fact.sequenceDomain).trim() } : {}),
+    ...(String(fact.sequenceDomain || "").trim()
+      ? { sequenceDomain: String(fact.sequenceDomain).trim() }
+      : {}),
     ...(String(fact.sessionId || "").trim() ? { sessionId: String(fact.sessionId).trim() } : {}),
-    ...(String(fact.dialogProcessId || "").trim() ? { dialogProcessId: String(fact.dialogProcessId).trim() } : {}),
-    ...(String(fact.turnScopeId || "").trim() ? { turnScopeId: String(fact.turnScopeId).trim() } : {}),
-    ...(Array.isArray(fact.attachments) && fact.attachments.length ? { attachments: fact.attachments } : {}),
+    ...(String(fact.dialogProcessId || "").trim()
+      ? { dialogProcessId: String(fact.dialogProcessId).trim() }
+      : {}),
+    ...(String(fact.turnScopeId || "").trim()
+      ? { turnScopeId: String(fact.turnScopeId).trim() }
+      : {}),
+    ...(Array.isArray(fact.attachments) && fact.attachments.length
+      ? { attachments: fact.attachments }
+      : {}),
     ...(summary ? { summary } : {}),
   });
   return (Array.isArray(items) ? items : []).map((item = {}) => ({
@@ -68,8 +56,23 @@ function compactThinkingTimeline(items = []) {
     toolCallId: String(item.toolCallId || item.tool_call_id || "").trim(),
     tool: String(item.tool || "").trim(),
     status: String(item.status || "").trim(),
-    ...(item.call ? { call: compactFact(item.call, compactToolSummary(item.tool, item.args)) } : {}),
-    ...(item.resultEvent ? { resultEvent: compactFact(item.resultEvent, compactToolSummary(item.tool, item.result)) } : {}),
+    ...(String(item.riskLevel || "").trim() ? { riskLevel: String(item.riskLevel).trim() } : {}),
+    ...(item.call
+      ? {
+          call: compactFact(
+            item.call,
+            projectToolOperationSummary(item.tool, item.args, { result: false }),
+          ),
+        }
+      : {}),
+    ...(item.resultEvent
+      ? {
+          resultEvent: compactFact(
+            item.resultEvent,
+            projectToolOperationSummary(item.tool, item.result, { result: true }),
+          ),
+        }
+      : {}),
   }));
 }
 
@@ -77,7 +80,8 @@ export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   if (Number(payload?.schemaVersion || 0) !== SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION) return false;
   const normalizedSessionId = String(sessionId || "").trim();
-  if (normalizedSessionId && String(payload?.sessionId || "").trim() !== normalizedSessionId) return false;
+  if (normalizedSessionId && String(payload?.sessionId || "").trim() !== normalizedSessionId)
+    return false;
   return true;
 }
 
@@ -95,7 +99,9 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
   const firstUserMessage = messages.find(
     (messageItem) =>
       messageItem?.injectedMessage !== true &&
-      String(messageItem?.role || "").trim().toLowerCase() === "user" &&
+      String(messageItem?.role || "")
+        .trim()
+        .toLowerCase() === "user" &&
       String(messageItem?.content || "").trim(),
   );
   const lastMessage = messages.length ? buildMessageSummary(messages[messages.length - 1]) : null;
@@ -109,9 +115,11 @@ export function buildSessionSummary(session = {}, { depth = 0 } = {}) {
     updatedAt: String(session?.updatedAt || "").trim(),
     depth: Number.isFinite(Number(depth)) ? Number(depth) : 0,
     aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
-    title: customTitle || (firstUserMessage
-      ? String(firstUserMessage.content || "").slice(0, 20)
-      : sessionId.slice(0, 8)),
+    title:
+      customTitle ||
+      (firstUserMessage
+        ? String(firstUserMessage.content || "").slice(0, 20)
+        : sessionId.slice(0, 8)),
     messageCount: messages.length,
     lastMessage,
     availability: "available",
@@ -287,50 +295,109 @@ function pickPayloadSemantic(semantic = {}) {
 
 function pickPayloadNodeRun(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  const picked = pickPlainFields(item, [
-    "transition", "stepId", "stepIndex", "actionNodeStateId", "nodeDialogProcessId", "dialogProcessId",
-    "nodeDialogId", "dialogId",
-    "nodeSessionId", "sessionId", "rootSessionId", "stepStatus", "status", "parallelWave", "waveOrder",
-  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS }) || {};
-  const step = pickPlainFields(item?.step, [
-    "nodeId", "nodeName", "nodeType", "type", "stateType", "stepId", "stepIndex", "actionNodeStateId",
-  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS });
+  const picked =
+    pickPlainFields(
+      item,
+      [
+        "transition",
+        "stepId",
+        "stepIndex",
+        "actionNodeStateId",
+        "nodeDialogProcessId",
+        "dialogProcessId",
+        "nodeDialogId",
+        "dialogId",
+        "nodeSessionId",
+        "sessionId",
+        "rootSessionId",
+        "stepStatus",
+        "status",
+        "parallelWave",
+        "waveOrder",
+      ],
+      { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+    ) || {};
+  const step = pickPlainFields(
+    item?.step,
+    [
+      "nodeId",
+      "nodeName",
+      "nodeType",
+      "type",
+      "stateType",
+      "stepId",
+      "stepIndex",
+      "actionNodeStateId",
+    ],
+    { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+  );
   if (step) picked.step = step;
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
-  const envelopes = pickLightPayloadTransferEnvelopes(item?.nodeResultTransferEnvelopes || item?.transferEnvelopes);
+  const envelopes = pickLightPayloadTransferEnvelopes(
+    item?.nodeResultTransferEnvelopes || item?.transferEnvelopes,
+  );
   if (envelopes.length) picked.nodeResultTransferEnvelopes = envelopes;
   return Object.keys(picked).length ? picked : null;
 }
 
 function pickPayloadNodeSession(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-  const picked = pickPlainFields(item, [
-    "transition", "nodeName", "nodeId", "nodeType", "actionNodeStateId", "stepId", "stepIndex",
-    "type", "stateType", "rootSessionId", "dialogProcessId", "dialogId", "sessionId", "stepStatus", "status",
-    "parallelWave", "waveOrder",
-  ], { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS }) || {};
+  const picked =
+    pickPlainFields(
+      item,
+      [
+        "transition",
+        "nodeName",
+        "nodeId",
+        "nodeType",
+        "actionNodeStateId",
+        "stepId",
+        "stepIndex",
+        "type",
+        "stateType",
+        "rootSessionId",
+        "dialogProcessId",
+        "dialogId",
+        "sessionId",
+        "stepStatus",
+        "status",
+        "parallelWave",
+        "waveOrder",
+      ],
+      { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+    ) || {};
   const stepFailure = pickPayloadStepFailure(item?.stepFailure);
   if (stepFailure) picked.stepFailure = stepFailure;
-  const envelopes = pickLightPayloadTransferEnvelopes(item?.transferEnvelopes || item?.nodeResultTransferEnvelopes);
+  const envelopes = pickLightPayloadTransferEnvelopes(
+    item?.transferEnvelopes || item?.nodeResultTransferEnvelopes,
+  );
   if (envelopes.length) picked.transferEnvelopes = envelopes;
   return Object.keys(picked).length ? picked : null;
 }
 
 function pickPluginPayloadSnapshot(payload = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const picked = pickPlainFields(payload, ["workflowRunId", "status", "phase", "phaseStatus"], {
-    maxStringLength: SUMMARY_SMALL_JSON_STRING_CHARS,
-  }) || {};
+  const picked =
+    pickPlainFields(payload, ["workflowRunId", "status", "phase", "phaseStatus"], {
+      maxStringLength: SUMMARY_SMALL_JSON_STRING_CHARS,
+    }) || {};
   const semantic = pickPayloadSemantic(payload?.semantic);
   if (semantic) picked.semantic = semantic;
-  if (payload?.execution && typeof payload.execution === "object" && !Array.isArray(payload.execution)) {
-    const execution = pickPlainFields(
-      payload.execution,
-      ["workflowRunId", "instanceId", "completed", "status", "startedAt", "endedAt", "error"],
-      { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
-    ) || {};
-    const runs = (Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : [])
+  if (
+    payload?.execution &&
+    typeof payload.execution === "object" &&
+    !Array.isArray(payload.execution)
+  ) {
+    const execution =
+      pickPlainFields(
+        payload.execution,
+        ["workflowRunId", "instanceId", "completed", "status", "startedAt", "endedAt", "error"],
+        { maxStringLength: SUMMARY_OBJECT_FIELD_CHARS },
+      ) || {};
+    const runs = (
+      Array.isArray(payload.execution?.nodeAgentRuns) ? payload.execution.nodeAgentRuns : []
+    )
       .slice(0, 100)
       .map((item) => pickPayloadNodeRun(item))
       .filter(Boolean);
@@ -368,8 +435,22 @@ function hasPluginPayloadSnapshot(message = {}) {
 
 function pickLightPluginMeta(message = {}) {
   const pluginMeta = pickLightObject(message?.pluginMeta, [
-    "pluginId", "pluginName", "name", "title", "status", "state", "icon", "color",
-    "source", "kind", "phase", "nodeId", "nodeName", "nodeType", "stepId", "stepName",
+    "pluginId",
+    "pluginName",
+    "name",
+    "title",
+    "status",
+    "state",
+    "icon",
+    "color",
+    "source",
+    "kind",
+    "phase",
+    "nodeId",
+    "nodeName",
+    "nodeType",
+    "stepId",
+    "stepName",
   ]);
   if (pluginMeta && hasPluginPayloadSnapshot(message)) {
     const payload = pickPluginPayloadSnapshot(message?.pluginMeta?.payload);
@@ -428,8 +509,12 @@ function buildThinkingDetailCountByMessage(messages = []) {
   return (message = {}) => {
     const facts = factsByRoute.get(routeByMessage.get(message));
     if (!facts) return 0;
-    return facts.activityKeys.size + facts.toolKeys.size
-      + facts.unkeyedActivityCount + facts.unkeyedToolCount;
+    return (
+      facts.activityKeys.size +
+      facts.toolKeys.size +
+      facts.unkeyedActivityCount +
+      facts.unkeyedToolCount
+    );
   };
 }
 
@@ -444,12 +529,19 @@ function buildDisplayMessageSummary(message = {}) {
     String(message?.presentationMessageId || "").trim() &&
     Array.isArray(message?.activityTimeline) &&
     message.activityTimeline.length > 0;
-  if (role === "assistant" && message?.chatPresentation === false && !hasCanonicalActivity) return null;
+  if (role === "assistant" && message?.chatPresentation === false && !hasCanonicalActivity)
+    return null;
   if (["tool_call", "tool_result"].includes(type) && !hasCanonicalActivity) return null;
   const presentationMessageId = String(message?.presentationMessageId || "").trim();
-  if (role === "assistant" && (message?.chatPresentation === true || hasCanonicalActivity) && !presentationMessageId) return null;
+  if (
+    role === "assistant" &&
+    (message?.chatPresentation === true || hasCanonicalActivity) &&
+    !presentationMessageId
+  )
+    return null;
   const summary = buildMessageSummary(message) || {};
-  summary.content = typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
+  summary.content =
+    typeof message?.content === "string" ? message.content : JSON.stringify(message?.content ?? "");
   if (hasCanonicalActivity && message?.chatPresentation !== true) {
     summary.type = "message";
     summary.chatPresentation = true;
@@ -480,10 +572,12 @@ function buildDisplayMessageSummary(message = {}) {
   if (pluginMeta) summary.pluginMeta = pluginMeta;
   if (transferEnvelopes.length) summary.transferEnvelopes = transferEnvelopes;
   if (Array.isArray(message?.tool_calls) && message.tool_calls.length) {
-    summary.toolCalls = message.tool_calls.map((toolCall = {}) => ({
-      id: String(toolCall?.id || "").trim(),
-      name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
-    })).filter((item) => item.id || item.name);
+    summary.toolCalls = message.tool_calls
+      .map((toolCall = {}) => ({
+        id: String(toolCall?.id || "").trim(),
+        name: String(toolCall?.function?.name || toolCall?.name || "").trim(),
+      }))
+      .filter((item) => item.id || item.name);
   }
   return compactMessageSummary(summary);
 }
@@ -500,7 +594,9 @@ function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
   }
   const presentationMessageId = String(activeTurn.presentationMessageId || "").trim();
   if (!presentationMessageId) {
-    throw new TypeError("active Turn presentation invariant failed: presentation_message_id_missing");
+    throw new TypeError(
+      "active Turn presentation invariant failed: presentation_message_id_missing",
+    );
   }
   return {
     id: presentationMessageId,
@@ -544,9 +640,8 @@ function buildToolArtifactTimelineProjection(session = {}) {
       const toolCallId = String(item?.toolCallId || "").trim();
       const callKey = callKeyOf(message, toolCallId);
       if (!callKey) continue;
-      const resultEvent = item?.resultEvent && typeof item.resultEvent === "object"
-        ? item.resultEvent
-        : {};
+      const resultEvent =
+        item?.resultEvent && typeof item.resultEvent === "object" ? item.resultEvent : {};
       const attachments = collectAttachmentRefsFromTransferEnvelopes(
         resultEvent?.transferEnvelopes,
       );
@@ -571,7 +666,9 @@ function buildToolArtifactTimelineProjection(session = {}) {
     if (type === "tool_call" || (role === "assistant" && Array.isArray(message?.tool_calls))) {
       for (const toolCall of Array.isArray(message?.tool_calls) ? message.tool_calls : []) {
         const toolCallId = String(toolCall?.id || "").trim();
-        const toolName = String(toolCall?.function?.name || toolCall?.name || "unknown_tool").trim();
+        const toolName = String(
+          toolCall?.function?.name || toolCall?.name || "unknown_tool",
+        ).trim();
         const callKey = callKeyOf(message, toolCallId);
         if (callKey) toolNameByCallId.set(callKey, toolName);
         totalCount += 1;
@@ -581,7 +678,8 @@ function buildToolArtifactTimelineProjection(session = {}) {
       const toolCallId = String(message?.tool_call_id || "").trim();
       const callKey = callKeyOf(message, toolCallId);
       const canonicalArtifact = callKey ? artifactByCallId.get(callKey) : null;
-      const toolName = toolNameByCallId.get(callKey) ||
+      const toolName =
+        toolNameByCallId.get(callKey) ||
         String(message?.toolName || canonicalArtifact?.toolName || "tool_result");
       totalCount += 1;
       const attachments = dedupeAttachmentRefs([
@@ -633,22 +731,26 @@ function buildToolArtifactTimelineProjection(session = {}) {
 
 export function buildSessionDisplaySummary(session = {}) {
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const terminalTurnScopeIds = [...new Set(
-    messages.map((message) => String(message?.turnScopeId || "").trim()).filter(Boolean),
-  )];
+  const terminalTurnScopeIds = [
+    ...new Set(
+      messages.map((message) => String(message?.turnScopeId || "").trim()).filter(Boolean),
+    ),
+  ];
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
   const turnStatuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
   const sessionId = String(session?.sessionId || "").trim();
-  const lifecycle = session?.turnLifecycle && typeof session.turnLifecycle === "object"
-    ? session.turnLifecycle
-    : null;
-  const lifecycleTurns = lifecycle?.turns && typeof lifecycle.turns === "object"
-    ? lifecycle.turns
-    : {};
+  const lifecycle =
+    session?.turnLifecycle && typeof session.turnLifecycle === "object"
+      ? session.turnLifecycle
+      : null;
+  const lifecycleTurns =
+    lifecycle?.turns && typeof lifecycle.turns === "object" ? lifecycle.turns : {};
   const firstUserMessage = messages.find(
     (messageItem) =>
       messageItem?.injectedMessage !== true &&
-      String(messageItem?.role || "").trim().toLowerCase() === "user" &&
+      String(messageItem?.role || "")
+        .trim()
+        .toLowerCase() === "user" &&
       String(messageItem?.content || "").trim(),
   );
   const customTitle = String(session?.customTitle || "").trim();
@@ -671,10 +773,11 @@ export function buildSessionDisplaySummary(session = {}) {
   const activeTurnPresentation = buildActiveTurnPresentation(lifecycle, sessionId);
   if (activeTurnPresentation) {
     const presentationMessageId = activeTurnPresentation.presentationMessageId;
-    const existingPresentation = projectedDisplayMessages.find((message) => (
-      String(message?.presentationMessageId || message?.messageId || message?.id || "").trim() ===
-      presentationMessageId
-    ));
+    const existingPresentation = projectedDisplayMessages.find(
+      (message) =>
+        String(message?.presentationMessageId || message?.messageId || message?.id || "").trim() ===
+        presentationMessageId,
+    );
     if (existingPresentation && String(existingPresentation?.role || "").trim() !== "assistant") {
       throw new TypeError("active Turn presentation invariant failed: presentation_role_conflict");
     }
@@ -682,13 +785,16 @@ export function buildSessionDisplaySummary(session = {}) {
       existingPresentation &&
       String(existingPresentation?.turnScopeId || "").trim() !== activeTurnPresentation.turnScopeId
     ) {
-      throw new TypeError("active Turn presentation invariant failed: presentation_turn_scope_conflict");
+      throw new TypeError(
+        "active Turn presentation invariant failed: presentation_turn_scope_conflict",
+      );
     }
     if (!existingPresentation) {
-      const owningUserIndex = projectedDisplayMessages.findLastIndex((message) => (
-        String(message?.role || "").trim() === "user" &&
-        String(message?.turnScopeId || "").trim() === activeTurnPresentation.turnScopeId
-      ));
+      const owningUserIndex = projectedDisplayMessages.findLastIndex(
+        (message) =>
+          String(message?.role || "").trim() === "user" &&
+          String(message?.turnScopeId || "").trim() === activeTurnPresentation.turnScopeId,
+      );
       projectedDisplayMessages.splice(
         owningUserIndex >= 0 ? owningUserIndex + 1 : projectedDisplayMessages.length,
         0,
@@ -698,7 +804,9 @@ export function buildSessionDisplaySummary(session = {}) {
   }
   const displayMessageByIdentity = new Map();
   for (const message of projectedDisplayMessages) {
-    const identity = String(message?.presentationMessageId || message?.messageId || message?.id || "").trim();
+    const identity = String(
+      message?.presentationMessageId || message?.messageId || message?.id || "",
+    ).trim();
     if (!identity || message?.role !== "assistant") {
       displayMessageByIdentity.set(`${identity}:${displayMessageByIdentity.size}`, message);
       continue;
@@ -724,7 +832,8 @@ export function buildSessionDisplaySummary(session = {}) {
     const turnScopeId = String(displayMessage?.turnScopeId || "").trim();
     if (!turnScopeId) continue;
     const thinkingTimeline = projectThinkingTimeline(messages, displayMessage, { turnScopeId });
-    if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length) continue;
+    if (!thinkingTimeline.toolTimeline.length && !thinkingTimeline.activityTimeline.length)
+      continue;
     displayMessage.toolTimeline = compactThinkingTimeline(thinkingTimeline.toolTimeline);
     if (thinkingTimeline.activityTimeline.length) {
       displayMessage.activityTimeline = thinkingTimeline.activityTimeline;
@@ -732,37 +841,51 @@ export function buildSessionDisplaySummary(session = {}) {
       delete displayMessage.activityTimeline;
     }
     displayMessage.hasThinkingDetails = true;
-    displayMessage.thinkingDetailCount = thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
+    displayMessage.thinkingDetailCount =
+      thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
   }
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
-  const thinkingCount = displayMessages.filter((message) => message?.hasThinkingDetails === true).length;
-  const {
-    timelineByRoute,
-    totalCount: toolLogCount,
-  } = buildToolArtifactTimelineProjection(session);
+  const thinkingCount = displayMessages.filter(
+    (message) => message?.hasThinkingDetails === true,
+  ).length;
+  const { timelineByRoute, totalCount: toolLogCount } =
+    buildToolArtifactTimelineProjection(session);
   let unassignedToolArtifactCount = 0;
   let assignedToolArtifactCount = 0;
   for (const [routeKey, toolTimeline] of timelineByRoute) {
-    const candidates = displayMessages.filter((message) => (
-      String(message?.role || "").trim() === "assistant" &&
-      `${sessionId}::${String(message?.turnScopeId || "").trim()}` === routeKey
-    ));
-    const dialogProcessIds = new Set(toolTimeline
-      .map((item) => String(item?.resultEvent?.dialogProcessId || item?.call?.dialogProcessId || "").trim())
-      .filter(Boolean));
-    const matchingCandidates = dialogProcessIds.size === 1
-      ? candidates.filter((message) => {
-          const dialogProcessId = String(message?.dialogProcessId || "").trim();
-          return !dialogProcessId || dialogProcessIds.has(dialogProcessId);
-        })
-      : candidates;
+    const candidates = displayMessages.filter(
+      (message) =>
+        String(message?.role || "").trim() === "assistant" &&
+        `${sessionId}::${String(message?.turnScopeId || "").trim()}` === routeKey,
+    );
+    const dialogProcessIds = new Set(
+      toolTimeline
+        .map((item) =>
+          String(item?.resultEvent?.dialogProcessId || item?.call?.dialogProcessId || "").trim(),
+        )
+        .filter(Boolean),
+    );
+    const matchingCandidates =
+      dialogProcessIds.size === 1
+        ? candidates.filter((message) => {
+            const dialogProcessId = String(message?.dialogProcessId || "").trim();
+            return !dialogProcessId || dialogProcessIds.has(dialogProcessId);
+          })
+        : candidates;
     if (matchingCandidates.length !== 1) {
       unassignedToolArtifactCount += toolTimeline.length;
       continue;
     }
     const presentation = matchingCandidates[0];
-    const canonicalTimeline = Array.isArray(presentation?.toolTimeline) ? presentation.toolTimeline : [];
-    const canonicalByKey = new Map(canonicalTimeline.map((item, index) => [String(item?.key || item?.toolCallId || "").trim(), index]));
+    const canonicalTimeline = Array.isArray(presentation?.toolTimeline)
+      ? presentation.toolTimeline
+      : [];
+    const canonicalByKey = new Map(
+      canonicalTimeline.map((item, index) => [
+        String(item?.key || item?.toolCallId || "").trim(),
+        index,
+      ]),
+    );
     for (const artifact of toolTimeline) {
       const key = String(artifact?.key || artifact?.toolCallId || "").trim();
       const index = canonicalByKey.get(key);
@@ -770,7 +893,13 @@ export function buildSessionDisplaySummary(session = {}) {
         canonicalByKey.set(key, canonicalTimeline.length);
         canonicalTimeline.push(compactThinkingTimeline([artifact])[0]);
       } else {
-        canonicalTimeline[index] = { ...canonicalTimeline[index], resultEvent: { ...(canonicalTimeline[index]?.resultEvent || {}), ...compactThinkingTimeline([artifact])[0]?.resultEvent } };
+        canonicalTimeline[index] = {
+          ...canonicalTimeline[index],
+          resultEvent: {
+            ...(canonicalTimeline[index]?.resultEvent || {}),
+            ...compactThinkingTimeline([artifact])[0]?.resultEvent,
+          },
+        };
       }
     }
     presentation.toolTimeline = canonicalTimeline;
@@ -783,22 +912,22 @@ export function buildSessionDisplaySummary(session = {}) {
     const transferAttachments = dedupeAttachmentRefs([
       ...collectAttachmentRefsFromTransferEnvelopes(message?.transferEnvelopes),
       ...(Array.isArray(message?.toolTimeline)
-        ? message.toolTimeline.flatMap((item) => (
-            Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : []
-          ))
+        ? message.toolTimeline.flatMap((item) =>
+            Array.isArray(item?.resultEvent?.attachments) ? item.resultEvent.attachments : [],
+          )
         : []),
     ]);
     return count + sessionAttachments.length + transferAttachments.length;
   }, 0);
   const turnLifecycleSnapshot = lifecycle
     ? createAuthoritativeTurnSnapshot({
-      lifecycle,
-      turnTimings,
-      terminalTurnScopeIds,
-      commandId: `session-summary:${sessionId}:${Number(lifecycle?.sequence || 0)}`,
-      sessionId,
-      generatedAt: String(session?.updatedAt || "").trim(),
-    })
+        lifecycle,
+        turnTimings,
+        terminalTurnScopeIds,
+        commandId: `session-summary:${sessionId}:${Number(lifecycle?.sequence || 0)}`,
+        sessionId,
+        generatedAt: String(session?.updatedAt || "").trim(),
+      })
     : null;
   return {
     schemaVersion: SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
@@ -808,9 +937,11 @@ export function buildSessionDisplaySummary(session = {}) {
     currentTaskId: String(session?.currentTaskId || "").trim(),
     createdAt: String(session?.createdAt || "").trim(),
     updatedAt: String(session?.updatedAt || "").trim(),
-    title: customTitle || (firstUserMessage
-      ? String(firstUserMessage.content || "").slice(0, 20)
-      : sessionId.slice(0, 8)),
+    title:
+      customTitle ||
+      (firstUserMessage
+        ? String(firstUserMessage.content || "").slice(0, 20)
+        : sessionId.slice(0, 8)),
     aggregateVersion: session?.aggregateVersion,
     turnTimings,
     turnStatuses,
@@ -830,7 +961,10 @@ export function buildSessionDisplaySummary(session = {}) {
   };
 }
 
-export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Date().toISOString()) {
+export function normalizeSessionsSummaryPayload(
+  payload = {},
+  now = () => new Date().toISOString(),
+) {
   const source = Array.isArray(payload?.sessions) ? payload.sessions : [];
   const sessions = source
     .filter((item) => item && typeof item === "object" && !Array.isArray(item))
@@ -843,10 +977,16 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
       updatedAt: String(item?.updatedAt || "").trim(),
       depth: Number.isFinite(Number(item?.depth)) ? Number(item.depth) : 0,
       aggregateVersion: Math.max(0, Number(item?.aggregateVersion) || 0),
-      title: String(item?.title || "").trim() || String(item?.sessionId || "").trim().slice(0, 8),
+      title:
+        String(item?.title || "").trim() ||
+        String(item?.sessionId || "")
+          .trim()
+          .slice(0, 8),
       messageCount: Number.isFinite(Number(item?.messageCount)) ? Number(item.messageCount) : 0,
       lastMessage:
-        item?.lastMessage && typeof item.lastMessage === "object" && !Array.isArray(item.lastMessage)
+        item?.lastMessage &&
+        typeof item.lastMessage === "object" &&
+        !Array.isArray(item.lastMessage)
           ? item.lastMessage
           : null,
       ...(item?.availability === "unavailable" ? { messages: [] } : {}),
@@ -855,7 +995,9 @@ export function normalizeSessionsSummaryPayload(payload = {}, now = () => new Da
         ? {
             unavailableReason: {
               code: String(item?.unavailableReason?.code || "SESSION_PROTOCOL_INVALID").trim(),
-              message: String(item?.unavailableReason?.message || "Session uses an unsupported protocol").trim(),
+              message: String(
+                item?.unavailableReason?.message || "Session uses an unsupported protocol",
+              ).trim(),
             },
           }
         : {}),

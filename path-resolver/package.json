@@ -10,5 +10,8 @@
   },
   "scripts": {
     "test": "node --test __tests__/*.test.mjs"
+  },
+  "dependencies": {
+    "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol"
   }
 }

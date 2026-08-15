@@ -9,7 +9,6 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 import {
   TASK_PATH_KINDS,
-  TASK_PATH_VIEW,
   PATH_CAPABILITIES,
   createTaskPath,
   filePath as path,
@@ -22,8 +21,18 @@ import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { createFileInputSchema, resolveFileInput } from "../core/file-input.js";
+import { registerTransferAttachmentResources } from "../core/resource-broker.js";
 import { TOOL_NAME } from "../constants/index.js";
-import { confirmCriticalToolOperation, TOOL_RISK_LEVEL } from "./tool-risk.js";
+import {
+  projectToolExecutionMeta,
+  resolveToolExecutionPolicy,
+} from "@noobot/execution-isolation-protocol";
+import {
+  SECURITY_EVIDENCE_SOURCE,
+  SECURITY_RISK_LEVEL,
+  classifyToolExecutionRisk,
+} from "@noobot/security-assessment-protocol";
+import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
 import { persistTransferArtifacts } from "../../transfer-adapter/index.js";
 import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
@@ -211,6 +220,11 @@ async function collectOutputFiles(root, relative = "") {
 
 export function createNativeScriptTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
+  const executionPolicy = resolveToolExecutionPolicy({
+    toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+    globalConfig: runtime?.globalConfig || {},
+  });
+  const execution = projectToolExecutionMeta({ policy: executionPolicy });
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
   const config = effectiveConfig?.tools?.[TOOL_NAME.EXECUTE_NATIVE_SCRIPT];
   if (config?.enabled !== true || !String(runtime?.basePath || "").trim()) return [];
@@ -238,9 +252,12 @@ export function createNativeScriptTool({ agentContext }) {
         .optional()
         .default({})
         .describe(tTool(runtime, "tools.nativeScript.fieldArguments")),
+      riskLevel: createRiskLevelSchema(runtime, "tools.script.fieldRiskLevel").default(
+        SECURITY_RISK_LEVEL.MEDIUM,
+      ),
     }),
     func: async (
-      { script_body, inputs = [], arguments: scriptArguments = {} },
+      { script_body, inputs = [], arguments: scriptArguments = {}, riskLevel },
       _runManager,
       toolConfig = {},
     ) => {
@@ -248,9 +265,16 @@ export function createNativeScriptTool({ agentContext }) {
       if (!identity || typeof identity !== "object")
         throw new Error("native_script_identity_required");
       const body = validateScriptBody(script_body);
-      await confirmCriticalToolOperation({
+      await confirmToolOperation({
         runtime,
-        riskLevel: TOOL_RISK_LEVEL.HIGH,
+        declaredRiskLevel: riskLevel,
+        serverEvidence: {
+          source: SECURITY_EVIDENCE_SOURCE.EXECUTION_VIEW,
+          riskLevel: classifyToolExecutionRisk({
+            toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
+            executionView: executionPolicy.view,
+          }),
+        },
         toolName: TOOL_NAME.EXECUTE_NATIVE_SCRIPT,
         operation: "execute native capability script",
         reason: "The script can invoke browser, LibreOffice, and FFmpeg capabilities.",
@@ -267,6 +291,7 @@ export function createNativeScriptTool({ agentContext }) {
       let cleanupFailures = [];
       try {
         const inputMap = {};
+        const inputResources = [];
         let totalInputBytes = 0;
         for (const [index, value] of (Array.isArray(inputs) ? inputs : []).entries()) {
           const resolvedInput = await resolveFileInput({
@@ -276,6 +301,7 @@ export function createNativeScriptTool({ agentContext }) {
             capability: PATH_CAPABILITIES.NATIVE_INPUT,
           });
           const source = resolvedInput.executionPath;
+          if (resolvedInput.resourceRef) inputResources.push(resolvedInput.resourceRef);
           const sourceStat = await stat(source);
           if (!sourceStat.isFile()) throw new Error("native script inputs must be files");
           totalInputBytes += Number(sourceStat.size || 0);
@@ -312,6 +338,7 @@ export function createNativeScriptTool({ agentContext }) {
         if (outputBytes > LENGTH_THRESHOLDS.nativeScript.artifactTotalBytes)
           throw new Error("native script output exceeds 200 MB");
         let transferEnvelopes = [];
+        let resources = [];
         if (outputFiles.length) {
           const artifacts = await Promise.all(
             outputFiles.map(async (relative) => ({
@@ -340,25 +367,29 @@ export function createNativeScriptTool({ agentContext }) {
             },
           });
           transferEnvelopes = persisted.transferEnvelopes;
+          resources = registerTransferAttachmentResources({
+            agentContext,
+            transferEnvelopes,
+          });
         }
         resultPayload = {
           ok: result.code === 0,
           status: result.code === 0 ? "completed" : "failed",
-          isolation: "host_restricted",
-          path_view: TASK_PATH_VIEW,
+          execution,
           code: result.code,
           stdout: projectNativeOutput(result.stdout, { inputRoot, outputRoot, tempRoot }),
           stderr: projectNativeOutput(result.stderr, { inputRoot, outputRoot, tempRoot }),
           output_file_count: outputFiles.length,
           output_bytes: outputBytes,
           transferEnvelopes,
+          resources,
+          input_resources: inputResources,
         };
       } catch (error) {
         resultPayload = {
           ok: false,
           status: "failed",
-          isolation: "host_restricted",
-          path_view: TASK_PATH_VIEW,
+          execution,
           code: Number(error?.code || 1) || 1,
           stdout: projectNativeOutput(error?.stdout || "", { inputRoot, outputRoot, tempRoot }),
           stderr: projectNativeOutput(error?.message || String(error || "native script failed"), {
@@ -369,6 +400,8 @@ export function createNativeScriptTool({ agentContext }) {
           output_file_count: 0,
           output_bytes: 0,
           transferEnvelopes: [],
+          resources: [],
+          input_resources: [],
         };
       } finally {
         const cleanupResults = await Promise.allSettled([

@@ -5,15 +5,10 @@
  */
 import { cp, rm, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
+import { assertPreparedBackendRuntimeWorkspaces } from "./backend-runtime-workspaces.mjs";
 
 const requiredBackendRuntimeFiles = [
   "service/app.js",
-  "node_modules/noobot-agent/package.json",
-  "node_modules/@noobot/agent-config-protocol/package.json",
-  "node_modules/@noobot/plugin-runtime/package.json",
-  "node_modules/@noobot/event-protocol/package.json",
-  "node_modules/@noobot/authoritative-state/package.json",
-  "node_modules/@noobot/sanitize/package.json",
   "node_modules/noobot-agent/src/prompts/base.md",
   "node_modules/noobot-agent/src/prompts/base.zh-CN.md",
   "node_modules/noobot-agent/src/prompts/base.en-US.md",
@@ -25,6 +20,7 @@ const requiredBackendRuntimeFiles = [
 ];
 
 async function assertRequiredBackendRuntimeFiles(rootDir, label) {
+  await assertPreparedBackendRuntimeWorkspaces({ backendRoot: rootDir, label });
   await Promise.all(
     requiredBackendRuntimeFiles.map(async (relativePath) => {
       try {

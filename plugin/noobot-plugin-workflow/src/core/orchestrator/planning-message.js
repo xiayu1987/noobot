@@ -16,7 +16,7 @@ export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions =
     workflowRunId,
     autoTransitions: 0,
     completed: false,
-    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.stepStatus)).length,
+    pendingStepCount: nodeSessions.filter((item) => ["pending", "ready"].includes(item?.status)).length,
     actionRecords: [],
     nodeAgentRuns: [],
   };

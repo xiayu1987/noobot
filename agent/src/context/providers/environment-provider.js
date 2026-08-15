@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, resolveRuntimePathContext } from "@noobot/path-resolver";
+import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
+import {
+  SECURITY_RISK_LEVEL,
+  normalizeSecurityRiskLevel,
+} from "@noobot/security-assessment-protocol";
 import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import { hasOwnConfigKey, normalizeBooleanLike } from "../../config/index.js";
@@ -21,17 +26,21 @@ export function buildStaticInfo({ runtimeBasePath = "", userId = "", globalConfi
     runtimeBasePath: normalizedBasePath,
     userId,
     globalConfig,
+    executionPolicy: resolveToolExecutionPolicy({ toolName: "execute_script", globalConfig }),
   });
   return {
-    cwd: process.cwd(),
+    cwd: pathContext.currentDirectory,
     userId: userId || "",
-    basePath: normalizedBasePath,
+    basePath: pathContext.rootDirectory,
     platform: process.platform,
     arch: process.arch,
     nodeVersion: process.version,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
     globalDefaults: {
-      workspaceRoot: globalConfig?.workspaceRoot || "",
+      workspaceRoot:
+        pathContext.view === "sandbox"
+          ? pathContext.sandboxRoot
+          : globalConfig?.workspaceRoot || "",
     },
     directories: pathContext.directories,
   };
@@ -68,13 +77,10 @@ export function buildDynamicInfo({
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     safeConfirm: runConfig?.safeConfirm !== false,
     sanitizeOutput: runConfig?.sanitizeOutput !== false,
-    safeConfirmLevel: ["low", "medium", "high", "critical"].includes(
-      String(runConfig?.safeConfirmLevel || "")
-        .trim()
-        .toLowerCase(),
-    )
-      ? String(runConfig.safeConfirmLevel).trim().toLowerCase()
-      : "low",
+    safeConfirmLevel: normalizeSecurityRiskLevel(
+      runConfig?.safeConfirmLevel,
+      SECURITY_RISK_LEVEL.LOW,
+    ),
     ...(hasOwnConfigKey(runConfig, "streaming")
       ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
       : {}),

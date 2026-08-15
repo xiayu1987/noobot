@@ -14,6 +14,7 @@ import {
   resolveExtensionPoint,
 } from "../../../extensions/extension-registry.js";
 import { createPluginContext } from "../../../extensions/create-plugin-context.js";
+import { SECURITY_RISK_LEVELS } from "@noobot/security-assessment-protocol";
 
 const props = defineProps({
   ...sharedComposerOptionProps,
@@ -41,17 +42,16 @@ const emit = defineEmits([
 ]);
 
 const { translate } = useLocale();
-const safeConfirmLevels = ["low", "medium", "high", "critical"];
 const safeConfirmMarks = computed(() =>
   Object.fromEntries(
-    safeConfirmLevels.map((level, index) => [
+    SECURITY_RISK_LEVELS.map((level, index) => [
       index,
       translate(`composer.safeConfirmLevel.${level}`),
     ]),
   ),
 );
 const safeConfirmSliderValue = computed(() =>
-  Math.max(0, safeConfirmLevels.indexOf(props.safeConfirmLevel)),
+  Math.max(0, SECURITY_RISK_LEVELS.indexOf(props.safeConfirmLevel)),
 );
 
 // The selection is a Set and callers may mutate it in place when a plugin is
@@ -67,7 +67,10 @@ const selectedPluginKeys = computed(() =>
 const selectedPluginKeySetSnapshot = computed(() => new Set(selectedPluginKeys.value));
 
 function updateSafeConfirmSlider(value) {
-  emit("update:safeConfirmLevel", safeConfirmLevels[Math.round(Number(value))] || "low");
+  emit(
+    "update:safeConfirmLevel",
+    SECURITY_RISK_LEVELS[Math.round(Number(value))] || SECURITY_RISK_LEVELS[0],
+  );
 }
 
 const normalizedModelOptions = computed(() => {

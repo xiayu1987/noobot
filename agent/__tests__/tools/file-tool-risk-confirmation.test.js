@@ -13,12 +13,6 @@ import {
   buildAgentContext,
   parseToolResult,
 } from "./helpers/file-script-length-guards-helper.js";
-import {
-  classifyFileToolRisk,
-  maxToolRiskLevel,
-  shouldConfirmToolRisk,
-} from "../../src/tools/execution/tool-risk.js";
-
 function createContext(
   basePath,
   { safeConfirm = true, safeConfirmLevel = "low", confirmed = true, requests = [] } = {},
@@ -42,36 +36,6 @@ function createContext(
   });
 }
 
-test("safety confirmation threshold covers the complete 4x4 risk matrix", () => {
-  const levels = ["low", "medium", "high", "critical"];
-  const expected = {
-    low: [false, false, false, true],
-    medium: [false, false, true, true],
-    high: [false, true, true, true],
-    critical: [true, true, true, true],
-  };
-  for (const safeConfirmLevel of levels) {
-    levels.forEach((riskLevel, index) => {
-      assert.equal(
-        shouldConfirmToolRisk({ safeConfirm: true, safeConfirmLevel, riskLevel }),
-        expected[safeConfirmLevel][index],
-      );
-    });
-  }
-  assert.equal(
-    shouldConfirmToolRisk({
-      safeConfirm: false,
-      safeConfirmLevel: "critical",
-      riskLevel: "critical",
-    }),
-    false,
-  );
-  assert.equal(
-    shouldConfirmToolRisk({ safeConfirm: true, safeConfirmLevel: "invalid", riskLevel: "high" }),
-    false,
-  );
-});
-
 test("model-declared critical risk raises a server-classified workspace read", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-threshold-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "safe", "utf8");
@@ -91,18 +55,13 @@ function getTool(context, name) {
   return tool;
 }
 
-test("file risk schema requires model risk and combines it with server risk at the highest level", async () => {
+test("file risk schema requires the model declaration", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-schema-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "safe", "utf8");
   const tool = getTool(createContext(basePath, { safeConfirm: false }), "read_file");
   assert.equal(Object.hasOwn(tool.schema.shape, "riskLevel"), true);
   const result = parseToolResult(await tool.invoke({ filePath: "a.txt", riskLevel: "critical" }));
   assert.equal(result.ok, true);
-  assert.equal(classifyFileToolRisk({ operation: "read", pathView: "workspace" }), "low");
-  assert.equal(classifyFileToolRisk({ operation: "write", pathView: "workspace" }), "high");
-  assert.equal(classifyFileToolRisk({ operation: "write", pathView: "host" }), "critical");
-  assert.equal(maxToolRiskLevel("critical", "low"), "critical");
-  assert.equal(maxToolRiskLevel("low", "high"), "high");
 });
 
 test("server-classified read confirms after normalization and reconfirms each call", async () => {
@@ -128,10 +87,10 @@ test("server-classified read confirms after normalization and reconfirms each ca
   }
 });
 
-test("server-classified writes are blocked on rejection before change", async () => {
+test("server-classified writes are blocked at the medium-risk confirmation threshold", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-block-"));
   const target = path.join(basePath, "blocked.txt");
-  const rejected = createContext(basePath, { confirmed: false, safeConfirmLevel: "medium" });
+  const rejected = createContext(basePath, { confirmed: false, safeConfirmLevel: "high" });
   const writeTool = getTool(rejected, "write_file");
   await assert.rejects(
     () =>
@@ -145,7 +104,7 @@ test("server-classified patch confirmation omits patch content", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-risk-content-"));
   await fs.writeFile(path.join(basePath, "a.txt"), "one\n", "utf8");
   const requests = [];
-  const context = createContext(basePath, { requests, safeConfirmLevel: "medium" });
+  const context = createContext(basePath, { requests, safeConfirmLevel: "high" });
   const searchTool = getTool(context, "search");
   const patchTool = getTool(context, "patch_file");
   const query = "highly-secret-query";

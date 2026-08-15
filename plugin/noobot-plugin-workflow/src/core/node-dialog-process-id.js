@@ -5,5 +5,5 @@
  */
 
 export function resolveWorkflowNodeDialogProcessId(item = {}) {
-  return String(item?.nodeDialogProcessId || item?.nodeDialogId || "").trim();
+  return String(item?.nodeDialogProcessId || "").trim();
 }

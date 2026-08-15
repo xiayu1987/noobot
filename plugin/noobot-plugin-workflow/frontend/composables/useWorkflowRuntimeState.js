@@ -8,7 +8,7 @@ import { createActionRuntimeBySemanticKey } from "../runtime/workflowActionRunti
 import { createFlowNodes } from "../services/workflowFlowNodes.js";
 import { createRuntimeNodeSessions } from "../runtime/workflowRuntimeSessions.js";
 import { createStepStatusResolver } from "../runtime/workflowRuntimeStatus.js";
-import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessIdCompat.js";
+import { collectWorkflowDialogProcessIds } from "../utils/workflowDialogProcessId.js";
 
 export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {}) {
   const nodeSessions = computed(() => {

@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { readFile } from "node:fs/promises";
+import {
+  assertToolExecutionPolicy,
+  projectToolExecutionMeta,
+} from "@noobot/execution-isolation-protocol";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { persistTransferArtifacts } from "../../../transfer-adapter/index.js";
-import {
-  EXECUTE_SCRIPT_TOOL_NAME,
-  SANDBOX_PROVIDER_NAME,
-  SCRIPT_EXECUTION_MODE,
-  SCRIPT_WORKDIR_RELATIVE_PATH,
-} from "./constants.js";
+import { EXECUTE_SCRIPT_TOOL_NAME, SCRIPT_EXECUTION_MODE } from "./constants.js";
 
 function compactObject(value = {}) {
   return Object.fromEntries(
@@ -24,57 +23,45 @@ function compactObject(value = {}) {
 }
 
 export function buildExecutionWorkspaceMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  executionPolicy = {},
   workspace = "",
   runtime = {},
   agentContext = null,
-  dockerConfig = {},
   docker = {},
   pathContext = {},
 } = {}) {
-  void sandboxEnabled;
-  void sandboxProvider;
-  void workspace;
   void runtime;
   void agentContext;
-  void dockerConfig;
+  assertToolExecutionPolicy(executionPolicy);
+  void workspace;
   void docker;
   void pathContext;
-  return { path: SCRIPT_WORKDIR_RELATIVE_PATH, view: "workspace" };
+  return {
+    view: "workspace",
+    path: ".",
+  };
 }
 
-function buildExecutionMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
-  docker = {},
-} = {}) {
-  return compactObject({
-    view: sandboxEnabled ? "sandbox" : "host",
-    provider: sandboxEnabled ? sandboxProvider : "host",
-    image: String(docker?.image || "").trim(),
-  });
+function buildExecutionMeta({ executionPolicy = {}, docker = {} } = {}) {
+  void docker;
+  return compactObject(projectToolExecutionMeta({ policy: executionPolicy }));
 }
 
 export function buildScriptExecutionMeta({
-  sandboxEnabled = false,
-  sandboxProvider = SANDBOX_PROVIDER_NAME.DOCKER,
+  executionPolicy = {},
   workspace = "",
   runtime = {},
   agentContext = null,
-  dockerConfig = {},
   docker = {},
   pathContext = {},
 } = {}) {
   return compactObject({
-    execution: buildExecutionMeta({ sandboxEnabled, sandboxProvider, docker }),
+    execution: buildExecutionMeta({ executionPolicy, docker }),
     workspace: buildExecutionWorkspaceMeta({
-      sandboxEnabled,
-      sandboxProvider,
+      executionPolicy,
       workspace,
       runtime,
       agentContext,
-      dockerConfig,
       docker,
       pathContext,
     }),

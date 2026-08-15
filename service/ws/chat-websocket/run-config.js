@@ -35,13 +35,9 @@ function resolveConfigRunTimeoutMs(config = {}) {
   const source =
     config && typeof config === "object" && !Array.isArray(config) ? config : {};
   const hasCanonical = Object.prototype.hasOwnProperty.call(source, "runTimeoutMs");
-  const hasLegacy = Object.prototype.hasOwnProperty.call(source, "run_timeout_ms");
-  if (!hasCanonical && !hasLegacy) return undefined;
+  if (!hasCanonical) return undefined;
   return resolveTimeMs(source, {
     key: "runTimeoutMs",
-    legacyKeys: ["run_timeout_ms"],
-    sourceTag: "service.ws.chat-websocket-server",
-    warnLegacy: true,
     fallback: DEFAULT_RUN_TIMEOUT_MS,
     min: MIN_RUN_TIMEOUT_MS,
     max: MAX_RUN_TIMEOUT_MS,

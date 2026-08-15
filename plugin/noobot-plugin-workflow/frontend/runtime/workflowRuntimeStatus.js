@@ -11,7 +11,7 @@ export function normalizeStatus(value = "") {
   return status;
 }
 
-import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 
 export function createStepStatusResolver({ nodeRunByDialogProcessId }) {
   return function resolveStepStatus(stepItem = {}) {

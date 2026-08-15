@@ -17,6 +17,8 @@
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/model-protocol": "file:../../model-protocol",
+    "@noobot/execution-isolation-protocol": "file:../../execution-isolation-protocol",
+    "@noobot/path-resolver": "file:../../path-resolver",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/shared": "file:../../shared",

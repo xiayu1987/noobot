@@ -8,7 +8,7 @@ import { emitEvent } from "../../events/index.js";
 import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 import { isRequiredToolChoiceUnsupportedError } from "./tool-choice-strategy.js";
 
-export function maybeCreateRequiredToolChoiceUnsupportedFallbackAi({
+export function applyRequiredToolChoiceUnsupportedRetryDecision({
   error,
   configuredToolChoice = "",
   runtime,
@@ -20,9 +20,9 @@ export function maybeCreateRequiredToolChoiceUnsupportedFallbackAi({
     return null;
   }
 
-  const systemRuntimeForFallback = getSystemRuntimeFromRuntime(runtime);
-  systemRuntimeForFallback.toolChoiceRequiredUnsupported = true;
-  systemRuntimeForFallback.forceNonThinkingMode = true;
+  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  systemRuntime.toolChoiceRequiredUnsupported = true;
+  systemRuntime.forceNonThinkingMode = true;
   const currentModelInfo = resolveCurrentModelInfo(modelState);
   emitEvent(eventListener, "tool_choice_downgraded_to_auto", {
     turn,
@@ -31,15 +31,5 @@ export function maybeCreateRequiredToolChoiceUnsupportedFallbackAi({
     modelName: currentModelInfo.modelName,
   });
 
-  return {
-    content: "",
-    tool_calls: [],
-    additional_kwargs: {},
-    response_metadata: {
-      noobot: {
-        toolChoiceDowngradedToAuto: true,
-        downgradedAtTurn: turn,
-      },
-    },
-  };
+  return true;
 }

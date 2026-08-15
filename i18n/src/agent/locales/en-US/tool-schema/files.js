@@ -21,7 +21,7 @@ export const FILE_TOOL_SCHEMA = {
   "write_file": {
     "description": {
       "key": "tools.file.writeDescription",
-      "text": "Write text content to a file. Input filePath and content. Returns write result."
+      "text": "Write a workspace text file. Returns its logical path, resource identity, and an attachment snapshot taken at write time; later workspace edits do not change an existing snapshot."
     },
     "params": {
       "content": {

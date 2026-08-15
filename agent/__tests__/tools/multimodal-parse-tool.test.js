@@ -20,7 +20,7 @@ const TRANSFER_IDENTITY = Object.freeze({
   producer: { type: "tool", id: "call:test-multimodal-parse" },
 });
 
-test("multimodal_parse parses multiple files and backwrites every user source attachment", async () => {
+test("multimodal_parse preserves attachment names and backwrites every user source", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-"));
   const relativePath = path.join("runtime", "attach", "scoped", "session-1", "user", "scan.png");
   const inputPath = path.join(basePath, relativePath);
@@ -33,9 +33,20 @@ test("multimodal_parse parses multiple files and backwrites every user source at
     "invoice.pdf",
   );
   const secondInputPath = path.join(basePath, secondRelativePath);
+  const modelRelativePath = path.join(
+    "runtime",
+    "attach",
+    "scoped",
+    "session-1",
+    "model",
+    "38582bd8-547d-4189-9096-b1db03577511.txt",
+  );
+  const modelInputPath = path.join(basePath, modelRelativePath);
   await fs.mkdir(path.dirname(inputPath), { recursive: true });
+  await fs.mkdir(path.dirname(modelInputPath), { recursive: true });
   await fs.writeFile(inputPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   await fs.writeFile(secondInputPath, Buffer.from([0x25, 0x50, 0x44, 0x46]));
+  await fs.writeFile(modelInputPath, "model attachment", "utf8");
 
   let modelRequest = null;
   let ingestRequest = null;
@@ -45,6 +56,11 @@ test("multimodal_parse parses multiple files and backwrites every user source at
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: {
+        parsing: {
+          default_models: { image: "parse-model", document: "parse-model" },
+        },
+      },
       providers: {
         "parse-model": {
           enabled: true,
@@ -76,6 +92,15 @@ test("multimodal_parse parses multiple files and backwrites every user source at
         mimeType: "application/pdf",
         path: secondInputPath,
         relativePath: secondRelativePath,
+      },
+      {
+        attachmentId: "source-3",
+        sessionId: "session-1",
+        attachmentSource: "model",
+        name: "workspace-file.txt",
+        mimeType: "text/plain",
+        path: modelInputPath,
+        relativePath: modelRelativePath,
       },
     ],
     modelPort: {
@@ -137,6 +162,13 @@ test("multimodal_parse parses multiple files and backwrites every user source at
           {
             source: { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
           },
+          {
+            source: {
+              attachmentId: "source-3",
+              sessionId: "session-1",
+              attachmentSource: "model",
+            },
+          },
         ],
         prompt: "Extract the invoice",
       },
@@ -146,10 +178,13 @@ test("multimodal_parse parses multiple files and backwrites every user source at
 
   assert.equal(modelRequest.operation.kind, "multimodal_parse");
   assert.equal(modelRequest.operation.input.prompt, "Extract the invoice");
-  assert.equal(modelRequest.operation.input.attachments.length, 2);
+  assert.equal(modelRequest.operation.input.attachments.length, 3);
   assert.equal(modelRequest.operation.input.attachments[0].mimeType, "image/png");
+  assert.equal(modelRequest.operation.input.attachments[0].fileName, "scan.png");
   assert.match(modelRequest.operation.input.attachments[0].data, /^data:image\/png;base64,/);
   assert.equal(modelRequest.operation.input.attachments[1].mimeType, "application/pdf");
+  assert.equal(modelRequest.operation.input.attachments[1].fileName, "invoice.pdf");
+  assert.equal(modelRequest.operation.input.attachments[2].fileName, "workspace-file.txt");
   assert.equal(modelRequest.invocation.contextSequencePolicy, "independent_request");
   assert.equal(ingestRequest.generationSource, "multimodal_parse_tool");
   assert.equal(ingestRequest.artifacts[0].name, "scan.multimodal-parse.multimodal_model.md");
@@ -162,9 +197,9 @@ test("multimodal_parse parses multiple files and backwrites every user source at
   assert.equal(runtime.userMessageAttachments[1].parsedResult.attachmentId, "parsed-1");
   assert.equal(result.ok, true);
   assert.equal(result.summary.source_attachment_backwritten_count, 2);
-  assert.equal(result.summary.input_file_count, 2);
+  assert.equal(result.summary.input_file_count, 3);
   assert.deepEqual(result.summary.input_modalities, ["image", "document"]);
-  assert.deepEqual(result.summary.parsed_from_attachment_ids, ["source-1", "source-2"]);
+  assert.deepEqual(result.summary.parsed_from_attachment_ids, ["source-1", "source-2", "source-3"]);
   assert.equal(result.summary.saved_attachment_count, 1);
 });
 
@@ -179,6 +214,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "parse-model": {
           enabled: true,
@@ -244,6 +280,9 @@ test("multimodal_parse passes audio and video files to the configured model", as
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: {
+        parsing: { default_models: { audio: "parse-model", video: "parse-model" } },
+      },
       providers: {
         "parse-model": {
           enabled: true,
@@ -340,6 +379,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "parse-model": {
           enabled: true,
@@ -366,7 +406,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   );
 });
 
-test("multimodal_parse selects an enabled parsing model when the runtime model cannot parse", async () => {
+test("multimodal_parse uses the configured modality default instead of the runtime model", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-fallback-"));
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   let invokedModel = null;
@@ -375,6 +415,7 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
     userId: "admin",
     runtimeModel: "conversation-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "conversation-model": {
           enabled: true,
@@ -423,8 +464,6 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
       { configurable: { transferIdentity: TRANSFER_IDENTITY } },
     ),
   );
-
   assert.equal(invokedModel.alias, "parse-model");
-  assert.equal(invokedModel.model, "gpt-5.4");
   assert.equal(result.model.alias, "parse-model");
 });

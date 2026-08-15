@@ -79,6 +79,43 @@ test("resolvePatchRoot: 工作区相对子目录 root 生效", async () => {
   }
 });
 
+test("resolvePatchRoot: sandbox 模式下 root 保持逻辑路径并只解析一次", async () => {
+  const workspaceRoot = await mkWorkspace("noobot-patch-root-sandbox-");
+  const basePath = path.join(workspaceRoot, "u-test");
+  try {
+    await fs.mkdir(path.join(basePath, "runtime", "ops_workdir"), { recursive: true });
+    await fs.writeFile(
+      path.join(basePath, "runtime", "ops_workdir", "case.txt"),
+      "one\ntwo\n",
+      "utf8",
+    );
+    const agentContext = buildAgentContext(basePath, "u-test", {
+      runtime: {
+        globalConfig: {
+          workspaceRoot,
+          security: { executionIsolation: { mode: "sandbox" } },
+        },
+      },
+    });
+    const resolved = await resolvePatchTargetsWithOptions({
+      patches: modifyPatch("case.txt"),
+      agentContext,
+      root: "runtime/ops_workdir",
+    });
+    assert.equal(
+      resolved[0].resolvedOldPath,
+      path.join(basePath, "runtime", "ops_workdir", "case.txt"),
+    );
+    assert.deepEqual(resolved[0].oldPathRef, {
+      view: "workspace",
+      path: "runtime/ops_workdir/case.txt",
+      owner: "u-test",
+    });
+  } finally {
+    await fs.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
 test("resolvePatchRoot: 非工作区相对子目录 root 一律拒绝", async () => {
   const basePath = await mkWorkspace("noobot-patch-root-reject-");
   try {

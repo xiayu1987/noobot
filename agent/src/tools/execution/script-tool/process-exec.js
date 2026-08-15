@@ -11,10 +11,62 @@ import { filePath as path } from "@noobot/path-resolver";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import {
+  resolveCommandShell,
+  TOOL_EXECUTION_VIEW,
+} from "@noobot/execution-isolation-protocol";
 
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
+
+function resolveProcessCommand(command) {
+  if (command && typeof command === "object" && !Array.isArray(command)) {
+    const executable = String(command.command || "").trim();
+    if (!executable) throw new TypeError("process command executable is required");
+    return { executable, args: Array.isArray(command.args) ? command.args.map(String) : [], shell: false };
+  }
+  return {
+    executable: String(command || ""),
+    args: [],
+    shell: resolveCommandShell({
+      executionView: TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED,
+      platform: process.platform,
+    }),
+  };
+}
+
+const WINDOWS_OUTPUT_ENCODINGS = Object.freeze({
+  ja: "shift_jis",
+  ko: "euc-kr",
+});
+
+export function decodeCommandOutput(
+  value,
+  { platform = process.platform, locale = Intl.DateTimeFormat().resolvedOptions().locale } = {},
+) {
+  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value || "");
+  if (!bytes.length) return "";
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+  }
+  if (String(platform || "").toLowerCase() !== "win32") return bytes.toString("utf8");
+  const normalizedLocale = String(locale || "").trim().toLowerCase().replaceAll("_", "-");
+  const language = normalizedLocale.split("-")[0];
+  const encoding = language === "zh"
+    ? /^zh-(tw|hk|mo)(-|$)/.test(normalizedLocale) ? "big5" : "gbk"
+    : WINDOWS_OUTPUT_ENCODINGS[language] || "windows-1252";
+  return new TextDecoder(encoding).decode(bytes);
+}
+
+async function normalizeCommandOutputFile(filePath) {
+  const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
+  if (!bytes.length) return;
+  const text = decodeCommandOutput(bytes);
+  const normalized = Buffer.from(text, "utf8");
+  if (!normalized.equals(bytes)) await writeFile(filePath, normalized);
+}
 
 function appendCapture(chunks, chunk, state, maxBytes) {
   if (state.bytes >= maxBytes) return;
@@ -35,9 +87,10 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return new Promise((resolve) => {
-    const child = spawn(cmd, {
+    const processCommand = resolveProcessCommand(cmd);
+    const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
-      shell: true,
+      shell: processCommand.shell,
       detached: process.platform !== "win32",
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -83,6 +136,10 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       if (forceKillTimer) clearTimeout(forceKillTimer);
       abortSignal?.removeEventListener?.("abort", onAbort);
       await Promise.allSettled([stdoutFinished, stderrFinished]);
+      await Promise.all([
+        normalizeCommandOutputFile(stdoutPath),
+        normalizeCommandOutputFile(stderrPath),
+      ]);
       const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
       const stdoutBytes = Number(stdoutStat?.size || 0);
@@ -90,12 +147,12 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       const outputOverflow = stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
       const stdoutBuffer = Buffer.concat(stdoutChunks);
       const stderrBuffer = Buffer.concat(stderrChunks);
-      const stdout = (outputOverflow
+      const stdout = decodeCommandOutput(outputOverflow
         ? stdoutBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
-        : stdoutBuffer).toString("utf8");
-      const rawStderr = (outputOverflow
+        : stdoutBuffer);
+      const rawStderr = decodeCommandOutput(outputOverflow
         ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
-        : stderrBuffer).toString("utf8");
+        : stderrBuffer);
       const fallbackStderr = spawnError?.message || (timedOut
         ? `command timed out after ${Number(timeoutMs)}ms`
         : aborted ? "command aborted" : "");
@@ -176,9 +233,10 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return await new Promise((resolve) => {
-    const child = spawn(cmd, {
+    const processCommand = resolveProcessCommand(cmd);
+    const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
-      shell: true,
+      shell: processCommand.shell,
       detached: process.platform !== "win32",
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
@@ -228,6 +286,10 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
         const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
         if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
       }
+      await Promise.all([
+        normalizeCommandOutputFile(stdoutPath),
+        normalizeCommandOutputFile(stderrPath),
+      ]);
       const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
       const resultCode = timedOut || aborted

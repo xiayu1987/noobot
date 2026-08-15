@@ -68,11 +68,17 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     },
     pathGuidance: {
       preferRelative: "通用文件路径使用 workspace 逻辑视角；相对路径固定基于当前用户工作区。",
-      workspaceView: "sandbox 仅属于 execute_script 的执行视角，不能作为其他工具的文件路径传递。",
-      taskLocalView: "execute_native_script 的 task-local 仅本次调用有效，输出 name 不是路径；跨工具只传结果中的完整附件身份，不得拼接 workspace 或 host 路径。",
+      sandboxWorkspaceView:
+        "当前为 sandbox 模式；workspace 逻辑路径与系统运行环境中列出的额外挂载目标可用于所有文件相关工具。挂载路径受全局配置的只读属性和路径策略统一约束。",
+      hostWorkspaceView: "当前为 host 模式；workspace 类工具使用服务工作区视角。",
+      taskLocalView:
+        "execute_native_script 的 task-local 仅本次调用有效，输出 name 不是路径；跨工具只传结果中的完整附件身份，不得拼接 workspace 或 host 路径。",
       superUserHost:
         "可使用 Windows（如 C:\\\\dir）、macOS/Linux（如 /Users、/home）等 host 绝对路径。",
-      regularHost: "普通用户不能使用 host 绝对路径。",
+      regularHost:
+        "普通用户不能访问规范化后仍属于 host 视角的路径；指向本人工作区的绝对输入会规范化为 workspace 视角。",
+      sandboxHostAccess:
+        "sandbox 模式不因超级管理员身份自动开放 host 路径或增加挂载；宿主能力仅由固定的受限宿主工具按授权执行。",
       patchRoot: "patch root 通常省略；填写时只能是工作区相对子目录。",
     },
     executionEvidence:

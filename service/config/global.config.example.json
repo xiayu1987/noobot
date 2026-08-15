@@ -2,11 +2,31 @@
   "workspace_root": "../workspace",
   "workspace_template_path": "../user-template/default-user",
   "default_provider": "gpt_5_6_sol",
-  "attachments": {
-    "attachment_models": {
-      "audio": "gpt_5_6_sol",
-      "video": "gpt_5_6_sol",
-      "image": "gpt_5_6_sol"
+  "multimodal": {
+    "parsing": {
+      "default_models": {
+        "audio": "qwen3_5_omni_plus",
+        "video": "qwen3_5_omni_plus",
+        "image": "gpt_5_6_sol",
+        "document": "gpt_5_6_sol"
+      }
+    },
+    "generation": {
+      "default_models": {
+        "image": "gpt_5_6_sol"
+      }
+    }
+  },
+  "security": {
+    "execution_isolation": {
+      "mode": "sandbox",
+      "sandbox": {
+        "provider": "docker",
+        "scope": "user",
+        "container_name": "noobot-workspace-sandbox",
+        "image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
+        "mounts": []
+      }
     }
   },
   "tools": {
@@ -41,25 +61,7 @@
       "enabled": true
     },
     "execute_script": {
-      "enabled": true,
-      "sandbox_mode": true,
-      "sandbox_provider": {
-        "default": "docker",
-        "docker": {
-          "docker_container_scope": "global",
-          "docker_container_name": "noobot-script-sandbox",
-          "docker_image": "nikolaik/python-nodejs:python3.12-nodejs26-bookworm",
-          "docker_mounts": [
-            {
-              "source": "",
-              "target": "/project",
-              "description": "目录映射配置示例：source 与 target 同时非空才会生效；不配置或留空 source 则不映射"
-            }
-          ]
-        },
-        "bubblewrap": {},
-        "firejail": {}
-      }
+      "enabled": true
     },
     "execute_native_script": {
       "enabled": true
@@ -163,7 +165,7 @@
   "plugins": {
     "harness": {
       "enabled": true,
-      "mode": "off",
+      "mode": "on",
       "stepModels": {
         "planning": "gpt_5_6_sol",
         "guidance": "gpt_5_6_sol",
@@ -194,7 +196,28 @@
       "description": "擅长编码",
       "multimodal_parsing": {
         "enabled": true,
-        "input_modalities": ["image"]
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gpt_5_4": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-5.4",
+      "format": "openai_compatible",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "low",
+      "description": "擅长编码",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -240,8 +263,9 @@
       },
       "multimodal_generation": {
         "support_generation": {
-          "enabled": false,
-          "support_scope": []
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "openai_responses"
         }
       }
     },
@@ -261,7 +285,8 @@
       "multimodal_generation": {
         "support_generation": {
           "enabled": true,
-          "support_scope": ["image"]
+          "support_scope": ["image"],
+          "api_type": "images_async"
         }
       }
     },

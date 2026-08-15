@@ -56,6 +56,31 @@ describe("webSocketTransportSupervisor", () => {
     });
   });
 
+  it("replaces an open socket when the resolved authentication identity changes", () => {
+    let apiKey = "admin-key";
+    const createWebSocket = vi.fn((url) => new MockWebSocket(url));
+    const supervisor = createWebSocketTransportSupervisor({
+      resolveWebSocketUrl: () => `ws://test/channel?apikey=${apiKey}`,
+      resolveTransportOwner: () => apiKey === "admin-key" ? "admin" : "xiayu",
+      createWebSocket,
+    });
+    const admin = supervisor.acquire();
+    admin.socket.readyState = MockWebSocket.OPEN;
+    supervisor.markOpen(admin.socket);
+
+    apiKey = "xiayu-key";
+    const xiayu = supervisor.acquire();
+
+    expect(xiayu.socket).not.toBe(admin.socket);
+    expect(xiayu.identityChanged).toBe(true);
+    expect(xiayu.credentialsChanged).toBe(true);
+    expect(xiayu.transportOwner).toBe("xiayu");
+    expect(xiayu.socket.url).toBe("ws://test/channel?apikey=xiayu-key");
+    expect(admin.socket.close).toHaveBeenCalledWith(1000, "transport_identity_changed");
+    expect(supervisor.current()).toBe(xiayu.socket);
+    expect(createWebSocket).toHaveBeenCalledTimes(2);
+  });
+
   it("records the ready server instance on the current transport generation", () => {
     const supervisor = createWebSocketTransportSupervisor({
       channelId: "chat",

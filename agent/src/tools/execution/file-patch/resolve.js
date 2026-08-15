@@ -9,15 +9,18 @@ import {
   isAbsolutePathAnyPlatform,
   isCaseInsensitivePathContext,
   normalizePathForPlatform,
-  resolvePathUnderRoot,
+  isPathWithinRoot,
+  resolvePathRef,
   PATH_CAPABILITIES,
   TOOL_PATH_VIEWS,
 } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import {
-  assertAndResolveUserWorkspaceFilePath,
+  resolveAuthorizedUserWorkspaceFilePath,
   assertValidFileNameFromPath,
+  canUseHostPathsForWorkspaceTools,
+  projectToolPathRef,
 } from "../../core/check-tool-input.js";
 import { tTool } from "../../core/tool-i18n.js";
 import {
@@ -30,7 +33,6 @@ import {
   getBasePathFromAgentContext,
   getRuntimeFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
-import { isSuperUserAgentContext } from "../../../shared/utils/super-user.js";
 
 function normalizePatchPathInput(rawPath = "") {
   const trimmed = String(rawPath || "").trim();
@@ -42,18 +44,12 @@ function uniqueStrings(values = []) {
   return Array.from(new Set(values.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function isWithinBasePath(basePath = "", targetPath = "") {
-  const rel = path.relative(basePath, targetPath);
-  if (!rel) return true;
-  return !rel.startsWith("..") && !path.isAbsolute(rel);
-}
-
 function resolvePatchDefaultRoot(agentContext = {}) {
   return path.resolve(getBasePathFromAgentContext(agentContext) || ".");
 }
 
 function resolvePatchRootInvalidHint(agentContext = {}) {
-  return isSuperUserAgentContext(agentContext)
+  return canUseHostPathsForWorkspaceTools(agentContext)
     ? tTool(agentContext, "tools.patch_file.rootInvalidHintSuperHost")
     : tTool(agentContext, "tools.patch_file.rootInvalidHintHost");
 }
@@ -69,7 +65,7 @@ function formatDisplayPath({
   if (
     normalizedWorkspace &&
     normalizedResolved &&
-    isWithinBasePath(normalizedWorkspace, normalizedResolved)
+    isPathWithinRoot(normalizedWorkspace, normalizedResolved)
   ) {
     return toWorkspaceRelativePath(normalizedWorkspace, normalizedResolved);
   }
@@ -77,7 +73,7 @@ function formatDisplayPath({
   if (
     normalizedRoot &&
     normalizedResolved &&
-    isWithinBasePath(normalizedRoot, normalizedResolved)
+    isPathWithinRoot(normalizedRoot, normalizedResolved)
   ) {
     return toWorkspaceRelativePath(normalizedRoot, normalizedResolved);
   }
@@ -123,7 +119,7 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
     });
   }
   assertValidFileNameFromPath({ filePath: normalizedRoot, fieldName: "root" });
-  const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+  const resolution = await resolveAuthorizedUserWorkspaceFilePath({
     filePath: normalizedRoot,
     agentContext,
     fieldName: "root",
@@ -132,7 +128,8 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
   });
   return {
     displayPath: normalizedRoot,
-    resolvedPath,
+    resolvedPath: resolution.executionPath,
+    pathRef: resolution.pathRef,
     inputPath: normalizedRoot,
   };
 }
@@ -143,7 +140,7 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
   const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
   const candidatePath = normalizePatchPathInput(filePath);
   const inputPath = explicitRootPath
-    ? resolvePathUnderRoot(explicitRootPath, candidatePath)
+    ? normalizeSlash(path.join(rootInfo.inputPath, candidatePath))
     : candidatePath;
   return [
     {
@@ -192,8 +189,14 @@ function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matche
 }
 
 function buildDiagnosticPathMapper(agentContext = {}) {
-  void agentContext;
-  return (value = "") => normalizeSlash(value);
+  const workspaceRoot = resolvePatchDefaultRoot(agentContext);
+  return (value = "") =>
+    projectToolPathRef(
+      resolvePathRef({
+        input: value,
+        workspaceRoot,
+      }),
+    );
 }
 
 function buildPathAttemptDetails({
@@ -205,16 +208,6 @@ function buildPathAttemptDetails({
 } = {}) {
   const workspacePath = resolvePatchDefaultRoot(agentContext);
   const toDiagnosticPath = buildDiagnosticPathMapper(agentContext);
-  const classifiedInput = classifyToolInputPath(filePath, { agentContext });
-  const virtualRelativeSuggestion =
-    classifiedInput.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE
-      ? {
-          pathView: classifiedInput.view,
-          suggestedPatchPath: classifiedInput.normalized.split("/").slice(1).join("/"),
-          suggestedSandboxPath: `/${classifiedInput.normalized}`,
-          pathHint: `Path '${classifiedInput.normalized}' looks like a virtual relative path. Use '/${classifiedInput.virtualRoot}/...' for sandbox paths, or remove '${classifiedInput.virtualRoot}/' for workspace-relative paths.`,
-        }
-      : {};
   const suggestedRoots = uniqueStrings(
     candidates
       .filter((item) => item.reason && String(item.reason).includes("discovered-project-root"))
@@ -240,11 +233,9 @@ function buildPathAttemptDetails({
     })),
     suggestedRoots,
     suggestedRoot: suggestedRoots.length === 1 ? suggestedRoots[0] : "",
-    ...virtualRelativeSuggestion,
     hint: root
       ? "Patch path was resolved under the requested root. Check strip/root or use a path that exists under root."
-      : virtualRelativeSuggestion.pathHint ||
-        "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
+      : "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
   };
 }
 
@@ -276,15 +267,19 @@ async function resolveCompatibleWorkspaceFilePath({
     const matches = [];
     for (const candidate of candidates) {
       try {
-        const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+        const resolution = await resolveAuthorizedUserWorkspaceFilePath({
           filePath: candidate.inputPath || candidate.candidatePath,
           agentContext,
           fieldName,
           capability: PATH_CAPABILITIES.FILE_PATCH,
           mustExist: false,
         });
-        if (await exists(resolvedPath)) {
-          matches.push({ ...candidate, resolvedPath });
+        if (await exists(resolution.executionPath)) {
+          matches.push({
+            ...candidate,
+            resolvedPath: resolution.executionPath,
+            pathRef: resolution.pathRef,
+          });
         }
       } catch (error) {
         firstError ||= error;
@@ -293,12 +288,16 @@ async function resolveCompatibleWorkspaceFilePath({
     const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
     if (uniqueMatches.length === 1) {
       const match = uniqueMatches[0];
-      return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
+      return {
+        displayPath: match.displayPath,
+        resolvedPath: match.resolvedPath,
+        pathRef: match.pathRef,
+      };
     }
     if (uniqueMatches.length > 1) {
       throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
     }
-    if (firstError?.code === ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE) throw firstError;
+    if (firstError) throw firstError;
     throwPatchFileNotFound({
       filePath,
       fieldName,
@@ -312,15 +311,19 @@ async function resolveCompatibleWorkspaceFilePath({
   const matches = [];
   for (const candidate of candidates) {
     try {
-      const resolvedPath = await assertAndResolveUserWorkspaceFilePath({
+      const resolution = await resolveAuthorizedUserWorkspaceFilePath({
         filePath: candidate.inputPath || candidate.candidatePath,
         agentContext,
         fieldName,
         capability: PATH_CAPABILITIES.FILE_PATCH,
         mustExist: false,
       });
-      if (await exists(path.dirname(resolvedPath))) {
-        matches.push({ ...candidate, resolvedPath });
+      if (await exists(path.dirname(resolution.executionPath))) {
+        matches.push({
+          ...candidate,
+          resolvedPath: resolution.executionPath,
+          pathRef: resolution.pathRef,
+        });
       }
     } catch (error) {
       firstError ||= error;
@@ -329,7 +332,11 @@ async function resolveCompatibleWorkspaceFilePath({
   const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
   if (uniqueMatches.length === 1) {
     const match = uniqueMatches[0];
-    return { displayPath: match.displayPath, resolvedPath: match.resolvedPath };
+    return {
+      displayPath: match.displayPath,
+      resolvedPath: match.resolvedPath,
+      pathRef: match.pathRef,
+    };
   }
   if (uniqueMatches.length > 1) {
     throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
@@ -337,15 +344,17 @@ async function resolveCompatibleWorkspaceFilePath({
   if (firstError?.code === ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE) throw firstError;
   if (firstError && candidates.length === 1) throw firstError;
   const fallback = candidates[0]?.candidatePath || filePath;
+  const fallbackResolution = await resolveAuthorizedUserWorkspaceFilePath({
+    filePath: fallback,
+    agentContext,
+    fieldName,
+    mustExist: false,
+    capability: PATH_CAPABILITIES.FILE_PATCH,
+  });
   return {
     displayPath: fallback,
-    resolvedPath: await assertAndResolveUserWorkspaceFilePath({
-      filePath: fallback,
-      agentContext,
-      fieldName,
-      mustExist: false,
-      capability: PATH_CAPABILITIES.FILE_PATCH,
-    }),
+    resolvedPath: fallbackResolution.executionPath,
+    pathRef: fallbackResolution.pathRef,
   };
 }
 
@@ -399,6 +408,8 @@ export async function resolvePatchTargetsWithOptions({
       newPath: newInfo.displayPath || newPath,
       resolvedOldPath: oldInfo.resolvedPath,
       resolvedNewPath: newInfo.resolvedPath,
+      oldPathRef: oldInfo.pathRef || null,
+      newPathRef: newInfo.pathRef || null,
     });
   }
   return resolved;

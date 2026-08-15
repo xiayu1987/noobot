@@ -32,7 +32,9 @@ export function useComposerOptions(props, emit, translate) {
   });
 
   function resolveScenarioLabel(scenarioItem = {}) {
-    const scenarioKey = String(scenarioItem?.key || "").trim().toLowerCase();
+    const scenarioKey = String(scenarioItem?.key || "")
+      .trim()
+      .toLowerCase();
     const customLabel = String(scenarioItem?.label || "").trim();
     if (customLabel) return customLabel;
     if (scenarioKey === "programming") return translate("composer.scenarioProgramming");
@@ -48,7 +50,8 @@ export function useComposerOptions(props, emit, translate) {
       (scenarioItem) => scenarioItem.key === currentScenario,
     );
     if (matchedScenario) return resolveScenarioLabel(matchedScenario);
-    if (currentScenario.toLowerCase() === "programming") return translate("composer.scenarioProgramming");
+    if (currentScenario.toLowerCase() === "programming")
+      return translate("composer.scenarioProgramming");
     if (currentScenario.toLowerCase() === "text") return translate("composer.scenarioText");
     return currentScenario;
   });
@@ -70,7 +73,6 @@ export function useComposerOptions(props, emit, translate) {
         label: String(pluginItem?.label || pluginItem?.name || pluginItem?.key || "").trim(),
         description: String(pluginItem?.description || "").trim(),
         enabled: pluginItem?.enabled === true,
-        mode: String(pluginItem?.mode || "").trim().toLowerCase() === "on" ? "on" : "off",
       }))
       .filter((pluginItem) => Boolean(pluginItem.key));
   });

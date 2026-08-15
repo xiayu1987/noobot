@@ -60,7 +60,12 @@ test("buildTools: execute_native_script requires explicit global enablement", as
   );
   const tool = enabled.find((item) => item?.name === "execute_native_script");
   assert.ok(tool);
-  assert.deepEqual(Object.keys(tool.schema.shape).sort(), ["arguments", "inputs", "script_body"]);
+  assert.deepEqual(Object.keys(tool.schema.shape).sort(), [
+    "arguments",
+    "inputs",
+    "riskLevel",
+    "script_body",
+  ]);
 });
 
 test("buildTools: 重组后应注册关键工具", async () => {
@@ -146,7 +151,12 @@ test("buildTools: every path-aware tool declares an authoritative path contract"
     const contract = tool?.metadata?.pathContract;
     assert.ok(contract, `${tool.name} must declare pathContract`);
     assert.equal(contract.accepted.includes("sandbox"), false);
-    if (contract.execution.includes("sandbox")) assert.equal(tool.name, "execute_script");
+    if (contract.execution.includes("sandbox")) {
+      assert.equal(
+        ["read_file", "write_file", "search", "patch_file", "execute_script"].includes(tool.name),
+        true,
+      );
+    }
   }
 });
 

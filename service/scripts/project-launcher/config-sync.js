@@ -5,8 +5,13 @@
  */
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
-import { CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS } from "./constants.js";
-import { mergeIncremental, parseTemplateVariables, pruneBuiltInConfigParams } from "./config-merge.js";
+import { migrateConfigFileToCurrentProtocol } from "@noobot/agent-config-protocol";
+import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
+import {
+  mergeIncremental,
+  parseTemplateVariables,
+  pruneBuiltInConfigParams,
+} from "./config-merge.js";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
 import { alignInitialModelReferencesForFile } from "./provider.js";
 import {
@@ -54,12 +59,18 @@ export async function upsertConfigParams({
     : {};
   const overwriteKeySet = new Set(
     (Array.isArray(overwriteKeys) ? overwriteKeys : [])
-      .map((key) => String(key || "").trim().toUpperCase())
+      .map((key) =>
+        String(key || "")
+          .trim()
+          .toUpperCase(),
+      )
       .filter(Boolean),
   );
 
   for (const [key, value] of Object.entries(entries || {})) {
-    const normalizedKey = String(key || "").trim().toUpperCase();
+    const normalizedKey = String(key || "")
+      .trim()
+      .toUpperCase();
     if (!normalizedKey) continue;
     const incomingValue = String(value ?? "").trim();
     if (!hasOwnProperty(values, normalizedKey)) {
@@ -78,7 +89,11 @@ export async function upsertConfigParams({
   });
 }
 
-export async function syncJsonFileIncremental({ templateFilePath, targetFilePath, skipTopLevelKeys = new Set(), locale = "zh" } = {}) {
+export async function syncJsonFileIncremental({
+  templateFilePath,
+  targetFilePath,
+  locale = "zh",
+} = {}) {
   const templateJson = await readJsonStrict(templateFilePath, t(locale, "labelTemplateConfig"));
   if (!isPlainObject(templateJson)) return false;
 
@@ -86,11 +101,15 @@ export async function syncJsonFileIncremental({ templateFilePath, targetFilePath
   const targetJson = targetExists
     ? await readJsonStrict(targetFilePath, t(locale, "labelTargetConfig"))
     : {};
-  const merged = pruneBuiltInConfigParams(mergeIncremental({
-    template: pruneBuiltInConfigParams(templateJson),
-    target: pruneBuiltInConfigParams(targetJson),
-    skipTopLevelKeys,
-  }));
+  const merged = migrateConfigFileToCurrentProtocol(
+    pruneBuiltInConfigParams(
+      mergeIncremental({
+        template: pruneBuiltInConfigParams(templateJson),
+        target: pruneBuiltInConfigParams(targetJson),
+        excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
+      }),
+    ),
+  );
 
   if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
     await writeJson(targetFilePath, merged);
@@ -99,7 +118,10 @@ export async function syncJsonFileIncremental({ templateFilePath, targetFilePath
   return false;
 }
 
-export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, superAdminUserId = "" } = {}) {
+export async function collectWorkspaceUserIds({
+  workspaceRootAbsolutePath,
+  superAdminUserId = "",
+} = {}) {
   const userIds = new Set();
   const workspaceDirUserIds = new Set();
 
@@ -111,8 +133,7 @@ export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, super
       if (!userId) continue;
       workspaceDirUserIds.add(userId);
     }
-  } catch {
-  }
+  } catch {}
 
   for (const userId of workspaceDirUserIds) {
     userIds.add(userId);
@@ -133,7 +154,9 @@ export async function collectWorkspaceUserIds({ workspaceRootAbsolutePath, super
     }
   }
 
-  return Array.from(userIds).sort((leftUserId, rightUserId) => leftUserId.localeCompare(rightUserId));
+  return Array.from(userIds).sort((leftUserId, rightUserId) =>
+    leftUserId.localeCompare(rightUserId),
+  );
 }
 
 export async function syncTemplateAndUserConfigs({
@@ -164,14 +187,12 @@ export async function syncTemplateAndUserConfigs({
     await syncJsonFileIncremental({
       templateFilePath: templateExamplePath,
       targetFilePath: templateConfigPath,
-      skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
       locale,
     });
   } else if (templateConfigExists) {
     await syncJsonFileIncremental({
       templateFilePath: templateConfigPath,
       targetFilePath: templateExamplePath,
-      skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
       locale,
     });
   }
@@ -196,14 +217,12 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: templateConfigPath,
         targetFilePath: path.join(userBasePath, "config.json"),
-        skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
         locale,
       });
     } else if (finalTemplateSeedPath) {
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.json"),
-        skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
         locale,
       });
     }
@@ -211,14 +230,12 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: templateExamplePath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
-        skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
         locale,
       });
     } else if (finalTemplateSeedPath) {
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
-        skipTopLevelKeys: CONFIG_SYNC_SKIP_TOP_LEVEL_KEYS,
         locale,
       });
     }

@@ -5,15 +5,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  DEFAULT_ON_PLUGINS_STORAGE_KEY,
   SELECTED_PLUGINS_STORAGE_KEY,
-  getDefaultOnPluginKeys,
   hasStoredSelectedPluginKeys,
   loadSelectedPluginKeys,
   normalizeAvailablePlugins,
-  persistDefaultOnPluginKeys,
   persistSelectedPlugins,
   safeParseStringArray,
+  selectedPluginsStorageKey,
   syncSelectedPluginsWithConfig,
 } from "../../../src/app/state/pluginSelectionState.js";
 
@@ -39,13 +37,14 @@ describe("plugin selection state", () => {
   });
 
   it("loads selected plugin keys and detects whether the user has stored a selection", () => {
-    expect(hasStoredSelectedPluginKeys()).toBe(false);
-    expect(loadSelectedPluginKeys()).toEqual([]);
+    expect(hasStoredSelectedPluginKeys("xiayu")).toBe(false);
+    expect(loadSelectedPluginKeys("xiayu")).toEqual([]);
 
-    localStorage.setItem(SELECTED_PLUGINS_STORAGE_KEY, '["workflow"," ","harness"]');
+    localStorage.setItem(selectedPluginsStorageKey("xiayu"), '["workflow"," ","harness"]');
 
-    expect(hasStoredSelectedPluginKeys()).toBe(true);
-    expect(loadSelectedPluginKeys()).toEqual(["workflow", "harness"]);
+    expect(hasStoredSelectedPluginKeys("xiayu")).toBe(true);
+    expect(loadSelectedPluginKeys("xiayu")).toEqual(["workflow", "harness"]);
+    expect(loadSelectedPluginKeys("admin")).toEqual([]);
   });
 
   it("normalizes enabled plugin definitions for composer options", () => {
@@ -55,17 +54,16 @@ describe("plugin selection state", () => {
           label: " Workflow ",
           description: " Runs workflow ",
           enabled: true,
-          mode: " ON ",
+          mode: "off",
         },
         harness: {
           name: "Harness",
           enabled: true,
-          mode: "off",
+          mode: " ON ",
         },
         disabled: {
           label: "Disabled",
           enabled: false,
-          mode: "on",
         },
         " ": {
           enabled: true,
@@ -77,68 +75,100 @@ describe("plugin selection state", () => {
         label: "Workflow",
         description: "Runs workflow",
         enabled: true,
-        mode: "on",
+        selectedByDefault: false,
       },
       {
         key: "harness",
         label: "Harness",
         description: "",
         enabled: true,
-        mode: "off",
+        selectedByDefault: true,
       },
     ]);
   });
 
-  it("persists selected keys and unique default-on plugin keys", () => {
+  it("persists selected keys for one authenticated user", () => {
     const hasStoredSelectedPlugins = { value: false };
     const selectedPlugins = { value: [" workflow ", "", "harness"] };
 
-    persistSelectedPlugins({ selectedPlugins, hasStoredSelectedPlugins });
-    persistDefaultOnPluginKeys(["workflow", " workflow ", "", "harness"]);
+    persistSelectedPlugins({ userId: "xiayu", selectedPlugins, hasStoredSelectedPlugins });
 
     expect(hasStoredSelectedPlugins.value).toBe(true);
-    expect(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)).toBe(
+    expect(localStorage.getItem(`${SELECTED_PLUGINS_STORAGE_KEY}:xiayu`)).toBe(
       JSON.stringify([" workflow ", "", "harness"]),
     );
-    expect(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)).toBe(
-      JSON.stringify(["workflow", "harness"]),
-    );
+    expect(localStorage.getItem(`${SELECTED_PLUGINS_STORAGE_KEY}:admin`)).toBe(null);
   });
 
-  it("syncs unstored selections to default-on plugins without persisting selected plugins", () => {
+  it("initializes and persists an unstored selection from backend plugin defaults", () => {
     const selectedPlugins = { value: [] };
     const hasStoredSelectedPlugins = { value: false };
     const pluginOptions = [
-      { key: "workflow", enabled: true, mode: "on" },
-      { key: "harness", enabled: true, mode: "off" },
+      { key: "workflow", enabled: true, selectedByDefault: false },
+      { key: "harness", enabled: true, selectedByDefault: true },
     ];
 
-    syncSelectedPluginsWithConfig({ pluginOptions, selectedPlugins, hasStoredSelectedPlugins });
+    syncSelectedPluginsWithConfig({
+      pluginOptions,
+      selectedPlugins,
+      hasStoredSelectedPlugins,
+      userId: "xiayu",
+    });
 
-    expect(selectedPlugins.value).toEqual(["workflow"]);
-    expect(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)).toBe(JSON.stringify(["workflow"]));
-    expect(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)).toBe(null);
+    expect(selectedPlugins.value).toEqual(["harness"]);
+    expect(hasStoredSelectedPlugins.value).toBe(true);
+    expect(localStorage.getItem(selectedPluginsStorageKey("xiayu"))).toBe(
+      JSON.stringify(["harness"]),
+    );
   });
 
-  it("keeps valid stored selections and adds newly default-on plugins", () => {
-    localStorage.setItem(DEFAULT_ON_PLUGINS_STORAGE_KEY, JSON.stringify(["workflow"]));
+  it("persists an explicit empty default so later backend changes do not select a plugin", () => {
+    const selectedPlugins = { value: [] };
+    const hasStoredSelectedPlugins = { value: false };
+
+    syncSelectedPluginsWithConfig({
+      pluginOptions: [
+        { key: "harness", enabled: true, selectedByDefault: false },
+        { key: "workflow", enabled: true, selectedByDefault: false },
+      ],
+      selectedPlugins,
+      hasStoredSelectedPlugins,
+      userId: "xiayu",
+    });
+
+    expect(selectedPlugins.value).toEqual([]);
+    expect(hasStoredSelectedPlugins.value).toBe(true);
+    expect(localStorage.getItem(selectedPluginsStorageKey("xiayu"))).toBe("[]");
+
+    syncSelectedPluginsWithConfig({
+      pluginOptions: [{ key: "harness", enabled: true, selectedByDefault: true }],
+      selectedPlugins,
+      hasStoredSelectedPlugins,
+      userId: "xiayu",
+    });
+
+    expect(selectedPlugins.value).toEqual([]);
+  });
+
+  it("keeps only explicitly selected plugins that remain available", () => {
     const selectedPlugins = { value: ["workflow", "disabled", "missing"] };
     const hasStoredSelectedPlugins = { value: true };
     const pluginOptions = [
-      { key: "workflow", enabled: true, mode: "on" },
-      { key: "harness", enabled: true, mode: "on" },
-      { key: "disabled", enabled: false, mode: "on" },
+      { key: "workflow", enabled: true, selectedByDefault: true },
+      { key: "harness", enabled: true, selectedByDefault: true },
+      { key: "disabled", enabled: false, selectedByDefault: true },
     ];
 
-    syncSelectedPluginsWithConfig({ pluginOptions, selectedPlugins, hasStoredSelectedPlugins });
+    syncSelectedPluginsWithConfig({
+      pluginOptions,
+      selectedPlugins,
+      hasStoredSelectedPlugins,
+      userId: "xiayu",
+    });
 
-    expect(getDefaultOnPluginKeys(pluginOptions)).toEqual(["workflow", "harness"]);
-    expect(selectedPlugins.value).toEqual(["workflow", "harness"]);
-    expect(localStorage.getItem(DEFAULT_ON_PLUGINS_STORAGE_KEY)).toBe(
-      JSON.stringify(["workflow", "harness"]),
-    );
-    expect(localStorage.getItem(SELECTED_PLUGINS_STORAGE_KEY)).toBe(
-      JSON.stringify(["workflow", "harness"]),
+    expect(selectedPlugins.value).toEqual(["workflow"]);
+    expect(localStorage.getItem(selectedPluginsStorageKey("xiayu"))).toBe(
+      JSON.stringify(["workflow"]),
     );
   });
 

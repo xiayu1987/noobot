@@ -10,16 +10,19 @@ import {
   PATH_PLATFORMS,
   PATH_VIEWS,
   TOOL_PATH_VIEWS,
+  TOOL_PATH_RESOLUTION_ERROR,
   classifyToolInputPath,
   convertPathView,
   detectPathPlatform,
   normalizePathForPlatform,
+  isPathWithinRoot,
   PLATFORM_PROTECTED_ROOTS,
   resolvePathUnderRoot,
   TASK_PATH_KINDS,
   TASK_PATH_VIEW,
   createTaskPath,
   isTaskPath,
+  normalizeTaskPathRelative,
   parseTaskPath,
   projectTaskPathText,
   resolveTaskPath,
@@ -28,6 +31,7 @@ import {
   BUILTIN_PATH_POLICY,
   resolvePathPolicy,
   resolvePathRef,
+  resolveToolInputPath,
   TOOL_PATH_CONTRACTS,
 } from "../src/index.mjs";
 
@@ -39,6 +43,12 @@ test("normalizes cross-platform path syntax through the protocol", () => {
     resolvePathUnderRoot("/workspace/app", "C:\\work\\src\\file.js"),
     "C:/work/src/file.js",
   );
+});
+
+test("path containment distinguishes parent traversal from dot-prefixed names", () => {
+  assert.equal(isPathWithinRoot("/srv/workspace", "/srv/workspace"), true);
+  assert.equal(isPathWithinRoot("/srv/workspace", "/srv/workspace/..reports/a.txt"), true);
+  assert.equal(isPathWithinRoot("/srv/workspace", "/srv/outside.txt"), false);
 });
 
 test("converts explicit path views without losing the source contract", () => {
@@ -63,6 +73,58 @@ test("classifies tool input views as one canonical result", () => {
   assert.equal(classifyToolInputPath("C:\\work\\file.js").view, TOOL_PATH_VIEWS.HOST_ABSOLUTE);
 });
 
+test("rejects workspace-relative traversal before it can be reclassified as a host path", () => {
+  const escaped = resolveToolInputPath({
+    inputPath: "../outside.txt",
+    workspacePath: "/srv/workspaces/alice",
+  });
+  assert.equal(escaped.ok, false);
+  assert.equal(escaped.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE);
+  assert.equal(escaped.error, TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE);
+  assert.equal(escaped.resolvedPath, "");
+
+  const normalizedInside = resolveToolInputPath({
+    inputPath: "reports/drafts/../final.txt",
+    workspacePath: "/srv/workspaces/alice",
+  });
+  assert.equal(normalizedInside.ok, true);
+  assert.equal(normalizedInside.resolvedPath, "/srv/workspaces/alice/reports/final.txt");
+
+  const dotPrefixedInside = resolveToolInputPath({
+    inputPath: "..reports/final.txt",
+    workspacePath: "/srv/workspaces/alice",
+  });
+  assert.equal(dotPrefixedInside.ok, true);
+  assert.equal(dotPrefixedInside.resolvedPath, "/srv/workspaces/alice/..reports/final.txt");
+});
+
+test("sandbox mode treats unmapped absolute paths as execution paths, never host refs", () => {
+  const runtime = {
+    basePath: "/srv/workspaces/alice",
+    userId: "alice",
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
+        },
+      },
+    },
+  };
+  const result = resolveToolInputPath({
+    inputPath: "/tmp/container-private.txt",
+    runtime,
+    workspacePath: runtime.basePath,
+    workspaceRoot: "/srv/workspaces",
+    allowHostAbsolute: true,
+    allowSandbox: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
+  assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED);
+  assert.equal(result.resolvedPath, "");
+});
+
 test("task-local paths have one token and resolution protocol", () => {
   assert.equal(TASK_PATH_VIEW, "task-local");
   const output = createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "media/result.mp4" });
@@ -80,8 +142,17 @@ test("task-local paths have one token and resolution protocol", () => {
   assert.equal(createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, allowRoot: true }), "output://");
   assert.throws(
     () => createTaskPath({ kind: TASK_PATH_KINDS.TEMP, relative: "../escape" }),
-    /invalid/,
+    /safe relative path without parent traversal/,
   );
+  assert.throws(
+    () => createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "/absolute.txt" }),
+    /safe relative path without parent traversal/,
+  );
+  assert.throws(
+    () => createTaskPath({ kind: TASK_PATH_KINDS.OUTPUT, relative: "C:\\absolute.txt" }),
+    /safe relative path without parent traversal/,
+  );
+  assert.equal(normalizeTaskPathRelative("nested/./path//result.txt"), "nested/path/result.txt");
 });
 
 test("task-local projection replaces only declared runtime roots", () => {
@@ -97,7 +168,7 @@ test("task-local projection replaces only declared runtime roots", () => {
   );
 });
 
-test("logical path contracts keep sandbox exclusive to script execution", () => {
+test("logical path contracts keep sandbox as execution view only", () => {
   for (const contract of Object.values(TOOL_PATH_CONTRACTS))
     assert.doesNotThrow(() => assertToolPathContract(contract));
   assert.throws(
@@ -116,9 +187,9 @@ test("logical path contracts keep sandbox exclusive to script execution", () => 
         capability: "file.read",
         accepted: ["workspace"],
         execution: ["sandbox"],
-        display: "logical",
+        display: "runtime",
       }),
-    /script.input/,
+    /script\.input/,
   );
   assert.throws(
     () => resolvePathRef({ input: { view: "sandbox", path: "/workspace/a.txt" } }),
@@ -158,10 +229,11 @@ test("built-in path policy is complete and aligned with every tool contract", ()
 });
 
 test("built-in protected roots follow the service execution platform", () => {
-  assert.deepEqual(
-    resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots,
-    ["/proc", "/sys", "/dev"],
-  );
+  assert.deepEqual(resolvePathPolicy({}, { platform: "linux" }).roles.superAdmin.host.deniedRoots, [
+    "/proc",
+    "/sys",
+    "/dev",
+  ]);
   assert.deepEqual(
     resolvePathPolicy({}, { platform: "win32" }).roles.superAdmin.host.deniedRoots,
     [],
@@ -171,32 +243,38 @@ test("built-in protected roots follow the service execution platform", () => {
     ["/dev"],
   );
   assert.deepEqual(
-    resolvePathPolicy({
-      security: {
-        pathPolicy: {
-          roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
+    resolvePathPolicy(
+      {
+        security: {
+          pathPolicy: {
+            roles: { superAdmin: { host: { deniedRoots: ["C:/Windows/System32"] } } },
+          },
         },
       },
-    }, { platform: "windows" }).roles.superAdmin.host.deniedRoots,
+      { platform: "windows" },
+    ).roles.superAdmin.host.deniedRoots,
     ["C:/Windows/System32"],
   );
 });
 
 test("global path policy recursively overrides only configured values", () => {
-  const policy = resolvePathPolicy({
-    security: {
-      path_policy: {
-        roles: {
-          regular_user: { workspace: { others: "read_only" } },
-          super_admin: { host: { allowed_roots: ["/srv/shared"] } },
+  const policy = resolvePathPolicy(
+    {
+      security: {
+        path_policy: {
+          roles: {
+            regular_user: { workspace: { others: "read_only" } },
+            super_admin: { host: { allowed_roots: ["/srv/shared"] } },
+          },
+          capabilities: {
+            "file.read": { host_requires_role: "deny" },
+          },
+          display: { file_tools: "none" },
         },
-        capabilities: {
-          "file.read": { host_requires_role: "deny" },
-        },
-        display: { file_tools: "none" },
       },
     },
-  }, { platform: "linux" });
+    { platform: "linux" },
+  );
 
   assert.equal(policy.roles.regularUser.workspace.own, "read_write");
   assert.equal(policy.roles.regularUser.workspace.others, "read_only");

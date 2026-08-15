@@ -79,7 +79,7 @@ export default {
   "common.notFound": "未找到",
   "common.notFoundInParentSessionMessages": "在父会话消息中未找到",
   "common.parentSessionNotFound": "未找到父会话",
-  "common.pathIsNotFile": "path 不是文件",
+  "common.pathIsNotFile": "路径不是文件",
   "common.pathOutOfScope": "路径超出允许范围",
   "common.pathRequired": "必须提供 path",
   "common.pathSeparatorsNotAllowed": "不能包含路径分隔符",
@@ -127,10 +127,28 @@ export default {
   "tools.file.writeContentTooLong": "文件内容过长，请分批写入",
   "tools.file.readContentTooLong": "文件内容过长，请分批读取",
   "tools.file.readDescriptionWithLineNumbers": "读取文本文件内容（默认带行号）。",
+  "tools.file.workspaceRelativePathRule": "相对路径统一基于当前用户工作区根目录。",
+  "tools.file.symbolicLinkRule": "当前路径策略不允许文件工具使用符号链接。",
   "tools.file.readStartLineField": "起始行（1-based）。",
   "tools.file.readEndLineField": "结束行（1-based）。",
   "tools.file.readIncludeLineNumbersField": "content 是否带行号。",
   "tools.file.readMaxLinesField": "最大返回行数。",
+  "tools.file.readLineRangeOutOfBounds": (params = {}) =>
+    `读取行范围无效：请求 ${Number(params.startLine || 0)}-${Number(params.endLine || 0)}，文件共 ${Number(params.totalLines || 0)} 行`,
+  "tools.file.pathErrorRequired": (params = {}) =>
+    `必须提供 ${String(params.field || "filePath")}`,
+  "tools.file.pathErrorHostAbsoluteNotAllowed": "当前身份不允许访问宿主绝对路径。",
+  "tools.file.pathErrorSandboxNotAllowed": "当前执行视角不接受沙箱绝对路径。",
+  "tools.file.pathErrorSandboxNotMapped": "该沙箱路径未映射到共享文件根目录。",
+  "tools.file.pathErrorVirtualRelativeAmbiguous": (params = {}) => {
+    const relative = String(params.suggestedPath || "");
+    const sandbox = String(params.suggestedSandboxPath || "");
+    return sandbox
+      ? `路径含有歧义。工作区相对路径请使用 ${relative}，沙箱绝对路径请使用 ${sandbox}。`
+      : `路径含有歧义。工作区相对路径请使用 ${relative}。`;
+  },
+  "tools.file.pathErrorWorkspaceOutOfScope": "工作区相对路径超出了工作区根目录。",
+  "tools.file.writeAlreadyExists": "文件已存在；如需替换，请将 overwrite 设置为 true。",
   "tools.file.readRiskLevelField":
     "操作风险等级：low、medium、high 或 critical。读取可能涉及隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.file.writeOverwriteField": "文件存在时是否覆盖。",
@@ -139,6 +157,7 @@ export default {
   "tools.search.description": "搜索文件或文本，返回命中行与上下文。",
   "tools.search.fieldSource": "搜索来源：files 或 text。",
   "tools.search.fieldQuery": "必填且不能为空的关键词或正则；不要使用空字符串调用 search。",
+  "tools.search.queryRequired": "必须提供非空的搜索关键词或正则。",
   "tools.search.fieldIsRegex": "是否按正则搜索。",
   "tools.search.fieldCaseSensitive": "是否区分大小写。",
   "tools.search.fieldPath": "文件搜索路径。",
@@ -149,17 +168,16 @@ export default {
   "tools.search.fieldRiskLevel":
     "操作风险等级：low、medium、high 或 critical。搜索可能检索或返回隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.patch_file.description":
-    "按补丁修改文件；兼容 git/unified diff、apply_patch、常见模型混合格式和路径层级误差。",
-  "tools.patch_file.fieldFormat":
-    "补丁格式提示；不确定可不填，工具会自动尝试 unified_diff/git diff 与 apply_patch。",
+    "使用 git/unified diff 或 apply_patch 修改文件，路径按确定性协议解析。",
+  "tools.patch_file.fieldFormat": "补丁格式；省略时根据内容识别，显式格式与内容不一致会被拒绝。",
   "tools.patch_file.fieldPatch":
     "补丁内容；推荐先读文件，用精确上下文。路径按当前系统上下文的路径规则填写，不要把虚拟根名写成相对路径前缀。",
   "tools.patch_file.fieldPatchPathHintHost":
-    "workspace 逻辑视角：使用当前用户工作区相对路径；普通用户不能使用 host 绝对路径。",
+    "workspace 逻辑视角：优先使用当前用户工作区相对路径；普通用户不能访问规范化后仍属于 host 视角的路径，指向本人工作区的绝对输入会规范化为 workspace 视角。",
   "tools.patch_file.fieldPatchPathHintSuperHost":
     "workspace 逻辑视角：相对路径基于当前用户工作区；超级管理员也可使用经全局路径策略授权的 host 绝对路径。",
   "tools.patch_file.fieldStrip":
-    "diff 路径层级提示；常见 a/、b/、无前缀和虚拟根误差会自动尝试，不确定可省略。",
+    "从相对 diff 路径开头精确移除的层级数（a/、b/ 前缀通常为 1）。不会猜测路径；strip 后仍含父目录穿越会被拒绝。",
   "tools.patch_file.fieldRoot": "补丁根目录（可选，仅工作区相对子目录）；通常可省略。不要用 ..。",
   "tools.patch_file.fieldRootPathHintSandbox": "root 不是沙箱绝对路径入口。",
   "tools.patch_file.fieldRootPathHintHost": "root 只用于选择工作区子目录。",

@@ -124,6 +124,7 @@ describe("reconnect authoritative message event replay", () => {
       tool: "read_file",
       toolCallId: "call-1",
       result: { ok: true },
+      success: true,
     });
 
     const findCanonicalMessageById = canonicalFindFor(targetMessage);
@@ -207,7 +208,7 @@ describe("reconnect authoritative message event replay", () => {
         tool: "read_file", toolCallId: "call-1", args: { filePath: "notes.txt" },
       }),
       authoritative("tool_call_end", 3, {
-        tool: "read_file", toolCallId: "call-1", result: { ok: true },
+        tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
       }),
       authoritative("llm_delta", 4, { text: "world" }),
     ];
@@ -282,7 +283,9 @@ describe("reconnect authoritative message event replay", () => {
     const events = [
       authoritative("llm_delta", 1, { text: "A" }).data.event,
       authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }).data.event,
-      authoritative("tool_call_end", 3, { tool: "read_file", toolCallId: "call-1", result: { ok: true } }).data.event,
+      authoritative("tool_call_end", 3, {
+        tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
+      }).data.event,
       authoritative("llm_delta", 4, { text: "B" }).data.event,
     ];
     for (const envelope of events) dispatchTurnEnvelope({ targetMessage: ordered, envelope, classifyRealtimeLog: classify });

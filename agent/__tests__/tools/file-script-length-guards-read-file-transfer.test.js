@@ -75,8 +75,10 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   assert.equal(rawResult.ok, true);
   assert.equal(rawResult.content.length > 8000, true);
   assert.equal(rawResult.contentOmitted, undefined);
-  assert.equal(rawResult.resolvedPath, "runtime/ops_workdir/large_test_file.txt");
-  assert.equal(String(rawResult.resolvedPath || "").includes(workspaceRoot), false);
+  assert.deepEqual(rawResult.path, {
+    view: "workspace",
+    path: "runtime/ops_workdir/large_test_file.txt",
+  });
   assert.equal(rawResult.transferEnvelopes, undefined);
 
   const transferred = await transferSemanticContent({
@@ -100,7 +102,7 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
 
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
-  assert.equal(result.resolvedPath, undefined);
+  assert.equal(result.path, undefined);
   assert.equal(result.content, undefined);
   assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
   const envelope = result.transferEnvelopes?.[0] || {};

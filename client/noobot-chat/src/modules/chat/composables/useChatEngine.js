@@ -33,6 +33,7 @@ const DEFAULT_MONOTONIC_ACTION_STOP_POLL_INTERVAL_MS =
 export function useChatEngine({
   userId,
   allowUserInteraction,
+  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   streamOutput,
@@ -347,6 +348,7 @@ export function useChatEngine({
   };
   const senderComposerDeps = {
     allowUserInteraction,
+    safeConfirm,
     safeConfirmLevel,
     sanitizeOutput,
     streamOutput,
