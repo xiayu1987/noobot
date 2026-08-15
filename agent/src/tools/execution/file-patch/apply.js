@@ -7,10 +7,31 @@ import { recoverableToolError } from "../../../shared/errors/index.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { splitLines } from "../file-utils.js";
 
+function readTextFormat(originalContent = "") {
+  const rawContent = String(originalContent || "");
+  const byteOrderMark = rawContent.startsWith("\uFEFF") ? "\uFEFF" : "";
+  const content = byteOrderMark ? rawContent.slice(1) : rawContent;
+  return {
+    byteOrderMark,
+    content,
+    lineEnding: content.includes("\r\n") ? "\r\n" : "\n",
+    hadFinalNewline: content.endsWith("\n"),
+  };
+}
+
+function joinPatchedLines(lines = [], textFormat = {}) {
+  const lineEnding = textFormat.lineEnding === "\r\n" ? "\r\n" : "\n";
+  return (
+    String(textFormat.byteOrderMark || "") +
+    lines.join(lineEnding) +
+    (textFormat.hadFinalNewline ? lineEnding : "")
+  );
+}
+
 export function applyUnifiedHunks(originalContent = "", hunks = []) {
-  const hadFinalNewline = String(originalContent || "").endsWith("\n");
-  const originalLines = splitLines(originalContent);
-  if (hadFinalNewline) originalLines.pop();
+  const textFormat = readTextFormat(originalContent);
+  const originalLines = splitLines(textFormat.content);
+  if (textFormat.hadFinalNewline) originalLines.pop();
   const output = [];
   let pointer = 0;
   for (const hunk of hunks) {
@@ -57,9 +78,8 @@ export function applyUnifiedHunks(originalContent = "", hunks = []) {
     }
   }
   output.push(...originalLines.slice(pointer));
-  return output.join("\n") + (hadFinalNewline ? "\n" : "");
+  return joinPatchedLines(output, textFormat);
 }
-
 
 function findSubsequence(lines = [], pattern = [], startIndex = 0) {
   if (!pattern.length) return Math.max(0, startIndex);
@@ -77,9 +97,9 @@ function findSubsequence(lines = [], pattern = [], startIndex = 0) {
 }
 
 export function applySearchHunks(originalContent = "", hunks = []) {
-  const hadFinalNewline = String(originalContent || "").endsWith("\n");
-  const originalLines = splitLines(originalContent);
-  if (hadFinalNewline) originalLines.pop();
+  const textFormat = readTextFormat(originalContent);
+  const originalLines = splitLines(textFormat.content);
+  if (textFormat.hadFinalNewline) originalLines.pop();
   let output = [...originalLines];
   let searchStart = 0;
   for (const hunk of hunks) {
@@ -100,12 +120,8 @@ export function applySearchHunks(originalContent = "", hunks = []) {
         },
       });
     }
-    output = [
-      ...output.slice(0, hit),
-      ...newBlock,
-      ...output.slice(hit + oldPattern.length),
-    ];
+    output = [...output.slice(0, hit), ...newBlock, ...output.slice(hit + oldPattern.length)];
     searchStart = hit + newBlock.length;
   }
-  return output.join("\n") + (hadFinalNewline ? "\n" : "");
+  return joinPatchedLines(output, textFormat);
 }

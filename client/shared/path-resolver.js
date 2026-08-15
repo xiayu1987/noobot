@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
 
 export const clientFilePath = Object.freeze({
   basename: (...args) => path.basename(...args),
@@ -23,37 +24,49 @@ export const clientFilePath = Object.freeze({
 
 export default clientFilePath;
 
-export const CLIENT_PATH_PLATFORMS = Object.freeze({ WINDOWS: "windows", MACOS: "macos", LINUX: "linux" });
-export const CLIENT_PATH_VIEWS = Object.freeze({ HOST: "host", SANDBOX: "sandbox", CLIENT: "client" });
+export { PLATFORM as CLIENT_PATH_PLATFORMS };
+export const CLIENT_PATH_VIEWS = Object.freeze({
+  HOST: "host",
+  SANDBOX: "sandbox",
+  CLIENT: "client",
+});
 
 export function normalizeClientPath(value = "", { platform = "" } = {}) {
-  const api = platform === CLIENT_PATH_PLATFORMS.WINDOWS ? path.win32 : path.posix;
+  const api = normalizePlatform(platform) === PLATFORM.WINDOWS ? path.win32 : path.posix;
   return api.normalize(String(value || "")).replaceAll("\\", "/");
 }
 
 export function joinClientPath(basePath = "", ...segments) {
-  const platform = /^[a-z]:[\\/]|^\\\\/i.test(String(basePath)) ? CLIENT_PATH_PLATFORMS.WINDOWS : "";
-  const api = platform === CLIENT_PATH_PLATFORMS.WINDOWS ? path.win32 : path.posix;
+  const platform = /^[a-z]:[\\/]|^\\\\/i.test(String(basePath)) ? PLATFORM.WINDOWS : "";
+  const api = platform === PLATFORM.WINDOWS ? path.win32 : path.posix;
   return api.join(basePath, ...segments).replaceAll("\\", "/");
 }
 
 export function isAbsoluteClientPath(value = "", { platform = "" } = {}) {
-  const detected = platform || (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? CLIENT_PATH_PLATFORMS.WINDOWS : "");
-  return (detected === CLIENT_PATH_PLATFORMS.WINDOWS ? path.win32 : path.posix).isAbsolute(String(value || ""));
+  const detected =
+    normalizePlatform(platform) ||
+    (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? PLATFORM.WINDOWS : "");
+  return (detected === PLATFORM.WINDOWS ? path.win32 : path.posix).isAbsolute(String(value || ""));
 }
 
 export function clientPathBasename(value = "", { platform = "" } = {}) {
-  const detected = platform || (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? CLIENT_PATH_PLATFORMS.WINDOWS : "");
-  return (detected === CLIENT_PATH_PLATFORMS.WINDOWS ? path.win32 : path.posix).basename(String(value || ""));
+  const detected =
+    normalizePlatform(platform) ||
+    (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? PLATFORM.WINDOWS : "");
+  return (detected === PLATFORM.WINDOWS ? path.win32 : path.posix).basename(String(value || ""));
 }
 
 export function clientPathDirname(value = "", { platform = "" } = {}) {
-  const detected = platform || (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? CLIENT_PATH_PLATFORMS.WINDOWS : "");
-  return (detected === CLIENT_PATH_PLATFORMS.WINDOWS ? path.win32 : path.posix).dirname(String(value || "")).replaceAll("\\", "/");
+  const detected =
+    normalizePlatform(platform) ||
+    (/^[a-z]:[\\/]|^\\\\/i.test(String(value)) ? PLATFORM.WINDOWS : "");
+  return (detected === PLATFORM.WINDOWS ? path.win32 : path.posix)
+    .dirname(String(value || ""))
+    .replaceAll("\\", "/");
 }
 
 export function clientPathDelimiter(platform = "") {
-  return platform === CLIENT_PATH_PLATFORMS.WINDOWS || platform === "win32" ? ";" : ":";
+  return normalizePlatform(platform) === PLATFORM.WINDOWS ? ";" : ":";
 }
 
 export function createDesktopPathEnvironment({ entryUrl, platform, iconName }) {

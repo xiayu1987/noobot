@@ -4,6 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import nodePath from "node:path";
+import {
+  PLATFORM,
+  isCaseInsensitivePlatform,
+  normalizePlatform,
+} from "@noobot/platform-compatibility/platform";
+
+export { PLATFORM as PATH_PLATFORMS } from "@noobot/platform-compatibility/platform";
 
 export const filePath = Object.freeze({
   basename: (...args) => nodePath.basename(...args),
@@ -19,12 +26,6 @@ export const filePath = Object.freeze({
   delimiter: nodePath.delimiter,
   sep: nodePath.sep,
 });
-export const PATH_PLATFORMS = Object.freeze({
-  WINDOWS: "windows",
-  MACOS: "macos",
-  LINUX: "linux",
-});
-
 export const PATH_VIEWS = Object.freeze({
   HOST: "host",
   SANDBOX: "sandbox",
@@ -38,27 +39,12 @@ export const TOOL_PATH_VIEWS = Object.freeze({
   VIRTUAL_RELATIVE: "virtual-relative",
   EMPTY: "",
 });
-function normalizePlatform(platform = "") {
-  const value = String(platform || "").trim().toLowerCase();
-  if (["win", "win32", "windows"].includes(value)) return PATH_PLATFORMS.WINDOWS;
-  if (["mac", "macos", "darwin", "osx"].includes(value)) return PATH_PLATFORMS.MACOS;
-  if (["linux", "posix"].includes(value)) return PATH_PLATFORMS.LINUX;
-  return "";
-}
-
-export function normalizePathPlatform(platform = "") {
-  return normalizePlatform(platform);
-}
-
 export function resolvePathPlatformFromContext(agentContext = {}) {
-  return normalizePlatform(
-    agentContext?.context?.environment?.os?.platform || "",
-  );
+  return normalizePlatform(agentContext?.context?.environment?.os?.platform || "");
 }
 
 export function isCaseInsensitivePathPlatform(platform = "") {
-  const normalized = normalizePlatform(platform);
-  return normalized === PATH_PLATFORMS.WINDOWS || normalized === PATH_PLATFORMS.MACOS;
+  return isCaseInsensitivePlatform(platform);
 }
 
 export function isCaseInsensitivePathContext(agentContext = {}) {
@@ -69,7 +55,7 @@ export function detectPathPlatform(value = "", platformHint = "") {
   if (hinted) return hinted;
   const source = String(value || "").trim();
   if (/^(?:[a-z]:[\\/]|\\\\|\/\/[^/\\]+[/\\][^/\\]+)/i.test(source)) {
-    return PATH_PLATFORMS.WINDOWS;
+    return PLATFORM.WINDOWS;
   }
   return "";
 }
@@ -87,7 +73,10 @@ function decodeFileUrl(value = "") {
   }
 }
 
-export function normalizePathForPlatform(value = "", { platform = "", trailingSlash = false } = {}) {
+export function normalizePathForPlatform(
+  value = "",
+  { platform = "", trailingSlash = false } = {},
+) {
   const decoded = decodeFileUrl(value);
   const resolvedPlatform = detectPathPlatform(decoded, platform);
   let normalized = decoded.replaceAll("\\", "/");
@@ -96,19 +85,20 @@ export function normalizePathForPlatform(value = "", { platform = "", trailingSl
   const parts = [];
   for (const part of body.split("/")) {
     if (!part || part === ".") continue;
-    if (part === ".." && parts.length && parts.at(-1) !== ".." && !/^[a-z]:$/i.test(parts.at(-1))) parts.pop();
+    if (part === ".." && parts.length && parts.at(-1) !== ".." && !/^[a-z]:$/i.test(parts.at(-1)))
+      parts.pop();
     else if (part !== ".." || !prefix) parts.push(part);
   }
   normalized = `${prefix}${parts.join("/")}` || prefix;
   if (trailingSlash && normalized && !normalized.endsWith("/")) normalized += "/";
-  if (resolvedPlatform === PATH_PLATFORMS.WINDOWS) return normalized;
+  if (resolvedPlatform === PLATFORM.WINDOWS) return normalized;
   return normalized;
 }
 
 export function isAbsolutePathForPlatform(value = "", platform = "") {
   const normalized = normalizePathForPlatform(value, { platform });
   const resolvedPlatform = detectPathPlatform(value, platform);
-  return resolvedPlatform === PATH_PLATFORMS.WINDOWS
+  return resolvedPlatform === PLATFORM.WINDOWS
     ? /^(?:[a-z]:\/|\/\/[^/]+\/[^/]+)/i.test(normalized)
     : normalized.startsWith("/");
 }
@@ -129,5 +119,7 @@ export function joinPathForPlatform(basePath = "", ...segments) {
 }
 
 export function normalizeSlashPath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/");
+  return String(value || "")
+    .trim()
+    .replaceAll("\\", "/");
 }

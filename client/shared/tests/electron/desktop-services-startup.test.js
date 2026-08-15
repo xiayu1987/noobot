@@ -65,7 +65,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
   let desktopConfigState = null;
   const calls = [];
   const startupEvents = [];
-  const execFileCalls = [];
+  const terminateCalls = [];
   let healthCalls = 0;
   const originalResourcesPath = Object.getOwnPropertyDescriptor(process, "resourcesPath");
   Object.defineProperty(process, "resourcesPath", { value: resourcesPath, configurable: true });
@@ -126,9 +126,8 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
       calls.push({ command, args, options, child });
       return child;
     },
-    execFileProcess: (command, args, options, callback) => {
-      execFileCalls.push({ command, args, options });
-      callback?.(null, "", "");
+    terminateProcess: (child, signal, options) => {
+      terminateCalls.push({ child, signal, options });
     },
   });
 
@@ -138,7 +137,7 @@ async function createFixture({ packaged = false, dependencyProxyUrl = "" } = {})
     userDataPath,
     packagedBackendRoot,
     calls,
-    execFileCalls,
+    terminateCalls,
     getHealthCalls: () => healthCalls,
     startupEvents,
     manager,
@@ -195,19 +194,20 @@ test("desktop startup passes configured dependency proxy to the service runtime"
   });
 });
 
-test("desktop stop uses taskkill process tree cleanup on Windows", async () => {
+test("desktop stop delegates process tree cleanup to the platform boundary", async () => {
   await withPlatform("win32", async () => {
     const fixture = await createFixture({ packaged: false });
     try {
       await fixture.manager.ensureServiceStarted();
       fixture.manager.stopManagedService();
 
-      assert.equal(fixture.execFileCalls.length, 1);
-      assert.deepEqual(fixture.execFileCalls[0], {
-        command: "taskkill",
-        args: ["/PID", String(fixture.calls[0].child.pid), "/T", "/F"],
-        options: { windowsHide: true },
-      });
+      assert.deepEqual(fixture.terminateCalls, [
+        {
+          child: fixture.calls[0].child,
+          signal: "SIGTERM",
+          options: { processGroup: false },
+        },
+      ]);
       assert.deepEqual(fixture.calls[0].child.killCalls, []);
     } finally {
       await fixture.restore();

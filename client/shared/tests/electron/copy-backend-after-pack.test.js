@@ -13,6 +13,7 @@ import copyBackendAfterPack from "../../scripts/copy-backend-after-pack.mjs";
 const runtimeWorkspacePackages = Object.freeze([
   ["agent", "noobot-agent"],
   ["agent-config-protocol", "@noobot/agent-config-protocol"],
+  ["platform-compatibility", "@noobot/platform-compatibility"],
   ["execution-isolation-protocol", "@noobot/execution-isolation-protocol"],
   ["security-assessment-protocol", "@noobot/security-assessment-protocol"],
   ["plugin-runtime", "@noobot/plugin-runtime"],
