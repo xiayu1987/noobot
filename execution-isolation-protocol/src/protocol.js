@@ -5,6 +5,7 @@
  */
 
 import path from "node:path";
+import { SHELL, resolveHostShell } from "@noobot/platform-compatibility/platform";
 import { TOOL_EXECUTION_VIEW } from "./execution-views.js";
 
 export { TOOL_EXECUTION_VIEW } from "./execution-views.js";
@@ -48,18 +49,12 @@ export const WORKSPACE_SANDBOX_PATHS = Object.freeze({
   OPS_WORKDIR_RELATIVE: "runtime/ops_workdir",
 });
 
-export const COMMAND_SHELL = Object.freeze({
-  BASH: "bash",
-  WINDOWS_COMMAND: "cmd.exe",
-  POSIX: "/bin/sh",
-});
+export { SHELL as COMMAND_SHELL } from "@noobot/platform-compatibility/platform";
 
 export function resolveCommandShell({ executionView, platform = process.platform } = {}) {
-  if (executionView === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX) return COMMAND_SHELL.BASH;
+  if (executionView === TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX) return SHELL.BASH;
   if (executionView === TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED) {
-    return String(platform || "").trim().toLowerCase() === "win32"
-      ? COMMAND_SHELL.WINDOWS_COMMAND
-      : COMMAND_SHELL.POSIX;
+    return resolveHostShell(platform);
   }
   throw new Error(`execution view does not support shell commands: ${executionView}`);
 }

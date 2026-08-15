@@ -11,10 +11,13 @@ import { filePath as path } from "@noobot/path-resolver";
 import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { resolveCommandShell, TOOL_EXECUTION_VIEW } from "@noobot/execution-isolation-protocol";
 import {
-  resolveCommandShell,
-  TOOL_EXECUTION_VIEW,
-} from "@noobot/execution-isolation-protocol";
+  decodeCommandOutput,
+  resolveCommandLookupExecutable,
+  terminateProcessTree,
+  usesDetachedProcessGroup,
+} from "@noobot/platform-compatibility/process";
 
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
@@ -24,7 +27,11 @@ function resolveProcessCommand(command) {
   if (command && typeof command === "object" && !Array.isArray(command)) {
     const executable = String(command.command || "").trim();
     if (!executable) throw new TypeError("process command executable is required");
-    return { executable, args: Array.isArray(command.args) ? command.args.map(String) : [], shell: false };
+    return {
+      executable,
+      args: Array.isArray(command.args) ? command.args.map(String) : [],
+      shell: false,
+    };
   }
   return {
     executable: String(command || ""),
@@ -34,30 +41,6 @@ function resolveProcessCommand(command) {
       platform: process.platform,
     }),
   };
-}
-
-const WINDOWS_OUTPUT_ENCODINGS = Object.freeze({
-  ja: "shift_jis",
-  ko: "euc-kr",
-});
-
-export function decodeCommandOutput(
-  value,
-  { platform = process.platform, locale = Intl.DateTimeFormat().resolvedOptions().locale } = {},
-) {
-  const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value || "");
-  if (!bytes.length) return "";
-  try {
-    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-  }
-  if (String(platform || "").toLowerCase() !== "win32") return bytes.toString("utf8");
-  const normalizedLocale = String(locale || "").trim().toLowerCase().replaceAll("_", "-");
-  const language = normalizedLocale.split("-")[0];
-  const encoding = language === "zh"
-    ? /^zh-(tw|hk|mo)(-|$)/.test(normalizedLocale) ? "big5" : "gbk"
-    : WINDOWS_OUTPUT_ENCODINGS[language] || "windows-1252";
-  return new TextDecoder(encoding).decode(bytes);
 }
 
 async function normalizeCommandOutputFile(filePath) {
@@ -91,7 +74,7 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
     const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
       shell: processCommand.shell,
-      detached: process.platform !== "win32",
+      detached: usesDetachedProcessGroup(process.platform),
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -111,23 +94,27 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
         terminationHookCalled = true;
         Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
       }
-      terminateChild(child, "SIGTERM");
+      void terminateProcessTree(child, "SIGTERM");
       if (!forceKillTimer) {
-        forceKillTimer = setTimeout(() => terminateChild(child, "SIGKILL"), FORCE_KILL_GRACE_MS);
+        forceKillTimer = setTimeout(
+          () => void terminateProcessTree(child, "SIGKILL"),
+          FORCE_KILL_GRACE_MS,
+        );
         forceKillTimer.unref?.();
       }
     };
     const onAbort = () => terminate("abort");
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
     if (aborted) terminate("abort");
-    const timeout = Number(timeoutMs || 0) > 0
-      ? setTimeout(() => terminate("timeout"), Number(timeoutMs))
-      : null;
+    const timeout =
+      Number(timeoutMs || 0) > 0 ? setTimeout(() => terminate("timeout"), Number(timeoutMs)) : null;
 
     pipeReadableToWritable(child.stdout, stdoutStream, (chunk) =>
-      appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES));
+      appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES),
+    );
     pipeReadableToWritable(child.stderr, stderrStream, (chunk) =>
-      appendCapture(stderrChunks, chunk, stderrCapture, FOREGROUND_CAPTURE_BYTES));
+      appendCapture(stderrChunks, chunk, stderrCapture, FOREGROUND_CAPTURE_BYTES),
+    );
     child.on("error", (error) => {
       spawnError = error;
     });
@@ -144,44 +131,57 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
       const stdoutBytes = Number(stdoutStat?.size || 0);
       const stderrBytes = Number(stderrStat?.size || 0);
-      const outputOverflow = stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
+      const outputOverflow =
+        stdoutBytes > FOREGROUND_CAPTURE_BYTES || stderrBytes > FOREGROUND_CAPTURE_BYTES;
       const stdoutBuffer = Buffer.concat(stdoutChunks);
       const stderrBuffer = Buffer.concat(stderrChunks);
-      const stdout = decodeCommandOutput(outputOverflow
-        ? stdoutBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
-        : stdoutBuffer);
-      const rawStderr = decodeCommandOutput(outputOverflow
-        ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES)
-        : stderrBuffer);
-      const fallbackStderr = spawnError?.message || (timedOut
-        ? `command timed out after ${Number(timeoutMs)}ms`
-        : aborted ? "command aborted" : "");
-      const resultCode = timedOut || aborted
-        ? timedOut ? 124 : 130
-        : Number.isFinite(Number(code))
-          ? Number(code)
-          : Number(spawnError?.code || 0) || 0;
+      const stdout = decodeCommandOutput(
+        outputOverflow ? stdoutBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stdoutBuffer,
+      );
+      const rawStderr = decodeCommandOutput(
+        outputOverflow ? stderrBuffer.subarray(0, FOREGROUND_PREVIEW_BYTES) : stderrBuffer,
+      );
+      const fallbackStderr =
+        spawnError?.message ||
+        (timedOut
+          ? `command timed out after ${Number(timeoutMs)}ms`
+          : aborted
+            ? "command aborted"
+            : "");
+      const resultCode =
+        timedOut || aborted
+          ? timedOut
+            ? 124
+            : 130
+          : Number.isFinite(Number(code))
+            ? Number(code)
+            : Number(spawnError?.code || 0) || 0;
       const result = {
         code: resultCode,
         stdout,
         stderr: rawStderr || fallbackStderr,
         ...(signal ? { signal } : {}),
-        ...(outputOverflow ? {
-          outputOverflow: true,
-          stdoutPath,
-          stderrPath,
-          stdoutBytes,
-          stderrBytes,
-        } : {}),
+        ...(outputOverflow
+          ? {
+              outputOverflow: true,
+              stdoutPath,
+              stderrPath,
+              stdoutBytes,
+              stderrBytes,
+            }
+          : {}),
       };
-      if (!outputOverflow) await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
+      if (!outputOverflow)
+        await rm(outputDir, { recursive: true, force: true }).catch(() => undefined);
       resolve(result);
     });
   });
 }
 
 export function normalizeExecutionMode(value = "") {
-  return String(value || "").trim().toLowerCase() === SCRIPT_EXECUTION_MODE.BACKGROUND
+  return String(value || "")
+    .trim()
+    .toLowerCase() === SCRIPT_EXECUTION_MODE.BACKGROUND
     ? SCRIPT_EXECUTION_MODE.BACKGROUND
     : SCRIPT_EXECUTION_MODE.FOREGROUND;
 }
@@ -210,18 +210,6 @@ function pipeReadableToWritable(readable, writable, onChunk = null) {
   readable.on("error", (error) => writable.destroy(error));
 }
 
-function terminateChild(child, signal = "SIGTERM") {
-  if (!child) return;
-  if (process.platform !== "win32" && Number.isFinite(Number(child.pid))) {
-    try {
-      process.kill(-Number(child.pid), signal);
-      return;
-    } catch {
-    }
-  }
-  child.kill(signal);
-}
-
 export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
   const outputDir = path.join(cwd, ".execute-script-background", `${Date.now()}-${randomUUID()}`);
   await mkdir(outputDir, { recursive: true });
@@ -237,7 +225,7 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
     const child = spawn(processCommand.executable, processCommand.args, {
       cwd,
       shell: processCommand.shell,
-      detached: process.platform !== "win32",
+      detached: usesDetachedProcessGroup(process.platform),
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -253,18 +241,20 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
         terminationHookCalled = true;
         Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
       }
-      terminateChild(child, "SIGTERM");
+      void terminateProcessTree(child, "SIGTERM");
       if (!forceKillTimer) {
-        forceKillTimer = setTimeout(() => terminateChild(child, "SIGKILL"), FORCE_KILL_GRACE_MS);
+        forceKillTimer = setTimeout(
+          () => void terminateProcessTree(child, "SIGKILL"),
+          FORCE_KILL_GRACE_MS,
+        );
         forceKillTimer.unref?.();
       }
     };
     const onAbort = () => terminate("abort");
     abortSignal?.addEventListener?.("abort", onAbort, { once: true });
     if (aborted) terminate("abort");
-    const timeout = Number(timeoutMs || 0) > 0
-      ? setTimeout(() => terminate("timeout"), Number(timeoutMs))
-      : null;
+    const timeout =
+      Number(timeoutMs || 0) > 0 ? setTimeout(() => terminate("timeout"), Number(timeoutMs)) : null;
 
     pipeReadableToWritable(child.stdout, stdoutStream);
     pipeReadableToWritable(child.stderr, stderrStream);
@@ -277,12 +267,11 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       abortSignal?.removeEventListener?.("abort", onAbort);
       try {
         await Promise.all([stdoutFinished, stderrFinished]);
-      } catch {
-      }
+      } catch {}
       if (spawnError || timedOut || aborted) {
-        const fallbackMessage = spawnError?.message || (timedOut
-          ? `command timed out after ${Number(timeoutMs)}ms`
-          : "command aborted");
+        const fallbackMessage =
+          spawnError?.message ||
+          (timedOut ? `command timed out after ${Number(timeoutMs)}ms` : "command aborted");
         const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
         if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
       }
@@ -292,11 +281,14 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       ]);
       const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
-      const resultCode = timedOut || aborted
-        ? timedOut ? 124 : 130
-        : Number.isFinite(Number(code))
-          ? Number(code)
-          : Number(spawnError?.code || 0) || 0;
+      const resultCode =
+        timedOut || aborted
+          ? timedOut
+            ? 124
+            : 130
+          : Number.isFinite(Number(code))
+            ? Number(code)
+            : Number(spawnError?.code || 0) || 0;
       resolve({
         code: resultCode,
         ...(signal ? { signal } : {}),
@@ -316,7 +308,7 @@ export function hasCommand(commandName = "") {
       resolve(false);
       return;
     }
-    const lookupCommand = process.platform === "win32" ? "where" : "which";
+    const lookupCommand = resolveCommandLookupExecutable(process.platform);
     execFile(lookupCommand, [normalizedCommandName], { windowsHide: true }, (error) => {
       resolve(!error);
     });

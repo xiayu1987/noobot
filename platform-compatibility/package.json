@@ -1,18 +1,17 @@
 {
-  "name": "@noobot/execution-isolation-protocol",
+  "name": "@noobot/platform-compatibility",
   "version": "4.1.8",
   "private": true,
   "type": "module",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./execution-views": "./src/execution-views.js",
+    "./platform": "./src/platform.js",
+    "./file-system": "./src/file-system.js",
+    "./process": "./src/process.js",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"
-  },
-  "dependencies": {
-    "@noobot/platform-compatibility": "file:../platform-compatibility"
   }
 }
