@@ -20,7 +20,7 @@ import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol
 
 function getBasePath(agentContext) {
   const runtime = getRuntimeFromAgentContext(agentContext);
-  return agentContext?.context?.environment?.workspace?.basePath || runtime?.basePath || "";
+  return runtime?.basePath || "";
 }
 
 function skillRelativePath(parentSkill = "") {

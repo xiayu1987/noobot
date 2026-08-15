@@ -56,3 +56,22 @@ test("list_skills rejects a parentSkill outside the authorized skills root", asy
     },
   );
 });
+
+test("list_skills uses the runtime execution root when sandbox display paths are active", async () => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-skill-sandbox-"));
+  const basePath = path.join(workspaceRoot, "admin");
+  await fs.mkdir(path.join(basePath, "skills", "analysis"), { recursive: true });
+  await fs.writeFile(path.join(basePath, "skills", "analysis", "SKILL.md"), "# Analysis", "utf8");
+  const runtime = createRuntime(basePath);
+  runtime.globalConfig = {
+    workspaceRoot,
+    security: { executionIsolation: { mode: "sandbox" } },
+  };
+  const agentContext = createTestAgentExecutionScope(runtime);
+  agentContext.context = { environment: { workspace: { basePath: "/workspace" } } };
+  const [tool] = createSkillTool({ agentContext });
+
+  const result = JSON.parse(await tool.invoke({}));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(result.items[0].path, { view: "workspace", path: "skills/analysis" });
+});

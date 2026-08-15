@@ -330,8 +330,8 @@ test("packaged desktop setup selects library models and inserts missing provider
     const defaultUserConfig = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
     for (const config of [globalConfig, defaultUserConfig]) {
       assert.equal(config.default_provider, "gemini_3_7_flash");
-      assert.equal(config.providers.gemini_3_7_flash.model, "gemini-3.7-flash");
-      assert.equal(config.providers.gemini_3_7_flash.api_key, "${GEMINI_API_KEY}");
+      assert.equal(config.providers["gemini_3_7_flash"].model, "gemini-3.7-flash");
+      assert.equal(config.providers["gemini_3_7_flash"].api_key, "${GEMINI_API_KEY}");
     }
     assert.equal(globalConfig.providers.openai.model, "gpt");
     assert.equal(defaultUserConfig.providers.openai.model, "gpt");

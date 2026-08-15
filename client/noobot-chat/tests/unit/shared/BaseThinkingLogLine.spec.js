@@ -76,6 +76,7 @@ describe("BaseThinkingLogLine", () => {
     });
 
     expect(wrapper.classes()).toContain("is-tool-result-failed");
+    expect(wrapper.find(".base-thinking-log-line__event").classes()).toContain("is-tool-result");
     expect(wrapper.find(".base-thinking-log-line__event").classes()).toContain(
       "is-tool-result-failed",
     );
