@@ -127,7 +127,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(1);
   });
 
-  it("refreshes the latest session version and retries once when delete-from returns a version conflict", async () => {
+  it("applies the conflict version and retries delete-from without loading session detail", async () => {
     const { actions, activeSession, userMessage, deleteSessionMessagesFromApi, fetchSessionDetail } = createActions();
     deleteSessionMessagesFromApi
       .mockResolvedValueOnce({
@@ -137,7 +137,7 @@ describe("monotonicMessageActions stop-window gates", () => {
           ok: false,
           error: "session version conflict",
           errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
-          currentAggregateVersion: 2,
+          currentVersion: 2,
         }),
       })
       .mockResolvedValueOnce({
@@ -151,7 +151,7 @@ describe("monotonicMessageActions stop-window gates", () => {
     const result = await actions.deleteMonotonicMessage(userMessage);
 
     expect(result).toBe(true);
-    expect(fetchSessionDetail).toHaveBeenCalledTimes(1);
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(deleteSessionMessagesFromApi).toHaveBeenCalledTimes(2);
     expect(deleteSessionMessagesFromApi.mock.calls[0][0].expectedAggregateVersion).toBe(1);
     expect(deleteSessionMessagesFromApi.mock.calls[1][0].expectedAggregateVersion).toBe(2);

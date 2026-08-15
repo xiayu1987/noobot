@@ -76,42 +76,36 @@ describe("useChatEngine.send-stream", () => {
     expect(capturedPayload.concurrency.expectedAggregateVersion).toBe(7);
   });
 
-  it("refreshes a stale session version without replaying the failed Turn", async () => {
+  it("retries a stale session version without replacing the local Turn presentation", async () => {
     const conflict = new Error("session version conflict");
     conflict.data = {
       errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
       currentVersion: 2,
     };
-    const stream = vi.fn(async () => {
-      throw conflict;
-    });
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "s-version-conflict",
-      sessions: [{ sessionId: "s-version-conflict", version: 2, revision: 2, messages: [] }],
-    }));
+    const stream = vi.fn()
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce(undefined);
+    const fetchSessionDetail = vi.fn();
     const applySessionDetail = vi.fn();
-    const { engine } = createHarness({
+    const { engine, activeSession } = createHarness({
       sessionId: "s-version-conflict",
       stream,
       deps: { fetchSessionDetail, applySessionDetail },
     });
 
-    await expect(engine.send()).resolves.toBe(false);
+    await expect(engine.send()).resolves.toBe(true);
 
-    expect(stream).toHaveBeenCalledTimes(1);
-    expect(fetchSessionDetail).toHaveBeenCalledWith(
-      "s-version-conflict",
-      expect.objectContaining({
-        source: "sendVersionConflict",
-        force: true,
-      }),
-    );
-    expect(applySessionDetail).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        scrollToBottom: false,
-      }),
-    );
+    expect(stream).toHaveBeenCalledTimes(2);
+    expect(stream.mock.calls.map(([payload]) => (
+      payload.concurrency.expectedAggregateVersion
+    ))).toEqual([0, 2]);
+    expect(stream.mock.calls[1][0].identity).toEqual(stream.mock.calls[0][0].identity);
+    expect(activeSession.value.messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: RoleEnum.USER, frontendUserMessage: true }),
+      expect.objectContaining({ role: RoleEnum.ASSISTANT }),
+    ]));
+    expect(fetchSessionDetail).not.toHaveBeenCalled();
+    expect(applySessionDetail).not.toHaveBeenCalled();
   });
 
   it("sends the locally recorded thinking start so refresh can hydrate the duration", async () => {

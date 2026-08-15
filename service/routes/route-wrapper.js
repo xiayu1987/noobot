@@ -26,9 +26,15 @@ export function withJsonError(
         Number.isInteger(errorStatusCode) && errorStatusCode >= 400 && errorStatusCode < 600
           ? errorStatusCode
           : statusCode;
+      const errorCode = String(error?.errorCode || "").trim();
+      const hasCurrentVersion = error?.currentVersion !== undefined &&
+        error?.currentVersion !== null && String(error.currentVersion).trim() !== "";
+      const currentVersion = Number(error?.currentVersion);
       res.status(responseStatusCode).json({
         ok: false,
         error: error?.message || fallbackMessage || String(error || "request failed"),
+        ...(errorCode ? { errorCode } : {}),
+        ...(hasCurrentVersion && Number.isFinite(currentVersion) ? { currentVersion } : {}),
       });
     }
     return undefined;

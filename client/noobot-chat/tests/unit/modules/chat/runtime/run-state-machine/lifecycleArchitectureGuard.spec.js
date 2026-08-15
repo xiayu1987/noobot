@@ -15,6 +15,8 @@ const files = {
   messageMeta: "src/modules/chat/composables/message/useMessageMeta.js",
   reducer: "src/modules/chat/runtime/run-state-machine/turnReducer.js",
   registry: "src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js",
+  eventReducer: "src/modules/chat/runtime/run-state-machine/turnRuntimeEventReducer.js",
+  authoritativeRuntime: "src/modules/chat/runtime/run-state-machine/authoritativeTurnRuntime.js",
   interaction: "src/modules/chat/composables/useAgentInteraction.js",
   messageList: "src/modules/chat/components/navigation/ChatMessageListPanel.vue",
   sendFinalize: "src/modules/chat/runtime/engine/sendFinalize.js",
@@ -23,7 +25,8 @@ const files = {
 
 const protocolWriters = new Set([
   files.reducer,
-  files.registry,
+  files.eventReducer,
+  files.authoritativeRuntime,
 ]);
 
 const lifecycleTerminalLiterals = [
@@ -40,8 +43,8 @@ const lifecycleTerminalLiterals = [
 ];
 
 const forbiddenTurnWritePatterns = [
-  /\b(?:turn|runtime|current)\.(?:state|terminal|authority)\s*=/,
-  /\b(?:turn|runtime|current)\[["'](?:state|terminal|authority)["']\]\s*=/,
+  /\b(?:turn|runtime|current)\.(?:state|terminal|authority)\s*=(?!=)/,
+  /\b(?:turn|runtime|current)\[["'](?:state|terminal|authority)["']\]\s*=(?!=)/,
   new RegExp(`\\b(?:state|terminal|authority)\\s*:\\s*["'](?:${lifecycleTerminalLiterals.join("|")})["']`),
 ];
 
@@ -68,6 +71,7 @@ describe("lifecycle architecture guard", () => {
   it("keeps all Turn transitions in the protocol reducer and registry event flow", () => {
     const reducer = source(files.reducer);
     const registry = source(files.registry);
+    const eventReducer = source(files.eventReducer);
     expect(reducer).toMatch(/TERMINAL_RESOLVED/);
     expect(reducer).toMatch(/FINAL_STATES\.has\(nextState\)/);
     expect(reducer).not.toMatch(/LOCAL_FRONTEND_COMPLETION_APPLIED/);
@@ -79,7 +83,7 @@ describe("lifecycle architecture guard", () => {
     expect(reducer).toMatch(/STOP_ERROR/);
     expect(reducer).toMatch(/CANCELLED/);
     expect(registry).toMatch(/applyTurnRuntimeEvent/);
-    expect(registry).toMatch(/reduceTurnRuntimeEvent/);
+    expect(eventReducer).toMatch(/reduceTurnRuntimeEvent/);
     expect(registry).not.toMatch(/persistedStatusStepState\s*===?\s*["']completed["']/);
   });
 
@@ -133,10 +137,10 @@ describe("lifecycle architecture guard", () => {
     }
   });
 
-  it("allows reducer invocation only through the registry production gateway", () => {
+  it("allows reducer invocation only through the runtime event production gateway", () => {
     const callers = productionFiles().filter((relativePath) =>
       relativePath !== files.reducer && source(relativePath).includes("reduceTurnRuntimeEvent"));
-    expect(callers).toEqual([files.registry]);
+    expect(callers).toEqual([files.eventReducer]);
   });
 
   it("forbids legacy timeline, log compatibility, and thinking transport projection", () => {
@@ -192,13 +196,13 @@ describe("lifecycle architecture guard", () => {
 
   it("keeps the authority contracts, domain reducer and client projections as the lifecycle boundary", () => {
     const reducer = source(files.reducer);
-    const registry = source(files.registry);
+    const eventReducer = source(files.eventReducer);
     for (const eventType of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {
       expect(TURN_EVENT[eventType]).toBeTruthy();
     }
     expect(TURN_EVENT).not.toHaveProperty("CANCELLED");
     expect(reducer).toMatch(/isFinalTurnState\(currentState, current\)/);
-    expect(registry).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
+    expect(eventReducer).toMatch(/reduceTurnRuntimeEvent\(current, rawEvent\)/);
   });
 
   it("keeps transport and local commands out of authoritative lifecycle projection", () => {

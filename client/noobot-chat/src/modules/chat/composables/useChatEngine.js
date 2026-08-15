@@ -66,7 +66,6 @@ export function useChatEngine({
   upsertCanonicalAssistantMessage,
   makeViewMessage,
   foldMessagesForView,
-  fetchSessionDetail,
   applySessionDetail,
   refreshSessionConnectorsAsync,
   deleteSessionMessagesFromApi,
@@ -387,7 +386,6 @@ export function useChatEngine({
     connectorTypeSet,
     upsertConnectedConnectorInPanelState,
     refreshSessionConnectorsAsync,
-    fetchSessionDetail,
     processStore,
   };
   const send = createChatEngineSender({
@@ -418,7 +416,6 @@ export function useChatEngine({
     translate,
     userId,
     applySessionDetail,
-    fetchSessionDetail,
     applyRunStateEvent,
     turnRuntimeRegistry,
     messageOperationStore,

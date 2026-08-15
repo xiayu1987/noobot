@@ -104,7 +104,6 @@ export function createMonotonicMessageActions({
   translate,
   userId,
   applySessionDetail,
-  fetchSessionDetail,
   turnRuntimeRegistry,
   messageOperationStore,
   monotonicActionStopTimeoutMs,
@@ -299,8 +298,6 @@ export function createMonotonicMessageActions({
         }));
         const sessionAggregateVersionManager = createSessionAggregateVersionManager({
           activeSession,
-          fetchSessionDetail,
-          applySessionDetail,
         });
         const mutationResult = await sessionAggregateVersionManager.runAggregateVersionedMutation({
           mutate: async ({ expectedAggregateVersion }) => {
@@ -315,9 +312,8 @@ export function createMonotonicMessageActions({
             const payload = typeof result?.json === "function" ? await result.json() : result;
             return { result, payload };
           },
-          refreshOptions: {
+          conflictOptions: {
             sessionId,
-            detailOptions: { source: "deleteVersionConflict" },
             logContext: { turnScopeId: anchor.turnScopeId || "" },
           },
         });
@@ -399,7 +395,6 @@ export function createMonotonicMessageActions({
     messageOperationStore,
     prepareMonotonicMessageAction,
     replaceSessionTurnApi,
-    fetchSessionDetail,
     resolveMonotonicUserTarget,
     send,
     userId,

@@ -15,6 +15,7 @@ import {
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
+  getAgentCommandIdentity,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
 
@@ -110,16 +111,12 @@ export function createChatWebSocketClient({
     protocolRequestSerial += 1;
     return `${kind}:${Date.now()}:${protocolRequestSerial}`;
   }
-
-
-
-
-
   function normalizeScopeFromPayload(payload = {}) {
+    const identity = getAgentCommandIdentity(payload);
     return {
-      sessionId: normalizeTrimmedString(payload?.sessionId),
-      dialogProcessId: normalizeTrimmedString(payload?.dialogProcessId),
-      turnScopeId: normalizeTrimmedString(payload?.turnScopeId),
+      sessionId: normalizeTrimmedString(identity.sessionId),
+      dialogProcessId: normalizeTrimmedString(identity.dialogProcessId),
+      turnScopeId: normalizeTrimmedString(identity.turnScopeId),
     };
   }
 
