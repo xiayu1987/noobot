@@ -16,12 +16,12 @@ const PROVIDER_IDS = new Set([
   "generic",
 ]);
 
-function providerId(spec = {}) {
-  const value = String(spec.operatorId || spec.providerId || "")
+function operatorId(spec = {}) {
+  const value = String(spec.operatorId || "")
     .trim()
     .toLowerCase();
   if (!value) throw new TypeError("model spec.operatorId is required");
-  if (!PROVIDER_IDS.has(value)) throw new TypeError(`unsupported model providerId: ${value}`);
+  if (!PROVIDER_IDS.has(value)) throw new TypeError(`unsupported model operatorId: ${value}`);
   return value;
 }
 
@@ -44,7 +44,7 @@ function segment(value) {
 }
 
 export function resolveCacheVendor(spec = {}) {
-  return providerId(spec);
+  return operatorId(spec);
 }
 
 export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
@@ -67,7 +67,7 @@ function gptVersion(name = "") {
 }
 
 export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
-  const vendor = providerId(spec);
+  const vendor = operatorId(spec);
   const format = String(spec.format || "")
     .trim()
     .toLowerCase();

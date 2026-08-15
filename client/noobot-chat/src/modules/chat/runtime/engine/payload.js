@@ -25,6 +25,7 @@ export function buildChatPayload({
   message,
   attachments = [],
   allowUserInteraction,
+  safeConfirm,
   safeConfirmLevel,
   sanitizeOutput,
   requestedTextStreaming = false,
@@ -77,6 +78,7 @@ export function buildChatPayload({
     preferences: {
       allowUserInteraction:
         (allowUserInteraction?.value ?? allowUserInteraction) === false ? false : true,
+      safeConfirm: (safeConfirm?.value ?? safeConfirm) === false ? false : true,
       sanitizeOutput: (sanitizeOutput?.value ?? sanitizeOutput) === false ? false : true,
       confirmationLevel: normalizeSecurityRiskLevel(
         safeConfirmLevel?.value ?? safeConfirmLevel,

@@ -344,7 +344,7 @@ test("patch_file: 用户配置不能授权 /project 沙箱挂载", async () => {
     () => tool.invoke({ riskLevel: "low", format: "apply_patch", patch: patchText }),
     (error) => {
       assert.equal(error.code, "RECOVERABLE_PATH_OUT_OF_SCOPE");
-      assert.match(String(error.message || ""), /范围|scope|path/i);
+      assert.equal(error.message, "当前执行视角不接受沙箱绝对路径。");
       return true;
     },
   );

@@ -1,10 +1,18 @@
 {
   "default_provider": "gpt_5_6_sol",
-  "attachments": {
-    "attachment_models": {
-      "audio": "gpt_5_6_sol",
-      "video": "gpt_5_6_sol",
-      "image": "gpt_5_6_sol"
+  "multimodal": {
+    "parsing": {
+      "default_models": {
+        "audio": "qwen3_5_omni_plus",
+        "video": "qwen3_5_omni_plus",
+        "image": "gpt_5_6_sol",
+        "document": "gpt_5_6_sol"
+      }
+    },
+    "generation": {
+      "default_models": {
+        "image": "gpt_5_6_sol"
+      }
     }
   },
   "tools": {
@@ -163,7 +171,7 @@
       "description": "擅长编码",
       "multimodal_parsing": {
         "enabled": true,
-        "input_modalities": ["image"]
+        "input_modalities": ["image", "document"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -209,8 +217,9 @@
       },
       "multimodal_generation": {
         "support_generation": {
-          "enabled": false,
-          "support_scope": []
+          "enabled": true,
+          "support_scope": ["image"],
+          "api_type": "openai_responses"
         }
       }
     },
@@ -230,7 +239,8 @@
       "multimodal_generation": {
         "support_generation": {
           "enabled": true,
-          "support_scope": ["image"]
+          "support_scope": ["image"],
+          "api_type": "images_async"
         }
       }
     },

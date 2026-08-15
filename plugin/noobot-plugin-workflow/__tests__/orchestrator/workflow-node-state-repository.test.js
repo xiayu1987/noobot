@@ -20,7 +20,7 @@ const nodes = [
     turnScopeId: "workflow-node:node-a-exec",
     nodeId: "a",
     nodeName: "A",
-    stepStatus: "ready",
+    status: "ready",
     dependencies: [],
   },
   {
@@ -31,7 +31,7 @@ const nodes = [
     turnScopeId: "workflow-node:node-b-exec",
     nodeId: "b",
     nodeName: "B",
-    stepStatus: "pending",
+    status: "pending",
     dependencies: ["a"],
   },
 ];

@@ -57,7 +57,7 @@ export function createChatRunService({
     const selectedPlugins = normalizeStringArray(preferences.selectedPlugins);
     const runConfig = {
       allowUserInteraction: preferences.allowUserInteraction,
-      safeConfirm: true,
+      safeConfirm: preferences.safeConfirm,
       safeConfirmLevel: preferences.confirmationLevel,
       sanitizeOutput: preferences.sanitizeOutput,
       ...(Object.prototype.hasOwnProperty.call(preferences, "streaming")

@@ -146,6 +146,10 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
       "tools.multimodalParse.modelNotFound":
         "No model is configured with multimodal parsing enabled",
+      "tools.multimodalParse.defaultModelMissing": (params = {}) =>
+        `No default multimodal parsing model is configured for: ${String(params.modalities || "").trim()}`,
+      "tools.multimodalParse.defaultModelConflict":
+        "The input types use different default parsing models; specify one model_name that supports every input type",
     },
   },
   switch_model: {

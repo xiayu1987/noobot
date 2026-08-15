@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { tTool } from "../../core/tool-i18n.js";
+import { resolveCommandShell } from "@noobot/execution-isolation-protocol";
 
 export function buildScriptToolDescription({
   runtime,
@@ -11,10 +12,14 @@ export function buildScriptToolDescription({
   sandboxProvider,
   workspace,
   pathContext = {},
+  executionView,
+  platform = process.platform,
 }) {
+  const commandShell = resolveCommandShell({ executionView, platform });
   if (!sandboxEnabled) {
     return [
       tTool(runtime, "tools.script.localModeTitle"),
+      tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
       tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: workspace }),
       tTool(runtime, "tools.script.localModePathHint"),
     ].join("\n");
@@ -40,6 +45,7 @@ export function buildScriptToolDescription({
 
   return [
     `${tTool(runtime, "tools.script.workspaceSandboxTitlePrefix")}${sandboxProvider}${tTool(runtime, "tools.script.workspaceSandboxTitleSuffix")}`,
+    tTool(runtime, "tools.script.concise.lineShell", { shell: commandShell }),
     tTool(runtime, "tools.script.concise.lineWorkdir", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.lineRelativeBase", { workdir: sandboxWorkdir }),
     tTool(runtime, "tools.script.concise.linePaths", { root: sandboxRoot }),

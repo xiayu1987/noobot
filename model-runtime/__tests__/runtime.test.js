@@ -28,7 +28,7 @@ const invocation = {
   domain: "test",
   contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
 };
-const model = { model: "m", format: "test", providerId: "test", adapterId: "test" };
+const model = { model: "m", format: "openai_compatible", operatorId: "test", adapterId: "test" };
 
 const sdkTool = {
   type: "function",
@@ -45,7 +45,7 @@ test("openai-compatible adapter applies bound invocation overrides without mutat
     modelSpec: {
       model: "gpt-5.5",
       format: "openai_compatible",
-      providerId: "openai",
+      operatorId: "openai",
       adapterId: "openai-compatible",
       base_url: "http://localhost",
       reasoning_effort: "high",
@@ -66,7 +66,6 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
       modelFamily: "gpt",
       format: "openai_compatible",
       operatorId: "generic",
-      providerId: "generic",
       adapterId: "openai-compatible",
       base_url: "http://localhost",
     },
@@ -83,7 +82,7 @@ test("dashscope-compatible adapter applies non-thinking invocation overrides", (
     modelSpec: {
       model: "qwen3.6-plus",
       format: "dashscope",
-      providerId: "dashscope",
+      operatorId: "dashscope",
       adapterId: "dashscope",
       base_url: "http://localhost",
       preserve_thinking: true,
@@ -107,8 +106,8 @@ test("dashscope-compatible adapter applies non-thinking invocation overrides", (
 test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: true }),
     createClient: () => ({
       invoke: async () => {
@@ -141,8 +140,8 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
   const streamingAttempts = [];
   let calls = 0;
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -187,8 +186,8 @@ test("non-streaming invocation never enables streaming during semantic retries",
   const streamingAttempts = [];
   let calls = 0;
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -221,8 +220,8 @@ test("executor is the single model context trace authority at each provider atte
   const events = [];
   let attempts = 0;
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: true }),
     createClient: () => {
       const client = {
@@ -293,8 +292,8 @@ test("provider registry resolves only the explicit adapter identity", () => {
 test("non-chat operations execute only through the resolved provider adapter", async () => {
   const calls = [];
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
@@ -327,7 +326,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
       messages: [],
       operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "latest" } },
     }),
-    /provider adapter test does not support operation: web_search/,
+    /provider adapter openai-compatible does not support operation: web_search/,
   );
 });
 
@@ -336,7 +335,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
   const openAi = compileProviderModelKwargs(
     {
       ...common,
-      providerId: "openai",
+      operatorId: "openai",
       model: "gpt-5.6",
       modelFamily: "gpt",
       extra_body: { cached_content: "leak", cache_control: { type: "ephemeral" } },
@@ -350,7 +349,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
 
   const anthropic = compileProviderModelKwargs({
     ...common,
-    providerId: "anthropic",
+    operatorId: "anthropic",
     model: "claude-opus",
     extra_body: { prompt_cache_key: "leak", cached_content: "leak" },
   });
@@ -358,7 +357,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
 
   const gemini = compileProviderModelKwargs({
     ...common,
-    providerId: "gemini",
+    operatorId: "gemini",
     model: "gemini-pro",
     cached_content: "cachedContents/1",
     extra_body: { prompt_cache_retention: "leak", cache_control: { type: "ephemeral" } },
@@ -367,7 +366,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
 
   const deepseek = compileProviderModelKwargs({
     ...common,
-    providerId: "deepseek",
+    operatorId: "deepseek",
     model: "deepseek-chat",
     extra_body: { prompt_cache_key: "leak", cache_control: { type: "ephemeral" } },
   });
@@ -375,7 +374,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
 
   const dashscope = compileProviderModelKwargs({
     format: "dashscope",
-    providerId: "dashscope",
+    operatorId: "dashscope",
     adapterId: "dashscope",
     model: "qwen-max",
     enable_thinking: true,
@@ -395,7 +394,7 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const openai = normalizeRuntimeModelSpec({
     model: "gpt-5.6",
     format: "openai_compatible",
-    providerId: "openai",
+    operatorId: "openai",
     adapterId: "openai-compatible",
   });
   assert.deepEqual(
@@ -409,7 +408,7 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const openaiTopP = normalizeRuntimeModelSpec({
     model: "gpt-4.1",
     format: "openai_compatible",
-    providerId: "openai",
+    operatorId: "openai",
     adapterId: "openai-compatible",
     top_p: 0.9,
   });
@@ -420,7 +419,7 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const qwen = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
     format: "dashscope",
-    providerId: "dashscope",
+    operatorId: "dashscope",
     adapterId: "dashscope",
   });
   assert.deepEqual(
@@ -430,7 +429,7 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const thinking = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
     format: "dashscope",
-    providerId: "dashscope",
+    operatorId: "dashscope",
     adapterId: "dashscope",
     enable_thinking: true,
   });
@@ -440,19 +439,16 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
 });
 
-test("direct GPT image models default to their configured Images transport", async () => {
+test("multimodal generation transport remains an explicit configured fact", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
-  const inferred = normalizeRuntimeModelSpec({
+  const unconfigured = normalizeRuntimeModelSpec({
     model: "gpt-image-2",
     format: "openai_compatible",
     multimodal_generation: {
       support_generation: { enabled: true, support_scope: ["image"] },
     },
   });
-  assert.equal(
-    inferred.multimodal_generation.support_generation.api_type,
-    "images_async",
-  );
+  assert.equal(unconfigured.multimodal_generation.support_generation.api_type, undefined);
 
   const explicit = normalizeRuntimeModelSpec({
     model: "gpt-image-2",
@@ -477,14 +473,11 @@ test("model identity and defaults layer operator, family, concrete model, then e
     model: "gpt-5.6-sol",
     format: "openai_compatible",
     base_url: "https://third-party.example.com/v1",
-    operatorId: "openai",
     modelFamily: "qwen",
-    providerId: "openai",
     adapterId: "dashscope",
   });
   assert.equal(proxiedGpt.operatorId, "generic");
   assert.equal(proxiedGpt.modelFamily, "gpt");
-  assert.equal(proxiedGpt.providerId, "generic");
   assert.equal(proxiedGpt.adapterId, "openai-compatible");
   assert.equal(proxiedGpt.temperature, 0.7);
 
@@ -514,8 +507,8 @@ test("model identity and defaults layer operator, family, concrete model, then e
 
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({
       invoke: async () => ({ content: "", additional_kwargs: { reasoning_content: "thinking" } }),
@@ -540,8 +533,8 @@ test("reasoning-only exhaustion is a typed terminal protocol error", async () =>
 test("reasoning-only retries are exposed through the canonical attempt trace", async () => {
   let calls = 0;
   const adapter = {
-    id: "test",
-    formats: ["test"],
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({
       invoke: async () =>
@@ -582,7 +575,7 @@ test("responses API and cache key selection are deterministic", () => {
   assert.equal(
     buildPromptCacheKey(
       {
-        providerId: "openai",
+        operatorId: "openai",
         model: "gpt-5",
         modelFamily: "gpt",
         format: "openai_compatible",

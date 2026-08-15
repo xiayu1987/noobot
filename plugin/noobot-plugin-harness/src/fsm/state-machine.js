@@ -10,7 +10,6 @@ import {
   HARNESS_FSM_STATES,
   HARNESS_FSM_TERMINAL_STATES,
   normalizeFsmState,
-  statusToFsmState,
   buildFsmTransitionPlan,
 } from "./transitions.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -66,9 +65,7 @@ async function resolveCurrentFsmState(paths, options = {}) {
     return { state: cached, resumed: false };
   }
   const manifest = await readJson(paths.manifest, {});
-  const fromManifest = normalizeFsmState(manifest?.fsmStatus || manifest?.fsm?.state);
-  const inferred = fromManifest !== HARNESS_FSM_STATES.IDLE ? fromManifest : statusToFsmState(manifest?.status);
-  const state = normalizeFsmState(inferred);
+  const state = normalizeFsmState(manifest?.fsmStatus);
   setFsmState(paths.runId, state);
   const resumed = state !== HARNESS_FSM_STATES.IDLE && !HARNESS_FSM_TERMINAL_STATES.has(state);
   return { state, resumed };

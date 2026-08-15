@@ -62,8 +62,12 @@ test("execute_script: ordinary users require sandbox isolation", async () => {
     sandboxTools.some((item) => item?.name === "execute_script"),
     true,
   );
+  assert.match(sandboxTools.find((item) => item?.name === "execute_script").description, /bash/);
 });
-import { run } from "../../src/tools/execution/script-tool/process-exec.js";
+import {
+  decodeCommandOutput,
+  run,
+} from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 
@@ -79,6 +83,18 @@ const TEST_TRANSFER_IDENTITY = Object.freeze({
 function invokeScript(tool, args) {
   return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
 }
+
+test("execute_script: Windows localized shell output is normalized to UTF-8", () => {
+  const gbkText = Buffer.from([0xb2, 0xbb, 0xca, 0xc7]);
+  assert.equal(
+    decodeCommandOutput(gbkText, { platform: "win32", locale: "zh-CN" }),
+    "不是",
+  );
+  assert.equal(
+    decodeCommandOutput(Buffer.from("中文", "utf8"), { platform: "win32", locale: "zh-CN" }),
+    "中文",
+  );
+});
 
 test("execute_script: command 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));
@@ -144,6 +160,7 @@ test("execute_script: host 执行以 workspace 根作为统一相对路径基准
   });
   const tool = tools.find((item) => item?.name === "execute_script");
   assert.ok(tool);
+  assert.match(tool.description, /\/bin\/sh/);
 
   const result = parseToolResult(
     await invokeScript(tool, { command: "printf 'ok'", riskLevel: "low" }),

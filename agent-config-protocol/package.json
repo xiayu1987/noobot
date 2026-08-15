@@ -11,5 +11,8 @@
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"
+  },
+  "dependencies": {
+    "@noobot/model-protocol": "file:../model-protocol"
   }
 }

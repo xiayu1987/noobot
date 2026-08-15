@@ -246,7 +246,7 @@ test("ordinary tool paths reject sandbox and ambiguous virtual views", () => {
   assert.equal(virtualRelative.error, "virtual_relative_path_ambiguous");
   assert.equal(virtualRelative.candidateWorkspaceRelativePath, "src/a.js");
   assert.equal(virtualRelative.candidateSandboxPath, undefined);
-  assert.match(virtualRelative.hint, /Remove 'project\//);
+  assert.equal(Object.hasOwn(virtualRelative, "hint"), false);
 
   const hostAbsolute = resolveToolInputPath({
     inputPath: "C:\\outside\\a.js",
@@ -270,6 +270,32 @@ test("workspace-relative traversal retains its logical view when rejected", () =
   assert.equal(result.ok, false);
   assert.equal(result.view, TOOL_PATH_VIEWS.WORKSPACE_RELATIVE);
   assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE);
+});
+
+test("sandbox mode does not reinterpret an unmapped absolute path as host", () => {
+  const runtime = {
+    basePath: "/workspace-root/u1",
+    userId: "u1",
+    globalConfig: {
+      security: {
+        executionIsolation: {
+          mode: "sandbox",
+          sandbox: { provider: "docker", scope: "user" },
+        },
+      },
+    },
+  };
+  const result = resolveToolInputPath({
+    inputPath: "/etc/hosts",
+    runtime,
+    workspacePath: runtime.basePath,
+    workspaceRoot: "/workspace-root",
+    allowHostAbsolute: true,
+    allowSandbox: true,
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
+  assert.equal(result.error, TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED);
 });
 
 test("resolves sandbox runtime paths only from explicit execution context", () => {

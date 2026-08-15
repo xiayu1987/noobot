@@ -6,30 +6,21 @@
 import {
   pickAlias,
   byAliasWithUser,
-  firstEnabledAlias,
   getEnabledProviders,
 } from "../provider/resolver.js";
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
 
 export function resolveDefaultModelSpec({ globalConfig, userConfig }) {
   const alias = pickAlias({ globalConfig, userConfig, skillConfig: {} });
-  const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
-  if (fromAlias) return fromAlias;
-  const fallbackAlias = firstEnabledAlias(globalConfig, userConfig);
-  if (!fallbackAlias) return null;
-  return byAliasWithUser(fallbackAlias, globalConfig, userConfig);
+  return byAliasWithUser(alias, globalConfig, userConfig);
 }
 
 export function resolveModelSpecByAlias({
   alias,
   globalConfig,
   userConfig,
-  fallbackToDefault = true,
 }) {
-  const fromAlias = byAliasWithUser(alias, globalConfig, userConfig);
-  if (fromAlias) return fromAlias;
-  if (!fallbackToDefault) return null;
-  return resolveDefaultModelSpec({ globalConfig, userConfig });
+  return byAliasWithUser(alias, globalConfig, userConfig);
 }
 
 export function resolveModelSpecByName({
@@ -37,19 +28,14 @@ export function resolveModelSpecByName({
   modelName,
   globalConfig,
   userConfig,
-  fallbackToDefault = true,
 }) {
   const targetName = String(modelName || name || "").trim();
-  if (!targetName) {
-    if (!fallbackToDefault) return null;
-    return resolveDefaultModelSpec({ globalConfig, userConfig });
-  }
+  if (!targetName) return null;
 
   const byAlias = resolveModelSpecByAlias({
     alias: targetName,
     globalConfig,
     userConfig,
-    fallbackToDefault: false,
   });
   if (byAlias) return byAlias;
 
@@ -63,7 +49,22 @@ export function resolveModelSpecByName({
       return normalizeRuntimeModelSpec({ alias, ...provider });
     }
   }
-  if (!fallbackToDefault) return null;
+  return null;
+}
+
+export function resolveModelSpecOrConfiguredDefault({
+  name,
+  modelName,
+  globalConfig,
+  userConfig,
+}) {
+  const requestedModelSpec = resolveModelSpecByName({
+    name,
+    modelName,
+    globalConfig,
+    userConfig,
+  });
+  if (requestedModelSpec) return requestedModelSpec;
   return resolveDefaultModelSpec({ globalConfig, userConfig });
 }
 

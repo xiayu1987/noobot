@@ -32,7 +32,6 @@ import {
 } from "./event-builder.js";
 import {
   normalizeFsmState,
-  statusToFsmState,
 } from "../fsm/transitions.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
@@ -157,7 +156,7 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     dialogProcessId: resolveManifestDialogProcessId(ctx, current),
     caller: ctx.caller || current.caller || "",
     status: current.status || HARNESS_RUN_STATUS.RUNNING,
-    fsmStatus: normalizeFsmState(current.fsmStatus || current?.fsm?.state || statusToFsmState(current.status)),
+    fsmStatus: normalizeFsmState(current.fsmStatus),
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
     updatedAt: nowIso(),
     capabilities:

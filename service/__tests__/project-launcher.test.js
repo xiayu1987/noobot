@@ -183,6 +183,17 @@ test("project launcher recursively adds new global nodes without replacing confi
     connect_code: "change-your-connect-code",
   };
   example.streaming = { enabled: true, transport: "sse" };
+  example.multimodal = {
+    parsing: {
+      default_models: {
+        audio: "example_openai",
+        video: "example_openai",
+        image: "example_openai",
+        document: "example_openai",
+      },
+    },
+    generation: { default_models: { image: "example_openai" } },
+  };
   await writeJson(examplePath, example);
   await writeJson(path.join(serviceRoot, "default-template", "config.example.json"), {});
   await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
@@ -202,6 +213,22 @@ test("project launcher recursively adds new global nodes without replacing confi
       user_id: "owner",
       connect_code: "configured-secret",
     },
+    attachments: {
+      attachment_models: { image: "legacy" },
+      limits: { max_file_size_bytes: 4096 },
+    },
+    session: {
+      use_last_running_task_range: false,
+      use_last_completed_task_range: false,
+    },
+    tools: {
+      set_skill_task: { enabled: true },
+      execute_script: {
+        enabled: true,
+        sandbox_mode: true,
+        sandbox_provider: { default: "docker" },
+      },
+    },
     streaming: { enabled: false },
   });
 
@@ -219,4 +246,11 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.equal(config.super_admin.connect_code, "configured-secret");
   assert.equal(config.streaming.enabled, false);
   assert.equal(config.streaming.transport, "sse");
+  assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
+  assert.equal(config.attachments.limits.max_file_size_bytes, 4096);
+  assert.equal(Object.hasOwn(config, "session"), false);
+  assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);
+  assert.deepEqual(config.tools.execute_script, { enabled: true });
+  assert.equal(config.multimodal.parsing.default_models.document, "example_openai");
+  assert.equal(config.multimodal.generation.default_models.image, "example_openai");
 });

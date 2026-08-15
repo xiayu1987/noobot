@@ -17,6 +17,7 @@ export {
   resolveDefaultModelSpec,
   resolveModelSpecByAlias,
   resolveModelSpecByName,
+  resolveModelSpecOrConfiguredDefault,
   resolveSkillModelSpec,
 } from "./resolver/index.js";
 export {

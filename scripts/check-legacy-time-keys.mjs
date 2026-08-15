@@ -32,6 +32,7 @@ const ALLOW_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,
   `${path.sep}.git${path.sep}`,
   `${path.sep}dist${path.sep}`,
+  `${path.sep}build${path.sep}`,
   `${path.sep}coverage${path.sep}`,
 ];
 
@@ -69,7 +70,7 @@ function detectViolations(filePath) {
     const line = lines[index];
     for (const legacyKey of LEGACY_KEYS) {
       const directDot = new RegExp(`\\.${legacyKey}\\b`);
-      const directBracket = new RegExp(`\\[\\s*["']${legacyKey}["']\\s*\\]`);
+      const directBracket = new RegExp(`\\b[A-Za-z_$][\\w$]*\\s*\\[\\s*["']${legacyKey}["']\\s*\\]`);
       if (!directDot.test(line) && !directBracket.test(line)) continue;
       if (isAllowedLine(line)) continue;
       violations.push({

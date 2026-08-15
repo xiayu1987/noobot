@@ -122,6 +122,8 @@ export const INVOCATION_TOOL_SCHEMA = {
         "The critical-risk script was not confirmed by the user and execution was cancelled.",
       "tools.script.concise.lineWorkdir": (params = {}) =>
         `Default working directory: ${String(params.workdir || "").trim()}`,
+      "tools.script.concise.lineShell": (params = {}) =>
+        `Command interpreter: ${String(params.shell || "").trim()}. Use that interpreter's syntax; on Windows, invoke powershell or pwsh explicitly for PowerShell syntax.`,
       "tools.script.concise.lineRelativeBase": (params = {}) =>
         `Relative paths are resolved from: ${String(params.workdir || "").trim()}`,
       "tools.script.concise.linePaths": (params = {}) =>

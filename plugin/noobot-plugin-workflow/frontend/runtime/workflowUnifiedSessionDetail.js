@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessIdCompat.js";
+import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { mergeCanonicalSessionDetail } from "noobot-chat/plugin-api/session-domain";
 
 function getListValue(value) {

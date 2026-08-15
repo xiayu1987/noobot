@@ -15,11 +15,11 @@ import {
 
 import { createRegisterWorkflowHooks } from "../../src/core/hooks.js";
 import { WORKFLOW_PLUGIN_DEFAULTS } from "../../src/core/constants.js";
-import { resolveWorkflowNodeDialogProcessId } from "../../src/core/dialog-process-compat.js";
+import { resolveWorkflowNodeDialogProcessId } from "../../src/core/node-dialog-process-id.js";
 import {
   collectWorkflowDialogProcessIds,
   resolveWorkflowDialogProcessId,
-} from "../../frontend/utils/workflowDialogProcessIdCompat.js";
+} from "../../frontend/utils/workflowDialogProcessId.js";
 
 export function createMockBotHookManager() {
   const listeners = new Map();

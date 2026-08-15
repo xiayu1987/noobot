@@ -20,6 +20,20 @@ export const MODEL_ADAPTER_ID = Object.freeze({
   DASHSCOPE: "dashscope",
 });
 
+const ADAPTER_ID_BY_FORMAT = Object.freeze({
+  openai_compatible: MODEL_ADAPTER_ID.OPENAI_COMPATIBLE,
+  dashscope: MODEL_ADAPTER_ID.DASHSCOPE,
+});
+
+const OPERATOR_ID_BY_HOST = Object.freeze({
+  "api.openai.com": MODEL_PROVIDER_ID.OPENAI,
+  "api.anthropic.com": MODEL_PROVIDER_ID.ANTHROPIC,
+  "generativelanguage.googleapis.com": MODEL_PROVIDER_ID.GOOGLE,
+  "dashscope.aliyuncs.com": MODEL_PROVIDER_ID.ALIBABA,
+  "open.bigmodel.cn": MODEL_PROVIDER_ID.ZHIPU,
+  "api.deepseek.com": MODEL_PROVIDER_ID.DEEPSEEK,
+});
+
 function requireIdentity(value, field) {
   const normalized = String(value || "")
     .trim()
@@ -29,19 +43,33 @@ function requireIdentity(value, field) {
 }
 
 export function normalizeProviderSpec(input = {}) {
+  const format = requireIdentity(input.format, "format");
   return Object.freeze({
-    // Runtime normalization derives these fields; retain legacy values here
-    // for protocol-only callers that already provide a normalized spec.
-    providerId: String(input.providerId || input.operatorId || "generic").trim().toLowerCase(),
-    adapterId: String(
-      input.adapterId ||
-        (String(input.format || "").toLowerCase() === "dashscope"
-          ? "dashscope"
-          : "openai-compatible"),
-    )
-      .trim()
-      .toLowerCase(),
-    format: requireIdentity(input.format, "format"),
+    operatorId: requireIdentity(input.operatorId, "operatorId"),
+    adapterId: resolveModelAdapterId(format),
+    format,
     baseUrl: String(input.baseUrl || input.base_url || "").trim(),
   });
+}
+
+export function resolveModelAdapterId(format = "") {
+  const normalizedFormat = requireIdentity(format, "format");
+  const adapterId = ADAPTER_ID_BY_FORMAT[normalizedFormat];
+  if (!adapterId) throw new TypeError(`unsupported model spec.format: ${normalizedFormat}`);
+  return adapterId;
+}
+
+export function resolveModelOperatorId({ format = "", baseUrl = "" } = {}) {
+  const normalizedFormat = requireIdentity(format, "format");
+  if (normalizedFormat === "dashscope") return MODEL_PROVIDER_ID.ALIBABA;
+  resolveModelAdapterId(normalizedFormat);
+  const endpoint = String(baseUrl || "").trim();
+  if (!endpoint || /^\$\{[^}]+\}$/.test(endpoint)) return MODEL_PROVIDER_ID.GENERIC;
+  let host = "";
+  try {
+    host = new URL(endpoint).hostname.toLowerCase();
+  } catch {
+    throw new TypeError("model spec.baseUrl must be an absolute URL or a configuration placeholder");
+  }
+  return OPERATOR_ID_BY_HOST[host] || MODEL_PROVIDER_ID.GENERIC;
 }

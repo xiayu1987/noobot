@@ -90,6 +90,7 @@ export function createScriptTool({ agentContext }) {
     sandboxProvider,
     workspace,
     pathContext,
+    executionView: executionPolicy.view,
   });
 
   const execute_script = new DynamicStructuredTool({

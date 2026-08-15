@@ -56,6 +56,11 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: {
+        parsing: {
+          default_models: { image: "parse-model", document: "parse-model" },
+        },
+      },
       providers: {
         "parse-model": {
           enabled: true,
@@ -209,6 +214,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "parse-model": {
           enabled: true,
@@ -274,6 +280,9 @@ test("multimodal_parse passes audio and video files to the configured model", as
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: {
+        parsing: { default_models: { audio: "parse-model", video: "parse-model" } },
+      },
       providers: {
         "parse-model": {
           enabled: true,
@@ -370,6 +379,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
     userId: "admin",
     runtimeModel: "parse-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "parse-model": {
           enabled: true,
@@ -396,7 +406,7 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
   );
 });
 
-test("multimodal_parse selects an enabled parsing model when the runtime model cannot parse", async () => {
+test("multimodal_parse uses the configured modality default instead of the runtime model", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-fallback-"));
   await fs.writeFile(path.join(basePath, "input.pdf"), "content", "utf8");
   let invokedModel = null;
@@ -405,6 +415,7 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
     userId: "admin",
     runtimeModel: "conversation-model",
     globalConfig: {
+      multimodal: { parsing: { default_models: { document: "parse-model" } } },
       providers: {
         "conversation-model": {
           enabled: true,
@@ -453,8 +464,6 @@ test("multimodal_parse selects an enabled parsing model when the runtime model c
       { configurable: { transferIdentity: TRANSFER_IDENTITY } },
     ),
   );
-
   assert.equal(invokedModel.alias, "parse-model");
-  assert.equal(invokedModel.model, "gpt-5.4");
   assert.equal(result.model.alias, "parse-model");
 });

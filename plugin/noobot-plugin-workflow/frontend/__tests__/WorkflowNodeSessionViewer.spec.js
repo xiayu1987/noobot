@@ -247,14 +247,13 @@ describe("workflow node session view ownership", () => {
     wrapper.unmount();
   });
 
-  it("uses the node dialog identity when a clicked step also carries the parent dialog identity", async () => {
+  it("uses the canonical projected dialog identity for a clicked node step", async () => {
     const clickedStep = {
       rootSessionId: "root-session",
       nodeExecutionId: "node-dual-dialog",
       childExecutionId: "execution-dual-dialog",
       sessionId: "child-dual-dialog",
-      dialogProcessId: "parent-dialog",
-      nodeDialogProcessId: "wf_node_dual_dialog",
+      dialogProcessId: "wf_node_dual_dialog",
       stepId: "step-dual-dialog",
     };
     const fetcher = vi.fn(async () => detailResponse("child-dual-dialog", "child result"));

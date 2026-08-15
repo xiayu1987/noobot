@@ -39,6 +39,7 @@
     "ensure:openvscode-server": "node scripts/install-openvscode-server.mjs"
   },
   "dependencies": {
+    "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/hook-protocol": "file:../hook-protocol",
     "@langchain/core": "^1.2.6",

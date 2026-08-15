@@ -7,7 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 import { mergeConfig } from "../../config/index.js";
-import { resolveDefaultModelSpec, resolveModelSpecByName } from "../../models/index.js";
+import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { browserLikeFetch } from "../../shared/utils/web/fetch.js";
@@ -45,14 +45,11 @@ function resolveSearchModelSpec({
   const preferredModelName = String(modelName || "").trim();
   const currentRuntimeModel = String(runtimeModel || "").trim();
   const resolvedModelName = preferredModelName || currentRuntimeModel;
-  const resolvedModelSpec = resolvedModelName
-    ? resolveModelSpecByName({
-        modelName: resolvedModelName,
-        globalConfig,
-        userConfig,
-        fallbackToDefault: true,
-      })
-    : resolveDefaultModelSpec({ globalConfig, userConfig });
+  const resolvedModelSpec = resolveModelSpecOrConfiguredDefault({
+    modelName: resolvedModelName,
+    globalConfig,
+    userConfig,
+  });
   return { resolvedModelName, resolvedModelSpec };
 }
 

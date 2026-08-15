@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertToolExecutionPolicy,
+  COMMAND_SHELL,
   EXECUTION_ISOLATION_PROTOCOL_NAME,
   EXECUTION_ISOLATION_PROTOCOL_VERSION,
   TOOL_EXECUTION_CLASS,
@@ -14,6 +15,7 @@ import {
   TOOL_EXECUTION_VIEW,
   normalizeSandboxMounts,
   resolveExecutionIsolation,
+  resolveCommandShell,
   resolveSandboxMountMappings,
   resolveToolExecutionAuthorization,
   resolveToolExecutionClass,
@@ -21,6 +23,31 @@ import {
   resolveWorkspaceSandboxLayout,
   resolveWorkspaceSandboxMountProjection,
 } from "../src/index.js";
+
+test("command shell is derived from the authoritative execution view and platform", () => {
+  assert.equal(
+    resolveCommandShell({ executionView: TOOL_EXECUTION_VIEW.WORKSPACE_SANDBOX, platform: "win32" }),
+    COMMAND_SHELL.BASH,
+  );
+  assert.equal(
+    resolveCommandShell({
+      executionView: TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED,
+      platform: "win32",
+    }),
+    COMMAND_SHELL.WINDOWS_COMMAND,
+  );
+  assert.equal(
+    resolveCommandShell({
+      executionView: TOOL_EXECUTION_VIEW.SERVICE_HOST_RESTRICTED,
+      platform: "darwin",
+    }),
+    COMMAND_SHELL.POSIX,
+  );
+  assert.throws(
+    () => resolveCommandShell({ executionView: TOOL_EXECUTION_VIEW.NATIVE_HOST_RESTRICTED }),
+    /does not support shell commands/,
+  );
+});
 
 test("execution isolation owns tool classes and execution views", () => {
   const globalConfig = {

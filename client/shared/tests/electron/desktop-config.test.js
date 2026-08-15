@@ -45,8 +45,13 @@ async function createFixture() {
       },
       providers: {
         openai: { model: "gpt", enabled: true, used_for_conversation: true },
+        selected: { model: "selected-model", enabled: false, used_for_conversation: false },
       },
       default_provider: "openai",
+      multimodal: {
+        parsing: { default_models: { audio: "openai", image: "openai" } },
+        generation: { default_models: { image: "openai" } },
+      },
     }),
   );
   await writeFile(
@@ -55,6 +60,11 @@ async function createFixture() {
       default_provider: "openai",
       providers: {
         openai: { model: "gpt", enabled: true, used_for_conversation: true },
+        selected: { model: "selected-model", enabled: false, used_for_conversation: false },
+      },
+      multimodal: {
+        parsing: { default_models: { audio: "openai", image: "openai" } },
+        generation: { default_models: { image: "openai" } },
       },
     }),
   );
@@ -111,6 +121,10 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
       globalConfigPath,
       JSON.stringify({
         newly_added_config: { nested: { preserved_value: "client" } },
+        attachments: {
+          attachment_models: { image: "legacy" },
+          limits: { max_file_size_bytes: 2048 },
+        },
       }),
     );
 
@@ -121,6 +135,12 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.newly_added_config.nested.preserved_value, "client");
     assert.equal(config.security.execution_isolation.mode, "host");
     assert.equal(config.security.path_policy.resolution.follow_symbolic_links, false);
+    assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
+    assert.equal(config.attachments.limits.max_file_size_bytes, 2048);
+    assert.deepEqual(config.multimodal.parsing.default_models, {
+      audio: "openai",
+      image: "openai",
+    });
   } finally {
     await fixture.restore();
   }
@@ -253,7 +273,7 @@ test("packaged desktop config restores missing userData template example before 
       userId: "owner",
       connectCode: "secret",
       language: "en-US",
-      model: "openai",
+      model: "selected",
     });
 
     const globalConfig = JSON.parse(await readFile(restoredState.globalConfigPath, "utf8"));
@@ -261,7 +281,139 @@ test("packaged desktop config restores missing userData template example before 
     assert.equal(globalConfig.super_admin.user_id, "owner");
     assert.equal(globalConfig.super_admin.connect_code, "secret");
     assert.equal(globalConfig.security.execution_isolation.mode, "host");
-    assert.equal(templateConfig.default_provider, "openai");
+    assert.equal(templateConfig.default_provider, "selected");
+    assert.deepEqual(globalConfig.multimodal.parsing.default_models, {
+      audio: "selected",
+      image: "selected",
+    });
+    assert.equal(globalConfig.multimodal.generation.default_models.image, "selected");
+    assert.equal(templateConfig.multimodal.parsing.default_models.audio, "selected");
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop setup selects library models and inserts missing providers into both configs", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const state = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    assert.equal(
+      state.superAdmin.modelOptions.some((item) => item.key === "gemini_3_7_flash"),
+      true,
+    );
+    assert.equal(
+      state.superAdmin.modelOptions.some((item) => item.key === "openai" && !item.library),
+      true,
+    );
+
+    manager.saveSuperAdminConfig({
+      globalConfigPath: state.globalConfigPath,
+      userConfigPath: state.templateConfigPath,
+      userId: "owner",
+      connectCode: "secret",
+      language: "en-US",
+      model: "gemini_3_7_flash",
+    });
+
+    const nextState = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    const globalConfig = JSON.parse(await readFile(state.globalConfigPath, "utf8"));
+    const defaultUserConfig = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
+    for (const config of [globalConfig, defaultUserConfig]) {
+      assert.equal(config.default_provider, "gemini_3_7_flash");
+      assert.equal(config.providers.gemini_3_7_flash.model, "gemini-3.7-flash");
+      assert.equal(config.providers.gemini_3_7_flash.api_key, "${GEMINI_API_KEY}");
+    }
+    assert.equal(globalConfig.providers.openai.model, "gpt");
+    assert.equal(defaultUserConfig.providers.openai.model, "gpt");
+    assert.equal(
+      nextState.missingParams.some((item) => item.key === "GEMINI_API_KEY"),
+      true,
+    );
+    assert.equal(
+      nextState.missingParams.some((item) => item.key === "GEMINI_API_ADDRESS"),
+      true,
+    );
+    assert.deepEqual(
+      nextState.missingParams.slice(0, 2).map(({ key, group, modelField }) => ({
+        key,
+        group,
+        modelField,
+      })),
+      [
+        { key: "GEMINI_API_KEY", group: "model", modelField: "api_key" },
+        { key: "GEMINI_API_ADDRESS", group: "model", modelField: "base_url" },
+      ],
+    );
+    assert.equal(
+      nextState.missingParams
+        .slice(2)
+        .every((item) => item.group === "general" && item.modelField === ""),
+      true,
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop startup removes retired nodes from existing user configs", async () => {
+  const fixture = await createFixture();
+  try {
+    const existingUserPath = path.join(fixture.userDataPath, "workspace", "existing-user");
+    await mkdir(existingUserPath, { recursive: true });
+    const retiredConfig = {
+      attachments: { attachment_models: { image: "old" } },
+      session: {
+        use_last_running_task_range: false,
+        use_last_completed_task_range: false,
+      },
+      tools: {
+        set_skill_task: { enabled: true },
+        web_to_data: { enabled: true },
+        doc_to_data: { enabled: true },
+        media_to_data: { enabled: true },
+        process_content_task: { enabled: true },
+        execute_script: {
+          enabled: true,
+          sandbox_mode: true,
+          sandbox_provider: { default: "docker" },
+        },
+        read_file: { enabled: true },
+      },
+    };
+    await writeFile(path.join(existingUserPath, "config.json"), JSON.stringify(retiredConfig));
+    await writeFile(
+      path.join(existingUserPath, "config.example.json"),
+      JSON.stringify(retiredConfig),
+    );
+
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+
+    for (const fileName of ["config.json", "config.example.json"]) {
+      const config = JSON.parse(await readFile(path.join(existingUserPath, fileName), "utf8"));
+      assert.equal(Object.hasOwn(config, "attachments"), false);
+      assert.equal(Object.hasOwn(config, "session"), false);
+      assert.deepEqual(config.tools, {
+        execute_script: { enabled: true },
+        read_file: { enabled: true },
+      });
+    }
   } finally {
     await fixture.restore();
   }

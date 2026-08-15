@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import process from "node:process";
+import { migrateConfigFileToCurrentProtocol } from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
 import {
   parseCliOptions,
@@ -144,12 +145,14 @@ async function syncWhenGlobalConfigExists({
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
-  const mergedGlobal = pruneBuiltInConfigParams(
-    mergeIncremental({
-      template: pruneBuiltInConfigParams(globalExampleConfig),
-      target: pruneBuiltInConfigParams(globalConfig),
-      excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
-    }),
+  const mergedGlobal = migrateConfigFileToCurrentProtocol(
+    pruneBuiltInConfigParams(
+      mergeIncremental({
+        template: pruneBuiltInConfigParams(globalExampleConfig),
+        target: pruneBuiltInConfigParams(globalConfig),
+        excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
+      }),
+    ),
   );
 
   const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();

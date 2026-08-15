@@ -4,35 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 import { resolveDefaultModelSpec } from "../../models/index.js";
-import { isPlainObject } from "../../shared/utils/shared-utils.js";
+import { resolveModelMultimodalCapabilities } from "@noobot/model-protocol";
 
 function normalizeModelMultimodalInfo(modelSpec = {}) {
-  const multimodalGeneration = isPlainObject(modelSpec?.multimodal_generation)
-    ? modelSpec.multimodal_generation
-    : {};
-  const supportGeneration = isPlainObject(multimodalGeneration?.support_generation)
-    ? multimodalGeneration.support_generation
-    : {};
-  const supportScope = Array.isArray(supportGeneration?.support_scope)
-    ? supportGeneration.support_scope
-        .map((scopeItem) => String(scopeItem || "").trim())
-        .filter(Boolean)
-    : [];
+  const generation = resolveModelMultimodalCapabilities(modelSpec).generation;
   return {
     support_generation: {
-      enabled: supportGeneration?.enabled === true,
-      support_scope: supportScope,
+      enabled: generation.enabled,
+      support_scope: [...generation.outputModalities],
+      api_type: generation.apiType,
     },
   };
 }
 
 function normalizeModelMultimodalParsing(modelSpec = {}) {
-  const parsing = isPlainObject(modelSpec?.multimodal_parsing) ? modelSpec.multimodal_parsing : {};
+  const parsing = resolveModelMultimodalCapabilities(modelSpec).parsing;
   return {
-    enabled: parsing?.enabled === true,
-    input_modalities: Array.isArray(parsing?.input_modalities)
-      ? parsing.input_modalities.map((item) => String(item || "").trim()).filter(Boolean)
-      : [],
+    enabled: parsing.enabled,
+    input_modalities: [...parsing.inputModalities],
   };
 }
 

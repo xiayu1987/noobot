@@ -39,9 +39,9 @@ test("planning projection follows parsed flowtos and only action dependencies", 
   const sessions = buildWorkflowPlanningNodeSessions({ workflowRunId: "run-1", semantic });
   const a = sessions.find((item) => item.nodeId === "a");
   const b = sessions.find((item) => item.nodeId === "b");
-  assert.equal(a.stepStatus, "ready");
+  assert.equal(a.status, "ready");
   assert.deepEqual(a.dependencies, []);
-  assert.equal(b.stepStatus, "pending");
+  assert.equal(b.status, "pending");
   assert.deepEqual(b.dependencies, ["a"]);
   assert.equal(a.workflowRunId, "run-1");
   assert.ok(a.nodeExecutionId);

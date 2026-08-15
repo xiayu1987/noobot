@@ -363,11 +363,12 @@ export function createFileTool({ agentContext }) {
         reason: "The final normalized resource requires confirmation under the server path policy.",
       });
       if (overwrite === false && (await workspaceIo.exists(resolvedPath))) {
+        const message = tTool(agentContext, "tools.file.writeAlreadyExists");
         return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
           ok: false,
           code: ERROR_CODE.RECOVERABLE_FILE_ALREADY_EXISTS,
-          error: "file exists; set overwrite=true to replace it",
-          message: "file exists; set overwrite=true to replace it",
+          error: message,
+          message,
           path: projectToolPathRef(pathRef),
           fileName: path.basename(resolvedPath),
         });
@@ -450,7 +451,10 @@ export function createFileTool({ agentContext }) {
       const normalizedSource = String(source || "files").trim() === "text" ? "text" : "files";
       const normalizedQuery = String(query || "");
       if (!normalizedQuery) {
-        return toToolJsonResult(TOOL_NAME.SEARCH, { ok: false, message: "query is required" });
+        return toToolJsonResult(TOOL_NAME.SEARCH, {
+          ok: false,
+          message: tTool(agentContext, "tools.search.queryRequired"),
+        });
       }
       if (normalizedSource === "text") {
         await confirmToolOperation({

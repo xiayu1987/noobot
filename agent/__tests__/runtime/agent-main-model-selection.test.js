@@ -34,10 +34,11 @@ const globalConfig = {
   scenarios: {
     definitions: {
       programming: {
-        defaultModelAlias: "scenario_default",
+        model: "scenario_default",
       },
     },
   },
+  defaultProvider: "scenario_default",
   defaultModelAlias: "scenario_default",
 };
 
@@ -65,7 +66,7 @@ test("resolveEffectiveModelSpec accepts selectedModel object before scenario def
   assert.equal(spec.model, "selected-model");
 });
 
-test("resolveEffectiveModelSpec falls back to scenario default when selectedModel is invalid", () => {
+test("resolveEffectiveModelSpec uses the configured default when selectedModel is invalid", () => {
   const spec = resolveEffectiveModelSpec({
     globalConfig,
     userConfig: {},
@@ -75,6 +76,22 @@ test("resolveEffectiveModelSpec falls back to scenario default when selectedMode
 
   assert.equal(spec.alias, "scenario_default");
   assert.equal(spec.model, "scenario-default-model");
+});
+
+test("resolveEffectiveModelSpec rejects an invalid selection when no configured default exists", () => {
+  assert.throws(
+    () =>
+      resolveEffectiveModelSpec({
+        globalConfig: {
+          ...globalConfig,
+          defaultProvider: "",
+        },
+        userConfig: {},
+        selectedModel: "missing_alias",
+        scenario: "programming",
+      }),
+    /selected model not found and no configured default model is available: missing_alias/,
+  );
 });
 
 test("resolveEffectiveModelSpec uses scenario model as initial model fallback", () => {
@@ -107,6 +124,7 @@ test("resolveEffectiveModelSpec uses scenario model as initial model fallback", 
           },
         },
       },
+      defaultProvider: "system_default",
       defaultModelAlias: "system_default",
     },
     userConfig: {},

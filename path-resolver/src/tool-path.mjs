@@ -133,7 +133,6 @@ export function resolveToolInputPath({
       error: TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH,
       resolvedPath: "",
       workspaceRelativePath: "",
-      hint: "Path is required.",
     };
   }
 
@@ -145,7 +144,6 @@ export function resolveToolInputPath({
         resolvedPath: "",
         workspaceRelativePath: "",
         error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED,
-        hint: "Sandbox paths are not allowed here.",
       };
     }
     const mountedPath = resolveSandboxMount({
@@ -164,7 +162,6 @@ export function resolveToolInputPath({
         mountTarget: mountedPath.target,
         mountReadOnly: mountedPath.readOnly,
         error: "",
-        hint: "",
       };
     }
     if (classified.sandboxRoot === "workspace" && normalizedWorkspaceRoot) {
@@ -185,7 +182,6 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
       if (sandboxUserRoot.startsWith(`${WORKSPACE_SANDBOX_PATHS.ROOT}/`)) {
@@ -203,7 +199,6 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
       if (!sandboxUserRoot) {
@@ -221,7 +216,6 @@ export function resolveToolInputPath({
           workspaceRelativePath: "",
           mapped: true,
           error: "",
-          hint: "",
         };
       }
     }
@@ -239,7 +233,6 @@ export function resolveToolInputPath({
         workspaceRelativePath: "",
         mapped: true,
         error: "",
-        hint: "",
       };
     }
     return {
@@ -248,7 +241,6 @@ export function resolveToolInputPath({
       resolvedPath: "",
       workspaceRelativePath: "",
       error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
-      hint: "Sandbox path is not mapped to a host path.",
     };
   }
 
@@ -272,9 +264,18 @@ export function resolveToolInputPath({
           mountTarget: mountedPath.target,
           mountReadOnly: mountedPath.readOnly,
           error: "",
-          hint: "",
         };
       }
+      return {
+        ...classified,
+        view: TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+        sandboxRoot: "",
+        ok: false,
+        resolvedPath: "",
+        workspaceRelativePath: "",
+        mapped: false,
+        error: TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED,
+      };
     }
     if (!allowHostAbsolute) {
       return {
@@ -283,7 +284,6 @@ export function resolveToolInputPath({
         resolvedPath: "",
         workspaceRelativePath: "",
         error: TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED,
-        hint: "Host absolute paths are only allowed for super users.",
       };
     }
     return {
@@ -293,15 +293,11 @@ export function resolveToolInputPath({
       workspaceRelativePath: "",
       mapped: false,
       error: "",
-      hint: "",
     };
   }
 
   if (classified.view === TOOL_PATH_VIEWS.VIRTUAL_RELATIVE && !allowVirtualRelative) {
     const relativeWithoutVirtualRoot = classified.normalized.split("/").slice(1).join("/");
-    const sandboxHint = allowSandbox
-      ? `Use /${classified.virtualRoot}/... for sandbox paths, or remove '${classified.virtualRoot}/' for workspace-relative paths.`
-      : `Remove '${classified.virtualRoot}/' for a workspace-relative path.`;
     return {
       ...classified,
       ok: false,
@@ -310,7 +306,6 @@ export function resolveToolInputPath({
       candidateWorkspaceRelativePath: relativeWithoutVirtualRoot,
       ...(allowSandbox ? { candidateSandboxPath: `/${classified.normalized}` } : {}),
       error: TOOL_PATH_RESOLUTION_ERROR.VIRTUAL_RELATIVE_PATH_AMBIGUOUS,
-      hint: sandboxHint,
     };
   }
 
@@ -326,7 +321,6 @@ export function resolveToolInputPath({
       workspaceRelativePath: classified.normalized,
       mapped: false,
       error: TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE,
-      hint: "Workspace-relative path resolves outside the workspace root.",
     };
   }
 
@@ -337,7 +331,6 @@ export function resolveToolInputPath({
     workspaceRelativePath: classified.normalized,
     mapped: false,
     error: "",
-    hint: "",
   };
 }
 

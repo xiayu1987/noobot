@@ -32,7 +32,7 @@ import {
   stripHarnessReviewAppendix,
   truncateWorkflowResultText,
 } from "../hooks/persistence.js";
-import { resolveWorkflowNodeDialogProcessId } from "../dialog-process-compat.js";
+import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import {
   resolveWorkflowNodeStateRepository,
   WORKFLOW_NODE_STATUS,
