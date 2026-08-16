@@ -14,6 +14,13 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+
+function createMessageBuilderScope({ runtime = {}, history = [] } = {}) {
+  return createTestAgentExecutionScope(runtime, {
+    messageBlocks: { system: [], history },
+  });
+}
 
 function buildRoundContents(fromRound, toRound) {
   return Array.from(
@@ -48,43 +55,30 @@ function expectedDefaultHistoryContents() {
 
 test("buildContextMessages keeps explicit history dialog groups in natural order", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            systemRuntime: {
-              dialogProcessId: "dlg_current",
-            },
-          },
+    createMessageBuilderScope({
+      runtime: { systemRuntime: { dialogProcessId: "dlg_current" } },
+      history: [
+        {
+          role: "user",
+          content: "当前问题",
+          dialogProcessId: "dlg_newer",
         },
-      },
-      payload: {
-        messages: {
-          system: [],
-          history: [
-            {
-              role: "user",
-              content: "当前问题",
-              dialogProcessId: "dlg_newer",
-            },
-            {
-              role: "assistant",
-              content: "当前对话注入",
-              injectedMessage: true,
-              injectedBy: "agent-plugin",
-              dialogProcessId: "dlg_newer",
-            },
-            {
-              role: "assistant",
-              content: "旧对话注入",
-              injectedMessage: true,
-              injectedBy: "agent-plugin",
-              dialogProcessId: "dlg_old",
-            },
-          ],
+        {
+          role: "assistant",
+          content: "当前对话注入",
+          injectedMessage: true,
+          injectedBy: "agent-plugin",
+          dialogProcessId: "dlg_newer",
         },
-      },
-    },
+        {
+          role: "assistant",
+          content: "旧对话注入",
+          injectedMessage: true,
+          injectedBy: "agent-plugin",
+          dialogProcessId: "dlg_old",
+        },
+      ],
+    }),
     { currentUserMessage: null },
   );
 
@@ -95,19 +89,7 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
 test("buildContextMessages applies main model recent round window by default", () => {
   const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
-      payload: {
-        messages: {
-          system: [],
-          history,
-        },
-      },
-    },
+    createMessageBuilderScope({ history }),
     { currentUserMessage: null },
   );
 
@@ -122,28 +104,19 @@ test("buildContextMessages applies main model recent round window by default", (
 test("buildContextMessages keeps harness plugin history aligned with main recent rounds", () => {
   const history = buildDefaultHistoryRounds();
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            globalConfig: {
-              plugins: {
-                harness: {
-                  enabled: true,
-                  mode: "on",
-                },
-              },
+    createMessageBuilderScope({
+      runtime: {
+        globalConfig: {
+          plugins: {
+            harness: {
+              enabled: true,
+              mode: "on",
             },
           },
         },
       },
-      payload: {
-        messages: {
-          system: [],
-          history,
-        },
-      },
-    },
+      history,
+    }),
     { currentUserMessage: null },
   );
 

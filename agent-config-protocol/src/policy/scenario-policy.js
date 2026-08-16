@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { isPlainObject } from "./utils.js";
+import { isPlainObject } from "../utils.js";
 
 export const BUILTIN_SCENARIO_KEYS = Object.freeze(["full", "programming", "text"]);
 export const PROGRAMMING_SCENARIO_KEY = "programming";

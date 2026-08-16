@@ -12,7 +12,7 @@ import { SessionTurnPersister } from "../execution/turn-persister.js";
 import { SessionExecutionRunner } from "../execution/runner.js";
 import { BotManageValidator } from "../config/validator.js";
 import { ParentAsyncTaskManager } from "../execution/parent-async-task-manager.js";
-import { RunConfigResolver } from "@noobot/agent-config-protocol";
+import { mergeRunConfigPluginPolicy, RunConfigResolver } from "@noobot/agent-config-protocol";
 import { MemoryPostProcessService } from "../execution/memory-postprocess.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -35,7 +35,6 @@ import {
   prepareStoppedSnapshotResumeTurnExecution,
   resolveStoppedResumeAttachments,
 } from "./turn-execution-preparer.js";
-import { mergeRunConfigWithPluginStrategy } from "./run-config-plugin-strategy.js";
 import { commitSummaryCheckpoint } from "./summary-checkpoint-committer.js";
 
 export class SessionExecutionEngine {
@@ -173,7 +172,6 @@ export class SessionExecutionEngine {
       globalConfig: this.globalConfig,
       workspaceService: this.workspaceService,
       normalizeStringArray: (input) => this._normalizeStringArray(input),
-      mergePluginOptions: (...items) => this._mergePluginOptions(...items),
       createPluginResolveModelMessages: (payload = {}) =>
         this._createPluginResolveModelMessages(payload),
       createDetachedSubSessionRunner: () => this._createDetachedSubSessionRunner(),
@@ -380,12 +378,12 @@ export class SessionExecutionEngine {
     });
   }
 
-  _mergeRunConfigWithPluginStrategy({
+  _mergeRunConfigPluginPolicy({
     baseRunConfig = {},
     runConfigPatch = {},
     disabledPlugins = [],
   } = {}) {
-    return mergeRunConfigWithPluginStrategy({
+    return mergeRunConfigPluginPolicy({
       baseRunConfig,
       runConfigPatch,
       disabledPlugins,
@@ -424,8 +422,7 @@ export class SessionExecutionEngine {
       session: this.session,
       attachmentService: this.attach,
       pluginRuntime: this.pluginRuntimeBundle?.pluginRuntime || getDefaultSessionPluginRuntime(),
-      mergeRunConfigWithPluginStrategy: (payload = {}) =>
-        this._mergeRunConfigWithPluginStrategy(payload),
+      mergeRunConfigPluginPolicy: (payload = {}) => this._mergeRunConfigPluginPolicy(payload),
       prepareRunConfig: (payload = {}) => this._prepareRunConfig(payload),
     });
   }

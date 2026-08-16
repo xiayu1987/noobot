@@ -6,39 +6,34 @@
 import { readFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { resolveConfigSecrets } from "./config-secret-resolver.js";
-import { sanitizeUserConfig } from "@noobot/agent-config-protocol";
+import {
+  createConfigValueLookup,
+  mergeConfigParamLayers,
+  normalizeConfigParamsDocument,
+  resolveConfigTemplates,
+  sanitizeUserConfig,
+} from "@noobot/agent-config-protocol";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
-function normalizeConfigParams(input = {}) {
-  const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
-  return Object.fromEntries(
-    Object.entries(rawValues)
-      .map(([paramKey, paramValue]) => [
-        String(paramKey || "")
-          .trim()
-          .toUpperCase(),
-        String(paramValue ?? "").trim(),
-      ])
-      .filter(([paramKey]) => Boolean(paramKey)),
-  );
+async function readOptionalText(filePath) {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
 }
 
-function mergeConfigParamsWithFallback(systemParams = {}, overrideParams = {}) {
-  const base = {
-    ...(systemParams && typeof systemParams === "object" ? systemParams : {}),
-  };
-  const overrideSource = overrideParams && typeof overrideParams === "object" ? overrideParams : {};
-  for (const [paramKey, rawValue] of Object.entries(overrideSource)) {
-    const normalizedKey = String(paramKey || "")
-      .trim()
-      .toUpperCase();
-    if (!normalizedKey) continue;
-    const normalizedValue = String(rawValue ?? "").trim();
-    if (!normalizedValue) continue;
-    base[normalizedKey] = normalizedValue;
+function parseParamsDocument(rawText, documentName) {
+  if (rawText === null) return {};
+  try {
+    return normalizeConfigParamsDocument(JSON.parse(rawText));
+  } catch (error) {
+    throw recoverableToolError(
+      `${documentName} parse failed: ${error?.message || String(error)}`,
+      { code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG },
+    );
   }
-  return base;
 }
 
 export class ConfigService {
@@ -49,8 +44,8 @@ export class ConfigService {
   async loadUserConfig(basePath) {
     const [rawText, workspaceConfigParamsRawText, userConfigParamsRawText] = await Promise.all([
       readFile(path.join(basePath, "config.json"), "utf8"),
-      readFile(path.join(basePath, "..", "config-params.json"), "utf8").catch(() => "{}"),
-      readFile(path.join(basePath, "config-params.json"), "utf8").catch(() => "{}"),
+      readOptionalText(path.join(basePath, "..", "config-params.json")),
+      readOptionalText(path.join(basePath, "config-params.json")),
     ]);
     let raw = {};
     try {
@@ -61,40 +56,23 @@ export class ConfigService {
       });
     }
 
-    let workspaceConfigParamsJson = {};
-    try {
-      workspaceConfigParamsJson = JSON.parse(String(workspaceConfigParamsRawText || "{}"));
-    } catch {
-      workspaceConfigParamsJson = {};
-    }
-    const workspaceConfigParams = normalizeConfigParams(workspaceConfigParamsJson);
-
-    let userConfigParamsJson = {};
-    try {
-      userConfigParamsJson = JSON.parse(String(userConfigParamsRawText || "{}"));
-    } catch {
-      userConfigParamsJson = {};
-    }
-    const userConfigParams = normalizeConfigParams(userConfigParamsJson);
+    const workspaceConfigParams = parseParamsDocument(
+      workspaceConfigParamsRawText,
+      "workspace config-params.json",
+    );
+    const userConfigParams = parseParamsDocument(userConfigParamsRawText, "user config-params.json");
     const systemConfigParams =
       this.globalConfig?.configParams && typeof this.globalConfig.configParams === "object"
         ? this.globalConfig.configParams
         : {};
-    const mergedWorkspaceConfigParams = mergeConfigParamsWithFallback(
+    const mergedConfigParams = mergeConfigParamLayers(
       systemConfigParams,
       workspaceConfigParams,
-    );
-    const mergedConfigParams = mergeConfigParamsWithFallback(
-      mergedWorkspaceConfigParams,
       userConfigParams,
     );
-    const resolvedRaw = resolveConfigSecrets(raw, {
-      configParams: mergedConfigParams,
+    const resolvedRaw = resolveConfigTemplates(raw, {
+      lookup: createConfigValueLookup(process.env, mergedConfigParams),
     });
-    const sanitized = sanitizeUserConfig(resolvedRaw);
-    return {
-      ...sanitized,
-      configParams: mergedConfigParams,
-    };
+    return sanitizeUserConfig(resolvedRaw);
   }
 }

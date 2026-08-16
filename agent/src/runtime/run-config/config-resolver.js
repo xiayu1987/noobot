@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../../config/index.js";
+import { selectModelAlias } from "@noobot/agent-config-protocol";
 import {
-  resolveDefaultModelSpec,
   resolveModelSpecByName,
   resolveModelSpecOrConfiguredDefault,
 } from "../../models/index.js";
@@ -47,70 +47,21 @@ export function resolveEffectiveModelSpec({
   selectedModel = "",
   scenario = "",
 } = {}) {
-  const normalizedSelectedModel = normalizeModelCandidate(readModelValue(selectedModel));
-  if (normalizedSelectedModel) {
+  const effectiveConfig = mergeConfig(globalConfig, userConfig);
+  const selection = selectModelAlias({ selectedModel, scenario, effectiveConfig });
+  if (selection.source === "requested") {
     const selectedOrDefaultModelSpec = resolveModelSpecOrConfiguredDefault({
-      name: normalizedSelectedModel,
+      name: selection.alias,
       globalConfig,
       userConfig,
     });
     if (!selectedOrDefaultModelSpec) {
-      throw new Error(`selected model not found: ${normalizedSelectedModel}`);
+      throw new Error(`selected model not found: ${selection.alias}`);
     }
     return selectedOrDefaultModelSpec;
   }
-  const scenarioModelSpec = resolveScenarioDefaultModelSpec({
-    globalConfig,
-    userConfig,
-    scenario,
-  });
-  if (scenarioModelSpec) return scenarioModelSpec;
-  return resolveDefaultModelSpec({ globalConfig, userConfig });
-}
-
-function normalizeModelCandidate(value = "") {
-  return String(value || "").trim();
-}
-
-function readModelValue(modelConfig = {}) {
-  if (typeof modelConfig === "string") return modelConfig;
-  if (!modelConfig || typeof modelConfig !== "object" || Array.isArray(modelConfig)) return "";
-  return (
-    modelConfig.value ||
-    modelConfig.alias ||
-    modelConfig.key ||
-    modelConfig.model ||
-    ""
-  );
-}
-
-function readScenarioDefinition(sourceConfig = {}, scenarioKey = "") {
-  const definitions =
-    sourceConfig?.scenarios?.definitions &&
-    typeof sourceConfig.scenarios.definitions === "object" &&
-    !Array.isArray(sourceConfig.scenarios.definitions)
-      ? sourceConfig.scenarios.definitions
-      : {};
-  const definition = definitions?.[scenarioKey];
-  return definition && typeof definition === "object" && !Array.isArray(definition)
-    ? definition
-    : {};
-}
-
-function resolveScenarioDefaultModelSpec({
-  globalConfig = {},
-  userConfig = {},
-  scenario = "",
-} = {}) {
-  const scenarioKey = normalizeModelCandidate(scenario);
-  if (!scenarioKey) return null;
-
-  const effectiveConfig = mergeConfig(globalConfig, userConfig);
-  const scenarioDefinition = readScenarioDefinition(effectiveConfig, scenarioKey);
-  const modelName = normalizeModelCandidate(scenarioDefinition?.model);
-  if (!modelName) return null;
   return resolveModelSpecByName({
-    name: modelName,
+    name: selection.alias,
     globalConfig,
     userConfig,
   });

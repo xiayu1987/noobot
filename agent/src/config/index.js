@@ -51,6 +51,8 @@ export {
   normalizeWithAliases,
   resolveBuiltinScenarios,
   resolveRunConfigValue,
+  createConfigValueLookup,
+  resolveConfigTemplates,
   resolveTimeMs,
   sanitizeScenarioConfig,
   sanitizeUserConfig,
@@ -71,7 +73,6 @@ export {
   resolveToolExecutionClass,
   resolveToolExecutionPolicy,
 } from "@noobot/execution-isolation-protocol";
-export { resolveConfigSecrets, resolveConfigTemplates } from "./core/config-secret-resolver.js";
 export { resolveLocalizedBuiltinScenarios } from "./core/scenario-localization-adapter.js";
 export { createGlobalConfigBuilder } from "./core/global-config-builder.js";
 export { ConfigService } from "./core/config-service.js";

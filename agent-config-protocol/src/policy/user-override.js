@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeKnownConfigKeys } from "./key-normalizer.js";
-import { normalizeTimeMs } from "./time-config-normalizer.js";
-import { sanitizeScenarioConfig } from "./builtin-scenarios.js";
-import { isPlainObject } from "./utils.js";
+import { normalizeKnownConfigKeys } from "../normalization/keys.js";
+import { normalizeTimeMs } from "../normalization/time.js";
+import { sanitizeScenarioConfig } from "./scenario-policy.js";
+import { isPlainObject } from "../utils.js";
 
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",

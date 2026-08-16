@@ -121,7 +121,7 @@ export function createDetachedSubSessionRunner({
   session = null,
   attachmentService = null,
   pluginRuntime = {},
-  mergeRunConfigWithPluginStrategy = null,
+  mergeRunConfigPluginPolicy = null,
   prepareRunConfig = null,
   now = () => new Date().toISOString(),
 } = {}) {
@@ -197,7 +197,10 @@ export function createDetachedSubSessionRunner({
           ? inheritedRuntime.runConfig
           : {}),
     });
-    const mergedRunConfig = mergeRunConfigWithPluginStrategy({
+    if (typeof mergeRunConfigPluginPolicy !== "function") {
+      throw new TypeError("detached sub-session runner requires mergeRunConfigPluginPolicy");
+    }
+    const mergedRunConfig = mergeRunConfigPluginPolicy({
       baseRunConfig: inheritedRunConfig,
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],

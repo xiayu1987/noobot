@@ -7,7 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./enums": "./src/enums.js",
-    "./tool-policy": "./src/tool-policy.js"
+    "./tool-policy": "./src/policy/tool-policy.js"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"

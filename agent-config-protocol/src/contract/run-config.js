@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mergeConfig } from "./config-merge.js";
-import { isPlainObject } from "./utils.js";
+import { mergeConfig } from "../pipeline/effective-config.js";
+import { isPlainObject } from "../utils.js";
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
