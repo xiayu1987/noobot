@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isSettledTurn } from "../lifecycle/turn-state.mjs";
+import { normalizeCommandReceipt } from "../command/command-receipt.mjs";
 
 const clean = (value) => String(value || "").trim();
 
@@ -19,11 +20,26 @@ export function validateSessionAggregateInvariants(session = {}) {
   }
   const lifecycle = session.turnLifecycle || {};
   const activeTurnScopeId = clean(lifecycle.activeTurnScopeId);
-  if (activeTurnScopeId && (!lifecycle.turns?.[activeTurnScopeId] || isSettledTurn(lifecycle.turns[activeTurnScopeId]))) {
+  if (
+    activeTurnScopeId &&
+    (!lifecycle.turns?.[activeTurnScopeId] || isSettledTurn(lifecycle.turns[activeTurnScopeId]))
+  ) {
     errors.push("invalid_active_turn");
   }
   const replaced = new Set(Object.keys(lifecycle.replacedTurns || {}));
-  if (Object.keys(lifecycle.turns || {}).some((turnScopeId) => replaced.has(turnScopeId))) errors.push("replaced_turn_materialized");
+  if (Object.keys(lifecycle.turns || {}).some((turnScopeId) => replaced.has(turnScopeId)))
+    errors.push("replaced_turn_materialized");
+  const commandReceipts = Array.isArray(lifecycle.commandReceipts) ? lifecycle.commandReceipts : [];
+  const commandIds = new Set();
+  for (const receipt of commandReceipts) {
+    const normalized = normalizeCommandReceipt(receipt);
+    if (!normalized || Object.hasOwn(receipt || {}, "eventType")) {
+      errors.push("invalid_command_receipt");
+      continue;
+    }
+    if (commandIds.has(normalized.commandId)) errors.push("duplicate_command_receipt");
+    commandIds.add(normalized.commandId);
+  }
   if (Object.hasOwn(session, "turnStatuses")) errors.push("duplicate_terminal_fact");
   if (Object.hasOwn(session, "mutationReceipts")) errors.push("duplicate_command_receipts");
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
