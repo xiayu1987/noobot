@@ -19,7 +19,6 @@ import {
   validateTurnLifecycleReceipt,
   validateTurnTerminalResolution,
   validateSessionProvisionIntent,
-  validateAttachmentParsedEvent,
 } from "@noobot/session-protocol";
 
 test("terminal resolution binds terminal state to the committed Session aggregate version", () => {
@@ -45,39 +44,6 @@ test("terminal resolution binds terminal state to the committed Session aggregat
   assert.deepEqual(
     validateTurnTerminalResolution({ ...resolution, aggregateVersion: null }).errors,
     ["invalid_aggregate_version"],
-  );
-});
-
-test("attachment parsed event requires canonical source and parsed-result identities", () => {
-  const validEvent = {
-    eventType: "attachment_parsed",
-    sessionId: "root-session",
-    turnScopeId: "client-turn:parsed-1",
-    attachments: [
-      {
-        attachmentId: "source-attachment",
-        sessionId: "root-session",
-        attachmentSource: "user",
-        parsedResult: {
-          attachmentId: "parsed-attachment",
-          sessionId: "child-session",
-          attachmentSource: "model",
-        },
-      },
-    ],
-  };
-  assert.deepEqual(validateAttachmentParsedEvent(validEvent), {
-    valid: true,
-    recognized: true,
-    errors: [],
-  });
-  assert.equal(validateAttachmentParsedEvent({ ...validEvent, attachments: [] }).valid, false);
-  assert.equal(
-    validateAttachmentParsedEvent({
-      ...validEvent,
-      attachments: [{ ...validEvent.attachments[0], parsedResult: null }],
-    }).valid,
-    false,
   );
 });
 

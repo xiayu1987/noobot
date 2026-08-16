@@ -75,7 +75,6 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             mimeType: "text/plain",
             attachmentSource: "user",
             sessionId: "s1",
-            parsedResult: { text: "parsed attachment" },
           },
         ],
         systemRuntime: {
@@ -121,7 +120,6 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
             mimeType: "text/plain",
             attachmentSource: "user",
             sessionId: "s1",
-            parsedResult: { text: "parsed attachment" },
           },
         ],
       }),

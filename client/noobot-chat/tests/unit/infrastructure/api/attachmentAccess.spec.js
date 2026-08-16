@@ -50,20 +50,21 @@ describe("attachmentAccess", () => {
     });
   });
 
-  it("resolves parsed result access from nested attachment metadata", () => {
+  it("resolves parsed result access from the canonical relation", () => {
     const meta = resolveParsedResultAccessMeta(
       {
         attachmentId: "source-1",
         sessionId: "session-1",
         attachmentSource: "upload",
-        parsedResult: {
-          attachmentId: "parsed-1",
-          sessionId: "session-1",
-          attachmentSource: "model",
-          relativePath: "parsed/report.md",
+        relations: [{
+          relationType: "parsed_result",
+          sourceIdentity: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "upload" },
+          targetIdentity: { attachmentId: "parsed-1", sessionId: "session-1", attachmentSource: "model" },
+          name: "report.md",
           mimeType: "text/markdown",
           size: 512,
-        },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }],
       },
       { userId: "admin" },
     );
@@ -72,40 +73,39 @@ describe("attachmentAccess", () => {
       attachmentId: "parsed-1",
       sessionId: "session-1",
       attachmentSource: "model",
-      relativePath: "parsed/report.md",
       url: "/api/internal/attachment/admin/parsed-1?sessionId=session-1&attachmentSource=model",
       name: "report.md",
       mimeType: "text/markdown",
       size: 512,
-      hasIdentity: true,
     });
   });
 
-  it("rejects explicit parsed result urls when no parsed attachment identity exists", () => {
-    expect(
-      resolveParsedResultAccessMeta({
-        parsedResultUrl: "https://attacker.example/result",
-        parsedResultName: "result.md",
-      }),
-    ).toMatchObject({
-      attachmentId: "",
-      url: "",
-      name: "",
-      hasIdentity: false,
-    });
+  it("returns no parsed access when the canonical relation is absent", () => {
+    expect(resolveParsedResultAccessMeta({
+      attachmentId: "source-1",
+      sessionId: "session-1",
+      attachmentSource: "upload",
+      relations: [],
+    })).toBeNull();
   });
 
   it("builds preview items from parsed result size and type, not source attachment size", () => {
     expect(
       buildParsedResultPreviewItem({
+        attachmentId: "source-1",
+        sessionId: "session-1",
+        attachmentSource: "upload",
         name: "source.docx",
         size: 2 * 1024 * 1024,
-        parsedResult: {
-          attachmentId: "parsed-1",
+        relations: [{
+          relationType: "parsed_result",
+          sourceIdentity: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "upload" },
+          targetIdentity: { attachmentId: "parsed-1", sessionId: "session-1", attachmentSource: "model" },
           name: "source.md",
           mimeType: "text/markdown",
           size: 256,
-        },
+          createdAt: "2026-01-01T00:00:00.000Z",
+        }],
       }),
     ).toMatchObject({
       attachmentId: "parsed-1",

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { validateAttachmentParsedEvent } from "@noobot/session-protocol";
 import {
   getMessageDialogProcessId,
   getMessageRole,
@@ -17,7 +16,10 @@ import {
 } from "./utils.js";
 import {
   attachmentIdentityKey,
+  ATTACHMENT_EVENT_TYPE,
+  createAttachmentLifecycleEvent,
   projectAttachmentIdentity,
+  reduceAttachmentLifecycle,
 } from "@noobot/attachment-protocol";
 import {
   isTerminalInteraction,
@@ -53,14 +55,6 @@ function canonicalAttachmentProjectionKey(attachment = {}) {
   if (attachmentId && sessionId && attachmentSource) {
     return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
   }
-  return "";
-}
-
-function draftAttachmentProjectionKey(attachment = {}) {
-  const clientAttachmentId = String(
-    attachment?.clientAttachmentId || attachment?.draftAttachmentId || "",
-  ).trim();
-  if (clientAttachmentId) return `draft:${clientAttachmentId}`;
   return "";
 }
 
@@ -122,38 +116,25 @@ export function handleAttachmentsStreamEvent({
   notifyFirstResponse();
 }
 
-export function handleAttachmentParsedStreamEvent({
+export function handleAttachmentLifecycleStreamEvent({
   data,
   activeSession,
   makeViewMessage,
   logSessionEvent,
 }) {
-  const incoming = Array.isArray(data?.attachments) ? data.attachments : [];
-  const protocolResult = validateAttachmentParsedEvent({
-    eventType: StreamEventEnum.ATTACHMENT_PARSED,
-    ...(data || {}),
-  });
+  const event = createAttachmentLifecycleEvent(data);
+  if (event.eventType !== ATTACHMENT_EVENT_TYPE.PARSED || !activeSession?.value) return;
   logSessionEvent?.({
     category: "debug",
     level: "debug",
     debugType: "workflow-diagnostics",
     event: "frontend.attachmentParsed.received",
-    sessionId: String(data?.sessionId || activeSession?.value?.sessionId || "").trim(),
+    sessionId: event.identity.sessionId,
     dialogProcessId: String(data?.dialogProcessId || "").trim(),
-    turnScopeId: String(data?.turnScopeId || "").trim(),
-    data: { incomingCount: incoming.length },
+    turnScopeId: String(event.turnScopeId || "").trim(),
+    data: { incomingCount: 1 },
   });
-  if (!protocolResult.valid || !activeSession?.value) return;
-  const normalized = typeof makeViewMessage === "function"
-    ? makeViewMessage({ attachments: incoming })?.attachments || incoming
-    : incoming;
-  const normalizedByIdentity = new Map();
-  for (const attachment of normalized) {
-    const canonicalKey = canonicalAttachmentProjectionKey(attachment);
-    const draftKey = draftAttachmentProjectionKey(attachment);
-    if (canonicalKey) normalizedByIdentity.set(canonicalKey, attachment);
-    if (draftKey) normalizedByIdentity.set(draftKey, attachment);
-  }
+  const eventKey = canonicalAttachmentProjectionKey(event.identity);
   const messages = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
@@ -162,14 +143,13 @@ export function handleAttachmentParsedStreamEvent({
     if (getMessageRole(message) !== "user" || !Array.isArray(message?.attachments)) continue;
     const nextAttachments = message.attachments.map((existing) => {
       const canonicalKey = canonicalAttachmentProjectionKey(existing);
-      const draftKey = canonicalKey ? "" : draftAttachmentProjectionKey(existing);
-      const matching = normalizedByIdentity.get(canonicalKey || draftKey);
-      if (!matching) return existing;
+      if (canonicalKey !== eventKey) return existing;
       matchedCount += 1;
+      const lifecycle = reduceAttachmentLifecycle(existing.attachmentLifecycle, event);
+      const updated = { ...existing, attachmentLifecycle: lifecycle, relations: lifecycle.relations };
       return typeof makeViewMessage === "function"
-        ? makeViewMessage({ attachments: [{ ...existing, parsedResult: matching.parsedResult }] })?.attachments?.[0]
-          || { ...existing, parsedResult: matching.parsedResult }
-        : { ...existing, parsedResult: matching.parsedResult };
+        ? makeViewMessage({ attachments: [updated] })?.attachments?.[0] || updated
+        : updated;
     });
     message.attachments.splice(0, message.attachments.length, ...nextAttachments);
   }
@@ -182,7 +162,7 @@ export function handleAttachmentParsedStreamEvent({
     dialogProcessId: String(data?.dialogProcessId || "").trim(),
     turnScopeId: String(data?.turnScopeId || "").trim(),
     data: {
-      incomingCount: incoming.length,
+      incomingCount: 1,
       messageCount: messages.length,
       matchedCount,
       userMessageCount: messages.filter((message) => getMessageRole(message) === "user").length,
@@ -274,8 +254,8 @@ export function handleBasicStreamEvent(event, context = {}) {
     handleAttachmentsStreamEvent(context);
     return true;
   }
-  if (event === StreamEventEnum.ATTACHMENT_PARSED) {
-    handleAttachmentParsedStreamEvent(context);
+  if (event === StreamEventEnum.ATTACHMENT_LIFECYCLE) {
+    handleAttachmentLifecycleStreamEvent(context);
     return true;
   }
   return false;

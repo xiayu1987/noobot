@@ -10,13 +10,7 @@ import {
   ingestEmailArtifacts,
   saveAttachmentRecord,
 } from "./attachment-service-ingest.js";
-import {
-  collectSessionJsonFiles,
-  linkParsedResultInScopes,
-  linkParsedResultToAttachment,
-  syncParsedResultToSessionSnapshots,
-  walkSessionJsonFilesFromRoot,
-} from "./attachment-service-link.js";
+import { linkParsedResultToAttachment } from "./attachment-service-link.js";
 import {
   deleteScopedAttachmentsBySessionIds,
   pruneOrphanScopedAttachments,
@@ -51,18 +45,6 @@ export class AttachmentService {
 
   async linkParsedResultToAttachment(payload = {}) {
     return linkParsedResultToAttachment(this, payload);
-  }
-
-  async _linkParsedResultInScopes(payload = {}) {
-    return linkParsedResultInScopes(payload);
-  }
-
-  async _syncParsedResultToSessionSnapshots(payload = {}) {
-    return syncParsedResultToSessionSnapshots(payload);
-  }
-
-  async _walkSessionJsonFilesFromRoot(payload = {}) {
-    return walkSessionJsonFilesFromRoot(payload);
   }
 
   async getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {

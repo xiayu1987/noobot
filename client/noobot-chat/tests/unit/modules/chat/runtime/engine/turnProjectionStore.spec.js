@@ -302,7 +302,7 @@ describe("turnProjectionStore convergence", () => {
     expect(projection(target)).toEqual(once);
   });
 
-  it("preserves local image preview metadata when an accepted snapshot adds parsed output", () => {
+  it("replaces local attachment metadata with the accepted authoritative snapshot", () => {
     const target = {
       ...message(),
       attachments: [{
@@ -325,7 +325,13 @@ describe("turnProjectionStore convergence", () => {
         name: "diagram.png",
         mimeType: "image/png",
         size: 123,
-        parsedResult: { attachmentId: "parsed-1", sessionId: "test-session", attachmentSource: "test", mimeType: "text/markdown" },
+        relations: [{
+          relationType: "parsed_result",
+          sourceIdentity: { attachmentId: "image-1", sessionId: "test-session", attachmentSource: "test" },
+          targetIdentity: { attachmentId: "parsed-1", sessionId: "test-session", attachmentSource: "test" },
+          mimeType: "text/markdown",
+          createdAt: "2026-08-16T00:00:00.000Z",
+        }],
       }],
     };
 
@@ -333,12 +339,20 @@ describe("turnProjectionStore convergence", () => {
       applied: true,
       reason: "snapshot_accepted",
     });
-    expect(target.attachments).toEqual([
-      expect.objectContaining({
-        attachmentId: "image-1",
-        previewUrl: "blob:http://localhost/image-1",
-        parsedResult: expect.objectContaining({ attachmentId: "parsed-1" }),
-      }),
-    ]);
+    expect(target.attachments).toEqual([{
+      attachmentId: "image-1",
+      sessionId: "test-session",
+      attachmentSource: "test",
+      name: "diagram.png",
+      mimeType: "image/png",
+      size: 123,
+      relations: [{
+        relationType: "parsed_result",
+        sourceIdentity: { attachmentId: "image-1", sessionId: "test-session", attachmentSource: "test" },
+        targetIdentity: { attachmentId: "parsed-1", sessionId: "test-session", attachmentSource: "test" },
+        mimeType: "text/markdown",
+        createdAt: "2026-08-16T00:00:00.000Z",
+      }],
+    }]);
   });
 });

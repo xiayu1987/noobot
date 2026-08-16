@@ -152,9 +152,10 @@ test("ScopedArtifactPersistenceHelpers generated artifact persister maps records
         return [
           {
             attachmentId: "att1",
-            fileName: "demo.bin",
-            mimeType: MIME_TYPE.TEXT_PLAIN,
+            sessionId: "s1",
             attachmentSource: "model",
+            name: "demo.bin",
+            mimeType: MIME_TYPE.TEXT_PLAIN,
             generationSource: "node",
           },
         ];

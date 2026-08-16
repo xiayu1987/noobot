@@ -7,14 +7,8 @@
 export const ATTACHMENT_PROTOCOL_NAME = "noobot.attachment";
 export const ATTACHMENT_PROTOCOL_VERSION = 1;
 
-export class AttachmentProtocolError extends Error {
-  constructor(code, details = {}) {
-    super(code);
-    this.name = "AttachmentProtocolError";
-    this.code = code;
-    this.details = Object.freeze({ ...details });
-  }
-}
+export { AttachmentProtocolError } from "./errors.js";
+import { AttachmentProtocolError } from "./errors.js";
 
 export function isPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

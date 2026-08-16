@@ -21,6 +21,7 @@ import {
 } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
@@ -168,8 +169,8 @@ export function useMessageFiles({
         clientAttachmentId: String(attachment?.clientAttachmentId || attachment?.draftAttachmentId || "").trim(),
         sessionId: String(attachment?.sessionId || "").trim(),
         attachmentSource: String(attachment?.attachmentSource || "").trim(),
-        hasParsedResult: Boolean(attachment?.parsedResult),
-        parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
+        parsedResultTargetIdentity:
+          resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
       })),
     }));
     logDisplayedAttachmentsSummary({

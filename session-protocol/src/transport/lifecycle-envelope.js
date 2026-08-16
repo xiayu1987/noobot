@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 export {
-  ATTACHMENT_PARSED_EVENT,
   TURN_LIFECYCLE_PROTOCOL_VERSION,
   TURN_LIFECYCLE_RECEIPT_ACTION,
   TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION,
@@ -12,7 +11,6 @@ export {
   createTurnLifecycleEnvelope,
   createTurnLifecycleReceipt,
   isAuthoritativeTurnLifecycleEnvelope,
-  validateAttachmentParsedEvent,
   validateSessionEvent,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,

@@ -16,13 +16,22 @@ function mountCard(overrides = {}) {
         attachmentSource: "user",
         name: "source.pdf",
         mimeType: "application/pdf",
-        parsedResult: {
-          attachmentId: "parsed-attachment-id",
-          sessionId: "session-id",
-          attachmentSource: "model",
+        relations: [{
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "source-attachment-id",
+            sessionId: "session-id",
+            attachmentSource: "user",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-attachment-id",
+            sessionId: "session-id",
+            attachmentSource: "model",
+          },
           name: "source.md",
           mimeType: "text/markdown",
-        },
+          createdAt: "2026-08-16T00:00:00.000Z",
+        }],
       },
       userId: "admin",
       isImageMime: () => false,
@@ -63,9 +72,9 @@ describe("BaseAttachmentFileCard parsed result actions", () => {
     );
   });
 
-  it("does not render actions without the required user access identity", () => {
+  it("renders relation actions independently from the API caller identity", () => {
     const wrapper = mountCard({ userId: "" });
 
-    expect(wrapper.find(".parsed-result-row").exists()).toBe(false);
+    expect(wrapper.find(".parsed-result-row").exists()).toBe(true);
   });
 });

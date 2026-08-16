@@ -6,8 +6,11 @@
   "description": "Canonical Noobot attachment identity, model, lifecycle and access-reference protocol",
   "exports": {
     ".": "./src/index.js",
-    "./identity": "./src/attachment-identity.js",
-    "./lifecycle": "./src/attachment-lifecycle.js",
+    "./identity": "./src/identity.js",
+    "./model": "./src/model.js",
+    "./relation": "./src/relation.js",
+    "./lifecycle": "./src/lifecycle/index.js",
+    "./persistence": "./src/persistence/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -9,7 +9,6 @@ import { readdir } from "node:fs/promises";
 
 import { fsRm } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { DEFAULT_ATTACHMENT_SESSION_ID } from "../constants.js";
 import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 
 export async function deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds = [] } = {}) {
@@ -40,7 +39,7 @@ export async function pruneOrphanScopedAttachments(
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scopedRoot = attachScopedRoot(basePath);
   const sourceSet = new Set((Array.isArray(attachmentSources) ? attachmentSources : []).map((source) => safeStr(source).toLowerCase()).filter(Boolean));
-  const keepSet = new Set([DEFAULT_ATTACHMENT_SESSION_ID, ...(Array.isArray(keepSessionIds) ? keepSessionIds : []).map((sid) => safeStr(sid)).filter(Boolean)]);
+  const keepSet = new Set((Array.isArray(keepSessionIds) ? keepSessionIds : []).map((sid) => safeStr(sid)).filter(Boolean));
 
   let sessionEntries = [];
   try {

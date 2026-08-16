@@ -59,9 +59,10 @@ const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    resolveParsedResultAccessMeta(props.attachmentItem, {
-      userId: props.userId,
-    }).hasIdentity,
+    Boolean(resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId })),
+);
+const parsedResultAccess = computed(() =>
+  resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId }),
 );
 const parsedResultPreviewEnabled = computed(() =>
   hasParsedResult.value &&
@@ -147,7 +148,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.previewParsedResult', {
-              name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
+              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('preview-parsed-result', attachmentItem)"
@@ -159,7 +160,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.downloadParsedResult', {
-              name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
+              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('download-parsed-result', attachmentItem)"

@@ -5,6 +5,5 @@
  */
 export {
   resolveAttachmentAccessMeta,
-  resolveBaseName,
   resolveParsedResultAccessMeta,
 } from "../infrastructure/api/attachments/attachmentAccess.js";

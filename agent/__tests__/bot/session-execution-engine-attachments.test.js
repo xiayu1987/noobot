@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
-test("_prepareAgentTurnExecution falls back to payload userMessageAttachments when prepared runtime has none", async () => {
+test("_prepareAgentTurnExecution uses canonical payload attachments when prepared runtime has none", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
@@ -31,6 +31,9 @@ test("_prepareAgentTurnExecution falls back to payload userMessageAttachments wh
       userId: "admin",
       userMessageAttachments: [
         {
+          attachmentId: "att-payload-1",
+          sessionId: "session-payload-1",
+          attachmentSource: "user",
           name: "AI 体系现状概览.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           size: 1407731,
@@ -84,22 +87,19 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
     attachmentSource: "user",
     attachments: {
       "att-rich": {
-        attachmentId: "att-rich",
-        sessionId,
-        attachmentSource: "user",
-        name: "AI 体系现状概览.docx",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        size: 1407731,
-        path: "/workspace/admin/runtime/attach/scoped/session-index-a/user/att-rich/AI 体系现状概览.docx",
-        relativePath: "runtime/attach/scoped/session-index-a/user/att-rich/AI 体系现状概览.docx",
-        sandboxPath: "/workspace/admin/runtime/attach/scoped/session-index-a/user/att-rich/AI 体系现状概览.docx",
-        previewUrl: "/preview/att-rich",
-        downloadUrl: "/download/att-rich",
-        parsedResultUrl: "/download/parsed-rich",
-        parsedResultName: "AI 体系现状概览.txt",
-        parsedResultAttachmentId: "parsed-rich",
-        parsedResultSessionId: sessionId,
-        parsedResultAttachmentSource: "model",
+        schema: "noobot.attachment-record",
+        version: 1,
+        identity: { attachmentId: "att-rich", sessionId, attachmentSource: "user" },
+        descriptor: {
+          identity: { attachmentId: "att-rich", sessionId, attachmentSource: "user" },
+          name: "AI 体系现状概览.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          size: 1407731,
+        },
+        storageRef: { kind: "attachment-store", ref: "runtime/attach/scoped/session-index-a/user/att-rich/AI 体系现状概览.docx" },
+        relations: [],
+        createdAt: "2026-08-16T00:00:00.000Z",
+        updatedAt: "2026-08-16T00:00:00.000Z",
       },
     },
   }), "utf8");
@@ -141,11 +141,10 @@ test("_prepareAgentTurnExecution enriches raw userMessageAttachments from scoped
   assert.equal(meta.sessionId, sessionId);
   assert.equal(meta.path.includes("att-rich"), true);
   assert.equal(meta.relativePath.includes("att-rich"), true);
-  assert.equal(meta.sandboxPath.includes("att-rich"), true);
-  assert.equal(meta.previewUrl, "/preview/att-rich");
-  assert.equal(meta.downloadUrl, "/download/att-rich");
-  assert.equal(meta.parsedResultUrl, "/download/parsed-rich");
-  assert.equal(meta.parsedResultAttachmentId, "parsed-rich");
+  assert.equal(meta.sandboxPath, "");
+  assert.equal(meta.previewUrl, "");
+  assert.equal(meta.downloadUrl, "");
+  assert.equal(meta.parsedResult, undefined);
 });
 
 test("_prepareAgentTurnExecution enriches raw resend payload from existing session message attachments", async () => {
@@ -161,14 +160,6 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
     sandboxPath: "/workspace/admin/runtime/attach/scoped/session-existing-a/user/att-session-rich/需求说明.docx",
     previewUrl: "/preview/att-session-rich",
     downloadUrl: "/download/att-session-rich",
-    parsedResultUrl: "/download/parsed-session-rich",
-    parsedResultAttachmentId: "parsed-session-rich",
-    parsedResult: {
-      attachmentId: "parsed-session-rich",
-      sessionId: "session-existing-a",
-      attachmentSource: "model",
-      path: "/tmp/需求说明.txt",
-    },
   };
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
@@ -207,9 +198,6 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
   assert.equal(prepared.userMessageAttachments.length, 1);
   assert.equal(prepared.userMessageAttachments[0].attachmentId, "att-session-rich");
   assert.equal(prepared.userMessageAttachments[0].path, richAttachment.path);
-  assert.equal(prepared.userMessageAttachments[0].parsedResultUrl, "/download/parsed-session-rich");
-  assert.equal(prepared.userMessageAttachments[0].parsedResultAttachmentId, "parsed-session-rich");
-  assert.deepEqual(prepared.userMessageAttachments[0].parsedResult, richAttachment.parsedResult);
 });
 
 test("_prepareAgentTurnExecution does not restore old rich attachments when payload explicitly deletes all", async () => {

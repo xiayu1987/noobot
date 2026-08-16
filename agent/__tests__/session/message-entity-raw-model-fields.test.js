@@ -100,13 +100,17 @@ test("normalizeMessageEntity omits empty attachments", () => {
 });
 
 test("normalizeMessageEntity preserves compact non-empty attachments", () => {
-  const attachments = [{
-    attachmentId: "att_1",
-    filename: "a.txt",
-    mimeType: "text/plain",
-    raw: "drop",
-    owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
-  }];
+  const attachments = [
+    {
+      attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      name: "a.txt",
+      mimeType: "text/plain",
+      raw: "drop",
+      owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+    },
+  ];
   const normalized = normalizeMessageEntity({
     role: "user",
     content: "see attachment",
@@ -116,6 +120,8 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
   assert.deepEqual(normalized.attachments, [
     {
       attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
       name: "a.txt",
       mimeType: "text/plain",
       owner: { type: "plugin", id: "harness-plugin" },

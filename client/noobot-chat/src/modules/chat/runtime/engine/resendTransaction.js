@@ -23,7 +23,8 @@ import {
 import { SESSION_DETAIL_APPLY_MODE } from "./messageStateGuards.js";
 import { assertTurnReplacementMaterialization } from "@noobot/session-protocol";
 import {
-  attachmentIdentityKey as canonicalAttachmentIdentityKey,
+  attachmentIdentityKey,
+  dedupeAttachmentsByIdentity,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 
@@ -43,17 +44,9 @@ function toPendingDisplayAttachment(attachment = {}) {
 }
 
 function dedupeAttachmentMetas(attachments = []) {
-  const seen = new Set();
-  const out = [];
-  for (const attachment of Array.isArray(attachments) ? attachments : []) {
-    const meta = normalizeAttachmentMeta(attachment);
-    if (!meta) continue;
-    const key = canonicalAttachmentIdentityKey(projectAttachmentIdentity(meta));
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(meta);
-  }
-  return out;
+  return dedupeAttachmentsByIdentity(
+    (Array.isArray(attachments) ? attachments : []).map(normalizeAttachmentMeta).filter(Boolean),
+  );
 }
 
 function draftAttachmentIdentityKey(attachment = {}) {
@@ -78,10 +71,6 @@ function dedupeDraftAttachmentMetas(attachments = []) {
     out.push(meta);
   }
   return out;
-}
-
-function attachmentIdentityKey(attachment = {}) {
-  return canonicalAttachmentIdentityKey(projectAttachmentIdentity(attachment));
 }
 
 function enrichPersistedAttachmentsWithDraftMetadata(
@@ -261,7 +250,9 @@ export function createResendMessageTransaction({
     );
     const authoritativeAttachments = dedupeAttachmentMetas(
       userTargetMessage?.attachments || [],
-    ).filter((attachment) => !removedAttachmentKeys.has(attachmentIdentityKey(attachment)));
+    ).filter((attachment) => !removedAttachmentKeys.has(
+      attachmentIdentityKey(projectAttachmentIdentity(attachment)),
+    ));
     const keptAttachments = dedupeAttachmentMetas([
       ...authoritativeAttachments,
       ...(Array.isArray(options?.attachments) ? options.attachments : []),

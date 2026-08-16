@@ -78,7 +78,7 @@ describe("prepareChatSend attachment architecture", () => {
     ]);
   });
 
-  it("keeps rich user-message attachment fields when reuse turn receives raw userAttachments", () => {
+  it("uses incoming canonical attachments as authority when reusing a user turn", () => {
     const richAttachment = {
       attachmentId: "att-rich",
       attachmentSource: "test",
@@ -91,15 +91,6 @@ describe("prepareChatSend attachment architecture", () => {
       sandboxPath: "/workspace/att-rich.docx",
       previewUrl: "/api/attachments/att-rich/preview",
       downloadUrl: "/api/attachments/att-rich/download",
-      parsedResult: {
-        attachmentId: "parsed-rich",
-        sessionId: "session-a",
-        attachmentSource: "test",
-        path: "/workspace/parsed-rich.md",
-        relativePath: "runtime/attach/session-a/model/parsed-rich.md",
-      },
-      parsedResultAttachmentId: "parsed-rich",
-      parsedResultUrl: "/api/attachments/parsed-rich/download",
     };
     const userMessage = {
       role: RoleEnum.USER,
@@ -124,21 +115,14 @@ describe("prepareChatSend attachment architecture", () => {
       }],
     });
 
-    expect(userMessage.attachments).toHaveLength(1);
-    expect(userMessage.attachments[0]).toEqual(expect.objectContaining({
+    expect(userMessage.attachments).toEqual([{
       attachmentId: "att-rich",
-      path: "/workspace/att-rich.docx",
-      relativePath: "runtime/attach/session-a/user/att-rich.docx",
-      sandboxPath: "/workspace/att-rich.docx",
-      previewUrl: "/api/attachments/att-rich/preview",
-      downloadUrl: "/api/attachments/att-rich/download",
-      parsedResultAttachmentId: "parsed-rich",
-      parsedResultUrl: "/api/attachments/parsed-rich/download",
-    }));
-    expect(userMessage.attachments[0].parsedResult).toEqual(expect.objectContaining({
-      attachmentId: "parsed-rich",
-      path: "/workspace/parsed-rich.md",
-    }));
+      sessionId: "session-a",
+      attachmentSource: "test",
+      name: "report.docx",
+      mimeType: richAttachment.mimeType,
+      size: 123,
+    }]);
   });
 
   it("treats explicit empty userAttachments as delete-all instead of restoring old attachments", () => {

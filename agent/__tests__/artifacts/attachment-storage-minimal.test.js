@@ -291,11 +291,13 @@ test("AttachmentService links parsed results to one attachment identity only", a
 
     await service.linkParsedResultToAttachment({
       userId: "u1",
-      sourceAttachmentId: saved[0].attachmentId,
-      sourceSessionId: "s1",
-      sourceAttachmentSource: "user",
-      parsedAttachmentMeta: parsed,
-      toolName: "multimodal_parse",
+      sourceIdentity: {
+        attachmentId: saved[0].attachmentId,
+        sessionId: "s1",
+        attachmentSource: "user",
+      },
+      targetAttachment: parsed,
+      producerId: "multimodal_parse",
     });
 
     const otherAttachment = await service.getAttachmentById({
@@ -310,10 +312,18 @@ test("AttachmentService links parsed results to one attachment identity only", a
       attachmentSource: "user",
       attachmentId: saved[0].attachmentId,
     });
-    assert.equal(linkedAttachment.parsedResult?.attachmentId, parsed.attachmentId);
-    assert.equal(linkedAttachment.parsedResult?.sessionId, parsed.sessionId);
-    assert.equal(linkedAttachment.parsedResult?.attachmentSource, parsed.attachmentSource);
-    assert.equal(otherAttachment.parsedResult, undefined);
+    assert.equal(linkedAttachment.relations.length, 1);
+    assert.deepEqual(linkedAttachment.relations[0].sourceIdentity, {
+      attachmentId: saved[0].attachmentId,
+      sessionId: "s1",
+      attachmentSource: "user",
+    });
+    assert.deepEqual(linkedAttachment.relations[0].targetIdentity, {
+      attachmentId: parsed.attachmentId,
+      sessionId: parsed.sessionId,
+      attachmentSource: parsed.attachmentSource,
+    });
+    assert.deepEqual(otherAttachment.relations, []);
   });
 });
 
@@ -394,7 +404,7 @@ test("AttachmentService rejects a malformed generated batch before persisting an
   });
 });
 
-test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin snapshots", async () => {
+test("AttachmentService.linkParsedResultToAttachment updates only the attachment store relation", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
     const userId = "u1";
@@ -487,51 +497,43 @@ test("AttachmentService.linkParsedResultToAttachment syncs runtime and plugin sn
 
     const linked = await service.linkParsedResultToAttachment({
       userId,
-      sourceAttachmentId: sourceAttachment.attachmentId,
-      parsedAttachmentMeta: parsedAttachment,
-      toolName: "multimodal_parse",
-      sourceSessionId: rootSessionId,
-      sourceAttachmentSource: "user",
+      sourceIdentity: {
+        attachmentId: sourceAttachment.attachmentId,
+        sessionId: rootSessionId,
+        attachmentSource: "user",
+      },
+      targetAttachment: parsedAttachment,
+      producerId: "multimodal_parse",
     });
 
     assert.ok(linked);
-    assert.equal(linked.parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(linked.parsedResult?.sessionId, parsedAttachment.sessionId);
-    assert.equal(linked.parsedResult?.attachmentSource, parsedAttachment.attachmentSource);
-
-    const runtimeSnapshot = await readSessionArtifact({
-      sessionDir: path.dirname(runtimeSessionFile),
+    assert.equal(linked.relations.length, 1);
+    assert.deepEqual(linked.relations[0].sourceIdentity, {
+      attachmentId: sourceAttachment.attachmentId,
+      sessionId: rootSessionId,
+      attachmentSource: "user",
     });
-    const pluginSnapshot = await readSessionArtifact({
-      sessionDir: path.dirname(pluginSessionFile),
+    assert.deepEqual(linked.relations[0].targetIdentity, {
+      attachmentId: parsedAttachment.attachmentId,
+      sessionId: parsedAttachment.sessionId,
+      attachmentSource: parsedAttachment.attachmentSource,
     });
-    const runtimeAttachment = runtimeSnapshot?.messages?.[0]?.attachments?.[0] || {};
-    const pluginAttachment = pluginSnapshot?.messages?.[0]?.attachments?.[0] || {};
-    assert.equal(runtimeAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(pluginAttachment.parsedResult?.attachmentId, parsedAttachment.attachmentId);
-    assert.equal(runtimeAttachment.parsedResult?.tool, "multimodal_parse");
-    assert.equal(pluginAttachment.parsedResult?.tool, "multimodal_parse");
 
-    const runtimeSummary = JSON.parse(await readFile(runtimeSummaryFile, "utf8"));
-    const pluginSummary = JSON.parse(await readFile(pluginSummaryFile, "utf8"));
-    assert.equal(runtimeSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
-    assert.equal(pluginSummary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
-    assert.equal("depth" in runtimeSummary, false);
-    assert.equal("depth" in pluginSummary, false);
-    assert.equal(
-      runtimeSummary.messages[0].attachments[0].parsedResult?.attachmentId,
-      parsedAttachment.attachmentId,
-    );
-    assert.equal(
-      pluginSummary.messages[0].attachments[0].parsedResult?.attachmentId,
-      parsedAttachment.attachmentId,
-    );
-    assert.equal(runtimeSummary.messages[0].attachments[0].parsedResult?.tool, "multimodal_parse");
-    assert.equal(pluginSummary.messages[0].attachments[0].parsedResult?.tool, "multimodal_parse");
+    const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
+    const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });
+    assert.equal(runtimeSnapshot.messages[0].attachments[0].parsedResult, undefined);
+    assert.equal(pluginSnapshot.messages[0].attachments[0].parsedResult, undefined);
+    const stored = await service.getAttachmentById({
+      userId,
+      attachmentId: sourceAttachment.attachmentId,
+      sessionId: rootSessionId,
+      attachmentSource: "user",
+    });
+    assert.deepEqual(stored.relations, linked.relations);
   });
 });
 
-test("index-manager migrates protocol records and isolates every attachment scope", async () => {
+test("index-manager persists only versioned protocol records and isolates every attachment scope", async () => {
   await withTempDir(async (workspaceRoot) => {
     const basePath = path.join(workspaceRoot, "u1");
     const scope = { sessionId: "s1", attachmentSource: "user" };
@@ -539,18 +541,10 @@ test("index-manager migrates protocol records and isolates every attachment scop
     const empty = await readAttachIndex(basePath, scope);
     assert.deepEqual(empty.attachments, {});
 
-    await writeAttachIndex(
-      basePath,
-      {
-        attachments: {
-          a1: { attachmentId: "a1", name: "x.txt" },
-        },
-      },
-      scope,
+    await assert.rejects(
+      writeAttachIndex(basePath, { attachments: { a1: { attachmentId: "a1", name: "x.txt" } } }, scope),
+      /invalid_persisted_attachment_record/,
     );
-
-    const loaded = await readAttachIndex(basePath, scope);
-    assert.deepEqual(loaded.attachments, {});
 
     await writeAttachIndex(
       basePath,
@@ -572,11 +566,8 @@ test("index-manager migrates protocol records and isolates every attachment scop
     );
     const canonicalLoaded = await readAttachIndex(basePath, scope);
     assert.equal(canonicalLoaded.attachments.a2?.name, "x.txt");
-    assert.equal(
-      canonicalLoaded.attachments.a2?.sandboxPath,
-      "/workspace/sandbox/runtime/attach/scoped/s1/user/a2/x.txt",
-    );
-    assert.equal(canonicalLoaded.attachments.a2?.previewUrl, "/preview/a2");
+    assert.equal(canonicalLoaded.attachments.a2?.sandboxPath, undefined);
+    assert.equal(canonicalLoaded.attachments.a2?.previewUrl, undefined);
 
     const otherScope = { sessionId: "s2", attachmentSource: "user" };
     await writeAttachIndex(

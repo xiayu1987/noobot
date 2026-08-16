@@ -5,6 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  ATTACHMENT_EVENT_TYPE,
+  ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_RELATION_TYPE,
+  createAttachmentLifecycleEvent,
+} from "@noobot/attachment-protocol";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import {
@@ -168,23 +174,36 @@ test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta",
   }
 });
 
-test("chat-websocket-server: parsed attachment updates and delta events keep request turnScopeId", async () => {
+test("chat-websocket-server: versioned attachment lifecycle and delta events preserve protocol identity", async () => {
+  const identity = {
+    attachmentId: "att-1",
+    sessionId: "s1",
+    attachmentSource: "user",
+  };
+  const lifecycleEvent = createAttachmentLifecycleEvent({
+    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+    eventVersion: 1,
+    messageId: "attachment-event-1",
+    identity,
+    status: ATTACHMENT_LIFECYCLE.PARSED,
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    turnScopeId: "turn-parent",
+    relation: {
+      relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+      sourceIdentity: identity,
+      targetIdentity: {
+        attachmentId: "parsed-att-1",
+        sessionId: "s1",
+        attachmentSource: "model",
+      },
+      createdAt: "2026-08-16T00:00:00.000Z",
+    },
+  });
   const server = await startServerWithWs({
     runSession: async ({ eventListener }) => {
       eventListener?.onEvent?.({
-        event: "attachment_parsed",
-        data: {
-          dialogProcessId: "dp-attachments",
-          sessionId: "sub-session-from-parser",
-          attachments: [
-            {
-              attachmentId: "att-1",
-              sessionId: "s1",
-              attachmentSource: "user",
-              name: "a.txt",
-            },
-          ],
-        },
+        event: "attachment_lifecycle",
+        data: lifecycleEvent,
       });
       eventListener?.onEvent?.({
         event: "llm_delta",
@@ -223,17 +242,8 @@ test("chat-websocket-server: parsed attachment updates and delta events keep req
       },
     });
 
-    const attachmentsEvent = events.find((item) => item?.event === "attachment_parsed");
-    assert.equal(attachmentsEvent?.data?.sessionId, "s1");
-    assert.equal(attachmentsEvent?.data?.turnScopeId, "turn-parent");
-    assert.deepEqual(attachmentsEvent?.data?.attachments, [
-      {
-        attachmentId: "att-1",
-        sessionId: "s1",
-        attachmentSource: "user",
-        name: "a.txt",
-      },
-    ]);
+    const attachmentsEvent = events.find((item) => item?.event === "attachment_lifecycle");
+    assert.deepEqual(attachmentsEvent?.data, lifecycleEvent);
 
     const deltaEvent = events.find((item) => item?.event === "delta");
     assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");

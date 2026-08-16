@@ -84,7 +84,16 @@ test("session display summary should keep chat view lightweight and rebuild stal
           turnScopeId: "turn-scope-u1",
           dialogProcessId: "dp-u1",
           content: longUserContent,
-          attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
+          attachments: [
+            {
+              attachmentId: "att-1",
+              sessionId: "B",
+              attachmentSource: "user",
+              name: "a.txt",
+              mimeType: "text/plain",
+              size: 12,
+            },
+          ],
         },
         {
           id: "i1",
@@ -341,6 +350,8 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.deepEqual(userMessage.attachments, [
       {
         attachmentId: "att-1",
+        sessionId: "B",
+        attachmentSource: "user",
         name: "a.txt",
         mimeType: "text/plain",
         size: 12,

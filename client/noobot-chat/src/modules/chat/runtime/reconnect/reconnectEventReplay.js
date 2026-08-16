@@ -5,7 +5,8 @@
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { validateRegisteredEvent } from "@noobot/event-protocol";
-import { validateSessionEvent, validateAttachmentParsedEvent } from "@noobot/session-protocol";
+import { validateSessionEvent } from "@noobot/session-protocol";
+import { createAttachmentLifecycleEvent } from "@noobot/attachment-protocol";
 import { normalizeReplayCacheKey } from "./replayCache.js";
 import { _trimStr } from "./utils.js";
 import { normalizeTurnTransportEnvelope } from "../engine/turnTransportEnvelope.js";
@@ -29,7 +30,7 @@ export async function applyReconnectEventReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
-  onAttachmentParsed,
+  onAttachmentLifecycle,
   isDeletedTurn,
 } = {}) {
   const normalizedTransportEnvelope = normalizeTurnTransportEnvelope({
@@ -102,22 +103,19 @@ export async function applyReconnectEventReplay({
   }
   const { routed: runtimeRouted, result: runtimeResult } = routeRuntimeEvent();
   if (runtimeRouted) return runtimeResult || { applied: true };
-  if (replayEvent === StreamEventEnum.ATTACHMENT_PARSED) {
-    const protocolResult = validateAttachmentParsedEvent({
-      eventType: replayEvent,
-      ...(data || {}),
-    });
-    if (!protocolResult.valid) {
+  if (replayEvent === StreamEventEnum.ATTACHMENT_LIFECYCLE) {
+    let event;
+    try { event = createAttachmentLifecycleEvent(data); } catch (error) {
       logWorkflowDiagnostics("frontend.workflowReplay.attachmentParsedRejected", {
-        sessionId: _trimStr(data?.sessionId),
+        sessionId: _trimStr(data?.identity?.sessionId),
         dialogProcessId: _trimStr(data?.dialogProcessId),
         turnScopeId: _trimStr(data?.turnScopeId),
-        errors: protocolResult.errors,
+        errors: [error?.message || "invalid_attachment_lifecycle_event"],
       });
-      return { applied: false, reason: "invalid_attachment_parsed_event", errors: protocolResult.errors };
+      return { applied: false, reason: "invalid_attachment_lifecycle_event" };
     }
-    onAttachmentParsed?.(data || {});
-    return { applied: true, reason: "attachment_parsed_projected" };
+    onAttachmentLifecycle?.(event);
+    return { applied: true, reason: "attachment_lifecycle_projected" };
   }
   // Let registered extensions consume their own events before applying the
   // core registry. Core authority events are excluded by the router, so they

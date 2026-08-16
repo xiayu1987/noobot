@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   mapAttachmentRecordsToMetas,
   normalizeAttachmentMetas,
-  normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
   attachmentMatchKeys,
   findMatchingAttachmentMeta,
@@ -28,7 +27,7 @@ test("projectCanonicalAttachmentIdentity delegates identity to the shared protoc
         name: "display.txt",
         downloadUrl: "/api/attachments/att_1",
         previewUrl: "",
-        parsedResult: { path: "/runtime/parsed.md" },
+        relations: [],
       },
       "s1",
     ),
@@ -104,126 +103,101 @@ test("attachment matching uses only the shared three-field identity", () => {
   );
 });
 
-test("normalizeAttachmentMetas accepts legacy aliases but emits canonical attachment fields", () => {
+test("normalizeAttachmentMetas accepts only canonical attachment fields", () => {
   const [meta] = normalizeAttachmentMetas([
     {
-      id: "att_legacy",
-      client_attachment_id: "client_legacy",
-      content_sha256: "sha_legacy",
-      session_id: "session_legacy",
-      attachment_source: "user",
-      fileName: "legacy.txt",
-      type: "text/plain",
-      bytes: "25",
-      filePath: "/tmp/legacy.txt",
-      relative_path: "runtime/legacy.txt",
-      sandboxViewPath: "/workspace/legacy.txt",
-      sandboxEnabled: true,
-      generation_source: "semantic_transfer_tool_output",
+      attachmentId: "att_1",
+      clientAttachmentId: "client_1",
+      contentSha256: "sha_1",
+      sessionId: "session_1",
+      attachmentSource: "user",
+      name: "canonical.txt",
+      mimeType: "text/plain",
+      size: 25,
+      path: "/tmp/canonical.txt",
+      relativePath: "runtime/canonical.txt",
+      sandboxPath: "/workspace/canonical.txt",
+      isSandbox: true,
+      generationSource: "semantic_transfer_tool_output",
     },
   ]);
 
   assert.deepEqual(meta, {
-    attachmentId: "att_legacy",
-    clientAttachmentId: "client_legacy",
-    contentSha256: "sha_legacy",
-    sessionId: "session_legacy",
+    attachmentId: "att_1",
+    clientAttachmentId: "client_1",
+    contentSha256: "sha_1",
+    sessionId: "session_1",
     attachmentSource: "user",
-    name: "legacy.txt",
+    name: "canonical.txt",
     mimeType: "text/plain",
     size: 25,
-    path: "/tmp/legacy.txt",
-    relativePath: "runtime/legacy.txt",
-    sandboxPath: "/workspace/legacy.txt",
+    path: "/tmp/canonical.txt",
+    relativePath: "runtime/canonical.txt",
+    sandboxPath: "/workspace/canonical.txt",
     isSandbox: true,
     generationSource: "semantic_transfer_tool_output",
   });
-  assert.equal("id" in meta, false);
-  assert.equal("filePath" in meta, false);
-  assert.equal("type" in meta, false);
-  assert.equal("sandboxViewPath" in meta, false);
-  assert.equal("sandboxEnabled" in meta, false);
+  assert.throws(
+    () => normalizeAttachmentMetas([{ id: "att_legacy", sessionId: "session_1", attachmentSource: "user" }]),
+    (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
+  );
 });
 
-test("nested attachment metadata normalizers remove known alias fields", () => {
+test("nested attachment metadata normalizers preserve only canonical fields", () => {
   const turnScope = normalizeAttachmentTurnScopeMeta({
     turnScope: {
       turnScopeId: "turn_1",
-      session_id: "s1",
-      dialog_process_id: "dialog_legacy",
+      sessionId: "s1",
+      dialogProcessId: "dialog_1",
     },
   });
-  const parsedResult = normalizeAttachmentParsedResultMeta({
-    parsedResult: {
-      attachment_id: "parsed_legacy",
-      fileName: "parsed.md",
-      type: "text/markdown",
-      file_path: "/tmp/parsed.md",
-      relative_path: "runtime/parsed.md",
-      updated_at: "2026-07-11T00:00:00.000Z",
-      sandbox_enabled: true,
-      tool: "multimodal_parse",
-    },
-  });
-
   assert.deepEqual(turnScope, {
     turnScopeId: "turn_1",
-    dialogProcessId: "dialog_legacy",
+    dialogProcessId: "dialog_1",
     sessionId: "s1",
   });
-  assert.deepEqual(parsedResult, {
-    attachmentId: "parsed_legacy",
-    name: "parsed.md",
-    mimeType: "text/markdown",
-    path: "/tmp/parsed.md",
-    relativePath: "runtime/parsed.md",
-    tool: "multimodal_parse",
-    updatedAt: "2026-07-11T00:00:00.000Z",
-    isSandbox: true,
-  });
-  assert.equal("dialog_process_id" in turnScope, false);
-  assert.equal("attachment_id" in parsedResult, false);
-  assert.equal("file_path" in parsedResult, false);
-  assert.equal("relative_path" in parsedResult, false);
-  assert.equal("updated_at" in parsedResult, false);
-  assert.equal("sandbox_enabled" in parsedResult, false);
 });
 
-test("mapAttachmentRecordsToMetas canonicalizes aliases before exposing attachment metadata", () => {
+test("mapAttachmentRecordsToMetas projects canonical runtime records without inferring facts", () => {
   const [meta] = mapAttachmentRecordsToMetas([
     {
-      id: "att_alias",
-      client_attachment_id: "client_alias",
-      filename: "alias.md",
-      mime: "text/markdown",
-      filePath: "/tmp/alias.md",
-      relative_path: "runtime/alias.md",
-      sandboxViewPath: "/workspace/alias.md",
-      sandboxEnabled: false,
-      generation_source: "semantic_transfer_tool_output",
-      parsedResult: {
-        id: "parsed_alias",
-        updated_at: "2026-07-11T00:00:00.000Z",
-      },
+      attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "model",
+      clientAttachmentId: "client_1",
+      name: "result.md",
+      mimeType: "text/markdown",
+      path: "/tmp/result.md",
+      relativePath: "runtime/result.md",
+      sandboxPath: "/workspace/result.md",
+      isSandbox: false,
+      generationSource: "semantic_transfer_tool_output",
+      relations: [{
+        relationType: "parsed_result",
+        sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+        targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
+        createdAt: "2026-07-11T00:00:00.000Z",
+      }],
       turnScope: {
-        dialog_process_id: "dialog_alias",
+        dialogProcessId: "dialog_1",
       },
     },
   ]);
 
-  assert.equal(meta.attachmentId, "att_alias");
-  assert.equal(meta.clientAttachmentId, "client_alias");
-  assert.equal(meta.name, "alias.md");
+  assert.equal(meta.attachmentId, "att_1");
+  assert.equal(meta.clientAttachmentId, "client_1");
+  assert.equal(meta.name, "result.md");
   assert.equal(meta.mimeType, "text/markdown");
-  assert.equal(meta.path, "/tmp/alias.md");
-  assert.equal(meta.relativePath, "runtime/alias.md");
-  assert.equal(meta.sandboxPath, "/workspace/alias.md");
+  assert.equal(meta.path, "/tmp/result.md");
+  assert.equal(meta.relativePath, "runtime/result.md");
+  assert.equal(meta.sandboxPath, "/workspace/result.md");
   assert.equal(meta.isSandbox, false);
   assert.equal(meta.generationSource, "semantic_transfer_tool_output");
-  assert.equal(meta.parsedResult?.attachmentId, "parsed_alias");
-  assert.equal(meta.parsedResult?.updatedAt, "2026-07-11T00:00:00.000Z");
-  assert.equal(meta.turnScope?.dialogProcessId, "dialog_alias");
-  assert.equal(JSON.stringify(meta).includes("sandboxViewPath"), false);
-  assert.equal(JSON.stringify(meta).includes("updated_at"), false);
-  assert.equal(JSON.stringify(meta).includes("dialog_process_id"), false);
+  assert.deepEqual(meta.relations, [{
+    relationType: "parsed_result",
+    sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+    targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
+    createdAt: "2026-07-11T00:00:00.000Z",
+  }]);
+  assert.equal(meta.turnScope?.dialogProcessId, "dialog_1");
 });
