@@ -28,7 +28,13 @@ const invocation = {
   domain: "test",
   contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
 };
-const model = { model: "m", format: "openai_compatible", operatorId: "test", adapterId: "test" };
+const model = {
+  model: "m",
+  format: "openai_compatible",
+  operatorId: "test",
+  adapterId: "test",
+  capabilities: { web_search: true },
+};
 
 const sdkTool = {
   type: "function",

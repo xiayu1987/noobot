@@ -12,9 +12,11 @@ import {
   MODEL_PROTOCOL_VERSION,
   listModelLibraryOptions,
   resolveModelLibraryProvider,
+  normalizeModelCapabilities,
   resolveModelMultimodalCapabilities,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
+  supportsModelCapability,
   validateModelResponse,
 } from "../src/index.js";
 
@@ -54,6 +56,7 @@ const model = {
   format: "openai_compatible",
   operatorId: "openai",
   adapterId: "openai-compatible",
+  capabilities: { web_search: true },
 };
 
 test("model request has one versioned canonical shape", () => {
@@ -261,4 +264,36 @@ test("multimodal capabilities are governed only by explicit model configuration"
   const suggestiveNameOnly = { model: "omni-vision-image-video" };
   assert.equal(supportsModelMultimodalParsing(suggestiveNameOnly, ["image"]), false);
   assert.equal(supportsModelMultimodalGeneration(suggestiveNameOnly, ["image"]), false);
+});
+
+test("model operation capabilities are governed only by explicit model configuration", () => {
+  const configured = {
+    capabilities: {
+      streaming: false,
+      tools: true,
+      web_search: true,
+      image_generation: false,
+    },
+  };
+  assert.deepEqual(normalizeModelCapabilities(configured.capabilities), {
+    streaming: false,
+    tools: true,
+    vision: false,
+    reasoning: false,
+    web_search: true,
+    image_generation: false,
+  });
+  assert.equal(supportsModelCapability(configured, "web_search"), true);
+  assert.equal(supportsModelCapability({}, "web_search"), false);
+  assert.throws(() => supportsModelCapability(configured, "unknown"), /unsupported model capability/);
+  assert.throws(
+    () =>
+      createModelRequest({
+        invocation,
+        model: { ...model, capabilities: {} },
+        messages: [],
+        operation: { kind: MODEL_OPERATION_KIND.WEB_SEARCH, input: { query: "latest" } },
+      }),
+    /does not declare web_search capability/,
+  );
 });

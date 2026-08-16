@@ -151,7 +151,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     "if(s.step===4)v=String(s.values[3].length);",
     "if(s.step===5)v=s.values[3].toUpperCase();",
     "if(s.step===6)v=crypto.createHash('sha256').update(s.values[5]).digest('hex');",
-    "s.values.push(v);s.step+=1;fs.mkdirSync(require('path').dirname(p),{recursive:true});",
+    "s.values.push(v);s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
     "fs.writeFileSync(p,JSON.stringify(s));",
     "console.log(JSON.stringify({step:s.step,value:v}));",
     "\"",
