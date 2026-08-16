@@ -71,24 +71,3 @@ export function mergeIncremental({
 
   return output;
 }
-
-export function parseTemplateVariables(input, collector = new Set()) {
-  if (typeof input === "string") {
-    const pattern = /\$\{([A-Z0-9_]+)\}/g;
-    let matched = pattern.exec(input);
-    while (matched) {
-      const key = String(matched[1] || "").trim();
-      if (key) collector.add(key);
-      matched = pattern.exec(input);
-    }
-    return collector;
-  }
-  if (Array.isArray(input)) {
-    for (const item of input) parseTemplateVariables(item, collector);
-    return collector;
-  }
-  if (isPlainObject(input)) {
-    for (const value of Object.values(input)) parseTemplateVariables(value, collector);
-  }
-  return collector;
-}

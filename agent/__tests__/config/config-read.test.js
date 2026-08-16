@@ -78,14 +78,7 @@ test("ConfigService.loadUserConfig: 应读取用户配置并合并 config-params
       "utf8",
     );
 
-    const service = new ConfigService({
-      globalConfig: {
-        configParams: {
-          API_KEY: "global-key",
-          BASE_URL: "https://api.example.com",
-        },
-      },
-    });
+    const service = new ConfigService();
 
     const loaded = await service.loadUserConfig(tempDir);
     assert.equal(loaded.defaultProvider, "openai");
@@ -97,7 +90,7 @@ test("ConfigService.loadUserConfig: 应读取用户配置并合并 config-params
   }
 });
 
-test("ConfigService.loadUserConfig: 缺少 config-params.json 时应使用全局参数回退", async () => {
+test("ConfigService.loadUserConfig: 缺少独立 config-params 文档时不读取配置内旧参数", async () => {
   const tempDir = await createTempDir();
   try {
     await writeFile(
@@ -105,22 +98,16 @@ test("ConfigService.loadUserConfig: 缺少 config-params.json 时应使用全局
       JSON.stringify({
         default_provider: "openai",
         providers: {
-          openai: { model: "gpt-4o", api_key: "${API_KEY}" },
+          openai: { model: "gpt-4o", api_key: "${NOOBOT_TEST_MISSING_CONFIG_PARAM}" },
         },
       }),
       "utf8",
     );
 
-    const service = new ConfigService({
-      globalConfig: {
-        configParams: {
-          API_KEY: "global-only-key",
-        },
-      },
-    });
+    const service = new ConfigService();
 
     const loaded = await service.loadUserConfig(tempDir);
-    assert.equal(loaded.providers?.openai?.api_key, "global-only-key");
+    assert.equal(loaded.providers?.openai?.api_key, "");
     assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -152,13 +139,7 @@ test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/conf
       "utf8",
     );
 
-    const service = new ConfigService({
-      globalConfig: {
-        configParams: {
-          API_KEY: "stale-global-key",
-        },
-      },
-    });
+    const service = new ConfigService();
 
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "workspace-new-key");
@@ -208,14 +189,7 @@ test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空
       "utf8",
     );
 
-    const service = new ConfigService({
-      globalConfig: {
-        configParams: {
-          API_KEY: "global-key",
-          BASE_URL: "https://global.example.com",
-        },
-      },
-    });
+    const service = new ConfigService();
 
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "user-key");
@@ -230,14 +204,12 @@ test("ConfigService.loadUserConfig: config.json 非法 JSON 时应抛出可恢�
   const tempDir = await createTempDir();
   try {
     await writeFile(path.join(tempDir, "config.json"), "{invalid json", "utf8");
-    const service = new ConfigService({ globalConfig: {} });
+    const service = new ConfigService();
 
     await assert.rejects(
       () => service.loadUserConfig(tempDir),
       (error) =>
-        error &&
-        error.name === "NoobotError" &&
-        error.code === "RECOVERABLE_INVALID_USER_CONFIG",
+        error && error.name === "NoobotError" && error.code === "RECOVERABLE_INVALID_USER_CONFIG",
     );
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -259,20 +231,12 @@ test("ConfigService.loadUserConfig: config-params.json 非法时应抛出可恢�
     );
     await writeFile(path.join(tempDir, "config-params.json"), "{broken json", "utf8");
 
-    const service = new ConfigService({
-      globalConfig: {
-        configParams: {
-          API_KEY: "global-fallback-key",
-        },
-      },
-    });
+    const service = new ConfigService();
 
     await assert.rejects(
       () => service.loadUserConfig(tempDir),
       (error) =>
-        error &&
-        error.name === "NoobotError" &&
-        error.code === "RECOVERABLE_INVALID_USER_CONFIG",
+        error && error.name === "NoobotError" && error.code === "RECOVERABLE_INVALID_USER_CONFIG",
     );
   } finally {
     await rm(tempDir, { recursive: true, force: true });

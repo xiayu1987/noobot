@@ -247,17 +247,9 @@ async function main() {
     path.join(resolvedWorkspaceRoot, args.userId, "config-params.json"),
     {},
   );
-  const workspaceConfigParams = normalizeConfigParamsDocument(workspaceConfigParamsRaw);
-  const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw);
-  const globalConfigParams =
-    rawGlobalConfig?.configParams && typeof rawGlobalConfig.configParams === "object"
-      ? rawGlobalConfig.configParams
-      : {};
-  const mergedConfigParams = mergeConfigParamLayers(
-    globalConfigParams,
-    workspaceConfigParams,
-    userConfigParams,
-  );
+  const workspaceConfigParams = normalizeConfigParamsDocument(workspaceConfigParamsRaw).values;
+  const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw).values;
+  const mergedConfigParams = mergeConfigParamLayers(workspaceConfigParams, userConfigParams);
   const lookup = createConfigValueLookup(process.env, mergedConfigParams);
   const globalConfig = resolveConfigTemplates(rawGlobalConfig, {
     lookup,

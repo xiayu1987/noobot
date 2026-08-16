@@ -5,13 +5,15 @@
  */
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
-import { migrateConfigFileToCurrentProtocol } from "@noobot/agent-config-protocol";
-import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
 import {
-  mergeIncremental,
-  parseTemplateVariables,
-  pruneBuiltInConfigParams,
-} from "./config-merge.js";
+  collectConfigTemplateKeys,
+  migrateConfigFileToCurrentProtocol,
+  normalizeConfigParamKey,
+  normalizeConfigParamValues,
+  normalizeConfigParamsDocument,
+} from "@noobot/agent-config-protocol";
+import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
+import { mergeIncremental, pruneBuiltInConfigParams } from "./config-merge.js";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
 import { alignInitialModelReferencesForFile } from "./provider.js";
 import {
@@ -52,27 +54,18 @@ export async function upsertConfigParams({
   overwriteKeys = [],
 } = {}) {
   const filePath = path.join(workspaceRootAbsolutePath, "config-params.json");
-  const currentPayload = (await readJsonRelaxed(filePath, {})) || {};
-  const values = isPlainObject(currentPayload?.values) ? { ...currentPayload.values } : {};
-  const descriptions = isPlainObject(currentPayload?.descriptions)
-    ? { ...currentPayload.descriptions }
-    : {};
+  const currentPayload = normalizeConfigParamsDocument((await readJsonRelaxed(filePath, {})) || {});
+  const values = { ...currentPayload.values };
+  const descriptions = { ...currentPayload.descriptions };
   const overwriteKeySet = new Set(
     (Array.isArray(overwriteKeys) ? overwriteKeys : [])
-      .map((key) =>
-        String(key || "")
-          .trim()
-          .toUpperCase(),
-      )
+      .map(normalizeConfigParamKey)
       .filter(Boolean),
   );
 
-  for (const [key, value] of Object.entries(entries || {})) {
-    const normalizedKey = String(key || "")
-      .trim()
-      .toUpperCase();
-    if (!normalizedKey) continue;
-    const incomingValue = String(value ?? "").trim();
+  for (const [normalizedKey, incomingValue] of Object.entries(
+    normalizeConfigParamValues(isPlainObject(entries) ? entries : {}),
+  )) {
     if (!hasOwnProperty(values, normalizedKey)) {
       values[normalizedKey] = incomingValue;
     } else if (overwriteKeySet.has(normalizedKey)) {
@@ -83,10 +76,7 @@ export async function upsertConfigParams({
     }
   }
 
-  await writeJson(filePath, {
-    values,
-    descriptions,
-  });
+  await writeJson(filePath, normalizeConfigParamsDocument({ values, descriptions }));
 }
 
 export async function syncJsonFileIncremental({
@@ -330,22 +320,19 @@ export async function syncInitialModelReferencesAcrossTemplateAndUsers({
 }
 
 async function collectTemplateParamKeys({ globalConfigPath, workspaceTemplateAbsolutePath } = {}) {
-  const keys = new Set();
+  const documents = [];
   if (await fileExists(globalConfigPath)) {
-    const globalConfig = await readJsonRelaxed(globalConfigPath, {});
-    parseTemplateVariables(globalConfig, keys);
+    documents.push(await readJsonRelaxed(globalConfigPath, {}));
   }
   const templateConfigPath = path.join(workspaceTemplateAbsolutePath, "config.json");
   const templateExamplePath = path.join(workspaceTemplateAbsolutePath, "config.example.json");
   if (await fileExists(templateConfigPath)) {
-    const templateConfig = await readJsonRelaxed(templateConfigPath, {});
-    parseTemplateVariables(templateConfig, keys);
+    documents.push(await readJsonRelaxed(templateConfigPath, {}));
   }
   if (await fileExists(templateExamplePath)) {
-    const templateExample = await readJsonRelaxed(templateExamplePath, {});
-    parseTemplateVariables(templateExample, keys);
+    documents.push(await readJsonRelaxed(templateExamplePath, {}));
   }
-  return Array.from(keys).sort((a, b) => a.localeCompare(b));
+  return collectConfigTemplateKeys(...documents);
 }
 
 export async function ensureWorkspaceConfigParamsCatalog({
