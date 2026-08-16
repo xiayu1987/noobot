@@ -6,7 +6,7 @@
 import { emitEvent } from "../../events/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME } from "@noobot/context-protocol/summary-policy";
+import { DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME } from "@noobot/context-protocol/policy/summary";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";

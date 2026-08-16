@@ -13,10 +13,10 @@ import {
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
-import { createModelContext } from "@noobot/context-protocol/hook-context";
-import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/session-message-projection";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
-import { projectTerminalHistoryMessages } from "@noobot/context-protocol/terminal-history-policy";
+import { projectTerminalHistoryMessages } from "@noobot/context-protocol/policy/terminal-history";
 
 function buildAgentContext({
   userId = "u1",

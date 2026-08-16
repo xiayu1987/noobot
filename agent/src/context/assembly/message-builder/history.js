@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/block-strategy";
+import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/policy/block";
 import {
   projectContextMessageIdentityMetadata,
   resolveContextMessageRole,
   resolveContextToolCallId,
   resolveContextToolCalls,
-} from "@noobot/context-protocol/message-codec";
+} from "@noobot/context-protocol/message/codec";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { compactToolResultTextForModel } from "../../../transfer-adapter/core/compact.js";
 import { toLangChainToolCalls } from "../../../models/adapters/langchain/context-message-adapter.js";

@@ -23,7 +23,10 @@ export function parseTaskCheckReceipt(value) {
   }
   const keys = Object.keys(value).sort();
   const expectedKeys = ["abstract", "contentHash", "nextAction", "state"];
-  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
+  ) {
     throw receiptError(`receipt must contain exactly ${expectedKeys.join(", ")}`);
   }
   const state = String(value.state || "").trim();

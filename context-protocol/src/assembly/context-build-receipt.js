@@ -31,9 +31,19 @@ export function createContextBuildReceipt({
     completedAt: String(completedAt || "").trim(),
     status: String(status || "").trim(),
     messageCount: Number.isFinite(Number(messageCount)) ? Number(messageCount) : 0,
-    ...(error ? { error: { name: String(error?.name || "Error"), message: String(error?.message || error) } } : {}),
+    ...(error
+      ? {
+          error: { name: String(error?.name || "Error"), message: String(error?.message || error) },
+        }
+      : {}),
   };
-  if (![CONTEXT_BUILD_STATUS.BUILDING, CONTEXT_BUILD_STATUS.READY, CONTEXT_BUILD_STATUS.FAILED].includes(receipt.status)) {
+  if (
+    ![
+      CONTEXT_BUILD_STATUS.BUILDING,
+      CONTEXT_BUILD_STATUS.READY,
+      CONTEXT_BUILD_STATUS.FAILED,
+    ].includes(receipt.status)
+  ) {
     throw new TypeError(`invalid context build status: ${receipt.status}`);
   }
   if (!receipt.scope?.sessionId || !receipt.scope?.dialogProcessId || !receipt.scope?.turnScopeId) {
@@ -44,4 +54,3 @@ export function createContextBuildReceipt({
   }
   return Object.freeze(receipt);
 }
-

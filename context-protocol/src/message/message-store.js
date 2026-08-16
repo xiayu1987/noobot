@@ -6,7 +6,7 @@
 import {
   getModelContextRuntime,
   resetModelContextMessageStore,
-} from "./model-context-runtime.js";
+} from "../assembly/model-context-runtime.js";
 import { deriveContextMessageProjectionId } from "./message-codec.js";
 
 function normalizeList(value) {
@@ -63,13 +63,17 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
 }
 
 function resolveRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
   if (role) return role;
   const type = String(
     message?.type ||
       message?.lc_kwargs?.type ||
       (typeof message?._getType === "function" ? message._getType() : ""),
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
   if (type === "ai") return "assistant";
   if (type === "human") return "user";
   return type;
@@ -103,7 +107,10 @@ function assignMessageId(message = {}, id = "") {
   additionalKwargs.noobotMessageId = normalizedId;
   if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
     message.lc_kwargs.noobotMessageId = normalizedId;
-    if (!message.lc_kwargs.additional_kwargs || typeof message.lc_kwargs.additional_kwargs !== "object") {
+    if (
+      !message.lc_kwargs.additional_kwargs ||
+      typeof message.lc_kwargs.additional_kwargs !== "object"
+    ) {
       message.lc_kwargs.additional_kwargs = {};
     }
     message.lc_kwargs.additional_kwargs.noobotMessageId = normalizedId;
@@ -112,10 +119,12 @@ function assignMessageId(message = {}, id = "") {
 }
 
 function isSummarized(message = {}) {
-  return message?.summarized === true ||
+  return (
+    message?.summarized === true ||
     message?.lc_kwargs?.summarized === true ||
     message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true;
+    message?.lc_kwargs?.additional_kwargs?.summarized === true
+  );
 }
 
 function mergeMessageState(target = {}, source = {}) {
@@ -163,7 +172,7 @@ function resolveStore(holder = {}) {
   if (!(store.byId instanceof Map)) store.byId = new Map();
   if (!Array.isArray(store.messages)) store.messages = [];
   if (!Number.isFinite(Number(store.nextId))) {
-      store.nextId = store.messages.length + 1;
+    store.nextId = store.messages.length + 1;
   }
   return store;
 }
@@ -274,7 +283,9 @@ export function canonicalizeMessageStore(holder = {}) {
   if (!holder || typeof holder !== "object") return null;
   const store = resolveStore(holder);
   const blocks =
-    holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
+    holder.messageBlocks &&
+    typeof holder.messageBlocks === "object" &&
+    !Array.isArray(holder.messageBlocks)
       ? holder.messageBlocks
       : null;
   reserveExplicitMessageIds(store, [
@@ -304,7 +315,9 @@ export function removeMessagesByInternalTypes(holder = {}, internalTypes = []) {
     throw new TypeError("modelContext document is required");
   }
   const normalizedTypes = new Set(
-    normalizeList(internalTypes).map((value) => String(value || "").trim()).filter(Boolean),
+    normalizeList(internalTypes)
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
   );
   if (normalizedTypes.size === 0) {
     throw new TypeError("internalTypes must contain at least one internal message type");
@@ -332,9 +345,13 @@ export function removeMessagesByInternalTypes(holder = {}, internalTypes = []) {
   return {
     removedCount: removedMessages.length,
     removedMessageIds: [...new Set(removedMessages.map(resolveMessageId).filter(Boolean))],
-    removedInternalTypes: [...new Set(
-      removedMessages.map((message) => readField(message, "noobotInternalMessageType")).filter(Boolean),
-    )],
+    removedInternalTypes: [
+      ...new Set(
+        removedMessages
+          .map((message) => readField(message, "noobotInternalMessageType"))
+          .filter(Boolean),
+      ),
+    ],
   };
 }
 
@@ -343,7 +360,9 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
     throw new TypeError("modelContext document is required");
   }
   const normalizedIds = new Set(
-    normalizeList(messageIds).map((value) => String(value || "").trim()).filter(Boolean),
+    normalizeList(messageIds)
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
   );
   if (normalizedIds.size === 0) {
     throw new TypeError("messageIds must contain at least one canonical message id");
@@ -405,9 +424,8 @@ export function replaceMessages(holder = {}, messages = []) {
   );
   if (!Array.isArray(holder.messages)) holder.messages = [];
   holder.messages.splice(0, holder.messages.length, ...canonicalMessages);
-  const blocks = holder.messageBlocks && typeof holder.messageBlocks === "object"
-    ? holder.messageBlocks
-    : null;
+  const blocks =
+    holder.messageBlocks && typeof holder.messageBlocks === "object" ? holder.messageBlocks : null;
   if (blocks) {
     const retained = new Set(canonicalMessages);
     const assigned = new Set();
@@ -415,15 +433,18 @@ export function replaceMessages(holder = {}, messages = []) {
       // History is an immutable context block. Replacing the active flat
       // projection must not discard historical entities that are intentionally
       // absent from that projection.
-      const next = blockName === "history"
-        ? normalizeList(blocks[blockName])
-        : normalizeList(blocks[blockName]).filter((message) => retained.has(message));
+      const next =
+        blockName === "history"
+          ? normalizeList(blocks[blockName])
+          : normalizeList(blocks[blockName]).filter((message) => retained.has(message));
       blocks[blockName] = next;
       for (const message of next) assigned.add(message);
     }
     for (const message of canonicalMessages) {
       if (assigned.has(message)) continue;
-      const blockName = ["system", "developer"].includes(resolveRole(message)) ? "system" : "incremental";
+      const blockName = ["system", "developer"].includes(resolveRole(message))
+        ? "system"
+        : "incremental";
       blocks[blockName].push(message);
       assigned.add(message);
     }
@@ -455,7 +476,9 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
   const keepActive = (message = {}) => !isSummarized(message);
   const messages = Array.isArray(holder.messages) ? holder.messages : [];
   const blocks =
-    holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
+    holder.messageBlocks &&
+    typeof holder.messageBlocks === "object" &&
+    !Array.isArray(holder.messageBlocks)
       ? holder.messageBlocks
       : null;
   const incremental = blocks && Array.isArray(blocks.incremental) ? blocks.incremental : [];
@@ -477,7 +500,9 @@ export function pruneSummarizedIncrementalMessages(holder = {}) {
 export function writeMessageBlocks(holder = {}, blocks = {}) {
   if (!holder || typeof holder !== "object") return null;
   const existing =
-    holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
+    holder.messageBlocks &&
+    typeof holder.messageBlocks === "object" &&
+    !Array.isArray(holder.messageBlocks)
       ? holder.messageBlocks
       : {};
   const store = canonicalizeMessageStore(holder) || resolveStore(holder);
@@ -529,7 +554,9 @@ export function appendMessage(holder = {}, message = {}, { block = "" } = {}) {
   const blockName = String(block || "").trim();
   if (["system", "history", "incremental"].includes(blockName)) {
     const currentBlocks =
-      holder.messageBlocks && typeof holder.messageBlocks === "object" && !Array.isArray(holder.messageBlocks)
+      holder.messageBlocks &&
+      typeof holder.messageBlocks === "object" &&
+      !Array.isArray(holder.messageBlocks)
         ? holder.messageBlocks
         : { system: [], history: [], incremental: [] };
     const nextBlocks = {

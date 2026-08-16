@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context-envelope";
+import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { buildTools } from "../../tools/index.js";
 import { createRuntimeContext } from "../../runtime/runtime-context-factory.js";

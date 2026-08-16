@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
-import {
-  TASK_CHECK_PROTOCOL_VERSION,
-  TASK_CHECK_STATE,
-} from "./task-check-receipt.js";
+import { TASK_CHECK_PROTOCOL_VERSION, TASK_CHECK_STATE } from "./task-check-receipt.js";
 
 export {
   TASK_CHECK_PROTOCOL_VERSION,
@@ -27,7 +24,9 @@ function protocolError(message) {
 }
 
 function normalizeProtocolText(value) {
-  return String(value ?? "").replace(/\r\n?/g, "\n").trim();
+  return String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .trim();
 }
 
 export function parseTaskCheckContent(value) {

@@ -8,7 +8,7 @@ import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
-import { projectRecoveredMessagesToIdentity } from "@noobot/context-protocol/snapshot-policy";
+import { projectRecoveredMessagesToIdentity } from "@noobot/context-protocol/policy/snapshot";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {

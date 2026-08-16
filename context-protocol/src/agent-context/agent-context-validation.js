@@ -53,7 +53,9 @@ export function validateAgentContextEnvelope(context = {}) {
     }
     const active = modelContext.activeTurnIdentity || {};
     if (String(active.dialogProcessId || "").trim() !== identityResult.identity.dialogProcessId) {
-      errors.push("modelContext.activeTurnIdentity.dialogProcessId must match identity.dialogProcessId");
+      errors.push(
+        "modelContext.activeTurnIdentity.dialogProcessId must match identity.dialogProcessId",
+      );
     }
     if (String(active.turnScopeId || "").trim() !== identityResult.identity.turnScopeId) {
       errors.push("modelContext.activeTurnIdentity.turnScopeId must match identity.turnScopeId");

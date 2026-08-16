@@ -6,8 +6,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAgentContextEnvelope } from "../src/agent-context-envelope.js";
-import { validateAgentContextEnvelope } from "../src/agent-context-validation.js";
+import { createAgentContextEnvelope } from "../src/agent-context/agent-context-envelope.js";
+import { validateAgentContextEnvelope } from "../src/agent-context/agent-context-validation.js";
 
 function createEnvelope(overrides = {}) {
   return createAgentContextEnvelope({

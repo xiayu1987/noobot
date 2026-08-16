@@ -9,7 +9,7 @@ import {
   createTaskCheckReceipt,
   parseTaskCheckContent,
   parseTaskCheckReceipt,
-} from "../src/task-check-protocol.js";
+} from "../src/task/task-check-protocol.js";
 
 const validContent = [
   "NOOBOT_TASK_CHECK/1",

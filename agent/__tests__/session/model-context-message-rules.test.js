@@ -11,18 +11,23 @@ import {
   resolveModelHistoryMessages,
   resolveModelIncrementalMessages,
   resolveModelSystemMessages,
-} from "@noobot/context-protocol/window-reducer";
-import { markCurrentTurnArraySummarized } from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/window";
+import { markCurrentTurnArraySummarized } from "@noobot/context-protocol/policy/summary";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
-const resolveMainModelFinalMessages = (options = {}) => resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
-const resolveMainModelHistoryMessages = (options = {}) => resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
-const resolveMainModelIncrementalMessages = (options = {}) => resolveModelIncrementalMessages(options);
+const resolveMainModelFinalMessages = (options = {}) =>
+  resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelHistoryMessages = (options = {}) =>
+  resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelIncrementalMessages = (options = {}) =>
+  resolveModelIncrementalMessages(options);
 const resolveMainModelSystemMessages = (options = {}) => resolveModelSystemMessages(options);
 
 function contents(messages = []) {
-  return messages.map((item = {}) => String(item.content || item.tool_call_id || item.tool_calls?.[0]?.id || ""));
+  return messages.map((item = {}) =>
+    String(item.content || item.tool_call_id || item.tool_calls?.[0]?.id || ""),
+  );
 }
 
 test("model-context rules 1.1: systemMessages preserves every unsummarized injection and consumes summary marks", () => {
@@ -73,15 +78,35 @@ test("model-context rules 1.2: historyMessages keeps non-system unsummarized mes
     const number = index + 1;
     const dialogFields = { dialogProcessId: `dlg-${number}` };
     return [
-      { role: "user", content: `aux-injected-${number}`, injectedBy: "agent-plugin", ...dialogFields },
-      { role: "user", content: `aux-user-meta-${number}`, additional_kwargs: { noobotInternalMessageType: "user_meta" }, ...dialogFields },
-      { role: "user", content: `aux-recovered-summary-${number}`, recoveredFromUnpairedTaskSummary: true, ...dialogFields },
+      {
+        role: "user",
+        content: `aux-injected-${number}`,
+        injectedBy: "agent-plugin",
+        ...dialogFields,
+      },
+      {
+        role: "user",
+        content: `aux-user-meta-${number}`,
+        additional_kwargs: { noobotInternalMessageType: "user_meta" },
+        ...dialogFields,
+      },
+      {
+        role: "user",
+        content: `aux-recovered-summary-${number}`,
+        recoveredFromUnpairedTaskSummary: true,
+        ...dialogFields,
+      },
       { role: "user", content: `actual-user-${number}-first`, ...dialogFields },
       { role: "system", content: `system-${number}`, ...dialogFields },
       { role: "user", content: `actual-user-${number}-second`, ...dialogFields },
       { role: "assistant", content: `assistant-${number}-old`, ...dialogFields },
       { role: "tool", content: `tool-${number}`, ...dialogFields },
-      { role: "assistant", content: `assistant-${number}-summarized`, summarized: true, ...dialogFields },
+      {
+        role: "assistant",
+        content: `assistant-${number}-summarized`,
+        summarized: true,
+        ...dialogFields,
+      },
       { role: "assistant", content: `assistant-${number}-latest`, ...dialogFields },
       { role: "tool", content: `after-latest-tool-${number}`, ...dialogFields },
     ];
@@ -209,7 +234,9 @@ test("model-context rules 3: main-flow final message resolution works without ha
       { role: "user", content: "plain-history-user", dialogProcessId: "plain-history" },
       { role: "assistant", content: "plain-history-assistant", dialogProcessId: "plain-history" },
     ],
-    incrementalMessages: [{ role: "user", content: "plain-current", dialogProcessId: "plain-current" }],
+    incrementalMessages: [
+      { role: "user", content: "plain-current", dialogProcessId: "plain-current" },
+    ],
     currentDialogProcessId: "plain-current",
   };
   const before = JSON.stringify(source);
@@ -225,7 +252,6 @@ test("model-context rules 3: main-flow final message resolution works without ha
   assert.equal(JSON.stringify(source), before);
 });
 
-
 test("model-context rules 2 note: agent-side summary marking policy remains unchanged for task_summary pairs", () => {
   const messages = [
     { role: "user", content: "current-user" },
@@ -234,7 +260,7 @@ test("model-context rules 2 note: agent-side summary marking policy remains unch
       content: "",
       tool_calls: [{ id: "call-exec", function: { name: "execute_script", arguments: "{}" } }],
     },
-    { role: "tool", content: "{\"toolName\":\"execute_script\",\"ok\":true}", tool_call_id: "call-exec" },
+    { role: "tool", content: '{"toolName":"execute_script","ok":true}', tool_call_id: "call-exec" },
     {
       role: "assistant",
       content: "",
@@ -242,7 +268,7 @@ test("model-context rules 2 note: agent-side summary marking policy remains unch
     },
     {
       role: "tool",
-      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
+      content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
       tool_call_id: "call-summary",
     },
   ];
@@ -259,12 +285,29 @@ test("model-context rules: cross-block duplicate current user stays only in incr
   const result = resolveMainModelFinalMessages({
     systemMessages: [{ role: "system", content: "sys" }],
     historyMessages: [
-      { role: "user", content: "same", additional_kwargs: { noobotMessageId: "current-user" }, dialogProcessId: "d-current", turnScopeId: "t-current" },
+      {
+        role: "user",
+        content: "same",
+        additional_kwargs: { noobotMessageId: "current-user" },
+        dialogProcessId: "d-current",
+        turnScopeId: "t-current",
+      },
       { role: "assistant", content: "old answer", dialogProcessId: "d-old" },
     ],
     incrementalMessages: [
-      { role: "user", content: "same", additional_kwargs: { noobotMessageId: "current-user" }, dialogProcessId: "d-current", turnScopeId: "t-current" },
-      { role: "user", content: "[用户元信息]\n{}", dialogProcessId: "d-current", turnScopeId: "t-current" },
+      {
+        role: "user",
+        content: "same",
+        additional_kwargs: { noobotMessageId: "current-user" },
+        dialogProcessId: "d-current",
+        turnScopeId: "t-current",
+      },
+      {
+        role: "user",
+        content: "[用户元信息]\n{}",
+        dialogProcessId: "d-current",
+        turnScopeId: "t-current",
+      },
     ],
   });
 

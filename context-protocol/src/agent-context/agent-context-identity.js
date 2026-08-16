@@ -25,9 +25,9 @@ export function normalizeAgentContextIdentity(identity = {}) {
 
 export function validateAgentContextIdentity(identity = {}) {
   const normalized = normalizeAgentContextIdentity(identity);
-  const errors = REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS
-    .filter((field) => !normalized[field])
-    .map((field) => `identity.${field} is required`);
+  const errors = REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS.filter((field) => !normalized[field]).map(
+    (field) => `identity.${field} is required`,
+  );
   return { success: errors.length === 0, errors, identity: normalized };
 }
 

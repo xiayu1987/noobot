@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { resolveSessionTreeWithRootSessionId } from "../../src/context/providers/session-tree-resolver.js";
 import { resolveAttachments } from "../../src/context/providers/attachment-resolver.js";
 import { resolveLongMemory } from "../../src/context/providers/memory-resolver.js";
-import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/session-message-projection";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
 test("resolveSessionTreeWithRootSessionId falls back when runtime/sessionManager missing", async () => {

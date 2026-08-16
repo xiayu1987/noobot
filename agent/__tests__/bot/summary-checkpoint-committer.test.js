@@ -7,8 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
-import { createModelContext } from "@noobot/context-protocol/hook-context";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-types";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
 
 test("summary checkpoint persists unmodified messages before atomically marking exact UIDs", async () => {
   const messages = [

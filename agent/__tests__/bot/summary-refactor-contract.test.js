@@ -9,13 +9,13 @@ import assert from "node:assert/strict";
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
-import { filterForModelContext } from "@noobot/context-protocol/message-policy";
-import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol/window-reducer";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol/policy/window";
 import {
   appendContextMessage as appendMessage,
   pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,
-} from "@noobot/context-protocol/context-mutation";
-import { createModelContext } from "@noobot/context-protocol/hook-context";
+} from "@noobot/context-protocol/mutation/context";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import * as mainFlowControl from "../../src/runtime/main-flow-control.js";
 
 function message(id, value = {}) {

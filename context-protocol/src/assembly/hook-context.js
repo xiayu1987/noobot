@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeMessageStore } from "./message-store.js";
+import { canonicalizeMessageStore } from "../message/message-store.js";
 import { attachModelContextRuntime } from "./model-context-runtime.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "./agent-context-schema.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 
 function asObject(value) {
@@ -23,13 +23,17 @@ function normalizeBlocks(value) {
 }
 
 function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
   if (role) return role;
   const type = String(
     message?.type ||
       message?.lc_kwargs?.type ||
       (typeof message?._getType === "function" ? message._getType() : ""),
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
   if (type === "ai") return "assistant";
   if (type === "human") return "user";
   return type;
@@ -66,7 +70,8 @@ export function createModelContext({
   onMutationConsumed = null,
 } = {}) {
   const explicitBlocks = normalizeBlocks(messageBlocks);
-  const blocks = explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
+  const blocks =
+    explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
   // Explicit blocks are the authoritative context partition. A flat message
   // projection supplied beside them must not be used to infer additional block
   // membership, otherwise stale/filtered messages can silently re-enter the
@@ -118,20 +123,28 @@ export function resolveAuthoritativeModelContext(context = {}) {
 export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
   const warnings = [];
   const version = Number(context?.contextProtocolVersion);
-  if (version !== HOOK_PROTOCOL_VERSION) warnings.push(`contextProtocolVersion must equal ${HOOK_PROTOCOL_VERSION}`);
+  if (version !== HOOK_PROTOCOL_VERSION)
+    warnings.push(`contextProtocolVersion must equal ${HOOK_PROTOCOL_VERSION}`);
   const modelContext = context?.modelContext;
   if (modelContext != null) {
     if (!asObject(modelContext)) warnings.push("modelContext should be object");
     else {
-      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+      if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION)
+        warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
       const activeTurnIdentity = modelContext.activeTurnIdentity;
-      if (activeTurnIdentity != null && (
-        !asObject(activeTurnIdentity) ||
-        !String(activeTurnIdentity?.dialogProcessId || "").trim() ||
-        !String(activeTurnIdentity?.turnScopeId || "").trim()
-      )) warnings.push("modelContext.activeTurnIdentity must contain dialogProcessId and turnScopeId");
-      if (modelContext.messages != null && !Array.isArray(modelContext.messages)) warnings.push("modelContext.messages should be array");
-      if (modelContext.messageBlocks != null && !asObject(modelContext.messageBlocks)) warnings.push("modelContext.messageBlocks should be object");
+      if (
+        activeTurnIdentity != null &&
+        (!asObject(activeTurnIdentity) ||
+          !String(activeTurnIdentity?.dialogProcessId || "").trim() ||
+          !String(activeTurnIdentity?.turnScopeId || "").trim())
+      )
+        warnings.push(
+          "modelContext.activeTurnIdentity must contain dialogProcessId and turnScopeId",
+        );
+      if (modelContext.messages != null && !Array.isArray(modelContext.messages))
+        warnings.push("modelContext.messages should be array");
+      if (modelContext.messageBlocks != null && !asObject(modelContext.messageBlocks))
+        warnings.push("modelContext.messageBlocks should be object");
     }
   }
   const normalizedPoint = String(point || context?.point || "").trim();

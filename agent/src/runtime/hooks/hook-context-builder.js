@@ -6,11 +6,14 @@
 import { withHookRuntimeMeta } from "../../extensions/hooks/index.js";
 import { emitEvent } from "../../events/index.js";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
-import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
+import {
+  summarizeDiagnosticBlocks,
+  summarizeDiagnosticMessages,
+} from "@noobot/context-protocol/assembly/diagnostics";
 import {
   attachModelContext,
   validateHookContextProtocol,
-} from "@noobot/context-protocol/hook-context";
+} from "@noobot/context-protocol/assembly/hook-context";
 import { emitAgentContextProtocolDebug } from "../../observability/agent-context-protocol-debug.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 
@@ -62,10 +65,7 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
       throw new TypeError(`Hook Context V2 forbids top-level ${forbiddenField}`);
     }
   }
-  const {
-    modelContext: suppliedModelContext,
-    ...hookFields
-  } = safeRaw;
+  const { modelContext: suppliedModelContext, ...hookFields } = safeRaw;
   const modelContext = suppliedModelContext?.protocolVersion
     ? suppliedModelContext
     : runtime?.activeMessageContext;
@@ -93,27 +93,35 @@ export function buildHookContext(point = "", runtime = {}, raw = {}) {
   };
   const context = withHookRuntimeMeta(runtime, merged);
   attachModelContext(context, modelContext?.protocolVersion ? modelContext : null);
-  emitAgentContextProtocolDebug(runtime?.eventListener || null, "hookDocumentConsumed", {
-    userId: context.userId,
-    sessionId: context.sessionId,
-    dialogProcessId:
-      context.modelContext?.activeTurnIdentity?.dialogProcessId || context.dialogProcessId,
-    turnScopeId:
-      context.modelContext?.activeTurnIdentity?.turnScopeId || context.turnScopeId,
-  }, {
-    consumer: `hook:${context.point}`,
-    contextProtocolVersion: context.contextProtocolVersion,
-    hasModelContext: context.modelContext != null,
-    modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
-    messageCount: Array.isArray(context.modelContext?.messages) ? context.modelContext.messages.length : 0,
-  });
+  emitAgentContextProtocolDebug(
+    runtime?.eventListener || null,
+    "hookDocumentConsumed",
+    {
+      userId: context.userId,
+      sessionId: context.sessionId,
+      dialogProcessId:
+        context.modelContext?.activeTurnIdentity?.dialogProcessId || context.dialogProcessId,
+      turnScopeId: context.modelContext?.activeTurnIdentity?.turnScopeId || context.turnScopeId,
+    },
+    {
+      consumer: `hook:${context.point}`,
+      contextProtocolVersion: context.contextProtocolVersion,
+      hasModelContext: context.modelContext != null,
+      modelContextProtocolVersion: Number(context.modelContext?.protocolVersion || 0),
+      messageCount: Array.isArray(context.modelContext?.messages)
+        ? context.modelContext.messages.length
+        : 0,
+    },
+  );
   if (String(point || "").trim() === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
     emitModelContextTrace(runtime, "hook_context_built", {
       point: String(point || "").trim(),
       mode: context.mode,
       turn: context.turn,
       rawHadMessages: Array.isArray(safeRaw?.messages),
-      rawHadMessageBlocks: Boolean(safeRaw?.messageBlocks && typeof safeRaw.messageBlocks === "object"),
+      rawHadMessageBlocks: Boolean(
+        safeRaw?.messageBlocks && typeof safeRaw.messageBlocks === "object",
+      ),
       contextBlocks: summarizeDiagnosticBlocks(context.modelContext?.messageBlocks),
       contextMessages: summarizeDiagnosticMessages(context.modelContext?.messages),
     });

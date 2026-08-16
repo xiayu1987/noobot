@@ -23,7 +23,9 @@ function protocolError(message) {
 }
 
 function normalizeProtocolText(value) {
-  return String(value ?? "").replace(/\r\n?/g, "\n").trim();
+  return String(value ?? "")
+    .replace(/\r\n?/g, "\n")
+    .trim();
 }
 
 export function parseTaskSummaryContent(value) {
@@ -73,9 +75,7 @@ export function parseTaskSummaryContent(value) {
 }
 
 export function createTaskSummaryReceipt(parsedSummary) {
-  const parsed = parsedSummary?.content
-    ? parsedSummary
-    : parseTaskSummaryContent(parsedSummary);
+  const parsed = parsedSummary?.content ? parsedSummary : parseTaskSummaryContent(parsedSummary);
   return Object.freeze({
     state: parsed.state,
     abstract: parsed.abstract,
@@ -90,12 +90,17 @@ export function parseTaskSummaryReceipt(value) {
   }
   const keys = Object.keys(value).sort();
   const expectedKeys = ["abstract", "contentHash", "nextAction", "state"];
-  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index])
+  ) {
     throw protocolError(`summary receipt must contain exactly ${expectedKeys.join(", ")}`);
   }
   const state = String(value.state || "").trim();
   if (!Object.values(TASK_SUMMARY_STATE).includes(state)) {
-    throw protocolError(`summary receipt state must be one of ${Object.values(TASK_SUMMARY_STATE).join(", ")}`);
+    throw protocolError(
+      `summary receipt state must be one of ${Object.values(TASK_SUMMARY_STATE).join(", ")}`,
+    );
   }
   const abstract = String(value.abstract || "").trim();
   const nextAction = String(value.nextAction || "").trim();

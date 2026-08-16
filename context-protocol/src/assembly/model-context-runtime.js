@@ -10,10 +10,10 @@ function createStore() {
   return { messages: [], byId: new Map(), nextId: 1 };
 }
 
-export function attachModelContextRuntime(document, {
-  onCanonicalMessageAdded = null,
-  onMutationConsumed = null,
-} = {}) {
+export function attachModelContextRuntime(
+  document,
+  { onCanonicalMessageAdded = null, onMutationConsumed = null } = {},
+) {
   if (!document || typeof document !== "object" || Array.isArray(document)) {
     throw new TypeError("model context runtime requires a document object");
   }

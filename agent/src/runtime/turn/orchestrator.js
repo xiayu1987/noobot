@@ -7,11 +7,11 @@ import {
   collectScopedMessagesToSummarize,
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
   DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../constants/index.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-policy";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { handleEngineError } from "../errors/index.js";
 import {
   maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
@@ -29,8 +29,8 @@ import {
   getSessionIdsFromAgentContext,
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
-import { removeContextMessagesByIds } from "@noobot/context-protocol/context-mutation";
-import { getMessageId } from "@noobot/context-protocol/message-store";
+import { removeContextMessagesByIds } from "@noobot/context-protocol/mutation/context";
+import { getMessageId } from "@noobot/context-protocol/message/store";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,

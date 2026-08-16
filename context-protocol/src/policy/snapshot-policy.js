@@ -5,54 +5,99 @@
  */
 
 const SNAPSHOT_VERSION = 2;
-const IDENTITY_FIELDS = ["userId", "sessionId", "parentSessionId", "dialogProcessId", "turnScopeId"];
+const IDENTITY_FIELDS = [
+  "userId",
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "turnScopeId",
+];
 const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
-const SESSION_IDENTITY_FIELDS = ["userName", "sessionId", "parentSessionId", "parentDialogProcessId"];
+const SESSION_IDENTITY_FIELDS = [
+  "userName",
+  "sessionId",
+  "parentSessionId",
+  "parentDialogProcessId",
+];
 const SERIALIZATION_KEYS = new Set([
-  "lc", "id", "kwargs", "type", "lc_namespace", "lc_serializable",
-  "lc_aliases", "lc_attributes", "lc_secrets",
+  "lc",
+  "id",
+  "kwargs",
+  "type",
+  "lc_namespace",
+  "lc_serializable",
+  "lc_aliases",
+  "lc_attributes",
+  "lc_secrets",
 ]);
 
 function cloneJson(value) {
   if (value == null) return value;
-  try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
 }
 
 function messageType(message = {}) {
-  if (typeof message?._getType === "function") return String(message._getType() || "").toLowerCase();
+  if (typeof message?._getType === "function")
+    return String(message._getType() || "").toLowerCase();
   return String(message?.type || message?.role || message?.lc_kwargs?.type || "").toLowerCase();
 }
 
 export function normalizeSnapshotIdentity(identity = {}) {
-  return Object.fromEntries(IDENTITY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]));
+  return Object.fromEntries(
+    IDENTITY_FIELDS.map((field) => [field, String(identity?.[field] || "").trim()]),
+  );
 }
 
 export function serializeContextMessage(message = {}) {
   const type = messageType(message);
-  const normalizedType = type === "system" ? "system"
-    : type === "ai" || type === "assistant" ? "ai"
-      : type === "tool" || type === "tool_result" ? "tool" : "human";
-  const additionalKwargs = message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
+  const normalizedType =
+    type === "system"
+      ? "system"
+      : type === "ai" || type === "assistant"
+        ? "ai"
+        : type === "tool" || type === "tool_result"
+          ? "tool"
+          : "human";
+  const additionalKwargs =
+    message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
   const serialized = {
     raw: {},
     type: normalizedType,
-    content: typeof message?.content === "string" ? message.content : message?.content ?? "",
+    content: typeof message?.content === "string" ? message.content : (message?.content ?? ""),
     additional_kwargs: cloneJson(additionalKwargs) || {},
     lc_kwargs: cloneJson(message?.lc_kwargs) || {},
-    summarized: message?.summarized === true || message?.lc_kwargs?.summarized === true || additionalKwargs?.summarized === true,
+    summarized:
+      message?.summarized === true ||
+      message?.lc_kwargs?.summarized === true ||
+      additionalKwargs?.summarized === true,
   };
   for (const key of Object.keys(message || {})) {
-    if (key in serialized || ["content", "additional_kwargs", "lc_kwargs"].includes(key) ||
-        SERIALIZATION_KEYS.has(key) || String(key).startsWith("lc_")) continue;
+    if (
+      key in serialized ||
+      ["content", "additional_kwargs", "lc_kwargs"].includes(key) ||
+      SERIALIZATION_KEYS.has(key) ||
+      String(key).startsWith("lc_")
+    )
+      continue;
     const value = cloneJson(message[key]);
     if (value !== undefined) serialized.raw[key] = value;
   }
   if (normalizedType === "ai") {
-    if (Array.isArray(message?.tool_calls)) serialized.tool_calls = cloneJson(message.tool_calls) || [];
-    if (Array.isArray(message?.invalid_tool_calls)) serialized.invalid_tool_calls = cloneJson(message.invalid_tool_calls) || [];
+    if (Array.isArray(message?.tool_calls))
+      serialized.tool_calls = cloneJson(message.tool_calls) || [];
+    if (Array.isArray(message?.invalid_tool_calls))
+      serialized.invalid_tool_calls = cloneJson(message.invalid_tool_calls) || [];
   }
   if (normalizedType === "tool") {
-    serialized.tool_call_id = message?.tool_call_id || message?.lc_kwargs?.tool_call_id || additionalKwargs?.tool_call_id || "";
+    serialized.tool_call_id =
+      message?.tool_call_id ||
+      message?.lc_kwargs?.tool_call_id ||
+      additionalKwargs?.tool_call_id ||
+      "";
     if (message?.name) serialized.name = message.name;
     if (message?.status) serialized.status = message.status;
     if (message?.artifact !== undefined) serialized.artifact = cloneJson(message.artifact);
@@ -66,7 +111,10 @@ export function deserializeContextMessageRecord(item = {}) {
     ...raw,
     type: item?.type || "human",
     content: item?.content ?? "",
-    additional_kwargs: { ...(raw?.additional_kwargs || {}), ...(cloneJson(item?.additional_kwargs) || {}) },
+    additional_kwargs: {
+      ...(raw?.additional_kwargs || {}),
+      ...(cloneJson(item?.additional_kwargs) || {}),
+    },
     lc_kwargs: cloneJson(item?.lc_kwargs) || raw?.lc_kwargs || {},
   };
   if (item?.type === "ai") {
@@ -79,7 +127,8 @@ export function deserializeContextMessageRecord(item = {}) {
     if (item?.status) message.status = item.status;
     if (item?.artifact !== undefined) message.artifact = cloneJson(item.artifact);
   }
-  if (item?.summarized === true || raw?.summarized === true || raw?.lc_kwargs?.summarized === true) message.summarized = true;
+  if (item?.summarized === true || raw?.summarized === true || raw?.lc_kwargs?.summarized === true)
+    message.summarized = true;
   return message;
 }
 
@@ -95,7 +144,11 @@ export function composeMessagesFromBlocks(blocks = {}) {
   ];
 }
 
-export function createModelContextSnapshot({ identity = {}, messageBlocks = {}, now = new Date().toISOString() } = {}) {
+export function createModelContextSnapshot({
+  identity = {},
+  messageBlocks = {},
+  now = new Date().toISOString(),
+} = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
   const blocks = {
     system: serializeList(messageBlocks?.system),
@@ -121,13 +174,16 @@ export function assertModelContextSnapshotIdentity(snapshot = {}, identity = {})
   }
 }
 
-export function hydrateModelContextSnapshot(snapshot = {}, identity = {}, {
-  deserializeMessage = (message) => message,
-} = {}) {
+export function hydrateModelContextSnapshot(
+  snapshot = {},
+  identity = {},
+  { deserializeMessage = (message) => message } = {},
+) {
   assertModelContextSnapshotIdentity(snapshot, identity);
-  const hydrate = (messages) => (Array.isArray(messages) ? messages : [])
-    .map(deserializeContextMessageRecord)
-    .map(deserializeMessage);
+  const hydrate = (messages) =>
+    (Array.isArray(messages) ? messages : [])
+      .map(deserializeContextMessageRecord)
+      .map(deserializeMessage);
   return {
     ...snapshot,
     messageBlocks: {
@@ -183,8 +239,10 @@ function rebindUserMetaContent(message = {}, identity = {}) {
 
 export function projectRecoveredMessagesToIdentity(messages = [], identity = {}) {
   const current = Object.fromEntries(
-    [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]
-      .map((field) => [field, String(identity?.[field] || "").trim()]),
+    [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS].map((field) => [
+      field,
+      String(identity?.[field] || "").trim(),
+    ]),
   );
   if (!current.dialogProcessId || !current.turnScopeId) {
     throw new Error("Recovery target requires dialogProcessId and turnScopeId as one identity");

@@ -8,7 +8,7 @@ import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
-} from "@noobot/context-protocol/dual-lane-context";
+} from "@noobot/context-protocol/assembly/dual-lane";
 import {
   buildContentOriginKey,
   MESSAGE_ORIGIN_KIND,
@@ -19,9 +19,13 @@ import {
 } from "./message-metadata.js";
 
 function resolveCompatibleRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
   if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
+  const type = String(message?.type || message?.lc_kwargs?.type || "")
+    .trim()
+    .toLowerCase();
   if (type === "ai") return "assistant";
   if (type === "human") return "user";
   if (type === "system") return "system";
@@ -47,10 +51,7 @@ function normalizeMessageForCompatibility(message = {}) {
           : [];
   if (toolCalls.length) normalized.tool_calls = toolCalls;
   const toolCallId = String(
-    message?.tool_call_id ||
-      message?.toolCallId ||
-      message?.lc_kwargs?.tool_call_id ||
-      "",
+    message?.tool_call_id || message?.toolCallId || message?.lc_kwargs?.tool_call_id || "",
   ).trim();
   if (toolCallId) normalized.tool_call_id = toolCallId;
   if (
@@ -69,7 +70,8 @@ function normalizeMessageForCompatibility(message = {}) {
 }
 
 function markContextOriginFromNormalized(message = {}, normalized = {}) {
-  const originKey = resolveMessageOriginKey(normalized, MESSAGE_ORIGIN_KIND.CONTEXT) ||
+  const originKey =
+    resolveMessageOriginKey(normalized, MESSAGE_ORIGIN_KIND.CONTEXT) ||
     buildContentOriginKey({
       prefix: "rewritten-context",
       role: message?.role,
@@ -79,11 +81,14 @@ function markContextOriginFromNormalized(message = {}, normalized = {}) {
 }
 
 function markProtocolMessage(message = {}, prefix = "protocol") {
-  return markMessageAsProtocol(message, buildContentOriginKey({
-    prefix,
-    role: message?.role,
-    content: message?.content,
-  }));
+  return markMessageAsProtocol(
+    message,
+    buildContentOriginKey({
+      prefix,
+      role: message?.role,
+      content: message?.content,
+    }),
+  );
 }
 
 function resolveToolCallName(toolCall = {}) {
@@ -132,10 +137,14 @@ function buildToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
       const args =
         resolveToolCallArguments(toolCall) ||
         translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_NO_ARGUMENTS);
-      return translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_SEMANTIC_LINE, {
-        name,
-        args,
-      });
+      return translateI18nText(
+        locale,
+        HARNESS_I18N_KEYSET.MESSAGE_FACTORY.TOOL_CALL_SEMANTIC_LINE,
+        {
+          name,
+          args,
+        },
+      );
     })
     .join("\n");
 }
@@ -152,19 +161,34 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
     return markContextOriginFromNormalized(rewritten, normalized);
   }
 
-  if (normalized.role === "assistant" && Array.isArray(normalized.tool_calls) && normalized.tool_calls.length) {
+  if (
+    normalized.role === "assistant" &&
+    Array.isArray(normalized.tool_calls) &&
+    normalized.tool_calls.length
+  ) {
     const semanticContent = buildToolCallSemanticText(normalized.tool_calls, locale);
     if (!semanticContent) return null;
     const records = [];
     if (normalized.content) {
-      records.push(markContextOriginFromNormalized({
-        role: "user",
-        content: translateI18nText(locale, HARNESS_I18N_KEYSET.MESSAGE_FACTORY.ANALYSIS_SEMANTIC_LINE, {
-          content: normalized.content,
-        }),
-      }, normalized));
+      records.push(
+        markContextOriginFromNormalized(
+          {
+            role: "user",
+            content: translateI18nText(
+              locale,
+              HARNESS_I18N_KEYSET.MESSAGE_FACTORY.ANALYSIS_SEMANTIC_LINE,
+              {
+                content: normalized.content,
+              },
+            ),
+          },
+          normalized,
+        ),
+      );
     }
-    records.push(markContextOriginFromNormalized({ role: "user", content: semanticContent }, normalized));
+    records.push(
+      markContextOriginFromNormalized({ role: "user", content: semanticContent }, normalized),
+    );
     return records;
   }
 
@@ -179,7 +203,9 @@ function rewriteMessageForCapabilityContext(message = {}, locale = "zh-CN") {
 }
 
 function normalizeModelMessageRole(role = "", fallback = "user") {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return normalized || fallback;
 }
 
@@ -190,7 +216,9 @@ function normalizeTextList(items = []) {
 }
 
 function isSystemLikeRole(role = "") {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return normalized === "system" || normalized === "developer";
 }
 
@@ -210,8 +238,9 @@ export function buildCapabilityModelMessages({
   const flattenedAgentMessages = (Array.isArray(agentMessages) ? agentMessages : [])
     .flatMap((item = {}) => rewriteMessageForCapabilityContext(item, locale) || [])
     .filter((item) => item && String(item.content || "").trim());
-  const constraintMessages = normalizeTextList(constraints)
-    .map((content) => markProtocolMessage({ role: "system", content }, "constraint"));
+  const constraintMessages = normalizeTextList(constraints).map((content) =>
+    markProtocolMessage({ role: "system", content }, "constraint"),
+  );
   const protocolSystemMessages = [...constraintMessages];
   const taskMessages = [];
   const resolvedTaskRole = normalizeModelMessageRole(taskRole, "user");
@@ -234,7 +263,6 @@ export function buildCapabilityModelMessages({
     taskMessages,
   }).messages;
 }
-
 
 export function buildCapabilityProtocolModelMessages({
   locale = "zh-CN",

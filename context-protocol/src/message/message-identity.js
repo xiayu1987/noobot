@@ -7,4 +7,3 @@
 export function createMessageUid() {
   return `sm_${globalThis.crypto.randomUUID()}`;
 }
-

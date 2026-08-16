@@ -46,9 +46,7 @@ export function applyTurnCompletionPolicy({
   mirrorSummarizedMessagesById(modelMessages, markedMessageIds);
   return {
     markedCount,
-    messages: typeof turnMessageStore.toArray === "function"
-      ? turnMessageStore.toArray()
-      : [],
+    messages: typeof turnMessageStore.toArray === "function" ? turnMessageStore.toArray() : [],
   };
 }
 

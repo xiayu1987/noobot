@@ -13,9 +13,11 @@ import {
   recoverContextTaskSummaryToolResult,
   resolveContextToolCallId,
   resolveContextToolCalls,
-} from "./message-codec.js";
+} from "../message/message-codec.js";
 
-function text(value) { return String(value || "").trim(); }
+function text(value) {
+  return String(value || "").trim();
+}
 
 export function readMessageField(message = {}, field = "") {
   return readContextMessageField(message, field);
@@ -60,7 +62,8 @@ export function isInjectedMessage(message = {}) {
 
 export function resolveInjectedMessageType(message = {}) {
   if (!isInjectedMessage(message)) return "";
-  const explicit = readMessageField(message, "injectedMessageType") ||
+  const explicit =
+    readMessageField(message, "injectedMessageType") ||
     readMessageField(message, "injected_message_type") ||
     readMessageField(message, "noobotInternalMessageType");
   if (explicit) return explicit;
@@ -70,20 +73,28 @@ export function resolveInjectedMessageType(message = {}) {
 }
 
 export function shouldKeepForModelContext(message = {}) {
-  if (isMessageSummarized(message) &&
-      isSystemLikeMessageRole(resolveMessageRole(message)) &&
-      isCurrentSystemContextMessage(message)) return true;
+  if (
+    isMessageSummarized(message) &&
+    isSystemLikeMessageRole(resolveMessageRole(message)) &&
+    isCurrentSystemContextMessage(message)
+  )
+    return true;
   return !isMessageSummarized(message);
 }
 
-export function filterForModelContext(messages = [], {
-  recoverUnpairedToolResult = recoverContextTaskSummaryToolResult,
-} = {}) {
+export function filterForModelContext(
+  messages = [],
+  { recoverUnpairedToolResult = recoverContextTaskSummaryToolResult } = {},
+) {
   const kept = (Array.isArray(messages) ? messages : []).filter((message) => {
-    const placeholder = message?.turnStatusPlaceholder === true || Boolean(
-      message?.synthetic === true && message?.placeholder === true &&
-      message?.turnStatus && typeof message.turnStatus === "object",
-    );
+    const placeholder =
+      message?.turnStatusPlaceholder === true ||
+      Boolean(
+        message?.synthetic === true &&
+        message?.placeholder === true &&
+        message?.turnStatus &&
+        typeof message.turnStatus === "object",
+      );
     return !placeholder && shouldKeepForModelContext(message);
   });
   const source = kept;
@@ -91,7 +102,11 @@ export function filterForModelContext(messages = [], {
   const resultIds = new Set();
   for (const message of source) {
     const role = resolveMessageRole(message);
-    if (role === "assistant") getMessageToolCalls(message).map(resolveToolCallId).filter(Boolean).forEach((id) => assistantIds.add(id));
+    if (role === "assistant")
+      getMessageToolCalls(message)
+        .map(resolveToolCallId)
+        .filter(Boolean)
+        .forEach((id) => assistantIds.add(id));
     if (role === "tool") {
       const id = resolveToolCallId(message);
       if (id) resultIds.add(id);

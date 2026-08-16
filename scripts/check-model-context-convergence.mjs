@@ -286,8 +286,8 @@ if (!failures.some((item) => item.title.includes("injected message type inferred
   pass("injected message classification never falls back to content");
 }
 
-const SUMMARY_POLICY_PATH = "context-protocol/src/summary-policy.js";
-const TERMINAL_HISTORY_POLICY_PATH = "context-protocol/src/terminal-history-policy.js";
+const SUMMARY_POLICY_PATH = "context-protocol/src/policy/summary-policy.js";
+const TERMINAL_HISTORY_POLICY_PATH = "context-protocol/src/policy/terminal-history-policy.js";
 const latestInjectionPolicyPattern =
   /\b(?:keepLatestInjectedOnly|filterLatestInjectedMessagesByType|filterInjectedMessagesForDialog|collectLatestInjectedMessageIndexes)\b/g;
 const latestInjectionPolicyHits = [];
@@ -315,9 +315,9 @@ if (latestInjectionPolicyHits.length) {
 
 const summarizedMutationAllowed = new Set([
   SUMMARY_POLICY_PATH,
-  "context-protocol/src/message-store.js",
-  "context-protocol/src/context-mutation.js",
-  "context-protocol/src/snapshot-policy.js",
+  "context-protocol/src/message/message-store.js",
+  "context-protocol/src/mutation/context-mutation.js",
+  "context-protocol/src/policy/snapshot-policy.js",
   "agent/src/runtime/resume/model-message-snapshot-store.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
   "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
@@ -350,9 +350,9 @@ if (summarizedMutationHits.length) {
 
 const summaryMutationCallAllowed = new Set([
   SUMMARY_POLICY_PATH,
-  "context-protocol/src/message-store.js",
-  "context-protocol/src/context-mutation.js",
-  "context-protocol/src/turn-completion-policy.js",
+  "context-protocol/src/message/message-store.js",
+  "context-protocol/src/mutation/context-mutation.js",
+  "context-protocol/src/policy/turn-completion-policy.js",
   "agent/src/runtime/turn/turn-result-aggregator.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
 ]);
@@ -381,7 +381,7 @@ if (summaryMutationCallHits.length) {
   pass("summary mutation API is restricted to checkpoint commit and completed-turn finalization");
 }
 
-assertFileContains("context-protocol/src/window-reducer.js", [
+assertFileContains("context-protocol/src/policy/window-reducer.js", [
   {
     name: "history excludes system-like roles",
     pattern: /isSystemLikeMessageRole\(resolveMessageRole\(message\)\)/,
@@ -396,7 +396,7 @@ assertFileContains("context-protocol/src/window-reducer.js", [
       /const explicitId = resolveMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/,
   },
 ]);
-const messagePolicyText = assertFileContains("context-protocol/src/message-policy.js", [
+const messagePolicyText = assertFileContains("context-protocol/src/policy/message-policy.js", [
   {
     name: "message policy delegates canonical identity to codec",
     pattern: /return\s+resolveContextMessageId\(message\)/,
@@ -430,7 +430,7 @@ assertFileContains("agent/src/bot/session/session-execution-engine-utils.js", [
     pattern: /projectContextMessageIdentityMetadata\(messageItem\)/,
   },
 ]);
-assertFileContains("context-protocol/src/block-strategy.js", [
+assertFileContains("context-protocol/src/policy/block-strategy.js", [
   {
     name: "owns canonical system/history/incremental composition",
     pattern: /export\s+function\s+buildCanonicalMessageBlocks\b/,
@@ -444,7 +444,7 @@ assertFileContains("context-protocol/src/block-strategy.js", [
     pattern: /export\s+function\s+filterCurrentTurnMessagesFromHistory\b/,
   },
 ]);
-assertFileContains("context-protocol/src/summary-policy.js", [
+assertFileContains("context-protocol/src/policy/summary-policy.js", [
   {
     name: "owns summary scope marking",
     pattern: /export\s+function\s+markScopedMessagesSummarized\b/,
@@ -454,7 +454,7 @@ assertFileContains("context-protocol/src/summary-policy.js", [
     pattern: /export\s+function\s+collectLatestTaskSummaryMessageIndexes\b/,
   },
 ]);
-assertFileContains("context-protocol/src/terminal-history-policy.js", [
+assertFileContains("context-protocol/src/policy/terminal-history-policy.js", [
   {
     name: "owns terminal history projection",
     pattern: /export\s+function\s+projectTerminalHistoryMessages\b/,
@@ -615,7 +615,7 @@ if (/\bmessages\s*\.\s*(?:push|splice|unshift|shift|pop)\s*\(/.test(stateCommitt
 if (!messageContextStoreText) {
   fail("authoritative Message Context write port is unavailable");
 }
-assertFileContains("context-protocol/src/snapshot-policy.js", [
+assertFileContains("context-protocol/src/policy/snapshot-policy.js", [
   {
     name: "owns snapshot serialization",
     pattern: /export\s+function\s+createModelContextSnapshot\b/,
@@ -662,7 +662,7 @@ if (
 assertFileContains("agent/src/context/assembly/message-builder/context-blocks.js", [
   {
     name: "delegates block strategy to context protocol",
-    pattern: /@noobot\/context-protocol\/block-strategy/,
+    pattern: /@noobot\/context-protocol\/policy\/block/,
   },
 ]);
 const snapshotStoreText = assertFileContains(
@@ -670,7 +670,7 @@ const snapshotStoreText = assertFileContains(
   [
     {
       name: "delegates snapshot strategy to context protocol",
-      pattern: /@noobot\/context-protocol\/snapshot-policy/,
+      pattern: /@noobot\/context-protocol\/policy\/snapshot/,
     },
   ],
 );
@@ -703,7 +703,7 @@ if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
   );
 }
 
-const windowReducerText = readRel("context-protocol/src/window-reducer.js");
+const windowReducerText = readRel("context-protocol/src/policy/window-reducer.js");
 const mainHistoryResolverMatch = windowReducerText.match(
   /export\s+function\s+resolveModelHistoryMessages\s*\([\s\S]*?\n}\n/,
 );
@@ -761,7 +761,7 @@ if (!mainIncrementalResolverText) {
 const helpersText = assertFileContains("agent/src/bot/session/model-message-runtime-helpers.js", [
   {
     name: "uses dual-lane context protocol",
-    pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/,
+    pattern: /@noobot\/context-protocol\/assembly\/dual-lane[\s\S]*?buildDualLaneModelContext/,
   },
   { name: "declares primary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.PRIMARY/ },
   { name: "passes authoritative modelContext", pattern: /modelContext:\s*ctx\?\.modelContext/ },
@@ -787,7 +787,7 @@ if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [
   {
     name: "main turn uses dual-lane context protocol",
-    pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/,
+    pattern: /@noobot\/context-protocol\/assembly\/dual-lane[\s\S]*?buildDualLaneModelContext/,
   },
   { name: "main turn declares primary lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.PRIMARY/ },
 ]);
@@ -858,7 +858,7 @@ assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.
   },
 ]);
 
-const messageStoreText = assertFileContains("context-protocol/src/message-store.js", [
+const messageStoreText = assertFileContains("context-protocol/src/message/message-store.js", [
   {
     name: "persisted message uid owns canonical entity identity",
     pattern:
@@ -945,7 +945,7 @@ assertFileContains(
   [
     {
       name: "uses dual-lane context protocol",
-      pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/,
+      pattern: /@noobot\/context-protocol\/assembly\/dual-lane[\s\S]*?buildDualLaneModelContext/,
     },
     { name: "declares auxiliary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.AUXILIARY/ },
   ],
@@ -954,7 +954,7 @@ assertFileContains(
 assertFileContains("plugin/noobot-plugin-workflow/src/core/orchestrator/semantic-resolution.js", [
   {
     name: "uses dual-lane context protocol",
-    pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/,
+    pattern: /@noobot\/context-protocol\/assembly\/dual-lane[\s\S]*?buildDualLaneModelContext/,
   },
   { name: "declares auxiliary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.AUXILIARY/ },
   { name: "capability runner receives no second prompt source", pattern: /prompt:\s*["']["']/ },

@@ -6,14 +6,14 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModelContext } from "../src/hook-context.js";
+import { createModelContext } from "../src/assembly/hook-context.js";
 import {
   CONTEXT_MUTATION_TYPES,
   createContextMutation,
   dispatchContextMutation,
   removeContextMessagesByIds,
-} from "../src/context-mutation.js";
-import { getModelContextRevision } from "../src/model-context-runtime.js";
+} from "../src/mutation/context-mutation.js";
+import { getModelContextRevision } from "../src/assembly/model-context-runtime.js";
 
 test("model context document excludes runtime capabilities and is JSON serializable", () => {
   const document = createModelContext({
@@ -31,7 +31,9 @@ test("context mutation consumes one exact revision and rejects replay", () => {
   const consumed = [];
   const document = createModelContext({
     messageBlocks: { system: [], history: [], incremental: [] },
-    onMutationConsumed(result) { consumed.push(result); },
+    onMutationConsumed(result) {
+      consumed.push(result);
+    },
   });
   const command = createContextMutation(document, CONTEXT_MUTATION_TYPES.APPEND_MESSAGE, {
     message: { role: "user", content: "hello" },

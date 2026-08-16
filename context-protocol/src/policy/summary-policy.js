@@ -16,7 +16,7 @@ import {
   resolveToolCallId,
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message-policy.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "./injected-message-types.js";
+import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-message-types.js";
 
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 export const DEFAULT_TASK_CHECK_TOOL_NAME = "task_check";
@@ -48,7 +48,7 @@ export function getMessageRole(message = {}) {
   const role = String(message?.role || "").trim();
   if (role) return role;
   const type = getModelMessageType(message).trim().toLowerCase();
-  return ({ ai: "assistant", human: "user", system: "system", tool: "tool" })[type] || "";
+  return { ai: "assistant", human: "user", system: "system", tool: "tool" }[type] || "";
 }
 
 export function resolveToolNameFromMessage(message = {}) {
@@ -79,7 +79,9 @@ function getTaskSummaryToolCallIds(
   { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
 ) {
   return getMessageToolCalls(message)
-    .filter((call) => String(call?.name || call?.function?.name || "").trim() === taskSummaryToolName)
+    .filter(
+      (call) => String(call?.name || call?.function?.name || "").trim() === taskSummaryToolName,
+    )
     .map((call) => String(call?.id || call?.tool_call_id || "").trim())
     .filter(Boolean);
 }
@@ -157,8 +159,7 @@ export function shouldMarkCurrentTurnSummarizedMessage(
   return shouldMarkCurrentTurnSummarizedByPolicy(message);
 }
 
-export const shouldMarkCurrentTurnSummarizedModelMessage =
-  shouldMarkCurrentTurnSummarizedMessage;
+export const shouldMarkCurrentTurnSummarizedModelMessage = shouldMarkCurrentTurnSummarizedMessage;
 
 export function shouldMarkCurrentTurnSummarizedMessageInScope(
   message = {},
@@ -176,22 +177,25 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
   const source = Array.isArray(messages) ? messages : [];
   if (isSummaryCheckpointControlMessage(message)) return true;
   const injected = isInjectedMessage(message, policyOptions);
-  const latestInjected = latestInjectedIndexes instanceof Set
-    ? latestInjectedIndexes
-    : collectLatestInjectedMessageIndexes(source, policyOptions);
+  const latestInjected =
+    latestInjectedIndexes instanceof Set
+      ? latestInjectedIndexes
+      : collectLatestInjectedMessageIndexes(source, policyOptions);
   if (injected && latestInjected.has(index)) return false;
   if (injected) return true;
   if (isTaskSummaryMessage(message, { taskSummaryToolName })) {
-    const latestSummary = latestTaskSummaryIndexes instanceof Set
-      ? latestTaskSummaryIndexes
-      : collectLatestTaskSummaryMessageIndexes(source, { taskSummaryToolName });
+    const latestSummary =
+      latestTaskSummaryIndexes instanceof Set
+        ? latestTaskSummaryIndexes
+        : collectLatestTaskSummaryMessageIndexes(source, { taskSummaryToolName });
     if (latestSummary.has(index)) return false;
     return shouldMarkCurrentTurnSummarizedByPolicy(message);
   }
   if (isNamedToolPairMessage(message, taskCheckToolName)) {
-    const latestTaskCheck = latestTaskCheckIndexes instanceof Set
-      ? latestTaskCheckIndexes
-      : collectLatestTaskCheckMessageIndexes(source, { taskCheckToolName });
+    const latestTaskCheck =
+      latestTaskCheckIndexes instanceof Set
+        ? latestTaskCheckIndexes
+        : collectLatestTaskCheckMessageIndexes(source, { taskCheckToolName });
     if (latestTaskCheck.has(index)) return false;
     return shouldMarkCurrentTurnSummarizedByPolicy(message);
   }
@@ -203,7 +207,9 @@ function summaryScope(messages, { taskSummaryToolName, taskCheckToolName, policy
   return {
     source,
     latestInjectedIndexes: collectLatestInjectedMessageIndexes(source, policyOptions),
-    latestTaskSummaryIndexes: collectLatestTaskSummaryMessageIndexes(source, { taskSummaryToolName }),
+    latestTaskSummaryIndexes: collectLatestTaskSummaryMessageIndexes(source, {
+      taskSummaryToolName,
+    }),
     latestTaskCheckIndexes: collectLatestTaskCheckMessageIndexes(source, { taskCheckToolName }),
   };
 }
@@ -236,10 +242,13 @@ function enforceToolCallBatchClosure(selectedMessages = [], source = [], retenti
   const selectedObjects = new Set(selected);
   const selectedIds = new Set(selected.map((message) => resolveMessageId(message)).filter(Boolean));
   const sourceObjects = new Set(sourceMessages);
-  const sourceIds = new Set(sourceMessages.map((message) => resolveMessageId(message)).filter(Boolean));
+  const sourceIds = new Set(
+    sourceMessages.map((message) => resolveMessageId(message)).filter(Boolean),
+  );
   const blockedObjects = new Set();
   const blockedIds = new Set();
-  const has = (objects, ids, message) => objects.has(message) ||
+  const has = (objects, ids, message) =>
+    objects.has(message) ||
     Boolean(resolveMessageId(message) && ids.has(resolveMessageId(message)));
   const block = (message) => {
     if (!has(sourceObjects, sourceIds, message)) return;
@@ -255,22 +264,24 @@ function enforceToolCallBatchClosure(selectedMessages = [], source = [], retenti
     const calls = getMessageToolCalls(message);
     const callIds = calls.map(resolveToolCallId).filter(Boolean);
     if (!calls.length) continue;
-    const resultMembers = retainedMessages.filter((candidate) =>
-      resolveMessageRole(candidate) === "tool" &&
-      callIds.includes(resolveToolCallId(candidate)),
+    const resultMembers = retainedMessages.filter(
+      (candidate) =>
+        resolveMessageRole(candidate) === "tool" && callIds.includes(resolveToolCallId(candidate)),
     );
     for (const result of resultMembers) claimedToolResultIds.add(resolveToolCallId(result));
     assistantBatches.push({
       members: [message, ...resultMembers],
-      complete: callIds.length === calls.length && callIds.every((id) =>
-        resultMembers.some((result) => resolveToolCallId(result) === id),
-      ),
+      complete:
+        callIds.length === calls.length &&
+        callIds.every((id) => resultMembers.some((result) => resolveToolCallId(result) === id)),
     });
   }
 
   for (const batch of assistantBatches) {
     const allInSource = batch.members.every((message) => has(sourceObjects, sourceIds, message));
-    const allSelected = batch.members.every((message) => has(selectedObjects, selectedIds, message));
+    const allSelected = batch.members.every((message) =>
+      has(selectedObjects, selectedIds, message),
+    );
     if (batch.complete && allInSource && allSelected) continue;
     for (const member of batch.members) block(member);
   }
@@ -279,11 +290,17 @@ function enforceToolCallBatchClosure(selectedMessages = [], source = [], retenti
     const toolCallId = resolveToolCallId(message);
     if (toolCallId && !claimedToolResultIds.has(toolCallId)) block(message);
   }
-  return selected.filter((message) => !blockedObjects.has(message) &&
-    !(resolveMessageId(message) && blockedIds.has(resolveMessageId(message))));
+  return selected.filter(
+    (message) =>
+      !blockedObjects.has(message) &&
+      !(resolveMessageId(message) && blockedIds.has(resolveMessageId(message))),
+  );
 }
 
-export function collectClosedToolCallBatchMessages(messages = [], { retentionMessages = messages } = {}) {
+export function collectClosedToolCallBatchMessages(
+  messages = [],
+  { retentionMessages = messages } = {},
+) {
   const source = Array.isArray(messages) ? messages : [];
   return enforceToolCallBatchClosure(source, source, retentionMessages);
 }
@@ -299,7 +316,11 @@ export function markCurrentTurnStoreSummarized(
 ) {
   if (!store || typeof store.updateWhere !== "function") return 0;
   const scoped = typeof store.toArray === "function" ? store.toArray() : [];
-  const dimensions = summaryScope(scoped, { taskSummaryToolName, taskCheckToolName, policyOptions });
+  const dimensions = summaryScope(scoped, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
   return store.updateWhere({ summarized: true }, (message, index) => {
     const marked = shouldMarkCurrentTurnSummarizedMessageInScope(message, {
       ...dimensions,
@@ -333,7 +354,11 @@ export function markCurrentTurnArraySummarized(
     policyOptions = {},
   } = {},
 ) {
-  const dimensions = summaryScope(messages, { taskSummaryToolName, taskCheckToolName, policyOptions });
+  const dimensions = summaryScope(messages, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
   return dimensions.source.map((message, index) =>
     shouldMarkCurrentTurnSummarizedMessageInScope(message, {
       ...dimensions,
@@ -342,7 +367,9 @@ export function markCurrentTurnArraySummarized(
       taskSummaryToolName,
       taskCheckToolName,
       policyOptions,
-    }) ? { ...(message || {}), summarized: true } : message,
+    })
+      ? { ...(message || {}), summarized: true }
+      : message,
   );
 }
 
@@ -354,18 +381,26 @@ export function markCurrentTurnModelMessagesSummarized(
     policyOptions = {},
   } = {},
 ) {
-  const dimensions = summaryScope(messages, { taskSummaryToolName, taskCheckToolName, policyOptions });
+  const dimensions = summaryScope(messages, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
   for (const [index, message] of dimensions.source.entries()) {
-    if (!shouldMarkCurrentTurnSummarizedMessageInScope(message, {
-      ...dimensions,
-      messages: dimensions.source,
-      index,
-      taskSummaryToolName,
-      taskCheckToolName,
-      policyOptions,
-    })) continue;
+    if (
+      !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
+        ...dimensions,
+        messages: dimensions.source,
+        index,
+        taskSummaryToolName,
+        taskCheckToolName,
+        policyOptions,
+      })
+    )
+      continue;
     message.summarized = true;
-    if (message?.lc_kwargs && typeof message.lc_kwargs === "object") message.lc_kwargs.summarized = true;
+    if (message?.lc_kwargs && typeof message.lc_kwargs === "object")
+      message.lc_kwargs.summarized = true;
   }
 }
 
@@ -383,11 +418,20 @@ export function collectScopedMessagesToSummarize(
   const source = Array.isArray(messages) ? messages : [];
   const retentionSource = Array.isArray(retentionMessages) ? retentionMessages : source;
   const numericLimit = Number(maxMessages);
-  const limit = Number.isFinite(numericLimit) && numericLimit >= 0
-    ? Math.min(source.length, Math.floor(numericLimit))
-    : source.length;
-  const dimensions = summaryScope(source, { taskSummaryToolName, taskCheckToolName, policyOptions });
-  const retentionDimensions = summaryScope(retentionSource, { taskSummaryToolName, taskCheckToolName, policyOptions });
+  const limit =
+    Number.isFinite(numericLimit) && numericLimit >= 0
+      ? Math.min(source.length, Math.floor(numericLimit))
+      : source.length;
+  const dimensions = summaryScope(source, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
+  const retentionDimensions = summaryScope(retentionSource, {
+    taskSummaryToolName,
+    taskCheckToolName,
+    policyOptions,
+  });
   const preservedInjected = collectPreservedMessages(
     retentionSource,
     retentionDimensions.latestInjectedIndexes,
@@ -418,14 +462,16 @@ export function collectScopedMessagesToSummarize(
     } else if (isNamedToolPairMessage(message, taskCheckToolName)) {
       if (isPreservedMessage(message, preservedTaskChecks)) continue;
       if (!shouldMarkCurrentTurnSummarizedByPolicy(message)) continue;
-    } else if (!shouldMarkCurrentTurnSummarizedMessageInScope(message, {
-      ...dimensions,
-      messages: source,
-      index,
-      taskSummaryToolName,
-      taskCheckToolName,
-      policyOptions,
-    })) {
+    } else if (
+      !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
+        ...dimensions,
+        messages: source,
+        index,
+        taskSummaryToolName,
+        taskCheckToolName,
+        policyOptions,
+      })
+    ) {
       continue;
     }
     if (message?.summarized === true || message?.lc_kwargs?.summarized === true) continue;
@@ -441,7 +487,8 @@ export function markScopedMessagesSummarized(messages = [], options = {}) {
   const selected = collectScopedMessagesToSummarize(messages, options);
   for (const message of selected.messages) {
     message.summarized = true;
-    if (message?.lc_kwargs && typeof message.lc_kwargs === "object") message.lc_kwargs.summarized = true;
+    if (message?.lc_kwargs && typeof message.lc_kwargs === "object")
+      message.lc_kwargs.summarized = true;
   }
   return {
     changedCount: selected.messages.length,
@@ -473,11 +520,12 @@ export function collectDialogScopedMessagesToSummarize(
     group.push(message);
     retentionGroups.set(dialogProcessId, group);
   }
-  return [...sourceGroups.entries()].flatMap(([dialogProcessId, group]) =>
-    collectScopedMessagesToSummarize(group, {
-      ...options,
-      retentionMessages: retentionGroups.get(dialogProcessId) || group,
-    }).messages,
+  return [...sourceGroups.entries()].flatMap(
+    ([dialogProcessId, group]) =>
+      collectScopedMessagesToSummarize(group, {
+        ...options,
+        retentionMessages: retentionGroups.get(dialogProcessId) || group,
+      }).messages,
   );
 }
 

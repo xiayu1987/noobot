@@ -16,7 +16,7 @@ import {
   getSystemRuntimeFromRuntime,
   getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
