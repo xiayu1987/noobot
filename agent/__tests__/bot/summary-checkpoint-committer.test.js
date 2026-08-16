@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createModelContext } from "@noobot/context-protocol/hook-context";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-types";
@@ -23,11 +23,18 @@ test("summary checkpoint persists unmodified messages before atomically marking 
     session: {
       async commitTurnSummaryCheckpoint(payload) {
         checkpointPayload = payload;
-        assert.equal(persisted.every((message) => message.summarized !== true), true);
+        assert.equal(
+          persisted.every((message) => message.summarized !== true),
+          true,
+        );
         return { committed: true, markedCount: 2, checkpointRevision: 1 };
       },
     },
-    turnPersister: { async appendAgentMessages({ messages: batch }) { persisted.push(...batch); } },
+    turnPersister: {
+      async appendAgentMessages({ messages: batch }) {
+        persisted.push(...batch);
+      },
+    },
     runtime,
     userId: "u1",
     sessionId: "s1",
@@ -38,7 +45,10 @@ test("summary checkpoint persists unmodified messages before atomically marking 
 
   assert.equal(result.committed, true);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1", "sm_2"]);
-  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_3"]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["sm_3"],
+  );
   assert.deepEqual(runtime.summaryCheckpointPromotionSources, [
     { role: "tool", type: "", attachments: [{ id: "a1" }] },
   ]);
@@ -51,18 +61,32 @@ test("failed summary transaction leaves canonical memory and persisted messages 
   ];
   const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
   const persisted = [];
-  await assert.rejects(commitSummaryCheckpoint({
-    session: { async commitTurnSummaryCheckpoint() { throw new Error("checkpoint failed"); } },
-    turnPersister: { async appendAgentMessages({ messages: batch }) { persisted.push(...batch); } },
-    runtime,
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    summaryCompletion: { summarizedMessageIds: ["sm_1"] },
-  }), /checkpoint failed/);
+  await assert.rejects(
+    commitSummaryCheckpoint({
+      session: {
+        async commitTurnSummaryCheckpoint() {
+          throw new Error("checkpoint failed");
+        },
+      },
+      turnPersister: {
+        async appendAgentMessages({ messages: batch }) {
+          persisted.push(...batch);
+        },
+      },
+      runtime,
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+    }),
+    /checkpoint failed/,
+  );
 
-  assert.equal(persisted.every((message) => message.summarized !== true), true);
+  assert.equal(
+    persisted.every((message) => message.summarized !== true),
+    true,
+  );
   assert.deepEqual(runtime.currentTurnMessages.toArray(), messages);
 });
 
@@ -145,18 +169,25 @@ test("failed summary checkpoint preserves context control prompts", async () => 
     }),
   };
 
-  await assert.rejects(commitSummaryCheckpoint({
-    session: { async commitTurnSummaryCheckpoint() { throw new Error("checkpoint failed"); } },
-    turnPersister: { async appendAgentMessages() {} },
-    runtime,
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    summaryCompletion: {
-      summarizedMessageIds: ["sm_1", "phase_prompt_1"],
-    },
-  }), /checkpoint failed/);
+  await assert.rejects(
+    commitSummaryCheckpoint({
+      session: {
+        async commitTurnSummaryCheckpoint() {
+          throw new Error("checkpoint failed");
+        },
+      },
+      turnPersister: { async appendAgentMessages() {} },
+      runtime,
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      summaryCompletion: {
+        summarizedMessageIds: ["sm_1", "phase_prompt_1"],
+      },
+    }),
+    /checkpoint failed/,
+  );
 
   assert.equal(phasePrompt.summarized, undefined);
   assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, [phasePrompt]);
@@ -185,7 +216,10 @@ test("summary completion never falls back to content identity", async () => {
     summaryCompletion: { summarizedMessageIds: ["marked"] },
   });
 
-  assert.deepEqual(runtime.currentTurnMessages.toArray().map((item) => item.messageUid), ["keep"]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((item) => item.messageUid),
+    ["keep"],
+  );
 });
 
 test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint API is available", async () => {
@@ -218,7 +252,10 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
   assert.equal(checkpointPayload.expectedCheckpointRevision, undefined);
   assert.equal(runtime.summaryCheckpointRevision, 4);
   assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
-  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_2"]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["sm_2"],
+  );
 });
 
 test("summary checkpoint does not replay messages already persisted by the timeline checkpoint", async () => {
@@ -240,7 +277,9 @@ test("summary checkpoint does not replay messages already persisted by the timel
       },
     },
     turnPersister: {
-      async appendAgentMessages() { appendCount += 1; },
+      async appendAgentMessages() {
+        appendCount += 1;
+      },
     },
     runtime,
     userId: "u1",
@@ -254,7 +293,10 @@ test("summary checkpoint does not replay messages already persisted by the timel
   assert.equal(appendCount, 0);
   assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_1", "sm_2"]);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
-  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), ["sm_2"]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["sm_2"],
+  );
 });
 
 test("summary checkpoint closes assistant tool-call and tool-result identity as one exact scope", async () => {
@@ -314,8 +356,14 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
 
   assert.equal(result.committed, true);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ids);
-  assert.deepEqual(persisted.map((message) => message.messageUid), ids);
-  assert.equal(persisted.every((message) => message.summarized !== true), true);
+  assert.deepEqual(
+    persisted.map((message) => message.messageUid),
+    ids,
+  );
+  assert.equal(
+    persisted.every((message) => message.summarized !== true),
+    true,
+  );
   assert.deepEqual(runtime.currentTurnMessages.toArray(), []);
   assert.deepEqual(runtime.activeMessageContext.messageBlocks.incremental, []);
 });
@@ -323,8 +371,18 @@ test("summary checkpoint closes assistant tool-call and tool-result identity as 
 test("summary checkpoint passes restored historical UIDs to the active Turn transaction", async () => {
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore([
-      { messageUid: "sm_current_call", role: "assistant", content: "", tool_calls: [{ id: "call_current" }] },
-      { messageUid: "sm_current_result", role: "tool", content: "ok", tool_call_id: "call_current" },
+      {
+        messageUid: "sm_current_call",
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call_current" }],
+      },
+      {
+        messageUid: "sm_current_result",
+        role: "tool",
+        content: "ok",
+        tool_call_id: "call_current",
+      },
     ]),
     timelineCheckpointPersistedMessageUids: ["sm_current_call", "sm_current_result"],
   };
@@ -350,13 +408,17 @@ test("summary checkpoint passes restored historical UIDs to the active Turn tran
   });
 
   assert.equal(result.committed, true);
-  assert.deepEqual(checkpointPayload.persistedMessageUids, ["sm_current_call", "sm_current_result"]);
+  assert.deepEqual(checkpointPayload.persistedMessageUids, [
+    "sm_current_call",
+    "sm_current_result",
+  ]);
   assert.deepEqual(checkpointPayload.summarizedMessageUids, [
     "sm_history_call",
     "sm_history_result",
     "sm_current_call",
   ]);
-  assert.deepEqual(runtime.currentTurnMessages.toArray().map((message) => message.messageUid), [
-    "sm_current_result",
-  ]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["sm_current_result"],
+  );
 });

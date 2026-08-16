@@ -1,3 +1,4 @@
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -5,8 +6,6 @@
  */
 
 import { emitEvent } from "../../events/index.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import {
   createEmptyHookResult,
   HOOK_CANCELLATION_MODE,
@@ -32,7 +31,7 @@ export function resolveBotHookRuntimeMeta({
     userId: String(userId || "").trim(),
     sessionId: String(sessionId || "").trim(),
     parentSessionId: normalizeParentSessionId(parentSessionId),
-    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     caller: String(caller || "").trim(),
   };
 }
@@ -58,9 +57,10 @@ export async function runBotRuntimeHook({
     return createEmptyHookResult(normalizedPoint, context);
   }
   const listener = eventListener || runtime?.eventListener || null;
-  const invocationSignal = descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
-    ? null
-    : runtime?.abortSignal || null;
+  const invocationSignal =
+    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
+      ? null
+      : runtime?.abortSignal || null;
   emitEvent(listener, "bot_hook_start", { point: normalizedPoint });
   try {
     const result = await manager.emit(normalizedPoint, context, {

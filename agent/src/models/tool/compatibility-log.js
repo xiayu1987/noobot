@@ -5,7 +5,7 @@
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 
 function resolveWorkspaceRoot({ runtime = {}, modelState = {} } = {}) {
   const runtimeBasePath = String(runtime?.basePath || "").trim();
@@ -35,12 +35,10 @@ export function buildToolCompatibilityLogLine({
     event: String(event || "").trim(),
     userId: String(runtime?.userId || "").trim(),
     sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
-    parentSessionId: resolveParentSessionId({ runtime }),
+    parentSessionId: normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId),
     modelAlias: String(modelState?.activeModelAlias || "").trim(),
     modelName: String(modelState?.activeModelName || "").trim(),
-    tools: Array.isArray(tools)
-      ? tools.map((t) => String(t || "").trim()).filter(Boolean)
-      : [],
+    tools: Array.isArray(tools) ? tools.map((t) => String(t || "").trim()).filter(Boolean) : [],
   });
 }
 

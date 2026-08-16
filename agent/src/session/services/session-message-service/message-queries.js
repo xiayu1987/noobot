@@ -3,10 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveDialogProcessIdFromContext,
-  resolveMessageDialogProcessId,
-} from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 
 export async function getSessionTurns({
   userId,
@@ -61,7 +59,7 @@ export async function getTurnSummaryCheckpointState({
   dialogProcessId = "",
   turnScopeId = "",
 } = {}) {
-  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId) return null;
   const resolvedParentSessionId = await this._resolveParentSessionId(
@@ -89,14 +87,13 @@ export async function hasDialogProcessIdInSession({
   parentSessionId = "",
   persistenceContext = null,
 }) {
-  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({
-    dialogProcessId,
-  });
+  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) return false;
   const session = await this.sessionRepo.findById(userId, sessionId, parentSessionId);
   if (!session) return false;
   const messages = Array.isArray(session?.messages) ? session.messages : [];
   return messages.some(
-    (messageItem) => resolveMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
+    (messageItem) =>
+      resolveContextMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
   );
 }

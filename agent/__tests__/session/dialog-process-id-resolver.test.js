@@ -5,26 +5,14 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 
-import {
-  resolveDialogProcessId,
-  resolveDialogProcessIdFromContext,
-  resolveMessageDialogProcessId,
-} from "../../src/context/session/dialog-process-id-resolver.js";
-
-test("resolveMessageDialogProcessId reads only the canonical dialogProcessId field", () => {
-  assert.equal(resolveMessageDialogProcessId({ dialogProcessId: "d1" }), "d1");
-  assert.equal(resolveMessageDialogProcessId({ dialogId: "d2" }), "");
+test("resolveContextMessageDialogProcessId reads only the canonical dialogProcessId field", () => {
+  assert.equal(resolveContextMessageDialogProcessId({ dialogProcessId: "d1" }), "d1");
+  assert.equal(resolveContextMessageDialogProcessId({ dialogId: "d2" }), "");
 });
 
-test("resolveDialogProcessIdFromContext reads only the explicit field", () => {
-  assert.equal(resolveDialogProcessIdFromContext({ dialogProcessId: "d1" }), "d1");
-  assert.equal(resolveDialogProcessIdFromContext({ runtime: { dialogProcessId: "legacy" } }), "");
-});
-
-test("resolveDialogProcessId reads only the explicit current context", () => {
-  const id = resolveDialogProcessId({
-    ctx: { dialogProcessId: "d_current" },
-  });
-  assert.equal(id, "d_current");
+test("normalizeDialogProcessId normalizes only the explicit value", () => {
+  assert.equal(normalizeDialogProcessId(" d_current "), "d_current");
 });

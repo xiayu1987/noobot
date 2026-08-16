@@ -11,11 +11,20 @@ import {
   createCommandRequestHash,
   createSessionCommand,
   createSessionSnapshot,
+  normalizeDialogProcessId,
+  normalizeParentSessionId,
+  normalizeSessionId,
   decideAggregateConcurrency,
   decideCommandIdempotency,
   validateSessionCommand,
   validateSessionSnapshot,
 } from "../src/index.mjs";
+
+test("session identity normalization has one protocol implementation", () => {
+  assert.equal(normalizeSessionId(" session-1 "), "session-1");
+  assert.equal(normalizeParentSessionId(` ${"p".repeat(220)} `), "p".repeat(200));
+  assert.equal(normalizeDialogProcessId(" dialog-1 "), "dialog-1");
+});
 
 test("command fingerprints use the protocol SHA-256 algorithm without Node runtime APIs", () => {
   assert.equal(

@@ -14,7 +14,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createModelContext } from "@noobot/context-protocol/hook-context";
-import { toConversationMessages } from "../../../src/context/session/message-converter.js";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/session-message-projection";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 import { projectTerminalHistoryMessages } from "@noobot/context-protocol/terminal-history-policy";
 

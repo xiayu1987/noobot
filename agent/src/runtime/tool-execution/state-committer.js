@@ -3,14 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ToolMessage } from "@langchain/core/messages";
 import { emitEvent } from "../../events/index.js";
 import { TOOL_RESULT_TRACE_TRUNCATE_LENGTH } from "../constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
-import { appendContextMessage as appendMessage } from "@noobot/context-protocol/context-mutation";
+import { appendToolResultModelMessage } from "../message-context/message-store.js";
 import {
   applyAuthoritativeMessageId,
   currentAssistantPresentationMessageId,
@@ -48,8 +47,7 @@ function resolveTurnOwnership(runtime = {}, dialogProcessId = "") {
 }
 
 export function createStateCommitter({
-  messages = null,
-  messageHolder = null,
+  modelContext = null,
   traces = null,
   turnMessageStore = null,
   dialogProcessId = "",
@@ -221,16 +219,12 @@ export function createStateCommitter({
           result: normalizedToolResultText.slice(0, TOOL_RESULT_TRACE_TRUNCATE_LENGTH),
         });
       }
-      const toolMessage = new ToolMessage({
-        tool_call_id: resolvedCallId,
+      appendToolResultModelMessage({
+        modelContext,
+        toolCallId: resolvedCallId,
         content: normalizedToolResultText,
-        additional_kwargs: { noobotMessageId: messageUid },
+        messageUid,
       });
-      if (messageHolder && typeof messageHolder === "object") {
-        appendMessage(messageHolder, toolMessage, { block: "incremental" });
-      } else if (Array.isArray(messages)) {
-        messages.push(toolMessage);
-      }
       if (turnMessageStore?.push) {
         turnMessageStore.push(toolResultPayload);
       }

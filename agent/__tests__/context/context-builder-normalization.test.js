@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ContextBuilder } from "../../src/context/index.js";
+import { buildSystemRuntime } from "../../src/context/application/build-system-context.js";
 import { buildContextMessageBlocks } from "../../src/context/assembly/message-builder.js";
 import { createPersistedCurrentUserMessage } from "../runtime/core/message-builder-current-user-fixture.js";
 
@@ -50,7 +51,8 @@ function createBuilderForNormalizationTest() {
 function createBuilderForAttachmentRuntimeTest({
   attachments = [],
   userMessageAttachments = null,
-  includeContextKeys = [],
+  promptSections = [],
+  runtimeAttachments = true,
   eventListener = null,
 } = {}) {
   return new ContextBuilder({
@@ -63,7 +65,11 @@ function createBuilderForAttachmentRuntimeTest({
     serviceContainer: {
       sessionManager: null,
       memoryService: null,
-      attachmentService: { async ingest() { return []; } },
+      attachmentService: {
+        async ingest() {
+          return [];
+        },
+      },
       skillService: null,
       eventListener,
       botManager: null,
@@ -78,7 +84,8 @@ function createBuilderForAttachmentRuntimeTest({
       attachments,
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
-          includeContextKeys,
+          promptSections,
+          runtimeCapabilities: { attachments: runtimeAttachments },
         },
       }),
       abortSignal: null,
@@ -90,7 +97,7 @@ function createBuilderForAttachmentRuntimeTest({
 test("buildInitialContext emits the default agent context debug structure", async () => {
   const events = [];
   const builder = createBuilderForAttachmentRuntimeTest({
-    includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+    promptSections: ["base_prompt", "system_runtime", "scenario"],
     eventListener: {
       onEvent(event = {}) {
         events.push(event);
@@ -124,6 +131,7 @@ test("buildInitialContext prefers userMessageAttachments over legacy attachments
       {
         attachmentId: "att_input",
         sessionId: "s1",
+        attachmentSource: "user",
         name: "input.png",
         mimeType: "image/png",
         size: 123,
@@ -134,20 +142,18 @@ test("buildInitialContext prefers userMessageAttachments over legacy attachments
       {
         attachmentId: "att_legacy",
         sessionId: "s1",
+        attachmentSource: "user",
         name: "legacy.png",
         mimeType: "image/png",
         size: 123,
         path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/legacy.png",
       },
     ],
-    includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+    promptSections: ["base_prompt", "system_runtime", "scenario"],
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
-  assert.equal(
-    context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId,
-    "att_input",
-  );
+  assert.equal(context?.bindings?.runtime?.userMessageAttachments?.[0]?.attachmentId, "att_input");
   assert.deepEqual(context?.bindings?.runtime?.attachments, []);
 });
 
@@ -164,7 +170,11 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
     serviceContainer: {
       sessionManager: null,
       memoryService: null,
-      attachmentService: { async ingest() { return []; } },
+      attachmentService: {
+        async ingest() {
+          return [];
+        },
+      },
       skillService: null,
       eventListener: null,
       botManager: null,
@@ -178,7 +188,7 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
       attachments: [],
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
-          includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+          promptSections: ["base_prompt", "system_runtime", "scenario"],
         },
       }),
       abortSignal: null,
@@ -187,17 +197,16 @@ test("buildInitialContext marks normalized superAdmin user as super user", async
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
-  assert.equal(
-    context?.bindings?.runtime?.systemRuntime?.isSuperUser,
-    true,
-  );
+  assert.equal(context?.bindings?.runtime?.systemRuntime?.isSuperUser, true);
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
   assert.equal(
-    context.context.modelContext.messageBlocks.system.join("\n").includes("\"isSuperUser\": true"),
+    context.context.modelContext.messageBlocks.system.join("\n").includes('"isSuperUser": true'),
     true,
   );
   assert.equal(
-    context.context.modelContext.messageBlocks.system.join("\n").includes("\"allowedRoots\": [\n      \"<host-filesystem>\""),
+    context.context.modelContext.messageBlocks.system
+      .join("\n")
+      .includes('"allowedRoots": [\n      "<host-filesystem>"'),
     true,
   );
 });
@@ -251,7 +260,11 @@ test("buildInitialContext keeps super user identity in system message when syste
     serviceContainer: {
       sessionManager: null,
       memoryService: null,
-      attachmentService: { async ingest() { return []; } },
+      attachmentService: {
+        async ingest() {
+          return [];
+        },
+      },
       skillService: null,
       eventListener: null,
       botManager: null,
@@ -265,7 +278,7 @@ test("buildInitialContext keeps super user identity in system message when syste
       attachments: [],
       runConfig: executionRunConfig("turn-1", {
         contextPolicy: {
-          includeContextKeys: ["base_prompt"],
+          promptSections: ["base_prompt"],
         },
       }),
       abortSignal: null,
@@ -276,8 +289,8 @@ test("buildInitialContext keeps super user identity in system message when syste
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
   const systemText = context.context.modelContext.messageBlocks.system.join("\n");
   assert.equal(context?.context?.environment?.permissions?.isSuperUser, true);
-  assert.equal(systemText.includes("\"identity\""), true);
-  assert.equal(systemText.includes("\"isSuperUser\": true"), true);
+  assert.equal(systemText.includes('"identity"'), true);
+  assert.equal(systemText.includes('"isSuperUser": true'), true);
 });
 
 test("buildContextMessageBlocks prefers runtime userMessageAttachments for user meta", () => {
@@ -299,11 +312,13 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
         },
       },
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
-      dialogProcessId: "dp1",
-      turnScopeId: "turn-1",
-      attachments: [{ attachmentId: "att_input", name: "input.png" }],
-    }) },
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("hello", {
+        dialogProcessId: "dp1",
+        turnScopeId: "turn-1",
+        attachments: [{ attachmentId: "att_input", name: "input.png" }],
+      }),
+    },
   );
   const metaMessage = blocks.incremental.find(
     (item) => item?.additional_kwargs?.noobotInternalMessageType === "user_meta",
@@ -319,13 +334,14 @@ test("buildInitialContext keeps user message attachments separate from runtime g
       {
         attachmentId: "att_1",
         sessionId: "s1",
+        attachmentSource: "user",
         name: "image.png",
         mimeType: "image/png",
         size: 123,
         path: "/tmp/noobot-test-workspace/u1/runtime/attach/scoped/s1/user/att_1.png",
       },
     ],
-    includeContextKeys: ["base_prompt", "system_runtime", "scenario"],
+    promptSections: ["base_prompt", "system_runtime", "scenario"],
   });
 
   const context = await builder.buildInitialContext({ dialogProcessId: "dp_1" });
@@ -347,25 +363,32 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
       sessionManager: {
         async getContextProjection(payload = {}) {
           calls.push(payload);
-          return { messages: [
-            {
-              role: "user",
-              content: "history user",
-              dialogProcessId: "history-dp",
-              turnScopeId: "client-turn:old",
-            },
-            {
-              role: "assistant",
-              content: "history assistant",
-              dialogProcessId: "history-dp",
-              turnScopeId: "client-turn:old",
-            },
-          ], sourceRevision: "ctxsrc:test" };
+          return {
+            messages: [
+              {
+                role: "user",
+                content: "history user",
+                dialogProcessId: "history-dp",
+                turnScopeId: "client-turn:old",
+              },
+              {
+                role: "assistant",
+                content: "history assistant",
+                dialogProcessId: "history-dp",
+                turnScopeId: "client-turn:old",
+              },
+            ],
+            sourceRevision: "ctxsrc:test",
+          };
         },
         async upsertSessionTree() {},
       },
       memoryService: null,
-      attachmentService: { async ingest() { return []; } },
+      attachmentService: {
+        async ingest() {
+          return [];
+        },
+      },
       skillService: null,
       eventListener: null,
       botManager: null,
@@ -378,7 +401,7 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
       parentSessionId: "",
       attachments: [],
       runConfig: executionRunConfig("client-turn:edited", {
-        contextPolicy: { includeContextKeys: ["base_prompt", "system_runtime"] },
+        contextPolicy: { promptSections: ["base_prompt", "system_runtime"] },
       }),
       abortSignal: null,
       parentAsyncResultContainer: null,
@@ -397,133 +420,62 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
   assert.equal(context.context.modelContext.messageBlocks.system.length > 0, true);
 });
 
-function createBuilderForSuperUserRuntimeTest({ globalConfig = {}, userId = "u1", systemRuntimePatch = null } = {}) {
-  return new ContextBuilder({
-    config: {
-      globalConfig,
-      userConfig: {},
-    },
-    serviceContainer: {
-      sessionManager: null,
-      memoryService: null,
-      attachmentService: null,
-      skillService: null,
-      eventListener: null,
-      botManager: null,
-      userInteractionBridge: null,
-    },
-    sessionContext: {
-      userId,
-      sessionId: "s1",
-      caller: "user",
-      parentSessionId: "",
-      attachments: [],
-      runConfig: executionRunConfig("turn-1", systemRuntimePatch ? { systemRuntimePatch } : {}),
-      abortSignal: null,
-      parentAsyncResultContainer: null,
-    },
-  });
-}
-
-function createBuilderForStartupDependencyRuntimeTest() {
-  return new ContextBuilder({
-    config: {
-      globalConfig: {},
-      userConfig: {},
-    },
-    serviceContainer: {
-      sessionManager: null,
-      memoryService: null,
-      attachmentService: null,
-      skillService: null,
-      eventListener: null,
-      botManager: {
-        startupContext: {
-          runtime: {
-            dependencies: {
-              sourceSummary: {
-                platform: "darwin",
-                dependencies: [{
-                  key: "ffmpeg",
-                  name: "FFmpeg",
-                  available: true,
-                  installMode: "managed",
-                  sourceType: "self-hosted",
-                  hasCustomSource: true,
-                  customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
-                  configKeys: ["darwinManaged.url"],
-                }],
-              },
-            },
-          },
-        },
-      },
-      userInteractionBridge: null,
-    },
-    sessionContext: {
-      userId: "u1",
-      sessionId: "s1",
-      caller: "user",
-      parentSessionId: "",
-      attachments: [],
-      runConfig: executionRunConfig("turn-1"),
-      abortSignal: null,
-      parentAsyncResultContainer: null,
-    },
-  });
-}
-
-test("_buildSystemRuntime derives isSuperUser from configured super user id", () => {
-  const builder = createBuilderForSuperUserRuntimeTest({
+test("buildSystemRuntime derives isSuperUser from configured super user id", () => {
+  const runtime = buildSystemRuntime({
     globalConfig: { super_admin: { user_id: "super-root-user" } },
     userId: "super-root-user",
+    dialogProcessId: "dp-super",
   });
-
-  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-super" });
 
   assert.equal(runtime.isSuperUser, true);
 });
 
-test("_buildSystemRuntime injects redacted desktop dependency source summary", () => {
-  const builder = createBuilderForStartupDependencyRuntimeTest();
-
-  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-deps" });
-
-  assert.deepEqual(runtime.desktopDependencySources, {
+test("buildSystemRuntime injects redacted desktop dependency source summary", () => {
+  const sourceSummary = {
     platform: "darwin",
-    dependencies: [{
-      key: "ffmpeg",
-      name: "FFmpeg",
-      available: true,
-      installMode: "managed",
-      sourceType: "self-hosted",
-      hasCustomSource: true,
-      customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
-      configKeys: ["darwinManaged.url"],
-    }],
+    dependencies: [
+      {
+        key: "ffmpeg",
+        name: "FFmpeg",
+        available: true,
+        installMode: "managed",
+        sourceType: "self-hosted",
+        hasCustomSource: true,
+        customSourceEnvKeys: ["NOOBOT_FFMPEG_MAC_URL"],
+        configKeys: ["darwinManaged.url"],
+      },
+    ],
+  };
+  const runtime = buildSystemRuntime({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-deps",
+    botManager: { startupContext: { runtime: { dependencies: { sourceSummary } } } },
   });
+
+  assert.deepEqual(runtime.desktopDependencySources, sourceSummary);
   assert.equal(JSON.stringify(runtime.desktopDependencySources).includes("http"), false);
 });
 
-test("_buildSystemRuntime defaults isSuperUser to false when config is missing", () => {
-  const builder = createBuilderForSuperUserRuntimeTest({
+test("buildSystemRuntime defaults isSuperUser to false when config is missing", () => {
+  const runtime = buildSystemRuntime({
     globalConfig: {},
     userId: "super-root-user",
+    dialogProcessId: "dp-regular",
   });
-
-  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-regular" });
 
   assert.equal(runtime.isSuperUser, false);
 });
 
-test("_buildSystemRuntime does not allow systemRuntimePatch to grant super user", () => {
-  const builder = createBuilderForSuperUserRuntimeTest({
+test("buildSystemRuntime does not allow systemRuntimePatch to grant super user", () => {
+  const runtime = buildSystemRuntime({
     globalConfig: { super_admin: { user_id: "super-root-user" } },
     userId: "regular-user",
-    systemRuntimePatch: { isSuperUser: true, userId: "super-root-user" },
+    dialogProcessId: "dp-guard",
+    runConfig: {
+      systemRuntimePatch: { isSuperUser: true, userId: "super-root-user" },
+    },
   });
-
-  const runtime = builder._buildSystemRuntime({ dialogProcessId: "dp-guard" });
 
   assert.equal(runtime.isSuperUser, false);
   assert.equal(runtime.userId, "super-root-user");

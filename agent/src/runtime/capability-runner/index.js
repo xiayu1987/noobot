@@ -13,10 +13,10 @@ import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import {
   getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
   getSystemRuntimeFromRuntime,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
@@ -68,17 +68,11 @@ function resolveRuntime(ctx = {}) {
 }
 
 function resolveSessionMeta(ctx = {}, runtime = {}) {
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const identity = getSessionIdsFromAgentContext(ctx.agentContext);
   return {
-    userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
-    sessionId: String(
-      ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "",
-    ).trim(),
-    parentSessionId: resolveParentSessionId({
-      context: ctx,
-      runtime,
-      parentSessionId: ctx?.parentSessionId,
-    }),
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
   };
 }
 

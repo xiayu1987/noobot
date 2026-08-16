@@ -9,7 +9,7 @@ import { SessionExecutionRunner } from "../../../src/bot/execution/runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -240,7 +240,6 @@ export function createRunner({
     now: () => new Date().toISOString(),
   });
 }
-
 
 export {
   HOOK_POINT,

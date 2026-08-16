@@ -10,9 +10,9 @@ import {
   MODEL_CONTEXT_LANE,
 } from "@noobot/context-protocol/dual-lane-context";
 import {
-  resolveTurnMessagesStore,
-  resolveTurnTasksStore,
-} from "../../context/session/current-turn-store.js";
+  requireCurrentTurnMessagesStore,
+  requireCurrentTurnTasksStore,
+} from "./current-turn-ledger.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
@@ -480,13 +480,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     { block: "incremental" },
   );
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
-  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
+  const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
+  const turnTaskStore = requireCurrentTurnTasksStore(currentTurnTasks);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
 
   const stateCommitter = createStateCommitter({
-    messages,
-    messageHolder: modelContext,
+    modelContext,
     traces,
     turnMessageStore,
     dialogProcessId,

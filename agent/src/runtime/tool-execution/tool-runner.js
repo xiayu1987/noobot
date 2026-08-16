@@ -20,7 +20,7 @@ import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   resolveRuntimeTransferIdentity,
   persistTransferArtifacts,

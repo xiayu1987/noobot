@@ -18,7 +18,8 @@ import { createSessionFacade } from "../../src/session/index.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
 import { StorageService } from "../../src/session/storage-service.js";
-import { normalizeMessagesEntity, normalizeSelectedConnectors } from "../../src/session/entities/session-entity.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeMessagesEntity } from "../../src/session/entities/session-entity.js";
 import { normalizeTaskEntity } from "../../src/session/entities/task-entity.js";
 import {
   ScopedSessionLocationResolver,
@@ -36,11 +37,15 @@ function buildHarness() {
     resolveBasePath: (userId) => path.join(root, userId),
     sessionRoot: (basePath) => path.join(basePath, "runtime/session"),
     sessionsSummaryFile: (basePath) => path.join(basePath, "runtime/session/sessions.json"),
-    deletedSessionMarkerFile: (basePath) => path.join(basePath, "runtime/session/.deleted-sessions.json"),
+    deletedSessionMarkerFile: (basePath) =>
+      path.join(basePath, "runtime/session/.deleted-sessions.json"),
   };
   const sessionPathResolver = {
     async resolveSessionScope(userId, sessionId, parentSessionId = "") {
-      const sessionDir = path.join(pathResolver.sessionRoot(pathResolver.resolveBasePath(userId)), sessionId);
+      const sessionDir = path.join(
+        pathResolver.sessionRoot(pathResolver.resolveBasePath(userId)),
+        sessionId,
+      );
       return {
         resolvedParentSessionId: String(parentSessionId || ""),
         sessionDir,
@@ -57,7 +62,9 @@ function buildHarness() {
   return {
     async setup() {
       root = await mkdtemp(path.join(os.tmpdir(), "noobot-scoped-session-"));
-      await import("node:fs/promises").then(({ mkdir }) => mkdir(path.join(root, "alice"), { recursive: true }));
+      await import("node:fs/promises").then(({ mkdir }) =>
+        mkdir(path.join(root, "alice"), { recursive: true }),
+      );
       const storageService = new StorageService({ pathResolver });
       const sessionRepo = new FileSystemSessionRepository({
         pathResolver,
@@ -127,9 +134,15 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
     const scope = await sessionRepo.resolveSessionScope("alice", sessionId, "");
     const files = buildSessionArtifactFileMap(scope.sessionDir);
     const manifest = await readJson(files.session);
-    assert.deepEqual(manifest.turnOrder.map((turn) => turn.turnId), ["turn-000001", "turn-000004"]);
+    assert.deepEqual(
+      manifest.turnOrder.map((turn) => turn.turnId),
+      ["turn-000001", "turn-000004"],
+    );
     assert.equal(manifest.turnArtifactSequence, 4);
-    assert.equal(new Set(manifest.turnOrder.map((turn) => turn.turnId)).size, manifest.turnOrder.length);
+    assert.equal(
+      new Set(manifest.turnOrder.map((turn) => turn.turnId)).size,
+      manifest.turnOrder.length,
+    );
 
     const restored = await readSessionArtifact({ sessionDir: scope.sessionDir });
     assert.equal(restored.messages[0].turnScopeId, "turn-keep");
@@ -138,9 +151,9 @@ test("concurrent repository saves allocate monotonic Turn journals without cross
 
     for (const turn of manifest.turnOrder) {
       const records = await readJsonlArtifactFile(path.join(scope.sessionDir, turn.file));
-      const recordTurnScopes = new Set(records
-        .map((record) => record?.message?.turnScopeId)
-        .filter(Boolean));
+      const recordTurnScopes = new Set(
+        records.map((record) => record?.message?.turnScopeId).filter(Boolean),
+      );
       assert.deepEqual([...recordTurnScopes], [turn.turnScopeId]);
     }
   } finally {
@@ -171,22 +184,41 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
       }),
     });
 
-    await sessionRepo.withSessionMutation("alice", "child-a", "parent-a", async () => {
-      await sessionRepo.ensureSession({
-        userId: "alice",
-        sessionId: "child-a",
-        parentSessionId: "parent-a",
-        meta: { caller: "bot", modelAlias: "m" },
-        persistenceContext: context,
-      });
-      await taskRepo.save("alice", "child-a", {
-        taskId: "task-a",
-        skillName: "skill",
-        taskName: "task",
-        taskStatus: "start",
-      }, "parent-a", context);
-      await executionRepo.appendLog("alice", "child-a", { type: "event", value: 1 }, {}, "parent-a", context);
-    }, context);
+    await sessionRepo.withSessionMutation(
+      "alice",
+      "child-a",
+      "parent-a",
+      async () => {
+        await sessionRepo.ensureSession({
+          userId: "alice",
+          sessionId: "child-a",
+          parentSessionId: "parent-a",
+          meta: { caller: "bot", modelAlias: "m" },
+          persistenceContext: context,
+        });
+        await taskRepo.save(
+          "alice",
+          "child-a",
+          {
+            taskId: "task-a",
+            skillName: "skill",
+            taskName: "task",
+            taskStatus: "start",
+          },
+          "parent-a",
+          context,
+        );
+        await executionRepo.appendLog(
+          "alice",
+          "child-a",
+          { type: "event", value: 1 },
+          {},
+          "parent-a",
+          context,
+        );
+      },
+      context,
+    );
 
     const scope = await resolver.resolveSessionScope("alice", "child-a", "parent-a");
     assert.equal(scope.sessionDir, path.join(root, "alice/runtime/workflow/session/run-a/node-a"));
@@ -202,10 +234,22 @@ test("scoped repositories keep all artifacts and metadata in their execution dir
     assert.equal((await readJsonlArtifactFile(scope.executionEventsFile))[0].value, 1);
 
     const defaultRoot = path.join(root, "alice/runtime/session");
-    assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, "child-a/session.json")), false);
-    assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, "sessions.json")), false);
-    assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, ".deleted-sessions.json")), false);
-    assert.equal(await sessionRepo.storageService.exists(path.join(defaultRoot, "session-tree.json")), false);
+    assert.equal(
+      await sessionRepo.storageService.exists(path.join(defaultRoot, "child-a/session.json")),
+      false,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(path.join(defaultRoot, "sessions.json")),
+      false,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(path.join(defaultRoot, ".deleted-sessions.json")),
+      false,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(path.join(defaultRoot, "session-tree.json")),
+      false,
+    );
     assert.equal(await sessionRepo.storageService.exists(scope.mutationLockDir), false);
   } finally {
     await harness.cleanup();
@@ -256,7 +300,10 @@ test("session facade execution reads do not create a default shadow session for 
 
     const scope = await resolver.resolveSessionScope("alice", "child-facade", "parent-facade");
     assert.equal(await sessionRepo.storageService.exists(scope.sessionFile), true);
-    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile))[0].event, "workflow_started");
+    assert.equal(
+      (await readJsonlArtifactFile(scope.executionEventsFile))[0].event,
+      "workflow_started",
+    );
     assert.equal(
       await sessionRepo.storageService.exists(
         path.join(root, "alice/runtime/session/child-facade/session.json"),
@@ -293,14 +340,15 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
     const persister = new SessionTurnPersister({
       session: {
         appendTurn: (payload = {}) => messageService.appendTurn(payload),
-        appendExecutionLog: (payload = {}) => executionRepo.appendLog(
-          payload.userId,
-          payload.sessionId,
-          { event: payload.event, type: payload.type, data: payload.data },
-          {},
-          payload.parentSessionId,
-          payload.persistenceContext,
-        ),
+        appendExecutionLog: (payload = {}) =>
+          executionRepo.appendLog(
+            payload.userId,
+            payload.sessionId,
+            { event: payload.event, type: payload.type, data: payload.data },
+            {},
+            payload.parentSessionId,
+            payload.persistenceContext,
+          ),
       },
     });
     await messageService.appendTurn({
@@ -334,16 +382,21 @@ test("scoped Agent persistence keeps assistant and tool turns beside the child u
 
     const scope = await resolver.resolveSessionScope("alice", "child-agent", "root-agent");
     const scopedSession = await readSessionArtifact({ sessionDir: scope.sessionDir });
-    assert.deepEqual(scopedSession.messages.map((message) => message.role), [
-      "user",
-      "assistant",
-      "tool",
-      "assistant",
-    ]);
+    assert.deepEqual(
+      scopedSession.messages.map((message) => message.role),
+      ["user", "assistant", "tool", "assistant"],
+    );
     assert.equal(scopedSession.messages.at(-1).content, "done");
-    assert.equal((await readJsonlArtifactFile(scope.executionEventsFile)).some((item) => JSON.stringify(item).includes("session_turn_full")), true);
     assert.equal(
-      await sessionRepo.storageService.exists(path.join(root, "alice/runtime/session/child-agent/session.json")),
+      (await readJsonlArtifactFile(scope.executionEventsFile)).some((item) =>
+        JSON.stringify(item).includes("session_turn_full"),
+      ),
+      true,
+    );
+    assert.equal(
+      await sessionRepo.storageService.exists(
+        path.join(root, "alice/runtime/session/child-agent/session.json"),
+      ),
       false,
     );
   } finally {
@@ -376,17 +429,39 @@ test("scoped repositories isolate concurrent contexts and mutation locks", async
     const first = makeContext("node-1", 0);
     const second = makeContext("node-2", 1);
 
-    await Promise.all([first, second].map(({ context }, index) => sessionRepo.withSessionMutation(
-      "alice",
-      `child-${index}`,
-      "parent",
-      async () => {
-        await sessionRepo.ensureSession({ userId: "alice", sessionId: `child-${index}`, parentSessionId: "parent", persistenceContext: context });
-        await taskRepo.save("alice", `child-${index}`, { taskId: `task-${index}`, taskStatus: "start" }, "parent", context);
-        await executionRepo.appendLog("alice", `child-${index}`, { index }, {}, "parent", context);
-      },
-      context,
-    )));
+    await Promise.all(
+      [first, second].map(({ context }, index) =>
+        sessionRepo.withSessionMutation(
+          "alice",
+          `child-${index}`,
+          "parent",
+          async () => {
+            await sessionRepo.ensureSession({
+              userId: "alice",
+              sessionId: `child-${index}`,
+              parentSessionId: "parent",
+              persistenceContext: context,
+            });
+            await taskRepo.save(
+              "alice",
+              `child-${index}`,
+              { taskId: `task-${index}`, taskStatus: "start" },
+              "parent",
+              context,
+            );
+            await executionRepo.appendLog(
+              "alice",
+              `child-${index}`,
+              { index },
+              {},
+              "parent",
+              context,
+            );
+          },
+          context,
+        ),
+      ),
+    );
 
     const firstScope = await first.resolver.resolveSessionScope("alice", "child-0", "parent");
     const secondScope = await second.resolver.resolveSessionScope("alice", "child-1", "parent");
@@ -420,9 +495,24 @@ test("scoped metadata contributor failures abort the locked mutation", async () 
         throw new Error("metadata boom");
       },
     });
-    await assert.rejects(() => sessionRepo.withSessionMutation("alice", "child", "parent", async () => {
-      await sessionRepo.ensureSession({ userId: "alice", sessionId: "child", parentSessionId: "parent", persistenceContext: context });
-    }, context), /metadata boom/);
+    await assert.rejects(
+      () =>
+        sessionRepo.withSessionMutation(
+          "alice",
+          "child",
+          "parent",
+          async () => {
+            await sessionRepo.ensureSession({
+              userId: "alice",
+              sessionId: "child",
+              parentSessionId: "parent",
+              persistenceContext: context,
+            });
+          },
+          context,
+        ),
+      /metadata boom/,
+    );
     const scope = await resolver.resolveSessionScope("alice", "child", "parent");
     assert.equal(await sessionRepo.storageService.exists(scope.metadataFile), false);
     assert.equal(await sessionRepo.storageService.exists(scope.mutationLockDir), false);

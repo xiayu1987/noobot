@@ -14,16 +14,19 @@ import {
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import {
+  TASK_SUMMARY_PROTOCOL_VERSION,
+  createTaskSummaryReceipt,
+  parseTaskSummaryContent,
+} from "@noobot/context-protocol/task-summary-protocol";
 
 function buildRoundContents(fromRound, toRound) {
-  return Array.from(
-    { length: Math.max(0, toRound - fromRound + 1) },
-    (_, index) => {
-      const number = fromRound + index;
-      return [`u-${number}`, `a-${number}`];
-    },
-  ).flat();
+  return Array.from({ length: Math.max(0, toRound - fromRound + 1) }, (_, index) => {
+    const number = fromRound + index;
+    return [`u-${number}`, `a-${number}`];
+  }).flat();
 }
 
 function buildDefaultHistoryRounds() {
@@ -49,14 +52,10 @@ function expectedDefaultHistoryContents() {
 
 test("buildContextMessages drops orphan tool results without matching assistant tool_call", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
-      payload: {
-        messages: {
+    createTestAgentExecutionScope(
+      {},
+      {
+        messageBlocks: {
           system: [],
           history: [
             {
@@ -80,13 +79,13 @@ test("buildContextMessages drops orphan tool results without matching assistant 
             },
             {
               role: "tool",
-              content: "{\"ok\":true}",
+              content: '{"ok":true}',
               tool_call_id: "call_ok_1",
               dialogProcessId: "dlg-tool",
             },
             {
               role: "tool",
-              content: "{\"ok\":true}",
+              content: '{"ok":true}',
               tool_call_id: "call_orphan_1",
               dialogProcessId: "dlg-tool",
             },
@@ -98,7 +97,7 @@ test("buildContextMessages drops orphan tool results without matching assistant 
           ],
         },
       },
-    },
+    ),
     { currentUserMessage: null },
   );
 
@@ -108,15 +107,23 @@ test("buildContextMessages drops orphan tool results without matching assistant 
 });
 
 test("buildContextMessages converts orphan task_summary tool result to user summary message", () => {
+  const summaryContent = [
+    "NOOBOT_TASK_SUMMARY/1",
+    "[STATE]",
+    "CONTINUE",
+    "[ABSTRACT]",
+    "孤立小结内容",
+    "[DETAILS]",
+    "孤立工具结果中的权威阶段小结",
+    "[NEXT_ACTION]",
+    "继续执行",
+  ].join("\n");
+  const summary = createTaskSummaryReceipt(parseTaskSummaryContent(summaryContent));
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {},
-        },
-      },
-      payload: {
-        messages: {
+    createTestAgentExecutionScope(
+      {},
+      {
+        messageBlocks: {
           system: [],
           history: [
             {
@@ -126,7 +133,12 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
             },
             {
               role: "tool",
-              content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"孤立小结内容\"}",
+              content: JSON.stringify({
+                toolName: "task_summary",
+                ok: true,
+                protocolVersion: TASK_SUMMARY_PROTOCOL_VERSION,
+                summary,
+              }),
               tool_call_id: "call_orphan_summary",
               dialogProcessId: "dlg-summary",
               turnScopeId: "turn-summary",
@@ -139,15 +151,19 @@ test("buildContextMessages converts orphan task_summary tool result to user summ
           ],
         },
       },
-    },
+    ),
     { currentUserMessage: null },
   );
 
-  assert.equal(messages.some((item) => item instanceof ToolMessage), false);
+  assert.equal(
+    messages.some((item) => item instanceof ToolMessage),
+    false,
+  );
   const humanMessage = messages.find(
-    (item) => item instanceof HumanMessage && String(item.content || "").includes("[阶段小结]"),
+    (item) =>
+      item instanceof HumanMessage &&
+      item.additional_kwargs?.noobotInternalMessageType === "phase_summary_memory",
   );
   assert.ok(humanMessage);
-  assert.equal(String(humanMessage.content || "").includes("[阶段小结]"), true);
   assert.equal(String(humanMessage.content || "").includes("孤立小结内容"), true);
 });

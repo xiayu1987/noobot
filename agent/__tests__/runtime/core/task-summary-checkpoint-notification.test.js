@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createTurnOrchestrator } from "../../../src/runtime/turn/orchestrator.js";
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
 
 test("task_summary sends one checkpoint command without mutating messages before commit", async () => {

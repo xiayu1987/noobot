@@ -163,7 +163,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "services",
     "mcp_servers",
   ]);
-  assert.deepEqual(resolved.contextPolicy.includeContextKeys, [
+  assert.deepEqual(resolved.contextPolicy.promptSections, [
     "scenario",
     "system_runtime",
     "base_prompt",

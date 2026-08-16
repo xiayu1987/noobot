@@ -17,8 +17,8 @@ import {
   SESSION_ASYNC_STATUS,
   SESSION_ASYNC_TERMINAL_STATUSES,
 } from "./constants.js";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import { isUserStopAbort } from "../../shared/utils/error-utils.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -89,7 +89,7 @@ export class AsyncSessionRunner {
       .find((m) => m.role === MESSAGE_ROLE.ASSISTANT && m.type === MESSAGE_TYPE.MESSAGE);
 
     const answer = assistantMessage?.content || "";
-    const dialogProcessId = resolveMessageDialogProcessId(assistantMessage);
+    const dialogProcessId = resolveContextMessageDialogProcessId(assistantMessage);
 
     const executionBundle = await this.session.getExecutionBundle({
       userId,

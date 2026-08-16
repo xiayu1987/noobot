@@ -4,14 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import { HumanMessage } from "@langchain/core/messages";
-import { deriveContextMessageProjectionId as deriveMessageProjectionId } from "@noobot/context-protocol/message-codec";
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
-import { resolveMessageDialogProcessId, resolveDialogProcessIdFromContext } from "../../session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId, resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { normalizeAttachmentParsedResultMeta } from "../../../artifacts/index.js";
-import { resolveMessageRole, buildModelMessageIdentityKwargs } from "./message-utils.js";
+import {
+  projectContextMessageIdentityMetadata,
+  deriveContextMessageProjectionId as deriveMessageProjectionId,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageRole,
+} from "@noobot/context-protocol/message-codec";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   const transferAttachments = getTransferAttachments(
@@ -62,7 +65,9 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
       ? { clientAttachmentId: String(attachmentItem.clientAttachmentId).trim() }
       : {}),
     ...(Number.isFinite(size) ? { size } : {}),
-    ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
+    ...(typeof attachmentItem?.isSandbox === "boolean"
+      ? { isSandbox: attachmentItem.isSandbox }
+      : {}),
     ...(parsedResult ? { parsedResult } : {}),
   };
 }
@@ -83,23 +88,16 @@ function buildUserMetaInfoContent(
     ? resolveFallbackAttachments(fallbackMeta)
     : [];
   const attachments = allowMessageAttachments ? resolveAttachments(msg, fallbackAttachments) : [];
-  const fallbackParentSessionId = resolveParentSessionId({
-    runtime,
-    parentSessionId: identityFallback?.parentSessionId,
-  });
+  const fallbackParentSessionId = normalizeParentSessionId(identityFallback?.parentSessionId);
   const messageParentSessionId = normalizeParentSessionId(msg?.parentSessionId);
   const payload = {
     userName: String(msg?.userName || identityFallback?.userName || "").trim(),
     sessionId: String(msg?.sessionId || identityFallback?.sessionId || "").trim(),
-    parentSessionId: messageParentSessionId
-      ? messageParentSessionId
-      : fallbackParentSessionId,
+    parentSessionId: messageParentSessionId ? messageParentSessionId : fallbackParentSessionId,
     dialogProcessId:
-      resolveMessageDialogProcessId(msg) ||
+      resolveContextMessageDialogProcessId(msg) ||
       (allowFallbackRoundIdentity
-        ? resolveDialogProcessIdFromContext({
-            dialogProcessId: identityFallback?.dialogProcessId,
-          })
+        ? normalizeDialogProcessId(identityFallback?.dialogProcessId)
         : ""),
     parentDialogProcessId: String(
       msg?.parentDialogProcessId || identityFallback?.parentDialogProcessId || "",
@@ -124,16 +122,10 @@ export function buildHumanMessagesForUser(
     allowFallbackRoundIdentity = true,
   } = {},
 ) {
-  const contentText = buildHumanMessageContent(
-    msg,
-    resolveFallbackAttachments(fallbackMeta),
-  );
+  const contentText = buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackMeta));
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
-  const identityKwargs = buildModelMessageIdentityKwargs(msg, fallbackMeta);
-  const userMetaMessageId = deriveMessageProjectionId(
-    identityKwargs.noobotMessageId,
-    "user_meta",
-  );
+  const identityKwargs = projectContextMessageIdentityMetadata(msg);
+  const userMetaMessageId = deriveMessageProjectionId(identityKwargs.noobotMessageId, "user_meta");
   const contentMessage = isFrontendUserMessage
     ? new HumanMessage({
         content: contentText,
@@ -167,24 +159,28 @@ export function shouldBuildUserMetaForHistoryMessage(
   runtime = {},
   { restorableUserMetaKeys = null } = {},
 ) {
-  if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
+  if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
   const kwargs = msg?.additional_kwargs || msg?.lc_kwargs?.additional_kwargs || {};
-  if (String(msg?.messageOrigin || kwargs?.messageOrigin || "").trim().toLowerCase() === "internal") return false;
+  if (
+    String(msg?.messageOrigin || kwargs?.messageOrigin || "")
+      .trim()
+      .toLowerCase() === "internal"
+  )
+    return false;
   if (msg?.phaseSummaryMemory === true) return false;
   if (
-    msg?.injectedMessage === true || kwargs?.injectedMessage === true ||
-    msg?.pluginMessage === true || kwargs?.pluginMessage === true
-  ) return false;
-  if (String(
-    msg?.injectedMessageType || kwargs?.injectedMessageType || "",
-  ).trim()) return false;
+    msg?.injectedMessage === true ||
+    kwargs?.injectedMessage === true ||
+    msg?.pluginMessage === true ||
+    kwargs?.pluginMessage === true
+  )
+    return false;
+  if (String(msg?.injectedMessageType || kwargs?.injectedMessageType || "").trim()) return false;
   if (msg?.frontendUserMessage === true) return true;
   const identityKey = buildUserSourceIdentityKey(msg);
   if (identityKey && restorableUserMetaKeys?.has?.(identityKey)) return true;
 
-
-
-  return Boolean(resolveMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
+  return Boolean(resolveContextMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
 }
 
 export function isDerivedUserMetaMessage(msg = {}, runtime = {}) {
@@ -199,8 +195,8 @@ export function isDerivedUserMetaMessage(msg = {}, runtime = {}) {
   const localizedTag = String(tEngine(runtime, "agent.userMetaTag") || "").trim();
   return Boolean(
     content.startsWith("[用户元信息]") ||
-      content.startsWith("[User Metadata]") ||
-      (localizedTag && content.startsWith(`[${localizedTag}]`))
+    content.startsWith("[User Metadata]") ||
+    (localizedTag && content.startsWith(`[${localizedTag}]`)),
   );
 }
 
@@ -215,7 +211,7 @@ export function resolveMessageTurnScopeId(msg = {}) {
 }
 
 function buildUserSourceIdentityKey(msg = {}) {
-  const dialogProcessId = resolveMessageDialogProcessId(msg);
+  const dialogProcessId = resolveContextMessageDialogProcessId(msg);
   const turnScopeId = resolveMessageTurnScopeId(msg);
   if (!dialogProcessId || !turnScopeId) return "";
   return `${dialogProcessId}\u0000${turnScopeId}`;
@@ -241,7 +237,7 @@ export function buildRestoredUserMetaIndex(messages = [], runtime = {}) {
     const parsed = parseDerivedUserMeta(msg, runtime);
     if (!parsed) continue;
     const key = buildUserSourceIdentityKey({
-      dialogProcessId: parsed.dialogProcessId || resolveMessageDialogProcessId(msg),
+      dialogProcessId: parsed.dialogProcessId || resolveContextMessageDialogProcessId(msg),
       turnScopeId: parsed.turnScopeId || resolveMessageTurnScopeId(msg),
     });
     if (!key) continue;
@@ -255,7 +251,7 @@ export function buildRestorableUserMetaKeys(messages = [], runtime = {}) {
   const keys = new Set();
   for (const msg of Array.isArray(messages) ? messages : []) {
     if (isDerivedUserMetaMessage(msg, runtime)) continue;
-    if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) continue;
+    if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) continue;
     const key = buildUserSourceIdentityKey(msg);
     if (key && metaIndex.has(key)) keys.add(key);
   }
@@ -265,30 +261,32 @@ export function buildRestorableUserMetaKeys(messages = [], runtime = {}) {
 function canRestoreUserMetaProjection(parsedMeta = null, msg = {}, messages = []) {
   if (!parsedMeta) return false;
   const dialogProcessId = String(
-    parsedMeta.dialogProcessId || resolveMessageDialogProcessId(msg) || "",
+    parsedMeta.dialogProcessId || resolveContextMessageDialogProcessId(msg) || "",
   ).trim();
-  const turnScopeId = String(
-    parsedMeta.turnScopeId || resolveMessageTurnScopeId(msg) || "",
-  ).trim();
+  const turnScopeId = String(parsedMeta.turnScopeId || resolveMessageTurnScopeId(msg) || "").trim();
   if (!dialogProcessId && !turnScopeId) return true;
   return (Array.isArray(messages) ? messages : []).some((source) => {
     if (isDerivedUserMetaMessage(source, {})) return false;
-    if (resolveMessageRole(source) !== MESSAGE_ROLE.USER) return false;
-    const sourceDialog = resolveMessageDialogProcessId(source);
+    if (resolveContextMessageRole(source) !== MESSAGE_ROLE.USER) return false;
+    const sourceDialog = resolveContextMessageDialogProcessId(source);
     const sourceTurn = resolveMessageTurnScopeId(source);
-    return (!dialogProcessId || sourceDialog === dialogProcessId) &&
-      (!turnScopeId || sourceTurn === turnScopeId);
+    return (
+      (!dialogProcessId || sourceDialog === dialogProcessId) &&
+      (!turnScopeId || sourceTurn === turnScopeId)
+    );
   });
 }
 
 export function normalizeRestoredUserSource(msg = {}, restoredUserMetaIndex = new Map()) {
-  if (resolveMessageRole(msg) !== MESSAGE_ROLE.USER) return msg;
-  const dialogProcessId = resolveMessageDialogProcessId(msg);
+  if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return msg;
+  const dialogProcessId = resolveContextMessageDialogProcessId(msg);
   const turnScopeId = resolveMessageTurnScopeId(msg);
-  const restoredMeta = restoredUserMetaIndex.get(buildUserSourceIdentityKey({
-    dialogProcessId,
-    turnScopeId,
-  }));
+  const restoredMeta = restoredUserMetaIndex.get(
+    buildUserSourceIdentityKey({
+      dialogProcessId,
+      turnScopeId,
+    }),
+  );
   const sourceAttachments = resolveAttachments(msg, []);
   const restoredAttachments = Array.isArray(restoredMeta?.attachments)
     ? restoredMeta.attachments

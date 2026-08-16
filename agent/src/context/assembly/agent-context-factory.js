@@ -1,3 +1,4 @@
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -8,10 +9,8 @@ import { ContextBuilder } from "../index.js";
 import { emitEvent } from "../../events/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
 import { getRuntimeFromAgentContext } from "../agent-context-accessor.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
 
 export class AgentContextFactory {
@@ -134,7 +133,7 @@ export class AgentContextFactory {
       sessionId: String(sessionId || "").trim(),
       caller: String(caller || "").trim(),
       parentSessionId: normalizeParentSessionId(parentSessionId),
-      dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+      dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     };
   }
 

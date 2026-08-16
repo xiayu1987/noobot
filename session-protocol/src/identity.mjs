@@ -3,31 +3,48 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
+import {
+  canonicalizeTurnScopeId,
+  isCanonicalTurnScopeId,
+} from "@noobot/session-protocol/turn-scope-identity";
 
 const clean = (value) => String(value || "").trim();
+
+export function normalizeSessionId(value = "") {
+  return clean(value).slice(0, 200);
+}
+
+export function normalizeParentSessionId(value = "") {
+  return normalizeSessionId(value);
+}
+
+export function normalizeDialogProcessId(value = "") {
+  return clean(value);
+}
 
 export function createSessionScope({ userId = "", sessionId = "", parentSessionId = "" } = {}) {
   return Object.freeze({
     userId: clean(userId),
-    sessionId: clean(sessionId),
-    parentSessionId: clean(parentSessionId),
+    sessionId: normalizeSessionId(sessionId),
+    parentSessionId: normalizeParentSessionId(parentSessionId),
   });
 }
 
 export function validateSessionScope(scope = {}) {
   const errors = [];
-  if (!scope || typeof scope !== "object" || Array.isArray(scope)) return { valid: false, errors: ["invalid_scope"] };
+  if (!scope || typeof scope !== "object" || Array.isArray(scope))
+    return { valid: false, errors: ["invalid_scope"] };
   if (!clean(scope.userId)) errors.push("missing_user_id");
   if (!clean(scope.sessionId)) errors.push("missing_session_id");
   const keys = Object.keys(scope);
-  if (keys.some((key) => !["userId", "sessionId", "parentSessionId"].includes(key))) errors.push("unknown_scope_field");
+  if (keys.some((key) => !["userId", "sessionId", "parentSessionId"].includes(key)))
+    errors.push("unknown_scope_field");
   return { valid: errors.length === 0, errors };
 }
 
 export function createTurnIdentity({ dialogProcessId = "", turnScopeId = "" } = {}) {
   return Object.freeze({
-    dialogProcessId: clean(dialogProcessId),
+    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     turnScopeId: canonicalizeTurnScopeId(turnScopeId),
   });
 }
@@ -49,4 +66,3 @@ export function isSameSession(left = {}, right = {}) {
   const rightId = typeof right === "string" ? clean(right) : sessionIdentity(right);
   return Boolean(leftId) && leftId === rightId;
 }
-

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
@@ -114,7 +114,7 @@ export async function commitTurn({
           aggregateVersion: resolveAggregateVersion(session),
           deduplicated: true,
           turnScopeId: normalizedTurnScopeId,
-          dialogProcessId: resolveMessageDialogProcessId(existing),
+          dialogProcessId: resolveContextMessageDialogProcessId(existing),
           runState: String(idempotency.receipt?.result?.runState || "pending_start"),
         };
       }
@@ -221,7 +221,7 @@ export async function commitTurn({
         aggregateVersion: resolveAggregateVersion(savedSession),
         deduplicated: false,
         turnScopeId: normalizedTurnScopeId,
-        dialogProcessId: resolveMessageDialogProcessId(savedMessage),
+        dialogProcessId: resolveContextMessageDialogProcessId(savedMessage),
         runState: savedMessage?.turnCommit?.runState || "pending_start",
       };
     },

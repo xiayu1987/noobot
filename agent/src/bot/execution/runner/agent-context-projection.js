@@ -10,7 +10,6 @@ import {
   getSystemRuntimeFromAgentContext,
   getToolsFromAgentContext,
 } from "../../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../../context/parent-session-id-resolver.js";
 
 export function normalizePreparedAgentTurnExecution(prepared = {}) {
   const source = prepared && typeof prepared === "object" ? prepared : {};
@@ -36,9 +35,9 @@ export function buildAgentContextSummary(agentContext = {}) {
     : [];
   const runtimeAttachments = Array.isArray(runtime?.attachments) ? runtime.attachments : [];
   return {
-    userId: String(systemRuntime?.userId || "").trim(),
-    sessionId: String(systemRuntime?.sessionId || "").trim(),
-    parentSessionId: resolveParentSessionId({ runtime }),
+    userId: context.identity.userId,
+    sessionId: context.identity.sessionId,
+    parentSessionId: context.identity.parentSessionId,
     dialogProcessId: getDialogProcessIdFromAgentContext(agentContext),
     caller: String(systemRuntime?.caller || "").trim(),
     runtimeModel: String(runtime?.runtimeModel || "").trim(),

@@ -18,28 +18,24 @@ export async function resolveAttachments({
     effectiveConfig?.attachments && typeof effectiveConfig.attachments === "object"
       ? effectiveConfig.attachments
       : {};
-  const sourceAttachments = Array.isArray(userMessageAttachments)
-    ? userMessageAttachments
-    : [];
+  const sourceAttachments = Array.isArray(userMessageAttachments) ? userMessageAttachments : [];
   if (!sourceAttachments.length) return [];
   const isCanonical = (attachmentItem) =>
     String(attachmentItem?.attachmentId || "").trim() &&
+    String(attachmentItem?.sessionId || "").trim() &&
+    String(attachmentItem?.attachmentSource || "").trim() &&
     String(attachmentItem?.path || "").trim();
-  const mapCanonical = (attachmentItem) =>
-    mapAttachmentRecordsToMetas([{
-      ...attachmentItem,
-      sessionId: attachmentItem?.sessionId || attachmentItem?.session_id || sessionId,
-      attachmentSource:
-        attachmentItem?.attachmentSource || attachmentItem?.attachment_source || "user",
-    }])[0] || null;
+  const mapCanonical = (attachmentItem) => mapAttachmentRecordsToMetas([attachmentItem])[0] || null;
   const rawAttachments = sourceAttachments.filter((attachmentItem) => !isCanonical(attachmentItem));
-  const ingested = rawAttachments.length ? await attachmentService.ingest({
-    userId,
-    sessionId: sessionId || "",
-    attachmentSource: "user",
-    attachments: rawAttachments,
-    attachmentPolicy,
-  }) : [];
+  const ingested = rawAttachments.length
+    ? await attachmentService.ingest({
+        userId,
+        sessionId: sessionId || "",
+        attachmentSource: "user",
+        attachments: rawAttachments,
+        attachmentPolicy,
+      })
+    : [];
   let ingestedIndex = 0;
   return sourceAttachments.flatMap((attachmentItem) => {
     if (isCanonical(attachmentItem)) {

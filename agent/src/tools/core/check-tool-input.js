@@ -22,7 +22,7 @@ import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tTool } from "./tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
@@ -54,10 +54,8 @@ function resolveToolPathErrorText(agentContext = {}, resolution = {}, fieldName 
     [TOOL_PATH_RESOLUTION_ERROR.EMPTY_PATH]: "tools.file.pathErrorRequired",
     [TOOL_PATH_RESOLUTION_ERROR.HOST_ABSOLUTE_NOT_ALLOWED]:
       "tools.file.pathErrorHostAbsoluteNotAllowed",
-    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED]:
-      "tools.file.pathErrorSandboxNotAllowed",
-    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED]:
-      "tools.file.pathErrorSandboxNotMapped",
+    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_ALLOWED]: "tools.file.pathErrorSandboxNotAllowed",
+    [TOOL_PATH_RESOLUTION_ERROR.SANDBOX_PATH_NOT_MAPPED]: "tools.file.pathErrorSandboxNotMapped",
     [TOOL_PATH_RESOLUTION_ERROR.VIRTUAL_RELATIVE_PATH_AMBIGUOUS]:
       "tools.file.pathErrorVirtualRelativeAmbiguous",
     [TOOL_PATH_RESOLUTION_ERROR.WORKSPACE_PATH_OUT_OF_SCOPE]:
@@ -305,21 +303,21 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   if (!resolvedToolPath.ok) {
     const localizedHint = resolveToolPathErrorText(agentContext, resolvedToolPath, fieldName);
     throw recoverableToolError(localizedHint, {
-        code: isToolPathScopeError(resolvedToolPath.error)
-          ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
-          : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-        details: {
-          field: fieldName,
-          filePath: normalizedPath,
-          pathView: resolvedToolPath.view,
-          error: resolvedToolPath.error,
-          hint: localizedHint,
-          suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
-          ...(resolvedToolPath.candidateSandboxPath
-            ? { suggestedSandboxPath: resolvedToolPath.candidateSandboxPath }
-            : {}),
-        },
-      });
+      code: isToolPathScopeError(resolvedToolPath.error)
+        ? ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE
+        : ERROR_CODE.RECOVERABLE_INVALID_INPUT,
+      details: {
+        field: fieldName,
+        filePath: normalizedPath,
+        pathView: resolvedToolPath.view,
+        error: resolvedToolPath.error,
+        hint: localizedHint,
+        suggestedPath: resolvedToolPath.candidateWorkspaceRelativePath || "",
+        ...(resolvedToolPath.candidateSandboxPath
+          ? { suggestedSandboxPath: resolvedToolPath.candidateSandboxPath }
+          : {}),
+      },
+    });
   }
   const resolvedTargetPath = resolvedToolPath.resolvedPath;
   const normalizedRequiredExecutionRoot = String(requiredExecutionRoot || "").trim()
@@ -424,7 +422,9 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
     if (
       normalizedRequiredExecutionRoot &&
       !isPathWithinRoot(
-        await realpath(normalizedRequiredExecutionRoot).catch(() => normalizedRequiredExecutionRoot),
+        await realpath(normalizedRequiredExecutionRoot).catch(
+          () => normalizedRequiredExecutionRoot,
+        ),
         realTarget,
       )
     ) {

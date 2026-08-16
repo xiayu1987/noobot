@@ -10,6 +10,7 @@ import {
   buildContextMessages,
   buildHumanMessagesForUser,
 } from "../../../src/context/assembly/message-builder.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function findUserMetaMessage(messages) {
@@ -24,38 +25,38 @@ function parseUserMeta(content) {
 
 test("buildContextMessages uses current runtime userMessageAttachments in user meta", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [
-              {
-                attachmentId: "att-a",
-                name: "AI 体系现状概览.docx",
-                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                size: 1407731,
-              },
-            ],
-            attachments: [],
-            systemRuntime: {
-              sessionId: "session-a",
-              dialogProcessId: "dialog-a",
-              turnScopeId: "turn-a",
-            },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [
+          {
+            attachmentId: "att-a",
+            name: "AI 体系现状概览.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size: 1407731,
           },
+        ],
+        attachments: [],
+        systemRuntime: {
+          sessionId: "session-a",
+          dialogProcessId: "dialog-a",
+          turnScopeId: "turn-a",
         },
       },
-      payload: { messages: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [] } },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("hello", {
+        attachments: [
+          {
+            attachmentId: "att-a",
+            name: "AI 体系现状概览.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            size: 1407731,
+          },
+        ],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
-      attachments: [{
-        attachmentId: "att-a",
-        name: "AI 体系现状概览.docx",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        size: 1407731,
-      }],
-    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -68,22 +69,18 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
 
 test("buildContextMessages preserves explicit empty current userMessageAttachments", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [],
-            systemRuntime: {
-              sessionId: "session-a",
-              dialogProcessId: "dialog-a",
-              turnScopeId: "turn-a",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [],
+        systemRuntime: {
+          sessionId: "session-a",
+          dialogProcessId: "dialog-a",
+          turnScopeId: "turn-a",
         },
       },
-      payload: { messages: { system: [], history: [] } },
-    },
+      { messageBlocks: { system: [], history: [] } },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
@@ -95,25 +92,19 @@ test("buildContextMessages preserves explicit empty current userMessageAttachmen
 
 test("buildContextMessages does not treat runtime attachments bucket as current user attachments", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [],
-            attachments: [
-              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
-            ],
-            systemRuntime: {
-              sessionId: "session-a",
-              dialogProcessId: "dialog-a",
-              turnScopeId: "turn-a",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [],
+        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        systemRuntime: {
+          sessionId: "session-a",
+          dialogProcessId: "dialog-a",
+          turnScopeId: "turn-a",
         },
       },
-      payload: { messages: { system: [], history: [] } },
-    },
+      { messageBlocks: { system: [], history: [] } },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
@@ -125,30 +116,36 @@ test("buildContextMessages does not treat runtime attachments bucket as current 
 
 test("buildContextMessages uses only userMessageAttachments as current user attachment input", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [
-              { attachmentId: "current-user-input", name: "current.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-            ],
-            attachments: [
-              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
-            ],
-            systemRuntime: {
-              sessionId: "session-a",
-              dialogProcessId: "dialog-a",
-              turnScopeId: "turn-a",
-            },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [
+          {
+            attachmentId: "current-user-input",
+            name: "current.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           },
+        ],
+        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        systemRuntime: {
+          sessionId: "session-a",
+          dialogProcessId: "dialog-a",
+          turnScopeId: "turn-a",
         },
       },
-      payload: { messages: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [] } },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("hello", {
+        attachments: [
+          {
+            attachmentId: "current-user-input",
+            name: "current.docx",
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        ],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
-      attachments: [{ attachmentId: "current-user-input", name: "current.docx", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }],
-    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -160,38 +157,36 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
 
 test("buildContextMessages does not use fallback meta attachments as current user attachments", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [],
-            attachments: [
-              { attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" },
-            ],
-            systemRuntime: {
-              sessionId: "session-a",
-              dialogProcessId: "dialog-a",
-              turnScopeId: "turn-a",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [],
+        attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
+        systemRuntime: {
+          sessionId: "session-a",
+          dialogProcessId: "dialog-a",
+          turnScopeId: "turn-a",
         },
       },
-      payload: {
-        messages: {
+      {
+        messageBlocks: {
           system: [],
           history: [
             {
               role: "user",
               content: "history with stale attachments",
               attachments: [
-                { attachmentId: "stale-history-attachment", name: "stale.txt", mimeType: "text/plain" },
+                {
+                  attachmentId: "stale-history-attachment",
+                  name: "stale.txt",
+                  mimeType: "text/plain",
+                },
               ],
             },
           ],
         },
       },
-    },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("hello") },
   );
 
@@ -210,7 +205,8 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
     sessionId: "session-rich",
     path: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
     relativePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
-    sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
+    sandboxPath:
+      "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
     previewUrl: "/preview/att-rich",
     downloadUrl: "/download/att-rich",
     parsedResultUrl: "/download/parsed-rich",
@@ -225,27 +221,25 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
     },
   };
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [richAttachment],
-            systemRuntime: {
-              sessionId: "session-rich",
-              dialogProcessId: "dialog-rich",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [richAttachment],
+        systemRuntime: {
+          sessionId: "session-rich",
+          dialogProcessId: "dialog-rich",
         },
       },
-      payload: { messages: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [] } },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("hello", {
+        userName: "admin",
+        sessionId: "session-rich",
+        dialogProcessId: "dialog-rich",
+        attachments: [richAttachment],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("hello", {
-      userName: "admin",
-      sessionId: "session-rich",
-      dialogProcessId: "dialog-rich",
-      attachments: [richAttachment],
-    }) },
   );
 
   const metaMessage = findUserMetaMessage(messages);
@@ -288,9 +282,7 @@ test("buildContextMessages does not copy current-turn attachments into historica
       role: "user",
       content: "historical attachment",
       turnScopeId: "turn-2",
-      attachments: [
-        { attachmentId: "history-only", name: "history.txt", mimeType: "text/plain" },
-      ],
+      attachments: [{ attachmentId: "history-only", name: "history.txt", mimeType: "text/plain" }],
     },
     fallbackMeta,
     { allowFallbackAttachments: false },
@@ -299,30 +291,29 @@ test("buildContextMessages does not copy current-turn attachments into historica
   const emptyMeta = parseUserMeta(attachmentFreeHistory[1].content);
   const historyMeta = parseUserMeta(attachedHistory[1].content);
   assert.deepEqual(emptyMeta.attachments, []);
-  assert.deepEqual(historyMeta.attachments.map((item) => item.attachmentId), ["history-only"]);
+  assert.deepEqual(
+    historyMeta.attachments.map((item) => item.attachmentId),
+    ["history-only"],
+  );
   assert.notStrictEqual(emptyMeta.attachments, historyMeta.attachments);
 });
 
 test("buildContextMessages keeps complete metadata per historical user turn without current-turn fallback", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "current-admin",
-            userMessageAttachments: [
-              { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
-            ],
-            systemRuntime: {
-              sessionId: "current-session",
-              dialogProcessId: "current-dialog",
-              turnScopeId: "current-turn",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "current-admin",
+        userMessageAttachments: [
+          { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+        ],
+        systemRuntime: {
+          sessionId: "current-session",
+          dialogProcessId: "current-dialog",
+          turnScopeId: "current-turn",
         },
       },
-      payload: {
-        messages: {
+      {
+        messageBlocks: {
           system: [],
           history: [
             {
@@ -360,14 +351,18 @@ test("buildContextMessages keeps complete metadata per historical user turn with
           ],
         },
       },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("current turn", {
+        userName: "current-admin",
+        sessionId: "current-session",
+        dialogProcessId: "current-dialog",
+        turnScopeId: "current-turn",
+        attachments: [
+          { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+        ],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("current turn", {
-      userName: "current-admin",
-      sessionId: "current-session",
-      dialogProcessId: "current-dialog",
-      turnScopeId: "current-turn",
-      attachments: [{ attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" }],
-    }) },
   );
 
   const metas = messages
@@ -397,7 +392,10 @@ test("buildContextMessages keeps complete metadata per historical user turn with
   assert.equal(metas[2].sessionId, "current-session");
   assert.equal(metas[2].dialogProcessId, "current-dialog");
   assert.equal(metas[2].turnScopeId, "current-turn");
-  assert.deepEqual(metas[2].attachments.map((item) => item.attachmentId), ["latest-only"]);
+  assert.deepEqual(
+    metas[2].attachments.map((item) => item.attachmentId),
+    ["latest-only"],
+  );
 });
 
 test("buildContextMessages rebuilds metadata beside every legacy stopped/resend user turn", () => {
@@ -429,22 +427,18 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     },
   ];
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "current-admin",
-            userMessageAttachments: [],
-            systemRuntime: {
-              sessionId: "current-session",
-              dialogProcessId: "dialog-current",
-              turnScopeId: "turn-current",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        userId: "current-admin",
+        userMessageAttachments: [],
+        systemRuntime: {
+          sessionId: "current-session",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
         },
       },
-      payload: { messages: { system: [], history } },
-    },
+      { messageBlocks: { system: [], history } },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("current") },
   );
 
@@ -470,54 +464,49 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
       { dialogProcessId: "dialog-3", turnScopeId: "turn-3" },
     ],
   );
-  assert.deepEqual(historicalMetas.map((meta) => meta.attachments.map((item) => item.attachmentId)), [
-    [],
-    [],
-    ["last-turn-only"],
-  ]);
+  assert.deepEqual(
+    historicalMetas.map((meta) => meta.attachments.map((item) => item.attachmentId)),
+    [[], [], ["last-turn-only"]],
+  );
 });
 
 test("buildContextMessages discards restored user_meta projections before rebuilding", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            resumeFromStoppedSnapshot: true,
-            userId: "admin",
-            userMessageAttachments: [],
-            systemRuntime: {
-              sessionId: "s1",
+    createTestAgentExecutionScope(
+      {
+        resumeFromStoppedSnapshot: true,
+        userId: "admin",
+        userMessageAttachments: [],
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dialog-current",
+          turnScopeId: "turn-current",
+        },
+      },
+      {
+        messageBlocks: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "hello",
+              frontendUserMessage: true,
               dialogProcessId: "dialog-current",
               turnScopeId: "turn-current",
             },
-          },
-        },
-      },
-      payload: {
-        messages: {
-          system: [],
-          history: [
-                {
-                  role: "user",
-                  content: "hello",
-                  frontendUserMessage: true,
-                  dialogProcessId: "dialog-current",
-                  turnScopeId: "turn-current",
-                },
-                {
-                  role: "user",
-                  content: '[用户元信息]\n{"dialogProcessId":"dialog-current"}\n[/用户元信息]',
-                  additional_kwargs: { noobotInternalMessageType: "user_meta" },
-                },
-                {
-                  role: "user",
-                  content: '[用户元信息]\n{}\n[/用户元信息]',
-                },
+            {
+              role: "user",
+              content: '[用户元信息]\n{"dialogProcessId":"dialog-current"}\n[/用户元信息]',
+              additional_kwargs: { noobotInternalMessageType: "user_meta" },
+            },
+            {
+              role: "user",
+              content: "[用户元信息]\n{}\n[/用户元信息]",
+            },
           ],
         },
       },
-    },
+    ),
     { currentUserMessage: null },
   );
 
@@ -530,54 +519,53 @@ test("buildContextMessages discards restored user_meta projections before rebuil
 
 test("buildContextMessages restores stopped source attachments by exact turn identity", () => {
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            resumeFromStoppedSnapshot: true,
-            userId: "admin",
-            userMessageAttachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dialog-continue",
-              turnScopeId: "turn-continue",
-            },
-          },
+    createTestAgentExecutionScope(
+      {
+        resumeFromStoppedSnapshot: true,
+        userId: "admin",
+        userMessageAttachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dialog-continue",
+          turnScopeId: "turn-continue",
         },
       },
-      payload: {
-        messages: {
+      {
+        messageBlocks: {
           system: [],
           history: [
-                {
-                  type: "human",
-                  content: "parse attachment",
-                  additional_kwargs: {
-                    dialogProcessId: "dialog-stopped",
-                    turnScopeId: "turn-stopped",
-                    frontendUserMessage: true,
-                  },
-                },
-                {
-                  type: "human",
-                  content: '[用户元信息]\n{"userName":"admin","sessionId":"s1","parentSessionId":"parent-1","dialogProcessId":"dialog-stopped","parentDialogProcessId":"parent-dialog-1","turnScopeId":"turn-stopped","attachments":[{"attachmentId":"attachment-a","name":"stopped.docx"}]}\n[/用户元信息]',
-                  additional_kwargs: {
-                    dialogProcessId: "dialog-stopped",
-                    turnScopeId: "turn-stopped",
-                    noobotInternalMessageType: "user_meta",
-                  },
-                },
+            {
+              type: "human",
+              content: "parse attachment",
+              additional_kwargs: {
+                dialogProcessId: "dialog-stopped",
+                turnScopeId: "turn-stopped",
+                frontendUserMessage: true,
+              },
+            },
+            {
+              type: "human",
+              content:
+                '[用户元信息]\n{"userName":"admin","sessionId":"s1","parentSessionId":"parent-1","dialogProcessId":"dialog-stopped","parentDialogProcessId":"parent-dialog-1","turnScopeId":"turn-stopped","attachments":[{"attachmentId":"attachment-a","name":"stopped.docx"}]}\n[/用户元信息]',
+              additional_kwargs: {
+                dialogProcessId: "dialog-stopped",
+                turnScopeId: "turn-stopped",
+                noobotInternalMessageType: "user_meta",
+              },
+            },
           ],
         },
       },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("continue", {
+        userName: "admin",
+        sessionId: "s1",
+        dialogProcessId: "dialog-continue",
+        turnScopeId: "turn-continue",
+        attachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("continue", {
-      userName: "admin",
-      sessionId: "s1",
-      dialogProcessId: "dialog-continue",
-      turnScopeId: "turn-continue",
-      attachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
-    }) },
   );
 
   const bodies = messages.filter((message) =>
@@ -586,15 +574,25 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
   assert.equal(bodies.length, 2);
   const metas = bodies.map((body) => parseUserMeta(messages[messages.indexOf(body) + 1].content));
   assert.deepEqual(
-    metas.map(({ userName, sessionId, parentSessionId, dialogProcessId, parentDialogProcessId, turnScopeId, attachments }) => ({
-      userName,
-      sessionId,
-      parentSessionId,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId,
-      attachmentIds: attachments.map((attachment) => attachment.attachmentId),
-    })),
+    metas.map(
+      ({
+        userName,
+        sessionId,
+        parentSessionId,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        attachments,
+      }) => ({
+        userName,
+        sessionId,
+        parentSessionId,
+        dialogProcessId,
+        parentDialogProcessId,
+        turnScopeId,
+        attachmentIds: attachments.map((attachment) => attachment.attachmentId),
+      }),
+    ),
     [
       {
         userName: "admin",
@@ -623,58 +621,62 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
 });
 
 test("buildContextMessages does not project frontend user metadata for internal prompts", () => {
-  const messages = buildContextMessages({
-    execution: {
-      controllers: {
-        runtime: {
-          userId: "admin",
-          userMessageAttachments: [],
-          systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child" },
+  const messages = buildContextMessages(
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [],
+        systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child" },
+      },
+      {
+        messageBlocks: {
+          system: [],
+          history: [
+            {
+              role: "user",
+              content: "internal task",
+              messageOrigin: "internal",
+              dialogProcessId: "dialog-previous-child",
+              turnScopeId: "internal-turn:1",
+            },
+          ],
         },
       },
-    },
-    payload: {
-      messages: {
-        system: [],
-        history: [{
-          role: "user",
-          content: "internal task",
-          messageOrigin: "internal",
-          dialogProcessId: "dialog-previous-child",
-          turnScopeId: "internal-turn:1",
-        }],
-      },
-    },
-  });
-  assert.equal(messages.some((message) => message?.content === "internal task"), true);
+    ),
+  );
+  assert.equal(
+    messages.some((message) => message?.content === "internal task"),
+    true,
+  );
   assert.equal(
     messages.some((message) => String(message?.content || "").startsWith("[用户元信息]")),
     false,
   );
 
   const currentMessages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [],
-            systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child", caller: "bot" },
-          },
-        },
+    createTestAgentExecutionScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [],
+        systemRuntime: { sessionId: "child", dialogProcessId: "dialog-child", caller: "bot" },
       },
-      payload: { messages: { system: [], history: [] } },
+      { messageBlocks: { system: [], history: [] } },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("current internal task", {
+        userName: "admin",
+        sessionId: "child",
+        dialogProcessId: "dialog-child",
+        turnScopeId: "internal-turn:current",
+        frontendUserMessage: false,
+        messageOrigin: "internal",
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("current internal task", {
-      userName: "admin",
-      sessionId: "child",
-      dialogProcessId: "dialog-child",
-      turnScopeId: "internal-turn:current",
-      frontendUserMessage: false,
-      messageOrigin: "internal",
-    }) },
   );
-  assert.equal(currentMessages.some((message) => message?.content === "current internal task"), true);
+  assert.equal(
+    currentMessages.some((message) => message?.content === "current internal task"),
+    true,
+  );
   assert.equal(
     currentMessages.some((message) => String(message?.content || "").startsWith("[用户元信息]")),
     false,

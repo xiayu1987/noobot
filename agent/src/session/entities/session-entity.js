@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
@@ -63,19 +64,6 @@ function normalizeSessionAttachment(item = {}) {
 
 export { createSessionMessageUid };
 
-export function normalizeSelectedConnectors(selectedConnectors = {}) {
-  const source =
-    selectedConnectors && typeof selectedConnectors === "object" ? selectedConnectors : {};
-  return Object.fromEntries(
-    Object.entries(source)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => connectorType),
-  );
-}
-
 export function normalizeMessageEntity(message = {}, now = () => new Date().toISOString()) {
   const attachmentKeys = new Set();
   const normalizedAttachments = Array.isArray(message?.attachments)
@@ -109,7 +97,7 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
     userName: String(message?.userName || "").trim(),
     sessionId: String(message?.sessionId || "").trim(),
     parentSessionId: String(message?.parentSessionId || "").trim(),
-    dialogProcessId: resolveMessageDialogProcessId(message),
+    dialogProcessId: resolveContextMessageDialogProcessId(message),
     parentDialogProcessId: String(message?.parentDialogProcessId || "").trim(),
     turnScopeId: String(message?.turnScopeId || "").trim(),
     taskId: String(message?.taskId || "").trim(),
@@ -268,7 +256,7 @@ export function assertSessionMessageIdentityInvariants(messages = []) {
 export function normalizeTurnTimingEntity(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
   const turnScopeId = String(timing?.turnScopeId || "").trim();
-  const dialogProcessId = resolveMessageDialogProcessId(timing);
+  const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   if (!turnScopeId) return null;
   const thinkingStartedAt = String(timing?.thinkingStartedAt || "").trim();
   const thinkingFinishedAt = String(timing?.thinkingFinishedAt || "").trim();
@@ -309,7 +297,7 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
       sessionMessages
         .filter(
           (message) =>
-            resolveMessageDialogProcessId(message) === dialogProcessId &&
+            resolveContextMessageDialogProcessId(message) === dialogProcessId &&
             String(message?.turnScopeId || "").trim() === turnScopeId,
         )
         .map((message) => String(message?.messageUid || "").trim())

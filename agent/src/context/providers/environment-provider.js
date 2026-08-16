@@ -1,3 +1,4 @@
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -9,9 +10,8 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-import { resolveDialogProcessIdFromContext } from "../session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId } from "../parent-session-id-resolver.js";
 import { hasOwnConfigKey, normalizeBooleanLike } from "../../config/index.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -61,18 +61,7 @@ export function buildDynamicInfo({
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
       : null;
-  const selectedConnectorsSource =
-    runConfig?.selectedConnectors && typeof runConfig.selectedConnectors === "object"
-      ? runConfig.selectedConnectors
-      : {};
-  const selectedConnectors = Object.fromEntries(
-    Object.entries(selectedConnectorsSource)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
+  const selectedConnectors = normalizeSelectedConnectors(runConfig?.selectedConnectors);
   const config = {
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     safeConfirm: runConfig?.safeConfirm !== false,
@@ -93,7 +82,7 @@ export function buildDynamicInfo({
     parentSessionId: normalizeParentSessionId(parentSessionId),
     rootSessionId: String(rootSessionId || "").trim(),
     caller: String(caller || "user").trim(),
-    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     turnScopeId: normalizedTurnScopeId,
     now,
     config: {
