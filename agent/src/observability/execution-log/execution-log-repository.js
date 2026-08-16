@@ -7,8 +7,8 @@ import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -53,7 +53,7 @@ export class ExecutionLogRepository {
         userId,
         sessionId,
         parentSessionId,
-        dialogProcessId: resolveMessageDialogProcessId(normalizedLog),
+        dialogProcessId: resolveContextMessageDialogProcessId(normalizedLog),
         turnScopeId: normalizedLog.turnScopeId,
         source: "agent",
         category: mapExecutionLogToSessionChannelCategory(normalizedLog),
@@ -207,15 +207,15 @@ export class ExecutionLogRepository {
         persistenceContext,
       );
       const normalizedLog = normalizeExecutionLogEntity(executionLog, this.now);
-      const incomingDialogProcessId = resolveMessageDialogProcessId(normalizedLog);
+      const incomingDialogProcessId = resolveContextMessageDialogProcessId(normalizedLog);
       const existingLatestDialogProcessId = Array.isArray(bundle.logs)
-        ? bundle.logs.findLast((logItem) => Boolean(resolveMessageDialogProcessId(logItem)))
+        ? bundle.logs.findLast((logItem) => Boolean(resolveContextMessageDialogProcessId(logItem)))
         : null;
-      const bundleDialogProcessId = resolveMessageDialogProcessId(bundle);
+      const bundleDialogProcessId = resolveContextMessageDialogProcessId(bundle);
       const targetDialogProcessId =
         incomingDialogProcessId ||
         bundleDialogProcessId ||
-        resolveMessageDialogProcessId(existingLatestDialogProcessId);
+        resolveContextMessageDialogProcessId(existingLatestDialogProcessId);
       const resetExecutionLogs = false;
       if (!incomingDialogProcessId && targetDialogProcessId) {
         normalizedLog.dialogProcessId = targetDialogProcessId;

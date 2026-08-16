@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { normalizeAnchorValue } from "./anchor-utils.js";
 
 export function resolveTurnTimingKey(item = {}) {
@@ -12,7 +12,7 @@ export function resolveTurnTimingKey(item = {}) {
 
 export function upsertSessionTurnTiming(session = {}, timing = {}) {
   const turnScopeId = normalizeAnchorValue(timing?.turnScopeId);
-  const dialogProcessId = resolveMessageDialogProcessId(timing);
+  const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
   const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
   if (!turnScopeId || (!thinkingStartedAt && !thinkingFinishedAt)) return;

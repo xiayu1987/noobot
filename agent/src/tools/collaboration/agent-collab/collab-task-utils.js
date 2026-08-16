@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { toToolJsonResult } from "../../core/tool-json-result.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot/config/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
-import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -55,9 +55,7 @@ export function toTaskRequest(taskItem = {}, sessionId = "") {
 
 export function summarizeTaskResultsStatus(taskResults = []) {
   const failed = taskResults.some(
-    (item) =>
-      String(item?.status || "") === SESSION_ASYNC_STATUS.FAILED ||
-      item?.ok === false,
+    (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.FAILED || item?.ok === false,
   );
   if (failed) return SESSION_ASYNC_STATUS.FAILED;
   const userStopped = taskResults.some(
@@ -67,16 +65,10 @@ export function summarizeTaskResultsStatus(taskResults = []) {
   const completed = taskResults.every(
     (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.COMPLETED,
   );
-  return completed
-    ? SESSION_ASYNC_STATUS.COMPLETED
-    : SESSION_ASYNC_STATUS.RUNNING;
+  return completed ? SESSION_ASYNC_STATUS.COMPLETED : SESSION_ASYNC_STATUS.RUNNING;
 }
 
-export function buildWaitTaskRequest({
-  sessionId = "",
-  taskName = "",
-  taskContent = "",
-} = {}) {
+export function buildWaitTaskRequest({ sessionId = "", taskName = "", taskContent = "" } = {}) {
   return {
     sessionId: normalizeString(sessionId),
     taskName: normalizeString(taskName),
@@ -101,11 +93,7 @@ export function buildDelegateTaskFailureResult({
   };
 }
 
-export function buildWaitTaskInvalidResult({
-  index = 0,
-  request = {},
-  error = "",
-} = {}) {
+export function buildWaitTaskInvalidResult({ index = 0, request = {}, error = "" } = {}) {
   return {
     ok: false,
     index,
@@ -115,11 +103,7 @@ export function buildWaitTaskInvalidResult({
   };
 }
 
-export function buildWaitTaskFailedResult({
-  index = 0,
-  request = {},
-  error = "",
-} = {}) {
+export function buildWaitTaskFailedResult({ index = 0, request = {}, error = "" } = {}) {
   return {
     ok: false,
     index,
@@ -162,7 +146,9 @@ export function buildWaitAsyncTaskResultPayload({
       child_async_result_containers: cloneData(containers),
       container_statuses: containerStatuses,
       task_stats: taskStats,
-      ...(normalizedTransferEnvelopes.length ? { transferEnvelopes: normalizedTransferEnvelopes } : {}),
+      ...(normalizedTransferEnvelopes.length
+        ? { transferEnvelopes: normalizedTransferEnvelopes }
+        : {}),
     },
     true,
   );
@@ -175,7 +161,7 @@ export function summarizeAsyncTaskResult(result = null) {
     sessionId: String(result?.sessionId || "").trim(),
     parentSessionId: normalizeParentSessionId(result?.parentSessionId),
     parentDialogProcessId: String(result?.parentDialogProcessId || "").trim(),
-    dialogProcessId: resolveMessageDialogProcessId(result),
+    dialogProcessId: resolveContextMessageDialogProcessId(result),
     answer,
     hasAnswer: Boolean(answer),
     messageCount: Array.isArray(result?.messages) ? result.messages.length : 0,

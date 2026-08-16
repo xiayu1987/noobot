@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { ModelMessageRuntimeHelpers } from "../../src/bot/session/model-message-runtime-helpers.js";
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol/window-reducer";
 import {
@@ -35,31 +35,40 @@ test("plugin runtime exposes no direct summarized-message mutation port", () => 
 
 test("model input after memory release equals the pre-refactor full-memory model input", async () => {
   const fullMemory = [
-    message("m1", { role: "assistant", content: "", summarized: true, tool_calls: [{ id: "c1", function: { name: "read_file" } }] }),
+    message("m1", {
+      role: "assistant",
+      content: "",
+      summarized: true,
+      tool_calls: [{ id: "c1", function: { name: "read_file" } }],
+    }),
     message("m2", { role: "tool", content: "old", summarized: true, tool_call_id: "c1" }),
     message("m3", { role: "user", content: "keep" }),
     message("m4", { role: "assistant", content: "answer" }),
   ];
   const reducedMemory = fullMemory.filter((item) => item.summarized !== true);
 
-  assert.deepEqual(
-    filterForModelContext(reducedMemory),
-    filterForModelContext(fullMemory),
-  );
+  assert.deepEqual(filterForModelContext(reducedMemory), filterForModelContext(fullMemory));
 });
 
 test("model input remains deeply equal to pre-refactor block filtering across two checkpoints", () => {
   const holder = createModelContext({
     messageBlocks: {
-      system: [{
-        role: "system",
-        content: "current-system",
-        summarized: true,
-        additional_kwargs: { noobotInternalMessageType: "system_context" },
-      }],
+      system: [
+        {
+          role: "system",
+          content: "current-system",
+          summarized: true,
+          additional_kwargs: { noobotInternalMessageType: "system_context" },
+        },
+      ],
       history: [
         { role: "user", content: "history-keep", dialogProcessId: "old-dialog" },
-        { role: "assistant", content: "history-drop", summarized: true, dialogProcessId: "old-dialog" },
+        {
+          role: "assistant",
+          content: "history-drop",
+          summarized: true,
+          dialogProcessId: "old-dialog",
+        },
       ],
       incremental: [
         { role: "user", content: "current-user", dialogProcessId: "current-dialog" },
@@ -74,35 +83,48 @@ test("model input remains deeply equal to pre-refactor block filtering across tw
       ],
     },
   });
-  const resolve = () => resolveMainModelFinalMessages({
-    systemMessages: holder.messageBlocks.system,
-    historyMessages: holder.messageBlocks.history,
-    incrementalMessages: holder.messageBlocks.incremental,
-  }).messages;
+  const resolve = () =>
+    resolveMainModelFinalMessages({
+      systemMessages: holder.messageBlocks.system,
+      historyMessages: holder.messageBlocks.history,
+      incrementalMessages: holder.messageBlocks.incremental,
+    }).messages;
 
   const preRefactorFirst = structuredClone(resolve());
   pruneSummarizedIncrementalMessages(holder);
   assert.deepEqual(resolve(), preRefactorFirst);
 
-  appendMessage(holder, {
-    role: "assistant",
-    content: "",
-    summarized: true,
-    tool_calls: [{ id: "call-2", function: { name: "search" } }],
-  }, { block: "incremental" });
-  appendMessage(holder, {
-    role: "tool",
-    content: "second-old-result",
-    tool_call_id: "call-2",
-    summarized: true,
-  }, { block: "incremental" });
-  appendMessage(holder, {
-    role: "user",
-    content: "latest-summary-relay",
-    injectedMessage: true,
-    injectedBy: "harness-plugin",
-    injectedMessageType: "summary",
-  }, { block: "incremental" });
+  appendMessage(
+    holder,
+    {
+      role: "assistant",
+      content: "",
+      summarized: true,
+      tool_calls: [{ id: "call-2", function: { name: "search" } }],
+    },
+    { block: "incremental" },
+  );
+  appendMessage(
+    holder,
+    {
+      role: "tool",
+      content: "second-old-result",
+      tool_call_id: "call-2",
+      summarized: true,
+    },
+    { block: "incremental" },
+  );
+  appendMessage(
+    holder,
+    {
+      role: "user",
+      content: "latest-summary-relay",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "summary",
+    },
+    { block: "incremental" },
+  );
 
   const preRefactorSecond = structuredClone(resolve());
   pruneSummarizedIncrementalMessages(holder);

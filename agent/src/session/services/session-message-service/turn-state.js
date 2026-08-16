@@ -1,13 +1,10 @@
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import {
-  resolveDialogProcessIdFromContext,
-  resolveMessageDialogProcessId,
-} from "../../../context/session/dialog-process-id-resolver.js";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
@@ -26,6 +23,7 @@ import {
   SESSION_ERROR_CODE,
   decideAggregateConcurrency,
   materializeTurnTerminalMessages,
+  normalizeDialogProcessId,
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
@@ -482,7 +480,7 @@ export async function assertReusedUserTurnIdentity({
   if (!userId || !sessionId) throw new TypeError("reused Turn session identity is required");
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   if (!normalizedTurnScopeId) throw new TypeError("reused Turn turnScopeId is required");
-  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) throw new TypeError("reused Turn dialogProcessId is required");
   const resolvedParentSessionId = await this._resolveParentSessionId(
     userId,
@@ -511,7 +509,7 @@ export async function assertReusedUserTurnIdentity({
   if (targetIndex < 0) throw new TypeError("reused Turn user message was not found");
 
   const targetMessage = messages[targetIndex];
-  if (resolveMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
+  if (resolveContextMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
     throw new TypeError("reused Turn dialogProcessId does not match Session authority");
   }
   if (Array.isArray(attachments)) {

@@ -7,10 +7,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
-import {
-  createModelResponse,
-  MODEL_CONTEXT_SEQUENCE_POLICY,
-} from "@noobot/model-protocol";
+import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("capability mini-runner requires and uses the host ModelPort", async () => {
   const calls = [];
@@ -76,7 +74,16 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     model: "GLM_5_1",
     purpose: "workflow_semantic",
     domain: "botPlugin",
-    ctx: { agentContext: { bindings: { runtime } } },
+    ctx: {
+      agentContext: createTestAgentExecutionScope(runtime, {
+        identity: {
+          sessionId: "session-1",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+          runId: "agent:turn-1",
+        },
+      }),
+    },
     messages: [{ role: "user", content: "你好" }],
   });
 

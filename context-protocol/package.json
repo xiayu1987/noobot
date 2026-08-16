@@ -11,6 +11,7 @@
     "./context-mutation": "./src/context-mutation.js",
     "./message-identity": "./src/message-identity.js",
     "./message-codec": "./src/message-codec.js",
+    "./session-message-projection": "./src/session-message-projection.js",
     "./context-policy": "./src/context-policy.js",
     "./context-diagnostics": "./src/context-diagnostics.js",
     "./hook-context": "./src/hook-context.js",

@@ -1,3 +1,5 @@
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -5,11 +7,6 @@
  */
 
 import { emitEvent } from "../../events/index.js";
-import {
-  resolveDialogProcessIdFromContext,
-  resolveMessageDialogProcessId,
-} from "../../context/session/dialog-process-id-resolver.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -241,7 +238,7 @@ export class SessionTurnPersister {
       parentSessionId: normalizedParentSessionId,
       taskId: taskId ?? "",
       taskStatus: taskStatus ?? "",
-      dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+      dialogProcessId: normalizeDialogProcessId(dialogProcessId),
       parentDialogProcessId: parentDialogProcessId || "",
       turnScopeId: normalizedTurnScopeId,
       tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
@@ -288,7 +285,7 @@ export class SessionTurnPersister {
         userId,
         sessionId,
         parentSessionId: normalizedParentSessionId,
-        dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+        dialogProcessId: normalizeDialogProcessId(dialogProcessId),
         event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
         category: MESSAGE_ROLE.SYSTEM,
         type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
@@ -300,7 +297,7 @@ export class SessionTurnPersister {
           userId,
           sessionId,
           parentSessionId: normalizedParentSessionId,
-          dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+          dialogProcessId: normalizeDialogProcessId(dialogProcessId),
           event: "debug_turn_timing_append",
           category: MESSAGE_ROLE.SYSTEM,
           type: "system",
@@ -308,7 +305,7 @@ export class SessionTurnPersister {
             sessionId,
             role,
             turnScopeId: normalizedTurnScopeId,
-            dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+            dialogProcessId: normalizeDialogProcessId(dialogProcessId),
             messageThinkingStartedAt: normalizedThinkingStartedAt,
             messageThinkingFinishedAt: normalizedThinkingFinishedAt,
             turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
@@ -397,8 +394,8 @@ export class SessionTurnPersister {
         type: messageItem.type || "",
         parentSessionId,
         dialogProcessId:
-          resolveMessageDialogProcessId(messageItem) ||
-          resolveDialogProcessIdFromContext({ dialogProcessId }),
+          resolveContextMessageDialogProcessId(messageItem) ||
+          normalizeDialogProcessId(dialogProcessId),
         parentDialogProcessId: messageItem.parentDialogProcessId || parentDialogProcessId || "",
         taskId: messageItem.taskId || null,
         taskStatus: messageItem.taskStatus || null,

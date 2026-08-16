@@ -6,44 +6,54 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { mapToAgentContextSchema } from "../../src/context/formatters/agent-context-mapper.js";
+import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context-envelope";
+import { createAgentContextEnvelopeInput } from "../../src/context/agent-context-envelope-input.js";
 
 function buildEnvelope() {
-  return mapToAgentContextSchema({
-    staticAgentContext: {
+  return createAgentContextBuildEnvelope(
+    createAgentContextEnvelopeInput({
       userId: "u1",
-      cwd: "/workspace",
-      basePath: "/workspace/u1",
-      workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
-      platform: "linux",
-      arch: "x64",
-      nodeVersion: "v20.0.0",
-      timezone: "Asia/Shanghai",
-      globalDefaults: { workspaceRoot: "/workspace" },
-      identity: { userId: "u1", isSuperUser: true },
-    },
-    runtime: {
+      sessionId: "s1",
+      parentSessionId: "p1",
+      rootSessionId: "r1",
+      dialogProcessId: "dp1",
+      caller: "user",
+      runConfig: {
+        turnScopeId: "turn1",
+        executionId: "run1",
+        messageId: "message1",
+      },
+      staticAgentContext: {
+        userId: "u1",
+        cwd: "/workspace",
+        basePath: "/workspace/u1",
+        workspaceDirectories: ["runtime/session", "runtime/ops_workdir"],
+        platform: "linux",
+        arch: "x64",
+        nodeVersion: "v20.0.0",
+        timezone: "Asia/Shanghai",
+        globalDefaults: { workspaceRoot: "/workspace" },
+      },
       runtimeModel: "openai",
       allEnabledProviders: { openai: { model: "gpt-4o" } },
       systemRuntime: {
-        sessionId: "s1",
-        parentSessionId: "p1",
-        rootSessionId: "r1",
+        now: "2026-08-16T00:00:00.000Z",
+        isSuperUser: true,
         config: { allowUserInteraction: false, maxToolLoopTurns: "6" },
       },
-    },
-    dialogProcessId: "dp1",
-    turnScopeId: "turn1",
-    runId: "run1",
-    messageId: "message1",
-    systemMessages: ["sys"],
-    conversationMessages: [{ role: "user", content: "hi" }],
-    sourceRevision: "ctxsrc:test",
-    contextBuildMode: "existing_session",
-  });
+      systemMessages: ["sys"],
+      conversationMessages: [{ role: "user", content: "hi" }],
+      contextBuild: {
+        sourceRevision: "ctxsrc:test",
+        mode: "existing_session",
+        startedAt: "2026-08-16T00:00:00.000Z",
+        completedAt: "2026-08-16T00:00:01.000Z",
+      },
+    }),
+  );
 }
 
-test("mapToAgentContextSchema creates a serializable versioned envelope", () => {
+test("explicit envelope input creates a serializable versioned envelope", () => {
   const context = buildEnvelope();
   assert.equal(context.kind, "noobot.agent-context");
   assert.equal(context.protocolVersion, 1);
@@ -67,16 +77,17 @@ test("mapToAgentContextSchema creates a serializable versioned envelope", () => 
   assert.doesNotThrow(() => JSON.stringify(context));
 });
 
-test("mapToAgentContextSchema excludes runtime controllers and tool instances", () => {
+test("explicit envelope input excludes runtime controllers and tool instances", () => {
   const context = buildEnvelope();
   assert.equal("runtime" in context, false);
   assert.equal("controllers" in context.execution, false);
   assert.equal("payload" in context, false);
 });
 
-test("mapToAgentContextSchema rejects incomplete execution identity", () => {
+test("protocol envelope rejects incomplete execution identity", () => {
   assert.throws(
-    () => mapToAgentContextSchema({ sessionId: "s1", dialogProcessId: "dp1" }),
-    /identity\.turnScopeId is required/,
+    () =>
+      createAgentContextBuildEnvelope({ identity: { sessionId: "s1", dialogProcessId: "dp1" } }),
+    /context build receipt requires a complete context scope/,
   );
 });

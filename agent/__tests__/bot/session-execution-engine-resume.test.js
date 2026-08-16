@@ -130,7 +130,7 @@ test("stopped snapshot v2 history without round identity is rebound to current t
 test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
   const contextBuilder = {
-    async _buildAgentContext() {
+    async buildAgentContext() {
       throw new Error("snapshot identity validation should run before context build");
     },
   };
@@ -168,7 +168,7 @@ test("stopped snapshot resume degrades to a normal turn when the optional snapsh
       return { degraded: true };
     },
   };
-  const contextBuilder = { _buildAgentContext() {} };
+  const contextBuilder = { buildAgentContext() {} };
 
   try {
     const result = await engine._prepareStoppedSnapshotResumeTurnExecution({
@@ -206,14 +206,14 @@ test("stopped snapshot resume preserves history and incremental block boundaries
   };
   const captured = [];
   const contextBuilder = {
-    async _buildAgentContext(system, history, options) {
+    async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
       return createTestAgentExecutionScope({});
     },
   };
   const history = [{ type: "human", content: "history", dialogProcessId: "old" }];
   const incremental = [{ type: "human", content: "injected", injectedMessage: true }];
-  await contextBuilder._buildAgentContext([], history, { incrementalMessages: incremental });
+  await contextBuilder.buildAgentContext([], history, { incrementalMessages: incremental });
 
   assert.deepEqual(captured[0].history, history);
   assert.deepEqual(captured[0].options.incrementalMessages, incremental);
@@ -257,7 +257,7 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     async buildExistingSessionContext() {
       throw new Error("stopped resume must not rebuild Context from Session history");
     },
-    async _buildAgentContext(system, history, options) {
+    async buildAgentContext(system, history, options) {
       captured.push({ system, history, options });
       return createTestAgentExecutionScope({});
     },

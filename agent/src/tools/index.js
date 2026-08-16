@@ -22,7 +22,6 @@ import { emitEvent } from "../events/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
 import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
-import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
 import {
   MODEL_MULTIMODAL_MODALITY,
@@ -31,6 +30,7 @@ import {
 } from "@noobot/model-protocol";
 import {
   getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
   getToolsFromAgentContext,
 } from "../context/agent-context-accessor.js";
 export {
@@ -179,9 +179,10 @@ async function filterToolsByRuntimePolicy({
 }) {
   const sourceTools = Array.isArray(tools) ? tools : getToolsFromAgentContext(agentContext);
   const runtime = getRuntimeFromAgentContext(agentContext);
-  const sessionId = String(runtime?.systemRuntime?.sessionId || runtime?.sessionId || "").trim();
-  const parentSessionId = resolveParentSessionId({ runtime });
-  const userId = String(runtime?.userId || "").trim();
+  const identity = getSessionIdsFromAgentContext(agentContext);
+  const sessionId = identity.sessionId;
+  const parentSessionId = identity.parentSessionId;
+  const userId = identity.userId;
   const sessionManager = runtime?.sessionManager || null;
   const maxSubAgentDepth = resolveMaxSubAgentDepth(effectiveConfig);
   const depthTargetSessionId = sessionId || parentSessionId;

@@ -5,11 +5,30 @@
  */
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/block-strategy";
+import {
+  projectContextMessageIdentityMetadata,
+  resolveContextMessageRole,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "@noobot/context-protocol/message-codec";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { compactToolResultTextForModel } from "../../../transfer-adapter/core/compact.js";
-import { resolveMessageRole, resolveMessageToolCalls, resolveMessageToolCallId, toLangChainToolCalls, buildModelMessageIdentityKwargs } from "./message-utils.js";
-import { isTaskSummaryToolResultMessage, buildTaskSummaryFallbackHumanMessage, shouldSkipSummarizedHistoryMessage } from "./task-summary.js";
-import { resolveFallbackAttachments, buildHumanMessageContent, buildHumanMessagesForUser, shouldBuildUserMetaForHistoryMessage, isDerivedUserMetaMessage, buildRestoredUserMetaIndex, buildRestorableUserMetaKeys, normalizeRestoredUserSource } from "./user-meta.js";
+import { toLangChainToolCalls } from "../../../models/adapters/langchain/context-message-adapter.js";
+import {
+  isTaskSummaryToolResultMessage,
+  buildTaskSummaryFallbackHumanMessage,
+  shouldSkipSummarizedHistoryMessage,
+} from "./task-summary.js";
+import {
+  resolveFallbackAttachments,
+  buildHumanMessageContent,
+  buildHumanMessagesForUser,
+  shouldBuildUserMetaForHistoryMessage,
+  isDerivedUserMetaMessage,
+  buildRestoredUserMetaIndex,
+  buildRestorableUserMetaKeys,
+  normalizeRestoredUserSource,
+} from "./user-meta.js";
 
 export function filterCurrentTurnUserMessageFromHistory(
   historyMessages = [],
@@ -34,8 +53,8 @@ export function buildHistoryMessages({
   const restorableUserMetaKeys = buildRestorableUserMetaKeys(effectiveHistoryMessages, runtime);
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
-    if (resolveMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
-    const normalizedToolCalls = toLangChainToolCalls(resolveMessageToolCalls(msg));
+    if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
+    const normalizedToolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
       const toolCallId = String(toolCall?.id || "").trim();
       if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
@@ -45,16 +64,18 @@ export function buildHistoryMessages({
     const msg = normalizeRestoredUserSource(sourceMessage, restoredUserMetaIndex);
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (isDerivedUserMetaMessage(msg, runtime)) continue;
-    const role = resolveMessageRole(msg);
+    const role = resolveContextMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
-      history.push(new SystemMessage({
-        content: msg.content || "",
-        additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
-      }));
+      history.push(
+        new SystemMessage({
+          content: msg.content || "",
+          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+        }),
+      );
       continue;
     }
     if (role === MESSAGE_ROLE.ASSISTANT) {
-      const toolCalls = toLangChainToolCalls(resolveMessageToolCalls(msg));
+      const toolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
       const resolvedAssistantContent =
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
@@ -63,13 +84,13 @@ export function buildHistoryMessages({
         new AIMessage({
           content: resolvedAssistantContent,
           tool_calls: toolCalls,
-          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
+          additional_kwargs: projectContextMessageIdentityMetadata(msg),
         }),
       );
       continue;
     }
     if (role === MESSAGE_ROLE.TOOL) {
-      const toolCallId = resolveMessageToolCallId(msg);
+      const toolCallId = resolveContextToolCallId(msg);
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
         if (isTaskSummaryToolResultMessage(msg)) {
           const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg);
@@ -81,7 +102,7 @@ export function buildHistoryMessages({
         new ToolMessage({
           tool_call_id: toolCallId,
           content: compactToolResultTextForModel(msg.content || ""),
-          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
+          additional_kwargs: projectContextMessageIdentityMetadata(msg),
         }),
       );
       continue;
@@ -98,20 +119,19 @@ export function buildHistoryMessages({
       continue;
     }
     if (shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })) {
-      history.push(...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
-        allowFallbackAttachments: false,
-        allowFallbackIdentity: false,
-        allowMessageAttachments,
-        allowFallbackRoundIdentity: false,
-      }));
+      history.push(
+        ...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
+          allowFallbackAttachments: false,
+          allowFallbackIdentity: false,
+          allowMessageAttachments,
+          allowFallbackRoundIdentity: false,
+        }),
+      );
     } else {
       history.push(
         new HumanMessage({
-          content: buildHumanMessageContent(
-            msg,
-            resolveFallbackAttachments(fallbackUserMeta),
-          ),
-          additional_kwargs: buildModelMessageIdentityKwargs(msg, fallbackUserMeta),
+          content: buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackUserMeta)),
+          additional_kwargs: projectContextMessageIdentityMetadata(msg),
         }),
       );
     }

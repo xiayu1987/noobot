@@ -7,18 +7,14 @@ import { randomUUID } from "node:crypto";
 import { isPlainObject } from "../../../shared/utils/shared-utils.js";
 import { TASK_STATUS } from "../../../bot/async/constants.js";
 import { cloneData } from "./collab-task-utils.js";
-import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 
 export function createCollabContainerStore({ runtime }) {
-  runtime.childAsyncResultContainers = Array.isArray(
-    runtime.childAsyncResultContainers,
-  )
+  runtime.childAsyncResultContainers = Array.isArray(runtime.childAsyncResultContainers)
     ? runtime.childAsyncResultContainers
     : [];
   runtime.sharedTools =
-    runtime.sharedTools && typeof runtime.sharedTools === "object"
-      ? runtime.sharedTools
-      : {};
+    runtime.sharedTools && typeof runtime.sharedTools === "object" ? runtime.sharedTools : {};
 
   const nowIso = () => new Date().toISOString();
 
@@ -36,12 +32,8 @@ export function createCollabContainerStore({ runtime }) {
     const normalized = {
       id: containerId,
       parentSessionId: normalizeParentSessionId(container?.parentSessionId),
-      parentDialogProcessId: String(
-        container?.parentDialogProcessId || "",
-      ).trim(),
-      status:
-        String(container?.status || TASK_STATUS.RUNNING).trim() ||
-        TASK_STATUS.RUNNING,
+      parentDialogProcessId: String(container?.parentDialogProcessId || "").trim(),
+      status: String(container?.status || TASK_STATUS.RUNNING).trim() || TASK_STATUS.RUNNING,
       updatedAt: String(container?.updatedAt || nowIso()),
       tasks: Array.isArray(container?.tasks)
         ? container.tasks.map((item = {}, index) => ({
@@ -50,9 +42,7 @@ export function createCollabContainerStore({ runtime }) {
             taskName: String(item?.taskName || "").trim(),
             taskContent: String(item?.taskContent || "").trim(),
             deliverable: String(item?.deliverable || "").trim(),
-            status:
-              String(item?.status || TASK_STATUS.RUNNING).trim() ||
-              TASK_STATUS.RUNNING,
+            status: String(item?.status || TASK_STATUS.RUNNING).trim() || TASK_STATUS.RUNNING,
             startedAt: String(item?.startedAt || "").trim(),
             endedAt: String(item?.endedAt || "").trim(),
             error: String(item?.error || "").trim(),
@@ -67,11 +57,7 @@ export function createCollabContainerStore({ runtime }) {
     return normalized;
   };
 
-  const patchAsyncResultTask = ({
-    containerId = "",
-    sessionId = "",
-    patch = {},
-  } = {}) => {
+  const patchAsyncResultTask = ({ containerId = "", sessionId = "", patch = {} } = {}) => {
     const normalizedContainerId = String(containerId || "").trim();
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedContainerId || !normalizedSessionId || !isPlainObject(patch)) {
@@ -100,9 +86,7 @@ export function createCollabContainerStore({ runtime }) {
     if (taskList.some((task) => String(task?.status || "") === TASK_STATUS.FAILED)) {
       return TASK_STATUS.FAILED;
     }
-    if (
-      taskList.every((task) => String(task?.status || "") === TASK_STATUS.COMPLETED)
-    ) {
+    if (taskList.every((task) => String(task?.status || "") === TASK_STATUS.COMPLETED)) {
       return TASK_STATUS.COMPLETED;
     }
     if (taskList.some((task) => String(task?.status || "") === TASK_STATUS.USER_STOPPED)) {
@@ -117,9 +101,7 @@ export function createCollabContainerStore({ runtime }) {
     const containerId = String(normalized?.id || "").trim();
     if (!containerId) return null;
     const list = runtime.childAsyncResultContainers;
-    const hitIndex = list.findIndex(
-      (item) => String(item?.id || "").trim() === containerId,
-    );
+    const hitIndex = list.findIndex((item) => String(item?.id || "").trim() === containerId);
     if (hitIndex >= 0) {
       list[hitIndex] = normalized;
     } else {
@@ -158,11 +140,7 @@ export function createCollabContainerStore({ runtime }) {
     return addChildAsyncResultContainer(container);
   };
 
-  const patchContainerTaskAndStatus = ({
-    container = null,
-    sessionId = "",
-    patch = {},
-  } = {}) => {
+  const patchContainerTaskAndStatus = ({ container = null, sessionId = "", patch = {} } = {}) => {
     if (!isPlainObject(container)) return;
     patchAsyncResultTask({
       containerId: String(container?.id || ""),

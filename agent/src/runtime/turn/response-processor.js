@@ -6,16 +6,16 @@
 import { emitEvent } from "../../events/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
-import {
-  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
-} from "@noobot/context-protocol/summary-policy";
+import { DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME } from "@noobot/context-protocol/summary-policy";
 import { assertNotAborted } from "../utils/error-utils.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
+import {
+  getSessionIdsFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
 
 function updateToolFailureState({ modelState, loopState, toolCallResult }) {
   const runtime = modelState?.runtime || {};
@@ -40,7 +40,7 @@ export async function processToolResults({
   const { errorLogger } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const parentSessionId = resolveParentSessionId({ runtime });
+  const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
   emitEvent(eventListener, "tool_calls_detected", { turn, count: calls.length });
   await runAgentRuntimeHook({
     runtime,
@@ -55,24 +55,26 @@ export async function processToolResults({
     }),
   });
 
-  const toolCallResults = await Promise.all(calls.map(async (call) => {
-    assertNotAborted(abortSignal, runtime);
-    const tool = toolMap.get(call.name);
-    const toolCallResult = await executeToolCallInTurn({
-      call,
-      tool,
-      abortSignal,
-      eventListener,
-      turn,
-      errorLogger,
-      userId: systemRuntime?.userId || runtime?.userId || "",
-      sessionId: systemRuntime?.sessionId || "",
-      parentSessionId,
-      runtime,
-      agentContext: modelState?.agentContext || null,
-    });
-    return toolCallResult;
-  }));
+  const toolCallResults = await Promise.all(
+    calls.map(async (call) => {
+      assertNotAborted(abortSignal, runtime);
+      const tool = toolMap.get(call.name);
+      const toolCallResult = await executeToolCallInTurn({
+        call,
+        tool,
+        abortSignal,
+        eventListener,
+        turn,
+        errorLogger,
+        userId: executionIdentity.userId,
+        sessionId: executionIdentity.sessionId,
+        parentSessionId: executionIdentity.parentSessionId,
+        runtime,
+        agentContext: modelState?.agentContext || null,
+      });
+      return toolCallResult;
+    }),
+  );
 
   const hasTaskSummaryCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
@@ -83,7 +85,6 @@ export async function processToolResults({
   const hasFinalAnswerCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === FINAL_ANSWER_TOOL_NAME,
   );
-
 
   if (hasTaskSummaryCall) {
     loopState.taskSummaryTriggered = true;

@@ -3,40 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { mergeConfig, CONTEXT_SECTION_ALIASES } from "../config/index.js";
-import { buildTools } from "../tools/index.js";
-import {
-  getConnectorChannelStore,
-  getConnectorHistoryStore,
-} from "../integrations/connectors/index.js";
-import {
-  resolveRuntimeBasePath,
-  buildStaticInfo,
-  buildDynamicInfo,
-} from "./providers/environment-provider.js";
+import { mergeConfig } from "../config/index.js";
+import { normalizeContextPolicy } from "@noobot/agent-config-protocol/enums";
+import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/session-message-projection";
+import { resolveRuntimeBasePath, buildStaticInfo } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
-import { resolveConnectorStatusSection } from "./providers/connector-status-provider.js";
-import { resolveServices } from "./providers/service-provider.js";
-import { resolveAvailableMcpServers } from "./providers/mcp-provider.js";
-import { resolveModelSection, resolveAllEnabledProviders } from "./providers/model-provider.js";
-import { loadSystemPrompt } from "./providers/system-prompt-loader.js";
+import { resolveAllEnabledProviders } from "./providers/model-provider.js";
 import { resolveSessionTreeWithRootSessionId } from "./providers/session-tree-resolver.js";
-import { resolveAttachments } from "./providers/attachment-resolver.js";
-import { resolveSkills } from "./providers/skills-resolver.js";
 import { resolveLongMemory } from "./providers/memory-resolver.js";
-import { toConversationMessages } from "./session/message-converter.js";
+import { buildAgentExecutionContext } from "./application/build-agent-execution-context.js";
 import {
-  buildRuntimeContext,
-  initializeRuntimeEnvironment,
-} from "./builders/runtime-environment-builder.js";
-import { resolveScenarioProfile } from "./builders/scenario-resolver.js";
-import { composeSystemInfoSections } from "./formatters/system-prompt-formatter.js";
-import { mapToAgentContextSchema } from "./formatters/agent-context-mapper.js";
-import { createAgentExecutionScope } from "./agent-execution-scope.js";
+  applyIdentityToStaticPathInfo,
+  buildSystemContext,
+  buildSystemRuntime,
+} from "./application/build-system-context.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeParentSessionId } from "./parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
-import { emitAgentContextDebug } from "../observability/agent-context-debug.js";
 import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
 import { resolveConfiguredSuperUserId } from "../shared/utils/super-user.js";
 
@@ -44,25 +27,6 @@ function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {
   const configuredSuperUserId = resolveConfiguredSuperUserId(globalConfig);
   if (!configuredSuperUserId) return false;
   return String(userId || "").trim() === configuredSuperUserId;
-}
-
-function applyIdentityToStaticPathInfo(staticInfo = {}, identityInfo = {}) {
-  const sourceInfo = staticInfo && typeof staticInfo === "object" ? staticInfo : {};
-  const directories =
-    sourceInfo?.directories && typeof sourceInfo.directories === "object"
-      ? sourceInfo.directories
-      : null;
-  if (!directories || directories.view !== "host" || identityInfo?.isSuperUser !== true) {
-    return sourceInfo;
-  }
-  return {
-    ...sourceInfo,
-    directories: {
-      ...directories,
-      allowedRoots: ["<host-filesystem>"],
-      hostAbsolutePaths: true,
-    },
-  };
 }
 
 function normalizeAdditionalSystemMessages(input = []) {
@@ -123,6 +87,7 @@ export class ContextBuilder {
     this.botManager = botManager;
     this.userInteractionBridge = userInteractionBridge;
     this.runConfig = runConfig;
+    this.contextPolicy = normalizeContextPolicy(runConfig?.contextPolicy);
     this.additionalSystemMessages = normalizeAdditionalSystemMessages(systemMessages);
     this.abortSignal = abortSignal;
     this.parentAsyncResultContainer = parentAsyncResultContainer;
@@ -157,33 +122,6 @@ export class ContextBuilder {
     return this._workspaceDirectoriesPromise;
   }
 
-  _resolveContextIncludeSet() {
-    const contextPolicy = this.runConfig?.contextPolicy;
-    const includeContextKeys = Array.isArray(contextPolicy?.includeContextKeys)
-      ? contextPolicy.includeContextKeys
-      : [];
-    const normalizedKeys = includeContextKeys
-      .map((item) =>
-        String(item || "")
-          .trim()
-          .toLowerCase(),
-      )
-      .filter(Boolean);
-    if (normalizedKeys.includes("*")) return new Set();
-    return new Set(normalizedKeys);
-  }
-
-  _isContextSectionEnabled(includeSet, sectionKey = "") {
-    if (!(includeSet instanceof Set) || includeSet.size === 0) return true;
-    const normalizedSectionKey = String(sectionKey || "")
-      .trim()
-      .toLowerCase();
-    if (!normalizedSectionKey) return false;
-    const aliasMap = CONTEXT_SECTION_ALIASES;
-    const aliasList = aliasMap[normalizedSectionKey] || [normalizedSectionKey];
-    return aliasList.some((aliasItem) => includeSet.has(aliasItem));
-  }
-
   async _buildStaticAgentContext({ runtimeBasePath = "" } = {}) {
     const staticInfo = buildStaticInfo({
       runtimeBasePath,
@@ -205,53 +143,7 @@ export class ContextBuilder {
     };
   }
 
-  _buildSystemRuntime({ dialogProcessId = "", rootSessionId = "", staticInfo = null } = {}) {
-    const dynamicInfo = buildDynamicInfo({
-      userId: this.userId,
-      sessionId: this.sessionId,
-      caller: this.caller,
-      dialogProcessId,
-      runConfig: this.runConfig,
-      now: this._now(),
-      rootSessionId,
-      parentSessionId: this.parentSessionId,
-    });
-    const dependencySourceSummary =
-      this.botManager?.startupContext?.runtime?.dependencies?.sourceSummary &&
-      typeof this.botManager.startupContext.runtime.dependencies.sourceSummary === "object"
-        ? this.botManager.startupContext.runtime.dependencies.sourceSummary
-        : null;
-    const systemRuntimeWithStartup = dependencySourceSummary
-      ? { ...dynamicInfo, desktopDependencySources: dependencySourceSummary }
-      : dynamicInfo;
-    const systemRuntimePatch =
-      this.runConfig?.systemRuntimePatch && typeof this.runConfig.systemRuntimePatch === "object"
-        ? this.runConfig.systemRuntimePatch
-        : null;
-    const mergedRuntime = systemRuntimePatch
-      ? { ...systemRuntimeWithStartup, ...systemRuntimePatch }
-      : systemRuntimeWithStartup;
-    const protectedDialogProcessId = String(
-      dynamicInfo?.dialogProcessId || dialogProcessId || "",
-    ).trim();
-    return {
-      ...mergedRuntime,
-      ...(staticInfo && typeof staticInfo === "object" ? { staticInfo } : {}),
-      ...(protectedDialogProcessId
-        ? {
-            dialogProcessId: protectedDialogProcessId,
-            currentDialogProcessId: protectedDialogProcessId,
-          }
-        : {}),
-      isSuperUser: resolveRuntimeSuperUserFlag({
-        globalConfig: this.globalConfig,
-        userId: dynamicInfo?.userId || this.userId,
-      }),
-      parentSessionId: normalizeParentSessionId(mergedRuntime?.parentSessionId),
-    };
-  }
-
-  async _buildAgentContext(
+  async buildAgentContext(
     systemMessages,
     conversationMessages,
     {
@@ -265,6 +157,7 @@ export class ContextBuilder {
       contextBuildMode = "",
     } = {},
   ) {
+    const contextBuildStartedAt = this._now();
     const effectiveSystemMessages = [
       ...(Array.isArray(systemMessages) ? systemMessages : []),
       ...this.additionalSystemMessages,
@@ -312,12 +205,31 @@ export class ContextBuilder {
         }),
       },
     );
-    const runtime = buildRuntimeContext({
+    const runtimeModel = String(this.runConfig?.runtimeModel || "").trim();
+    const allEnabledProviders = resolveAllEnabledProviders(effectiveConfig);
+    const systemRuntime = buildSystemRuntime({
       userId: this.userId,
-      basePath: resolvedRuntimeBasePath,
+      sessionId: this.sessionId,
+      parentSessionId: this.parentSessionId,
+      caller: this.caller,
+      dialogProcessId,
+      rootSessionId: resolvedRootSessionId,
+      runConfig: this.runConfig,
       globalConfig: this.globalConfig,
-      sourceRevision,
-      contextBuildMode,
+      botManager: this.botManager,
+      staticInfo: runtimeStaticInfo,
+      now: this._now(),
+    });
+    return buildAgentExecutionContext({
+      identity: {
+        userId: this.userId,
+        sessionId: this.sessionId,
+        rootSessionId: resolvedRootSessionId,
+        parentSessionId: this.parentSessionId,
+        dialogProcessId,
+      },
+      caller: this.caller,
+      globalConfig: this.globalConfig,
       userConfig: this.userConfig,
       eventListener: this.eventListener,
       sessionManager: this.sessionManager,
@@ -325,54 +237,24 @@ export class ContextBuilder {
       botManager: this.botManager,
       userInteractionBridge: this.userInteractionBridge,
       abortSignal: this.abortSignal,
-      runtimeModel: String(this.runConfig?.runtimeModel || "").trim(),
-      allEnabledProviders: resolveAllEnabledProviders(effectiveConfig),
       parentAsyncResultContainer: this.parentAsyncResultContainer,
       runConfig: this.runConfig,
-      systemRuntime: this._buildSystemRuntime({
-        dialogProcessId,
-        sessionTree: resolvedSessionTree,
-        rootSessionId: resolvedRootSessionId,
-        staticInfo: runtimeStaticInfo,
-      }),
-      userMessageAttachments: attachments,
-    });
-    await initializeRuntimeEnvironment(runtime);
-
-    const agentContext = mapToAgentContextSchema({
+      runtimeBasePath: resolvedRuntimeBasePath,
+      runtimeModel,
+      allEnabledProviders,
+      systemRuntime,
       staticAgentContext,
-      runtime,
-      dialogProcessId,
-      resolvedRootSessionId,
-      resolvedSessionTree,
-      sessionId: this.sessionId,
-      parentSessionId: this.parentSessionId,
-      caller: this.caller,
-      turnScopeId: String(this.runConfig?.turnScopeId || "").trim(),
-      runId: String(this.runConfig?.executionId || "").trim(),
-      messageId: String(
-        this.runConfig?.messageId || runtime?.systemRuntime?.messageId || "",
-      ).trim(),
-      now: this._now(),
       systemMessages: effectiveSystemMessages,
       conversationMessages,
       incrementalMessages,
-      globalConfig: this.globalConfig,
-      sourceRevision,
-      contextBuildMode,
+      attachments,
+      contextBuild: {
+        mode: contextBuildMode,
+        sourceRevision,
+        startedAt: contextBuildStartedAt,
+        completedAt: this._now(),
+      },
     });
-    const executionScope = createAgentExecutionScope({
-      context: agentContext,
-      bindings: { runtime, tools: [] },
-    });
-    const builtTools = await buildTools({
-      sessionId: this.sessionId || "",
-      parentSessionId: normalizeParentSessionId(this.parentSessionId),
-      agentContext: executionScope,
-    });
-    executionScope.bindings.tools = Array.isArray(builtTools) ? builtTools : [];
-    emitAgentContextDebug(runtime.eventListener, executionScope);
-    return executionScope;
   }
 
   async _resolveSessionRecords({ sessionId, dialogProcessId = "" } = {}) {
@@ -392,133 +274,29 @@ export class ContextBuilder {
 
   async _buildSystemContext({ dialogProcessId = "", longMemory = null } = {}) {
     const runtimeBasePath = this._resolveRuntimeBasePath();
-    const effectiveConfig = this._getEffectiveConfig();
-    const includeSet = this._resolveContextIncludeSet();
-    const includeBasePrompt = this._isContextSectionEnabled(includeSet, "base_prompt");
-    const includeSystemRuntime = this._isContextSectionEnabled(includeSet, "system_runtime");
-    const includeScenario = this._isContextSectionEnabled(includeSet, "scenario");
-    const includeLongMemory = this._isContextSectionEnabled(includeSet, "long_memory");
-    const includeModel = this._isContextSectionEnabled(includeSet, "model");
-    const includeSkills = this._isContextSectionEnabled(includeSet, "skills");
-    const includeServices = this._isContextSectionEnabled(includeSet, "services");
-    const includeMcpServers = this._isContextSectionEnabled(includeSet, "mcp_servers");
-    const includeConnectors = this._isContextSectionEnabled(includeSet, "connectors");
-    const includeAttachments = this._isContextSectionEnabled(includeSet, "attachments");
-    const locale = this.runConfig?.locale || "zh-CN";
-
-    const treeInfo = await resolveSessionTreeWithRootSessionId({
-      runtimeBasePath,
-      sessionManager: this.sessionManager,
-      userId: this.userId,
-      sessionId: this.sessionId,
-      parentSessionId: this.parentSessionId,
-      now: this._now(),
-    });
-
-    const [systemPrompt, skills, attachments, workspaceDirectories] = await Promise.all([
-      includeBasePrompt ? loadSystemPrompt({ locale }) : "",
-      includeSkills
-        ? resolveSkills({
-            skillService: this.skillService,
-            runtimeBasePath,
-            userId: this.userId,
-          })
-        : [],
-      resolveAttachments({
-        attachmentService: this.attachmentService,
-        runtimeBasePath,
-        effectiveConfig,
-        userMessageAttachments: this.userMessageAttachments,
+    return buildSystemContext({
+      identity: {
         userId: this.userId,
         sessionId: this.sessionId,
-      }),
-      includeSystemRuntime ? this._resolveWorkspaceDirectoriesCached(runtimeBasePath) : [],
-    ]);
-    const scenarioProfile = resolveScenarioProfile({
+        parentSessionId: this.parentSessionId,
+        dialogProcessId,
+      },
+      caller: this.caller,
+      globalConfig: this.globalConfig,
+      userConfig: this.userConfig,
       runConfig: this.runConfig,
-      effectiveConfig,
-    });
-    const services = includeServices
-      ? resolveServices(effectiveConfig, {
-          includeRefs: scenarioProfile?.services || [],
-        })
-      : [];
-    const mcpServers = includeMcpServers
-      ? resolveAvailableMcpServers(effectiveConfig, {
-          includeNames: scenarioProfile?.mcpServers || [],
-        })
-      : [];
-    const modelSection = includeModel
-      ? resolveModelSection({
-          globalConfig: this.globalConfig,
-          userConfig: this.userConfig,
-          effectiveConfig,
-        })
-      : {};
-    const connectorStatusSection = includeConnectors
-      ? await resolveConnectorStatusSection({
-          rootSessionId: treeInfo.rootSessionId,
-          userId: this.userId,
-          selectedConnectors:
-            this.runConfig?.selectedConnectors &&
-            typeof this.runConfig.selectedConnectors === "object"
-              ? this.runConfig.selectedConnectors
-              : {},
-          connectorChannelStore: getConnectorChannelStore(),
-          connectorHistoryStore: getConnectorHistoryStore(),
-        })
-      : {};
-    const identityInfo = {
-      userId: String(this.userId || "").trim(),
-      isSuperUser: resolveRuntimeSuperUserFlag({
-        globalConfig: this.globalConfig,
-        userId: this.userId,
-      }),
-    };
-
-    const staticInfo = includeSystemRuntime
-      ? applyIdentityToStaticPathInfo(
-          {
-            ...buildStaticInfo({
-              runtimeBasePath,
-              userId: this.userId,
-              globalConfig: this.globalConfig,
-            }),
-            identity: identityInfo,
-          },
-          identityInfo,
-        )
-      : { identity: identityInfo };
-    const dynamicInfo = includeSystemRuntime
-      ? this._buildSystemRuntime({
-          dialogProcessId,
-          rootSessionId: treeInfo.rootSessionId,
-        })
-      : {};
-    const normalizedLongMemory = includeLongMemory ? longMemory : null;
-
-    const systemContext = composeSystemInfoSections({
-      locale,
-      systemPrompt,
-      staticInfo,
-      dynamicInfo,
-      scenarioSection: includeScenario ? scenarioProfile : {},
-      longMemory: normalizedLongMemory,
-      workspaceDirectories,
-      modelSection,
-      skills,
-      services,
-      mcpServers,
-      attachments: includeAttachments ? attachments : [],
-      connectorStatusSection,
-    });
-    return {
-      systemContext,
+      contextPolicy: this.contextPolicy,
+      effectiveConfig: this._getEffectiveConfig(),
       runtimeBasePath,
-      sessionTree: treeInfo.sessionTree,
-      rootSessionId: treeInfo.rootSessionId,
-      attachments,
-    };
+      longMemory,
+      sessionManager: this.sessionManager,
+      attachmentService: this.attachmentService,
+      skillService: this.skillService,
+      botManager: this.botManager,
+      userMessageAttachments: this.userMessageAttachments,
+      resolveWorkspaceDirectories: (basePath) => this._resolveWorkspaceDirectoriesCached(basePath),
+      now: () => this._now(),
+    });
   }
 
   async buildNewSessionContext({ dialogProcessId = "" } = {}) {
@@ -540,15 +318,19 @@ export class ContextBuilder {
     );
     const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
       await this._buildSystemContext({ dialogProcessId });
-    return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
-      runtimeBasePath,
-      dialogProcessId,
-      sessionTree,
-      rootSessionId,
-      attachments,
-      sourceRevision: sessionProjection?.sourceRevision || "",
-      contextBuildMode: "new_session",
-    });
+    return this.buildAgentContext(
+      systemContext,
+      projectSessionRecordsToContextMessages(sessionRecords),
+      {
+        runtimeBasePath,
+        dialogProcessId,
+        sessionTree,
+        rootSessionId,
+        attachments,
+        sourceRevision: sessionProjection?.sourceRevision || "",
+        contextBuildMode: "new_session",
+      },
+    );
   }
 
   async buildExistingSessionContext({ dialogProcessId = "" } = {}) {
@@ -575,15 +357,19 @@ export class ContextBuilder {
     });
     const { systemContext, runtimeBasePath, sessionTree, rootSessionId, attachments } =
       await this._buildSystemContext({ dialogProcessId, longMemory });
-    return this._buildAgentContext(systemContext, toConversationMessages(sessionRecords), {
-      runtimeBasePath,
-      dialogProcessId,
-      sessionTree,
-      rootSessionId,
-      attachments,
-      sourceRevision: sessionProjection?.sourceRevision || "",
-      contextBuildMode: "existing_session",
-    });
+    return this.buildAgentContext(
+      systemContext,
+      projectSessionRecordsToContextMessages(sessionRecords),
+      {
+        runtimeBasePath,
+        dialogProcessId,
+        sessionTree,
+        rootSessionId,
+        attachments,
+        sourceRevision: sessionProjection?.sourceRevision || "",
+        contextBuildMode: "existing_session",
+      },
+    );
   }
 
   async buildInitialContext(payload = {}) {

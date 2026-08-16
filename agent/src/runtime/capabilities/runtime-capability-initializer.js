@@ -21,10 +21,6 @@ import {
   getConnectorHistoryStore,
 } from "../../integrations/connectors/index.js";
 import {
-  createCurrentTurnMessagesStore,
-  createCurrentTurnTasksStore,
-} from "../session/current-turn-store.js";
-import {
   resolveRuntimeTransferIdentity,
   transferSemanticContent,
 } from "../../transfer-adapter/index.js";
@@ -62,64 +58,6 @@ function createDefaultTextCleaner() {
         maxChars: LENGTH_THRESHOLDS.toolIO.runtimeCleanAnyChars,
       });
     },
-  };
-}
-
-export function buildRuntimeContext({
-  userId = "",
-  basePath = "",
-  globalConfig = {},
-  userConfig = {},
-  eventListener = null,
-  sessionManager = null,
-  attachmentService = null,
-  botManager = null,
-  userInteractionBridge = null,
-  abortSignal = null,
-  runtimeModel = "",
-  allEnabledProviders = {},
-  parentAsyncResultContainer = null,
-  runConfig = {},
-  systemRuntime = {},
-  userMessageAttachments = [],
-  attachments = [],
-} = {}) {
-  const passthroughSharedTools =
-    runConfig?.sharedTools && typeof runConfig.sharedTools === "object"
-      ? runConfig.sharedTools
-      : {};
-  const runtimeHookManager =
-    runConfig?.hookManager && typeof runConfig.hookManager === "object"
-      ? runConfig.hookManager
-      : null;
-  return {
-    userId: String(userId || "").trim(),
-    basePath: String(basePath || "").trim(),
-    globalConfig,
-    userConfig,
-    eventListener,
-    sessionManager,
-    attachmentService,
-    botManager,
-    userInteractionBridge,
-    abortSignal: abortSignal || null,
-    runtimeModel: String(runtimeModel || "").trim(),
-    runConfig:
-      runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {},
-    allEnabledProviders:
-      allEnabledProviders && typeof allEnabledProviders === "object" ? allEnabledProviders : {},
-    sharedTools: passthroughSharedTools,
-    hookManager: runtimeHookManager,
-    childAsyncResultContainers: [],
-    parentAsyncResultContainer:
-      parentAsyncResultContainer && typeof parentAsyncResultContainer === "object"
-        ? parentAsyncResultContainer
-        : null,
-    systemRuntime: systemRuntime && typeof systemRuntime === "object" ? systemRuntime : {},
-    currentTurnMessages: createCurrentTurnMessagesStore(),
-    currentTurnTasks: createCurrentTurnTasksStore(),
-    userMessageAttachments: Array.isArray(userMessageAttachments) ? userMessageAttachments : [],
-    attachments: [],
   };
 }
 

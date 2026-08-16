@@ -37,21 +37,36 @@ function installEmptyMessageEventMaterializer(runtime = {}) {
   return runtime;
 }
 
+function createTestModelContext(dialogProcessId = "d-test", turnScopeId = "t-test") {
+  return createModelContext({
+    activeTurnIdentity: { dialogProcessId, turnScopeId },
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
+}
+
 test("state-committer emits before/after hooks for assistant message commit", async () => {
   const hookCalls = [];
   const hookManager = createHookManager();
   const runtime = installEmptyMessageEventMaterializer({ hookManager });
   const turnMessageStore = createInMemoryTurnStore();
 
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "assistant_message") return;
-    hookCalls.push(`before:${ctx.commitType}`);
-    ctx.payload.content = `[hooked]${ctx.payload.content}`;
-  }, { id: "test.assistant-commit.before" });
-  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "assistant_message") return;
-    hookCalls.push(`after:${ctx.commitType}`);
-  }, { id: "test.assistant-commit.after" });
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+    async (ctx = {}) => {
+      if (ctx.commitType !== "assistant_message") return;
+      hookCalls.push(`before:${ctx.commitType}`);
+      ctx.payload.content = `[hooked]${ctx.payload.content}`;
+    },
+    { id: "test.assistant-commit.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+    async (ctx = {}) => {
+      if (ctx.commitType !== "assistant_message") return;
+      hookCalls.push(`after:${ctx.commitType}`);
+    },
+    { id: "test.assistant-commit.after" },
+  );
 
   const committer = createStateCommitter({
     messages: [],
@@ -79,20 +94,29 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   const runtime = { hookManager };
   const turnMessageStore = createInMemoryTurnStore();
   const traces = [];
-  const messages = [];
+  const modelContext = createTestModelContext("dp_2", "turn-dp-2");
+  const messages = modelContext.messages;
 
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "tool_result") return;
-    hookCalls.push(`before:${ctx.commitType}`);
-    ctx.payload.content = "tool_result_overridden_by_hook";
-  }, { id: "test.tool-commit.before" });
-  hookManager.on(HOOK_POINT.AGENT.AFTER_STATE_COMMIT, async (ctx = {}) => {
-    if (ctx.commitType !== "tool_result") return;
-    hookCalls.push(`after:${ctx.commitType}`);
-  }, { id: "test.tool-commit.after" });
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+    async (ctx = {}) => {
+      if (ctx.commitType !== "tool_result") return;
+      hookCalls.push(`before:${ctx.commitType}`);
+      ctx.payload.content = "tool_result_overridden_by_hook";
+    },
+    { id: "test.tool-commit.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+    async (ctx = {}) => {
+      if (ctx.commitType !== "tool_result") return;
+      hookCalls.push(`after:${ctx.commitType}`);
+    },
+    { id: "test.tool-commit.after" },
+  );
 
   const committer = createStateCommitter({
-    messages,
+    modelContext,
     traces,
     turnMessageStore,
     dialogProcessId: "dp_2",
@@ -109,10 +133,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(turnMessageStore.items[0].role, "tool");
   assert.equal(turnMessageStore.items[0].content, "tool_result_overridden_by_hook");
   assert.match(turnMessageStore.items[0].messageUid, /^sm_/);
-  assert.equal(
-    turnMessageStore.items[0].messageId,
-    turnMessageStore.items[0].messageUid,
-  );
+  assert.equal(turnMessageStore.items[0].messageId, turnMessageStore.items[0].messageUid);
   assert.equal(traces.length, 1);
   assert.equal(traces[0].tool, "demo_tool");
   assert.equal(traces[0].result, "tool_result_overridden_by_hook");
@@ -127,11 +148,13 @@ test("state-committer checkpoints assistant and tool records with presentation i
     systemRuntime: {
       messageEventStream: { activePresentationMessageId: "msg_chat_checkpoint" },
     },
-    persistCurrentTurnMessages: async () => { checkpointCount += 1; },
+    persistCurrentTurnMessages: async () => {
+      checkpointCount += 1;
+    },
   };
   installEmptyMessageEventMaterializer(runtime);
   const committer = createStateCommitter({
-    messages: [],
+    modelContext: createTestModelContext("dp_checkpoint", "turn-checkpoint"),
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_checkpoint",
@@ -153,10 +176,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
   assert.equal(turnMessageStore.items[0].presentationMessageId, "msg_chat_checkpoint");
   assert.equal(turnMessageStore.items[0].chatPresentation, false);
   assert.equal(turnMessageStore.items[1].presentationMessageId, "msg_chat_checkpoint");
-  assert.equal(
-    turnMessageStore.items[1].messageId,
-    turnMessageStore.items[1].messageUid,
-  );
+  assert.equal(turnMessageStore.items[1].messageId, turnMessageStore.items[1].messageUid);
 });
 
 test("state-committer writes tool result through message store when holder is provided", async () => {
@@ -169,8 +189,7 @@ test("state-committer writes tool result through message store when holder is pr
     messageBlocks: { system: [], history: [], incremental: [] },
   });
   const committer = createStateCommitter({
-    messages: modelContext.messages,
-    messageHolder: modelContext,
+    modelContext,
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_store_tool",
@@ -197,7 +216,8 @@ test("state-committer writes tool result through message store when holder is pr
 
 test("state-committer stores compact LLM-facing tool result content", async () => {
   const turnMessageStore = createInMemoryTurnStore();
-  const messages = [];
+  const modelContext = createTestModelContext("dp_compact", "turn-compact");
+  const messages = modelContext.messages;
   const envelope = {
     protocol: "noobot.semantic-transfer",
     version: 2,
@@ -212,23 +232,30 @@ test("state-committer stores compact LLM-facing tool result content", async () =
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: {
-          attachmentId: "att_compact",
-          sessionId: "session_compact",
-          attachmentSource: "model",
+      attachments: [
+        {
+          identity: {
+            attachmentId: "att_compact",
+            sessionId: "session_compact",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "generated.png",
+          mimeType: "image/png",
+          size: 123,
         },
-        role: "primary",
-        name: "generated.png",
-        mimeType: "image/png",
-        size: 123,
-      }],
+      ],
     },
-    intent: { source: "tool", reason: "generated_media", scenario: "tool", strategy: "tool_result_text" },
+    intent: {
+      source: "tool",
+      reason: "generated_media",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: { persisted: true },
   };
   const committer = createStateCommitter({
-    messages,
+    modelContext,
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_compact",
@@ -265,11 +292,16 @@ test("state-committer persists transferEnvelopes only", async () => {
     },
     direction: "output",
     payload: { mode: "direct", content: "already persisted by transfer protocol" },
-    intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" },
+    intent: {
+      source: "tool",
+      reason: "tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: {},
   };
   const committer = createStateCommitter({
-    messages: [],
+    modelContext: createTestModelContext("dp_legacy_transfer", "turn-legacy-transfer"),
     traces: [],
     turnMessageStore,
     dialogProcessId: "dp_legacy_transfer",

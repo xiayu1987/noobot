@@ -15,6 +15,13 @@ import {
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "@noobot/context-protocol/message-store";
+import { attachModelContextRuntime } from "@noobot/context-protocol/model-context-runtime";
+import { resolveCanonicalContextMessages } from "@noobot/context-protocol/model-context-runtime";
+
+function attachRuntime(holder) {
+  attachModelContextRuntime(holder);
+  return holder;
+}
 
 test("agent message store canonicalizes messages and block views", () => {
   const system = { role: "system", content: "sys" };
@@ -28,7 +35,7 @@ test("agent message store canonicalizes messages and block views", () => {
     },
   };
 
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
 
   assert.equal(holder.messages[1], holder.messageBlocks.incremental[0]);
   assert.ok(getMessageId(holder.messages[1]));
@@ -36,18 +43,22 @@ test("agent message store canonicalizes messages and block views", () => {
 });
 
 test("agent message store append and replace keep block arrays synchronized", () => {
-  const holder = { messages: [], messageBlocks: { system: [], history: [], incremental: [] } };
-  const appended = appendMessage(holder, { role: "user", content: "hello" }, { block: "incremental" });
+  const holder = attachRuntime({
+    messages: [],
+    messageBlocks: { system: [], history: [], incremental: [] },
+  });
+  const appended = appendMessage(
+    holder,
+    { role: "user", content: "hello" },
+    { block: "incremental" },
+  );
 
   assert.equal(holder.messages[0], appended);
   assert.equal(holder.messageBlocks.incremental[0], appended);
   assert.ok(getMessageId(appended));
   assert.equal(holder.messageBlocks.incrementalIds, undefined);
 
-  const replacement = replaceMessages(holder, [
-    { role: "system", content: "sys" },
-    appended,
-  ]);
+  const replacement = replaceMessages(holder, [{ role: "system", content: "sys" }, appended]);
   writeMessageBlocks(holder, {
     system: [replacement[0]],
     history: [],
@@ -57,9 +68,10 @@ test("agent message store append and replace keep block arrays synchronized", ()
   assert.equal(holder.messages[1], holder.messageBlocks.incremental[0]);
   assert.equal(holder.messageBlocks.systemIds, undefined);
   assert.equal(holder.messageBlocks.incrementalIds, undefined);
-  assert.deepEqual(resolveMessagesByIds(holder, [getMessageId(holder.messageBlocks.incremental[0])]), [
-    holder.messages[1],
-  ]);
+  assert.deepEqual(
+    resolveMessagesByIds(holder, [getMessageId(holder.messageBlocks.incremental[0])]),
+    [holder.messages[1]],
+  );
 });
 
 test("agent message store partial block writes preserve untouched blocks", () => {
@@ -67,6 +79,7 @@ test("agent message store partial block writes preserve untouched blocks", () =>
     messages: [],
     messageBlocks: { system: [], history: [], incremental: [] },
   };
+  attachRuntime(holder);
   const system = appendMessage(holder, { role: "system", content: "sys" }, { block: "system" });
 
   writeMessageBlocks(holder, {
@@ -76,7 +89,10 @@ test("agent message store partial block writes preserve untouched blocks", () =>
   assert.equal(holder.messageBlocks.system[0], system);
   assert.ok(getMessageId(system));
   assert.equal(holder.messageBlocks.systemIds, undefined);
-  assert.deepEqual(holder.messageBlocks.incremental.map((item = {}) => item.content), ["hello"]);
+  assert.deepEqual(
+    holder.messageBlocks.incremental.map((item = {}) => item.content),
+    ["hello"],
+  );
 
   writeMessageBlocks(holder, { system: [] });
   assert.deepEqual(holder.messageBlocks.system, []);
@@ -90,18 +106,44 @@ test("agent message store ignores provider and business ids for block identity",
       { role: "user", content: "hist", id: "provider-collision", messageId: "business-collision" },
     ],
     messageBlocks: {
-      system: [{ role: "system", content: "sys", id: "provider-collision", messageId: "business-collision" }],
-      history: [{ role: "user", content: "hist", id: "provider-collision", messageId: "business-collision" }],
+      system: [
+        {
+          role: "system",
+          content: "sys",
+          id: "provider-collision",
+          messageId: "business-collision",
+        },
+      ],
+      history: [
+        {
+          role: "user",
+          content: "hist",
+          id: "provider-collision",
+          messageId: "business-collision",
+        },
+      ],
       incremental: [],
     },
   };
 
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
 
-  assert.deepEqual(holder.messages.map((item = {}) => item.content), ["sys", "hist"]);
-  assert.deepEqual(holder.messageBlocks.system.map((item = {}) => item.content), ["sys"]);
-  assert.deepEqual(holder.messageBlocks.history.map((item = {}) => item.content), ["hist"]);
-  assert.notEqual(getMessageId(holder.messageBlocks.system[0]), getMessageId(holder.messageBlocks.history[0]));
+  assert.deepEqual(
+    holder.messages.map((item = {}) => item.content),
+    ["sys", "hist"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.system.map((item = {}) => item.content),
+    ["sys"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.history.map((item = {}) => item.content),
+    ["hist"],
+  );
+  assert.notEqual(
+    getMessageId(holder.messageBlocks.system[0]),
+    getMessageId(holder.messageBlocks.history[0]),
+  );
 });
 
 test("agent message store advances next id when hydrating existing message ids", () => {
@@ -117,7 +159,7 @@ test("agent message store advances next id when hydrating existing message ids",
     },
   };
 
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
   const canonicalSystemMessage = holder.messageBlocks.system[0];
   replaceMessages(holder, [
     canonicalSystemMessage,
@@ -129,10 +171,19 @@ test("agent message store advances next id when hydrating existing message ids",
     },
   ]);
 
-  assert.deepEqual(holder.messages.map((item = {}) => getMessageId(item)), ["am_1", "am_3"]);
+  assert.deepEqual(
+    holder.messages.map((item = {}) => getMessageId(item)),
+    ["am_1", "am_3"],
+  );
   assert.equal(new Set(holder.messages.map((item = {}) => getMessageId(item))).size, 2);
-  assert.deepEqual(holder.messageBlocks.system.map((item = {}) => item.content), ["sys"]);
-  assert.deepEqual(holder.messageBlocks.history.map((item = {}) => item.content), ["old"]);
+  assert.deepEqual(
+    holder.messageBlocks.system.map((item = {}) => item.content),
+    ["sys"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.history.map((item = {}) => item.content),
+    ["old"],
+  );
 });
 
 test("agent message store replaceMessages does not rewrite message block ownership", () => {
@@ -149,7 +200,7 @@ test("agent message store replaceMessages does not rewrite message block ownersh
     ...holder.messageBlocks.history,
     ...holder.messageBlocks.incremental,
   ];
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
 
   replaceMessages(holder, [
     holder.messageBlocks.system[0],
@@ -157,9 +208,18 @@ test("agent message store replaceMessages does not rewrite message block ownersh
     holder.messageBlocks.incremental[0],
   ]);
 
-  assert.deepEqual(holder.messageBlocks.system.map((item = {}) => item.content), ["sys"]);
-  assert.deepEqual(holder.messageBlocks.history.map((item = {}) => item.content), ["hist"]);
-  assert.deepEqual(holder.messageBlocks.incremental.map((item = {}) => item.content), ["cur"]);
+  assert.deepEqual(
+    holder.messageBlocks.system.map((item = {}) => item.content),
+    ["sys"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.history.map((item = {}) => item.content),
+    ["hist"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.incremental.map((item = {}) => item.content),
+    ["cur"],
+  );
 });
 
 test("summary pruning clears only incremental blocks and rebuilds canonical indexes", () => {
@@ -179,17 +239,35 @@ test("summary pruning clears only incremental blocks and rebuilds canonical inde
       incremental: [summarizedIncremental, activeIncremental],
     },
   };
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
   const removedIncrementalId = getMessageId(holder.messageBlocks.incremental[0]);
 
   assert.equal(pruneSummarizedIncrementalMessages(holder), 1);
-  assert.deepEqual(holder.messages.map((item = {}) => item.content), ["sys", "latest-summary"]);
-  assert.deepEqual(holder.messageBlocks.system.map((item = {}) => item.content), ["sys"]);
-  assert.deepEqual(holder.messageBlocks.history.map((item = {}) => item.content), ["history-summary"]);
-  assert.deepEqual(holder.messageBlocks.incremental.map((item = {}) => item.content), ["latest-summary"]);
+  assert.deepEqual(
+    holder.messages.map((item = {}) => item.content),
+    ["sys", "latest-summary"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.system.map((item = {}) => item.content),
+    ["sys"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.history.map((item = {}) => item.content),
+    ["history-summary"],
+  );
+  assert.deepEqual(
+    holder.messageBlocks.incremental.map((item = {}) => item.content),
+    ["latest-summary"],
+  );
   assert.deepEqual(resolveMessagesByIds(holder, [removedIncrementalId]), []);
-  assert.equal(holder.messageStore.messages.some((item = {}) => item.content === "old-increment"), false);
-  assert.equal(holder.messageStore.messages.some((item = {}) => item.content === "history-summary"), true);
+  assert.equal(
+    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "old-increment"),
+    false,
+  );
+  assert.equal(
+    resolveCanonicalContextMessages(holder).some((item = {}) => item.content === "history-summary"),
+    true,
+  );
 });
 
 test("summary pruning preserves every unmarked incremental message byte-for-byte and in order", () => {
@@ -211,7 +289,7 @@ test("summary pruning preserves every unmarked incremental message byte-for-byte
       ],
     },
   };
-  canonicalizeMessageStore(holder);
+  canonicalizeMessageStore(attachRuntime(holder));
   const expectedIncremental = structuredClone(
     holder.messageBlocks.incremental.filter((message) => message.summarized !== true),
   );

@@ -1,3 +1,4 @@
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
@@ -5,12 +6,8 @@
  */
 
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
-import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
-import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
 
-const INTERNAL_TRANSPORT_EVENTS = new Set([
-  "turn_lifecycle_committed",
-]);
+const INTERNAL_TRANSPORT_EVENTS = new Set(["turn_lifecycle_committed"]);
 
 function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
@@ -19,10 +16,9 @@ function enrichEventData(rawData = {}, defaults = {}) {
     dialogProcessId: String(eventData?.dialogProcessId || defaults.dialogProcessId || "").trim(),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
     turnScopeId: String(eventData?.turnScopeId || defaults.turnScopeId || ""),
-    parentSessionId: resolveParentSessionId({
-      context: { parentSessionId: eventData?.parentSessionId },
-      parentSessionId: defaults.parentSessionId,
-    }),
+    parentSessionId: normalizeParentSessionId(
+      eventData?.parentSessionId || defaults.parentSessionId,
+    ),
   };
 }
 
@@ -34,7 +30,7 @@ export function createExecutionEventListener({
   turnScopeId = "",
   upstream = null,
 }) {
-  const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
+  const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);
   const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
@@ -71,7 +67,9 @@ export function createExecutionEventListener({
     sequence: Number(data?.sequence || 0),
     contentLength: String(data?.text || data?.content || "").length,
     attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
-    transferEnvelopeCount: Array.isArray(data?.transferEnvelopes) ? data.transferEnvelopes.length : 0,
+    transferEnvelopeCount: Array.isArray(data?.transferEnvelopes)
+      ? data.transferEnvelopes.length
+      : 0,
   });
 
   const forwardUpstream = ({ event, data, ts }) => {
@@ -81,10 +79,15 @@ export function createExecutionEventListener({
     const task = deliveryTail.then(async () => {
       if (shouldDiagnose) {
         appendExecutionLog({
-          userId, sessionId, parentSessionId, dialogProcessId,
+          userId,
+          sessionId,
+          parentSessionId,
+          dialogProcessId,
           event: "execution_upstream_forward_started",
-          category: "debug", type: "execution_upstream_forward_started",
-          data: diagnostic, ts: new Date().toISOString(),
+          category: "debug",
+          type: "execution_upstream_forward_started",
+          data: diagnostic,
+          ts: new Date().toISOString(),
         });
       }
       try {
@@ -96,10 +99,17 @@ export function createExecutionEventListener({
         }
         if (shouldDiagnose) {
           appendExecutionLog({
-            userId, sessionId, parentSessionId, dialogProcessId,
+            userId,
+            sessionId,
+            parentSessionId,
+            dialogProcessId,
             event: "execution_upstream_forward_completed",
-            category: "debug", type: "execution_upstream_forward_completed",
-            data: { ...diagnostic, result: result === true ? true : result === false ? false : "completed" },
+            category: "debug",
+            type: "execution_upstream_forward_completed",
+            data: {
+              ...diagnostic,
+              result: result === true ? true : result === false ? false : "completed",
+            },
             ts: new Date().toISOString(),
           });
         }
@@ -109,10 +119,15 @@ export function createExecutionEventListener({
         deliveryFailures.push(failure);
         if (shouldDiagnose) {
           appendExecutionLog({
-            userId, sessionId, parentSessionId, dialogProcessId,
+            userId,
+            sessionId,
+            parentSessionId,
+            dialogProcessId,
             event: "execution_upstream_forward_failed",
-            category: "system", type: "execution_upstream_forward_failed",
-            data: failure, ts: new Date().toISOString(),
+            category: "system",
+            type: "execution_upstream_forward_failed",
+            data: failure,
+            ts: new Date().toISOString(),
           });
         }
         return false;
@@ -122,11 +137,12 @@ export function createExecutionEventListener({
     return task;
   };
 
-  const forwardEvent = (evt = {}) => forwardUpstream({
-    event: evt?.event || "",
-    data: evt?.data || {},
-    ts: evt?.ts || new Date().toISOString(),
-  });
+  const forwardEvent = (evt = {}) =>
+    forwardUpstream({
+      event: evt?.event || "",
+      data: evt?.data || {},
+      ts: evt?.ts || new Date().toISOString(),
+    });
 
   return {
     flushPersistence: () => persistenceTail,
@@ -162,8 +178,7 @@ export function createExecutionEventListener({
           data,
           ts,
         });
-      } catch {
-      }
+      } catch {}
 
       return forwardEvent({ event, data, ts });
     },

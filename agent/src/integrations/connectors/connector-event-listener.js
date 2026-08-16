@@ -1,10 +1,10 @@
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
 import { tSystem } from "noobot-i18n/agent/system-text";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -91,7 +91,7 @@ export class ConnectorEventListener {
     this.historyStore = historyStore;
     this.rootSessionId = String(rootSessionId || "").trim();
     this.sessionId = String(sessionId || "").trim();
-    this.dialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+    this.dialogProcessId = normalizeDialogProcessId(dialogProcessId);
     this.allowUserInteraction = allowUserInteraction !== false;
     this.bridge = bridge;
   }

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { commitAuthoritativeFinalResult } from "../../../src/runtime/engine.js";
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import {
   beginAssistantMessageEventStream,
   bindAssistantMessageEventStream,
@@ -58,17 +58,19 @@ test("authoritative final event owns generated attachment envelopes before persi
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: {
-          attachmentId: "search-attachment-1",
-          sessionId: "session-1",
-          attachmentSource: "model",
+      attachments: [
+        {
+          identity: {
+            attachmentId: "search-attachment-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "search.result.txt",
+          mimeType: "text/plain",
+          size: 1301812,
         },
-        role: "primary",
-        name: "search.result.txt",
-        mimeType: "text/plain",
-        size: 1301812,
-      }],
+      ],
     },
     intent: {
       source: "tool",
@@ -117,11 +119,14 @@ test("authoritative final event owns generated attachment envelopes before persi
   const finalEvent = events.find((event) => event?.event === "authoritative_final_content");
   assert.deepEqual(finalEvent?.data?.transferEnvelopes, [transferEnvelope]);
   assert.deepEqual(
-    runtime.currentTurnMessages.toArray().find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
+    runtime.currentTurnMessages
+      .toArray()
+      .find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
     [transferEnvelope],
   );
   assert.deepEqual(
-    result.turnMessages.find((message) => message.messageId === "assistant-message-1")?.transferEnvelopes,
+    result.turnMessages.find((message) => message.messageId === "assistant-message-1")
+      ?.transferEnvelopes,
     [transferEnvelope],
   );
   assert.equal(

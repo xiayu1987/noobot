@@ -150,7 +150,7 @@ export class RunConfigResolver {
       const currentContextPolicy = isPlainObject(normalizedRunConfig?.contextPolicy)
         ? normalizedRunConfig.contextPolicy
         : {};
-      const currentContextKeys = normalizeStringArray(currentContextPolicy?.includeContextKeys);
+      const currentContextKeys = normalizeStringArray(currentContextPolicy?.promptSections);
       const mergedContextKeys = this.mergeScenarioRestrictedList({
         scenarioItems: scenarioContextKeys,
         currentItems: currentContextKeys,
@@ -158,7 +158,7 @@ export class RunConfigResolver {
       });
       resolvedRunConfig.contextPolicy = {
         ...currentContextPolicy,
-        includeContextKeys: mergedContextKeys,
+        promptSections: mergedContextKeys,
       };
     }
     return this.normalizeRunConfigToolPolicyConflicts(resolvedRunConfig);

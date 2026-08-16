@@ -13,7 +13,7 @@ import {
   shouldMarkCurrentTurnSummarizedMessage,
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "@noobot/context-protocol/summary-policy";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 
 test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {
   const oldAssistantMessage = {
@@ -223,16 +223,14 @@ test("filterSummarizedMessages excludes only summarized in one policy", () => {
     { role: "user", content: "keep me" },
     { role: "assistant", content: "old", summarized: true },
     { role: "assistant", content: "call", tool_calls: [{ id: "c1", function: { name: "x" } }] },
-    { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+    { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
     { role: "assistant", content: "keep too" },
   ];
   const result = filterSummarizedMessages(input);
-  assert.deepEqual(result.map((item) => item.content), [
-    "keep me",
-    "call",
-    "{\"ok\":true}",
-    "keep too",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["keep me", "call", '{"ok":true}', "keep too"],
+  );
 });
 
 test("filterSummarizedMessages keeps summarized current system context marker", () => {
@@ -249,33 +247,44 @@ test("filterSummarizedMessages keeps summarized current system context marker", 
     { role: "user", content: "task" },
   ];
   const result = filterSummarizedMessages(input);
-  assert.deepEqual(result.map((item) => item.content), [
-    "current system context",
-    "task",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["current system context", "task"],
+  );
 });
 
 test("system is summarized while user and assistant-without-tool-calls are not", () => {
-  assert.equal(
-    shouldMarkCurrentTurnSummarizedMessage({ role: "system", content: "note" }),
-    true,
-  );
-  assert.equal(
-    shouldMarkCurrentTurnSummarizedMessage({ role: "user", content: "ask" }),
-    false,
-  );
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage({ role: "system", content: "note" }), true);
+  assert.equal(shouldMarkCurrentTurnSummarizedMessage({ role: "user", content: "ask" }), false);
   assert.equal(
     shouldMarkCurrentTurnSummarizedMessage({ role: "assistant", content: "plain text" }),
     false,
   );
 });
 
-
 test("markCurrentTurnArraySummarized preserves only latest injected message per type", () => {
   const result = markCurrentTurnArraySummarized([
-    { role: "user", content: "old summary prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt" },
-    { role: "user", content: "old planning prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task" },
-    { role: "user", content: "new summary prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance_summary_prompt" },
+    {
+      role: "user",
+      content: "old summary prompt",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance_summary_prompt",
+    },
+    {
+      role: "user",
+      content: "old planning prompt",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "planning_task",
+    },
+    {
+      role: "user",
+      content: "new summary prompt",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance_summary_prompt",
+    },
   ]);
 
   assert.equal(result[0].summarized, true);
@@ -285,10 +294,36 @@ test("markCurrentTurnArraySummarized preserves only latest injected message per 
 
 test("markCurrentTurnModelMessagesSummarized includes restored old injections and preserves latest per type", () => {
   const messages = [
-    { type: "human", content: "old guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
-    { type: "human", content: "planning", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning", lc_kwargs: {} },
-    { type: "human", content: "new guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
-    { type: "ai", content: "", tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }], lc_kwargs: {} },
+    {
+      type: "human",
+      content: "old guidance",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance",
+      lc_kwargs: {},
+    },
+    {
+      type: "human",
+      content: "planning",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "planning",
+      lc_kwargs: {},
+    },
+    {
+      type: "human",
+      content: "new guidance",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance",
+      lc_kwargs: {},
+    },
+    {
+      type: "ai",
+      content: "",
+      tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }],
+      lc_kwargs: {},
+    },
   ];
 
   markCurrentTurnModelMessagesSummarized(messages);
@@ -302,12 +337,48 @@ test("markCurrentTurnModelMessagesSummarized includes restored old injections an
 
 test("model and store projections apply one summarization scope policy", () => {
   const source = [
-    { role: "user", content: "old guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
-    { role: "assistant", content: "", tool_calls: [{ id: "call_search", function: { name: "search", arguments: "{}" } }], lc_kwargs: {} },
-    { role: "tool", content: "search-result", tool_call_id: "call_search", toolName: "search", lc_kwargs: {} },
-    { role: "user", content: "new guidance", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "guidance", lc_kwargs: {} },
-    { role: "assistant", content: "", tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }], lc_kwargs: {} },
-    { role: "tool", content: JSON.stringify({ toolName: "task_summary", ok: true }), tool_call_id: "call_summary", toolName: "task_summary", lc_kwargs: {} },
+    {
+      role: "user",
+      content: "old guidance",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance",
+      lc_kwargs: {},
+    },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_search", function: { name: "search", arguments: "{}" } }],
+      lc_kwargs: {},
+    },
+    {
+      role: "tool",
+      content: "search-result",
+      tool_call_id: "call_search",
+      toolName: "search",
+      lc_kwargs: {},
+    },
+    {
+      role: "user",
+      content: "new guidance",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "guidance",
+      lc_kwargs: {},
+    },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }],
+      lc_kwargs: {},
+    },
+    {
+      role: "tool",
+      content: JSON.stringify({ toolName: "task_summary", ok: true }),
+      tool_call_id: "call_summary",
+      toolName: "task_summary",
+      lc_kwargs: {},
+    },
   ];
   const modelMessages = structuredClone(source);
   const store = createCurrentTurnMessagesStore(structuredClone(source));
@@ -327,16 +398,32 @@ test("model and store projections apply one summarization scope policy", () => {
 
 test("filterSummarizedMessages preserves every unsummarized injected message", () => {
   const result = filterSummarizedMessages([
-    { role: "user", content: "old relay", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "separate_model_relay:planning" },
-    { role: "user", content: "planning prompt", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "planning_task" },
-    { role: "user", content: "new relay", injectedMessage: true, injectedBy: "agent-plugin", injectedMessageType: "separate_model_relay:planning" },
+    {
+      role: "user",
+      content: "old relay",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "separate_model_relay:planning",
+    },
+    {
+      role: "user",
+      content: "planning prompt",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "planning_task",
+    },
+    {
+      role: "user",
+      content: "new relay",
+      injectedMessage: true,
+      injectedBy: "agent-plugin",
+      injectedMessageType: "separate_model_relay:planning",
+    },
     { role: "assistant", content: "normal" },
   ]);
 
-  assert.deepEqual(result.map((item) => item.content), [
-    "old relay",
-    "planning prompt",
-    "new relay",
-    "normal",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["old relay", "planning prompt", "new relay", "normal"],
+  );
 });

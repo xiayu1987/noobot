@@ -6,11 +6,8 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
-import {
-  CALLER_ROLE,
-  SESSION_ASYNC_STATUS,
-} from "../config/constants.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
 
 export class ParentAsyncTaskManager {
   constructor({ now = () => new Date().toISOString() } = {}) {
@@ -65,9 +62,7 @@ export class ParentAsyncTaskManager {
     let hasUserStopped = false;
     let allCompleted = taskList.length > 0;
     for (const taskItem of taskList) {
-      const status = (taskItem?.status || SESSION_ASYNC_STATUS.RUNNING || "")
-        .trim()
-        .toLowerCase();
+      const status = (taskItem?.status || SESSION_ASYNC_STATUS.RUNNING || "").trim().toLowerCase();
       if (status === SESSION_ASYNC_STATUS.FAILED) hasFailed = true;
       if (status === SESSION_ASYNC_STATUS.RUNNING) hasRunning = true;
       if (status === SESSION_ASYNC_STATUS.USER_STOPPED) hasUserStopped = true;
@@ -99,21 +94,17 @@ export class ParentAsyncTaskManager {
       container = {};
     }
     container.id = (container?.id ?? "").trim() || uuidv4();
-    const containerParentSessionId = normalizeParentSessionId(
-      container?.parentSessionId,
-    );
+    const containerParentSessionId = normalizeParentSessionId(container?.parentSessionId);
     const inputParentSessionId = normalizeParentSessionId(parentSessionId);
     container.parentSessionId = containerParentSessionId
       ? containerParentSessionId
       : inputParentSessionId;
     container.parentDialogProcessId =
-      (container?.parentDialogProcessId ?? "").trim() ||
-      (parentDialogProcessId ?? "").trim();
+      (container?.parentDialogProcessId ?? "").trim() || (parentDialogProcessId ?? "").trim();
     container.status =
       (container?.status || SESSION_ASYNC_STATUS.RUNNING || "").trim() ||
       SESSION_ASYNC_STATUS.RUNNING;
-    container.updatedAt =
-      (container?.updatedAt ?? "").trim() || this.now();
+    container.updatedAt = (container?.updatedAt ?? "").trim() || this.now();
     container.tasks = Array.isArray(container?.tasks) ? container.tasks : [];
     return container;
   }

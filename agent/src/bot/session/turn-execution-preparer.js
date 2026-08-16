@@ -97,7 +97,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   engine,
   { payload = {}, contextBuilder = null, abortSignal = null } = {},
 ) {
-  if (!contextBuilder || typeof contextBuilder._buildAgentContext !== "function") {
+  if (!contextBuilder || typeof contextBuilder.buildAgentContext !== "function") {
     throw new Error("stopped snapshot resume requires a compatible contextBuilder");
   }
   const runConfig =
@@ -162,7 +162,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     incrementalMessages,
     currentMessageIdentity,
   );
-  const agentContext = await contextBuilder._buildAgentContext(
+  const agentContext = await contextBuilder.buildAgentContext(
     systemMessages,
     resumedHistoryMessages,
     {

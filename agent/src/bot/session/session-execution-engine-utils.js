@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { persistSessionArtifactSnapshot } from "../../session/session-artifact-store.js";
+import { resolveMessageRole } from "@noobot/context-protocol/message-policy";
 import {
-  resolveMessageRole,
-} from "@noobot/context-protocol/message-policy";
-import { extractMessageTextContent } from "../../context/session/message-content-utils.js";
-import {
-  resolveMessageDialogProcessId,
-} from "../../context/session/dialog-process-id-resolver.js";
+  projectContextMessageIdentityMetadata,
+  resolveContextMessageContent,
+  resolveContextMessageFlags,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "@noobot/context-protocol/message-codec";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import {
@@ -39,17 +40,11 @@ export function resolvePluginOptionsFromConfig(sourceConfig = {}, pluginSelector
 export function normalizeMessageForModelRuntime(messageItem = {}) {
   const role = resolveMessageRole(messageItem);
   if (!role) return null;
-  const content = extractMessageTextContent(
-    messageItem?.content ?? messageItem?.lc_kwargs?.content ?? "",
-  );
+  const content = resolveContextMessageContent(messageItem);
   const normalized = {
     role,
     content: role === "tool" ? compactToolResultTextForModel(content) : content,
-    summarized:
-      messageItem?.summarized === true ||
-      messageItem?.lc_kwargs?.summarized === true ||
-      messageItem?.additional_kwargs?.summarized === true ||
-      messageItem?.lc_kwargs?.additional_kwargs?.summarized === true,
+    summarized: resolveContextMessageFlags(messageItem).summarized,
   };
   const noobotMessageId = getMessageId(messageItem);
   if (noobotMessageId) {
@@ -58,17 +53,9 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
       noobotMessageId,
     };
   }
-  const toolCalls = Array.isArray(messageItem?.tool_calls)
-    ? messageItem.tool_calls
-    : Array.isArray(messageItem?.lc_kwargs?.tool_calls)
-      ? messageItem.lc_kwargs.tool_calls
-      : Array.isArray(messageItem?.additional_kwargs?.tool_calls)
-        ? messageItem.additional_kwargs.tool_calls
-        : [];
+  const toolCalls = resolveContextToolCalls(messageItem);
   if (toolCalls.length) normalized.tool_calls = toolCalls;
-  const toolCallId = String(
-    messageItem?.tool_call_id || messageItem?.lc_kwargs?.tool_call_id || "",
-  ).trim();
+  const toolCallId = resolveContextToolCallId(messageItem);
   if (toolCallId) normalized.tool_call_id = toolCallId;
   const internalType = String(
     messageItem?.additional_kwargs?.noobotInternalMessageType ||
@@ -83,10 +70,7 @@ export function normalizeMessageForModelRuntime(messageItem = {}) {
       noobotInternalMessageType: internalType,
     };
   }
-  const dialogProcessId = resolveMessageDialogProcessId(messageItem);
-  if (dialogProcessId) normalized.dialogProcessId = dialogProcessId;
-  const turnScopeId = readMessageField(messageItem, "turnScopeId");
-  if (turnScopeId) normalized.turnScopeId = turnScopeId;
+  Object.assign(normalized, projectContextMessageIdentityMetadata(messageItem));
   return applyNormalizedMessageFlags(normalized, messageItem);
 }
 
@@ -101,7 +85,9 @@ export function resolveTransferEnvelopesFromMessage(message = {}) {
 export function resolveTransferEnvelopeListFromMessage(message = {}) {
   const transferEnvelopes = [
     ...(Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : []),
-    ...(Array.isArray(message?.lc_kwargs?.transferEnvelopes) ? message.lc_kwargs.transferEnvelopes : []),
+    ...(Array.isArray(message?.lc_kwargs?.transferEnvelopes)
+      ? message.lc_kwargs.transferEnvelopes
+      : []),
   ].filter(isPlainObject);
   return transferEnvelopes;
 }
@@ -134,11 +120,7 @@ export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {
   return normalized;
 }
 
-export function selectHookManager({
-  runConfig = {},
-  managerKey = "",
-  createManager = null,
-} = {}) {
+export function selectHookManager({ runConfig = {}, managerKey = "", createManager = null } = {}) {
   if (runConfig?.[managerKey] && typeof runConfig[managerKey] === "object") {
     return runConfig[managerKey];
   }

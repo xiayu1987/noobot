@@ -7,23 +7,27 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { dispatchAgentTurn } from "../../../src/bot/execution/runner/agent-dispatch.js";
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("dispatchAgentTurn accepts completed-turn summary state into the canonical store", async () => {
   const events = [];
   const runtimeEventListener = {
-    onEvent(event) { events.push(event); },
+    onEvent(event) {
+      events.push(event);
+    },
   };
   const dispatchRuntime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([{
-      messageId: "sm_tool",
-      messageUid: "sm_tool",
-      role: "tool",
-      type: "tool_result",
-      content: "result",
-      summarized: false,
-    }]),
+    currentTurnMessages: createCurrentTurnMessagesStore([
+      {
+        messageId: "sm_tool",
+        messageUid: "sm_tool",
+        role: "tool",
+        type: "tool_result",
+        content: "result",
+        summarized: false,
+      },
+    ]),
   };
 
   const result = await dispatchAgentTurn({
@@ -85,9 +89,13 @@ test("dispatchAgentTurn accepts completed-turn summary state into the canonical 
     syncLifecycleRuntimeState() {},
   });
 
-  assert.equal(result.turnMessages.find((message) => message.messageUid === "sm_tool")?.summarized, true);
   assert.equal(
-    dispatchRuntime.currentTurnMessages.toArray()
+    result.turnMessages.find((message) => message.messageUid === "sm_tool")?.summarized,
+    true,
+  );
+  assert.equal(
+    dispatchRuntime.currentTurnMessages
+      .toArray()
       .find((message) => message.messageUid === "sm_tool")?.summarized,
     true,
   );

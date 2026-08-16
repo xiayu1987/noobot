@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { toConversationMessages } from "../../src/context/session/message-converter.js";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/session-message-projection";
 
 test("toConversationMessages keeps transferEnvelopes", () => {
   const envelope = {
@@ -14,9 +14,24 @@ test("toConversationMessages keeps transferEnvelopes", () => {
     version: 2,
     transferId: "transfer-1",
     messageId: "message-1",
-    identity: { sessionId: "s1", turnScopeId: "t1", runId: "r1", producer: { type: "model", id: "model-1" } },
+    identity: {
+      sessionId: "s1",
+      turnScopeId: "t1",
+      runId: "r1",
+      producer: { type: "model", id: "model-1" },
+    },
     direction: "output",
-    payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" }, role: "primary", name: "a.md", mimeType: "text/markdown" }] },
+    payload: {
+      mode: "attachment",
+      attachments: [
+        {
+          identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+          role: "primary",
+          name: "a.md",
+          mimeType: "text/markdown",
+        },
+      ],
+    },
     intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
     meta: {},
   };
