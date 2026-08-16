@@ -29,18 +29,13 @@ function parseParamsDocument(rawText, documentName) {
   try {
     return normalizeConfigParamsDocument(JSON.parse(rawText));
   } catch (error) {
-    throw recoverableToolError(
-      `${documentName} parse failed: ${error?.message || String(error)}`,
-      { code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG },
-    );
+    throw recoverableToolError(`${documentName} parse failed: ${error?.message || String(error)}`, {
+      code: ERROR_CODE.RECOVERABLE_INVALID_USER_CONFIG,
+    });
   }
 }
 
 export class ConfigService {
-  constructor({ globalConfig = {} } = {}) {
-    this.globalConfig = globalConfig;
-  }
-
   async loadUserConfig(basePath) {
     const [rawText, workspaceConfigParamsRawText, userConfigParamsRawText] = await Promise.all([
       readFile(path.join(basePath, "config.json"), "utf8"),
@@ -59,16 +54,14 @@ export class ConfigService {
     const workspaceConfigParams = parseParamsDocument(
       workspaceConfigParamsRawText,
       "workspace config-params.json",
+    ).values;
+    const userConfigParams = parseParamsDocument(
+      userConfigParamsRawText,
+      "user config-params.json",
     );
-    const userConfigParams = parseParamsDocument(userConfigParamsRawText, "user config-params.json");
-    const systemConfigParams =
-      this.globalConfig?.configParams && typeof this.globalConfig.configParams === "object"
-        ? this.globalConfig.configParams
-        : {};
     const mergedConfigParams = mergeConfigParamLayers(
-      systemConfigParams,
       workspaceConfigParams,
-      userConfigParams,
+      userConfigParams.values,
     );
     const resolvedRaw = resolveConfigTemplates(raw, {
       lookup: createConfigValueLookup(process.env, mergedConfigParams),

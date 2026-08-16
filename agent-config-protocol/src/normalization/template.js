@@ -6,6 +6,7 @@
 
 import { isPlainObject } from "../utils.js";
 import { normalizeConfigParamKey } from "./config-params.js";
+import { AgentConfigProtocolError, CONFIG_ERROR_CODE } from "../contract/errors.js";
 
 export const UNRESOLVED_TEMPLATE_POLICY = Object.freeze({
   EMPTY: "empty",
@@ -52,6 +53,9 @@ export function resolveConfigTemplates(
   { lookup, unresolved = UNRESOLVED_TEMPLATE_POLICY.EMPTY } = {},
 ) {
   if (typeof lookup !== "function") throw new TypeError("config template lookup is required");
+  if (!Object.values(UNRESOLVED_TEMPLATE_POLICY).includes(unresolved)) {
+    throw new TypeError(`unsupported unresolved config template policy: ${unresolved}`);
+  }
   const resolve = (value) => {
     if (typeof value === "string") {
       return value.replace(/\$\{([A-Z0-9_]+)\}/g, (token, key) => {
@@ -59,7 +63,10 @@ export function resolveConfigTemplates(
         if (resolved !== undefined) return String(resolved);
         if (unresolved === UNRESOLVED_TEMPLATE_POLICY.PRESERVE) return token;
         if (unresolved === UNRESOLVED_TEMPLATE_POLICY.ERROR) {
-          throw new TypeError(`unresolved config template: ${key}`);
+          throw new AgentConfigProtocolError(`unresolved config template: ${key}`, {
+            code: CONFIG_ERROR_CODE.UNRESOLVED_TEMPLATE,
+            details: { key },
+          });
         }
         return "";
       });

@@ -7,8 +7,10 @@ import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
+  collectConfigTemplateKeys,
   ensureModelProviderInConfigFile,
   migrateConfigFileToCurrentProtocol,
+  normalizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
 
@@ -268,29 +270,19 @@ export function createDesktopConfigManager({
     return workspaceExamplePath;
   }
 
-  function collectTemplateVariables(input, keys = new Set()) {
-    if (typeof input === "string") {
-      for (const match of input.matchAll(/\$\{([A-Z0-9_]+)\}/g)) keys.add(match[1]);
-    } else if (Array.isArray(input)) {
-      input.forEach((item) => collectTemplateVariables(item, keys));
-    } else if (isPlainObject(input)) {
-      Object.values(input).forEach((value) => collectTemplateVariables(value, keys));
-    }
-    return keys;
-  }
-
   function ensureConfigParamsCatalog({ workspaceRootPath, configFiles = [] } = {}) {
-    const keys = new Set();
-    for (const filePath of configFiles) collectTemplateVariables(readJsonFile(filePath, {}), keys);
+    const keys = collectConfigTemplateKeys(
+      ...configFiles.map((filePath) => readJsonFile(filePath, {})),
+    );
     const filePath = path.join(workspaceRootPath, "config-params.json");
-    const current = readJsonFile(filePath, {}) || {};
-    const values = isPlainObject(current.values) ? { ...current.values } : {};
-    const descriptions = isPlainObject(current.descriptions) ? { ...current.descriptions } : {};
-    for (const key of Array.from(keys).sort((a, b) => a.localeCompare(b))) {
+    const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
+    const values = { ...current.values };
+    for (const key of keys)
       if (!Object.prototype.hasOwnProperty.call(values, key)) values[key] = "";
-      if (!Object.prototype.hasOwnProperty.call(descriptions, key)) descriptions[key] = "";
-    }
-    writeJsonFile(filePath, { values, descriptions });
+    writeJsonFile(
+      filePath,
+      normalizeConfigParamsDocument({ values, descriptions: current.descriptions }),
+    );
     return filePath;
   }
 
@@ -303,7 +295,7 @@ export function createDesktopConfigManager({
     const fields = ["api_key", "base_url"];
     const modelParams = new Map();
     fields.forEach((field, fieldOrder) => {
-      for (const key of collectTemplateVariables(selectedProvider[field])) {
+      for (const key of collectConfigTemplateKeys(selectedProvider[field])) {
         if (!modelParams.has(key)) modelParams.set(key, { field, fieldOrder });
       }
     });
@@ -311,8 +303,8 @@ export function createDesktopConfigManager({
   }
 
   function getMissingRequiredConfigParams(configParamsPath, globalConfigPath) {
-    const payload = readJsonFile(configParamsPath, {}) || {};
-    const values = isPlainObject(payload.values) ? payload.values : {};
+    const payload = normalizeConfigParamsDocument(readJsonFile(configParamsPath, {}) || {});
+    const values = payload.values;
     const modelParams = collectSelectedModelConfigParams(globalConfigPath);
     return Object.entries(values)
       .filter(([, value]) => String(value ?? "").trim() === "")
@@ -407,19 +399,12 @@ export function createDesktopConfigManager({
 
   function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
     const filePath = path.join(workspaceRootPath, "config-params.json");
-    const payload = readJsonFile(filePath, {}) || {};
-    const currentValues = isPlainObject(payload.values) ? { ...payload.values } : {};
-    const descriptions = isPlainObject(payload.descriptions) ? { ...payload.descriptions } : {};
-    for (const [key, value] of Object.entries(values || {})) {
-      const normalizedKey = String(key || "")
-        .trim()
-        .toUpperCase();
-      if (!normalizedKey) continue;
-      currentValues[normalizedKey] = String(value ?? "").trim();
-      if (!Object.prototype.hasOwnProperty.call(descriptions, normalizedKey))
-        descriptions[normalizedKey] = "";
-    }
-    writeJsonFile(filePath, { values: currentValues, descriptions });
+    const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
+    const next = normalizeConfigParamsDocument({
+      values: { ...current.values, ...(isPlainObject(values) ? values : {}) },
+      descriptions: current.descriptions,
+    });
+    writeJsonFile(filePath, next);
   }
 
   function syncJsonFileIncremental({ templateFilePath, targetFilePath } = {}) {

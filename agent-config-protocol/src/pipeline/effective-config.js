@@ -10,6 +10,7 @@ import { sanitizeUserConfig } from "../policy/user-override.js";
 
 const RETIRED_CONFIG_PATHS = Object.freeze(
   [
+    ["configParams"],
     ["attachments", "attachment_models"],
     ["session", "use_last_running_task_range"],
     ["session", "use_last_completed_task_range"],
@@ -43,8 +44,9 @@ function deletePath(root, segments) {
 
 export function migrateConfigFileToCurrentProtocol(config = {}) {
   if (!isPlainObject(config)) return config;
-  for (const segments of RETIRED_CONFIG_PATHS) deletePath(config, segments);
-  return config;
+  const migrated = structuredClone(config);
+  for (const segments of RETIRED_CONFIG_PATHS) deletePath(migrated, segments);
+  return migrated;
 }
 
 const USER_OVERRIDE_POLICY = {

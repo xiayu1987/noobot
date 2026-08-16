@@ -11,8 +11,8 @@ import {
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
+  buildConfigParamCatalog as buildProtocolConfigParamCatalog,
   collectConfigTemplateKeys as scanConfigTemplateKeys,
-  normalizeConfigParamKey,
   normalizeConfigParamsDocument,
 } from "@noobot/agent-config-protocol";
 
@@ -34,33 +34,26 @@ export function createConfigParamsService({
   }
 
   function normalizeConfigParams(input = {}) {
-    const values = normalizeConfigParamsDocument(input);
-    const rawDescriptions =
-      input?.descriptions && typeof input.descriptions === "object"
-        ? input.descriptions
-        : {};
-    const descriptions = Object.fromEntries(
-      Object.entries(rawDescriptions)
-        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
-        .filter(([key]) => Boolean(key)),
-    );
-    return { values, descriptions };
+    return normalizeConfigParamsDocument(input);
   }
 
   function writeConfigReadFailedEvent({ event, filePath, error, data = {} } = {}) {
-    void writeRoutedRuntimeEvent({
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-      level: "warn",
-      event,
-      data: {
-        fileName: path.basename(String(filePath || "")),
-        filePathLength: String(filePath || "").length,
-        ...data,
+    void writeRoutedRuntimeEvent(
+      {
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+        level: "warn",
+        event,
+        data: {
+          fileName: path.basename(String(filePath || "")),
+          filePathLength: String(filePath || "").length,
+          ...data,
+        },
+        error,
       },
-      error,
-    }, runtimeEventsConfig);
+      runtimeEventsConfig,
+    );
   }
 
   async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
@@ -137,8 +130,7 @@ export function createConfigParamsService({
   }
 
   async function collectConfigTemplateKeys() {
-    const globalConfigJson =
-      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     const templateBasePath =
       typeof templateRootPath === "function"
         ? templateRootPath()
@@ -153,26 +145,14 @@ export function createConfigParamsService({
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) return [];
     const userConfigFilePath = path.join(workspaceRootPath(), normalizedUserId, "config.json");
-    const globalConfigJson =
-      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
     return scanConfigTemplateKeys(globalConfigJson, userConfigJson);
   }
 
   async function collectConfigTemplateParamCatalog() {
     const payload = await readWorkspaceConfigParams({ createIfMissing: true });
-    const allKeys = Object.keys(payload?.values || {})
-      .concat(Object.keys(payload?.descriptions || {}))
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-    const dedupedKeys = Array.from(new Set(allKeys)).sort((leftKey, rightKey) =>
-      leftKey.localeCompare(rightKey),
-    );
-    const descriptionMap = payload?.descriptions || {};
-    return dedupedKeys.map((key) => ({
-      key,
-      description: String(descriptionMap?.[key] || "").trim(),
-    }));
+    return buildProtocolConfigParamCatalog(payload);
   }
 
   function buildConfigParamCatalog({
@@ -181,22 +161,7 @@ export function createConfigParamsService({
     values = {},
     extraKeys = [],
   } = {}) {
-    const mergedKeys = Array.from(
-      new Set(
-        [
-          ...(Array.isArray(keys) ? keys : []),
-          ...Object.keys(descriptions || {}),
-          ...Object.keys(values || {}),
-          ...(Array.isArray(extraKeys) ? extraKeys : []),
-        ]
-          .map((item) => String(item || "").trim())
-          .filter(Boolean),
-      ),
-    ).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
-    return mergedKeys.map((key) => ({
-      key,
-      description: String(descriptions?.[key] || "").trim(),
-    }));
+    return buildProtocolConfigParamCatalog({ keys, descriptions, values, extraKeys });
   }
 
   return {

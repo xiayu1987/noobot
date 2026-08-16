@@ -84,8 +84,18 @@ for (const relativePath of [
   await assertAbsent(relativePath);
 
 const agentSourceFiles = await filesUnder("agent/src");
+const agentScriptFiles = await filesUnder("agent/scripts");
 const serviceSourceFiles = await filesUnder("service/services");
-for (const file of [...agentSourceFiles, ...serviceSourceFiles]) {
+const serviceConfigScriptFiles = await filesUnder("service/scripts/project-launcher");
+const desktopConfigFiles = await filesUnder("client/shared/electron/runtime");
+const protocolConsumerFiles = [
+  ...agentSourceFiles,
+  ...agentScriptFiles,
+  ...serviceSourceFiles,
+  ...serviceConfigScriptFiles,
+  ...desktopConfigFiles,
+];
+for (const file of protocolConsumerFiles) {
   const source = await readFile(path.join(ROOT, file), "utf8");
   if (/\b(?:ToolPolicyManager|applyRunConfigToolPolicy|_applyRunConfigToolPolicy)\b/.test(source)) {
     violations.push(`${file}: obsolete parallel tool-policy entry is forbidden`);
@@ -99,6 +109,9 @@ for (const file of [...agentSourceFiles, ...serviceSourceFiles]) {
   if (source.includes("[A-Z0-9_]+") && source.includes("${")) {
     violations.push(`${file}: config template grammar must use the protocol`);
   }
+  if (/\b(?:globalConfig|rawGlobalConfig)\??\.configParams\b/.test(source)) {
+    violations.push(`${file}: configParams must come from the explicit resolution context`);
+  }
 }
 
 if (violations.length) {
@@ -106,6 +119,6 @@ if (violations.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `[agent-config-protocol-boundary] ok (${protocolFiles.length + agentSourceFiles.length + serviceSourceFiles.length} files)`,
+    `[agent-config-protocol-boundary] ok (${protocolFiles.length + protocolConsumerFiles.length} files)`,
   );
 }

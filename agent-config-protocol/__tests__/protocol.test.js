@@ -18,6 +18,18 @@ import {
   resolveToolBindings,
   validateConfigSnapshot,
   normalizeKnownConfigKeys,
+  normalizeConfigParamsDocument,
+  mergeConfigParamLayers,
+  buildConfigParamCatalog,
+  createConfigValueLookup,
+  resolveConfigTemplates,
+  UNRESOLVED_TEMPLATE_POLICY,
+  CONFIG_ERROR_CODE,
+  createConfigBuildResult,
+  applyConfigMigrations,
+  validateEffectiveConfig,
+  createPluginConfigPlan,
+  selectModelAlias,
   resolveMultimodalDefaultModelSelection,
 } from "../src/index.js";
 test("config snapshot is versioned and validated", () => {
@@ -259,6 +271,7 @@ test("model provider insertion uses the model library only when the alias is mis
 
 test("current config migration removes every retired config path and prunes empty parents", () => {
   const config = {
+    configParams: { API_KEY: "legacy" },
     attachments: {
       attachment_models: { image: "legacy" },
       limits: { max_file_size_bytes: 1024 },
@@ -286,8 +299,10 @@ test("current config migration removes every retired config path and prunes empt
     },
   };
 
-  assert.equal(migrateConfigFileToCurrentProtocol(config), config);
-  assert.deepEqual(config, {
+  const migrated = migrateConfigFileToCurrentProtocol(config);
+  assert.notEqual(migrated, config);
+  assert.equal(config.configParams.API_KEY, "legacy");
+  assert.deepEqual(migrated, {
     attachments: {
       limits: { max_file_size_bytes: 1024 },
       storage: { root: "runtime/attachments" },
@@ -300,6 +315,146 @@ test("current config migration removes every retired config path and prunes empt
       read_file: { enabled: true },
     },
   });
-  assert.equal(migrateConfigFileToCurrentProtocol(config), config);
-  assert.deepEqual(config.attachments.limits, { max_file_size_bytes: 1024 });
+  assert.deepEqual(migrateConfigFileToCurrentProtocol(migrated), migrated);
+  assert.deepEqual(migrated.attachments.limits, { max_file_size_bytes: 1024 });
+});
+
+test("config params document is the only values, descriptions, and catalog authority", () => {
+  const document = normalizeConfigParamsDocument({
+    values: { api_key: " key ", empty: "  " },
+    descriptions: { api_key: " API credential ", region: " Region " },
+  });
+  assert.deepEqual(document, {
+    values: { API_KEY: "key", EMPTY: "" },
+    descriptions: { API_KEY: "API credential", REGION: "Region", EMPTY: "" },
+  });
+  assert.deepEqual(
+    buildConfigParamCatalog({
+      values: document.values,
+      descriptions: document.descriptions,
+      extraKeys: ["tenant"],
+    }),
+    [
+      { key: "API_KEY", description: "API credential" },
+      { key: "EMPTY", description: "" },
+      { key: "REGION", description: "Region" },
+      { key: "TENANT", description: "" },
+    ],
+  );
+  assert.deepEqual(
+    mergeConfigParamLayers({ API_KEY: "workspace", REGION: "cn" }, { api_key: "user" }),
+    { API_KEY: "user", REGION: "cn" },
+  );
+});
+
+test("config params document rejects ambiguous, invalid, and unknown facts", () => {
+  for (const document of [
+    { values: [] },
+    { descriptions: [] },
+    { values: { "API-KEY": "x" } },
+    { values: { api_key: "x", API_KEY: "y" } },
+    { values: {}, extra: true },
+  ]) {
+    assert.throws(
+      () => normalizeConfigParamsDocument(document),
+      (error) => error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
+    );
+  }
+});
+
+test("template resolution has one explicit source order and unresolved policy", () => {
+  const lookup = createConfigValueLookup(
+    { API_KEY: "environment" },
+    { API_KEY: "params", REGION: "cn" },
+  );
+  assert.deepEqual(resolveConfigTemplates({ key: "${API_KEY}", region: "${REGION}" }, { lookup }), {
+    key: "environment",
+    region: "cn",
+  });
+  assert.equal(
+    resolveConfigTemplates("${MISSING}", {
+      lookup,
+      unresolved: UNRESOLVED_TEMPLATE_POLICY.PRESERVE,
+    }),
+    "${MISSING}",
+  );
+  assert.throws(
+    () =>
+      resolveConfigTemplates("${MISSING}", {
+        lookup,
+        unresolved: UNRESOLVED_TEMPLATE_POLICY.ERROR,
+      }),
+    (error) => error?.code === CONFIG_ERROR_CODE.UNRESOLVED_TEMPLATE,
+  );
+  assert.throws(
+    () => resolveConfigTemplates("${MISSING}", { lookup, unresolved: "fallback" }),
+    /unsupported unresolved config template policy/,
+  );
+});
+
+test("build, migration, and validation pipeline exposes one result contract", async () => {
+  const input = { nested: { value: 1 } };
+  const migrationResult = await applyConfigMigrations({
+    config: input,
+    migrations: [
+      {
+        name: "increment",
+        migrate: ({ config }) => ({ nested: { value: config.nested.value + 1 } }),
+      },
+    ],
+  });
+  assert.deepEqual(input, { nested: { value: 1 } });
+  assert.deepEqual(migrationResult, {
+    config: { nested: { value: 2 } },
+    appliedMigrations: ["increment"],
+  });
+  assert.deepEqual(
+    await validateEffectiveConfig({
+      resolvedConfig: migrationResult.config,
+      validators: [() => ({ warnings: ["reviewed"] })],
+    }),
+    ["reviewed"],
+  );
+  assert.deepEqual(
+    createConfigBuildResult({
+      rawConfig: input,
+      resolvedConfig: migrationResult.config,
+      metadata: { migrations: ["increment"], warnings: ["reviewed"] },
+    }).metadata,
+    { migrations: ["increment"], warnings: ["reviewed"] },
+  );
+  assert.throws(
+    () => createConfigBuildResult({ rawConfig: { configParams: {} }, resolvedConfig: {} }),
+    /resolution context/,
+  );
+});
+
+test("plugin plan and model selection are deterministic protocol projections", () => {
+  const plan = createPluginConfigPlan({
+    runConfig: {
+      selectedPlugins: ["workflow", "harness"],
+      disabledPlugins: ["workflow"],
+      plugins: { harness: { trace: false } },
+    },
+    effectiveConfig: { plugins: { harness: { enabled: true, timeoutMs: 1000 } } },
+    manifests: [
+      { pluginId: "workflow", defaults: { enabled: true } },
+      { pluginId: "harness", defaults: { trace: true } },
+    ],
+  });
+  assert.deepEqual(plan.enabledPluginIds, ["harness"]);
+  assert.deepEqual(plan.plugins, [
+    { pluginId: "harness", options: { trace: false, enabled: true, timeoutMs: 1000 } },
+  ]);
+  assert.deepEqual(
+    selectModelAlias({
+      selectedModel: "",
+      scenario: "programming",
+      effectiveConfig: {
+        defaultProvider: "default",
+        scenarios: { definitions: { programming: { model: "coder" } } },
+      },
+    }),
+    { alias: "coder", source: "scenario" },
+  );
 });

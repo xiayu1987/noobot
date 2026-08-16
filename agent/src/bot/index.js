@@ -31,7 +31,7 @@ export class BotManager {
     this.skill = new SkillService(globalConfig);
 
     this.workspaceService = new WorkspaceService({ globalConfig });
-    this.configService = new ConfigService({ globalConfig });
+    this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({
       globalConfig,
       workspaceService: this.workspaceService,
