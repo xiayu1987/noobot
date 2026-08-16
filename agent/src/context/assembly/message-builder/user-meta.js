@@ -8,7 +8,6 @@ import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/sess
 import { tEngine } from "../../../runtime/i18n-adapter.js";
 import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
-import { normalizeAttachmentParsedResultMeta } from "../../../artifacts/index.js";
 import {
   projectContextMessageIdentityMetadata,
   deriveContextMessageProjectionId as deriveMessageProjectionId,
@@ -44,7 +43,6 @@ export function buildHumanMessageContent(msg = {}, fallbackAttachments = []) {
 }
 
 function buildUserMetaAttachmentInfo(attachmentItem = {}) {
-  const parsedResult = normalizeAttachmentParsedResultMeta(attachmentItem);
   const size = Number(attachmentItem?.size);
   return {
     attachmentId: String(attachmentItem?.attachmentId || "").trim(),
@@ -57,9 +55,6 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
     sandboxPath: String(attachmentItem?.sandboxPath || "").trim(),
     downloadUrl: String(attachmentItem?.downloadUrl || "").trim(),
     previewUrl: String(attachmentItem?.previewUrl || "").trim(),
-    parsedResultUrl: String(attachmentItem?.parsedResultUrl || "").trim(),
-    parsedResultName: String(attachmentItem?.parsedResultName || "").trim(),
-    parsedResultAttachmentId: String(attachmentItem?.parsedResultAttachmentId || "").trim(),
     transferFilePath: String(attachmentItem?.transferFilePath || "").trim(),
     ...(String(attachmentItem?.clientAttachmentId || "").trim()
       ? { clientAttachmentId: String(attachmentItem.clientAttachmentId).trim() }
@@ -68,7 +63,6 @@ function buildUserMetaAttachmentInfo(attachmentItem = {}) {
     ...(typeof attachmentItem?.isSandbox === "boolean"
       ? { isSandbox: attachmentItem.isSandbox }
       : {}),
-    ...(parsedResult ? { parsedResult } : {}),
   };
 }
 

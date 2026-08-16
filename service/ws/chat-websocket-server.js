@@ -138,19 +138,21 @@ export function registerChatWebSocketServer(
         return false;
       }
       eventSequence += 1;
-      const enrichedData = {
-        ...(data && typeof data === "object" ? data : {}),
-        seq: eventSequence,
-        dialogProcessId: String(
-          authoritativeEvent?.dialogProcessId || data?.dialogProcessId || "",
-        ).trim(),
-        sessionId: String(
-          authoritativeEvent?.sessionId || data?.route?.sessionId || data?.sessionId || "",
-        ).trim(),
-        turnScopeId: String(
-          authoritativeEvent?.turnScopeId || data?.turnScopeId || "",
-        ).trim(),
-      };
+      const enrichedData = eventName === "attachment_lifecycle"
+        ? data
+        : {
+            ...(data && typeof data === "object" ? data : {}),
+            seq: eventSequence,
+            dialogProcessId: String(
+              authoritativeEvent?.dialogProcessId || data?.dialogProcessId || "",
+            ).trim(),
+            sessionId: String(
+              authoritativeEvent?.sessionId || data?.route?.sessionId || data?.sessionId || "",
+            ).trim(),
+            turnScopeId: String(
+              authoritativeEvent?.turnScopeId || data?.turnScopeId || "",
+            ).trim(),
+          };
       const recordSendFailure = (error) => {
         void recordServiceWebSocketSendFailure({
           sessionLogConfig,

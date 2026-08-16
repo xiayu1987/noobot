@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { buildViewMessage } from "../../../../../src/modules/chat/model/messageModel.js";
 
 describe("messageModel attachment normalization", () => {
-  it("expands nested parsedResult into preview/download fields for office attachments", () => {
+  it("preserves the canonical parsed-result relation for office attachments", () => {
     const viewMessage = buildViewMessage(
       {
         role: "user",
@@ -15,17 +15,27 @@ describe("messageModel attachment normalization", () => {
         attachments: [
           {
             attachmentId: "source-a",
+            sessionId: "session-a",
             name: "AI 体系现状概览.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             size: 1407731,
             attachmentSource: "user",
-            parsedResult: {
-              attachmentId: "parsed-a",
-              sessionId: "session-a",
-              attachmentSource: "model",
-              path: "/workspace/admin/runtime/attach/scoped/session-a/model/parsed-a.md",
-              relativePath: "runtime/attach/scoped/session-a/model/parsed-a.md",
-            },
+            relations: [{
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "source-a",
+                sessionId: "session-a",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "parsed-a",
+                sessionId: "session-a",
+                attachmentSource: "model",
+              },
+              name: "parsed-a.md",
+              mimeType: "text/markdown",
+              createdAt: "2026-01-01T00:00:00.000Z",
+            }],
           },
         ],
       },
@@ -36,21 +46,14 @@ describe("messageModel attachment normalization", () => {
     expect(viewMessage.attachments[0]).toEqual(
       expect.objectContaining({
         attachmentId: "source-a",
-        parsedResultAttachmentId: "parsed-a",
-        parsedResultPath: "/workspace/admin/runtime/attach/scoped/session-a/model/parsed-a.md",
-        parsedResultRelativePath: "runtime/attach/scoped/session-a/model/parsed-a.md",
-        parsedResultSessionId: "session-a",
-        parsedResultAttachmentSource: "model",
-        parsedResultUrl:
-          "/api/internal/attachment/admin/parsed-a?sessionId=session-a&attachmentSource=model",
-        parsedResultName: "parsed-a.md",
-      }),
-    );
-    expect(viewMessage.attachments[0].parsedResult).toEqual(
-      expect.objectContaining({
-        attachmentId: "parsed-a",
-        sessionId: "session-a",
-        attachmentSource: "model",
+        relations: [expect.objectContaining({
+          relationType: "parsed_result",
+          targetIdentity: {
+            attachmentId: "parsed-a",
+            sessionId: "session-a",
+            attachmentSource: "model",
+          },
+        })],
       }),
     );
   });

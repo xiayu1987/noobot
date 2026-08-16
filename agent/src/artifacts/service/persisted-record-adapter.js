@@ -5,6 +5,8 @@
  */
 
 import {
+  ATTACHMENT_RECORD_SCHEMA,
+  ATTACHMENT_RECORD_VERSION,
   parsePersistedAttachmentRecord,
 } from "@noobot/attachment-protocol";
 import { filePath as path } from "@noobot/path-resolver";
@@ -35,12 +37,11 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
   const now = new Date().toISOString();
   const createdAt = safeStr(record?.createdAt) || now;
   const updatedAt = safeStr(record?.updatedAt || record?.createdAt) || createdAt;
-  const parsed = record?.parsedResult && typeof record.parsedResult === "object"
-    ? record.parsedResult
-    : null;
   const ref = storageRef(basePath, record?.path || record?.relativePath);
   if (!ref) return null;
   const persisted = {
+    schema: ATTACHMENT_RECORD_SCHEMA,
+    version: ATTACHMENT_RECORD_VERSION,
     identity,
     descriptor: {
       identity,
@@ -56,55 +57,11 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
       ...(record?.generatedByModel === true ? { generatedByModel: true } : {}),
     },
     storageRef: { kind: "attachment-store", ref },
+    relations: Array.isArray(record?.relations) ? record.relations : [],
     createdAt,
     updatedAt,
   };
-  if (parsed && safeStr(parsed.attachmentId)) {
-    const parsedIdentity = {
-      attachmentId: safeStr(parsed.attachmentId),
-      sessionId: safeStr(parsed.sessionId || identity.sessionId),
-      attachmentSource: safeStr(parsed.attachmentSource || "parsed"),
-    };
-    persisted.parsedResultRef = {
-      identity: parsedIdentity,
-      ...(safeStr(parsed.name) ? { name: safeStr(parsed.name) } : {}),
-      ...(safeStr(parsed.mimeType) ? { mimeType: safeStr(parsed.mimeType) } : {}),
-      ...(Number.isSafeInteger(Number(parsed.size)) ? { size: Number(parsed.size) } : {}),
-      ...(storageRef(basePath, parsed.path) ? {
-        storageRef: { kind: "parsed-attachment-store", ref: storageRef(basePath, parsed.path) },
-      } : {}),
-      ...(safeStr(parsed.tool) ? { tool: safeStr(parsed.tool) } : {}),
-      ...(safeStr(parsed.updatedAt) ? { updatedAt: safeStr(parsed.updatedAt) } : {}),
-    };
-  }
   return parsePersistedAttachmentRecord(persisted);
-}
-
-/**
- * Session/runtime display metadata is deliberately not part of the protocol
- * persisted record. Keep it in the index view projection instead.
- */
-export function toAttachmentDisplayProjection(record = {}) {
-  const projection = {};
-  for (const field of [
-    "sandboxPath",
-    "downloadUrl",
-    "previewUrl",
-    "parsedResultUrl",
-    "parsedResultName",
-    "parsedResultAttachmentId",
-    "transferFilePath",
-  ]) {
-    const value = safeStr(record?.[field]);
-    if (value) projection[field] = value;
-  }
-  if (typeof record?.isSandbox === "boolean") projection.isSandbox = record.isSandbox;
-  return projection;
-}
-
-export function applyAttachmentDisplayProjection(record, projection) {
-  if (!record || !projection || typeof projection !== "object") return record;
-  return { ...record, ...toAttachmentDisplayProjection(projection) };
 }
 
 export function fromPersistedAttachmentRecord(basePath, persisted) {
@@ -126,20 +83,7 @@ export function fromPersistedAttachmentRecord(basePath, persisted) {
     attachmentSource: identity.attachmentSource,
     generatedByModel: descriptor.generatedByModel === true,
     generationSource: descriptor.generationSource || "",
+    relations: record.relations,
   };
-  if (record.parsedResultRef) {
-    const parsed = record.parsedResultRef;
-    output.parsedResult = {
-      attachmentId: parsed.identity.attachmentId,
-      sessionId: parsed.identity.sessionId,
-      attachmentSource: parsed.identity.attachmentSource,
-      ...(parsed.name ? { name: parsed.name } : {}),
-      ...(parsed.mimeType ? { mimeType: parsed.mimeType } : {}),
-      ...(parsed.size === undefined ? {} : { size: parsed.size }),
-      ...(parsed.storageRef ? { path: resolveStoragePath(basePath, parsed.storageRef.ref), relativePath: parsed.storageRef.ref } : {}),
-      ...(parsed.tool ? { tool: parsed.tool } : {}),
-      ...(parsed.updatedAt ? { updatedAt: parsed.updatedAt } : {}),
-    };
-  }
   return output;
 }

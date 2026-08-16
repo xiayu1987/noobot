@@ -61,7 +61,7 @@ import {
 } from "../../debug/loggers/stateMachineLogger.js";
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
 import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
-import { handleAttachmentParsedStreamEvent } from "../runtime/engine/streamHandlers.js";
+import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
 
 export function useReconnectReplay({
   sessions,
@@ -458,7 +458,7 @@ export function useReconnectReplay({
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
       isDeletedTurn,
-      onAttachmentParsed: (payload) => handleAttachmentParsedStreamEvent({
+      onAttachmentLifecycle: (payload) => handleAttachmentLifecycleStreamEvent({
         data: payload,
         activeSession,
         makeViewMessage,

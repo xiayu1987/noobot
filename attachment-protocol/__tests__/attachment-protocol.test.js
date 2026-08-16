@@ -17,6 +17,11 @@ import {
   projectAttachmentIdentity,
   parseAttachmentUiView,
   parsePersistedAttachmentRecord,
+  ATTACHMENT_RECORD_SCHEMA,
+  ATTACHMENT_RECORD_VERSION,
+  ATTACHMENT_RELATION_TYPE,
+  mergeAttachmentsByIdentity,
+  reduceAttachmentLifecycle,
   parseRuntimeAttachmentRef,
 } from "../src/index.js";
 
@@ -86,6 +91,8 @@ test("descriptor is metadata and cannot smuggle path access fields", () => {
 
 test("persistence, runtime, access and UI models stay separate", () => {
   const record = parsePersistedAttachmentRecord({
+    schema: ATTACHMENT_RECORD_SCHEMA,
+    version: ATTACHMENT_RECORD_VERSION,
     identity,
     descriptor: descriptor(),
     storageRef: { kind: "attachment-store", ref: "scope/att-1" },
@@ -109,7 +116,23 @@ test("persistence, runtime, access and UI models stay separate", () => {
   );
   assert.throws(
     () =>
+      parseAttachmentUiView({
+        identity,
+        name: "report.pdf",
+        mimeType: "application/pdf",
+        parsedResultAccess: {
+          identity: { ...identity, attachmentId: "parsed-1" },
+          capability: "preview",
+          href: "/attachments/parsed-1",
+        },
+      }),
+    /unknown_attachment_ui_view_field:parsedResultAccess/,
+  );
+  assert.throws(
+    () =>
       parsePersistedAttachmentRecord({
+        schema: ATTACHMENT_RECORD_SCHEMA,
+        version: ATTACHMENT_RECORD_VERSION,
         identity,
         descriptor: { ...descriptor(), identity: { ...identity, attachmentId: "att-2" } },
         storageRef: { kind: "attachment-store", ref: "scope/att-1" },
@@ -121,6 +144,12 @@ test("persistence, runtime, access and UI models stay separate", () => {
 });
 
 test("lifecycle events require stable identity and versioned message identity", () => {
+  const relation = {
+    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+    sourceIdentity: identity,
+    targetIdentity: { ...identity, attachmentId: "parsed-1", attachmentSource: "parsed" },
+    createdAt: "2026-08-07T00:00:00.000Z",
+  };
   const event = createAttachmentLifecycleEvent({
     eventType: ATTACHMENT_EVENT_TYPE.PARSED,
     eventVersion: 1,
@@ -128,11 +157,16 @@ test("lifecycle events require stable identity and versioned message identity", 
     identity,
     status: ATTACHMENT_LIFECYCLE.PARSED,
     occurredAt: "2026-08-07T00:00:00.000Z",
+    relation,
   });
   assert.equal(event.identity.attachmentId, "att-1");
   assert.throws(
     () => createAttachmentLifecycleEvent({ ...event, eventVersion: 2 }),
     /unsupported_attachment_event_version/,
+  );
+  assert.throws(
+    () => createAttachmentLifecycleEvent({ ...event, relation: undefined }),
+    /attachment_parsed_relation_required/,
   );
   assert.throws(
     () => createAttachmentLifecycleEvent({ ...event, identity: { ...identity, sessionId: "" } }),
@@ -148,4 +182,77 @@ test("attachment set update distinguishes unchanged from explicit delete-all", (
     /duplicate_attachment_identity/,
   );
   assert.throws(() => createAttachmentSetUpdate({}), /attachments_must_be_array_or_undefined/);
+});
+
+test("persisted records are explicitly versioned and relations are source-bound", () => {
+  assert.throws(
+    () => parsePersistedAttachmentRecord({ identity }),
+    /unsupported_attachment_record_schema/,
+  );
+  const relation = {
+    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+    sourceIdentity: identity,
+    targetIdentity: { ...identity, attachmentId: "parsed-1", attachmentSource: "parsed" },
+    createdAt: "2026-08-07T00:00:00.000Z",
+  };
+  const record = parsePersistedAttachmentRecord({
+    schema: ATTACHMENT_RECORD_SCHEMA,
+    version: 1,
+    identity,
+    descriptor: descriptor(),
+    storageRef: { kind: "attachment-store", ref: "scope/att-1" },
+    relations: [relation],
+    createdAt: relation.createdAt,
+    updatedAt: relation.createdAt,
+  });
+  assert.equal(record.relations[0].targetIdentity.attachmentId, "parsed-1");
+});
+
+test("lifecycle reducer is the unique deterministic transition authority", () => {
+  const base = { eventVersion: 1, identity, occurredAt: "2026-08-07T00:00:00.000Z" };
+  assert.throws(
+    () =>
+      createAttachmentLifecycleEvent({
+        ...base,
+        eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+        status: ATTACHMENT_LIFECYCLE.DELETED,
+        messageId: "bad",
+      }),
+    /attachment_event_status_mismatch/,
+  );
+  const received = createAttachmentLifecycleEvent({
+    ...base,
+    eventType: ATTACHMENT_EVENT_TYPE.RECEIVED,
+    status: ATTACHMENT_LIFECYCLE.RECEIVED,
+    messageId: "1",
+  });
+  const persisted = createAttachmentLifecycleEvent({
+    ...base,
+    eventType: ATTACHMENT_EVENT_TYPE.PERSISTED,
+    status: ATTACHMENT_LIFECYCLE.PERSISTED,
+    messageId: "2",
+  });
+  const state = reduceAttachmentLifecycle(
+    reduceAttachmentLifecycle(undefined, received),
+    persisted,
+  );
+  assert.equal(state.status, ATTACHMENT_LIFECYCLE.PERSISTED);
+  assert.equal(reduceAttachmentLifecycle(state, persisted), state);
+  assert.throws(
+    () => reduceAttachmentLifecycle(state, { ...received, messageId: "3" }),
+    /invalid_attachment_lifecycle_transition/,
+  );
+});
+
+test("identity merge requires an explicit conflict policy", () => {
+  assert.throws(
+    () => mergeAttachmentsByIdentity([identity], [identity]),
+    /attachment_merge_conflict_policy_required/,
+  );
+  assert.deepEqual(
+    mergeAttachmentsByIdentity([identity], [{ ...identity, name: "new" }], {
+      onConflict: (_old, incoming) => incoming,
+    }),
+    [{ ...identity, name: "new" }],
+  );
 });

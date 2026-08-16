@@ -33,7 +33,6 @@ export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";
 export const TURN_TERMINAL_RESOLUTION_PROTOCOL_VERSION = 2;
 export const TURN_TERMINAL_RESOLVED_EVENT = "turn.terminal_resolved";
-export const ATTACHMENT_PARSED_EVENT = "attachment_parsed";
 
 const EVENT_VALUES = new Set(TURN_EVENT_VALUES);
 const EVENT_STATE = TURN_EVENT_STATE;
@@ -405,38 +404,6 @@ export function validateSessionEvent(event = {}) {
     return { valid: false, recognized: false, errors: ["unsupported_session_event"] };
   }
   return { ...validateTurnLifecycleEnvelope(event), recognized: true };
-}
-
-export function validateAttachmentParsedEvent(event = {}) {
-  const errors = [];
-  if (clean(event?.eventType) !== ATTACHMENT_PARSED_EVENT)
-    errors.push("invalid_attachment_parsed_event_type");
-  if (!clean(event?.sessionId)) errors.push("missing_session_id");
-  if (!clean(event?.turnScopeId)) errors.push("missing_turn_scope_id");
-  if (!Array.isArray(event?.attachments) || event.attachments.length === 0) {
-    errors.push("missing_attachments");
-  } else {
-    for (const attachment of event.attachments) {
-      if (!attachment || typeof attachment !== "object") {
-        errors.push("invalid_attachment");
-        continue;
-      }
-      if (!clean(attachment.attachmentId)) errors.push("missing_attachment_id");
-      if (!clean(attachment.sessionId)) errors.push("missing_attachment_session_id");
-      if (!clean(attachment.attachmentSource)) errors.push("missing_attachment_source");
-      if (!attachment.parsedResult || typeof attachment.parsedResult !== "object") {
-        errors.push("missing_parsed_result");
-      } else {
-        if (!clean(attachment.parsedResult.attachmentId))
-          errors.push("missing_parsed_result_attachment_id");
-        if (!clean(attachment.parsedResult.sessionId))
-          errors.push("missing_parsed_result_session_id");
-        if (!clean(attachment.parsedResult.attachmentSource))
-          errors.push("missing_parsed_result_source");
-      }
-    }
-  }
-  return { valid: errors.length === 0, recognized: true, errors };
 }
 
 const TERMINAL_STATE_VALUES = new Set(TURN_TERMINAL_STATES);

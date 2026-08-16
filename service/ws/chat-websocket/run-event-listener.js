@@ -16,7 +16,7 @@ import {
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
-import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import { createAttachmentLifecycleEvent, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 function assertCanonicalAttachments(attachments = []) {
   const source = Array.isArray(attachments) ? attachments : [];
@@ -242,19 +242,8 @@ function routeAttachmentEvent({
   parentDialogProcessId,
   resolveTurnScopeId,
 }) {
-  if (eventName === "attachment_parsed") {
-    const parentOwnedData = childRunEvent
-      ? parentOwnsChildRunEventData(eventData, {
-          rootSessionId: sessionId,
-          parentDialogProcessId,
-        })
-      : eventData;
-    return sendEvent("attachment_parsed", {
-      ...parentOwnedData,
-      sessionId: String(sessionId || ""),
-      turnScopeId: resolveTurnScopeId(),
-      attachments: assertCanonicalAttachments(eventData?.attachments),
-    });
+  if (eventName === "attachment_lifecycle") {
+    return sendEvent("attachment_lifecycle", createAttachmentLifecycleEvent(eventData));
   }
   const parentOwnedData = childRunEvent
     ? parentOwnsChildRunEventData(eventData, {
@@ -416,7 +405,7 @@ export function createRunEventListener({
           resolveTurnScopeId,
         });
       }
-      if (eventName === "attachment_parsed") {
+      if (eventName === "attachment_lifecycle") {
         return routeAttachmentEvent({
           eventName,
           eventData,

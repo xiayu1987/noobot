@@ -48,7 +48,13 @@ test("session display summary should keep canonical attachment fields", () => {
         messageId: "assistant-canonical",
         presentationMessageId: "assistant-canonical",
         turnScopeId: "turn-canonical",
-        attachments: [{ attachmentId: "att-canonical", name: "canonical.txt", mimeType: "text/plain" }],
+        attachments: [{
+          attachmentId: "att-canonical",
+          sessionId: "s-attachments",
+          attachmentSource: "model",
+          name: "canonical.txt",
+          mimeType: "text/plain",
+        }],
       },
     ],
   });
@@ -79,13 +85,22 @@ test("session display summary keeps rich attachment fields for preview and parse
             sandboxPath: "/sandbox/report.docx",
             previewUrl: "/api/attachments/att-rich/preview",
             downloadUrl: "/api/attachments/att-rich/download",
-            parsedResult: {
-              attachmentId: "att-parsed",
+            relations: [{
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "att-rich",
+                sessionId: "s-rich-attachments",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "att-parsed",
+                sessionId: "s-rich-attachments",
+                attachmentSource: "model",
+              },
               name: "report.md",
               mimeType: "text/markdown",
-              path: "/workspace/report.md",
-              relativePath: "runtime/attach/s-rich-attachments/model/report.md",
-            },
+              createdAt: "2026-08-16T00:00:00.000Z",
+            }],
           },
         ],
       },
@@ -102,13 +117,22 @@ test("session display summary keeps rich attachment fields for preview and parse
     relativePath: "runtime/attach/s-rich-attachments/user/report.docx",
     sandboxPath: "/sandbox/report.docx",
     path: "/workspace/report.docx",
-    parsedResult: {
-      attachmentId: "att-parsed",
+    relations: [{
+      relationType: "parsed_result",
+      sourceIdentity: {
+        attachmentId: "att-rich",
+        sessionId: "s-rich-attachments",
+        attachmentSource: "user",
+      },
+      targetIdentity: {
+        attachmentId: "att-parsed",
+        sessionId: "s-rich-attachments",
+        attachmentSource: "model",
+      },
       name: "report.md",
-      path: "/workspace/report.md",
-      relativePath: "runtime/attach/s-rich-attachments/model/report.md",
       mimeType: "text/markdown",
-    },
+      createdAt: "2026-08-16T00:00:00.000Z",
+    }],
     downloadUrl: "/api/attachments/att-rich/download",
     previewUrl: "/api/attachments/att-rich/preview",
   });
@@ -284,6 +308,8 @@ test("session artifact persistence should normalize attachment fields before wri
             attachments: [
               {
                 attachmentId: "att-canonical",
+                sessionId: "s-attachments",
+                attachmentSource: "user",
                 name: "canonical.txt",
                 mimeType: "text/plain",
               },

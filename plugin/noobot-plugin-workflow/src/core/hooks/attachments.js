@@ -7,8 +7,8 @@
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import {
-  attachmentIdentityKey,
   projectAttachmentIdentity,
+  mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
 import {
   createAttachmentReference,
@@ -18,52 +18,21 @@ import {
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 
-function canonicalAttachmentKey(attachment = {}) {
-  return attachmentIdentityKey(projectAttachmentIdentity(attachment));
-}
-
 function assertTransferAttachmentIdentity(attachment = {}) {
   return projectAttachmentIdentity(attachment);
 }
 
 export function mergeAttachments(existing = [], incoming = []) {
-  const merged = Array.isArray(existing) ? existing.slice() : [];
-  const indexByKey = new Map();
-  merged.forEach((item, index) => indexByKey.set(canonicalAttachmentKey(item), index));
-  for (const item of Array.isArray(incoming) ? incoming : []) {
-    if (!item || typeof item !== "object") continue;
-    const key = canonicalAttachmentKey(item);
-    if (indexByKey.has(key)) {
-      const index = indexByKey.get(key);
-      merged[index] = { ...merged[index], ...item };
-      continue;
-    }
-    merged.push(item);
-    indexByKey.set(key, merged.length - 1);
-  }
-  return merged;
+  return mergeAttachmentsByIdentity(existing, incoming, {
+    onConflict: (current, next) => ({ ...current, ...next }),
+  });
 }
 
 export function mergeAttachmentReferences(existing = [], incoming = []) {
-  const merged = Array.isArray(existing) ? existing.slice() : [];
-  const indexByKey = new Map();
-  merged.forEach((reference, index) => {
-    const identity = reference?.identity;
-    indexByKey.set(attachmentIdentityKey(identity), index);
+  return mergeAttachmentsByIdentity(existing, incoming, {
+    selectIdentity: (reference) => reference.identity,
+    onConflict: (current, next) => ({ ...current, ...next, identity: next.identity }),
   });
-  for (const reference of Array.isArray(incoming) ? incoming : []) {
-    if (!reference || typeof reference !== "object") continue;
-    const identity = reference.identity;
-    const key = attachmentIdentityKey(identity);
-    if (indexByKey.has(key)) {
-      const index = indexByKey.get(key);
-      merged[index] = { ...merged[index], ...reference, identity };
-      continue;
-    }
-    merged.push(reference);
-    indexByKey.set(key, merged.length - 1);
-  }
-  return merged;
 }
 
 export function resolveWorkflowInputAttachments(ctx = {}) {
@@ -92,20 +61,16 @@ export function isAllUserAttachmentRef(ref = "") {
 export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}) {
   const userAttachments = resolveWorkflowInputAttachments(ctx);
   if (!userAttachments.length) return [];
-  const canonicalUserAttachments = userAttachments.map((attachment) => ({
-    attachment,
-    key: canonicalAttachmentKey(attachment),
-  }));
   const refs = normalizeAttachmentRefs(semanticNode?.attachments || []);
   if (!refs.length) return [];
-  if (refs.some(isAllUserAttachmentRef)) return canonicalUserAttachments.map(({ attachment }) => attachment);
+  if (refs.some(isAllUserAttachmentRef)) return userAttachments;
   const selected = [];
   for (const ref of refs) {
-    const matches = canonicalUserAttachments.filter(({ attachment }) => (
+    const matches = userAttachments.filter((attachment) => (
       String(attachment?.attachmentId || "").trim() === ref
     ));
     if (matches.length > 1) throw new Error(`ambiguous_attachment_id:${ref}`);
-    if (matches.length === 1) selected.push(matches[0].attachment);
+    if (matches.length === 1) selected.push(matches[0]);
   }
   return mergeAttachments([], selected);
 }

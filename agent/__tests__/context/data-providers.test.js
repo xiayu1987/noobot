@@ -158,7 +158,7 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
   );
 });
 
-test("resolveAttachments does not interpret historical attachment aliases", async () => {
+test("resolveAttachments does not infer a canonical identity from an incomplete attachment", async () => {
   let ingestCalled = false;
   const result = await resolveAttachments({
     attachmentService: {
@@ -171,16 +171,9 @@ test("resolveAttachments does not interpret historical attachment aliases", asyn
     userMessageAttachments: [
       {
         attachmentId: "existing",
+        name: "existing.txt",
+        mimeType: "text/plain",
         path: "/tmp/existing.txt",
-        session_id: "session_alias",
-        attachment_source: "user",
-        type: "text/plain",
-        sandboxViewPath: "/workspace/existing.txt",
-        sandboxEnabled: true,
-        parsedResult: {
-          id: "parsed_alias",
-          updated_at: "2026-07-11T00:00:00.000Z",
-        },
       },
     ],
     userId: "u1",

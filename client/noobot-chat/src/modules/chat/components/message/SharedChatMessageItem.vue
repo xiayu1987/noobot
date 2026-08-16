@@ -8,6 +8,7 @@ import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
+import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import {
   getMessageDialogProcessId,
@@ -117,10 +118,8 @@ watch(
   () =>
     displayedAttachments.value.map((attachment) => ({
       attachmentId: String(attachment?.attachmentId || "").trim(),
-      hasParsedResult: Boolean(attachment?.parsedResult),
-      parsedResultAttachmentId: String(
-        attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "",
-      ).trim(),
+      parsedResultTargetIdentity:
+        resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
     })),
   (attachments) => {
     logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {

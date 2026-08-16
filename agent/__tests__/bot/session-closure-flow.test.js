@@ -74,6 +74,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         return attachments.map((attachment, index) => ({
           attachmentId: attachment.attachmentId || attachment.id || `input-${index}`,
           sessionId,
+          attachmentSource: "user",
           name: attachment.name || "input",
           mimeType: attachment.mimeType || attachment.type || "application/octet-stream",
           path: attachment.path || `/tmp/noobot-test/input-${index}`,
@@ -164,7 +165,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             attachments: [
               {
                 attachmentId: "att-out-1",
-                sessionId: "",
+                sessionId,
                 attachmentSource: "model_generated",
                 name: "result.png",
                 mimeType: "image/png",

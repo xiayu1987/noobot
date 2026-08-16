@@ -114,5 +114,5 @@ export function isOfficeMime(mimeType = "") {
 }
 
 export function hasParsedResult(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem).hasIdentity;
+  return Boolean(resolveParsedResultAccessMeta(attachmentItem));
 }

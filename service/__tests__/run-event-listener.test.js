@@ -5,6 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  ATTACHMENT_EVENT_TYPE,
+  ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_RELATION_TYPE,
+  createAttachmentLifecycleEvent,
+} from "@noobot/attachment-protocol";
 
 import { createRunEventListener } from "../ws/chat-websocket/run-event-listener.js";
 
@@ -113,7 +119,7 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
   });
 });
 
-test("run-event-listener forwards attachment events only with canonical identity", () => {
+test("run-event-listener validates and forwards versioned attachment lifecycle facts", () => {
   const frames = [];
   const listener = createRunEventListener({
     sendEvent: (event, data) => { frames.push({ event, data }); return true; },
@@ -122,18 +128,34 @@ test("run-event-listener forwards attachment events only with canonical identity
     registerActiveRun: () => {},
     getCurrentRunMeta: () => ({ turnScopeId: "turn-1" }),
   });
-  const attachment = {
+  const identity = {
     attachmentId: "att-1",
     sessionId: "root-session",
     attachmentSource: "user",
-    name: "a.txt",
   };
+  const lifecycleEvent = createAttachmentLifecycleEvent({
+    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+    eventVersion: 1,
+    messageId: "attachment-event-1",
+    identity,
+    status: ATTACHMENT_LIFECYCLE.PARSED,
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    turnScopeId: "turn-1",
+    relation: {
+      relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+      sourceIdentity: identity,
+      targetIdentity: {
+        attachmentId: "parsed-1",
+        sessionId: "root-session",
+        attachmentSource: "model",
+      },
+      createdAt: "2026-08-16T00:00:00.000Z",
+    },
+  });
 
-  listener.onEvent({ event: "attachment_parsed", data: { attachments: [attachment] } });
-  listener.onEvent({ event: "attachments_saved", data: { attachments: [attachment] } });
+  listener.onEvent({ event: "attachment_lifecycle", data: lifecycleEvent });
 
-  assert.deepEqual(frames.map(({ event }) => event), ["attachment_parsed", "attachments"]);
-  assert.deepEqual(frames.map(({ data }) => data.attachments), [[attachment], [attachment]]);
+  assert.deepEqual(frames, [{ event: "attachment_lifecycle", data: lifecycleEvent }]);
 });
 
 test("run-event-listener rejects attachment events with incomplete identity", () => {

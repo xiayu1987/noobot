@@ -275,10 +275,7 @@ export async function replaceTurn({
       delete replacementBaseMessage.message_id;
       delete replacementBaseMessage.id;
       delete replacementBaseMessage.messageUid;
-      const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(
-        replacedUserMessage?.attachments,
-        attachments,
-      );
+      const nextAttachments = normalizeIncomingAttachmentsForSessionMessage(attachments);
       const newMessage = normalizeMessageEntity(
         {
           ...replacementBaseMessage,

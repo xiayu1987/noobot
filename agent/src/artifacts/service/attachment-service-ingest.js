@@ -28,15 +28,6 @@ import {
 import { buildPublicRecord, normalizeExtension } from "./record-builder.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
-function resolveAttachmentIsSandbox(...sources) {
-  for (const source of sources) {
-    if (!source || typeof source !== "object" || Array.isArray(source)) continue;
-    if (typeof source.isSandbox === "boolean") return source.isSandbox;
-    if (typeof source.sandboxEnabled === "boolean") return source.sandboxEnabled;
-  }
-  return undefined;
-}
-
 function requireArtifactEntries(items, label) {
   return items.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
@@ -209,7 +200,7 @@ export async function ingestAttachments(
         name,
         mimeType: normalizedMime,
         contentBytes: bytes,
-        isSandbox: resolveAttachmentIsSandbox(item),
+        isSandbox: typeof item.isSandbox === "boolean" ? item.isSandbox : undefined,
         clientAttachmentId,
         contentSha256,
       });
@@ -264,10 +255,8 @@ export async function ingestGeneratedArtifacts(
             ? item.turnScope
             : turnScope,
         turnScopeId: safeStr(item?.turnScopeId || turnScopeId),
-        dialogProcessId: safeStr(
-          item?.dialogProcessId || item?.dialog_process_id || dialogProcessId,
-        ),
-        isSandbox: resolveAttachmentIsSandbox(item, item?.meta),
+        dialogProcessId: safeStr(item?.dialogProcessId || dialogProcessId),
+        isSandbox: typeof item?.isSandbox === "boolean" ? item.isSandbox : undefined,
       });
       saved.push(record);
     }

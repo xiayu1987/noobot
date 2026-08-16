@@ -343,9 +343,21 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
     (item) => item?.descriptor?.name === file.name || item?.name === file.name,
   );
   expect(source).toBeTruthy();
-  const parsedResult = source.parsedResult || {
-    ...(source.parsedResultRef || {}),
-    ...(source.parsedResultRef?.identity || {}),
+  const parsedResultRelation = source.relations?.find(
+    (relation) => relation?.relationType === "parsed_result",
+  );
+  expect(parsedResultRelation).toMatchObject({
+    relationType: "parsed_result",
+    sourceIdentity: source.identity,
+    targetIdentity: {
+      attachmentId: expect.any(String),
+      sessionId: expect.any(String),
+      attachmentSource: "model",
+    },
+  });
+  const parsedResult = {
+    ...parsedResultRelation,
+    ...parsedResultRelation.targetIdentity,
   };
   expect(parsedResult).toMatchObject({
     attachmentId: expect.any(String),

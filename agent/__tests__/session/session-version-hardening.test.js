@@ -63,7 +63,13 @@ const canonical = (id = "a1") => ({
   mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   size: 321,
   path: `/workspace/${id}.docx`,
-  parsedResult: { attachmentId: `${id}-parsed`, path: `/workspace/${id}.md`, status: "completed" },
+  relations: [{
+    relationType: "parsed_result",
+    sourceIdentity: { attachmentId: id, sessionId: "s1", attachmentSource: "user" },
+    targetIdentity: { attachmentId: `${id}-parsed`, sessionId: "s1", attachmentSource: "model" },
+    mimeType: "text/markdown",
+    createdAt: "2026-08-16T00:00:00.000Z",
+  }],
 });
 
 test("commitTurn increments structural version and preserves canonical attachment round-trip", async () => {

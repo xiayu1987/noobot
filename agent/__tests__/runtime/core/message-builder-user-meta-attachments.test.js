@@ -209,16 +209,8 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
       "/workspace/admin/runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
     previewUrl: "/preview/att-rich",
     downloadUrl: "/download/att-rich",
-    parsedResultUrl: "/download/parsed-rich",
-    parsedResultName: "AI 体系现状概览.txt",
-    parsedResultAttachmentId: "parsed-rich",
     transferFilePath: "runtime/attach/scoped/session-rich/user/att-rich/AI 体系现状概览.docx",
     size: 1407731,
-    parsedResult: {
-      attachmentId: "parsed-rich",
-      path: "/workspace/admin/runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
-      relativePath: "runtime/attach/scoped/session-rich/user/parsed-rich/AI 体系现状概览.txt",
-    },
   };
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
@@ -254,11 +246,7 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
   assert.equal(attachment.sandboxPath.includes("att-rich"), true);
   assert.equal(attachment.previewUrl, "/preview/att-rich");
   assert.equal(attachment.downloadUrl, "/download/att-rich");
-  assert.equal(attachment.parsedResultUrl, "/download/parsed-rich");
-  assert.equal(attachment.parsedResultName, "AI 体系现状概览.txt");
-  assert.equal(attachment.parsedResultAttachmentId, "parsed-rich");
   assert.equal(attachment.transferFilePath.includes("att-rich"), true);
-  assert.equal(attachment.parsedResult.attachmentId, "parsed-rich");
 });
 
 test("buildContextMessages does not copy current-turn attachments into historical user metadata", () => {

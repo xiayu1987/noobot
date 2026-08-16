@@ -3,11 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  findMatchingAttachmentMeta,
-  mergeAttachmentMetaPreferRich,
-  readAttachIndex,
-} from "../../artifacts/index.js";
+import { readAttachIndex } from "../../artifacts/index.js";
+import { findAttachmentByIdentity } from "@noobot/attachment-protocol";
 import { filePath as path } from "@noobot/path-resolver";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
@@ -63,14 +60,13 @@ export async function enrichUserInputAttachmentsFromIndex(engine, {
   const indexedAttachments = Object.values(index?.attachments || {}).filter(
     (item) => item && typeof item === "object" && !Array.isArray(item),
   );
-  const richCandidates = [
-    ...(Array.isArray(existingAttachments) ? existingAttachments : []),
-    ...indexedAttachments,
-  ];
-  if (!richCandidates.length) return sourceAttachments;
+  const sessionAttachments = Array.isArray(existingAttachments) ? existingAttachments : [];
   return sourceAttachments.map((attachmentItem) => {
-    const match = findMatchingAttachmentMeta(attachmentItem, richCandidates);
-    return match ? mergeAttachmentMetaPreferRich(match, attachmentItem) : attachmentItem;
+    if (!attachmentItem?.attachmentId || !attachmentItem?.sessionId || !attachmentItem?.attachmentSource) return attachmentItem;
+    const indexed = findAttachmentByIdentity(indexedAttachments, attachmentItem);
+    if (indexed) return { ...attachmentItem, ...indexed };
+    const persistedSnapshot = findAttachmentByIdentity(sessionAttachments, attachmentItem);
+    return persistedSnapshot ? { ...attachmentItem, ...persistedSnapshot } : attachmentItem;
   });
 }
 

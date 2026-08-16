@@ -193,6 +193,7 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
           attachments: [
             {
               attachmentId: "att-ordinary",
+              sessionId: "s1",
               attachmentSource: "model",
               generatedByModel: true,
               name: "image.png",

@@ -6,12 +6,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useLocale } from "noobot-chat/plugin-api/locale";
-import {
-  resolveBaseName,
-  resolveParsedResultAccessMeta,
-} from "noobot-chat/plugin-api/attachment-domain";
+import { resolveParsedResultAccessMeta } from "noobot-chat/plugin-api/attachment-domain";
 import {
   attachmentIdentityKey,
+  mergeAttachmentsByIdentity,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 import { BaseAttachmentFileCard, BaseFileCardList } from "noobot-chat/plugin-api/ui";
@@ -41,15 +39,13 @@ const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
   dedupeAttachments(
     attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin")
-      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
+      .filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin"),
   ),
 );
 const pluginAttachments = computed(() =>
   dedupeAttachments(
     attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin")
-      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
+      .filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin"),
   ),
 );
 
@@ -61,89 +57,20 @@ function resolveAttachmentOwnerType(attachmentItem = {}) {
 }
 
 function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
-  const merged = { ...existingItem, ...incomingItem };
-  for (const field of [
-    "attachmentId",
-    "previewUrl",
-    "downloadUrl",
-    "parsedResultUrl",
-    "parsedResultName",
-    "parsedResultAttachmentId",
-    "sessionId",
-    "attachmentSource",
-    "source",
-    "mimeType",
-    "name",
-  ]) {
-    const incomingValue = incomingItem?.[field];
-    const existingValue = existingItem?.[field];
-    if (
-      (incomingValue === undefined || incomingValue === null || String(incomingValue).trim() === "") &&
-      existingValue !== undefined &&
-      existingValue !== null &&
-      String(existingValue).trim() !== ""
-    ) {
-      merged[field] = existingValue;
-    }
-  }
-  if (existingItem?.parsedResult && !incomingItem?.parsedResult) merged.parsedResult = existingItem.parsedResult;
-  if (existingItem?.parsedResult && incomingItem?.parsedResult) {
-    merged.parsedResult = mergeAttachmentDisplayMeta(existingItem.parsedResult, incomingItem.parsedResult);
-  }
-  return merged;
+  void existingItem;
+  return incomingItem;
 }
 
 function dedupeAttachments(list = []) {
-  const out = [];
-  const indexByIdentity = new Map();
-  for (const attachmentItem of Array.isArray(list) ? list : []) {
-    let identityKey = "";
-    try {
-      identityKey = attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
-    } catch {
-      continue;
-    }
-    const existingIndex = indexByIdentity.get(identityKey);
-    if (existingIndex === undefined) {
-      out.push(attachmentItem);
-      const nextIndex = out.length - 1;
-      indexByIdentity.set(identityKey, nextIndex);
-      continue;
-    }
-    out[existingIndex] = mergeAttachmentDisplayMeta(out[existingIndex] || {}, attachmentItem);
-    indexByIdentity.set(identityKey, existingIndex);
-  }
-  return out;
-}
-
-function resolveParsedResultUrl(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  }).url;
+  return mergeAttachmentsByIdentity([], Array.isArray(list) ? list : [], {
+    onConflict: mergeAttachmentDisplayMeta,
+  });
 }
 
 function hasParsedResultIdentity(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem, {
+  return Boolean(resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
-  }).hasIdentity;
-}
-
-function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
-  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  });
-  const parsedResultPath = parsedResult.path;
-  const parsedResultRelativePath = parsedResult.relativePath;
-  const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
-  const parsedResultName = parsedResult.name ||
-    resolveBaseName(parsedResultRelativePath) ||
-    resolveBaseName(parsedResultPath);
-  if (!parsedResultUrl && !parsedResultName) return attachmentItem;
-  return {
-    ...attachmentItem,
-    ...(parsedResultUrl ? { parsedResultUrl } : {}),
-    ...(parsedResultName ? { parsedResultName } : {}),
-  };
+  }));
 }
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
@@ -168,6 +95,7 @@ function emitPreviewParsedResult(attachmentItem = {}) {
   const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
   });
+  if (!parsedResult) return;
   const url = parsedResult.url;
   if (!url) return;
   emit("preview-resolved", {
@@ -185,6 +113,7 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
   });
+  if (!parsedResult) return;
   const url = parsedResult.url;
   if (!url) return;
   emit("download", {

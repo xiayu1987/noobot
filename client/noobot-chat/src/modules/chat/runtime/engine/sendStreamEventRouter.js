@@ -99,7 +99,7 @@ function routePostProjectionEvent(event, data, context) {
     ignoredSubSessionEvent,
   } = context;
   if (ignoredSubSessionEvent) return true;
-  if (event !== StreamEventEnum.ATTACHMENT_PARSED && !isEventForCurrentTurn(data || {}, botMessage))
+  if (event !== StreamEventEnum.ATTACHMENT_LIFECYCLE && !isEventForCurrentTurn(data || {}, botMessage))
     return true;
   if (
     isUserStoppedEvent(event, data || {}) &&

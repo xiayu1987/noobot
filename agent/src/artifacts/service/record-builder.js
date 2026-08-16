@@ -6,11 +6,11 @@
 
 import { filePath as path } from "@noobot/path-resolver";
 
-import { DEFAULT_ATTACHMENT_SESSION_ID, DEFAULT_ATTACHMENT_SOURCE, DEFAULT_MIME_TYPE, MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
+import { DEFAULT_MIME_TYPE, MIME_TO_EXTENSION, MAX_EXTENSION_LENGTH } from "../constants.js";
 import {
   normalizeAttachmentOwnerMeta,
-  normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
+  projectCanonicalAttachmentIdentity,
 } from "../meta-ops.js";
 import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
 
@@ -19,11 +19,11 @@ export function normalizeRelativePath(basePath, absolutePath) {
 }
 
 export function buildPublicRecord(basePath, record) {
+  const identity = projectCanonicalAttachmentIdentity(record);
   const owner = normalizeAttachmentOwnerMeta(record);
   const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
-  const parsedResult = normalizeAttachmentParsedResultMeta(record);
   return {
-    attachmentId: safeStr(record.attachmentId),
+    attachmentId: identity.attachmentId,
     ...(safeStr(record.clientAttachmentId) ? { clientAttachmentId: safeStr(record.clientAttachmentId) } : {}),
     ...(safeStr(record.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
     name: safeStr(record.name),
@@ -32,14 +32,14 @@ export function buildPublicRecord(basePath, record) {
     path: safeStr(record.path),
     relativePath: safeStr(record.relativePath) || normalizeRelativePath(basePath, safeStr(record.path)),
     createdAt: safeStr(record.createdAt, new Date().toISOString()),
-    sessionId: safeStr(record.sessionId, DEFAULT_ATTACHMENT_SESSION_ID),
-    attachmentSource: safeStr(record.attachmentSource, DEFAULT_ATTACHMENT_SOURCE),
+    sessionId: identity.sessionId,
+    attachmentSource: identity.attachmentSource,
     generatedByModel: record?.generatedByModel === true,
     generationSource: safeStr(record.generationSource),
     ...(typeof record?.isSandbox === "boolean" ? { isSandbox: record.isSandbox } : {}),
     ...(owner ? { owner } : {}),
     ...(turnScope ? { turnScope } : {}),
-    ...(parsedResult ? { parsedResult } : {}),
+    relations: Array.isArray(record?.relations) ? record.relations : [],
   };
 }
 

@@ -8,101 +8,23 @@ import {
   getMessageParentDialogProcessId,
 } from "./messageIdentity.js";
 import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
+  assertUniqueAttachmentIdentities,
+  mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
-
-function canonicalAttachmentKey(attachmentItem = {}) {
-  return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
-}
-
-export function mergeAttachmentMetaFields(existingItem = {}, incomingItem = {}) {
-  const existing = existingItem && typeof existingItem === "object" ? existingItem : {};
-  const incoming = incomingItem && typeof incomingItem === "object" ? incomingItem : {};
-  const merged = { ...existing, ...incoming };
-
-  for (const field of [
-    "attachmentId",
-    "url",
-    "previewUrl",
-    "thumbnailUrl",
-    "contentUrl",
-    "sourceUrl",
-    "downloadUrl",
-    "parsedResultUrl",
-    "parsedResultName",
-    "parsedResultAttachmentId",
-    "sessionId",
-    "attachmentSource",
-    "source",
-    "mimeType",
-    "name",
-    "path",
-    "relativePath",
-    "sandboxPath",
-    "transferFilePath",
-    "parsedResultPath",
-    "parsedResultRelativePath",
-    "parsedResultSessionId",
-    "parsedResultAttachmentSource",
-  ]) {
-    const incomingValue = incoming[field];
-    const existingValue = existing[field];
-    if (
-      (incomingValue === undefined || incomingValue === null || String(incomingValue).trim() === "") &&
-      existingValue !== undefined &&
-      existingValue !== null &&
-      String(existingValue).trim() !== ""
-    ) {
-      merged[field] = existingValue;
-    }
-  }
-  if (existing.parsedResult && !incoming.parsedResult) merged.parsedResult = existing.parsedResult;
-  if (incoming.parsedResult && existing.parsedResult) {
-    merged.parsedResult = mergeAttachmentMetaFields(existing.parsedResult, incoming.parsedResult);
-  }
-  return merged;
-}
 
 export function mergeAttachments(existing = [], incoming = []) {
   const existingList = Array.isArray(existing) ? existing : [];
   const incomingList = Array.isArray(incoming) ? incoming : [];
-  existingList.forEach(canonicalAttachmentKey);
-  if (!incomingList.length) return existingList;
-  const merged = [...existingList];
-  const indexByKey = new Map();
-  existingList.forEach((attachmentItem, index) => {
-    const attachmentKey = canonicalAttachmentKey(attachmentItem);
-    if (!indexByKey.has(attachmentKey)) indexByKey.set(attachmentKey, index);
+  return mergeAttachmentsByIdentity(existingList, incomingList, {
+    onConflict: (_current, authoritativeIncoming) => authoritativeIncoming,
   });
-  for (const attachmentItem of incomingList) {
-    const attachmentKey = canonicalAttachmentKey(attachmentItem);
-    if (indexByKey.has(attachmentKey)) {
-      const existingIndex = indexByKey.get(attachmentKey);
-      const existingItem = merged[existingIndex] || {};
-      merged[existingIndex] = mergeAttachmentMetaFields(existingItem, attachmentItem);
-      continue;
-    }
-    merged.push(attachmentItem);
-    indexByKey.set(attachmentKey, merged.length - 1);
-  }
-  return merged;
 }
 
 export function mergeAttachmentSnapshot(existing = [], snapshot = []) {
-  const existingList = Array.isArray(existing) ? existing : [];
+  if (!Array.isArray(existing)) throw new TypeError("existing attachments must be an array");
   const snapshotList = Array.isArray(snapshot) ? snapshot : [];
-  const existingByKey = new Map();
-  for (const attachmentItem of existingList) {
-    const key = canonicalAttachmentKey(attachmentItem);
-    if (!existingByKey.has(key)) existingByKey.set(key, attachmentItem);
-  }
-  return snapshotList.map((snapshotItem) => {
-    const existingItem = existingByKey.get(canonicalAttachmentKey(snapshotItem));
-    return existingItem
-      ? mergeAttachmentMetaFields(existingItem, snapshotItem)
-      : snapshotItem;
-  });
+  assertUniqueAttachmentIdentities(snapshotList);
+  return snapshotList;
 }
 
 export function flattenSessionMessages(sessionDocs = []) {

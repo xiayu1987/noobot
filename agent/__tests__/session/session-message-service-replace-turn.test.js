@@ -226,7 +226,7 @@ test("SessionMessageService.replaceTurn mutates only the owning lifecycle aggreg
   assert.deepEqual(Object.keys(child.getSession().turnLifecycle.turns), ["child-turn"]);
 });
 
-test("SessionMessageService.replaceTurn preserves rich attachment fields when payload is raw", async () => {
+test("SessionMessageService.replaceTurn persists only the incoming canonical attachment projection", async () => {
   const richAttachment = {
     attachmentId: "att-rich",
     name: "report.docx",
@@ -237,7 +237,6 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
     path: "/workspace/att-rich.docx",
     relativePath: "runtime/attach/s1/user/att-rich.docx",
     sandboxPath: "/workspace/att-rich.docx",
-    parsedResult: { attachmentId: "parsed-rich", path: "/workspace/parsed-rich.md" },
   };
   const { service, saved } = createService({
     initialSession: baseSession({
@@ -279,17 +278,25 @@ test("SessionMessageService.replaceTurn preserves rich attachment fields when pa
   });
 
   assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages[0].attachments[0], richAttachment);
+  assert.deepEqual(saved[0].messages[0].attachments[0], {
+    attachmentId: "att-rich",
+    sessionId: "s1",
+    attachmentSource: "user",
+    name: "report.docx",
+    mimeType: richAttachment.mimeType,
+    size: 123,
+  });
 });
 
 test("SessionMessageService.replaceTurn rejects attachments without stable identity", async () => {
   const richAttachment = {
     attachmentId: "att-rich",
+    sessionId: "s1",
+    attachmentSource: "user",
     name: "report.docx",
     mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     size: 123,
     path: "/workspace/att-rich.docx",
-    parsedResult: { attachmentId: "parsed-rich" },
   };
   const incomingAttachment = {
     name: "report.docx",
@@ -316,18 +323,20 @@ test("SessionMessageService.replaceTurn rejects attachments without stable ident
     }),
   });
 
-  await service.replaceTurn({
-    userId: "u1",
-    sessionId: "s1",
-    anchor: { turnScopeId: "scope-old" },
-    newContent: "edited",
-    turnScopeId: "scope-new",
-    commandId: "replace-attachment-identity",
-    attachments: [incomingAttachment],
-  });
+  await assert.rejects(
+    service.replaceTurn({
+      userId: "u1",
+      sessionId: "s1",
+      anchor: { turnScopeId: "scope-old" },
+      newContent: "edited",
+      turnScopeId: "scope-new",
+      commandId: "replace-attachment-identity",
+      attachments: [incomingAttachment],
+    }),
+    /invalid_attachment_id/,
+  );
 
-  assert.equal(saved.length, 1);
-  assert.equal(saved[0].messages[0].attachments, undefined);
+  assert.equal(saved.length, 0);
 });
 
 test("SessionMessageService.assertReusedUserTurnIdentity rejects attachment divergence", async () => {
@@ -566,7 +575,22 @@ test("SessionMessageService.assertReusedUserTurnIdentity ignores derived attachm
         downloadUrl: "/api/attachments/att-1",
         previewUrl: "",
         generatedByModel: false,
-        parsedResult: {},
+        relations: [
+          {
+            relationType: "parsed_result",
+            sourceIdentity: {
+              attachmentId: "att-1",
+              sessionId: "s1",
+              attachmentSource: "user",
+            },
+            targetIdentity: {
+              attachmentId: "parsed-att-1",
+              sessionId: "s1",
+              attachmentSource: "tool",
+            },
+            createdAt: "2026-06-22T00:00:00.000Z",
+          },
+        ],
       },
     ],
   });
