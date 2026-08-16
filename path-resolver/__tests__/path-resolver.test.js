@@ -33,7 +33,7 @@ import {
   resolvePathRef,
   resolveToolInputPath,
   TOOL_PATH_CONTRACTS,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 test("normalizes cross-platform path syntax through the protocol", () => {
   assert.equal(detectPathPlatform("C:\\work\\file.txt"), PATH_PLATFORMS.WINDOWS);

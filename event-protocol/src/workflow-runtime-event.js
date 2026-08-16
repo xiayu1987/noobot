@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isMessageEventEnvelope, MESSAGE_EVENT_SEQUENCE_DOMAIN } from "./message-event.mjs";
+import { isMessageEventEnvelope, MESSAGE_EVENT_SEQUENCE_DOMAIN } from "./message-event.js";
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({

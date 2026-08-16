@@ -15,7 +15,7 @@ import {
   isPendingInteractionReplay,
   INTERACTION_LIFECYCLE,
   isTerminalInteractionLifecycle,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 test("event registry classifies interaction, data and transport events", () => {
   assert.equal(getEventDefinition("turn.completed"), null);

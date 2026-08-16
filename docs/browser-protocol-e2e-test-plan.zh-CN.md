@@ -39,8 +39,8 @@ AND 无禁止错误
 
 测试实现应直接以以下代码为协议事实源：
 
-- Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.mjs`
-- Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.mjs`
+- Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.js`
+- Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.js`
 - Turn Lifecycle 和 receipt：`event-protocol/src/turn-lifecycle-protocol.mjs`
 - 浏览器 WebSocket 分派：`client/noobot-chat/src/infrastructure/websocket/chatWebSocketClient.js`
 - reconnect 协调与投影：`client/noobot-chat/src/modules/chat/runtime/session/reconnectCoordinator.js`
@@ -53,14 +53,14 @@ AND 无禁止错误
 
 协议版本基线：
 
-| 协议 | 当前版本/事件 |
-| --- | --- |
-| Agent Transport | `protocolVersion: 2` |
-| Turn Lifecycle | `protocolVersion: 4` |
-| Lifecycle transport | `transportProtocolVersion: 3` |
-| Lifecycle wire event | `turn_lifecycle` |
-| Lifecycle receipt | `action: turn.lifecycle.received` |
-| Model Context Snapshot | `version: 2` |
+| 协议                   | 当前版本/事件                     |
+| ---------------------- | --------------------------------- |
+| Agent Transport        | `protocolVersion: 2`              |
+| Turn Lifecycle         | `protocolVersion: 4`              |
+| Lifecycle transport    | `transportProtocolVersion: 3`     |
+| Lifecycle wire event   | `turn_lifecycle`                  |
+| Lifecycle receipt      | `action: turn.lifecycle.received` |
+| Model Context Snapshot | `version: 2`                      |
 
 版本变化时应同步修改协议库、生产代码和本文断言，不得在测试中接受多个版本。
 
@@ -512,11 +512,11 @@ npm run test:e2e:protocol:full
 
 推荐分组：
 
-| 级别 | 用例 |
-| --- | --- |
-| Smoke | PBE-002、006 |
-| Core | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036 |
+| 级别      | 用例                                            |
+| --------- | ----------------------------------------------- |
+| Smoke     | PBE-002、006                                    |
+| Core      | PBE-007～014、016、017、021、022、027、029、030 |
+| Full-only | PBE-015、023～026、028、031～036                |
 
 ## 8. CI 失败产物要求
 

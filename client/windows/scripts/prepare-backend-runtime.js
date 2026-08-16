@@ -3,4 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import "../../shared/scripts/prepare-backend-runtime.mjs";
+import "../../shared/scripts/prepare-backend-runtime.js";

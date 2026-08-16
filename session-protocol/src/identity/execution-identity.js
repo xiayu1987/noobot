@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeTurnScopeId } from "./turn-scope-identity.mjs";
+import { canonicalizeTurnScopeId } from "./turn-scope-identity.js";
 
 export const EXECUTION_KIND = Object.freeze({
   AGENT: "agent",
@@ -30,15 +30,18 @@ export function deriveAgentExecutionId({ executionId = "", turnScopeId = "" } = 
 
 export function normalizeExecutionIdentity(source = {}) {
   const executionKind = clean(source.executionKind).toLowerCase() || EXECUTION_KIND.AGENT;
-  const executionId = executionKind === EXECUTION_KIND.AGENT
-    ? deriveAgentExecutionId(source)
-    : clean(source.executionId || source.workflowExecutionId || source.workflowRunId);
+  const executionId =
+    executionKind === EXECUTION_KIND.AGENT
+      ? deriveAgentExecutionId(source)
+      : clean(source.executionId || source.workflowExecutionId || source.workflowRunId);
   const parentExecutionId = clean(source.parentExecutionId);
   return Object.freeze({
     executionId,
     executionKind,
     parentExecutionId,
-    rootExecutionId: clean(source.rootExecutionId) || (parentExecutionId ? clean(source.rootExecutionId) : executionId),
+    rootExecutionId:
+      clean(source.rootExecutionId) ||
+      (parentExecutionId ? clean(source.rootExecutionId) : executionId),
     sessionId: clean(source.sessionId),
     parentSessionId: clean(source.parentSessionId),
     turnScopeId: canonicalizeTurnScopeId(source.turnScopeId),
@@ -52,10 +55,13 @@ export function validateExecutionIdentity(source = {}) {
   const identity = normalizeExecutionIdentity(source);
   const errors = [];
   if (!identity.executionId) errors.push("missing_execution_id");
-  if (!Object.values(EXECUTION_KIND).includes(identity.executionKind)) errors.push("invalid_execution_kind");
+  if (!Object.values(EXECUTION_KIND).includes(identity.executionKind))
+    errors.push("invalid_execution_kind");
   if (!identity.rootExecutionId) errors.push("missing_root_execution_id");
-  if (identity.parentExecutionId && identity.parentExecutionId === identity.executionId) errors.push("self_parent_execution");
-  if (identity.executionKind === EXECUTION_KIND.AGENT && !identity.sessionId) errors.push("missing_session_id");
+  if (identity.parentExecutionId && identity.parentExecutionId === identity.executionId)
+    errors.push("self_parent_execution");
+  if (identity.executionKind === EXECUTION_KIND.AGENT && !identity.sessionId)
+    errors.push("missing_session_id");
   return { valid: errors.length === 0, errors, identity };
 }
 
@@ -75,7 +81,8 @@ export function createExecutionLifecycleEnvelope(source = {}) {
     state: clean(source.state),
     action: clean(source.action),
     executionState: clean(source.executionState).toLowerCase(),
-    capabilities: source.capabilities && typeof source.capabilities === "object" ? source.capabilities : {},
+    capabilities:
+      source.capabilities && typeof source.capabilities === "object" ? source.capabilities : {},
     failure: source.failure && typeof source.failure === "object" ? source.failure : undefined,
     updatedAt: clean(source.updatedAt),
     occurredAt: clean(source.occurredAt),
@@ -88,7 +95,11 @@ export function buildExecutionTree(executions = []) {
   for (const source of Array.isArray(executions) ? executions : []) {
     const validation = validateExecutionIdentity(source);
     if (!validation.valid) continue;
-    byId.set(validation.identity.executionId, { ...source, ...validation.identity, childExecutionIds: [] });
+    byId.set(validation.identity.executionId, {
+      ...source,
+      ...validation.identity,
+      childExecutionIds: [],
+    });
   }
   const roots = [];
   for (const execution of byId.values()) {

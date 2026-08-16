@@ -19,13 +19,19 @@ const installDir = path.resolve(
 );
 const version = String(process.env.OPENVSCODE_SERVER_VERSION || "latest").trim() || "latest";
 const force = ["1", "true", "yes", "on"].includes(
-  String(process.env.OPENVSCODE_SERVER_INSTALL_FORCE || "").trim().toLowerCase(),
+  String(process.env.OPENVSCODE_SERVER_INSTALL_FORCE || "")
+    .trim()
+    .toLowerCase(),
 );
 const checkUpdate = ["1", "true", "yes", "on"].includes(
-  String(process.env.OPENVSCODE_SERVER_CHECK_UPDATE || "").trim().toLowerCase(),
+  String(process.env.OPENVSCODE_SERVER_CHECK_UPDATE || "")
+    .trim()
+    .toLowerCase(),
 );
 const skipUpdateCheckIfUnreachable = ["1", "true", "yes", "on", ""].includes(
-  String(process.env.OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE || "").trim().toLowerCase(),
+  String(process.env.OPENVSCODE_SERVER_SKIP_UPDATE_CHECK_IF_UNREACHABLE || "")
+    .trim()
+    .toLowerCase(),
 );
 
 function resolvePlatform() {
@@ -59,7 +65,9 @@ async function resolveRelease() {
   const tags = Array.from(
     new Set([
       version,
-      version.startsWith("openvscode-server-v") ? version : `openvscode-server-v${version.replace(/^v/, "")}`,
+      version.startsWith("openvscode-server-v")
+        ? version
+        : `openvscode-server-v${version.replace(/^v/, "")}`,
       version.startsWith("v") ? `openvscode-server-${version}` : `openvscode-server-v${version}`,
     ]),
   );
@@ -81,7 +89,9 @@ function pickAsset(release) {
   const assets = Array.isArray(release?.assets) ? release.assets : [];
   const asset = assets.find((item) => String(item?.name || "").endsWith(suffix));
   if (!asset?.browser_download_url) {
-    throw new Error(`No OpenVSCode Server asset matched *${suffix} in ${release?.tag_name || "release"}`);
+    throw new Error(
+      `No OpenVSCode Server asset matched *${suffix} in ${release?.tag_name || "release"}`,
+    );
   }
   return asset;
 }
@@ -95,20 +105,22 @@ async function downloadFile(url, destination) {
   }
   await new Promise((resolve, reject) => {
     const file = createWriteStream(destination);
-    response.body.pipeTo(
-      new WritableStream({
-        write(chunk) {
-          file.write(Buffer.from(chunk));
-        },
-        close() {
-          file.end(resolve);
-        },
-        abort(error) {
-          file.destroy(error);
-          reject(error);
-        },
-      }),
-    ).catch(reject);
+    response.body
+      .pipeTo(
+        new WritableStream({
+          write(chunk) {
+            file.write(Buffer.from(chunk));
+          },
+          close() {
+            file.end(resolve);
+          },
+          abort(error) {
+            file.destroy(error);
+            reject(error);
+          },
+        }),
+      )
+      .catch(reject);
   });
 }
 
@@ -239,8 +251,7 @@ async function main() {
       console.log(
         `[openvscode] update available: ${installedTagName || "unknown"} -> ${release?.tag_name || "unknown"}`,
       );
-    } catch {
-    }
+    } catch {}
   }
 
   if (!release) release = await resolveRelease();

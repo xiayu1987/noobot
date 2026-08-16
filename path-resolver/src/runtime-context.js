@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
-import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.mjs";
+import { filePath, PATH_VIEWS, normalizeSlashPath } from "./platform.js";
+import { resolveSandboxPathMappings, resolveRuntimeUserId } from "./sandbox-mapping.js";
 import {
   WORKSPACE_SANDBOX_PATHS,
   TOOL_EXECUTION_VIEW,

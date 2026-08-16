@@ -9,31 +9,50 @@ import {
   AGENT_TRANSPORT_PROTOCOL_VERSION,
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
-} from "./constants.mjs";
-import { createRunPreferences, validateRunPreferences } from "./run-preferences.mjs";
+} from "./constants.js";
+import { createRunPreferences, validateRunPreferences } from "./run-preferences.js";
 
 const COMMAND_TYPE_SET = new Set(AGENT_COMMAND_TYPES);
 const RUN_COMMAND_SET = new Set(RUN_COMMAND_TYPES);
 const EXECUTION_QUERY_SET = new Set(EXECUTION_QUERY_COMMAND_TYPES);
 const TOP_LEVEL_KEYS = new Set([
-  "protocolVersion", "commandType", "commandId", "identity", "input", "preferences",
-  "presentation", "concurrency", "session", "continuation", "stop", "interaction", "query", "options",
+  "protocolVersion",
+  "commandType",
+  "commandId",
+  "identity",
+  "input",
+  "preferences",
+  "presentation",
+  "concurrency",
+  "session",
+  "continuation",
+  "stop",
+  "interaction",
+  "query",
+  "options",
 ]);
 const BASE_COMMAND_KEYS = ["protocolVersion", "commandType", "commandId", "identity"];
 const IDENTITY_KEYS = new Set([
-  "sessionId", "parentSessionId", "dialogProcessId", "parentDialogProcessId", "turnScopeId",
+  "sessionId",
+  "parentSessionId",
+  "dialogProcessId",
+  "parentDialogProcessId",
+  "turnScopeId",
 ]);
 const INPUT_KEYS = new Set(["message", "attachments"]);
 const PRESENTATION_KEYS = new Set(["userMessageId", "assistantMessageId"]);
-const RUN_CONCURRENCY_KEYS = new Set([
-  "expectedTurnRevision", "expectedAggregateVersion",
-]);
+const RUN_CONCURRENCY_KEYS = new Set(["expectedTurnRevision", "expectedAggregateVersion"]);
 const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
 const SESSION_KEYS = new Set(["createIfAbsent"]);
 const CONTINUATION_KEYS = new Set(["dialogProcessId", "turnScopeId"]);
 const STOP_KEYS = new Set(["executionId", "partialAssistant"]);
 const PARTIAL_ASSISTANT_KEYS = new Set([
-  "content", "dialogProcessId", "turnScopeId", "createdAtMs", "modelAlias", "modelName",
+  "content",
+  "dialogProcessId",
+  "turnScopeId",
+  "createdAtMs",
+  "modelAlias",
+  "modelName",
 ]);
 const INTERACTION_KEYS = new Set(["requestId", "response"]);
 const QUERY_KEYS = new Set(["executionId", "rootExecutionId"]);
@@ -44,7 +63,9 @@ const clean = (value) => String(value ?? "").trim();
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 function compactObject(source = {}) {
-  return Object.fromEntries(Object.entries(source).filter(([, value]) => value !== undefined && value !== ""));
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => value !== undefined && value !== ""),
+  );
 }
 
 function createIdentity(input = {}) {
@@ -87,12 +108,14 @@ export function createTurnRunCommand(input = {}) {
     session: {
       createIfAbsent: input.session?.createIfAbsent === true,
     },
-    ...(commandType === AGENT_COMMAND.CONTINUE ? {
-      continuation: {
-        dialogProcessId: clean(input.continuation?.dialogProcessId),
-        turnScopeId: clean(input.continuation?.turnScopeId),
-      },
-    } : {}),
+    ...(commandType === AGENT_COMMAND.CONTINUE
+      ? {
+          continuation: {
+            dialogProcessId: clean(input.continuation?.dialogProcessId),
+            turnScopeId: clean(input.continuation?.turnScopeId),
+          },
+        }
+      : {}),
   };
 }
 
@@ -106,7 +129,9 @@ export function createTurnStopCommand(input = {}) {
     concurrency: { expectedTurnRevision },
     stop: compactObject({
       executionId: clean(input.stop?.executionId),
-      partialAssistant: isObject(input.stop?.partialAssistant) ? { ...input.stop.partialAssistant } : undefined,
+      partialAssistant: isObject(input.stop?.partialAssistant)
+        ? { ...input.stop.partialAssistant }
+        : undefined,
     }),
   };
 }
@@ -123,7 +148,8 @@ export function createInteractionResponseCommand(input = {}) {
 
 export function createExecutionQueryCommand(input = {}) {
   const commandType = clean(input.commandType).toLowerCase();
-  if (!EXECUTION_QUERY_SET.has(commandType)) throw new TypeError("invalid_execution_query_command_type");
+  if (!EXECUTION_QUERY_SET.has(commandType))
+    throw new TypeError("invalid_execution_query_command_type");
   return {
     ...createEnvelope(commandType, input),
     query: compactObject({
@@ -168,15 +194,23 @@ function rejectUnknownFields(value, allowedKeys, path, errors) {
 
 function validateTopLevelFields(command, commandType, errors) {
   const commandKeys = RUN_COMMAND_SET.has(commandType)
-    ? [...BASE_COMMAND_KEYS, "input", "preferences", "presentation", "concurrency", "session",
-      ...(commandType === AGENT_COMMAND.CONTINUE ? ["continuation"] : [])]
+    ? [
+        ...BASE_COMMAND_KEYS,
+        "input",
+        "preferences",
+        "presentation",
+        "concurrency",
+        "session",
+        ...(commandType === AGENT_COMMAND.CONTINUE ? ["continuation"] : []),
+      ]
     : commandType === AGENT_COMMAND.STOP
       ? [...BASE_COMMAND_KEYS, "concurrency", "stop"]
       : commandType === AGENT_COMMAND.INTERACTION_RESPONSE
         ? [...BASE_COMMAND_KEYS, "interaction"]
         : EXECUTION_QUERY_SET.has(commandType)
           ? [...BASE_COMMAND_KEYS, "query"]
-          : commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET || commandType === AGENT_COMMAND.FINALIZE
+          : commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET ||
+              commandType === AGENT_COMMAND.FINALIZE
             ? [...BASE_COMMAND_KEYS, "options"]
             : [...BASE_COMMAND_KEYS];
   const allowedKeys = new Set(commandKeys);
@@ -189,7 +223,8 @@ function validateTopLevelFields(command, commandType, errors) {
 export function validateAgentCommand(command) {
   const errors = [];
   if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
-  if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION) errors.push("unsupported_protocol_version");
+  if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION)
+    errors.push("unsupported_protocol_version");
   const commandType = clean(command.commandType).toLowerCase();
   if (!COMMAND_TYPE_SET.has(commandType)) errors.push("unsupported_command_type");
   if (!clean(command.commandId)) errors.push("missing_command_id");
@@ -213,15 +248,20 @@ export function validateAgentCommand(command) {
     if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
     else {
       rejectUnknownFields(command.concurrency, RUN_CONCURRENCY_KEYS, "concurrency", errors);
-      if (command.concurrency.expectedTurnRevision !== 0) errors.push("run_turn_revision_must_be_zero");
-      if (!Number.isInteger(command.concurrency.expectedAggregateVersion) || command.concurrency.expectedAggregateVersion < 0) {
+      if (command.concurrency.expectedTurnRevision !== 0)
+        errors.push("run_turn_revision_must_be_zero");
+      if (
+        !Number.isInteger(command.concurrency.expectedAggregateVersion) ||
+        command.concurrency.expectedAggregateVersion < 0
+      ) {
         errors.push("invalid_expected_session_version");
       }
     }
     if (!isObject(command.session)) errors.push("session_not_object");
     else {
       rejectUnknownFields(command.session, SESSION_KEYS, "session", errors);
-      if (typeof command.session.createIfAbsent !== "boolean") errors.push("invalid_create_if_absent");
+      if (typeof command.session.createIfAbsent !== "boolean")
+        errors.push("invalid_create_if_absent");
       if (commandType !== AGENT_COMMAND.SEND && command.session.createIfAbsent) {
         errors.push("create_if_absent_requires_send");
       }
@@ -229,15 +269,20 @@ export function validateAgentCommand(command) {
     if (commandType === AGENT_COMMAND.CONTINUE) {
       if (!isObject(command.continuation)) errors.push("continuation_not_object");
       else rejectUnknownFields(command.continuation, CONTINUATION_KEYS, "continuation", errors);
-      if (!clean(command.continuation?.dialogProcessId)) errors.push("missing_continuation_dialog_process_id");
-      if (!clean(command.continuation?.turnScopeId)) errors.push("missing_continuation_turn_scope_id");
+      if (!clean(command.continuation?.dialogProcessId))
+        errors.push("missing_continuation_dialog_process_id");
+      if (!clean(command.continuation?.turnScopeId))
+        errors.push("missing_continuation_turn_scope_id");
     }
   } else if (commandType === AGENT_COMMAND.STOP) {
     if (!clean(command.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
     if (!isObject(command.concurrency)) errors.push("concurrency_not_object");
     else {
       rejectUnknownFields(command.concurrency, STOP_CONCURRENCY_KEYS, "concurrency", errors);
-      if (!Number.isInteger(command.concurrency.expectedTurnRevision) || command.concurrency.expectedTurnRevision < 1) {
+      if (
+        !Number.isInteger(command.concurrency.expectedTurnRevision) ||
+        command.concurrency.expectedTurnRevision < 1
+      ) {
         errors.push("invalid_expected_turn_revision");
       }
     }
@@ -246,7 +291,13 @@ export function validateAgentCommand(command) {
       rejectUnknownFields(command.stop, STOP_KEYS, "stop", errors);
       if (Object.prototype.hasOwnProperty.call(command.stop, "partialAssistant")) {
         if (!isObject(command.stop.partialAssistant)) errors.push("partial_assistant_not_object");
-        else rejectUnknownFields(command.stop.partialAssistant, PARTIAL_ASSISTANT_KEYS, "partial_assistant", errors);
+        else
+          rejectUnknownFields(
+            command.stop.partialAssistant,
+            PARTIAL_ASSISTANT_KEYS,
+            "partial_assistant",
+            errors,
+          );
       }
     }
   } else if (commandType === AGENT_COMMAND.INTERACTION_RESPONSE) {
@@ -257,8 +308,13 @@ export function validateAgentCommand(command) {
     if (!isObject(command.query)) errors.push("query_not_object");
     else rejectUnknownFields(command.query, QUERY_KEYS, "query", errors);
     const requiresExecutionId = commandType !== AGENT_COMMAND.EXECUTION_TREE_GET;
-    if (requiresExecutionId && !clean(command.query?.executionId)) errors.push("missing_execution_id");
-    if (!requiresExecutionId && !clean(command.query?.executionId) && !clean(command.query?.rootExecutionId)) {
+    if (requiresExecutionId && !clean(command.query?.executionId))
+      errors.push("missing_execution_id");
+    if (
+      !requiresExecutionId &&
+      !clean(command.query?.executionId) &&
+      !clean(command.query?.rootExecutionId)
+    ) {
       errors.push("missing_execution_query_root");
     }
   } else if (commandType === AGENT_COMMAND.TURN_SNAPSHOT_GET) {
@@ -286,9 +342,8 @@ export function parseAgentCommand(rawCommand) {
   let command;
   try {
     const isBuffer = typeof Buffer !== "undefined" && Buffer.isBuffer(rawCommand);
-    command = typeof rawCommand === "string" || isBuffer
-      ? JSON.parse(String(rawCommand))
-      : rawCommand;
+    command =
+      typeof rawCommand === "string" || isBuffer ? JSON.parse(String(rawCommand)) : rawCommand;
   } catch {
     throw new AgentTransportProtocolError(["invalid_json"]);
   }

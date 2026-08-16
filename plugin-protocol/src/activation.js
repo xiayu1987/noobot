@@ -49,9 +49,14 @@ export class PluginProtocolError extends Error {
 }
 
 export function requirePluginSurface(surface = "") {
-  const normalized = String(surface || "").trim().toLowerCase();
+  const normalized = String(surface || "")
+    .trim()
+    .toLowerCase();
   if (!Object.values(PLUGIN_SURFACE).includes(normalized)) {
-    throw new PluginProtocolError("PLUGIN_SURFACE_INVALID", `unsupported plugin surface: ${normalized || "<empty>"}`);
+    throw new PluginProtocolError(
+      "PLUGIN_SURFACE_INVALID",
+      `unsupported plugin surface: ${normalized || "<empty>"}`,
+    );
   }
   return normalized;
 }
@@ -60,7 +65,10 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
   const expectedPluginId = String(pluginId || "").trim();
   const expectedSurface = requirePluginSurface(surface);
   if (!result || typeof result !== "object" || Array.isArray(result)) {
-    throw new PluginProtocolError("PLUGIN_ACTIVATION_RESULT_INVALID", "plugin activate must return a plain object");
+    throw new PluginProtocolError(
+      "PLUGIN_ACTIVATION_RESULT_INVALID",
+      "plugin activate must return a plain object",
+    );
   }
   if (Number(result.protocolVersion) !== PLUGIN_PROTOCOL_VERSION) {
     throw new PluginProtocolError(
@@ -69,13 +77,22 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
     );
   }
   if (String(result.pluginId || "").trim() !== expectedPluginId) {
-    throw new PluginProtocolError("PLUGIN_ACTIVATION_ID_MISMATCH", `plugin activation id mismatch: ${expectedPluginId}`);
+    throw new PluginProtocolError(
+      "PLUGIN_ACTIVATION_ID_MISMATCH",
+      `plugin activation id mismatch: ${expectedPluginId}`,
+    );
   }
   if (String(result.surface || "").trim() !== expectedSurface) {
-    throw new PluginProtocolError("PLUGIN_ACTIVATION_SURFACE_MISMATCH", `plugin activation surface mismatch: ${expectedSurface}`);
+    throw new PluginProtocolError(
+      "PLUGIN_ACTIVATION_SURFACE_MISMATCH",
+      `plugin activation surface mismatch: ${expectedSurface}`,
+    );
   }
   if (result.dispose != null && typeof result.dispose !== "function") {
-    throw new PluginProtocolError("PLUGIN_ACTIVATION_DISPOSE_INVALID", "plugin activation dispose must be a function");
+    throw new PluginProtocolError(
+      "PLUGIN_ACTIVATION_DISPOSE_INVALID",
+      "plugin activation dispose must be a function",
+    );
   }
   return Object.freeze({
     protocolVersion: PLUGIN_PROTOCOL_VERSION,
@@ -88,11 +105,15 @@ export function validatePluginActivationResult(result = {}, { pluginId = "", sur
 
 export function createPluginActivationResult({ pluginId = "", surface = "", dispose = null } = {}) {
   const normalizedPluginId = String(pluginId || "").trim();
-  if (!normalizedPluginId) throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "pluginId is required");
-  return validatePluginActivationResult({
-    protocolVersion: PLUGIN_PROTOCOL_VERSION,
-    pluginId: normalizedPluginId,
-    surface: requirePluginSurface(surface),
-    dispose: typeof dispose === "function" ? dispose : () => {},
-  }, { pluginId: normalizedPluginId, surface });
+  if (!normalizedPluginId)
+    throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "pluginId is required");
+  return validatePluginActivationResult(
+    {
+      protocolVersion: PLUGIN_PROTOCOL_VERSION,
+      pluginId: normalizedPluginId,
+      surface: requirePluginSurface(surface),
+      dispose: typeof dispose === "function" ? dispose : () => {},
+    },
+    { pluginId: normalizedPluginId, surface },
+  );
 }

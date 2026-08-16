@@ -9,7 +9,7 @@ import {
   HOOK_FAILURE_MODE,
   HOOK_PROTOCOL_VERSION,
   requireHookPointDescriptor,
-} from "./points.mjs";
+} from "./points.js";
 
 export const HOOK_OUTCOME_STATUS = Object.freeze({
   OK: "ok",
@@ -23,7 +23,9 @@ export class HookExecutionError extends Error {
     const firstFailure = outcomes.find((outcome) => outcome?.status !== HOOK_OUTCOME_STATUS.OK);
     const failureLocation = `${point}${firstFailure?.handlerId ? `#${firstFailure.handlerId}` : ""}`;
     const failureMessage = String(firstFailure?.error?.message || "").trim();
-    super(`hook execution failed: ${failureLocation}${failureMessage ? `: ${failureMessage}` : ""}`);
+    super(
+      `hook execution failed: ${failureLocation}${failureMessage ? `: ${failureMessage}` : ""}`,
+    );
     this.name = "HookExecutionError";
     this.code = "HOOK_EXECUTION_FAILED";
     this.point = point;
@@ -79,7 +81,8 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
       reject(controller.signal.reason || new Error(`hook aborted: ${point}#${registration.id}`));
     };
     controller.signal.addEventListener("abort", rejectOnAbort, { once: true });
-    removeInvocationAbortListener = () => controller.signal.removeEventListener("abort", rejectOnAbort);
+    removeInvocationAbortListener = () =>
+      controller.signal.removeEventListener("abort", rejectOnAbort);
   });
   if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
     timer = setTimeout(() => {
@@ -88,12 +91,14 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
   }
   try {
     const value = await Promise.race([
-      Promise.resolve().then(() => registration.handler(context, {
-        protocolVersion: HOOK_PROTOCOL_VERSION,
-        point,
-        handlerId: registration.id,
-        signal: controller.signal,
-      })),
+      Promise.resolve().then(() =>
+        registration.handler(context, {
+          protocolVersion: HOOK_PROTOCOL_VERSION,
+          point,
+          handlerId: registration.id,
+          signal: controller.signal,
+        }),
+      ),
       abortPromise,
     ]);
     return Object.freeze({
@@ -106,11 +111,12 @@ async function invokeHandler({ registration, point, context, parentSignal }) {
       error: null,
     });
   } catch (error) {
-    const status = error?.code === "HOOK_TIMEOUT"
-      ? HOOK_OUTCOME_STATUS.TIMED_OUT
-      : controller.signal.aborted
-        ? HOOK_OUTCOME_STATUS.ABORTED
-        : HOOK_OUTCOME_STATUS.FAILED;
+    const status =
+      error?.code === "HOOK_TIMEOUT"
+        ? HOOK_OUTCOME_STATUS.TIMED_OUT
+        : controller.signal.aborted
+          ? HOOK_OUTCOME_STATUS.ABORTED
+          : HOOK_OUTCOME_STATUS.FAILED;
     return Object.freeze({
       protocolVersion: HOOK_PROTOCOL_VERSION,
       point,
@@ -156,14 +162,17 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
       handler,
       once: options?.once === true,
       priority: Number.isFinite(Number(options?.priority)) ? Number(options.priority) : 0,
-      timeoutMs: Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
-        ? configuredTimeoutMs
-        : defaultTimeoutMs,
+      timeoutMs:
+        Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+          ? configuredTimeoutMs
+          : defaultTimeoutMs,
     });
     handlers.push(registration);
-    handlers.sort((left, right) => left.priority === right.priority
-      ? left.sequence - right.sequence
-      : right.priority - left.priority);
+    handlers.sort((left, right) =>
+      left.priority === right.priority
+        ? left.sequence - right.sequence
+        : right.priority - left.priority,
+    );
     registry.set(descriptor.point, handlers);
     return () => off(descriptor.point, id);
   }
@@ -202,15 +211,20 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
         context,
         parentSignal: signal,
       });
-      const abortedByParent = outcome.status === HOOK_OUTCOME_STATUS.ABORTED && signal?.aborted === true;
-      if (!abortedByParent && outcome.status !== HOOK_OUTCOME_STATUS.OK && typeof onError === "function") {
+      const abortedByParent =
+        outcome.status === HOOK_OUTCOME_STATUS.ABORTED && signal?.aborted === true;
+      if (
+        !abortedByParent &&
+        outcome.status !== HOOK_OUTCOME_STATUS.OK &&
+        typeof onError === "function"
+      ) {
         onError({ point: descriptor.point, handlerId: registration.id, context, outcome });
       }
       return outcome;
     };
     const outcomes = [];
     if (descriptor.execution === HOOK_EXECUTION.PARALLEL) {
-      outcomes.push(...await Promise.all(registrations.map(runRegistration)));
+      outcomes.push(...(await Promise.all(registrations.map(runRegistration))));
     } else {
       for (const registration of registrations) {
         outcomes.push(await runRegistration(registration));
@@ -224,7 +238,9 @@ export function createHookManager({ defaultTimeoutMs = 3000, onError = null } = 
       point: descriptor.point,
       context,
       outcomes: Object.freeze(outcomes),
-      failures: Object.freeze(outcomes.filter((outcome) => outcome.status !== HOOK_OUTCOME_STATUS.OK)),
+      failures: Object.freeze(
+        outcomes.filter((outcome) => outcome.status !== HOOK_OUTCOME_STATUS.OK),
+      ),
     });
     if (result.failures.length && descriptor.failureMode === HOOK_FAILURE_MODE.FAIL_FLOW) {
       throw new HookExecutionError({ point: descriptor.point, outcomes });

@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { clientFilePath as path } from "../../path-resolver.js";
-import { resolveDesktopBackendRuntimeWorkspaces } from "../../scripts/backend-runtime-workspaces.mjs";
+import { resolveDesktopBackendRuntimeWorkspaces } from "../../scripts/backend-runtime-workspaces.js";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 

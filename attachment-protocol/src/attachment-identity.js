@@ -8,7 +8,7 @@ import {
   freezeDefined,
   requireNonEmptyString,
   requirePlainObject,
-} from "./protocol-utils.mjs";
+} from "./protocol-utils.js";
 
 const IDENTITY_FIELDS = new Set(["attachmentId", "sessionId", "attachmentSource"]);
 
@@ -37,11 +37,7 @@ export function projectAttachmentIdentity(value) {
 
 export function attachmentIdentityKey(value) {
   const identity = parseAttachmentIdentity(value);
-  return JSON.stringify([
-    identity.sessionId,
-    identity.attachmentSource,
-    identity.attachmentId,
-  ]);
+  return JSON.stringify([identity.sessionId, identity.attachmentSource, identity.attachmentId]);
 }
 
 export function sameAttachmentIdentity(left, right) {

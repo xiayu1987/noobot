@@ -5,8 +5,8 @@
  */
 import crypto from "node:crypto";
 
-import { LENGTH_THRESHOLDS } from "./length-thresholds.mjs";
-import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.mjs";
+import { LENGTH_THRESHOLDS } from "./length-thresholds.js";
+import { QUANTITY_THRESHOLDS } from "./quantity-thresholds.js";
 
 const DEFAULT_PREVIEW_LIMIT = QUANTITY_THRESHOLDS.diagnostics.modelContextPreviewLimit;
 const DEFAULT_CONTENT_CHARS = LENGTH_THRESHOLDS.display.modelContextContentChars;
@@ -57,9 +57,8 @@ function firstDefined(...values) {
 
 function providerMessageValue(message = {}) {
   const dictionary = typeof message?.toDict === "function" ? message.toDict() : null;
-  const dictionaryData = dictionary?.data && typeof dictionary.data === "object"
-    ? dictionary.data
-    : {};
+  const dictionaryData =
+    dictionary?.data && typeof dictionary.data === "object" ? dictionary.data : {};
   const role = resolveDiagnosticRole(message) || String(dictionary?.type || "").trim();
   const content = firstDefined(
     message?.content,

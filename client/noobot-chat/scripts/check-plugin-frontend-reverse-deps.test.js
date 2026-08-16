@@ -11,7 +11,7 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import {
   allowedPluginApiSpecifiers,
   inspectFrontendSource,
-} from "./check-plugin-frontend-reverse-deps.mjs";
+} from "./check-plugin-frontend-reverse-deps.js";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(projectRoot, "../..");
@@ -41,7 +41,9 @@ test("rejects relative client source imports and private host subpaths", async (
 });
 
 test("package exports expose exactly the supported plugin API surface", async () => {
-  const packageJson = JSON.parse(await fs.readFile(path.resolve(projectRoot, "package.json"), "utf8"));
+  const packageJson = JSON.parse(
+    await fs.readFile(path.resolve(projectRoot, "package.json"), "utf8"),
+  );
   const expectedExportKeys = new Set(
     [...allowedPluginApiSpecifiers].map((specifier) => `.${specifier.slice("noobot-chat".length)}`),
   );

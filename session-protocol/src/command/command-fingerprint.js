@@ -9,7 +9,11 @@ import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]));
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stable(value[key])]),
+  );
 }
 
 export function canonicalizeCommandRequest(value = {}) {
@@ -21,9 +25,11 @@ export function createCommandRequestHash(value = {}) {
 }
 
 export function canonicalAttachmentIdentities(attachments = []) {
-  return (Array.isArray(attachments) ? attachments : []).map((item = {}) => ({
-    attachmentId: String(item.attachmentId || "").trim(),
-    sessionId: String(item.sessionId || "").trim(),
-    attachmentSource: String(item.attachmentSource || "").trim(),
-  })).sort((a, b) => canonicalizeCommandRequest(a).localeCompare(canonicalizeCommandRequest(b)));
+  return (Array.isArray(attachments) ? attachments : [])
+    .map((item = {}) => ({
+      attachmentId: String(item.attachmentId || "").trim(),
+      sessionId: String(item.sessionId || "").trim(),
+      attachmentSource: String(item.attachmentSource || "").trim(),
+    }))
+    .sort((a, b) => canonicalizeCommandRequest(a).localeCompare(canonicalizeCommandRequest(b)));
 }

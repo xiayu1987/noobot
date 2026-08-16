@@ -4,5 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export * from "./points.mjs";
-export * from "./runtime.mjs";
+export * from "./points.js";
+export * from "./runtime.js";

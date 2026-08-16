@@ -13,19 +13,24 @@ import {
 
 test("dispatch protocol resolves one explicit owner", () => {
   const workflow = createBotDispatchHandled({ owner: "workflow", result: { output: "done" } });
-  const result = resolveBotDispatchOutcome({ outcomes: [
-    { status: "ok", value: createBotDispatchPass({ owner: "audit" }) },
-    { status: "ok", value: workflow },
-  ] });
+  const result = resolveBotDispatchOutcome({
+    outcomes: [
+      { status: "ok", value: createBotDispatchPass({ owner: "audit" }) },
+      { status: "ok", value: workflow },
+    ],
+  });
   assert.equal(result, workflow);
 });
 
 test("dispatch protocol rejects competing execution owners", () => {
   assert.throws(
-    () => resolveBotDispatchOutcome({ outcomes: [
-      { status: "ok", value: createBotDispatchHandled({ owner: "workflow" }) },
-      { status: "ok", value: createBotDispatchHandled({ owner: "other" }) },
-    ] }),
+    () =>
+      resolveBotDispatchOutcome({
+        outcomes: [
+          { status: "ok", value: createBotDispatchHandled({ owner: "workflow" }) },
+          { status: "ok", value: createBotDispatchHandled({ owner: "other" }) },
+        ],
+      }),
     (error) => error?.code === "BOT_DISPATCH_OWNERSHIP_CONFLICT",
   );
 });

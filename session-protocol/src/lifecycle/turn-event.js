@@ -39,7 +39,11 @@ export function createTurnLifecycleCommandId({ commandId, eventType, phase = "" 
   const lifecycleEventType = clean(eventType);
   const lifecyclePhase = clean(phase);
   if (!rootCommandId || !TURN_EVENT_VALUES.includes(lifecycleEventType)) return "";
-  return [rootCommandId, lifecycleEventType, lifecycleEventType === TURN_EVENT.FAILED ? lifecyclePhase : ""]
+  return [
+    rootCommandId,
+    lifecycleEventType,
+    lifecycleEventType === TURN_EVENT.FAILED ? lifecyclePhase : "",
+  ]
     .filter(Boolean)
     .join(":");
 }

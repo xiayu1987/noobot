@@ -3,11 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeCommandReceipts } from "../command/command-receipt.mjs";
-import { normalizeTurnTimings } from "../lifecycle/turn-timing.mjs";
+import { normalizeCommandReceipts } from "../command/command-receipt.js";
+import { normalizeTurnTimings } from "../lifecycle/turn-timing.js";
 
 export function normalizeSessionAggregateCore(session = {}) {
-  const lifecycle = session.turnLifecycle && typeof session.turnLifecycle === "object" ? session.turnLifecycle : {};
+  const lifecycle =
+    session.turnLifecycle && typeof session.turnLifecycle === "object" ? session.turnLifecycle : {};
   return {
     sessionId: String(session.sessionId || "").trim(),
     parentSessionId: String(session.parentSessionId || "").trim(),

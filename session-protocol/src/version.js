@@ -5,4 +5,3 @@
  */
 export const SESSION_PROTOCOL_NAME = "@noobot/session-protocol";
 export const SESSION_PROTOCOL_VERSION = 1;
-

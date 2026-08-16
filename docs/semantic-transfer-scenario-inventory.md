@@ -1,6 +1,6 @@
 # Semantic Transfer 场景清单
 
-本文档记录当前代码中实际经过 `@noobot/semantic-transfer-protocol` 的信息流。它是代码现状清单，不定义第二套协议；wire contract 仍以 `semantic-transfer-protocol/src/index.mjs` 为唯一规范。
+本文档记录当前代码中实际经过 `@noobot/semantic-transfer-protocol` 的信息流。它是代码现状清单，不定义第二套协议；wire contract 仍以 `semantic-transfer-protocol/src/index.js` 为唯一规范。
 
 更新日期：2026-08-08。
 
@@ -28,7 +28,7 @@
 
 ## 3. 场景白名单
 
-所有生产者在创建 envelope 前都必须通过 `semantic-transfer-protocol/src/registry.mjs` 注册。未注册场景、未注册 strategy、未注册工具输入策略或未注册工具出口策略直接失败，不降级、不推断、不走兼容分支。
+所有生产者在创建 envelope 前都必须通过 `semantic-transfer-protocol/src/registry.js` 注册。未注册场景、未注册 strategy、未注册工具输入策略或未注册工具出口策略直接失败，不降级、不推断、不走兼容分支。
 
 | scenario   | 注册的 strategy                                 |
 | ---------- | ----------------------------------------------- |
@@ -173,7 +173,7 @@ message.transferEnvelopes
 
 ## 16. 主要代码索引
 
-- Wire contract：`semantic-transfer-protocol/src/index.mjs`
+- Wire contract：`semantic-transfer-protocol/src/index.js`
 - Attachment contract：`attachment-protocol/src/`
 - 统一 dispatcher：`agent/src/transfer-adapter/transfer/semantic-transfer.js`
 - Storage adapter：`agent/src/transfer-adapter/storage/attachment-adapter.js`

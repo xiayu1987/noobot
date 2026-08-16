@@ -19,7 +19,7 @@ import {
   reconcileUncommittedAggregateConflictContinuations,
   resegmentMigratedCheckpointBaselines,
   runAtomicSessionRepair,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 function aggregateConflictContinuationSession({ withCommittedMessage = false } = {}) {
   const sourceTurn = {

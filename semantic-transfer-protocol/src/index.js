@@ -8,8 +8,8 @@ import {
   parseAttachmentIdentity,
   attachmentIdentityKey,
 } from "@noobot/attachment-protocol";
-import { assertSemanticTransferRegistration } from "./registry.mjs";
-export * from "./registry.mjs";
+import { assertSemanticTransferRegistration } from "./registry.js";
+export * from "./registry.js";
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
 export const TRANSFER_VERSION = 2;
@@ -34,14 +34,16 @@ export const TRANSFER_SOURCE = Object.freeze({
   CONNECTOR: "connector",
 });
 
-const IDENTITY_KEYS = new Set([
-  "sessionId",
-  "turnScopeId",
-  "runId",
-  "producer",
-]);
+const IDENTITY_KEYS = new Set(["sessionId", "turnScopeId", "runId", "producer"]);
 const PRODUCER_KEYS = new Set(["type", "id"]);
-const INTENT_KEYS = new Set(["source", "reason", "scenario", "strategy", "category", "businessPoint"]);
+const INTENT_KEYS = new Set([
+  "source",
+  "reason",
+  "scenario",
+  "strategy",
+  "category",
+  "businessPoint",
+]);
 const META_KEYS = new Set([
   "mimeType",
   "originalLength",
@@ -49,15 +51,15 @@ const META_KEYS = new Set([
   "persisted",
   "attributes",
 ]);
-const REF_KEYS = new Set([
-  "identity",
-  "role",
+const REF_KEYS = new Set(["identity", "role", "name", "mimeType", "size", "preview"]);
+const SOURCE_REFERENCE_KEYS = new Set([
+  "address",
   "name",
   "mimeType",
   "size",
-  "preview",
+  "startLine",
+  "endLine",
 ]);
-const SOURCE_REFERENCE_KEYS = new Set(["address", "name", "mimeType", "size", "startLine", "endLine"]);
 const FORBIDDEN_PATH_KEYS = new Set([
   "path",
   "filePath",
@@ -83,8 +85,7 @@ function normalizeSourceReferenceAddress(value) {
   return identity;
 }
 function known(value, keys, code) {
-  for (const key of Object.keys(value))
-    if (!keys.has(key)) throw new Error(`${code}:${key}`);
+  for (const key of Object.keys(value)) if (!keys.has(key)) throw new Error(`${code}:${key}`);
 }
 function clean(value) {
   if (value === undefined || value === null) return undefined;
@@ -110,8 +111,7 @@ function assertNoPaths(value, location = "envelope") {
     return;
   }
   for (const [key, child] of Object.entries(value)) {
-    if (FORBIDDEN_PATH_KEYS.has(key))
-      throw new Error(`forbidden_path_field:${location}.${key}`);
+    if (FORBIDDEN_PATH_KEYS.has(key)) throw new Error(`forbidden_path_field:${location}.${key}`);
     assertNoPaths(child, `${location}.${key}`);
   }
 }
@@ -130,12 +130,7 @@ function normalizeMeta(meta = {}) {
   return clean(normalized) || {};
 }
 
-export function createTransferIdentity({
-  sessionId,
-  turnScopeId,
-  runId,
-  producer,
-} = {}) {
+export function createTransferIdentity({ sessionId, turnScopeId, runId, producer } = {}) {
   if (!plain(producer)) throw new Error("invalid_transfer_producer");
   known(producer, PRODUCER_KEYS, "unknown_transfer_producer_field");
   return Object.freeze({
@@ -145,9 +140,7 @@ export function createTransferIdentity({
       : {
           turnScopeId: required(turnScopeId, "invalid_transfer_turn_scope_id"),
         }),
-    ...(runId === undefined
-      ? {}
-      : { runId: required(runId, "invalid_transfer_run_id") }),
+    ...(runId === undefined ? {} : { runId: required(runId, "invalid_transfer_run_id") }),
     producer: Object.freeze({
       type: required(producer.type, "invalid_transfer_producer_type"),
       id: required(producer.id, "invalid_transfer_producer_id"),
@@ -222,9 +215,7 @@ export function attachmentTransfer({ attachments, ...options } = {}) {
     ...options,
     payload: {
       mode: TRANSFER_MODE.ATTACHMENT,
-      attachments: (Array.isArray(attachments) ? attachments : []).map(
-        createAttachmentReference,
-      ),
+      attachments: (Array.isArray(attachments) ? attachments : []).map(createAttachmentReference),
     },
   });
 }
@@ -262,8 +253,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
       ]),
       "unknown_envelope_field",
     );
-    if (value.protocol !== TRANSFER_PROTOCOL)
-      throw new Error("invalid_protocol");
+    if (value.protocol !== TRANSFER_PROTOCOL) throw new Error("invalid_protocol");
     if (value.version !== TRANSFER_VERSION) throw new Error("invalid_version");
     required(value.transferId, "invalid_transfer_id");
     required(value.messageId, "invalid_message_id");
@@ -277,18 +267,12 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
       "unknown_payload_field",
     );
     if (value.payload.mode === TRANSFER_MODE.DIRECT) {
-      if (typeof value.payload.content !== "string")
-        throw new Error("direct_content_required");
-      if (value.payload.attachments !== undefined)
-        throw new Error("direct_attachments_forbidden");
+      if (typeof value.payload.content !== "string") throw new Error("direct_content_required");
+      if (value.payload.attachments !== undefined) throw new Error("direct_attachments_forbidden");
     } else if (value.payload.mode === TRANSFER_MODE.ATTACHMENT) {
-      if (
-        !Array.isArray(value.payload.attachments) ||
-        !value.payload.attachments.length
-      )
+      if (!Array.isArray(value.payload.attachments) || !value.payload.attachments.length)
         throw new Error("attachment_list_required");
-      if (value.payload.content !== undefined)
-        throw new Error("attachment_content_forbidden");
+      if (value.payload.content !== undefined) throw new Error("attachment_content_forbidden");
       value.payload.attachments.forEach((x) => {
         known(x, REF_KEYS, "unknown_attachment_field");
         createAttachmentReference(x);
@@ -311,8 +295,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     errors.push(error.message);
   }
   const result = { ok: errors.length === 0, errors };
-  if (!result.ok && strict)
-    throw new Error(`invalid_transfer_envelope:${errors.join(";")}`);
+  if (!result.ok && strict) throw new Error(`invalid_transfer_envelope:${errors.join(";")}`);
   return result;
 }
 

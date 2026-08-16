@@ -61,9 +61,7 @@ function inspectDirectory(directory) {
   if (!fs.existsSync(directory)) return;
   const entries = fs.readdirSync(directory, { withFileTypes: true });
   const extensions = new Set(
-    entries
-      .filter((entry) => entry.isFile())
-      .map((entry) => path.extname(entry.name)),
+    entries.filter((entry) => entry.isFile()).map((entry) => path.extname(entry.name)),
   );
   if (extensions.has(".vue") && (extensions.has(".js") || extensions.has(".mjs"))) {
     violations.push(`${path.relative(projectRoot, directory)} mixes Vue and JavaScript files`);
@@ -75,11 +73,17 @@ function inspectDirectory(directory) {
 
 function scriptRegions(filePath, content) {
   if (!filePath.endsWith(".vue")) return [content];
-  return Array.from(content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi), (match) => match[1]);
+  return Array.from(
+    content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi),
+    (match) => match[1],
+  );
 }
 
 function dependencyViolation(importer, target) {
-  if (isInside(sharedRoot, importer) && (isInside(appRoot, target) || isInside(moduleRoot, target))) {
+  if (
+    isInside(sharedRoot, importer) &&
+    (isInside(appRoot, target) || isInside(moduleRoot, target))
+  ) {
     return "shared code must not depend on app or business modules";
   }
   if (isInside(moduleRoot, importer) && isInside(appRoot, target)) {
@@ -102,7 +106,8 @@ async function inspectDependencies(directory) {
       await inspectDependencies(filePath);
       continue;
     }
-    if (!entry.isFile() || !inspectedExtensions.has(path.extname(entry.name).toLowerCase())) continue;
+    if (!entry.isFile() || !inspectedExtensions.has(path.extname(entry.name).toLowerCase()))
+      continue;
     for (const script of scriptRegions(filePath, fs.readFileSync(filePath, "utf8"))) {
       let imports;
       try {
@@ -117,9 +122,7 @@ async function inspectDependencies(directory) {
         const target = path.resolve(path.dirname(filePath), specifier.replace(/[?#].*$/, ""));
         const reason = dependencyViolation(filePath, target);
         if (reason) {
-          violations.push(
-            `${path.relative(repoRoot, filePath)}: ${reason} (${specifier})`,
-          );
+          violations.push(`${path.relative(repoRoot, filePath)}: ${reason} (${specifier})`);
         }
       }
     }
@@ -128,22 +131,20 @@ async function inspectDependencies(directory) {
 
 for (const relativeDirectory of retiredDirectories) {
   if (fs.existsSync(path.join(sourceRoot, relativeDirectory))) {
-    violations.push(`src/${relativeDirectory} is retired; use an owning module or infrastructure layer`);
+    violations.push(
+      `src/${relativeDirectory} is retired; use an owning module or infrastructure layer`,
+    );
   }
 }
 for (const relativeDirectory of retiredTestDirectories) {
   if (fs.existsSync(path.join(unitTestRoot, relativeDirectory))) {
-    violations.push(
-      `tests/unit/${relativeDirectory} is retired; mirror the owning source layer`,
-    );
+    violations.push(`tests/unit/${relativeDirectory} is retired; mirror the owning source layer`);
   }
 }
 if (fs.existsSync(agentProxyTestRoot)) {
   for (const entry of fs.readdirSync(agentProxyTestRoot, { withFileTypes: true })) {
     if (entry.isFile() && /\.(?:test|spec)\.js$/.test(entry.name)) {
-      violations.push(
-        `agent-proxy/__tests__/${entry.name} must belong to an owning source layer`,
-      );
+      violations.push(`agent-proxy/__tests__/${entry.name} must belong to an owning source layer`);
     }
   }
 }

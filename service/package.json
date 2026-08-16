@@ -35,8 +35,8 @@
     "lint:service-constants": "eslint .",
     "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=service",
     "pretest": "npm run -s check:i18n-imports",
-    "install:openvscode-server": "node scripts/install-openvscode-server.mjs",
-    "ensure:openvscode-server": "node scripts/install-openvscode-server.mjs"
+    "install:openvscode-server": "node scripts/install-openvscode-server.js",
+    "ensure:openvscode-server": "node scripts/install-openvscode-server.js"
   },
   "dependencies": {
     "@noobot/agent-config-protocol": "file:../agent-config-protocol",

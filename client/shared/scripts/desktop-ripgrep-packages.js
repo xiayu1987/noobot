@@ -18,11 +18,12 @@ const desktopRipgrepPackages = {
 };
 
 export function getDesktopRipgrepPackages(desktopPackageName, ripgrepVersion, arch) {
-  const platform = desktopPackageName === "noobot-windows-client"
-    ? "windows"
-    : desktopPackageName === "noobot-mac-client"
-      ? "mac"
-      : "";
+  const platform =
+    desktopPackageName === "noobot-windows-client"
+      ? "windows"
+      : desktopPackageName === "noobot-mac-client"
+        ? "mac"
+        : "";
   const packageName = desktopRipgrepPackages[platform]?.[arch];
   return packageName ? [`${packageName}@${ripgrepVersion}`] : [];
 }

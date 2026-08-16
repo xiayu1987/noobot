@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TOOL_SCENARIO, TOOL_STRATEGIES } from "./strategies/tool-strategies.mjs";
-import { HARNESS_SCENARIO, HARNESS_STRATEGIES } from "./strategies/harness-strategies.mjs";
-import { WORKFLOW_SCENARIO, WORKFLOW_STRATEGIES } from "./strategies/workflow-strategies.mjs";
-import { registerToolInputPolicies } from "./policies/tool-input-policies.mjs";
-import { registerToolOutputPolicies } from "./policies/tool-output-policies.mjs";
+import { TOOL_SCENARIO, TOOL_STRATEGIES } from "./strategies/tool-strategies.js";
+import { HARNESS_SCENARIO, HARNESS_STRATEGIES } from "./strategies/harness-strategies.js";
+import { WORKFLOW_SCENARIO, WORKFLOW_STRATEGIES } from "./strategies/workflow-strategies.js";
+import { registerToolInputPolicies } from "./policies/tool-input-policies.js";
+import { registerToolOutputPolicies } from "./policies/tool-output-policies.js";
 
 export const SEMANTIC_TRANSFER_REGISTRATION = Object.freeze({
   SCENARIOS: Object.freeze({
@@ -34,34 +34,35 @@ function requireText(value, code) {
   return normalized;
 }
 
-export function registerSemanticTransferScenario({
-  name,
-  strategies = [],
-  categories = {},
-} = {}) {
+export function registerSemanticTransferScenario({ name, strategies = [], categories = {} } = {}) {
   const scenario = requireText(name, "semantic_transfer_scenario_required");
-  if (scenarios.has(scenario))
-    throw new Error(`semantic_transfer_scenario_duplicate:${scenario}`);
+  if (scenarios.has(scenario)) throw new Error(`semantic_transfer_scenario_duplicate:${scenario}`);
   const registeredStrategies = new Set(
     (Array.isArray(strategies) ? strategies : []).map((item) =>
       requireText(item, "semantic_transfer_strategy_required"),
     ),
   );
   if (!registeredStrategies.size)
-    throw new Error(
-      `semantic_transfer_scenario_strategies_required:${scenario}`,
-    );
+    throw new Error(`semantic_transfer_scenario_strategies_required:${scenario}`);
   scenarios.set(
     scenario,
     Object.freeze({
       name: scenario,
       strategies: Object.freeze([...registeredStrategies]),
-      categories: Object.freeze(Object.fromEntries(
-        Object.entries(categories && typeof categories === "object" ? categories : {}).map(([category, points]) => [
-          text(category),
-          Object.freeze((Array.isArray(points) ? points : []).map((point) => requireText(point, "semantic_transfer_business_point_required"))),
-        ]),
-      )),
+      categories: Object.freeze(
+        Object.fromEntries(
+          Object.entries(categories && typeof categories === "object" ? categories : {}).map(
+            ([category, points]) => [
+              text(category),
+              Object.freeze(
+                (Array.isArray(points) ? points : []).map((point) =>
+                  requireText(point, "semantic_transfer_business_point_required"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     }),
   );
   return scenarios.get(scenario);
@@ -83,9 +84,7 @@ export function registerToolInputPolicy({
     throw new Error(`semantic_transfer_tool_input_policy_duplicate:${nameKey}`);
   const max = Number(maxChars);
   if (!Number.isSafeInteger(max) || max < 0)
-    throw new Error(
-      `semantic_transfer_tool_input_policy_max_chars_invalid:${nameKey}`,
-    );
+    throw new Error(`semantic_transfer_tool_input_policy_max_chars_invalid:${nameKey}`);
   inputPolicies.set(
     nameKey,
     Object.freeze({
@@ -97,20 +96,10 @@ export function registerToolInputPolicy({
       name:
         typeof name === "function"
           ? name
-          : () =>
-              requireText(name, "semantic_transfer_tool_input_name_required"),
-      mimeType: requireText(
-        mimeType,
-        "semantic_transfer_tool_input_mime_required",
-      ),
-      reason: requireText(
-        reason,
-        "semantic_transfer_tool_input_reason_required",
-      ),
-      message: requireText(
-        message,
-        "semantic_transfer_tool_input_message_required",
-      ),
+          : () => requireText(name, "semantic_transfer_tool_input_name_required"),
+      mimeType: requireText(mimeType, "semantic_transfer_tool_input_mime_required"),
+      reason: requireText(reason, "semantic_transfer_tool_input_reason_required"),
+      message: requireText(message, "semantic_transfer_tool_input_message_required"),
     }),
   );
 }
@@ -131,55 +120,37 @@ export function assertSemanticTransferRegistration({
   category = "",
   businessPoint = "",
 } = {}) {
-  const registered = scenarios.get(
-    requireText(scenario, "semantic_transfer_scenario_required"),
-  );
-  if (!registered)
-    throw new Error(`semantic_transfer_scenario_not_registered:${scenario}`);
-  const normalizedStrategy = requireText(
-    strategy,
-    "semantic_transfer_strategy_required",
-  );
+  const registered = scenarios.get(requireText(scenario, "semantic_transfer_scenario_required"));
+  if (!registered) throw new Error(`semantic_transfer_scenario_not_registered:${scenario}`);
+  const normalizedStrategy = requireText(strategy, "semantic_transfer_strategy_required");
   if (!registered.strategies.includes(normalizedStrategy)) {
-    throw new Error(
-      `semantic_transfer_strategy_not_registered:${scenario}:${normalizedStrategy}`,
-    );
+    throw new Error(`semantic_transfer_strategy_not_registered:${scenario}:${normalizedStrategy}`);
   }
   if (text(category) || text(businessPoint)) {
     const points = registered.categories?.[text(category)];
     if (!points || !points.includes(text(businessPoint))) {
-      throw new Error(`semantic_transfer_business_point_not_registered:${scenario}:${text(category)}:${text(businessPoint)}`);
+      throw new Error(
+        `semantic_transfer_business_point_not_registered:${scenario}:${text(category)}:${text(businessPoint)}`,
+      );
     }
   }
   return registered;
 }
 
 export function getToolInputPolicy(toolName, args = {}) {
-  const policy = inputPolicies.get(
-    requireText(toolName, "semantic_transfer_tool_name_required"),
-  );
-  if (!policy)
-    throw new Error(
-      `semantic_transfer_tool_input_policy_not_registered:${toolName}`,
-    );
+  const policy = inputPolicies.get(requireText(toolName, "semantic_transfer_tool_name_required"));
+  if (!policy) throw new Error(`semantic_transfer_tool_input_policy_not_registered:${toolName}`);
   if (policy.enabled && policy.enabled({ args }) !== true) return null;
   return policy;
 }
 
 export function hasToolInputPolicy(toolName) {
-  return inputPolicies.has(
-    requireText(toolName, "semantic_transfer_tool_name_required"),
-  );
+  return inputPolicies.has(requireText(toolName, "semantic_transfer_tool_name_required"));
 }
 
 export function getToolOutputPolicy(toolName) {
-  const policy = outputPolicies.get(
-    requireText(toolName, "semantic_transfer_tool_name_required"),
-  );
-  if (!policy)
-    throw new Error(
-      `semantic_transfer_tool_output_policy_not_registered:${toolName}`,
-    );
+  const policy = outputPolicies.get(requireText(toolName, "semantic_transfer_tool_name_required"));
+  if (!policy) throw new Error(`semantic_transfer_tool_output_policy_not_registered:${toolName}`);
   return policy;
 }
 

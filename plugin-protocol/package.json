@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Authoritative Noobot plugin manifest and activation protocol",
   "exports": {
-    ".": "./src/index.mjs",
-    "./manifest": "./src/manifest.mjs",
-    "./activation": "./src/activation.mjs",
-    "./frontend": "./src/frontend.mjs",
+    ".": "./src/index.js",
+    "./manifest": "./src/manifest.js",
+    "./activation": "./src/activation.js",
+    "./frontend": "./src/frontend.js",
     "./package.json": "./package.json"
   },
   "dependencies": {
@@ -16,6 +16,6 @@
     "zod": "^4.4.3"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   }
 }

@@ -6,15 +6,23 @@
 const clean = (value) => String(value || "").trim();
 
 export function createSessionIdentity({ userId = "", sessionId = "", parentSessionId = "" } = {}) {
-  return Object.freeze({ userId: clean(userId), sessionId: clean(sessionId), parentSessionId: clean(parentSessionId) });
+  return Object.freeze({
+    userId: clean(userId),
+    sessionId: clean(sessionId),
+    parentSessionId: clean(parentSessionId),
+  });
 }
 
 export function validateSessionIdentity(identity = {}) {
   const errors = [];
-  if (!identity || typeof identity !== "object" || Array.isArray(identity)) return { valid: false, errors: ["invalid_session_identity"] };
+  if (!identity || typeof identity !== "object" || Array.isArray(identity))
+    return { valid: false, errors: ["invalid_session_identity"] };
   if (!clean(identity.userId)) errors.push("missing_user_id");
   if (!clean(identity.sessionId)) errors.push("missing_session_id");
-  if (Object.keys(identity).some((key) => !["userId", "sessionId", "parentSessionId"].includes(key))) errors.push("unknown_session_identity_field");
+  if (
+    Object.keys(identity).some((key) => !["userId", "sessionId", "parentSessionId"].includes(key))
+  )
+    errors.push("unknown_session_identity_field");
   return { valid: errors.length === 0, errors };
 }
 

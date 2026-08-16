@@ -50,7 +50,7 @@ Session log WebSocket:
 - Auth: reuses the existing API key WebSocket authentication.
 - Storage: backend writes one directory per `sessionId`, and one JSONL file per category (`state`, `message`, `interaction`, `transport`, `agent-proxy`, `system`); debug logs are further split by `data.debugType` into `debug-<debugType>.jsonl`, or `debug.jsonl` when no explicit `debugType` is present.
 - Main fields: `source`, `category`, `event`, `sessionId`, optional `dialogProcessId` / `turnScopeId`, and compact `data` payloads for state-machine, message-flow, frontend/backend interaction, and agent-proxy events.
-- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.mjs`.
+- Control: frontend and agent-proxy only send events through the log WebSocket. Runtime-events is the single control point that decides whether to record by the specific business-type switches in `runtime-events-config.js`.
 - Internal session log controls are grouped as `sessionLogControls.log.*` and `sessionLogControls.debug.*`. Flat control fields are not part of the protocol.
 
 ---
@@ -169,7 +169,7 @@ Large-context length defaults:
 - Semantic-transfer tool-result inline threshold: 30000 chars
 - Semantic-transfer tool-input overflow threshold: 30000 chars
 
-Length thresholds are centralized in `@noobot/shared/length-thresholds` (`shared/length-thresholds.mjs`). Update that package export when changing character/byte/string-size limits.
+Length thresholds are centralized in `@noobot/shared/length-thresholds` (`shared/length-thresholds.js`). Update that package export when changing character/byte/string-size limits.
 
 Notes:
 

@@ -46,7 +46,7 @@ for (const marker of [
 const ownershipChecks = [
   ["agent/src/config/index.js", "@noobot/execution-isolation-protocol"],
   ["agent/src/sandbox/docker-sandbox.js", "@noobot/execution-isolation-protocol"],
-  ["path-resolver/src/sandbox-mapping.mjs", "@noobot/execution-isolation-protocol"],
+  ["path-resolver/src/sandbox-mapping.js", "@noobot/execution-isolation-protocol"],
   ["agent/src/tools/core/check-tool-input.js", "resolveExecutionIsolation"],
   ["agent/src/tools/core/workspace-io-executor.js", "assertToolExecutionPolicy"],
   [
@@ -64,7 +64,7 @@ const legacyFields =
   /\b(?:dockerMounts|dockerContainerScope|dockerContainerName|dockerImage|dockerWorkdir|dockerLockWaitTimeoutMs|mountSource|mountTarget|mountDescription|dockerProjectMountSource|dockerProjectMountTarget|sandboxPathMappings)\b/;
 for (const relativePath of [
   "agent/src/sandbox/docker-sandbox.js",
-  "path-resolver/src/sandbox-mapping.mjs",
+  "path-resolver/src/sandbox-mapping.js",
 ]) {
   if (legacyFields.test(await source(relativePath))) {
     violations.push(`${relativePath}: legacy execution-isolation field is forbidden`);
@@ -73,8 +73,8 @@ for (const relativePath of [
 
 const duplicateLayoutRules = [
   ["agent/src/sandbox/docker-sandbox.js", /["'`]\/workspace(?:\/|["'`])/],
-  ["path-resolver/src/runtime-context.mjs", /["'`]\/workspace(?:\/|["'`])/],
-  ["path-resolver/src/tool-path.mjs", /["'`]\/workspace(?:\/|["'`])/],
+  ["path-resolver/src/runtime-context.js", /["'`]\/workspace(?:\/|["'`])/],
+  ["path-resolver/src/tool-path.js", /["'`]\/workspace(?:\/|["'`])/],
   ["agent/src/tools/execution/script-tool/constants.js", /runtime\/ops_workdir/],
 ];
 for (const [relativePath, pattern] of duplicateLayoutRules) {

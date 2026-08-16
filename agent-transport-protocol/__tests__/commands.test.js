@@ -11,7 +11,7 @@ import {
   createTurnRunCommand,
   createTurnStopCommand,
   parseAgentCommand,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 test("turn send command has one canonical location for transport fields", () => {
   const command = createTurnRunCommand({
@@ -46,7 +46,8 @@ test("session provision intent is explicit and only valid for turn.send", () => 
     commandId: "turn-new",
     identity: { sessionId: "session-new", turnScopeId: "turn-new" },
     input: { message: "hello", attachments: [] },
-    preferences: {}, presentation: {},
+    preferences: {},
+    presentation: {},
     concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 0 },
     session: { createIfAbsent: true },
   });
@@ -86,7 +87,8 @@ test("run concurrency separates turn revision from session version", () => {
     commandId: "turn-1",
     identity: { sessionId: "session-1", turnScopeId: "turn-1" },
     input: { message: "hello", attachments: [] },
-    preferences: {}, presentation: {},
+    preferences: {},
+    presentation: {},
     concurrency: { expectedTurnRevision: 0, expectedAggregateVersion: 7 },
   });
   assert.equal(parseAgentCommand(command), command);
@@ -108,24 +110,34 @@ test("turn stop requires the current positive authoritative turn revision", () =
   assert.equal(parseAgentCommand(command), command);
   assert.equal(command.concurrency.expectedTurnRevision, 2);
 
-  assert.throws(() => createTurnStopCommand({
-    commandId: "stop:turn-1",
-    identity: { sessionId: "session-1", turnScopeId: "turn-1" },
-    concurrency: {},
-    stop: {},
-  }), /invalid_expected_turn_revision/);
+  assert.throws(
+    () =>
+      createTurnStopCommand({
+        commandId: "stop:turn-1",
+        identity: { sessionId: "session-1", turnScopeId: "turn-1" },
+        concurrency: {},
+        stop: {},
+      }),
+    /invalid_expected_turn_revision/,
+  );
   command.concurrency.expectedTurnRevision = 0;
   assert.throws(() => parseAgentCommand(command), /invalid_expected_turn_revision/);
 });
 
 test("protocol rejects legacy and unknown top-level fields", () => {
-  assert.throws(() => parseAgentCommand(JSON.stringify({
-    action: "continue",
-    userId: "user-1",
-    sessionId: "session-1",
-    message: "legacy",
-    config: {},
-  })), /unsupported_protocol_version/);
+  assert.throws(
+    () =>
+      parseAgentCommand(
+        JSON.stringify({
+          action: "continue",
+          userId: "user-1",
+          sessionId: "session-1",
+          message: "legacy",
+          config: {},
+        }),
+      ),
+    /unsupported_protocol_version/,
+  );
 
   const command = createInteractionResponseCommand({
     commandId: "interaction:request-1",

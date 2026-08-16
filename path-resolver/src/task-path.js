@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filePath, normalizeSlashPath } from "./platform.mjs";
+import { filePath, normalizeSlashPath } from "./platform.js";
 
 export const TASK_PATH_KINDS = Object.freeze({
   INPUT: "input",
@@ -15,8 +15,11 @@ export const TASK_PATH_VIEW = "task-local";
 const TASK_PATH_KIND_SET = new Set(Object.values(TASK_PATH_KINDS));
 
 function normalizeTaskPathKind(kind = "") {
-  const normalized = String(kind || "").trim().toLowerCase();
-  if (!TASK_PATH_KIND_SET.has(normalized)) throw new TypeError("task path kind must be input, output, or temp");
+  const normalized = String(kind || "")
+    .trim()
+    .toLowerCase();
+  if (!TASK_PATH_KIND_SET.has(normalized))
+    throw new TypeError("task path kind must be input, output, or temp");
   return normalized;
 }
 
@@ -30,7 +33,9 @@ export function normalizeTaskPathRelative(
   const hasParentTraversal = segments.includes("..");
   const normalized = segments.filter((segment) => segment && segment !== ".").join("/");
   if (isAbsolute || hasParentTraversal || (!normalized && !allowRoot)) {
-    throw new Error(`${String(label || "task path").trim()} must be a safe relative path without parent traversal`);
+    throw new Error(
+      `${String(label || "task path").trim()} must be a safe relative path without parent traversal`,
+    );
   }
   return normalized;
 }
@@ -46,9 +51,14 @@ export function parseTaskPath(value = "", { kind = "", allowRoot = false } = {})
   const match = /^([a-z]+):\/\/(.*)$/.exec(text);
   if (!match) throw new Error("task path token is required");
   const normalizedKind = normalizeTaskPathKind(match[1]);
-  if (kind && normalizedKind !== normalizeTaskPathKind(kind)) throw new Error(`${kind} task path token is required`);
+  if (kind && normalizedKind !== normalizeTaskPathKind(kind))
+    throw new Error(`${kind} task path token is required`);
   const relative = normalizeTaskPathRelative(match[2], { allowRoot });
-  return Object.freeze({ token: `${normalizedKind}://${relative}`, kind: normalizedKind, relative });
+  return Object.freeze({
+    token: `${normalizedKind}://${relative}`,
+    kind: normalizedKind,
+    relative,
+  });
 }
 
 export function isTaskPath(value = "", { kind = "", allowRoot = true } = {}) {
@@ -65,9 +75,15 @@ export function resolveTaskPath({ token = "", roots = {}, kind = "", allowRoot =
   const root = String(roots?.[parsed.kind] || "").trim();
   if (!root) throw new Error(`${parsed.kind} task path root is required`);
   const resolvedRoot = filePath.resolve(root);
-  const resolvedPath = parsed.relative ? filePath.resolve(resolvedRoot, parsed.relative) : resolvedRoot;
+  const resolvedPath = parsed.relative
+    ? filePath.resolve(resolvedRoot, parsed.relative)
+    : resolvedRoot;
   const relative = filePath.relative(resolvedRoot, resolvedPath);
-  if (relative === ".." || relative.startsWith(`..${filePath.sep}`) || filePath.isAbsolute(relative)) {
+  if (
+    relative === ".." ||
+    relative.startsWith(`..${filePath.sep}`) ||
+    filePath.isAbsolute(relative)
+  ) {
     throw new Error("task path is outside its root");
   }
   return Object.freeze({ ...parsed, root: resolvedRoot, path: resolvedPath });

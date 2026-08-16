@@ -5,15 +5,15 @@
   "type": "module",
   "description": "Canonical Noobot session aggregate, command, event and policy protocol",
   "exports": {
-    ".": "./src/index.mjs",
-    "./turn-lifecycle": "./src/turn-lifecycle.mjs",
+    ".": "./src/index.js",
+    "./turn-lifecycle": "./src/turn-lifecycle.js",
     "./package.json": "./package.json",
-    "./execution-lifecycle": "./src/execution-lifecycle.mjs",
-    "./turn-commit": "./src/turn-commit.mjs",
-    "./turn-scope-identity": "./src/turn-scope-identity.mjs"
+    "./execution-lifecycle": "./src/execution-lifecycle.js",
+    "./turn-commit": "./src/turn-commit.js",
+    "./turn-scope-identity": "./src/turn-scope-identity.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",

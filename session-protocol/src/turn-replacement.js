@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export * from "./lifecycle/turn-replacement.mjs";
+export * from "./lifecycle/turn-replacement.js";

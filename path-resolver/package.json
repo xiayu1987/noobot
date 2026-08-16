@@ -3,13 +3,13 @@
   "version": "4.1.9",
   "private": true,
   "type": "module",
-  "main": "src/index.mjs",
+  "main": "src/index.js",
   "exports": {
-    ".": "./src/index.mjs",
+    ".": "./src/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",

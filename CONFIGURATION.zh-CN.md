@@ -50,7 +50,7 @@ Session 日志 WebSocket：
 - 鉴权：复用现有 API key WebSocket 鉴权。
 - 存储：后端按 `sessionId` 建目录，并按分类写 JSONL 文件（`state`、`message`、`interaction`、`transport`、`agent-proxy`、`system`）；debug 日志按 `data.debugType` 继续拆分为 `debug-<debugType>.jsonl`，没有明确 `debugType` 时写入 `debug.jsonl`。
 - 主要字段：`source`、`category`、`event`、`sessionId`，可选 `dialogProcessId` / `turnScopeId`，以及用于状态机、消息流、前后端交互和 agent-proxy 事件的精简 `data` 载荷。
-- 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.mjs` 中的具体业务小类型开关决定。
+- 控制：前端和 agent-proxy 只通过日志 WebSocket 发送事件；是否记录统一由 runtime-events 按 `runtime-events-config.js` 中的具体业务小类型开关决定。
 - 内部 session 日志开关按 `sessionLogControls.log.*` 与 `sessionLogControls.debug.*` 分组；扁平开关字段不属于协议。
 
 ---
@@ -169,7 +169,7 @@ Session 日志 WebSocket：
 - semantic-transfer 工具结果 inline 阈值：30000 字符
 - semantic-transfer 工具输入 overflow 阈值：30000 字符
 
-长度相关阈值统一集中在 `@noobot/shared/length-thresholds`（`shared/length-thresholds.mjs`）。后续调整字符数、字节数、字符串预览长度时优先改这个包导出。
+长度相关阈值统一集中在 `@noobot/shared/length-thresholds`（`shared/length-thresholds.js`）。后续调整字符数、字节数、字符串预览长度时优先改这个包导出。
 
 说明：
 

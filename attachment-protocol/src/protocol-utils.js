@@ -60,7 +60,7 @@ export function assertKnownFields(value, allowedFields, codePrefix) {
 }
 
 export function freezeDefined(value) {
-  return Object.freeze(Object.fromEntries(
-    Object.entries(value).filter(([, child]) => child !== undefined),
-  ));
+  return Object.freeze(
+    Object.fromEntries(Object.entries(value).filter(([, child]) => child !== undefined)),
+  );
 }
