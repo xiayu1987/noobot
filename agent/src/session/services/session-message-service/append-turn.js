@@ -1,10 +1,10 @@
-import { normalizeDialogProcessId } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";

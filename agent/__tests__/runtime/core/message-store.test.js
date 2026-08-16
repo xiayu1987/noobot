@@ -15,8 +15,10 @@ import {
   resolveMessagesByIds,
   writeMessageBlocks,
 } from "@noobot/context-protocol/message-store";
-import { attachModelContextRuntime } from "@noobot/context-protocol/model-context-runtime";
-import { resolveCanonicalContextMessages } from "@noobot/context-protocol/model-context-runtime";
+import {
+  attachModelContextRuntime,
+  resolveCanonicalContextMessages,
+} from "@noobot/context-protocol/model-context-runtime";
 
 function attachRuntime(holder) {
   attachModelContextRuntime(holder);

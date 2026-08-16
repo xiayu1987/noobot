@@ -1,9 +1,9 @@
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { randomUUID } from "node:crypto";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";

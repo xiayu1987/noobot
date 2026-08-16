@@ -37,6 +37,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
   };
   const messages = toConversationMessages([
     {
+      messageUid: "message-1",
       role: "assistant",
       content: "ok",
       transferEnvelopes: [envelope],
@@ -52,6 +53,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
 test("toConversationMessages omits empty legacy attachment/transfer mirrors", () => {
   const [message] = toConversationMessages([
     {
+      messageUid: "message-1",
       role: "assistant",
       content: "ok",
       attachments: [],
