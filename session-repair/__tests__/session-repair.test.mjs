@@ -183,6 +183,127 @@ test("reconciles session summary membership from materialized artifact ids", () 
   assert.equal(result.changed, true);
 });
 
+test("migrates duplicate terminal and command facts into the canonical lifecycle", () => {
+  const terminalStatus = {
+    turnScopeId: "turn-1",
+    dialogProcessId: "dialog-1",
+    status: "completed",
+    reason: "run_completed",
+  };
+  const result = migrateSessionDocument({
+    sessionId: "session-1",
+    aggregateVersion: 3,
+    messages: [
+      {
+        messageUid: "user-1",
+        role: "user",
+        content: "hello",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dialog-1",
+        ts: "2026-01-01T00:00:00.000Z",
+        turnCommit: { action: "send", commandId: "send-1", runState: "pending_start" },
+      },
+    ],
+    turnStatuses: [terminalStatus],
+    mutationReceipts: [
+      {
+        operation: "delete_from",
+        commandId: "delete-1",
+        requestHash: "legacy-delete-hash",
+        aggregateVersion: 3,
+        result: { deletedCount: 1 },
+        committedAt: "2026-01-01T00:00:03.000Z",
+      },
+    ],
+    turnLifecycle: {
+      turns: {
+        "turn-1": {
+          turnScopeId: "turn-1",
+          dialogProcessId: "dialog-1",
+          commandId: "send-1:completed",
+          completionCommitId: "send-1:completed",
+          terminalStatus,
+        },
+      },
+      commandReceipts: [
+        {
+          commandId: "send-1:completed",
+          eventType: "turn.completed",
+          turnScopeId: "turn-1",
+          requestHash: "lifecycle-hash",
+          envelope: {
+            commandId: "send-1:completed",
+            eventType: "turn.completed",
+            phase: "completion",
+          },
+        },
+      ],
+    },
+    authorityEventOutbox: [
+      {
+        eventId: "event-1",
+        envelope: { commandId: "send-1:completed", eventType: "turn.completed" },
+      },
+    ],
+  });
+
+  assert.equal(result.changed, true);
+  assert.equal(Object.hasOwn(result.document, "turnStatuses"), false);
+  assert.equal(Object.hasOwn(result.document, "mutationReceipts"), false);
+  assert.deepEqual(
+    result.document.turnLifecycle.commandReceipts.map(({ commandId, type }) => ({
+      commandId,
+      type,
+    })),
+    [
+      { commandId: "send-1:completed:turn.completed", type: "turn.completed" },
+      { commandId: "send-1", type: "session.turn.commit" },
+      { commandId: "delete-1", type: "session.message.delete_from" },
+    ],
+  );
+  assert.equal(
+    result.document.turnLifecycle.turns["turn-1"].completionCommitId,
+    "send-1:completed:turn.completed",
+  );
+  assert.equal(
+    result.document.authorityEventOutbox[0].envelope.commandId,
+    "send-1:completed:turn.completed",
+  );
+});
+
+test("rejects conflicting duplicate terminal facts during explicit migration", () => {
+  assert.throws(
+    () =>
+      migrateSessionDocument({
+        sessionId: "session-1",
+        turnStatuses: [
+          {
+            turnScopeId: "turn-1",
+            dialogProcessId: "dialog-1",
+            status: "error",
+            reason: "run_error",
+          },
+        ],
+        turnLifecycle: {
+          turns: {
+            "turn-1": {
+              turnScopeId: "turn-1",
+              dialogProcessId: "dialog-1",
+              terminalStatus: {
+                turnScopeId: "turn-1",
+                dialogProcessId: "dialog-1",
+                status: "completed",
+                reason: "run_completed",
+              },
+            },
+          },
+        },
+      }),
+    (error) => error.code === "SESSION_TERMINAL_FACT_CONFLICT",
+  );
+});
+
 test("repairs eligible messages in completed turns without marking preserved user or final messages", () => {
   const result = reconcileCompletedTurnSummaryMarks({
     turnLifecycle: {
