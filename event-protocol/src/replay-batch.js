@@ -3,21 +3,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isPendingInteractionReplay } from "./interaction.mjs";
+import { isPendingInteractionReplay } from "./interaction.js";
 
 const clean = (value) => String(value || "").trim();
-const eventSequence = (event = {}) => Number(
-  event?.ordering?.streamSequence ?? event?.sequence ?? event?.data?.seq ?? 0,
-);
-const eventSessionId = (event = {}) => clean(
-  event?.identity?.sessionId ?? event?.sessionId ?? event?.data?.sessionId,
-);
-const eventParentSessionId = (event = {}) => clean(
-  event?.identity?.parentSessionId ?? event?.parentSessionId ?? event?.data?.parentSessionId,
-);
-const eventId = (event = {}) => clean(
-  event?.identity?.eventId ?? event?.eventId ?? event?.data?.eventId,
-);
+const eventSequence = (event = {}) =>
+  Number(event?.ordering?.streamSequence ?? event?.sequence ?? event?.data?.seq ?? 0);
+const eventSessionId = (event = {}) =>
+  clean(event?.identity?.sessionId ?? event?.sessionId ?? event?.data?.sessionId);
+const eventParentSessionId = (event = {}) =>
+  clean(event?.identity?.parentSessionId ?? event?.parentSessionId ?? event?.data?.parentSessionId);
+const eventId = (event = {}) =>
+  clean(event?.identity?.eventId ?? event?.eventId ?? event?.data?.eventId);
 
 export const EVENT_PROTOCOL_NAME = "@noobot/event-protocol";
 export const EVENT_PROTOCOL_VERSION = 2;
@@ -55,8 +51,9 @@ export function createReplayBatch({
     snapshot,
     snapshotSequence: sequence,
     events: normalizedEvents,
-    pendingInteractions: (Array.isArray(pendingInteractions) ? pendingInteractions : [])
-      .filter((item) => item && typeof item === "object"),
+    pendingInteractions: (Array.isArray(pendingInteractions) ? pendingInteractions : []).filter(
+      (item) => item && typeof item === "object",
+    ),
     cursor: {
       fromSequence: sequence,
       toSequence: normalizedEvents.reduce(
@@ -70,7 +67,8 @@ export function createReplayBatch({
 export function validateReplayBatch(batch = {}) {
   const errors = [];
   if (batch?.protocol?.name !== EVENT_PROTOCOL_NAME) errors.push("invalid_protocol_name");
-  if (Number(batch?.protocol?.version) !== EVENT_PROTOCOL_VERSION) errors.push("unsupported_protocol_version");
+  if (Number(batch?.protocol?.version) !== EVENT_PROTOCOL_VERSION)
+    errors.push("unsupported_protocol_version");
   if (batch?.protocol?.schema !== REPLAY_BATCH_SCHEMA) errors.push("invalid_schema");
   if ("cacheExpired" in batch) errors.push("unsupported_cache_expired_branch");
   if ("expiredDialogProcessIds" in batch) errors.push("unsupported_dialog_replay_cursor");
@@ -94,17 +92,22 @@ export function validateReplayBatch(batch = {}) {
     const id = eventId(event);
     if (!id) errors.push("missing_event_id");
     if (id && seenEventIds.has(id)) {
-      errors.push(JSON.stringify(seenEventIds.get(id)) === JSON.stringify(event)
-        ? "duplicate_event_id"
-        : "event_identity_conflict");
+      errors.push(
+        JSON.stringify(seenEventIds.get(id)) === JSON.stringify(event)
+          ? "duplicate_event_id"
+          : "event_identity_conflict",
+      );
     }
     if (id) seenEventIds.set(id, event);
     const sessionId = eventSessionId(event);
     if (sessionId && sessionId !== clean(batch.sessionId)) errors.push("event_session_mismatch");
-    if (!Number.isInteger(sequence) || sequence !== previous + 1) errors.push("invalid_event_sequence");
+    if (!Number.isInteger(sequence) || sequence !== previous + 1)
+      errors.push("invalid_event_sequence");
     previous = sequence;
   }
-  for (const interaction of Array.isArray(batch.pendingInteractions) ? batch.pendingInteractions : []) {
+  for (const interaction of Array.isArray(batch.pendingInteractions)
+    ? batch.pendingInteractions
+    : []) {
     if (!isPendingInteractionReplay(interaction)) {
       errors.push("invalid_pending_interaction");
       continue;
@@ -119,7 +122,8 @@ export function validateReplayBatch(batch = {}) {
   if (Number(batch?.cursor?.fromSequence ?? snapshotSequence) !== snapshotSequence) {
     errors.push("invalid_cursor_from_sequence");
   }
-  if (Number(batch?.cursor?.toSequence ?? previous) !== previous) errors.push("invalid_cursor_to_sequence");
+  if (Number(batch?.cursor?.toSequence ?? previous) !== previous)
+    errors.push("invalid_cursor_to_sequence");
   return { valid: errors.length === 0, errors };
 }
 
@@ -133,8 +137,15 @@ export function assertLosslessForward(original, forwarded) {
   }
   const originalVersion = original?.protocol?.version ?? original?.protocolVersion;
   const forwardedVersion = forwarded?.protocol?.version ?? forwarded?.protocolVersion;
-  if (originalVersion !== forwardedVersion) throw new Error("event_forwarding_mutated_protocolVersion");
-  const orderingKeys = ["revision", "sequence", "aggregateRevision", "aggregateSequence", "streamSequence"];
+  if (originalVersion !== forwardedVersion)
+    throw new Error("event_forwarding_mutated_protocolVersion");
+  const orderingKeys = [
+    "revision",
+    "sequence",
+    "aggregateRevision",
+    "aggregateSequence",
+    "streamSequence",
+  ];
   for (const key of orderingKeys) {
     const originalValue = original?.ordering?.[key] ?? original?.[key];
     const forwardedValue = forwarded?.ordering?.[key] ?? forwarded?.[key];
@@ -142,7 +153,10 @@ export function assertLosslessForward(original, forwarded) {
       if (originalValue !== forwardedValue) throw new Error(`event_forwarding_mutated_${key}`);
     }
   }
-  if (JSON.stringify(original?.payload || original?.data || {}) !== JSON.stringify(forwarded?.payload || forwarded?.data || {})) {
+  if (
+    JSON.stringify(original?.payload || original?.data || {}) !==
+    JSON.stringify(forwarded?.payload || forwarded?.data || {})
+  ) {
     throw new Error("event_forwarding_mutated_payload");
   }
   return true;
@@ -160,7 +174,12 @@ export function replayEventTail({ snapshotSequence = 0, events = [], apply } = {
     const id = eventId(event);
     if (id && appliedEventIds.has(id)) continue;
     if (sequence !== previous + 1) {
-      return { applied: false, reason: "event_sequence_gap", expected: previous + 1, actual: sequence };
+      return {
+        applied: false,
+        reason: "event_sequence_gap",
+        expected: previous + 1,
+        actual: sequence,
+      };
     }
     apply?.(event);
     if (id) appliedEventIds.add(id);

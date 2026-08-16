@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   reduceCanonicalToolTimeline,
   resolveCanonicalToolTimelineStatus,
-} from "../src/tool-timeline.mjs";
+} from "../src/tool-timeline.js";
 import {
   SECURITY_EVIDENCE_SOURCE,
   createSecurityAssessment,

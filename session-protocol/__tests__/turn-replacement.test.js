@@ -9,7 +9,7 @@ import {
   assertTurnReplacementMaterialization,
   createTurnReplacementCommit,
   validateTurnReplacementCommit,
-} from "../src/turn-replacement.mjs";
+} from "../src/turn-replacement.js";
 
 test("turn replacement commit binds one replacement user to one committed session version", () => {
   const commit = createTurnReplacementCommit({

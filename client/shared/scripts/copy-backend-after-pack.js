@@ -5,7 +5,7 @@
  */
 import { cp, rm, stat } from "node:fs/promises";
 import { clientFilePath as path } from "../path-resolver.js";
-import { assertPreparedBackendRuntimeWorkspaces } from "./backend-runtime-workspaces.mjs";
+import { assertPreparedBackendRuntimeWorkspaces } from "./backend-runtime-workspaces.js";
 
 const requiredBackendRuntimeFiles = [
   "service/app.js",

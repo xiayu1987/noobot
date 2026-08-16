@@ -8,7 +8,7 @@ import {
   isAbsolutePathAnyPlatform,
   normalizePathForPlatform,
   normalizeSlashPath,
-} from "./platform.mjs";
+} from "./platform.js";
 import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
 
 export const PATH_REF_VIEWS = Object.freeze({

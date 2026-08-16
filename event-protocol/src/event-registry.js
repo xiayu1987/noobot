@@ -37,27 +37,36 @@ export const EVENT_TYPE = Object.freeze({
 });
 
 const definitions = new Map([
-  [EVENT_TYPE.INTERACTION_REQUEST, {
-    eventType: EVENT_TYPE.INTERACTION_REQUEST,
-    category: EVENT_DEFINITION_CATEGORY.INTERACTION,
-    authoritative: false,
-  }],
-  [EVENT_TYPE.INTERACTION_RESPONSE, {
-    eventType: EVENT_TYPE.INTERACTION_RESPONSE,
-    category: EVENT_DEFINITION_CATEGORY.INTERACTION,
-    authoritative: false,
-  }],
+  [
+    EVENT_TYPE.INTERACTION_REQUEST,
+    {
+      eventType: EVENT_TYPE.INTERACTION_REQUEST,
+      category: EVENT_DEFINITION_CATEGORY.INTERACTION,
+      authoritative: false,
+    },
+  ],
+  [
+    EVENT_TYPE.INTERACTION_RESPONSE,
+    {
+      eventType: EVENT_TYPE.INTERACTION_RESPONSE,
+      category: EVENT_DEFINITION_CATEGORY.INTERACTION,
+      authoritative: false,
+    },
+  ],
   ...[
     EVENT_TYPE.TRANSPORT_READY,
     EVENT_TYPE.CHANNEL_STATE,
     EVENT_TYPE.RECONNECT_DATA,
     EVENT_TYPE.RECONNECT_COMPLETE,
     EVENT_TYPE.TRANSPORT_ERROR,
-  ].map((eventType) => [eventType, {
+  ].map((eventType) => [
     eventType,
-    category: EVENT_DEFINITION_CATEGORY.TRANSPORT,
-    authoritative: false,
-  }]),
+    {
+      eventType,
+      category: EVENT_DEFINITION_CATEGORY.TRANSPORT,
+      authoritative: false,
+    },
+  ]),
   ...[
     EVENT_TYPE.MESSAGE,
     EVENT_TYPE.MESSAGE_EVENT,
@@ -73,11 +82,14 @@ const definitions = new Map([
     EVENT_TYPE.EXECUTION_SNAPSHOT,
     EVENT_TYPE.EXECUTION_CHILDREN,
     EVENT_TYPE.EXECUTION_TREE,
-  ].map((eventType) => [eventType, {
+  ].map((eventType) => [
     eventType,
-    category: EVENT_DEFINITION_CATEGORY.DATA,
-    authoritative: false,
-  }]),
+    {
+      eventType,
+      category: EVENT_DEFINITION_CATEGORY.DATA,
+      authoritative: false,
+    },
+  ]),
 ]);
 
 export function getEventDefinition(eventType = "") {

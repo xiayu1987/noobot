@@ -10,7 +10,7 @@ import {
   validateReplayBatch,
   assertLosslessForward,
   replayEventTail,
-} from "../src/replay-batch.mjs";
+} from "../src/replay-batch.js";
 
 const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => ({
   protocol: { name: "@noobot/event-protocol", version: 1, schema: "turn.lifecycle" },
@@ -31,7 +31,10 @@ test("replay batch validates snapshot baseline and contiguous event tail", () =>
     snapshotSequence: 2,
     events: [event(4), event(3)],
   });
-  assert.deepEqual(batch.events.map((item) => item.ordering.streamSequence), [3, 4]);
+  assert.deepEqual(
+    batch.events.map((item) => item.ordering.streamSequence),
+    [3, 4],
+  );
   assert.equal(validateReplayBatch(batch).valid, true);
 });
 
@@ -46,9 +49,11 @@ test("replay batch rejects snapshot, session and sequence violations", () => {
   assert.equal(result.valid, false);
   assert.ok(result.errors.includes("invalid_event_sequence"));
 
-  const foreign = createReplayBatch({ sessionId: "session-1", snapshotSequence: 0, events: [
-    { ...event(1), identity: { ...event(1).identity, sessionId: "session-2" } },
-  ] });
+  const foreign = createReplayBatch({
+    sessionId: "session-1",
+    snapshotSequence: 0,
+    events: [{ ...event(1), identity: { ...event(1).identity, sessionId: "session-2" } }],
+  });
   assert.ok(validateReplayBatch(foreign).errors.includes("event_session_mismatch"));
 });
 
@@ -63,9 +68,15 @@ test("lossless forwarding accepts nested envelope and rejects identity, ordering
   const original = event(1);
   assert.equal(assertLosslessForward(original, structuredClone(original)), true);
   for (const mutate of [
-    (copy) => { copy.identity.eventId = "changed"; },
-    (copy) => { copy.ordering.streamSequence = 2; },
-    (copy) => { copy.payload.state = "completed"; },
+    (copy) => {
+      copy.identity.eventId = "changed";
+    },
+    (copy) => {
+      copy.ordering.streamSequence = 2;
+    },
+    (copy) => {
+      copy.payload.state = "completed";
+    },
   ]) {
     const copy = structuredClone(original);
     mutate(copy);

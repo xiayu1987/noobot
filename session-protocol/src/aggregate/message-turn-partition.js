@@ -10,9 +10,11 @@ export function partitionMessagesByTurnIdentity(messages = []) {
   for (const message of Array.isArray(messages) ? messages : []) {
     const turnScopeId = clean(message?.turnScopeId);
     const dialogProcessId = clean(message?.dialogProcessId);
-    if (!turnScopeId || !dialogProcessId) throw new TypeError("message turn identity is incomplete");
+    if (!turnScopeId || !dialogProcessId)
+      throw new TypeError("message turn identity is incomplete");
     const existing = partitions.get(turnScopeId);
-    if (existing && existing.dialogProcessId !== dialogProcessId) throw new TypeError("turn scope maps to multiple dialog processes");
+    if (existing && existing.dialogProcessId !== dialogProcessId)
+      throw new TypeError("turn scope maps to multiple dialog processes");
     if (!existing) partitions.set(turnScopeId, { turnScopeId, dialogProcessId, messages: [] });
     partitions.get(turnScopeId).messages.push(message);
   }

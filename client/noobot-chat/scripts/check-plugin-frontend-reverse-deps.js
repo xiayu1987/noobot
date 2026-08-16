@@ -55,7 +55,8 @@ export function classifyFrontendImport(importer, specifier) {
 function scriptRegions(filePath, content) {
   if (!filePath.endsWith(".vue")) return [content];
   const scripts = [];
-  for (const match of content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi)) scripts.push(match[1]);
+  for (const match of content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi))
+    scripts.push(match[1]);
   return scripts;
 }
 
@@ -91,7 +92,8 @@ async function walkFiles(rootDir) {
     if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const absolute = path.resolve(rootDir, entry.name);
     if (entry.isDirectory()) output.push(...(await walkFiles(absolute)));
-    else if (entry.isFile() && targetExtensions.has(path.extname(entry.name).toLowerCase())) output.push(absolute);
+    else if (entry.isFile() && targetExtensions.has(path.extname(entry.name).toLowerCase()))
+      output.push(absolute);
   }
   return output;
 }

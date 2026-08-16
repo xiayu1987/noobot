@@ -25,7 +25,8 @@ export const EXTENSION_ARBITRATION = Object.freeze({
 export const EXTENSION_POINT_DEFINITIONS = Object.freeze(
   Object.fromEntries(
     Object.values(EXTENSION_POINTS).map((point) => [
-      point, Object.freeze({ point, strategy: EXTENSION_ARBITRATION.MULTI }),
+      point,
+      Object.freeze({ point, strategy: EXTENSION_ARBITRATION.MULTI }),
     ]),
   ),
 );
@@ -33,7 +34,8 @@ export const EXTENSION_POINT_DEFINITIONS = Object.freeze(
 export function requirePluginFrontendExtensionPoint(point = "") {
   const normalized = String(point || "").trim();
   const descriptor = EXTENSION_POINT_DEFINITIONS[normalized];
-  if (!descriptor) throw new TypeError(`unknown plugin frontend extension point: ${normalized || "<empty>"}`);
+  if (!descriptor)
+    throw new TypeError(`unknown plugin frontend extension point: ${normalized || "<empty>"}`);
   return descriptor;
 }
 

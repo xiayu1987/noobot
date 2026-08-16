@@ -13,10 +13,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(projectRoot, "../..");
 const pluginRoot = path.resolve(repoRoot, "plugin");
-const outputFile = path.resolve(
-  projectRoot,
-  "src/plugins/generated/external-entries.js",
-);
+const outputFile = path.resolve(projectRoot, "src/plugins/generated/external-entries.js");
 
 async function readJsonSafe(filePath = "") {
   try {

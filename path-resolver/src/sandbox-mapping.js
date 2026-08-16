@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSlashPath } from "./platform.mjs";
+import { normalizeSlashPath } from "./platform.js";
 import {
   EXECUTION_ISOLATION_MODE,
   WORKSPACE_SANDBOX_PATHS,

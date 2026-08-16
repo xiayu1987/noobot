@@ -3,11 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./turn-scope-identity.mjs";
+import { canonicalizeTurnScopeId, isCanonicalTurnScopeId } from "./turn-scope-identity.js";
 const clean = (value) => String(value || "").trim();
 
 export function normalizeTurnIdentity({ turnScopeId = "", dialogProcessId = "" } = {}) {
-  return Object.freeze({ turnScopeId: canonicalizeTurnScopeId(turnScopeId), dialogProcessId: clean(dialogProcessId) });
+  return Object.freeze({
+    turnScopeId: canonicalizeTurnScopeId(turnScopeId),
+    dialogProcessId: clean(dialogProcessId),
+  });
 }
 
 export function validateTurnIdentity(value = {}) {
@@ -22,8 +25,10 @@ export function validateTurnIdentity(value = {}) {
 export function compareTurnIdentity(left = {}, right = {}) {
   const a = normalizeTurnIdentity(left);
   const b = normalizeTurnIdentity(right);
-  if (!a.turnScopeId || !b.turnScopeId) return Object.freeze({ matched: false, reason: "turn_scope_identity_incomplete" });
-  if (a.turnScopeId !== b.turnScopeId) return Object.freeze({ matched: false, reason: "turn_scope_identity_mismatch" });
+  if (!a.turnScopeId || !b.turnScopeId)
+    return Object.freeze({ matched: false, reason: "turn_scope_identity_incomplete" });
+  if (a.turnScopeId !== b.turnScopeId)
+    return Object.freeze({ matched: false, reason: "turn_scope_identity_mismatch" });
   if (a.dialogProcessId && b.dialogProcessId && a.dialogProcessId !== b.dialogProcessId) {
     return Object.freeze({ matched: false, reason: "dialog_process_identity_conflict" });
   }

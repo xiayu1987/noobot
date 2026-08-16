@@ -3,8 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { attachmentIdentityKey, parseAttachmentIdentity } from "./attachment-identity.mjs";
-import { AttachmentProtocolError, assertKnownFields, freezeDefined, requireNonEmptyString, requirePlainObject } from "./protocol-utils.mjs";
+import { attachmentIdentityKey, parseAttachmentIdentity } from "./attachment-identity.js";
+import {
+  AttachmentProtocolError,
+  assertKnownFields,
+  freezeDefined,
+  requireNonEmptyString,
+  requirePlainObject,
+} from "./protocol-utils.js";
 
 export const ATTACHMENT_LIFECYCLE = Object.freeze({
   RECEIVED: "received",
@@ -26,7 +32,17 @@ export const ATTACHMENT_EVENT_TYPE = Object.freeze({
   DELETED: "attachment.deleted",
 });
 
-const EVENT_FIELDS = new Set(["eventType", "eventVersion", "messageId", "identity", "status", "occurredAt", "turnScopeId", "runId", "error"]);
+const EVENT_FIELDS = new Set([
+  "eventType",
+  "eventVersion",
+  "messageId",
+  "identity",
+  "status",
+  "occurredAt",
+  "turnScopeId",
+  "runId",
+  "error",
+]);
 const EVENT_TYPES = new Set(Object.values(ATTACHMENT_EVENT_TYPE));
 const STATUSES = new Set(Object.values(ATTACHMENT_LIFECYCLE));
 
@@ -34,9 +50,11 @@ export function createAttachmentLifecycleEvent(value) {
   const source = requirePlainObject(value, "invalid_attachment_event");
   assertKnownFields(source, EVENT_FIELDS, "unknown_attachment_event_field");
   const eventType = requireNonEmptyString(source.eventType, "invalid_attachment_event_type");
-  if (!EVENT_TYPES.has(eventType)) throw new AttachmentProtocolError("unsupported_attachment_event_type");
+  if (!EVENT_TYPES.has(eventType))
+    throw new AttachmentProtocolError("unsupported_attachment_event_type");
   const status = requireNonEmptyString(source.status, "invalid_attachment_event_status");
-  if (!STATUSES.has(status)) throw new AttachmentProtocolError("unsupported_attachment_event_status");
+  if (!STATUSES.has(status))
+    throw new AttachmentProtocolError("unsupported_attachment_event_status");
   const identity = parseAttachmentIdentity(source.identity);
   const event = freezeDefined({
     eventType,
@@ -52,7 +70,11 @@ export function createAttachmentLifecycleEvent(value) {
   if (!Number.isSafeInteger(event.eventVersion) || event.eventVersion !== 1) {
     throw new AttachmentProtocolError("unsupported_attachment_event_version");
   }
-  if (event.error !== undefined && (!requirePlainObject(event.error, "invalid_attachment_event_error").code || !requireNonEmptyString(event.error.code, "invalid_attachment_event_error_code"))) {
+  if (
+    event.error !== undefined &&
+    (!requirePlainObject(event.error, "invalid_attachment_event_error").code ||
+      !requireNonEmptyString(event.error.code, "invalid_attachment_event_error_code"))
+  ) {
     throw new AttachmentProtocolError("invalid_attachment_event_error");
   }
   return event;
@@ -64,7 +86,8 @@ export function attachmentEventIdentityKey(event) {
 
 export function createAttachmentSetUpdate(attachments) {
   if (attachments === undefined) return Object.freeze({ kind: "unchanged" });
-  if (!Array.isArray(attachments)) throw new AttachmentProtocolError("attachments_must_be_array_or_undefined");
+  if (!Array.isArray(attachments))
+    throw new AttachmentProtocolError("attachments_must_be_array_or_undefined");
   const identities = attachments.map(parseAttachmentIdentity);
   const keys = new Set();
   for (const identity of identities) {

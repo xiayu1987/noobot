@@ -46,8 +46,10 @@ export function isTerminalTurnState(state = "") {
 }
 
 export function isRetryableFinalizeFailure(turn = {}) {
-  return finalizeFailureStates.has(String(turn?.state || "").trim()) &&
-    turn?.finalizeIntent?.retryable === true;
+  return (
+    finalizeFailureStates.has(String(turn?.state || "").trim()) &&
+    turn?.finalizeIntent?.retryable === true
+  );
 }
 
 export function isSettledTurn(turn = {}) {

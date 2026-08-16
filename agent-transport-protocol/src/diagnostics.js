@@ -38,7 +38,9 @@ export function summarizeAgentTransportCommand(rawCommand, extra = {}) {
     turnScopeId: clean(identity.turnScopeId),
     topLevelFields: Object.keys(command).sort(),
     messageLength: typeof command.input?.message === "string" ? command.input.message.length : 0,
-    attachmentCount: Array.isArray(command.input?.attachments) ? command.input.attachments.length : 0,
+    attachmentCount: Array.isArray(command.input?.attachments)
+      ? command.input.attachments.length
+      : 0,
     selectedPluginCount: Array.isArray(command.preferences?.selectedPlugins)
       ? command.preferences.selectedPlugins.length
       : 0,

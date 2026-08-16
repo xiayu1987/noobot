@@ -11,7 +11,7 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import {
   buildDesktopBuilderEnv,
   resolveDesktopBuildProxy,
-} from "../../scripts/run-electron-builder.mjs";
+} from "../../scripts/run-electron-builder.js";
 
 test("desktop builder prefers standard proxy environment", async () => {
   const proxy = await resolveDesktopBuildProxy({

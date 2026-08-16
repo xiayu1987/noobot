@@ -13,7 +13,7 @@ import {
   HOOK_CANCELLATION_MODE,
   HOOK_POINT,
   requireHookPointDescriptor,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 test("hook point descriptors own cancellation policy", () => {
   assert.equal(
@@ -39,10 +39,14 @@ test("protocol rejects unknown hook points and anonymous handlers", () => {
 test("once registration is consumed atomically before concurrent invocations", async () => {
   const manager = createHookManager();
   let invocationCount = 0;
-  manager.once(HOOK_POINT.AGENT.AFTER_TURN, async () => {
-    invocationCount += 1;
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }, { id: "test.once" });
+  manager.once(
+    HOOK_POINT.AGENT.AFTER_TURN,
+    async () => {
+      invocationCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    },
+    { id: "test.once" },
+  );
   await Promise.all([
     manager.emit(HOOK_POINT.AGENT.AFTER_TURN),
     manager.emit(HOOK_POINT.AGENT.AFTER_TURN),
@@ -62,14 +66,22 @@ test("duplicate handler ids are rejected", () => {
 test("timeout aborts the handler signal and fail-flow points throw", async () => {
   const manager = createHookManager();
   let observedAbort = false;
-  manager.on(HOOK_POINT.AGENT.BEFORE_TURN, async (_context, invocation) => {
-    await new Promise((resolve) => {
-      invocation.signal.addEventListener("abort", () => {
-        observedAbort = true;
-        resolve();
-      }, { once: true });
-    });
-  }, { id: "test.timeout", timeoutMs: 10 });
+  manager.on(
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    async (_context, invocation) => {
+      await new Promise((resolve) => {
+        invocation.signal.addEventListener(
+          "abort",
+          () => {
+            observedAbort = true;
+            resolve();
+          },
+          { once: true },
+        );
+      });
+    },
+    { id: "test.timeout", timeoutMs: 10 },
+  );
   await assert.rejects(
     manager.emit(HOOK_POINT.AGENT.BEFORE_TURN),
     (error) => error instanceof HookExecutionError && error.cause?.code === "HOOK_TIMEOUT",
@@ -89,14 +101,22 @@ test("parent cancellation propagates the single abort fact without hook failure 
     type: "user_stop",
   });
   let secondHandlerCalls = 0;
-  manager.on(HOOK_POINT.AGENT.BEFORE_TURN, async (_context, invocation) => {
-    await new Promise((resolve) => {
-      invocation.signal.addEventListener("abort", resolve, { once: true });
-    });
-  }, { id: "test.parent-abort.first" });
-  manager.on(HOOK_POINT.AGENT.BEFORE_TURN, () => {
-    secondHandlerCalls += 1;
-  }, { id: "test.parent-abort.second" });
+  manager.on(
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    async (_context, invocation) => {
+      await new Promise((resolve) => {
+        invocation.signal.addEventListener("abort", resolve, { once: true });
+      });
+    },
+    { id: "test.parent-abort.first" },
+  );
+  manager.on(
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    () => {
+      secondHandlerCalls += 1;
+    },
+    { id: "test.parent-abort.second" },
+  );
 
   const emitted = manager.emit(HOOK_POINT.AGENT.BEFORE_TURN, {}, { signal: controller.signal });
   controller.abort(abortReason);
@@ -108,9 +128,13 @@ test("parent cancellation propagates the single abort fact without hook failure 
 
 test("observer point returns a canonical failure outcome without failing the flow", async () => {
   const manager = createHookManager();
-  manager.on(HOOK_POINT.AGENT.AFTER_TURN, () => {
-    throw new Error("observer failure");
-  }, { id: "test.observer" });
+  manager.on(
+    HOOK_POINT.AGENT.AFTER_TURN,
+    () => {
+      throw new Error("observer failure");
+    },
+    { id: "test.observer" },
+  );
   const result = await manager.emit(HOOK_POINT.AGENT.AFTER_TURN);
   assert.equal(result.failures.length, 1);
   assert.equal(result.outcomes[0].status, HOOK_OUTCOME_STATUS.FAILED);

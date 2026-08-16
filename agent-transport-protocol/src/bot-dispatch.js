@@ -22,7 +22,8 @@ export function createBotDispatchPass({ owner = "" } = {}) {
 export function createBotDispatchHandled({ owner = "", result = {}, failure = null } = {}) {
   const normalizedOwner = clean(owner);
   if (!normalizedOwner) throw new Error("handled bot dispatch outcome requires owner");
-  const normalizedFailure = failure && typeof failure === "object" && !Array.isArray(failure) ? failure : null;
+  const normalizedFailure =
+    failure && typeof failure === "object" && !Array.isArray(failure) ? failure : null;
   if (normalizedFailure) {
     return Object.freeze({
       kind: BOT_DISPATCH_OUTCOME_KIND,
@@ -47,7 +48,9 @@ export function createBotDispatchHandled({ owner = "", result = {}, failure = nu
 
 export function isBotDispatchOutcome(value = null) {
   return Boolean(
-    value && typeof value === "object" && !Array.isArray(value) &&
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
     value.kind === BOT_DISPATCH_OUTCOME_KIND &&
     Number(value.version) === BOT_DISPATCH_OUTCOME_VERSION &&
     Object.values(BOT_DISPATCH_DISPOSITION).includes(clean(value.disposition)),
@@ -60,7 +63,9 @@ export function resolveBotDispatchOutcome(hookResult = {}) {
     .filter(isBotDispatchOutcome);
   const handled = outcomes.filter((item) => item.disposition === BOT_DISPATCH_DISPOSITION.HANDLED);
   if (handled.length > 1) {
-    const error = new Error(`bot dispatch ownership conflict: ${handled.map((item) => item.owner).join(",")}`);
+    const error = new Error(
+      `bot dispatch ownership conflict: ${handled.map((item) => item.owner).join(",")}`,
+    );
     error.code = "BOT_DISPATCH_OWNERSHIP_CONFLICT";
     error.owners = handled.map((item) => item.owner);
     throw error;

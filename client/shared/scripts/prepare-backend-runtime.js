@@ -10,11 +10,11 @@ import { spawnSync } from "node:child_process";
 import {
   getDesktopRipgrepPackages,
   getRipgrepBinaryRelativePath,
-} from "./desktop-ripgrep-packages.mjs";
+} from "./desktop-ripgrep-packages.js";
 import {
   assertPreparedBackendRuntimeWorkspaces,
   resolveDesktopBackendRuntimeWorkspaces,
-} from "./backend-runtime-workspaces.mjs";
+} from "./backend-runtime-workspaces.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "../../..");

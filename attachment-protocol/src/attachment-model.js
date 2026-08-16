@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { parseAttachmentIdentity } from "./attachment-identity.mjs";
+import { parseAttachmentIdentity } from "./attachment-identity.js";
 import {
   assertKnownFields,
   freezeDefined,
@@ -13,7 +13,7 @@ import {
   optionalNonNegativeInteger,
   requireNonEmptyString,
   requirePlainObject,
-} from "./protocol-utils.mjs";
+} from "./protocol-utils.js";
 
 const DESCRIPTOR_FIELDS = new Set([
   "identity",
@@ -86,7 +86,10 @@ function parseParsedResultRef(value) {
     size: optionalNonNegativeInteger(source.size, "invalid_attachment_parsed_result_size"),
     storageRef: source.storageRef === undefined ? undefined : parseStorageRef(source.storageRef),
     tool: optionalNonEmptyString(source.tool, "invalid_attachment_parsed_result_tool"),
-    updatedAt: optionalNonEmptyString(source.updatedAt, "invalid_attachment_parsed_result_updated_at"),
+    updatedAt: optionalNonEmptyString(
+      source.updatedAt,
+      "invalid_attachment_parsed_result_updated_at",
+    ),
   });
 }
 
@@ -102,7 +105,10 @@ export function parseAttachmentDescriptor(value) {
     name: requireNonEmptyString(source.name, "invalid_attachment_name"),
     mimeType: requireNonEmptyString(source.mimeType, "invalid_attachment_mime_type"),
     size: optionalNonNegativeInteger(source.size, "invalid_attachment_size"),
-    contentSha256: optionalNonEmptyString(source.contentSha256, "invalid_attachment_content_sha256"),
+    contentSha256: optionalNonEmptyString(
+      source.contentSha256,
+      "invalid_attachment_content_sha256",
+    ),
     owner: parseOwner(source.owner),
     generationSource: optionalNonEmptyString(
       source.generationSource,
@@ -164,9 +170,8 @@ export function parseRuntimeAttachmentRef(value) {
 export function parseAttachmentUiView(value) {
   const source = requirePlainObject(value, "invalid_attachment_ui_view");
   assertKnownFields(source, UI_VIEW_FIELDS, "unknown_attachment_ui_view_field");
-  const parseOptionalAccess = (access) => (
-    access === undefined ? undefined : parseAttachmentAccessRef(access)
-  );
+  const parseOptionalAccess = (access) =>
+    access === undefined ? undefined : parseAttachmentAccessRef(access);
   return freezeDefined({
     identity: parseAttachmentIdentity(source.identity),
     name: requireNonEmptyString(source.name, "invalid_attachment_ui_name"),

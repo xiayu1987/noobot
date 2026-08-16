@@ -23,7 +23,7 @@ async function assertAbsent(relativePath) {
   }
 }
 
-await assertAbsent("event-protocol/src/tool-risk.mjs");
+await assertAbsent("event-protocol/src/tool-risk.js");
 
 const protocolSource = await source("security-assessment-protocol/src/index.js");
 for (const marker of [
@@ -45,7 +45,7 @@ for (const [relativePath, marker] of [
   ["agent/src/tools/execution/tool-risk.js", "createSecurityAssessment"],
   ["agent/src/tools/execution/file-tools.js", "classifyResourceRisk"],
   ["agent/src/tools/execution/script-tool.js", "classifyToolExecutionRisk"],
-  ["event-protocol/src/message-event.mjs", "validateSecurityAssessment"],
+  ["event-protocol/src/message-event.js", "validateSecurityAssessment"],
   ["client/noobot-chat/src/shared/ui/BaseThinkingLogLine.vue", "normalizeSecurityRiskLevel"],
 ]) {
   if (!(await source(relativePath)).includes(marker)) {

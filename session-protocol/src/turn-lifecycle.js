@@ -11,11 +11,11 @@ import {
   canonicalizeTurnScopeId,
   isCanonicalTurnScopeId,
 } from "@noobot/session-protocol/turn-scope-identity";
-import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.mjs";
-import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.mjs";
-import { TURN_COMMAND, TURN_EVENT, TURN_EVENT_VALUES } from "./lifecycle/turn-event.mjs";
-import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.mjs";
-import { TURN_PHASE, TURN_STATE, TURN_TERMINAL_STATES } from "./lifecycle/turn-state.mjs";
+import { deriveAuthoritativeTurnCapabilities } from "./lifecycle/turn-capability.js";
+import { normalizeTurnContinuationSource } from "./lifecycle/turn-continuation.js";
+import { TURN_COMMAND, TURN_EVENT, TURN_EVENT_VALUES } from "./lifecycle/turn-event.js";
+import { TURN_EVENT_STATE, TURN_FAILED_PHASE_STATE } from "./lifecycle/turn-transition-policy.js";
+import { TURN_PHASE, TURN_STATE, TURN_TERMINAL_STATES } from "./lifecycle/turn-state.js";
 
 export {
   deriveAuthoritativeTurnCapabilities,

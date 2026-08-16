@@ -93,7 +93,9 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
   });
   assert.equal("persistenceScope" in envelope, false);
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
-  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, ["unsupported_persistence_scope"]);
+  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, [
+    "unsupported_persistence_scope",
+  ]);
 });
 
 test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {
@@ -110,7 +112,9 @@ test("authority outbox tracks attempts and acknowledges delivery idempotently", 
     phase: TURN_PHASE.PROCESSING,
     state: TURN_STATE.PROCESSING,
   });
-  const initial = normalizeAuthorityEventOutbox([{ eventId: envelope.eventId, envelope, committedAt: envelope.updatedAt }]);
+  const initial = normalizeAuthorityEventOutbox([
+    { eventId: envelope.eventId, envelope, committedAt: envelope.updatedAt },
+  ]);
   assert.equal(listPendingAuthorityEvents(initial).length, 1);
   const attempted = recordAuthorityEventDeliveryAttempt(initial, {
     eventId: envelope.eventId,
@@ -147,7 +151,9 @@ test("durable command receipt returns the original envelope after outbox compact
     expectedRevision: 0,
   };
   const committed = commitTurnLifecycle({
-    lifecycle: {}, event, createEventId: () => "durable-event-1",
+    lifecycle: {},
+    event,
+    createEventId: () => "durable-event-1",
     now: () => "2026-07-18T00:00:00.000Z",
   });
   assert.equal(committed.applied, true);
@@ -177,24 +183,44 @@ test("durable command receipt returns the original envelope after outbox compact
 });
 
 test("outbox compaction never removes pending, unreceipted, recent or above-watermark events", () => {
-  const envelope = (eventId, sequence) => createTurnLifecycleEnvelope({
-    eventType: TURN_EVENT.PROCESSING_STARTED,
-    eventId,
-    commandId: `command-${eventId}`,
-    sessionId: "session-1",
-    turnScopeId: "turn-1",
-    messageId: "message-1",
-    presentationMessageId: "presentation-1",
-    revision: sequence,
-    sequence,
-    phase: TURN_PHASE.PROCESSING,
-    state: TURN_STATE.PROCESSING,
-  });
+  const envelope = (eventId, sequence) =>
+    createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId,
+      commandId: `command-${eventId}`,
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
+      revision: sequence,
+      sequence,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
   const source = [
-    { eventId: "pending", envelope: envelope("pending", 1), committedAt: "2026-07-01T00:00:00.000Z" },
-    { eventId: "unreceipted", envelope: envelope("unreceipted", 2), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-02T00:00:00.000Z" },
-    { eventId: "recent", envelope: envelope("recent", 3), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-20T00:00:00.000Z" },
-    { eventId: "above-watermark", envelope: envelope("above-watermark", 4), committedAt: "2026-07-01T00:00:00.000Z", deliveredAt: "2026-07-02T00:00:00.000Z" },
+    {
+      eventId: "pending",
+      envelope: envelope("pending", 1),
+      committedAt: "2026-07-01T00:00:00.000Z",
+    },
+    {
+      eventId: "unreceipted",
+      envelope: envelope("unreceipted", 2),
+      committedAt: "2026-07-01T00:00:00.000Z",
+      deliveredAt: "2026-07-02T00:00:00.000Z",
+    },
+    {
+      eventId: "recent",
+      envelope: envelope("recent", 3),
+      committedAt: "2026-07-01T00:00:00.000Z",
+      deliveredAt: "2026-07-20T00:00:00.000Z",
+    },
+    {
+      eventId: "above-watermark",
+      envelope: envelope("above-watermark", 4),
+      committedAt: "2026-07-01T00:00:00.000Z",
+      deliveredAt: "2026-07-02T00:00:00.000Z",
+    },
   ];
   const receipts = source.slice(2).map((item) => ({
     commandId: item.envelope.commandId,
@@ -208,7 +234,10 @@ test("outbox compaction never removes pending, unreceipted, recent or above-wate
     commandReceipts: receipts,
   });
   assert.equal(result.removed, 0);
-  assert.deepEqual(result.outbox.map((item) => item.eventId), ["pending", "unreceipted", "recent", "above-watermark"]);
+  assert.deepEqual(
+    result.outbox.map((item) => item.eventId),
+    ["pending", "unreceipted", "recent", "above-watermark"],
+  );
 });
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
@@ -235,12 +264,14 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
 });
 
 test("turn lifecycle envelope rejects missing identity and invalid revision", () => {
-  const result = validateTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
-    eventType: TURN_EVENT.FAILED,
-    eventId: "evt-2",
-    revision: 0,
-    sequence: 1,
-  }));
+  const result = validateTurnLifecycleEnvelope(
+    createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.FAILED,
+      eventId: "evt-2",
+      revision: 0,
+      sequence: 1,
+    }),
+  );
   assert.equal(result.valid, false);
   assert.deepEqual(result.errors, [
     "missing_session_id",
@@ -284,51 +315,72 @@ test("action acceptance enforces one continuation source contract", () => {
 });
 
 test("only authoritative processing/sending is stoppable", () => {
-  assert.equal(deriveAuthoritativeTurnCapabilities({
-    state: TURN_STATE.PROCESSING,
-    executionState: "sending",
-  }).canStop, true);
-  for (const executionState of ["reconnecting", "interaction_pending", "stopping"]) {
-    assert.equal(deriveAuthoritativeTurnCapabilities({
+  assert.equal(
+    deriveAuthoritativeTurnCapabilities({
       state: TURN_STATE.PROCESSING,
-      executionState,
-    }).canStop, false);
+      executionState: "sending",
+    }).canStop,
+    true,
+  );
+  for (const executionState of ["reconnecting", "interaction_pending", "stopping"]) {
+    assert.equal(
+      deriveAuthoritativeTurnCapabilities({
+        state: TURN_STATE.PROCESSING,
+        executionState,
+      }).canStop,
+      false,
+    );
   }
-  assert.equal(deriveAuthoritativeTurnCapabilities({
-    state: TURN_STATE.COMPLETION_REQUESTING,
-    executionState: "sending",
-  }).canStop, false);
+  assert.equal(
+    deriveAuthoritativeTurnCapabilities({
+      state: TURN_STATE.COMPLETION_REQUESTING,
+      executionState: "sending",
+    }).canStop,
+    false,
+  );
 });
 
 test("session provision intent is explicit and restricted to the first send acceptance", () => {
-  assert.deepEqual(validateSessionProvisionIntent({
-    createSessionIfAbsent: true,
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    action: "send",
-    expectedRevision: 0,
-  }), { valid: true, requested: true, errors: [] });
+  assert.deepEqual(
+    validateSessionProvisionIntent({
+      createSessionIfAbsent: true,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      action: "send",
+      expectedRevision: 0,
+    }),
+    { valid: true, requested: true, errors: [] },
+  );
   for (const input of [
     { createSessionIfAbsent: "true", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "resend" },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.PROCESSING_STARTED, action: "send" },
-    { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send", expectedRevision: 1 },
-  ]) assert.equal(validateSessionProvisionIntent(input).valid, false);
+    {
+      createSessionIfAbsent: true,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      action: "send",
+      expectedRevision: 1,
+    },
+  ])
+    assert.equal(validateSessionProvisionIntent(input).valid, false);
 });
 
 test("execution identity is immutable after the first Turn revision", () => {
-  const accepted = transitionTurnLifecycle({}, {
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    commandId: "identity-r1",
-    turnScopeId: "identity-turn",
-    phase: TURN_PHASE.ACTION,
-    action: "send",
-    messageId: "identity-message",
-    presentationMessageId: "identity-presentation",
-    executionId: "workflow:identity-turn",
-    executionKind: "workflow",
-    rootExecutionId: "workflow:identity-turn",
-    origin: { type: "workflow", workflowRunId: "workflow:identity-turn" },
-  });
+  const accepted = transitionTurnLifecycle(
+    {},
+    {
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "identity-r1",
+      turnScopeId: "identity-turn",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+      messageId: "identity-message",
+      presentationMessageId: "identity-presentation",
+      executionId: "workflow:identity-turn",
+      executionKind: "workflow",
+      rootExecutionId: "workflow:identity-turn",
+      origin: { type: "workflow", workflowRunId: "workflow:identity-turn" },
+    },
+  );
   assert.equal(accepted.applied, true);
   const conflict = transitionTurnLifecycle(accepted.lifecycle, {
     eventType: TURN_EVENT.PROCESSING_STARTED,
@@ -384,13 +436,16 @@ test("continuation consumes the exact stopped Turn atomically and advances as on
     });
   };
 
-  let lifecycle = transition({}, {
-    ...identity("turn-a", "dialog-a"),
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    commandId: "turn-a:accepted",
-    phase: TURN_PHASE.ACTION,
-    action: "send",
-  });
+  let lifecycle = transition(
+    {},
+    {
+      ...identity("turn-a", "dialog-a"),
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      commandId: "turn-a:accepted",
+      phase: TURN_PHASE.ACTION,
+      action: "send",
+    },
+  );
   lifecycle = stop(lifecycle, "turn-a", "dialog-a", "turn-a");
   lifecycle = transition(lifecycle, {
     ...identity("turn-b", "dialog-b"),

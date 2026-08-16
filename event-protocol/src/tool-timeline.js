@@ -9,7 +9,7 @@ import {
   MESSAGE_EVENT_TYPE,
   projectMessageEventToolFacets,
   resolveMessageEventSequenceIdentity,
-} from "./message-event.mjs";
+} from "./message-event.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 
 const text = (value) => String(value || "").trim();

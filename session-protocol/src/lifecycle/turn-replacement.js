@@ -27,7 +27,9 @@ export function createTurnReplacementCommit({
     sessionId: text(sessionId),
     committedAggregateVersion: Number(committedAggregateVersion || 0),
     replacedTurnScopeIds: Object.freeze([
-      ...new Set((Array.isArray(replacedTurnScopeIds) ? replacedTurnScopeIds : []).map(text).filter(Boolean)),
+      ...new Set(
+        (Array.isArray(replacedTurnScopeIds) ? replacedTurnScopeIds : []).map(text).filter(Boolean),
+      ),
     ]),
     replacementDialogProcessId: text(replacementDialogProcessId),
     replacementTurnScopeId: text(replacementTurnScopeId),
@@ -39,13 +41,20 @@ export function createTurnReplacementCommit({
 
 export function validateTurnReplacementCommit(commit = {}) {
   const errors = [];
-  if (Number(commit?.protocolVersion) !== TURN_REPLACEMENT_PROTOCOL_VERSION) errors.push("unsupported_protocol_version");
+  if (Number(commit?.protocolVersion) !== TURN_REPLACEMENT_PROTOCOL_VERSION)
+    errors.push("unsupported_protocol_version");
   if (text(commit?.eventType) !== TURN_REPLACEMENT_EVENT) errors.push("invalid_event_type");
   if (!text(commit?.commandId)) errors.push("missing_command_id");
   if (!text(commit?.sessionId)) errors.push("missing_session_id");
-  if (!Number.isInteger(Number(commit?.committedAggregateVersion)) || Number(commit.committedAggregateVersion) < 1) errors.push("invalid_committed_aggregate_version");
-  if (!Array.isArray(commit?.replacedTurnScopeIds) || !commit.replacedTurnScopeIds.length) errors.push("missing_replaced_turn_scope_ids");
-  if (!text(commit?.replacementDialogProcessId)) errors.push("missing_replacement_dialog_process_id");
+  if (
+    !Number.isInteger(Number(commit?.committedAggregateVersion)) ||
+    Number(commit.committedAggregateVersion) < 1
+  )
+    errors.push("invalid_committed_aggregate_version");
+  if (!Array.isArray(commit?.replacedTurnScopeIds) || !commit.replacedTurnScopeIds.length)
+    errors.push("missing_replaced_turn_scope_ids");
+  if (!text(commit?.replacementDialogProcessId))
+    errors.push("missing_replacement_dialog_process_id");
   if (!text(commit?.replacementTurnScopeId)) errors.push("missing_replacement_turn_scope_id");
   if (!text(commit?.replacementUserMessageId)) errors.push("missing_replacement_user_message_id");
   if (!text(commit?.requestHash)) errors.push("missing_request_hash");
@@ -75,9 +84,9 @@ export function assertTurnReplacementMaterialization({ commit = {}, session = {}
     throw new TypeError("invalid turn replacement materialization: aggregate_version_mismatch");
   }
   const messages = Array.isArray(session?.messages) ? session.messages : [];
-  const replacementUsers = messages.filter((message = {}) => (
-    text(message?.messageId) === text(commit.replacementUserMessageId)
-  ));
+  const replacementUsers = messages.filter(
+    (message = {}) => text(message?.messageId) === text(commit.replacementUserMessageId),
+  );
   if (replacementUsers.length !== 1 || text(replacementUsers[0]?.role).toLowerCase() !== "user") {
     throw new TypeError("invalid turn replacement materialization: replacement_user_missing");
   }
@@ -86,17 +95,23 @@ export function assertTurnReplacementMaterialization({ commit = {}, session = {}
     throw new TypeError("invalid turn replacement materialization: replacement_scope_mismatch");
   }
   if (text(replacementUser?.dialogProcessId) !== text(commit.replacementDialogProcessId)) {
-    throw new TypeError("invalid turn replacement materialization: replacement_dialog_process_mismatch");
+    throw new TypeError(
+      "invalid turn replacement materialization: replacement_dialog_process_mismatch",
+    );
   }
-  const replacementScopeMessages = messages.filter((message = {}) => (
-    text(message?.turnScopeId) === text(commit.replacementTurnScopeId)
-  ));
+  const replacementScopeMessages = messages.filter(
+    (message = {}) => text(message?.turnScopeId) === text(commit.replacementTurnScopeId),
+  );
   if (replacementScopeMessages.length !== 1 || replacementScopeMessages[0] !== replacementUser) {
-    throw new TypeError("invalid turn replacement materialization: replacement_scope_not_user_only");
+    throw new TypeError(
+      "invalid turn replacement materialization: replacement_scope_not_user_only",
+    );
   }
   const replacedScopes = new Set(commit.replacedTurnScopeIds.map(text));
   if (messages.some((message = {}) => replacedScopes.has(text(message?.turnScopeId)))) {
-    throw new TypeError("invalid turn replacement materialization: replaced_scope_still_materialized");
+    throw new TypeError(
+      "invalid turn replacement materialization: replaced_scope_still_materialized",
+    );
   }
   return Object.freeze({ commit, session, replacementUser });
 }

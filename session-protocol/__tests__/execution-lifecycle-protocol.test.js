@@ -23,10 +23,17 @@ test("agent execution identity is a stable compatibility projection of turn scop
 
 test("execution envelope retains lifecycle coordinates and parent identity", () => {
   const envelope = createExecutionLifecycleEnvelope({
-    eventType: "turn.processing_started", eventId: "event-1", commandId: "command-1",
-    sessionId: "child-session", parentSessionId: "root-session", turnScopeId: "child-turn",
-    parentExecutionId: "agent:root-turn", rootExecutionId: "agent:root-turn",
-    revision: 2, sequence: 3, state: "processing",
+    eventType: "turn.processing_started",
+    eventId: "event-1",
+    commandId: "command-1",
+    sessionId: "child-session",
+    parentSessionId: "root-session",
+    turnScopeId: "child-turn",
+    parentExecutionId: "agent:root-turn",
+    rootExecutionId: "agent:root-turn",
+    revision: 2,
+    sequence: 3,
+    state: "processing",
   });
   assert.equal(envelope.executionKind, EXECUTION_KIND.AGENT);
   assert.equal(envelope.executionId, "agent:child-turn");
@@ -37,8 +44,20 @@ test("execution envelope retains lifecycle coordinates and parent identity", () 
 test("execution tree supports arbitrary child agent depth", () => {
   const tree = buildExecutionTree([
     { executionId: "root", executionKind: "workflow", rootExecutionId: "root" },
-    { executionId: "child", executionKind: "agent", rootExecutionId: "root", parentExecutionId: "root", sessionId: "s1" },
-    { executionId: "grandchild", executionKind: "agent", rootExecutionId: "root", parentExecutionId: "child", sessionId: "s2" },
+    {
+      executionId: "child",
+      executionKind: "agent",
+      rootExecutionId: "root",
+      parentExecutionId: "root",
+      sessionId: "s1",
+    },
+    {
+      executionId: "grandchild",
+      executionKind: "agent",
+      rootExecutionId: "root",
+      parentExecutionId: "child",
+      sessionId: "s2",
+    },
   ]);
   assert.deepEqual(tree.rootExecutionIds, ["root"]);
   assert.deepEqual(tree.executions.root.childExecutionIds, ["child"]);

@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { summarizeAgentTransportCommand } from "../src/index.mjs";
+import { summarizeAgentTransportCommand } from "../src/index.js";
 
 test("transport diagnostics expose correlation metadata without business payloads", () => {
   const summary = summarizeAgentTransportCommand({

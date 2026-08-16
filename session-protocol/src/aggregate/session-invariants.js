@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isSettledTurn } from "../lifecycle/turn-state.mjs";
-import { normalizeCommandReceipt } from "../command/command-receipt.mjs";
+import { isSettledTurn } from "../lifecycle/turn-state.js";
+import { normalizeCommandReceipt } from "../command/command-receipt.js";
 
 const clean = (value) => String(value || "").trim();
 

@@ -18,7 +18,7 @@ import {
   decideCommandIdempotency,
   validateSessionCommand,
   validateSessionSnapshot,
-} from "../src/index.mjs";
+} from "../src/index.js";
 
 test("session identity normalization has one protocol implementation", () => {
   assert.equal(normalizeSessionId(" session-1 "), "session-1");

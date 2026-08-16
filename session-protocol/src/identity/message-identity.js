@@ -5,7 +5,11 @@
  */
 const clean = (value) => String(value || "").trim();
 export function normalizeMessageIdentity(value = {}) {
-  return Object.freeze({ messageUid: clean(value.messageUid), messageId: clean(value.messageId || value.id), presentationMessageId: clean(value.presentationMessageId) });
+  return Object.freeze({
+    messageUid: clean(value.messageUid),
+    messageId: clean(value.messageId || value.id),
+    presentationMessageId: clean(value.presentationMessageId),
+  });
 }
 export function validateMessageIdentity(value = {}) {
   const identity = normalizeMessageIdentity(value);

@@ -3,11 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.mjs";
+import { canonicalAttachmentIdentities, createCommandRequestHash } from "./command-fingerprint.js";
 
 const clean = (value) => String(value || "").trim();
 
-export function createTurnReplaceFingerprint({ anchor = {}, newContent = "", turnScopeId = "", attachments = [] } = {}) {
+export function createTurnReplaceFingerprint({
+  anchor = {},
+  newContent = "",
+  turnScopeId = "",
+  attachments = [],
+} = {}) {
   return createCommandRequestHash({
     type: "session.turn.replace",
     anchor,

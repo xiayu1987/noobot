@@ -32,8 +32,14 @@ test("orphan recovery leaves a live execution authoritative turn untouched", asy
   const result = await recoverOrphanedTurn({
     conflict: conflictFor(staleTurn()),
     identity: { userId: "u1", sessionId: "s1" },
-    inspectExecution: async () => ({ alive: true, observedAtMs: Date.parse("2026-07-18T00:01:00.000Z") }),
-    commitTurnLifecycle: async () => { commits += 1; return { applied: true }; },
+    inspectExecution: async () => ({
+      alive: true,
+      observedAtMs: Date.parse("2026-07-18T00:01:00.000Z"),
+    }),
+    commitTurnLifecycle: async () => {
+      commits += 1;
+      return { applied: true };
+    },
     graceMs: 1,
   });
   assert.deepEqual(result, { recovered: false, reason: "execution_alive" });
@@ -45,8 +51,14 @@ test("orphan recovery respects the authority grace period", async () => {
   const result = await recoverOrphanedTurn({
     conflict: conflictFor(staleTurn()),
     identity: { userId: "u1", sessionId: "s1" },
-    inspectExecution: async () => ({ alive: false, observedAtMs: Date.parse("2026-07-18T00:00:05.000Z") }),
-    commitTurnLifecycle: async () => { commits += 1; return { applied: true }; },
+    inspectExecution: async () => ({
+      alive: false,
+      observedAtMs: Date.parse("2026-07-18T00:00:05.000Z"),
+    }),
+    commitTurnLifecycle: async () => {
+      commits += 1;
+      return { applied: true };
+    },
     graceMs: 10_000,
   });
   assert.deepEqual(result, { recovered: false, reason: "orphan_grace_period" });
@@ -58,8 +70,14 @@ test("orphan recovery binds failure to the observed revision", async () => {
   const result = await recoverOrphanedTurn({
     conflict: conflictFor(staleTurn()),
     identity: { userId: "u1", sessionId: "s1", parentSessionId: "parent" },
-    inspectExecution: async () => ({ alive: false, observedAtMs: Date.parse("2026-07-18T00:01:00.000Z") }),
-    commitTurnLifecycle: async (input) => { command = input; return { applied: false, reason: "turn_revision_conflict" }; },
+    inspectExecution: async () => ({
+      alive: false,
+      observedAtMs: Date.parse("2026-07-18T00:01:00.000Z"),
+    }),
+    commitTurnLifecycle: async (input) => {
+      command = input;
+      return { applied: false, reason: "turn_revision_conflict" };
+    },
     graceMs: 1,
   });
   assert.equal(result.recovered, false);
@@ -103,14 +121,25 @@ test("stop finalize recovery carries the pending assistant into terminal materia
       type: "stop",
       commandId: "stable-stop-finalize",
       retryable: true,
-      payload: { assistantMessage: { role: "assistant", content: "partial", turnScopeId: "turn-stale", dialogProcessId: "dialog-stale" } },
+      payload: {
+        assistantMessage: {
+          role: "assistant",
+          content: "partial",
+          turnScopeId: "turn-stale",
+          dialogProcessId: "dialog-stale",
+        },
+      },
     },
   });
   let command;
   const result = await recoverTurnFinalize({
-    userId: "u1", sessionId: "s1",
+    userId: "u1",
+    sessionId: "s1",
     readSnapshot: async () => ({ found: true, snapshot: { activeTurn: turn } }),
-    commitTurnLifecycle: async (input) => { command = input; return { applied: true }; },
+    commitTurnLifecycle: async (input) => {
+      command = input;
+      return { applied: true };
+    },
   });
   assert.equal(result.recovered, true);
   assert.equal(command.eventType, TURN_EVENT.STOP_COMPLETED);

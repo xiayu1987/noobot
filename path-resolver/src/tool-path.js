@@ -10,14 +10,10 @@ import {
   resolvePathPlatformFromContext,
   TOOL_PATH_VIEWS,
   normalizeSlashPath,
-} from "./platform.mjs";
-import {
-  resolveSandboxMount,
-  resolveSandboxUserRoot,
-  resolveHostPath,
-} from "./sandbox-mapping.mjs";
+} from "./platform.js";
+import { resolveSandboxMount, resolveSandboxUserRoot, resolveHostPath } from "./sandbox-mapping.js";
 import { WORKSPACE_SANDBOX_PATHS } from "@noobot/execution-isolation-protocol";
-import { isPathWithinRoot } from "./path-contract.mjs";
+import { isPathWithinRoot } from "./path-contract.js";
 
 const VIRTUAL_TOOL_PATH_ROOTS = new Set(["project", "workspace", "workdir", "repo", "repository"]);
 
@@ -309,10 +305,7 @@ export function resolveToolInputPath({
     };
   }
 
-  const resolvedWorkspacePath = filePath.resolve(
-    normalizedWorkspace || ".",
-    classified.normalized,
-  );
+  const resolvedWorkspacePath = filePath.resolve(normalizedWorkspace || ".", classified.normalized);
   if (normalizedWorkspace && !isPathWithinRoot(normalizedWorkspace, resolvedWorkspacePath)) {
     return {
       ...classified,

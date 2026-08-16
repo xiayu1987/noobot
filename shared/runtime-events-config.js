@@ -215,8 +215,9 @@ export function resolveRuntimeEventsSessionLogControls(env = process.env, overri
   const result = { log: {}, debug: {} };
   for (const domain of ["log", "debug"]) {
     for (const key of Object.keys(defaults[domain])) {
-      result[domain][key] = overrides?.[domain]?.[key]
-        ?? resolveBooleanEnv(env, envs[domain][key], defaults[domain][key]);
+      result[domain][key] =
+        overrides?.[domain]?.[key] ??
+        resolveBooleanEnv(env, envs[domain][key], defaults[domain][key]);
     }
   }
   return result;
@@ -234,44 +235,62 @@ export function resolveRuntimeEventsExecutionLogControls(env = process.env, over
 
 export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
   if (event && typeof event === "object") {
-    const level = String(event?.level || "").trim().toLowerCase();
-    const category = String(event?.category || "").trim().toLowerCase();
-    const status = String(event?.status || event?.data?.status || "").trim().toLowerCase();
+    const level = String(event?.level || "")
+      .trim()
+      .toLowerCase();
+    const category = String(event?.category || "")
+      .trim()
+      .toLowerCase();
+    const status = String(event?.status || event?.data?.status || "")
+      .trim()
+      .toLowerCase();
     if (
-      ["warn", "error", "fatal"].includes(level)
-      || ["warn", "error", "fatal"].includes(category)
-      || ["failed", "failure", "error"].includes(status)
-      || event?.success === false
-      || event?.data?.success === false
-      || Boolean(event?.error || event?.data?.error)
+      ["warn", "error", "fatal"].includes(level) ||
+      ["warn", "error", "fatal"].includes(category) ||
+      ["failed", "failure", "error"].includes(status) ||
+      event?.success === false ||
+      event?.data?.success === false ||
+      Boolean(event?.error || event?.data?.error)
     ) {
       return true;
     }
   }
-  if (String(event?.category || "").trim().toLowerCase() === "context_identity") {
+  if (
+    String(event?.category || "")
+      .trim()
+      .toLowerCase() === "context_identity"
+  ) {
     const controls = resolveRuntimeEventsSessionLogControls(
       options.env || process.env,
       options.sessionLogControls || {},
     );
     return controls.debug.contextIdentity === true;
   }
-  if (String(event?.category || "").trim().toLowerCase() === "agent_context") {
+  if (
+    String(event?.category || "")
+      .trim()
+      .toLowerCase() === "agent_context"
+  ) {
     const controls = resolveRuntimeEventsSessionLogControls(
       options.env || process.env,
       options.sessionLogControls || {},
     );
     return controls.debug.agentContext === true;
   }
-  if (String(event?.category || "").trim().toLowerCase() === "agent_context_protocol") {
+  if (
+    String(event?.category || "")
+      .trim()
+      .toLowerCase() === "agent_context_protocol"
+  ) {
     const controls = resolveRuntimeEventsSessionLogControls(
       options.env || process.env,
       options.sessionLogControls || {},
     );
     return controls.debug.agentContextProtocol === true;
   }
-  const eventName = String(
-    typeof event === "string" ? event : event?.event || event?.name || "",
-  ).trim().toLowerCase();
+  const eventName = String(typeof event === "string" ? event : event?.event || event?.name || "")
+    .trim()
+    .toLowerCase();
   const controlKey = RUNTIME_EVENTS_EXECUTION_LOG_EVENT_CONTROLS[eventName];
   if (!controlKey) return true;
   const controls = resolveRuntimeEventsExecutionLogControls(
@@ -281,14 +300,20 @@ export function shouldRecordRuntimeExecutionLog(event = {}, options = {}) {
   return controls[controlKey] === true;
 }
 
-export function resolveHookRuntimeEventsMode({ runtime = {}, options = {}, env = process.env } = {}) {
+export function resolveHookRuntimeEventsMode({
+  runtime = {},
+  options = {},
+  env = process.env,
+} = {}) {
   return String(
     runtime?.systemRuntime?.hookRuntimeEventsMode ??
       runtime?.hookRuntimeEventsMode ??
       options?.hookRuntimeEventsMode ??
       env?.[RUNTIME_EVENTS_CONFIG_ENVS.hookRuntimeEvents.mode] ??
       RUNTIME_EVENTS_CONFIG_DEFAULTS.hookRuntimeEvents.mode,
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
 }
 
 export function isHookRuntimeEventVerboseEnabled(input = {}) {

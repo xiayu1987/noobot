@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { projectToolFileDisplay, projectToolOperationSummary } from "../src/tool-presentation.mjs";
+import { projectToolFileDisplay, projectToolOperationSummary } from "../src/tool-presentation.js";
 
 test("tool file display projects paths, resources, and attachment identities", () => {
   assert.equal(

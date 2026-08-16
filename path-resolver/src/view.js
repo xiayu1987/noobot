@@ -9,8 +9,8 @@ import {
   detectPathPlatform,
   PATH_VIEWS,
   normalizeSlashPath,
-} from "./platform.mjs";
-import { resolveSandboxPathMappings } from "./sandbox-mapping.mjs";
+} from "./platform.js";
+import { resolveSandboxPathMappings } from "./sandbox-mapping.js";
 
 function normalizeView(view = "") {
   const value = String(view || "")

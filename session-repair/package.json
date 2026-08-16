@@ -5,11 +5,11 @@
   "type": "module",
   "description": "Explicit offline migrations into the canonical Noobot Session protocol",
   "exports": {
-    ".": "./src/index.mjs",
+    ".": "./src/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/context-protocol": "file:../context-protocol",

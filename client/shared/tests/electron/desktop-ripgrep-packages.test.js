@@ -8,7 +8,7 @@ import test from "node:test";
 import {
   getDesktopRipgrepPackages,
   getRipgrepBinaryRelativePath,
-} from "../../scripts/desktop-ripgrep-packages.mjs";
+} from "../../scripts/desktop-ripgrep-packages.js";
 
 const version = "^1.18.0";
 
@@ -20,7 +20,10 @@ test("desktop backend runtime selects the Windows ripgrep binary for the build a
   ]) {
     const packages = getDesktopRipgrepPackages("noobot-windows-client", version, arch);
     assert.deepEqual(packages, [`${packageName}@${version}`]);
-    assert.equal(getRipgrepBinaryRelativePath(packages[0]), `node_modules/${packageName}/bin/rg.exe`);
+    assert.equal(
+      getRipgrepBinaryRelativePath(packages[0]),
+      `node_modules/${packageName}/bin/rg.exe`,
+    );
   }
 });
 

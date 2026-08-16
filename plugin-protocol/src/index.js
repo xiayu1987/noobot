@@ -4,6 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export * from "./activation.mjs";
-export * from "./frontend.mjs";
-export * from "./manifest.mjs";
+export * from "./activation.js";
+export * from "./frontend.js";
+export * from "./manifest.js";

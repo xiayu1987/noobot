@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createResourceRef, isResourceRef, projectResourceRef } from "../src/index.mjs";
+import { createResourceRef, isResourceRef, projectResourceRef } from "../src/index.js";
 
 test("resource refs have an opaque identity independent of path", () => {
   const first = createResourceRef({

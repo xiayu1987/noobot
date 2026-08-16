@@ -3,4 +3,4 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export * from "./command/session-command.mjs";
+export * from "./command/session-command.js";

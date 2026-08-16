@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createCommandRequestHash } from "./command-fingerprint.mjs";
+import { createCommandRequestHash } from "./command-fingerprint.js";
 
 export function createMessageDeleteFingerprint({ anchor = {} } = {}) {
   return createCommandRequestHash({ type: "session.message.delete_from", anchor });

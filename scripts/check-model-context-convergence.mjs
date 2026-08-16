@@ -682,7 +682,7 @@ if (/legacySnapshotPath\b/.test(snapshotStoreText)) {
 } else {
   pass("stopped snapshots use one canonical storage path");
 }
-const turnThresholdsText = readFileSync(path.join(ROOT, "shared", "turn-thresholds.mjs"), "utf8");
+const turnThresholdsText = readFileSync(path.join(ROOT, "shared", "turn-thresholds.js"), "utf8");
 const contextBlocksText = readRel("agent/src/context/assembly/message-builder/context-blocks.js");
 const sessionContextText = readRel("agent/src/session/services/session-context-service.js");
 const historyLimitUsesTurnThreshold = [contextBlocksText, sessionContextText].every((source) =>

@@ -16,4 +16,4 @@ export {
   validateSessionEvent,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleReceipt,
-} from "../turn-lifecycle.mjs";
+} from "../turn-lifecycle.js";

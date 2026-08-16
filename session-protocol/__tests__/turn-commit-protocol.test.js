@@ -37,27 +37,31 @@ test("turn_committed accepts one canonical persisted user message", () => {
 });
 
 test("turn_committed rejects non-canonical or cross-session attachments", () => {
-  const validation = validateTurnCommittedEventData(createCommit({
-    userMessage: {
-      ...createCommit().userMessage,
-      attachments: [
-        { sessionId: "session-1" },
-        { attachmentId: "attachment-2", sessionId: "session-2" },
-      ],
-    },
-  }));
+  const validation = validateTurnCommittedEventData(
+    createCommit({
+      userMessage: {
+        ...createCommit().userMessage,
+        attachments: [
+          { sessionId: "session-1" },
+          { attachmentId: "attachment-2", sessionId: "session-2" },
+        ],
+      },
+    }),
+  );
   assert.equal(validation.ok, false);
   assert.deepEqual(validation.errors, ["attachment_id_missing", "attachment_session_mismatch"]);
 });
 
 test("turn_committed rejects mismatched message identity atomically", () => {
   assert.throws(
-    () => assertTurnCommittedEventData(createCommit({
-      userMessage: { ...createCommit().userMessage, turnScopeId: "turn-2" },
-    })),
-    (error) => (
+    () =>
+      assertTurnCommittedEventData(
+        createCommit({
+          userMessage: { ...createCommit().userMessage, turnScopeId: "turn-2" },
+        }),
+      ),
+    (error) =>
       error?.code === "TURN_COMMITTED_PROTOCOL_INVALID" &&
-      error?.validationErrors?.includes("user_message_turn_mismatch")
-    ),
+      error?.validationErrors?.includes("user_message_turn_mismatch"),
   );
 });

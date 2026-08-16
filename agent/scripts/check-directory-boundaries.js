@@ -85,10 +85,14 @@ for (const filePath of [...walk(SRC_ROOT), ...walk(TEST_ROOT)]) {
 
 const packageJson = JSON.parse(readFileSync(path.join(AGENT_ROOT, "package.json"), "utf8"));
 if (packageJson.exports?.["./bot-manage"] !== "./src/bot/index.js") {
-  violations.push("the noobot-agent/bot-manage compatibility export must resolve to src/bot/index.js");
+  violations.push(
+    "the noobot-agent/bot-manage compatibility export must resolve to src/bot/index.js",
+  );
 }
 if (packageJson.exports?.["./system-core"] !== "./src/system-core/index.js") {
-  violations.push("the noobot-agent/system-core compatibility export must resolve to src/system-core/index.js");
+  violations.push(
+    "the noobot-agent/system-core compatibility export must resolve to src/system-core/index.js",
+  );
 }
 
 if (violations.length > 0) {

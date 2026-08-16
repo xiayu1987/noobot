@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.mjs";
-import { TURN_EVENT } from "./turn-event.mjs";
-import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./turn-state.mjs";
+import { deriveAuthoritativeTurnCapabilities } from "./turn-capability.js";
+import { TURN_EVENT } from "./turn-event.js";
+import { isTerminalTurnState, TURN_PHASE, TURN_STATE } from "./turn-state.js";
 
 const EVENT_STATE = Object.freeze({
   [TURN_EVENT.ACTION_ACCEPTED]: TURN_STATE.ACTION_REQUESTING,
@@ -25,27 +25,47 @@ const FAILED_PHASE_STATE = Object.freeze({
 });
 
 export function deriveTurnState(eventType = "", phase = "") {
-  return eventType === TURN_EVENT.FAILED ? FAILED_PHASE_STATE[phase] || "" : EVENT_STATE[eventType] || "";
+  return eventType === TURN_EVENT.FAILED
+    ? FAILED_PHASE_STATE[phase] || ""
+    : EVENT_STATE[eventType] || "";
 }
 
 export function deriveTurnExecutionState(eventType = "", current = "") {
   if (eventType === TURN_EVENT.COMPLETED) return "completed";
   if (eventType === TURN_EVENT.STOP_COMPLETED) return "user_stopped";
   if (eventType === TURN_EVENT.FAILED) return "error";
-  return String(current || "").trim().toLowerCase();
+  return String(current || "")
+    .trim()
+    .toLowerCase();
 }
 
 export function decideTurnTransition({ current = null, eventType = "", phase = "" } = {}) {
   const nextState = deriveTurnState(eventType, phase);
   if (!nextState) return Object.freeze({ allowed: false, reason: "invalid_failure_phase" });
-  if (!current) return Object.freeze({ allowed: eventType === TURN_EVENT.ACTION_ACCEPTED, nextState, reason: eventType === TURN_EVENT.ACTION_ACCEPTED ? "" : "illegal_transition" });
+  if (!current)
+    return Object.freeze({
+      allowed: eventType === TURN_EVENT.ACTION_ACCEPTED,
+      nextState,
+      reason: eventType === TURN_EVENT.ACTION_ACCEPTED ? "" : "illegal_transition",
+    });
   let allowed = false;
-  if (eventType === TURN_EVENT.PROCESSING_STARTED) allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action !== "stop";
-  else if (eventType === TURN_EVENT.PROCESSING_COMPLETED) allowed = current.state === TURN_STATE.PROCESSING;
-  else if (eventType === TURN_EVENT.STOP_ACCEPTED) allowed = deriveAuthoritativeTurnCapabilities(current).canStop;
-  else if (eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED) allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action === "stop";
-  else if (eventType === TURN_EVENT.COMPLETED) allowed = current.state === TURN_STATE.COMPLETION_REQUESTING || (current.state === TURN_STATE.COMPLETION_FAILED && current.finalizeIntent?.retryable === true);
-  else if (eventType === TURN_EVENT.STOP_COMPLETED) allowed = current.state === TURN_STATE.STOPPING || (current.state === TURN_STATE.STOP_FAILED && current.finalizeIntent?.retryable === true);
+  if (eventType === TURN_EVENT.PROCESSING_STARTED)
+    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action !== "stop";
+  else if (eventType === TURN_EVENT.PROCESSING_COMPLETED)
+    allowed = current.state === TURN_STATE.PROCESSING;
+  else if (eventType === TURN_EVENT.STOP_ACCEPTED)
+    allowed = deriveAuthoritativeTurnCapabilities(current).canStop;
+  else if (eventType === TURN_EVENT.STOP_PROCESSING_COMPLETED)
+    allowed = current.state === TURN_STATE.ACTION_REQUESTING && current.action === "stop";
+  else if (eventType === TURN_EVENT.COMPLETED)
+    allowed =
+      current.state === TURN_STATE.COMPLETION_REQUESTING ||
+      (current.state === TURN_STATE.COMPLETION_FAILED &&
+        current.finalizeIntent?.retryable === true);
+  else if (eventType === TURN_EVENT.STOP_COMPLETED)
+    allowed =
+      current.state === TURN_STATE.STOPPING ||
+      (current.state === TURN_STATE.STOP_FAILED && current.finalizeIntent?.retryable === true);
   else if (eventType === TURN_EVENT.FAILED) allowed = !isTerminalTurnState(current.state);
   return Object.freeze({ allowed, nextState, reason: allowed ? "" : "illegal_transition" });
 }

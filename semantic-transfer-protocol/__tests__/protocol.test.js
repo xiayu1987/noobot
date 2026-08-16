@@ -15,8 +15,8 @@ import {
   getToolInputPolicy,
   getToolOutputPolicy,
   hasToolInputPolicy,
-} from "../src/index.mjs";
-import { decideTransfer } from "../src/policy.mjs";
+} from "../src/index.js";
+import { decideTransfer } from "../src/policy.js";
 
 const identity = createTransferIdentity({
   sessionId: "s1",
@@ -95,8 +95,18 @@ test("creates a source reference envelope without persisting an attachment", () 
     messageId: "m-source",
     identity,
     direction: "output",
-    reference: { address: "/workspace/u/runtime/ops_workdir/a.txt", name: "a.txt", startLine: 1, endLine: 10 },
-    intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+    reference: {
+      address: "/workspace/u/runtime/ops_workdir/a.txt",
+      name: "a.txt",
+      startLine: 1,
+      endLine: 10,
+    },
+    intent: {
+      source: "tool",
+      reason: "read_file_source_reference",
+      scenario: "tool",
+      strategy: "tool_output",
+    },
   });
   assert.equal(envelope.payload.mode, "source_reference");
   assert.equal(envelope.payload.reference.address, "/workspace/u/runtime/ops_workdir/a.txt");
@@ -115,7 +125,12 @@ test("creates a source reference envelope for a canonical attachment identity", 
     identity,
     direction: "output",
     reference: { address, name: "result.txt", startLine: 1, endLine: 400 },
-    intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+    intent: {
+      source: "tool",
+      reason: "read_file_source_reference",
+      scenario: "tool",
+      strategy: "tool_output",
+    },
   });
   assert.deepEqual(envelope.payload.reference.address, address);
   assert.equal(validateTransferEnvelope(envelope).ok, true);
@@ -129,7 +144,12 @@ test("rejects inferred or incomplete attachment source addresses", () => {
       identity,
       direction: "output",
       reference: { address: { attachmentId: "attachment-source-1" }, name: "result.txt" },
-      intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+      intent: {
+        source: "tool",
+        reason: "read_file_source_reference",
+        scenario: "tool",
+        strategy: "tool_output",
+      },
     }),
   );
 });
@@ -161,29 +181,39 @@ test("rejects unregistered scenarios and strategies", () => {
     () => assertSemanticTransferRegistration({ scenario: "tool", strategy: "unknown" }),
     /semantic_transfer_strategy_not_registered/,
   );
-  assert.throws(() => directTransfer({
-    transferId: "tr-unregistered",
-    messageId: "m-unregistered",
-    identity,
-    direction: "output",
-    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "unknown" },
-    content: "blocked",
-  }), /semantic_transfer_strategy_not_registered/);
+  assert.throws(
+    () =>
+      directTransfer({
+        transferId: "tr-unregistered",
+        messageId: "m-unregistered",
+        identity,
+        direction: "output",
+        intent: { source: "tool", reason: "test", scenario: "tool", strategy: "unknown" },
+        content: "blocked",
+      }),
+    /semantic_transfer_strategy_not_registered/,
+  );
 });
 
 test("enforces registered flow categories and business points", () => {
-  assert.doesNotThrow(() => assertSemanticTransferRegistration({
-    scenario: "harness",
-    strategy: "harness_acceptance",
-    category: "acceptance",
-    businessPoint: "acceptance_report",
-  }));
-  assert.throws(() => assertSemanticTransferRegistration({
-    scenario: "harness",
-    strategy: "harness_summary",
-    category: "guidance",
-    businessPoint: "ordinary_guidance",
-  }), /semantic_transfer_business_point_not_registered/);
+  assert.doesNotThrow(() =>
+    assertSemanticTransferRegistration({
+      scenario: "harness",
+      strategy: "harness_acceptance",
+      category: "acceptance",
+      businessPoint: "acceptance_report",
+    }),
+  );
+  assert.throws(
+    () =>
+      assertSemanticTransferRegistration({
+        scenario: "harness",
+        strategy: "harness_summary",
+        category: "guidance",
+        businessPoint: "ordinary_guidance",
+      }),
+    /semantic_transfer_business_point_not_registered/,
+  );
 });
 
 test("tool input and output policies come from the protocol registry", () => {

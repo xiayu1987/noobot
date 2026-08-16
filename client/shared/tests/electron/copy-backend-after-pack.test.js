@@ -8,7 +8,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
-import copyBackendAfterPack from "../../scripts/copy-backend-after-pack.mjs";
+import copyBackendAfterPack from "../../scripts/copy-backend-after-pack.js";
 
 const runtimeWorkspacePackages = Object.freeze([
   ["agent", "noobot-agent"],
