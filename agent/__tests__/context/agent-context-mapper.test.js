@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context-envelope";
+import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentContextEnvelopeInput } from "../../src/context/agent-context-envelope-input.js";
 
 function buildEnvelope() {

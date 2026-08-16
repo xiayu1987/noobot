@@ -20,7 +20,7 @@ import {
   TASK_SUMMARY_PROTOCOL_VERSION,
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
-} from "@noobot/context-protocol/task-summary-protocol";
+} from "@noobot/context-protocol/task/summary";
 
 function buildRoundContents(fromRound, toRound) {
   return Array.from({ length: Math.max(0, toRound - fromRound + 1) }, (_, index) => {

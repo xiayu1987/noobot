@@ -6,7 +6,7 @@
 import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reader.js";
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { filePath as path } from "@noobot/path-resolver";
 import { readSessionArtifact } from "../../session/session-artifact-store.js";
 

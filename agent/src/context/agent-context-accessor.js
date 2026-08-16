@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { getAgentContextIdentity } from "@noobot/context-protocol/agent-context-accessors";
+import { getAgentContextIdentity } from "@noobot/context-protocol/agent-context/accessors";
 import { getAgentContextEnvelope } from "./agent-execution-scope.js";
 
 export { getAgentContextEnvelope } from "./agent-execution-scope.js";

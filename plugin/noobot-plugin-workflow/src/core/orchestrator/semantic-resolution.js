@@ -18,7 +18,7 @@ import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
-} from "@noobot/context-protocol/dual-lane-context";
+} from "@noobot/context-protocol/assembly/dual-lane";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);

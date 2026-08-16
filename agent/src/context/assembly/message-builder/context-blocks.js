@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { SystemMessage } from "@langchain/core/messages";
-import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/block-strategy";
+import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/policy/block";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
 import {

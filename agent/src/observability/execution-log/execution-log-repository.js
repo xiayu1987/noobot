@@ -7,7 +7,7 @@ import { normalizeExecutionLogEntity } from "./execution-log-entities.js";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   RUNTIME_EVENT_CATEGORIES,

@@ -8,15 +8,17 @@ import {
   replaceContextMessages,
   replaceContextProjection,
   writeContextBlocks,
-} from "@noobot/context-protocol/context-mutation";
-import { resolveContextMessageId } from "@noobot/context-protocol/message-codec";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
-import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
+} from "@noobot/context-protocol/mutation/context";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context/schema";
+import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
 
 function resolveHolder(ctx = {}) {
   const modelContext = resolveAuthoritativeModelContext(ctx);
   if (!modelContext) {
-    throw new TypeError(`Harness model-message operations require modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+    throw new TypeError(
+      `Harness model-message operations require modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`,
+    );
   }
   return modelContext;
 }
@@ -38,20 +40,22 @@ export function resolveModelMessageBlocks(ctx = {}) {
   return modelContext.messageBlocks;
 }
 
-export {
-  resolveContextMessageId as getMessageId,
-};
+export { resolveContextMessageId as getMessageId };
 
 export const appendMessage = (ctx, ...args) => appendContextMessage(resolveHolder(ctx), ...args);
-export const replaceMessages = (ctx, ...args) => replaceContextMessages(resolveHolder(ctx), ...args);
-export const replaceMessageProjection = (ctx, ...args) => replaceContextProjection(resolveHolder(ctx), ...args);
+export const replaceMessages = (ctx, ...args) =>
+  replaceContextMessages(resolveHolder(ctx), ...args);
+export const replaceMessageProjection = (ctx, ...args) =>
+  replaceContextProjection(resolveHolder(ctx), ...args);
 export const writeMessageBlocks = (ctx, ...args) => writeContextBlocks(resolveHolder(ctx), ...args);
 export const resolveMessagesByIds = (ctx, ids = []) => {
   const wanted = new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || "").trim()));
   const modelContext = resolveHolder(ctx);
   const candidates = [
     ...resolveModelMessages(ctx),
-    ...Object.values(modelContext.messageBlocks).flatMap((messages) => Array.isArray(messages) ? messages : []),
+    ...Object.values(modelContext.messageBlocks).flatMap((messages) =>
+      Array.isArray(messages) ? messages : [],
+    ),
   ];
   const seen = new Set();
   return candidates.filter((message) => {

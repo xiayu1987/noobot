@@ -9,19 +9,22 @@ import assert from "node:assert/strict";
 import {
   filterSummarizedMessages,
   markCurrentTurnArraySummarized,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 import {
   resolveModelFinalMessages,
   resolveModelHistoryMessages,
   resolveModelIncrementalMessages,
-} from "@noobot/context-protocol/window-reducer";
-import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+} from "@noobot/context-protocol/policy/window";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
-const resolveMainModelFinalMessages = (options = {}) => resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
-const resolveMainModelHistoryMessages = (options = {}) => resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
-const resolveMainModelIncrementalMessages = (options = {}) => resolveModelIncrementalMessages(options);
+const resolveMainModelFinalMessages = (options = {}) =>
+  resolveModelFinalMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelHistoryMessages = (options = {}) =>
+  resolveModelHistoryMessages({ historyLimit: MAIN_MODEL_HISTORY_ROUND_LIMIT, ...options });
+const resolveMainModelIncrementalMessages = (options = {}) =>
+  resolveModelIncrementalMessages(options);
 
 test("filterSummarizedMessages removes only summarized messages", () => {
   const input = [
@@ -31,7 +34,10 @@ test("filterSummarizedMessages removes only summarized messages", () => {
     { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "x" } }] },
   ];
   const result = filterSummarizedMessages(input);
-  assert.deepEqual(result.map((item) => item.content), ["a"]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["a"],
+  );
 });
 
 test("filterForModelContext keeps unsummarized injected history messages without latest-only dedupe", () => {
@@ -52,12 +58,15 @@ test("filterForModelContext keeps unsummarized injected history messages without
     { role: "assistant", content: "answer", dialogProcessId: "d1" },
   ]);
 
-  assert.deepEqual(result.map((item) => item.content), [
-    "下一步",
-    "[来自harness外部模型输出/planning]\nold plan",
-    "[来自harness外部模型输出/planning]\nnewer plan",
-    "answer",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    [
+      "下一步",
+      "[来自harness外部模型输出/planning]\nold plan",
+      "[来自harness外部模型输出/planning]\nnewer plan",
+      "answer",
+    ],
+  );
 });
 
 test("filterForModelContext excludes derived turn status placeholders only", () => {
@@ -65,12 +74,20 @@ test("filterForModelContext excludes derived turn status placeholders only", () 
   const result = filterForModelContext([
     { role: "user", content: "hello" },
     { role: "assistant", content: "stopped", turnStatusPlaceholder: true },
-    { role: "assistant", content: "timeout", synthetic: true, placeholder: true, turnStatus: { status: "timeout" } },
+    {
+      role: "assistant",
+      content: "timeout",
+      synthetic: true,
+      placeholder: true,
+      turnStatus: { status: "timeout" },
+    },
     ordinarySynthetic,
   ]);
-  assert.deepEqual(result.map((item) => item.content), ["hello", "ordinary"]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["hello", "ordinary"],
+  );
 });
-
 
 test("task_summary pair is not marked summarized and remains in model context", () => {
   const messages = [
@@ -82,7 +99,7 @@ test("task_summary pair is not marked summarized and remains in model context", 
     },
     {
       role: "tool",
-      content: "{\"toolName\":\"execute_script\",\"ok\":true}",
+      content: '{"toolName":"execute_script","ok":true}',
       tool_call_id: "call_exec",
     },
     {
@@ -92,7 +109,7 @@ test("task_summary pair is not marked summarized and remains in model context", 
     },
     {
       role: "tool",
-      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结内容\"}",
+      content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结内容"}',
       tool_call_id: "call_summary",
     },
   ];
@@ -105,12 +122,13 @@ test("task_summary pair is not marked summarized and remains in model context", 
 
   const result = filterSummarizedMessages(marked);
   assert.deepEqual(
-    result.map((item) => String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || "")),
+    result.map((item) =>
+      String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || ""),
+    ),
     ["u0", "call_summary", "call_summary"],
   );
   assert.equal(result[2]?.content.includes("阶段小结内容"), true);
 });
-
 
 test("manually summarized task_summary pair is filtered by unified summarized policy", () => {
   const input = [
@@ -124,7 +142,7 @@ test("manually summarized task_summary pair is filtered by unified summarized po
     {
       role: "tool",
       summarized: true,
-      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"历史阶段小结\"}",
+      content: '{"toolName":"task_summary","ok":true,"phaseSummary":"历史阶段小结"}',
       tool_call_id: "call_summary",
     },
     { role: "assistant", content: "old normal", summarized: true },
@@ -132,11 +150,12 @@ test("manually summarized task_summary pair is filtered by unified summarized po
 
   const result = filterSummarizedMessages(input);
   assert.deepEqual(
-    result.map((item) => String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || "")),
+    result.map((item) =>
+      String(item?.tool_call_id || item?.tool_calls?.[0]?.id || item?.content || ""),
+    ),
     ["u0"],
   );
 });
-
 
 test("unpaired task_summary assistant tool call is dropped to avoid invalid model messages", () => {
   const input = [
@@ -190,23 +209,34 @@ test("resolveMainModelHistoryMessages keeps non-system unsummarized messages in 
 test("resolveMainModelHistoryMessages keeps original dialog group order and unsummarized injected messages", () => {
   const result = resolveMainModelHistoryMessages({
     sourceMessages: [
-      { role: "user", content: "injected-before-actual", injectedBy: "agent-plugin", dialogProcessId: "d1" },
-      { role: "user", content: "meta", additional_kwargs: { noobotInternalMessageType: "user_meta" }, dialogProcessId: "d1" },
+      {
+        role: "user",
+        content: "injected-before-actual",
+        injectedBy: "agent-plugin",
+        dialogProcessId: "d1",
+      },
+      {
+        role: "user",
+        content: "meta",
+        additional_kwargs: { noobotInternalMessageType: "user_meta" },
+        dialogProcessId: "d1",
+      },
       { role: "user", content: "actual", dialogProcessId: "d1" },
-      { role: "user", content: "injected-after-actual", injectedBy: "agent-plugin", dialogProcessId: "d1" },
+      {
+        role: "user",
+        content: "injected-after-actual",
+        injectedBy: "agent-plugin",
+        dialogProcessId: "d1",
+      },
       { role: "assistant", content: "old", dialogProcessId: "d1" },
       { role: "assistant", content: "latest", dialogProcessId: "d1" },
     ],
   });
 
-  assert.deepEqual(result.map((item) => item.content), [
-    "injected-before-actual",
-    "meta",
-    "actual",
-    "injected-after-actual",
-    "old",
-    "latest",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["injected-before-actual", "meta", "actual", "injected-after-actual", "old", "latest"],
+  );
 });
 
 test("resolveMainModelHistoryMessages keeps original dialog group order instead of starting at relay user", () => {
@@ -261,21 +291,63 @@ test("resolveMainModelHistoryMessages orders dialog groups by first natural occu
 
 test("resolveMainModelHistoryMessages selects recent user dialogs when artifact writes are interleaved", () => {
   const sourceMessages = [
-    { role: "user", content: "u1", dialogProcessId: "d1", frontendUserMessage: true, ts: "2026-07-27T01:00:00Z" },
-    { role: "user", content: "u2", dialogProcessId: "d2", frontendUserMessage: true, ts: "2026-07-27T02:00:00Z" },
+    {
+      role: "user",
+      content: "u1",
+      dialogProcessId: "d1",
+      frontendUserMessage: true,
+      ts: "2026-07-27T01:00:00Z",
+    },
+    {
+      role: "user",
+      content: "u2",
+      dialogProcessId: "d2",
+      frontendUserMessage: true,
+      ts: "2026-07-27T02:00:00Z",
+    },
     { role: "assistant", content: "a1 late", dialogProcessId: "d1", ts: "2026-07-27T03:00:00Z" },
-    { role: "user", content: "u3", dialogProcessId: "d3", frontendUserMessage: true, ts: "2026-07-27T03:00:00Z" },
-    { role: "user", content: "u4", dialogProcessId: "d4", frontendUserMessage: true, ts: "2026-07-27T04:00:00Z" },
-    { role: "user", content: "u5", dialogProcessId: "d5", frontendUserMessage: true, ts: "2026-07-27T05:00:00Z" },
-    { role: "user", content: "u6", dialogProcessId: "d6", frontendUserMessage: true, ts: "2026-07-27T06:00:00Z" },
-    { role: "assistant", content: "a2 very late", dialogProcessId: "d2", ts: "2026-07-27T07:00:00Z" },
+    {
+      role: "user",
+      content: "u3",
+      dialogProcessId: "d3",
+      frontendUserMessage: true,
+      ts: "2026-07-27T03:00:00Z",
+    },
+    {
+      role: "user",
+      content: "u4",
+      dialogProcessId: "d4",
+      frontendUserMessage: true,
+      ts: "2026-07-27T04:00:00Z",
+    },
+    {
+      role: "user",
+      content: "u5",
+      dialogProcessId: "d5",
+      frontendUserMessage: true,
+      ts: "2026-07-27T05:00:00Z",
+    },
+    {
+      role: "user",
+      content: "u6",
+      dialogProcessId: "d6",
+      frontendUserMessage: true,
+      ts: "2026-07-27T06:00:00Z",
+    },
+    {
+      role: "assistant",
+      content: "a2 very late",
+      dialogProcessId: "d2",
+      ts: "2026-07-27T07:00:00Z",
+    },
   ];
 
   const result = resolveMainModelHistoryMessages({ sourceMessages, historyLimit: 5 });
 
-  assert.deepEqual(result.map((item) => item.content), [
-    "u2", "a2 very late", "u3", "u4", "u5", "u6",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["u2", "a2 very late", "u3", "u4", "u5", "u6"],
+  );
 });
 
 test("resolveMainModelHistoryMessages ignores external dialog order and uses first occurrence", () => {
@@ -291,7 +363,10 @@ test("resolveMainModelHistoryMessages ignores external dialog order and uses fir
       { dialogProcessId: "d2", dialogOrdinal: 2 },
     ],
   });
-  assert.deepEqual(result.map((item) => item.content), ["first"]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["first"],
+  );
 });
 
 test("resolveMainModelHistoryMessages excludes messages without dialogProcessId or dialogId", () => {
@@ -324,7 +399,10 @@ test("resolveMainModelHistoryMessages keeps unsummarized injected messages in or
     ],
   });
 
-  assert.deepEqual(result.map((item) => item.content), ["u1", "latest injected", "a1"]);
+  assert.deepEqual(
+    result.map((item) => item.content),
+    ["u1", "latest injected", "a1"],
+  );
 });
 
 test("resolveMainModelHistoryMessages does not dedupe injected messages beyond summarized flag", () => {
@@ -367,7 +445,10 @@ test("resolveMainModelIncrementalMessages filters summarized messages without cl
   assert.equal(result.length, 21);
   assert.equal(result[0].content, "m1");
   assert.equal(result.at(-1).content, "m22");
-  assert.equal(result.some((item) => item.content === "m6"), false);
+  assert.equal(
+    result.some((item) => item.content === "m6"),
+    false,
+  );
 });
 
 test("resolveMainModelIncrementalMessages filters summarized messages from additional kwargs", () => {
@@ -400,7 +481,10 @@ test("resolveMainModelFinalMessages composes system history incremental in order
     incrementalMessages: [{ role: "user", content: "inc" }],
   });
 
-  assert.deepEqual(result.messages.map((item) => item.content), ["sys", "u", "a", "inc"]);
+  assert.deepEqual(
+    result.messages.map((item) => item.content),
+    ["sys", "u", "a", "inc"],
+  );
 });
 
 test("main-flow context resolution does not mutate source message order or count when unsummarized", () => {
@@ -429,9 +513,15 @@ test("main-flow context resolution does not mutate source message order or count
     ["sys-1", "u1", "a1", "u2", "a2", "current", "current-a"],
   );
   assert.equal(JSON.stringify({ systemMessages, historyMessages, incrementalMessages }), before);
-  assert.deepEqual(historyMessages.map((item) => item.content), ["u1", "a1", "u2", "a2"]);
+  assert.deepEqual(
+    historyMessages.map((item) => item.content),
+    ["u1", "a1", "u2", "a2"],
+  );
   assert.equal(historyMessages.length, 4);
-  assert.deepEqual(incrementalMessages.map((item) => item.content), ["current", "current-a"]);
+  assert.deepEqual(
+    incrementalMessages.map((item) => item.content),
+    ["current", "current-a"],
+  );
   assert.equal(incrementalMessages.length, 2);
 });
 
@@ -471,10 +561,26 @@ test("resolveMainModelIncrementalMessages preserves actual order for tool, plugi
 
   assert.deepEqual(
     result.map((item = {}) => item.content || item.tool_call_id || item.tool_calls?.[0]?.id),
-    ["main-user", "call-1", "tool-result", "plugin-guidance", "main-injected-system", "main-assistant"],
+    [
+      "main-user",
+      "call-1",
+      "tool-result",
+      "plugin-guidance",
+      "main-injected-system",
+      "main-assistant",
+    ],
   );
   assert.deepEqual(
-    incrementalMessages.map((item = {}) => item.content || item.tool_call_id || item.tool_calls?.[0]?.id),
-    ["main-user", "call-1", "tool-result", "plugin-guidance", "main-injected-system", "main-assistant"],
+    incrementalMessages.map(
+      (item = {}) => item.content || item.tool_call_id || item.tool_calls?.[0]?.id,
+    ),
+    [
+      "main-user",
+      "call-1",
+      "tool-result",
+      "plugin-guidance",
+      "main-injected-system",
+      "main-assistant",
+    ],
   );
 });

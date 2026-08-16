@@ -11,8 +11,8 @@ import {
   collectScopedMessagesToSummarize,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
-} from "../src/summary-policy.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/injected-message-types.js";
+} from "../src/policy/summary-policy.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-message-types.js";
 
 test("summary retention keeps the latest injection independently in every dialog", () => {
   const injected = (id, dialogProcessId, content) => ({
@@ -36,37 +36,79 @@ test("summary retention keeps the latest injection independently in every dialog
     retentionMessages: messages,
   });
 
-  assert.deepEqual(selected.map((message) => message.additional_kwargs.noobotMessageId), [
-    "d1-old",
-    "d2-old",
-  ]);
+  assert.deepEqual(
+    selected.map((message) => message.additional_kwargs.noobotMessageId),
+    ["d1-old", "d2-old"],
+  );
 });
 
 test("summary policy preserves latest task summary pair and latest injection", () => {
   const result = markCurrentTurnArraySummarized([
     { role: "assistant", tool_calls: [{ id: "old", name: "task_summary" }] },
     { role: "tool", tool_call_id: "old", toolName: "task_summary", content: "old" },
-    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "old guidance" },
+    {
+      role: "user",
+      injectedMessage: true,
+      injectedBy: "plugin",
+      injectedMessageType: "guidance",
+      content: "old guidance",
+    },
     { role: "assistant", tool_calls: [{ id: "latest", name: "task_summary" }] },
     { role: "tool", tool_call_id: "latest", toolName: "task_summary", content: "latest" },
-    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "latest guidance" },
+    {
+      role: "user",
+      injectedMessage: true,
+      injectedBy: "plugin",
+      injectedMessageType: "guidance",
+      content: "latest guidance",
+    },
   ]);
 
-  assert.deepEqual(result.map((message) => message.summarized === true), [true, true, true, false, false, false]);
+  assert.deepEqual(
+    result.map((message) => message.summarized === true),
+    [true, true, true, false, false, false],
+  );
 });
 
 test("checkpoint control prompts are summarized while normal injections retain their latest type", () => {
   const messages = [
-    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "old" },
-    { role: "user", injectedMessage: true, injectedBy: "plugin", injectedMessageType: "guidance", content: "latest" },
-    { role: "user", content: "summary prompt", additional_kwargs: { noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT } },
-    { role: "user", content: "check prompt", additional_kwargs: { noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT } },
+    {
+      role: "user",
+      injectedMessage: true,
+      injectedBy: "plugin",
+      injectedMessageType: "guidance",
+      content: "old",
+    },
+    {
+      role: "user",
+      injectedMessage: true,
+      injectedBy: "plugin",
+      injectedMessageType: "guidance",
+      content: "latest",
+    },
+    {
+      role: "user",
+      content: "summary prompt",
+      additional_kwargs: {
+        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.PHASE_SUMMARY_PROMPT,
+      },
+    },
+    {
+      role: "user",
+      content: "check prompt",
+      additional_kwargs: {
+        noobotInternalMessageType: CONTEXT_INJECTED_MESSAGE_TYPE.TASK_CHECK_PROMPT,
+      },
+    },
   ];
 
   const result = markCurrentTurnArraySummarized(messages);
   const selected = collectScopedMessagesToSummarize(messages).messages;
 
-  assert.deepEqual(result.map((message) => message.summarized === true), [true, false, true, true]);
+  assert.deepEqual(
+    result.map((message) => message.summarized === true),
+    [true, false, true, true],
+  );
   assert.deepEqual(selected, [messages[0], messages[2], messages[3]]);
 });
 

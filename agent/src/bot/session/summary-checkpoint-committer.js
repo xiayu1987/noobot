@@ -7,13 +7,13 @@
 import {
   markContextMessagesSummarized as markMessagesSummarizedByIds,
   pruneContextSummarizedIncremental as pruneSummarizedIncrementalMessages,
-} from "@noobot/context-protocol/context-mutation";
+} from "@noobot/context-protocol/mutation/context";
 import { createHash } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import {
   collectLatestTaskCheckMessageIndexes,
   hasTaskSummaryToolCall,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -32,9 +32,7 @@ function createSummaryCompletionMarker(summaryCompletion = null) {
   if (!summaryCompletion || typeof summaryCompletion !== "object") return null;
   if (!Array.isArray(summaryCompletion.summarizedMessageIds)) return null;
   const summarizedMessageIds = new Set(
-    summaryCompletion.summarizedMessageIds
-      .map((id) => String(id || "").trim())
-      .filter(Boolean),
+    summaryCompletion.summarizedMessageIds.map((id) => String(id || "").trim()).filter(Boolean),
   );
   return () => (message) => summarizedMessageIds.has(resolveMessageId(message));
 }
@@ -57,13 +55,23 @@ function resolveMessageUid(message = {}) {
   return String(message?.messageUid || "").trim();
 }
 
-function buildCheckpointId({ dialogProcessId = "", turnScopeId = "", persistedMessageUids = [], summarizedMessageUids = [] } = {}) {
-  const digest = createHash("sha256").update(JSON.stringify({
-    dialogProcessId,
-    turnScopeId,
-    persistedMessageUids,
-    summarizedMessageUids,
-  })).digest("hex").slice(0, 32);
+function buildCheckpointId({
+  dialogProcessId = "",
+  turnScopeId = "",
+  persistedMessageUids = [],
+  summarizedMessageUids = [],
+} = {}) {
+  const digest = createHash("sha256")
+    .update(
+      JSON.stringify({
+        dialogProcessId,
+        turnScopeId,
+        persistedMessageUids,
+        summarizedMessageUids,
+      }),
+    )
+    .digest("hex")
+    .slice(0, 32);
   return `summary_checkpoint_${digest}`;
 }
 
@@ -95,33 +103,41 @@ export async function commitSummaryCheckpoint({
 
   const turnMessages = currentTurnMessages.toArray();
   const summaryCallIndex = turnMessages.findIndex((message) => hasTaskSummaryToolCall(message));
-  const taskCheckScope = summaryCallIndex >= 0
-    ? turnMessages.slice(0, summaryCallIndex)
-    : turnMessages;
-  const latestTaskCheckIds = new Set([...collectLatestTaskCheckMessageIndexes(taskCheckScope)]
-    .map((index) => resolveMessageUid(taskCheckScope[index]))
-    .filter(Boolean));
-  const normalizedSummaryCompletion = summaryCompletion && typeof summaryCompletion === "object"
-    ? {
-        ...summaryCompletion,
-        summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)
-          ? summaryCompletion.summarizedMessageIds.filter((id) => !latestTaskCheckIds.has(String(id || "").trim()))
-          : summaryCompletion.summarizedMessageIds,
-      }
-    : summaryCompletion;
+  const taskCheckScope =
+    summaryCallIndex >= 0 ? turnMessages.slice(0, summaryCallIndex) : turnMessages;
+  const latestTaskCheckIds = new Set(
+    [...collectLatestTaskCheckMessageIndexes(taskCheckScope)]
+      .map((index) => resolveMessageUid(taskCheckScope[index]))
+      .filter(Boolean),
+  );
+  const normalizedSummaryCompletion =
+    summaryCompletion && typeof summaryCompletion === "object"
+      ? {
+          ...summaryCompletion,
+          summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)
+            ? summaryCompletion.summarizedMessageIds.filter(
+                (id) => !latestTaskCheckIds.has(String(id || "").trim()),
+              )
+            : summaryCompletion.summarizedMessageIds,
+        }
+      : summaryCompletion;
   const createSummaryMarker = createSummaryCompletionMarker(normalizedSummaryCompletion);
   const persistedPrefixCount = Math.min(
     turnMessages.length,
     Math.max(0, Number(runtime?.summaryCheckpointPersistedCount) || 0),
   );
-  const durablyPersistedMessageUids = new Set([
-    ...(Array.isArray(runtime?.timelineCheckpointPersistedMessageUids)
-      ? runtime.timelineCheckpointPersistedMessageUids
-      : []),
-    ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
-      ? runtime.summaryCheckpointPersistedMessageUids
-      : []),
-  ].map((uid) => String(uid || "").trim()).filter(Boolean));
+  const durablyPersistedMessageUids = new Set(
+    [
+      ...(Array.isArray(runtime?.timelineCheckpointPersistedMessageUids)
+        ? runtime.timelineCheckpointPersistedMessageUids
+        : []),
+      ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
+        ? runtime.summaryCheckpointPersistedMessageUids
+        : []),
+    ]
+      .map((uid) => String(uid || "").trim())
+      .filter(Boolean),
+  );
   const canUseDurableMessageUids = turnMessages.every((message) => resolveMessageUid(message));
   const pendingMessages = canUseDurableMessageUids
     ? turnMessages.filter((message) => !durablyPersistedMessageUids.has(resolveMessageUid(message)))
@@ -147,12 +163,19 @@ export async function commitSummaryCheckpoint({
   const newlyPersistedMessageUids = pendingMessages.map(resolveMessageUid).filter(Boolean);
   const persistedMessageUids = turnMessages
     .map(resolveMessageUid)
-    .filter((messageUid) => durablyPersistedMessageUids.has(messageUid)
-      || newlyPersistedMessageUids.includes(messageUid));
+    .filter(
+      (messageUid) =>
+        durablyPersistedMessageUids.has(messageUid) ||
+        newlyPersistedMessageUids.includes(messageUid),
+    );
   const summarizedMessageUids = createSummaryMarker
-    ? [...new Set(normalizedSummaryCompletion.summarizedMessageIds
-        .map((messageUid) => String(messageUid || "").trim())
-        .filter(Boolean))]
+    ? [
+        ...new Set(
+          normalizedSummaryCompletion.summarizedMessageIds
+            .map((messageUid) => String(messageUid || "").trim())
+            .filter(Boolean),
+        ),
+      ]
     : turnMessages.filter(isSummarized).map(resolveMessageUid).filter(Boolean);
   if (
     !createSummaryMarker ||
@@ -184,12 +207,14 @@ export async function commitSummaryCheckpoint({
     runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);
   }
   if (persistedMessageUids.length) {
-    runtime.summaryCheckpointPersistedMessageUids = [...new Set([
-      ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
-        ? runtime.summaryCheckpointPersistedMessageUids
-        : []),
-      ...persistedMessageUids,
-    ])];
+    runtime.summaryCheckpointPersistedMessageUids = [
+      ...new Set([
+        ...(Array.isArray(runtime?.summaryCheckpointPersistedMessageUids)
+          ? runtime.summaryCheckpointPersistedMessageUids
+          : []),
+        ...persistedMessageUids,
+      ]),
+    ];
   }
   const markedCount = Number(checkpointResult?.markedCount) || 0;
   const committed = checkpointResult?.committed === true || checkpointResult?.deduplicated === true;

@@ -5,7 +5,7 @@
  */
 import { mergeConfig } from "../config/index.js";
 import { normalizeContextPolicy } from "@noobot/agent-config-protocol/enums";
-import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/session-message-projection";
+import { projectSessionRecordsToContextMessages } from "@noobot/context-protocol/message/session-projection";
 import { resolveRuntimeBasePath, buildStaticInfo } from "./providers/environment-provider.js";
 import { resolveWorkspaceDirectories } from "./providers/workspace-provider.js";
 import { resolveAllEnabledProviders } from "./providers/model-provider.js";
@@ -20,7 +20,7 @@ import {
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
-import { summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
+import { summarizeDiagnosticMessages } from "@noobot/context-protocol/assembly/diagnostics";
 import { resolveConfiguredSuperUserId } from "../shared/utils/super-user.js";
 
 function resolveRuntimeSuperUserFlag({ globalConfig = {}, userId = "" } = {}) {

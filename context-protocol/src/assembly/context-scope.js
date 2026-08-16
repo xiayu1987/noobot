@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-function text(value) { return String(value ?? "").trim(); }
+function text(value) {
+  return String(value ?? "").trim();
+}
 
 export function createContextScope({
   sessionId = "",
@@ -34,4 +36,3 @@ export function excludeActiveContextScopeItems(items = [], scope = {}) {
   const source = Array.isArray(items) ? items : [];
   return source.filter((item) => !messageBelongsToContextScope(item, scope));
 }
-

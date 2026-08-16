@@ -28,7 +28,9 @@ function messageIdentity(message = {}) {
 
 function removeBlocked(messages, blocked) {
   if (!(blocked instanceof Set) || !blocked.size) return messages;
-  return (Array.isArray(messages) ? messages : []).filter((message) => !blocked.has(messageIdentity(message)));
+  return (Array.isArray(messages) ? messages : []).filter(
+    (message) => !blocked.has(messageIdentity(message)),
+  );
 }
 
 function identities(messages) {
@@ -44,9 +46,10 @@ export function resolveModelHistoryMessages({
   historyLimit = Number.POSITIVE_INFINITY,
   resolveHistoryDialogProcessId = resolveMessageDialogProcessId,
 } = {}) {
-  const resolveDialog = typeof resolveHistoryDialogProcessId === "function"
-    ? resolveHistoryDialogProcessId
-    : resolveMessageDialogProcessId;
+  const resolveDialog =
+    typeof resolveHistoryDialogProcessId === "function"
+      ? resolveHistoryDialogProcessId
+      : resolveMessageDialogProcessId;
   const source = (Array.isArray(sourceMessages) ? sourceMessages : []).filter((message) => {
     if (!resolveDialog(message)) return false;
     if (isSystemLikeMessageRole(resolveMessageRole(message))) return false;
@@ -80,11 +83,14 @@ export function resolveModelFinalMessages({
     resolveModelIncrementalMessages({ sourceMessages: incrementalMessages, policyOptions }),
     systemIdentities,
   );
-  const historyByStableIdentity = removeBlocked(resolveModelHistoryMessages({
-    sourceMessages: historyMessages,
-    historyLimit,
-    resolveHistoryDialogProcessId,
-  }), new Set([...systemIdentities, ...identities(incremental)]));
+  const historyByStableIdentity = removeBlocked(
+    resolveModelHistoryMessages({
+      sourceMessages: historyMessages,
+      historyLimit,
+      resolveHistoryDialogProcessId,
+    }),
+    new Set([...systemIdentities, ...identities(incremental)]),
+  );
   const history = historyByStableIdentity;
   return { system, history, incremental, messages: [...system, ...history, ...incremental] };
 }
@@ -93,9 +99,10 @@ export function materializeModelContext(context = {}) {
   if (Number(context?.protocolVersion) !== 2) {
     throw new Error("materializeModelContext requires modelContext protocolVersion=2");
   }
-  const blocks = context?.messageBlocks && typeof context.messageBlocks === "object"
-    ? context.messageBlocks
-    : {};
+  const blocks =
+    context?.messageBlocks && typeof context.messageBlocks === "object"
+      ? context.messageBlocks
+      : {};
   return resolveModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],

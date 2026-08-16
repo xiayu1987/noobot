@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveModelFinalMessages } from "./window-reducer.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "./agent-context-schema.js";
+import { resolveModelFinalMessages } from "../policy/window-reducer.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
 
 export const MODEL_CONTEXT_LANE = Object.freeze({
   PRIMARY: "primary",
@@ -13,7 +13,9 @@ export const MODEL_CONTEXT_LANE = Object.freeze({
 });
 
 function normalizeRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
   if (role === "developer") return "system";
   if (role === "human") return "user";
   if (role === "ai") return "assistant";
@@ -47,21 +49,20 @@ function normalizeDeclaredMessages(items = [], defaultRole = "system", label = "
 
 function projectSourceMessages(sourceMessages = [], projectSourceMessage = null) {
   if (!Array.isArray(sourceMessages)) throw new TypeError("sourceMessages must be an array");
-  const projector = typeof projectSourceMessage === "function"
-    ? projectSourceMessage
-    : (message) => message;
+  const projector =
+    typeof projectSourceMessage === "function" ? projectSourceMessage : (message) => message;
   return sourceMessages.flatMap((message, index) => {
     const projected = projector(message, index);
     const items = Array.isArray(projected) ? projected : projected ? [projected] : [];
     return items.map((item, itemIndex) =>
-      requireMessage(item, `projectedSourceMessages[${index}][${itemIndex}]`));
+      requireMessage(item, `projectedSourceMessages[${index}][${itemIndex}]`),
+    );
   });
 }
 
 function projectPrimaryBlock(messages = [], projectPrimaryMessage = null, blockName = "") {
-  const projector = typeof projectPrimaryMessage === "function"
-    ? projectPrimaryMessage
-    : (message) => message;
+  const projector =
+    typeof projectPrimaryMessage === "function" ? projectPrimaryMessage : (message) => message;
   return (Array.isArray(messages) ? messages : [])
     .map((message, index) => projector(message, { blockName, index }))
     .filter(Boolean);
@@ -89,16 +90,8 @@ export function buildDualLaneModelContext({
       throw new TypeError("primary model context requires authoritative messageBlocks");
     }
     const materialized = resolveModelFinalMessages({
-      systemMessages: projectPrimaryBlock(
-        blocks.system,
-        projectPrimaryMessage,
-        "system",
-      ),
-      historyMessages: projectPrimaryBlock(
-        blocks.history,
-        projectPrimaryMessage,
-        "history",
-      ),
+      systemMessages: projectPrimaryBlock(blocks.system, projectPrimaryMessage, "system"),
+      historyMessages: projectPrimaryBlock(blocks.history, projectPrimaryMessage, "history"),
       incrementalMessages: projectPrimaryBlock(
         blocks.incremental,
         projectPrimaryMessage,

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { createHash } from "node:crypto";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 
 export async function getSessionTurns({

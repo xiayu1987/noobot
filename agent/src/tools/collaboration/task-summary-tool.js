@@ -17,7 +17,7 @@ import {
   TASK_SUMMARY_STATE,
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
-} from "@noobot/context-protocol/task-summary-protocol";
+} from "@noobot/context-protocol/task/summary";
 import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,
@@ -28,18 +28,14 @@ export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 function normalizeToolNameFromToolCall(toolCall = {}) {
   if (!toolCall || typeof toolCall !== "object") return "";
   if (toolCall.name) return String(toolCall.name || "").trim();
-  const fn = toolCall.function && typeof toolCall.function === "object"
-    ? toolCall.function
-    : {};
+  const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
   return String(fn.name || "").trim();
 }
 
 export function isTaskSummaryMessage(messageItem = {}) {
   const role = String(messageItem?.role || "").trim();
   if (role === "assistant") {
-    const toolCalls = Array.isArray(messageItem?.tool_calls)
-      ? messageItem.tool_calls
-      : [];
+    const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
     return toolCalls.some(
       (toolCall) => normalizeToolNameFromToolCall(toolCall) === TASK_SUMMARY_TOOL_NAME,
     );
@@ -65,30 +61,24 @@ export function createTaskSummaryTool(ctx = {}) {
     name: TASK_SUMMARY_TOOL_NAME,
     description: tTool(runtime, "tools.task_summary.description"),
     schema: z.object({
-      summaryContent: z
-        .string()
-        .describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
+      summaryContent: z.string().describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
     }),
     func: async ({ summaryContent }) => {
       const summaryText = String(summaryContent || "").trim();
       if (!summaryText) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.task_summary.summaryContentRequired"),
-          { code: ERROR_CODE.RECOVERABLE_INPUT_MISSING },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.task_summary.summaryContentRequired"), {
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+        });
       }
 
       let parsedSummary;
       try {
         parsedSummary = parseTaskSummaryContent(summaryText);
       } catch (error) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.task_summary.summaryProtocolInvalid"),
-          {
-            code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
-            details: { reason: String(error?.message || error) },
-          },
-        );
+        throw recoverableToolError(tTool(runtime, "tools.task_summary.summaryProtocolInvalid"), {
+          code: ERROR_CODE.RECOVERABLE_INVALID_TOOL_INPUT,
+          details: { reason: String(error?.message || error) },
+        });
       }
 
       const summary = createTaskSummaryReceipt(parsedSummary);

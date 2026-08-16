@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 
 export function splitSessionMessages(messages = [], dialogOrder = []) {

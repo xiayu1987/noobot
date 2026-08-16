@@ -5,7 +5,7 @@
  */
 
 import { ToolMessage } from "@langchain/core/messages";
-import { appendContextMessage } from "@noobot/context-protocol/context-mutation";
+import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
 
 export function appendToolResultModelMessage({
   modelContext,

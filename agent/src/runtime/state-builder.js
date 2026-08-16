@@ -26,12 +26,12 @@ import {
   resolveTaskCheckLoopTurns,
   resolveToolFailureHelpCount,
 } from "./run-config/index.js";
-import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { emitModelContextTrace } from "../observability/model-context-trace-emitter.js";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "@noobot/context-protocol/context-diagnostics";
+} from "@noobot/context-protocol/assembly/diagnostics";
 import {
   canonicalMessageId,
   canonicalMessageIdentityDebugData,

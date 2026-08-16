@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 
 function normalizeText(value) {
   return String(value || "").trim();

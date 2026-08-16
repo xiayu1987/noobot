@@ -14,7 +14,7 @@ import {
   deriveContextMessageProjectionId as deriveMessageProjectionId,
   resolveContextMessageDialogProcessId,
   resolveContextMessageRole,
-} from "@noobot/context-protocol/message-codec";
+} from "@noobot/context-protocol/message/codec";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
   const transferAttachments = getTransferAttachments(

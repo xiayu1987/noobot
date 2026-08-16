@@ -6,12 +6,12 @@
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
-} from "@noobot/context-protocol/dual-lane-context";
+} from "@noobot/context-protocol/assembly/dual-lane";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "@noobot/context-protocol/context-diagnostics";
+} from "@noobot/context-protocol/assembly/diagnostics";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([

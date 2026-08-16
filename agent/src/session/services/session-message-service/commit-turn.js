@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";

@@ -7,7 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { projectTerminalHistoryMessages } from "../src/terminal-history-policy.js";
+import { projectTerminalHistoryMessages } from "../src/policy/terminal-history-policy.js";
 
 function message(overrides = {}) {
   return {

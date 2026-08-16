@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 
 test("resolveContextMessageDialogProcessId reads only the canonical dialogProcessId field", () => {

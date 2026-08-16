@@ -10,15 +10,18 @@ import test from "node:test";
 import {
   fingerprintDiagnosticMessages,
   summarizeDiagnosticMessages,
-} from "../src/context-diagnostics.js";
+} from "../src/assembly/context-diagnostics.js";
 
 test("context diagnostics records compact role and dialog dimensions", () => {
-  const summary = summarizeDiagnosticMessages([
-    { role: "user", content: "u1", dialogProcessId: "d1" },
-    { role: "assistant", content: "a1", dialogProcessId: "d1" },
-    { role: "user", content: "u2", dialogId: "d2", summarized: true },
-    { role: "system", content: "system" },
-  ], { limit: 1 });
+  const summary = summarizeDiagnosticMessages(
+    [
+      { role: "user", content: "u1", dialogProcessId: "d1" },
+      { role: "assistant", content: "a1", dialogProcessId: "d1" },
+      { role: "user", content: "u2", dialogId: "d2", summarized: true },
+      { role: "system", content: "system" },
+    ],
+    { limit: 1 },
+  );
 
   assert.deepEqual(summary.roles, { user: 2, assistant: 1, system: 1 });
   assert.deepEqual(summary.dialogGroups, [
@@ -49,17 +52,29 @@ test("context diagnostics records compact role and dialog dimensions", () => {
 test("message fingerprints cover provider content and tool protocol without key-order noise", () => {
   const first = fingerprintDiagnosticMessages([
     { role: "user", content: [{ type: "text", text: "task" }], additional_kwargs: { b: 2, a: 1 } },
-    { role: "assistant", content: "", tool_calls: [{ id: "call-1", name: "read_file", args: { path: "a" } }] },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call-1", name: "read_file", args: { path: "a" } }],
+    },
     { role: "tool", content: "ok", tool_call_id: "call-1", toolName: "read_file" },
   ]);
   const reorderedKeys = fingerprintDiagnosticMessages([
     { additional_kwargs: { a: 1, b: 2 }, content: [{ text: "task", type: "text" }], role: "user" },
-    { tool_calls: [{ args: { path: "a" }, name: "read_file", id: "call-1" }], content: "", role: "assistant" },
+    {
+      tool_calls: [{ args: { path: "a" }, name: "read_file", id: "call-1" }],
+      content: "",
+      role: "assistant",
+    },
     { toolName: "read_file", tool_call_id: "call-1", content: "ok", role: "tool" },
   ]);
   const changedToolArgs = fingerprintDiagnosticMessages([
     { role: "user", content: [{ type: "text", text: "task" }], additional_kwargs: { a: 1, b: 2 } },
-    { role: "assistant", content: "", tool_calls: [{ id: "call-1", name: "read_file", args: { path: "b" } }] },
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call-1", name: "read_file", args: { path: "b" } }],
+    },
     { role: "tool", content: "ok", tool_call_id: "call-1", toolName: "read_file" },
   ]);
 

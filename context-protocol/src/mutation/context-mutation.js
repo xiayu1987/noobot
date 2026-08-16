@@ -12,13 +12,13 @@ import {
   replaceMessageProjection,
   replaceMessages,
   writeMessageBlocks,
-} from "./message-store.js";
+} from "../message/message-store.js";
 import {
   commitModelContextRevision,
   getModelContextRevision,
   getModelContextRuntime,
-} from "./model-context-runtime.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "./agent-context-schema.js";
+} from "../assembly/model-context-runtime.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
 
 export const CONTEXT_MUTATION_PROTOCOL_VERSION = 2;
 
@@ -36,7 +36,9 @@ let nextCommandSequence = 1;
 
 function requireDocument(document) {
   if (Number(document?.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
-    throw new TypeError(`context mutation requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+    throw new TypeError(
+      `context mutation requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`,
+    );
   }
   getModelContextRuntime(document);
   return document;
@@ -60,14 +62,18 @@ export function createContextMutation(document, commandType, payload = {}) {
 export function dispatchContextMutation(document, command = {}) {
   requireDocument(document);
   if (Number(command?.protocolVersion) !== CONTEXT_MUTATION_PROTOCOL_VERSION) {
-    throw new TypeError(`context mutation protocolVersion must equal ${CONTEXT_MUTATION_PROTOCOL_VERSION}`);
+    throw new TypeError(
+      `context mutation protocolVersion must equal ${CONTEXT_MUTATION_PROTOCOL_VERSION}`,
+    );
   }
   const commandId = String(command?.commandId || "").trim();
   if (!commandId) throw new TypeError("context mutation commandId is required");
   const expectedRevision = Number(command?.expectedRevision);
   const actualRevision = getModelContextRevision(document);
   if (!Number.isInteger(expectedRevision) || expectedRevision !== actualRevision) {
-    throw new Error(`context mutation revision conflict: expected ${expectedRevision}, actual ${actualRevision}`);
+    throw new Error(
+      `context mutation revision conflict: expected ${expectedRevision}, actual ${actualRevision}`,
+    );
   }
   const payload = command?.payload && typeof command.payload === "object" ? command.payload : {};
   let value;
@@ -108,15 +114,18 @@ export function executeContextMutation(document, commandType, payload = {}) {
 }
 
 export function appendContextMessage(document, message, { block = "" } = {}) {
-  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.APPEND_MESSAGE, { message, block }).value;
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.APPEND_MESSAGE, { message, block })
+    .value;
 }
 
 export function replaceContextMessages(document, messages) {
-  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REPLACE_MESSAGES, { messages }).value;
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REPLACE_MESSAGES, { messages })
+    .value;
 }
 
 export function replaceContextProjection(document, messages) {
-  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REPLACE_PROJECTION, { messages }).value;
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REPLACE_PROJECTION, { messages })
+    .value;
 }
 
 export function writeContextBlocks(document, blocks) {
@@ -124,11 +133,13 @@ export function writeContextBlocks(document, blocks) {
 }
 
 export function markContextMessagesSummarized(document, messageIds) {
-  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.MARK_SUMMARIZED, { messageIds }).value;
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.MARK_SUMMARIZED, { messageIds })
+    .value;
 }
 
 export function pruneContextSummarizedIncremental(document) {
-  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.PRUNE_SUMMARIZED_INCREMENTAL).value;
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.PRUNE_SUMMARIZED_INCREMENTAL)
+    .value;
 }
 
 export function removeContextMessagesByIds(document, messageIds) {

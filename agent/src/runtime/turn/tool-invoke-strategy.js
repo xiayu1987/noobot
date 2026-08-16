@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import {
   resolveBoundToolModelRequestOverrides,

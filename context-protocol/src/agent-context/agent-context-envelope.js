@@ -11,7 +11,7 @@ import {
 } from "./agent-context-schema.js";
 import { normalizeAgentContextIdentity } from "./agent-context-identity.js";
 import { assertValidAgentContextEnvelope } from "./agent-context-validation.js";
-import { createContextBuildReceipt } from "./context-build-receipt.js";
+import { createContextBuildReceipt } from "../assembly/context-build-receipt.js";
 
 function plainObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;

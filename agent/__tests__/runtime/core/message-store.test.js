@@ -14,11 +14,11 @@ import {
   replaceMessages,
   resolveMessagesByIds,
   writeMessageBlocks,
-} from "@noobot/context-protocol/message-store";
+} from "@noobot/context-protocol/message/store";
 import {
   attachModelContextRuntime,
   resolveCanonicalContextMessages,
-} from "@noobot/context-protocol/model-context-runtime";
+} from "@noobot/context-protocol/assembly/model-runtime";
 
 function attachRuntime(holder) {
   attachModelContextRuntime(holder);

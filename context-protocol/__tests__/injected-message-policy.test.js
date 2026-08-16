@@ -9,19 +9,25 @@ import test from "node:test";
 import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
-} from "../src/injected-message-policy.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../src/injected-message-types.js";
+} from "../src/policy/injected-message-policy.js";
+import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../src/message/injected-message-types.js";
 
 test("internal message type uses the context protocol field codec", () => {
-  assert.equal(resolveContextInternalMessageType({
-    additional_kwargs: { noobotInternalMessageType: "internal.marker" },
-  }), "internal.marker");
+  assert.equal(
+    resolveContextInternalMessageType({
+      additional_kwargs: { noobotInternalMessageType: "internal.marker" },
+    }),
+    "internal.marker",
+  );
 });
 
 test("internal message type reads the canonical Session entity field", () => {
-  assert.equal(resolveContextInternalMessageType({
-    noobotInternalMessageType: "noobot.phase_summary_prompt",
-  }), "noobot.phase_summary_prompt");
+  assert.equal(
+    resolveContextInternalMessageType({
+      noobotInternalMessageType: "noobot.phase_summary_prompt",
+    }),
+    "noobot.phase_summary_prompt",
+  );
 });
 
 test("every runtime control message participates in summary checkpoint policy", () => {

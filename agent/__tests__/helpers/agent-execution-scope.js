@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context-envelope";
+import { createAgentContextBuildEnvelope } from "@noobot/context-protocol/agent-context/envelope";
 import { createAgentExecutionScope } from "../../src/context/agent-execution-scope.js";
 
 export function createTestAgentExecutionScope(

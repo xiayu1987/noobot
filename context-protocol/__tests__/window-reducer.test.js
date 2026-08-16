@@ -6,12 +6,12 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModelContext } from "../src/hook-context.js";
+import { createModelContext } from "../src/assembly/hook-context.js";
 import {
   resolveModelFinalMessages,
   resolveModelHistoryMessages,
-} from "../src/window-reducer.js";
-import { collectDialogScopedMessagesToSummarize } from "../src/summary-policy.js";
+} from "../src/policy/window-reducer.js";
+import { collectDialogScopedMessagesToSummarize } from "../src/policy/summary-policy.js";
 
 function legacyUser(content, dialogProcessId, turnScopeId) {
   return {
@@ -55,7 +55,11 @@ test("final projection preserves unsummarized injections in history and incremen
   const historyOld = injected("history-old", "history-dialog", "history old guidance");
   const historyLatest = injected("history-latest", "history-dialog", "history latest guidance");
   const incrementalOld = injected("incremental-old", "current-dialog", "incremental old guidance");
-  const incrementalLatest = injected("incremental-latest", "current-dialog", "incremental latest guidance");
+  const incrementalLatest = injected(
+    "incremental-latest",
+    "current-dialog",
+    "incremental latest guidance",
+  );
 
   const result = resolveModelFinalMessages({
     historyMessages: [historyOld, historyLatest],
@@ -77,7 +81,9 @@ test("history filters missing identity, system and summarized messages before se
   ];
 
   assert.deepEqual(
-    resolveModelHistoryMessages({ sourceMessages: input, historyLimit: 2 }).map((message) => message.content),
+    resolveModelHistoryMessages({ sourceMessages: input, historyLimit: 2 }).map(
+      (message) => message.content,
+    ),
     ["d1", "d2"],
   );
 });
@@ -90,7 +96,9 @@ test("history group order comes only from first occurrence in filtered messages"
   ];
 
   assert.deepEqual(
-    resolveModelHistoryMessages({ sourceMessages: input, historyLimit: 1 }).map((message) => message.content),
+    resolveModelHistoryMessages({ sourceMessages: input, historyLimit: 1 }).map(
+      (message) => message.content,
+    ),
     ["d1"],
   );
 });
@@ -132,25 +140,19 @@ test("history only consumes summary marks after each dialog retains its own late
   ];
 
   const selected = new Set(collectDialogScopedMessagesToSummarize(source));
-  const persisted = source.map((item) => selected.has(item)
-    ? { ...item, summarized: true }
-    : item);
+  const persisted = source.map((item) =>
+    selected.has(item) ? { ...item, summarized: true } : item,
+  );
 
   assert.deepEqual(
     [...selected].map((item) => item.content),
     ["d1 old guidance", "d2 old guidance"],
   );
   assert.deepEqual(
-    resolveModelHistoryMessages({ sourceMessages: persisted, historyLimit: 5 })
-      .map((item) => item.content),
-    [
-      "d1 user",
-      "d1 latest guidance",
-      "d1 answer",
-      "d2 user",
-      "d2 latest guidance",
-      "d2 answer",
-    ],
+    resolveModelHistoryMessages({ sourceMessages: persisted, historyLimit: 5 }).map(
+      (item) => item.content,
+    ),
+    ["d1 user", "d1 latest guidance", "d1 answer", "d2 user", "d2 latest guidance", "d2 answer"],
   );
 });
 
@@ -178,7 +180,10 @@ test("explicit blocks hydrate one stable identity for projections with the same 
 
   assert.equal(context.messageBlocks.history[0], context.messageBlocks.incremental[0]);
   assert.equal(context.messages.includes(context.messageBlocks.history[0]), true);
-  assert.equal(context.messages.some((message) => message.content === "stale-flat-message"), false);
+  assert.equal(
+    context.messages.some((message) => message.content === "stale-flat-message"),
+    false,
+  );
 });
 
 test("same text in different dialog processes remains distinct", () => {

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { persistSessionArtifactSnapshot } from "../../session/session-artifact-store.js";
-import { resolveMessageRole } from "@noobot/context-protocol/message-policy";
+import { resolveMessageRole } from "@noobot/context-protocol/policy/message";
 import {
   projectContextMessageIdentityMetadata,
   resolveContextMessageContent,
   resolveContextMessageFlags,
   resolveContextToolCallId,
   resolveContextToolCalls,
-} from "@noobot/context-protocol/message-codec";
+} from "@noobot/context-protocol/message/codec";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
 import {
