@@ -54,6 +54,7 @@ test("workflow hook fails the parent workflow and stops downstream after a sub-a
     options: {
       enabled: true,
       mode: "on",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -126,6 +127,7 @@ test("workflow hook stops all fan-out downstream nodes after their upstream node
     options: {
       enabled: true,
       mode: "on",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -191,6 +193,7 @@ test("workflow hook does not execute a merge downstream node after an upstream b
       mode: "on",
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -257,6 +260,7 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
       mode: "on",
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -313,4 +317,3 @@ test("workflow hook does not execute any post-merge fan-out node after an upstre
     forbiddenNodes: ["节点C", "节点D"],
   });
 });
-

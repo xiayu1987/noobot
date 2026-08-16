@@ -40,6 +40,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
     options: {
       enabled: true,
       mode: "on",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async (payload = {}) => {
         semanticRequestMessages.push(...(Array.isArray(payload?.messages) ? payload.messages : []));
         return {
@@ -116,4 +117,3 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   assert.doesNotMatch(semanticPrompt, /ATTACHMENT id=/);
   assert.match(semanticPrompt, /attachments="user:\*"|attachmentId=att-user-1/);
 });
-

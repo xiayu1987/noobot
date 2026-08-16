@@ -29,8 +29,19 @@ test("context diagnostics records compact role and dialog dimensions", () => {
   assert.equal(summary.summarizedCount, 1);
   assert.equal(summary.preview.length, 1);
   assert.equal(summary.preview[0].contentLength, 2);
+  assert.equal(summary.evidence.length, 4);
+  assert.deepEqual(
+    summary.evidence.map(({ index, role, contentLength }) => ({ index, role, contentLength })),
+    [
+      { index: 0, role: "user", contentLength: 2 },
+      { index: 1, role: "assistant", contentLength: 2 },
+      { index: 2, role: "user", contentLength: 2 },
+      { index: 3, role: "system", contentLength: 6 },
+    ],
+  );
+  assert.equal(summary.evidence[0].contentPreview, undefined);
   assert.equal(summary.truncated, 3);
-  assert.equal(summary.fingerprintProtocolVersion, 1);
+  assert.equal(summary.fingerprintProtocolVersion, 2);
   assert.equal(summary.fingerprints.length, 4);
   assert.match(summary.sequenceHash, /^[a-f0-9]{64}$/);
 });
@@ -55,4 +66,34 @@ test("message fingerprints cover provider content and tool protocol without key-
   assert.deepEqual(first, reorderedKeys);
   assert.notEqual(first.fingerprints[1], changedToolArgs.fingerprints[1]);
   assert.notEqual(first.sequenceHash, changedToolArgs.sequenceHash);
+});
+
+test("message fingerprints exclude runtime metadata that providers never receive", () => {
+  const original = fingerprintDiagnosticMessages([
+    {
+      role: "user",
+      content: "stable input",
+      summarized: false,
+      additional_kwargs: {
+        noobotMessageId: "message-1",
+        dialogProcessId: "dialog-1",
+        injectedMessageType: "separate_model_relay:phase_acceptance",
+      },
+    },
+  ]);
+  const runtimeStateChanged = fingerprintDiagnosticMessages([
+    {
+      role: "user",
+      content: "stable input",
+      summarized: true,
+      additional_kwargs: {
+        noobotMessageId: "message-1",
+        dialogProcessId: "dialog-1",
+        injectedMessageType: "separate_model_relay:phase_acceptance",
+        checkpointRevision: 2,
+      },
+    },
+  ]);
+
+  assert.deepEqual(original, runtimeStateChanged);
 });

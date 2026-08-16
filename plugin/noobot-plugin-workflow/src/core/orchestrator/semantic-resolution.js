@@ -15,6 +15,10 @@ import {
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  buildDualLaneModelContext,
+  MODEL_CONTEXT_LANE,
+} from "@noobot/context-protocol/dual-lane-context";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
@@ -86,17 +90,21 @@ export async function resolveSemanticText({ options = {}, ctx = {}, sourceText =
       .filter(Boolean)
       .join("\n\n"),
   };
-  const semanticMessages = [
-    ...contextMessages,
-    ...(availableToolsSystemMessage ? [availableToolsSystemMessage] : []),
-    semanticTaskMessage,
-  ];
+  const semanticMessages = buildDualLaneModelContext({
+    lane: MODEL_CONTEXT_LANE.AUXILIARY,
+    sourceMessages: contextMessages,
+    protocolSystemMessages: [
+      String(options?.semanticPrompt || "").trim(),
+      ...(availableToolsSystemMessage ? [availableToolsSystemMessage] : []),
+    ].filter(Boolean),
+    taskMessages: [semanticTaskMessage],
+  }).messages;
   const result = await options.capabilityModelInvoker({
     purpose: WORKFLOW_SEMANTIC.PURPOSE,
     domain: WORKFLOW_SEMANTIC.DOMAIN,
     model: options?.semanticModel || "",
     locale,
-    prompt: options?.semanticPrompt || "",
+    prompt: "",
     messages: semanticMessages,
     ctx,
     toolAllowlist: availableToolNames,

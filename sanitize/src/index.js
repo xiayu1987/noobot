@@ -128,7 +128,7 @@ function collectPiiRanges(text) {
   addMatches(/(?<![\w+])\+\d(?:[ ()-]*\d){7,14}(?!\d)/g, isValidInternationalPhone);
   addMatches(/(?<!\d)\d{17}[\dXx](?![\dXx])/g, isValidCnId);
   addMatches(/(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])/g, isValidUsSsn);
-  addMatches(/(?<!\d)(?:\d[ -]?){12,19}(?!\d)/g, isValidBankCard);
+  addMatches(/(?<![A-Z0-9])(?:\d[ -]?){12,19}(?![A-Z0-9])/gi, isValidBankCard);
   addMatches(/(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Z0-9])/gi, isValidIban);
   addMatches(/(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
     (value) => isIP(value) === 4 && !isPrivateOrLocalIpv4(value));

@@ -45,14 +45,13 @@ import {
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailTransferEnvelopes,
+  recordSummaryTransferEnvelopes,
   resolvePreviousSummaryContextText,
-  shouldSaveSummaryDetailToAttachment,
+  shouldSaveSummaryToAttachment,
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import {
   parseSummaryOverviewAndDetailFromText,
-  resolveSummaryDetailAttachmentText,
 } from "../shared/plan/summary-text-protocol.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
@@ -75,10 +74,6 @@ import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/mode
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
-
-function buildSummaryRelayContent({ overviewText = "" } = {}) {
-  return String(overviewText || "").trim();
-}
 
 export async function runPendingPlanUpdateBySeparateModel(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
@@ -485,38 +480,31 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     const parsedSummary = parseSummaryOverviewAndDetailFromText(responseText);
     const summaryOverviewText = String(parsedSummary?.overviewText || "").trim() || responseText;
     summaryMergeText = summaryOverviewText;
-    const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
-    const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-    const summaryDetailTransferPayload =
-      saveDetailToAttachment && summaryDetailAttachmentText
+    const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
+    const summaryTransferPayload =
+      persistSummaryAttachment && responseText
         ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
-            purpose: "summary_detail",
-            content: summaryDetailAttachmentText,
-            generationSource: "harness_summary_detail",
+            purpose: "summary",
+            content: responseText,
+            generationSource: "harness_summary",
             domain: CAPABILITY_DOMAIN.GUIDANCE,
           })
         : { transferEnvelopes: [] };
-    recordSummaryDetailTransferEnvelopes(ctx, summaryDetailTransferPayload);
-    const baseRelayText = saveDetailToAttachment
-      ? buildSummaryRelayContent({
-          locale,
-          overviewText: summaryOverviewText,
-        })
-      : responseText;
+    recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
     relayText = await transferSummaryInjectionMessage(ctx, {
       fullText: responseText,
-      summaryText: baseRelayText,
-      detailText: summaryDetailAttachmentText,
-      injectMode: saveDetailToAttachment ? "summary" : "full",
+      summaryText: responseText,
+      detailText: responseText,
+      injectMode: "full",
       meta,
     });
     relayText = [
-      relayText || baseRelayText,
+      relayText || responseText,
       formatOperationDirectoryForRelay(resolveOperationDirectoryContext(ctx)),
     ]
       .filter(Boolean)
       .join("\n\n");
-    relayAttachments = summaryDetailTransferPayload;
+    relayAttachments = summaryTransferPayload;
   } else if (workflowPurpose !== "analysis") {
     relayAttachments = await saveCapabilityOutputAsTransferArtifacts(ctx, {
       purpose,

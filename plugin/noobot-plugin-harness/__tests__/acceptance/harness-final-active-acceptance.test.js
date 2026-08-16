@@ -187,10 +187,119 @@ test("harness active request_task_acceptance semantic validation receives agent 
   assert.equal(invocations[1].envelopeType, "structured_v1");
   assertFlatCapabilityMessages(invocations[1].messages);
   assert.equal(result.phaseAcceptanceTriggered, true);
-  assert.equal(result.report.semanticValidation.status, "pass");
+  assert.equal(result.report, undefined);
+  assert.equal(result.acceptance.semanticValidation.status, "pass");
+  assert.equal(result.acceptance.semanticValidation.consistent, true);
+  assert.equal(
+    result.acceptance.statusAuthority,
+    agentContext.payload.harness.lastAcceptanceReport.statusAuthority,
+  );
   assert.equal(
     agentContext.payload.harness.lastAcceptanceReport.semanticValidation.consistent,
     true,
+  );
+});
+
+test("task acceptance clears queued summary, pauses only during review, and is exposed once per turn", async () => {
+  const hookManager = createAgentHookManager();
+  const invocations = [];
+  const acceptanceReviewingStates = [];
+  registerHarnessCore(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      acceptance: { semanticValidation: true },
+      resolveModelMessages: new ModelMessageRuntimeHelpers().createResolveModelMessages(),
+      capabilityModelInvoker: async (payload) => {
+        invocations.push(payload);
+        acceptanceReviewingStates.push(
+          agentContext.payload.harness.state.flags.acceptanceReviewing,
+        );
+        return createTestModelResponse(
+          payload.purpose === "acceptance_semantic_validation"
+            ? JSON.stringify({
+                status: "pass",
+                consistent: true,
+                checklistCoverage: [],
+                missingItems: [],
+                unsupportedClaims: [],
+                suggestions: [],
+              })
+            : "phase acceptance completed",
+        );
+      },
+    },
+  );
+  const state = {
+    flags: { summaryByCharsPrompted: true },
+    counters: { summaryTurns: 0 },
+    signals: { successfulToolCount: 1 },
+    pending: {
+      summary: true,
+      summaryCheckpointMessageIds: ["stale-checkpoint-message"],
+    },
+  };
+  const agentContext = {
+    payload: {
+      tools: { registry: [] },
+      harness: {
+        taskChecklist: [{ index: 1, task: "pending task" }],
+        state,
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+  await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
+  state.pending.summary = true;
+  state.pending.summaryCheckpointMessageIds = ["stale-checkpoint-message"];
+  state.flags.summaryByCharsPrompted = true;
+  const tool = agentContext.payload.tools.registry.find(
+    (item) => item.name === "request_task_acceptance",
+  );
+  const toolCtx = createTestHookContext({
+    agentContext,
+    result: { output: "work is not complete" },
+  });
+  await tool.invoke(
+    { mode: "active" },
+    { configurable: { noobotHookContext: toolCtx } },
+  );
+
+  assert.equal(state.flags.acceptanceRequested, true);
+  assert.equal(state.flags.acceptanceReviewing, false);
+  assert.equal(state.flags.acceptanceCompleted, false);
+  assert.equal(state.pending.summary, false);
+  assert.equal(state.pending.summaryCheckpointMessageIds, null);
+  assert.equal(state.flags.summaryByCharsPrompted, false);
+  assert.equal(
+    agentContext.payload.tools.registry.some(
+      (item) => item.name === "request_task_acceptance",
+    ),
+    false,
+  );
+  assert.deepEqual(acceptanceReviewingStates, [true, true]);
+
+  const summaryInvocationCountAfterAcceptance = invocations.filter(
+    (item) => item.purpose === "summary",
+  ).length;
+  await hookManager.emit(
+    "agent.before_llm_call",
+    createTestHookContext({
+      agentContext,
+      turn: 1,
+      modelContext: { messages: [] },
+    }),
+  );
+  assert.equal(
+    invocations.filter((item) => item.purpose === "summary").length,
+    summaryInvocationCountAfterAcceptance,
+  );
+  assert.equal(
+    agentContext.payload.tools.registry.some(
+      (item) => item.name === "request_task_acceptance",
+    ),
+    false,
   );
 });
 
@@ -252,5 +361,10 @@ test("harness active request_task_acceptance falls back to closure meta when con
   assert.equal(invocations[0].purpose, "phase_acceptance");
   assert.equal(invocations[1].purpose, "acceptance_semantic_validation");
   assert.equal(result.phaseAcceptanceTriggered, true);
-  assert.equal(result.report.semanticValidation.status, "pass");
+  assert.equal(result.report, undefined);
+  assert.equal(result.acceptance.semanticValidation.status, "pass");
+  assert.equal(
+    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status,
+    "pass",
+  );
 });

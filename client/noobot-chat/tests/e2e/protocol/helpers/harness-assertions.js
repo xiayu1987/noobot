@@ -27,13 +27,23 @@ export function assertCapabilityModelTraces(traces = []) {
     expect(record.detail && typeof record.detail === "object" && !Array.isArray(record.detail)).toBe(true);
     expect(typeof record.detail.purpose).toBe("string");
     expect(record.detail.purpose.length).toBeGreaterThan(0);
-    expect(typeof record.detail.finishedReason).toBe("string");
-    expect(record.detail.traces.length).toBeGreaterThan(0);
-    for (const invocation of record.detail.traces) {
-      expect(invocation.purpose).toBe(record.detail.purpose);
-      expect(invocation.domain).toBe(record.domain);
-      expect(Array.isArray(invocation.toolCalls)).toBe(true);
-      expect(typeof invocation.finishedReason).toBe("string");
+    expect(Array.isArray(record.detail.modelAttempts)).toBe(true);
+    expect(record.detail.modelAttempts.length).toBeGreaterThan(0);
+    for (const attempt of record.detail.modelAttempts) {
+      expect(Number.isInteger(attempt.attempt)).toBe(true);
+      expect(attempt.attempt).toBeGreaterThan(0);
+      expect(["completed", "retry", "failed"]).toContain(attempt.status);
+      expect(typeof attempt.kind).toBe("string");
+      expect(attempt.kind.length).toBeGreaterThan(0);
+      expect(typeof attempt.streaming).toBe("boolean");
+      if (attempt.output) {
+        expect(Array.isArray(attempt.output.toolCalls)).toBe(true);
+        expect(typeof attempt.output.finishReason).toBe("string");
+      }
+      if (attempt.status === "completed") expect(attempt.output).toBeTruthy();
+      if (attempt.status === "failed") {
+        expect(Boolean(attempt.output || attempt.error)).toBe(true);
+      }
     }
   }
 }

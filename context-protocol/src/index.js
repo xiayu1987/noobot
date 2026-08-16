@@ -29,3 +29,4 @@ export * from "./task-check-protocol.js";
 export * from "./context-scope.js";
 export * from "./context-source.js";
 export * from "./context-build-receipt.js";
+export * from "./dual-lane-context.js";

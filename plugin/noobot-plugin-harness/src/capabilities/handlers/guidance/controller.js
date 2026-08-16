@@ -18,7 +18,6 @@ import {
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
 import {
   parseSummaryOverviewAndDetailFromText,
-  resolveSummaryDetailAttachmentText,
 } from "../shared/plan/summary-text-protocol.js";
 import {
   maybeInjectPlanUpdatePrompt,
@@ -38,8 +37,8 @@ import {
 import {
   applySummaryText,
   recordLatestSummaryFullText,
-  recordSummaryDetailTransferEnvelopes,
-  shouldSaveSummaryDetailToAttachment,
+  recordSummaryTransferEnvelopes,
+  shouldSaveSummaryToAttachment,
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
 import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
@@ -355,7 +354,7 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
     let changed = false;
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       const current = ensureHarnessBucket(ctx);
-      if (current?.state?.flags?.acceptanceCompleted === true) {
+      if (current?.state?.flags?.acceptanceReviewing === true) {
         return { capability, point, status: "active", changed: false };
       }
       const invariantChanged =
@@ -428,32 +427,31 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         const parsedSummary = parseSummaryOverviewAndDetailFromText(rawSummaryText);
         const summaryOverviewText =
           String(parsedSummary?.overviewText || "").trim() || rawSummaryText;
-        const saveDetailToAttachment = shouldSaveSummaryDetailToAttachment(meta);
-        const summaryDetailAttachmentText = resolveSummaryDetailAttachmentText(parsedSummary);
-        const detailTransferPayload =
-          saveDetailToAttachment && summaryDetailAttachmentText
+        const persistSummaryAttachment = shouldSaveSummaryToAttachment(meta);
+        const summaryTransferPayload =
+          persistSummaryAttachment && rawSummaryText
             ? await saveCapabilityOutputAsTransferArtifacts(ctx, {
-                purpose: "summary_detail",
-                content: summaryDetailAttachmentText,
-                generationSource: "harness_summary_detail",
+                purpose: "summary",
+                content: rawSummaryText,
+                generationSource: "harness_summary",
                 domain: CAPABILITY_DOMAIN.GUIDANCE,
               })
             : { transferEnvelopes: [] };
-        recordSummaryDetailTransferEnvelopes(ctx, detailTransferPayload);
-        if (detailTransferPayload.transferEnvelopes.length) {
+        recordSummaryTransferEnvelopes(ctx, summaryTransferPayload);
+        if (summaryTransferPayload.transferEnvelopes.length) {
           relaySeparateModelOutputAsUserMessage(ctx, {
             locale,
-            purpose: "summary_detail",
-            content: summaryOverviewText,
+            purpose: "summary",
+            content: rawSummaryText,
             dedupe: true,
-            transferPayload: detailTransferPayload,
+            transferPayload: summaryTransferPayload,
           });
         }
-        if (!saveDetailToAttachment && rawSummaryText) {
+        if (!persistSummaryAttachment && rawSummaryText) {
           const summaryInjectionContent = await transferSummaryInjectionMessage(ctx, {
             fullText: rawSummaryText,
-            summaryText: summaryOverviewText,
-            detailText: summaryDetailAttachmentText,
+            summaryText: rawSummaryText,
+            detailText: rawSummaryText,
             injectMode: "full",
             meta,
           });

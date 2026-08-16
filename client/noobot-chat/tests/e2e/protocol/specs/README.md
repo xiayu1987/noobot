@@ -8,9 +8,15 @@
 - `016`～`017`：Harness 自然完成、Hook 中断和 Model Context。
 - `021`～`026`：Session 恢复、版本冲突、停止幂等、断网和非法协议拒绝。
 - `027`～`032`：插件协议、Session 协议、本地 Session 刷新和 Workflow 生命周期。
-- `034`～`036`：主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
-- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-016/017、PBE-032、PBE-028；PBE-028 同一 Session 同时核对 Workflow/Harness model 附件、真实 HTTP 读取、刷新后投影，以及普通 Harness guidance 不进入 transfer；PBE-033 的重复 Harness/阈值复合链路与 PBE-099 的重复组合审计已删除。
+- `033`～`036`：Harness 全流程注入、主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
+- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-028 同一 Session同时核对 Workflow/Harness model 附件、真实 HTTP 读取、刷新后投影，以及普通 Harness guidance 不进入 transfer；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
+
+### PBE-033：Harness 低轮次完整流程
+
+步骤：从 Harness UI 启用 planning 和 acceptance，并设置 guidance analysis 强度；测试通过正式 `update:pluginModelConfig` 参数边界降低 summary、plan update 和 phase acceptance 阈值，驱动五步依赖计算链，并显式请求 plan refinement 和 task acceptance。
+
+断言：planning、guidance analysis、summary、plan revision/refinement、phase acceptance、semantic validation 和 review 都形成运行事实；每个辅助模型 purpose 都有 provider 观测和 capability trace，每个模型输出及其 follow-up 都以规范 `separate_model_relay:*` 进入后续主模型 provider 输入；阈值来源、summary checkpoint、缓存前缀与七次工具结果闭合。
 
 ### PBE-034：主 Agent 低轮次阶段小结
 

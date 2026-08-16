@@ -42,6 +42,7 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -117,6 +118,7 @@ test("workflow waits for every parallel node sub-session to stop before planner 
       semanticPrompt: "emit parallel workflow dsl",
       parallelNodeExecution: true,
       maxParallelNodeAgents: 2,
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
