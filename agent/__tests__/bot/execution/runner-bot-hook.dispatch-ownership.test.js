@@ -14,6 +14,41 @@ import {
   createBotDispatchHandled,
   createTestAgentExecutionScope,
 } from "./runner-bot-hook.fixtures.js";
+import { createModelResponse } from "@noobot/model-protocol";
+
+function createCompletedModelResponse(request, text) {
+  const output = {
+    text,
+    reasoning: "",
+    toolCalls: [],
+    finishReason: "stop",
+    usage: {},
+  };
+  return createModelResponse({
+    invocation: {
+      ...request.invocation,
+      requestId: "request-before-dispatch",
+      invocationId: "invocation-before-dispatch",
+      sessionId: "s1",
+      parentSessionId: "",
+      dialogProcessId: "dp1",
+      turnScopeId: "turn-workflow-semantic",
+      runId: "agent:turn-workflow-semantic",
+    },
+    output,
+    attempts: [
+      {
+        attempt: 1,
+        status: "completed",
+        kind: "response",
+        streaming: false,
+        output,
+      },
+    ],
+    model: request.model,
+    provider: {},
+  });
+}
 
 test("before-dispatch capability events use the bound Turn message domain", async () => {
   const botHookManager = createTestBotHookManager();
@@ -40,8 +75,8 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
         runId: `agent:${turnScopeId}`,
       };
       const modelPort = {
-        async invoke() {
-          return { output: { text: "WORKFLOW_DSL/1\nEND" } };
+        async invoke(request) {
+          return createCompletedModelResponse(request, "WORKFLOW_DSL/1\nEND");
         },
       };
       const runtimeAgentContext = createTestAgentExecutionScope({

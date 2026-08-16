@@ -10,34 +10,13 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import {
+  collectConfigTemplateKeys as scanConfigTemplateKeys,
+  normalizeConfigParamKey,
+  normalizeConfigParamsDocument,
+} from "@noobot/agent-config-protocol";
 
 const CONFIG_PARAMS_FILE_NAME = "config-params.json";
-
-function collectTemplateKeysFromObject(input, collector = new Set()) {
-  if (typeof input === "string") {
-    const templatePattern = /\$\{([A-Z0-9_]+)\}/g;
-    let matchedItem = templatePattern.exec(input);
-    while (matchedItem) {
-      collector.add(String(matchedItem[1] || "").trim());
-      matchedItem = templatePattern.exec(input);
-    }
-    return collector;
-  }
-  if (Array.isArray(input)) {
-    for (const item of input) collectTemplateKeysFromObject(item, collector);
-    return collector;
-  }
-  if (input && typeof input === "object") {
-    for (const value of Object.values(input)) {
-      collectTemplateKeysFromObject(value, collector);
-    }
-  }
-  return collector;
-}
-
-function normalizeConfigParamKey(input = "") {
-  return String(input || "").trim().toUpperCase();
-}
 
 export function createConfigParamsService({
   workspaceRootPath,
@@ -55,16 +34,11 @@ export function createConfigParamsService({
   }
 
   function normalizeConfigParams(input = {}) {
-    const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
+    const values = normalizeConfigParamsDocument(input);
     const rawDescriptions =
       input?.descriptions && typeof input.descriptions === "object"
         ? input.descriptions
         : {};
-    const values = Object.fromEntries(
-      Object.entries(rawValues)
-        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
-        .filter(([key]) => Boolean(key)),
-    );
     const descriptions = Object.fromEntries(
       Object.entries(rawDescriptions)
         .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
@@ -101,6 +75,7 @@ export function createConfigParamsService({
         error,
         data: { createIfMissing: createIfMissing === true },
       });
+      if (error?.code !== "ENOENT") throw error;
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeWorkspaceConfigParams(payload);
@@ -131,6 +106,7 @@ export function createConfigParamsService({
           userIdLength: String(userId || "").trim().length,
         },
       });
+      if (error?.code !== "ENOENT") throw error;
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeUserConfigParams({ userId, input: payload });
@@ -155,7 +131,8 @@ export function createConfigParamsService({
         filePath,
         error,
       });
-      return {};
+      if (error?.code === "ENOENT") return {};
+      throw error;
     }
   }
 
@@ -169,10 +146,7 @@ export function createConfigParamsService({
     const templateConfigJson = await readConfigJsonIfExists(
       path.join(templateBasePath, "config.json"),
     );
-    const keys = new Set();
-    collectTemplateKeysFromObject(globalConfigJson, keys);
-    collectTemplateKeysFromObject(templateConfigJson, keys);
-    return Array.from(keys).filter(Boolean).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
+    return scanConfigTemplateKeys(globalConfigJson, templateConfigJson);
   }
 
   async function collectUserConfigTemplateKeys(userId = "") {
@@ -182,10 +156,7 @@ export function createConfigParamsService({
     const globalConfigJson =
       typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
-    const keys = new Set();
-    collectTemplateKeysFromObject(globalConfigJson, keys);
-    collectTemplateKeysFromObject(userConfigJson, keys);
-    return Array.from(keys).filter(Boolean).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
+    return scanConfigTemplateKeys(globalConfigJson, userConfigJson);
   }
 
   async function collectConfigTemplateParamCatalog() {

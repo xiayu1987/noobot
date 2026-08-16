@@ -18,7 +18,10 @@ import {
   resolveTaskPath,
 } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { buildRestrictedProcessEnv } from "@noobot/platform-compatibility/process";
+import {
+  buildRestrictedProcessEnv,
+  resolveBrowserExecutable,
+} from "@noobot/platform-compatibility/process";
 
 const LIBREOFFICE_OUTPUT_FORMATS = Object.freeze({
   docx: Object.freeze({ extension: "docx", convertTo: "docx:Office Open XML Text" }),
@@ -318,7 +321,6 @@ export async function createNativeScriptRuntime({
   inputMap = {},
   args,
   timeoutMs,
-  browserExecutablePath,
   libreOfficeExecutable,
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
@@ -593,9 +595,16 @@ export async function createNativeScriptRuntime({
   const getBrowser = async () => {
     if (browser) return browser;
     const playwright = await import("playwright");
+    const browserExecutablePath = resolveBrowserExecutable({
+      playwrightExecutable: playwright.chromium.executablePath(),
+    });
+    const browserExecutableStat = await stat(browserExecutablePath);
+    if (!browserExecutableStat.isFile()) {
+      throw new Error("configured Playwright Chromium executable is not a file");
+    }
     const instance = await playwright.chromium.launch({
       headless: true,
-      executablePath: String(browserExecutablePath || "").trim(),
+      executablePath: browserExecutablePath,
       proxy: resolveBrowserProxyFromEnv(),
     });
     browser = instance;

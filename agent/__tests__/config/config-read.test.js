@@ -91,10 +91,7 @@ test("ConfigService.loadUserConfig: 应读取用户配置并合并 config-params
     assert.equal(loaded.defaultProvider, "openai");
     assert.equal(loaded.providers?.openai?.api_key, "user-key");
     assert.equal(loaded.workspaceRoot, undefined, "workspace_root 应被策略过滤");
-    assert.deepEqual(loaded.configParams, {
-      API_KEY: "user-key",
-      BASE_URL: "https://api.example.com",
-    });
+    assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -124,7 +121,7 @@ test("ConfigService.loadUserConfig: 缺少 config-params.json 时应使用全局
 
     const loaded = await service.loadUserConfig(tempDir);
     assert.equal(loaded.providers?.openai?.api_key, "global-only-key");
-    assert.deepEqual(loaded.configParams, { API_KEY: "global-only-key" });
+    assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -165,7 +162,7 @@ test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/conf
 
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "workspace-new-key");
-    assert.deepEqual(loaded.configParams, { API_KEY: "workspace-new-key" });
+    assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
@@ -223,10 +220,7 @@ test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "user-key");
     assert.equal(loaded.providers?.openai?.base_url, "https://workspace.example.com");
-    assert.deepEqual(loaded.configParams, {
-      API_KEY: "user-key",
-      BASE_URL: "https://workspace.example.com",
-    });
+    assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }
@@ -250,7 +244,7 @@ test("ConfigService.loadUserConfig: config.json 非法 JSON 时应抛出可恢�
   }
 });
 
-test("ConfigService.loadUserConfig: config-params.json 非法时应忽略并继续读取", async () => {
+test("ConfigService.loadUserConfig: config-params.json 非法时应抛出可恢复错误", async () => {
   const tempDir = await createTempDir();
   try {
     await writeFile(
@@ -273,9 +267,13 @@ test("ConfigService.loadUserConfig: config-params.json 非法时应忽略并继�
       },
     });
 
-    const loaded = await service.loadUserConfig(tempDir);
-    assert.equal(loaded.providers?.openai?.api_key, "global-fallback-key");
-    assert.deepEqual(loaded.configParams, { API_KEY: "global-fallback-key" });
+    await assert.rejects(
+      () => service.loadUserConfig(tempDir),
+      (error) =>
+        error &&
+        error.name === "NoobotError" &&
+        error.code === "RECOVERABLE_INVALID_USER_CONFIG",
+    );
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }

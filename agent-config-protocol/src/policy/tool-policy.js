@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./builtin-scenarios.js";
+import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./scenario-policy.js";
 
 function normalizeStringArrayFallback(input = []) {
   return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];

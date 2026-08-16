@@ -77,7 +77,7 @@ test("collectConfigTemplateKeys: 只收集大写模板变量", async () => {
   }
 });
 
-test("config-params-service: writes sanitized system events for config read failures", async () => {
+test("config-params-service: rejects invalid documents and writes sanitized system events", async () => {
   const tempDir = await createTempDir();
   const workspaceRoot = path.join(tempDir, "workspace");
   const runtimeRoot = path.join(tempDir, "runtime-root");
@@ -96,9 +96,9 @@ test("config-params-service: writes sanitized system events for config read fail
       runtimeEventsConfig: { workspaceRoot: runtimeRoot },
     });
 
-    assert.deepEqual(await service.readWorkspaceConfigParams(), { values: {}, descriptions: {} });
-    assert.deepEqual(await service.readUserConfigParams({ userId: "user-secret-token" }), { values: {}, descriptions: {} });
-    assert.deepEqual(await service.collectConfigTemplateKeys(), ["API_KEY"]);
+    await assert.rejects(service.readWorkspaceConfigParams(), SyntaxError);
+    await assert.rejects(service.readUserConfigParams({ userId: "user-secret-token" }), SyntaxError);
+    await assert.rejects(service.collectConfigTemplateKeys(), SyntaxError);
 
     const eventFile = serviceConfigEventFile(runtimeRoot);
     await waitForFile(eventFile);

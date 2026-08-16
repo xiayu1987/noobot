@@ -3,10 +3,49 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { deepMerge, isPlainObject } from "./utils.js";
-import { normalizeKnownConfigKeys } from "./key-normalizer.js";
-import { resolveBuiltinScenarios } from "./builtin-scenarios.js";
-import { sanitizeUserConfig } from "./user-override-policy.js";
+import { deepMerge, isPlainObject } from "../utils.js";
+import { normalizeKnownConfigKeys } from "../normalization/keys.js";
+import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
+import { sanitizeUserConfig } from "../policy/user-override.js";
+
+const RETIRED_CONFIG_PATHS = Object.freeze(
+  [
+    ["attachments", "attachment_models"],
+    ["session", "use_last_running_task_range"],
+    ["session", "use_last_completed_task_range"],
+    ["tools", "set_skill_task"],
+    ["tools", "web_to_data"],
+    ["tools", "doc_to_data"],
+    ["tools", "media_to_data"],
+    ["tools", "process_content_task"],
+    ["tools", "execute_script", "sandbox_mode"],
+    ["tools", "execute_script", "sandbox_provider"],
+  ].map((segments) => Object.freeze(segments)),
+);
+
+function deletePath(root, segments) {
+  let node = root;
+  const parents = [];
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    if (!isPlainObject(node)) return;
+    parents.push({ node, key: segments[index] });
+    node = node[segments[index]];
+    if (!isPlainObject(node)) return;
+  }
+  delete node[segments[segments.length - 1]];
+  for (let index = parents.length - 1; index >= 0; index -= 1) {
+    const parent = parents[index];
+    const child = parent.node[parent.key];
+    if (!isPlainObject(child) || Object.keys(child).length > 0) break;
+    delete parent.node[parent.key];
+  }
+}
+
+export function migrateConfigFileToCurrentProtocol(config = {}) {
+  if (!isPlainObject(config)) return config;
+  for (const segments of RETIRED_CONFIG_PATHS) deletePath(config, segments);
+  return config;
+}
 
 const USER_OVERRIDE_POLICY = {
   defaultProvider: "replace",
@@ -39,27 +78,7 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
     out[key] = userValue;
   }
   out.scenarios = resolveBuiltinScenarios(globalBase?.scenarios, safeUser?.scenarios);
-  const userRuntimeConfigParams =
-    userConfig?.configParams && isPlainObject(userConfig.configParams)
-      ? userConfig.configParams
-      : null;
-  if (userRuntimeConfigParams) {
-    const mergedRuntimeConfigParams = {
-      ...(isPlainObject(globalBase?.configParams) ? globalBase.configParams : {}),
-    };
-    for (const [paramKey, rawValue] of Object.entries(userRuntimeConfigParams)) {
-      const normalizedKey = String(paramKey || "")
-        .trim()
-        .toUpperCase();
-      if (!normalizedKey) continue;
-      const normalizedValue = String(rawValue ?? "").trim();
-      if (!normalizedValue) continue;
-      mergedRuntimeConfigParams[normalizedKey] = normalizedValue;
-    }
-    out.configParams = {
-      ...mergedRuntimeConfigParams,
-    };
-  }
+  delete out.configParams;
   return out;
 }
 

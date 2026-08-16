@@ -19,6 +19,7 @@ import {
   createPluginPolicyApi,
   hasToolPolicyPatchContent,
   mergeToolPolicyPatch,
+  createPluginConfigPlan,
 } from "@noobot/agent-config-protocol";
 import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runner/index.js";
 import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
@@ -33,22 +34,6 @@ const activationsByManager = new WeakMap();
 
 function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function pluginConfig(source = {}, pluginId = "") {
-  return plainObject(plainObject(source?.plugins)[pluginId]);
-}
-
-function pluginModelConfig(source = {}, pluginId = "") {
-  return plainObject(plainObject(source?.pluginModelConfig)[pluginId]);
-}
-
-function pluginIsSelected({ pluginId, runConfig, effectiveConfig }) {
-  const disabled = new Set(normalizeTrimmedStringList(runConfig?.disabledPlugins));
-  if (disabled.has(pluginId)) return false;
-  const selected = new Set(normalizeTrimmedStringList(runConfig?.selectedPlugins));
-  if (!selected.has(pluginId)) return false;
-  return pluginConfig(effectiveConfig, pluginId).enabled !== false;
 }
 
 function createAgentExecutionIntent({ runConfig = {}, turnScopeId = "" } = {}) {
@@ -83,7 +68,6 @@ export class RunConfigPluginPreparer {
     workspaceService = null,
     loadedDynamicPlugins = null,
     normalizeStringArray = null,
-    mergePluginOptions = null,
     createPluginResolveModelMessages = null,
     createDetachedSubSessionRunner = null,
     createBotSubSessionRunner = null,
@@ -96,10 +80,6 @@ export class RunConfigPluginPreparer {
       typeof normalizeStringArray === "function"
         ? normalizeStringArray
         : normalizeTrimmedStringList;
-    this.mergePluginOptions =
-      typeof mergePluginOptions === "function"
-        ? mergePluginOptions
-        : (...items) => Object.assign({}, ...items.map(plainObject));
     this.createPluginResolveModelMessages = createPluginResolveModelMessages;
     this.createDetachedSubSessionRunner =
       createDetachedSubSessionRunner || createBotSubSessionRunner;
@@ -107,17 +87,23 @@ export class RunConfigPluginPreparer {
   }
 
   selectedEntries({ runConfig = {}, userConfig = {} } = {}) {
-    if (
-      String(runConfig?.pluginPolicy?.mode || "")
-        .trim()
-        .toLowerCase() === "none"
-    ) {
-      return [];
-    }
+    const { entries, plan } = this.createConfigPlan({ runConfig, userConfig });
+    const selected = new Set(plan.plugins.map((plugin) => plugin.pluginId));
+    return entries.filter((entry) => selected.has(entry.pluginId));
+  }
+
+  createConfigPlan({ runConfig = {}, userConfig = {} } = {}) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
-    return listLoadedNoobotPluginEntries(this.loadedDynamicPlugins).filter((entry) =>
-      pluginIsSelected({ pluginId: entry.pluginId, runConfig, effectiveConfig }),
-    );
+    const entries = listLoadedNoobotPluginEntries(this.loadedDynamicPlugins);
+    const plan = createPluginConfigPlan({
+      runConfig,
+      effectiveConfig,
+      manifests: entries.map((entry) => ({
+        pluginId: entry.pluginId,
+        defaults: entry.manifest.configuration?.defaults,
+      })),
+    });
+    return { entries, plan };
   }
 
   resolveExecutionIntent({ runConfig = {}, userConfig = {}, turnScopeId = "" } = {}) {
@@ -151,13 +137,12 @@ export class RunConfigPluginPreparer {
 
   resolveOptions({ entry, userId = "", runConfig = {}, userConfig = {} }) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
-    const modelConfig = pluginModelConfig(runConfig, entry.pluginId);
-    const options = this.mergePluginOptions(
-      entry.manifest.configuration?.defaults,
-      pluginConfig(effectiveConfig, entry.pluginId),
-      pluginConfig(runConfig, entry.pluginId),
-      modelConfig,
-    );
+    const plan = createPluginConfigPlan({
+      runConfig,
+      effectiveConfig,
+      manifests: [{ pluginId: entry.pluginId, defaults: entry.manifest.configuration?.defaults }],
+    });
+    const options = plan.plugins.find((plugin) => plugin.pluginId === entry.pluginId)?.options || {};
     const basePath =
       String(options.basePath || "").trim() ||
       (this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : "");
@@ -221,18 +206,17 @@ export class RunConfigPluginPreparer {
   }
 
   prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
-    if (
-      String(runConfig?.pluginPolicy?.mode || "")
-        .trim()
-        .toLowerCase() === "none"
-    ) {
+    const { entries: loadedEntries, plan } = this.createConfigPlan({ runConfig, userConfig });
+    const selected = new Set(plan.plugins.map((plugin) => plugin.pluginId));
+    const entries = loadedEntries.filter((entry) => selected.has(entry.pluginId));
+    if (plan.pluginsDisabled) {
       return {
         ...runConfig,
-        selectedPlugins: [],
+        selectedPlugins: plan.selectedPlugins,
+        disabledPlugins: plan.disabledPlugins,
         plugins: {},
       };
     }
-    const entries = this.selectedEntries({ runConfig, userConfig });
     const agentHooks = selectHookManager({
       runConfig,
       managerKey: "hookManager",

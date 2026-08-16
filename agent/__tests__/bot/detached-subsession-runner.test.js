@@ -94,7 +94,7 @@ function createDeps(overrides = {}) {
         });
       },
     },
-    mergeRunConfigWithPluginStrategy(payload = {}) {
+    mergeRunConfigPluginPolicy(payload = {}) {
       calls.mergePayload = payload;
       return {
         ...payload.baseRunConfig,
