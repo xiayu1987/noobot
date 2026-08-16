@@ -13,21 +13,37 @@ import {
   resolveTurnScopeId,
   uniqueValues,
 } from "./anchor-utils.js";
+import { pruneSessionTurnTimings } from "./turn-timing.js";
 import {
-  createRequestHash,
-  assertCommandRequestMatches,
-  findMutationReceipt,
-  rememberMutationReceipt,
-  normalizeExpectedAggregateVersion,
-} from "./idempotency-guards.js";
-import { pruneSessionTurnTimings, pruneSessionTurnStatuses } from "./turn-timing.js";
-import {
+  appendCommandReceipt,
   assertTurnReplacementMaterialization,
+  createMessageDeleteFingerprint,
+  createTurnReplaceFingerprint,
   createTurnReplacementCommit,
+  decideAggregateConcurrency,
+  decideCommandIdempotency,
+  normalizeExpectedAggregateVersion,
+  SESSION_COMMAND,
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import { commitTurnReplacement } from "@noobot/authoritative-state/application";
-import { randomUUID } from "node:crypto";
+
+function assertIdempotencyDecision(decision) {
+  if (decision.allowed) return;
+  const error = new Error("commandId was reused with a different request");
+  error.statusCode = 409;
+  error.errorCode = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
+  throw error;
+}
+
+function assertConcurrencyDecision(decision) {
+  if (decision.allowed) return;
+  const error = new Error("session aggregate version conflict");
+  error.statusCode = 409;
+  error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
+  error.currentVersion = decision.aggregateVersion;
+  throw error;
+}
 
 export async function deleteFromMessage({
   userId,
@@ -52,7 +68,12 @@ export async function deleteFromMessage({
     throw error;
   }
   const normalizedCommandId = String(commandId || "").trim();
-  const requestHash = createRequestHash({ operation: "delete_from", anchor });
+  if (!normalizedCommandId) {
+    const error = new Error("commandId is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const requestHash = createMessageDeleteFingerprint({ anchor });
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -74,28 +95,29 @@ export async function deleteFromMessage({
         error.statusCode = 404;
         throw error;
       }
-      const replay = findMutationReceipt(session, "delete_from", normalizedCommandId);
-      if (replay) {
-        assertCommandRequestMatches(replay.requestHash, requestHash);
+      const idempotency = decideCommandIdempotency({
+        commandId: normalizedCommandId,
+        type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+        requestHash,
+        receipts: session.turnLifecycle.commandReceipts,
+      });
+      assertIdempotencyDecision(idempotency);
+      if (idempotency.deduplicated) {
         return {
           session,
-          ...replay.result,
+          ...idempotency.receipt.result,
           aggregateVersion: resolveAggregateVersion(session),
-          committedAggregateVersion: replay.aggregateVersion,
+          committedAggregateVersion: idempotency.receipt.aggregateVersion,
           commandId: normalizedCommandId,
           deduplicated: true,
         };
       }
       const currentVersion = resolveAggregateVersion(session);
-      if (normalizedExpectedVersion !== null) {
-        if (normalizedExpectedVersion !== currentVersion) {
-          const error = new Error("session aggregate version conflict");
-          error.statusCode = 409;
-          error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-          error.currentVersion = currentVersion;
-          throw error;
-        }
-      }
+      const concurrency = decideAggregateConcurrency({
+        expectedAggregateVersion: normalizedExpectedVersion,
+        aggregateVersion: currentVersion,
+      });
+      assertConcurrencyDecision(concurrency);
       const messages = Array.isArray(session.messages) ? session.messages : [];
       const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
       if (anchorIndex < 0) {
@@ -108,21 +130,21 @@ export async function deleteFromMessage({
       const deletedTurnScopeIds = uniqueValues(deletedMessages.map(resolveTurnScopeId));
       session.messages = messages.slice(0, anchorIndex);
       pruneSessionTurnTimings(session);
-      pruneSessionTurnStatuses(session);
       session.updatedAt = this.now();
-      session.aggregateVersion = currentVersion + 1;
+      session.aggregateVersion = concurrency.nextAggregateVersion;
 
       const result = { deletedCount, anchorIndex, deletedTurnScopeIds };
-      if (normalizedCommandId) {
-        rememberMutationReceipt(session, {
-          operation: "delete_from",
+      session.turnLifecycle.commandReceipts = appendCommandReceipt(
+        session.turnLifecycle.commandReceipts,
+        {
+          type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
           commandId: normalizedCommandId,
           aggregateVersion: session.aggregateVersion,
           requestHash,
           result,
           committedAt: this.now(),
-        });
-      }
+        },
+      );
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: currentVersion,
@@ -183,14 +205,11 @@ export async function replaceTurn({
     error.statusCode = 400;
     throw error;
   }
-  const requestHash = createRequestHash({
-    operation: "replace_turn",
+  const requestHash = createTurnReplaceFingerprint({
     anchor,
     newContent: normalizedNewContent,
     turnScopeId: normalizedTurnScopeId,
-    attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) =>
-      String(item?.attachmentId || "").trim(),
-    ),
+    attachments,
   });
   return this._withSessionMutation(
     userId,
@@ -213,21 +232,22 @@ export async function replaceTurn({
         error.statusCode = 404;
         throw error;
       }
-      const replay = findMutationReceipt(session, "replace_turn", normalizedCommandId);
-      if (replay) {
-        assertCommandRequestMatches(replay.requestHash, requestHash);
-        return { session, ...replay.result, deduplicated: true };
+      const idempotency = decideCommandIdempotency({
+        commandId: normalizedCommandId,
+        type: SESSION_COMMAND.TURN_REPLACE,
+        requestHash,
+        receipts: session.turnLifecycle.commandReceipts,
+      });
+      assertIdempotencyDecision(idempotency);
+      if (idempotency.deduplicated) {
+        return { session, ...idempotency.receipt.result, deduplicated: true };
       }
       const currentVersion = resolveAggregateVersion(session);
-      if (normalizedExpectedVersion !== null) {
-        if (normalizedExpectedVersion !== currentVersion) {
-          const error = new Error("session aggregate version conflict");
-          error.statusCode = 409;
-          error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
-          error.currentVersion = currentVersion;
-          throw error;
-        }
-      }
+      const concurrency = decideAggregateConcurrency({
+        expectedAggregateVersion: normalizedExpectedVersion,
+        aggregateVersion: currentVersion,
+      });
+      assertConcurrencyDecision(concurrency);
       const messages = Array.isArray(session.messages) ? session.messages : [];
       const anchorIndex = messages.findIndex((messageItem) => matcher(messageItem));
       if (anchorIndex < 0) {
@@ -238,9 +258,16 @@ export async function replaceTurn({
       const turnStartIndex = resolveUserTurnStartIndex(messages, anchorIndex);
       const replacedMessages = messages.slice(turnStartIndex);
       const replacedUserMessage = messages[turnStartIndex] || messages[anchorIndex] || {};
-      const nextVersion = currentVersion + 1;
+      const nextVersion = concurrency.nextAggregateVersion;
       const nowValue = this.now();
-      const replacementDialogProcessId = randomUUID();
+      if (typeof this.allocateDialogProcessId !== "function") {
+        throw new TypeError(
+          "SessionMessageService requires allocateDialogProcessId for Turn replacement",
+        );
+      }
+      const replacementDialogProcessId = String(this.allocateDialogProcessId()).trim();
+      if (!replacementDialogProcessId)
+        throw new TypeError("allocated replacement dialogProcessId is empty");
       const replacementBaseMessage = clearReplacementUserRuntimeState(replacedUserMessage || {});
       delete replacementBaseMessage.turnId;
       delete replacementBaseMessage.turn_id;
@@ -271,7 +298,6 @@ export async function replaceTurn({
       );
       session.messages = [...messages.slice(0, turnStartIndex), newMessage];
       pruneSessionTurnTimings(session);
-      pruneSessionTurnStatuses(session);
       session.updatedAt = nowValue;
       session.aggregateVersion = nextVersion;
 
@@ -284,6 +310,7 @@ export async function replaceTurn({
         replacementDialogProcessId,
         replacementTurnScopeId: normalizedTurnScopeId,
         replacementUserMessageId,
+        requestHash,
         committedAt: nowValue,
       });
       const lifecycleReplacement = commitTurnReplacement({
@@ -297,14 +324,17 @@ export async function replaceTurn({
       session.turnLifecycle = lifecycleReplacement.lifecycle;
       session.authorityEventOutbox = lifecycleReplacement.eventOutbox;
       const result = { turnReplacement };
-      rememberMutationReceipt(session, {
-        operation: "replace_turn",
-        commandId: normalizedCommandId,
-        aggregateVersion: session.aggregateVersion,
-        requestHash,
-        result,
-        committedAt: nowValue,
-      });
+      session.turnLifecycle.commandReceipts = appendCommandReceipt(
+        session.turnLifecycle.commandReceipts,
+        {
+          type: SESSION_COMMAND.TURN_REPLACE,
+          commandId: normalizedCommandId,
+          aggregateVersion: session.aggregateVersion,
+          requestHash,
+          result,
+          committedAt: nowValue,
+        },
+      );
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       assertTurnReplacementMaterialization({ commit: turnReplacement, session });
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {

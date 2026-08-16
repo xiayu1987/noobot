@@ -554,7 +554,6 @@ export function createSubSessionStore({
     const {
       status: _persistedStatus,
       state: _persistedState,
-      turnStatuses: _persistedTurnStatuses,
       turnTimings: _persistedTurnTimings,
       ...messageSnapshot
     } = sessionDoc || {};
@@ -609,7 +608,6 @@ export function createSubSessionStore({
       turnRuntime,
       workflowNodeState,
       status: turnRuntime?.terminal || turnRuntime?.displayState || "",
-      turnStatuses: undefined,
       turnTimings: undefined,
     };
     logWorkflowDiagnostics("frontend.workflowSubSession.selectedProjection", () => ({

@@ -4,9 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 import { WebSocket } from "ws";
-import { commitTurnLifecycle, createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
-import { acknowledgeAuthorityEventDelivery, listPendingAuthorityEvents, recordAuthorityEventDeliveryAttempt } from "@noobot/event-protocol";
-import { createTurnLifecycleEnvelope, TURN_EVENT, TURN_COMMAND, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
+import {
+  commitTurnLifecycle,
+  createAuthoritativeTurnSnapshot,
+} from "@noobot/authoritative-state/application";
+import {
+  acknowledgeAuthorityEventDelivery,
+  listPendingAuthorityEvents,
+  recordAuthorityEventDeliveryAttempt,
+} from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_COMMAND,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
 import { createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
 
 const TEST_EVENT_FACTS = Object.freeze({
@@ -83,19 +96,21 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
     },
     async applyTurnLifecycleEvent(input) {
       commitInputs.push(structuredClone(input));
-      if (input.terminalStatus && !persistSummary) {
-        return { applied: false, reason: "summary_persistence_failed", lifecycle };
-      }
-      const terminalMaterialization = input.terminalStatus
-        ? await bot.materializeTerminal({ event: input, terminalStatus: input.terminalStatus })
-        : null;
       const result = commitTurnLifecycle({
         lifecycle,
         event: input,
         eventOutbox,
         createEventId: () => `authority-event-${++eventIdSequence}`,
         materializeTerminal: input.terminalStatus
-          ? () => terminalMaterialization || { reason: "terminal_materialization_failed" }
+          ? ({ terminalStatus, previousSummaryVersion }) =>
+              persistSummary
+                ? {
+                    materialized: true,
+                    terminalStatus,
+                    messages: [],
+                    summaryVersion: previousSummaryVersion + 1,
+                  }
+                : { materialized: false, reason: "summary_persistence_failed" }
           : undefined,
       });
       if (result.applied) {
@@ -104,7 +119,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         committed.push(input.eventType);
       }
       return input.terminalStatus && result.applied
-        ? { ...result, turnStatus: terminalMaterialization.turnStatus }
+        ? { ...result, turnStatus: result.turn.terminalStatus }
         : result;
     },
     async getPendingAuthorityEvents() {
@@ -154,19 +169,6 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         messages: [],
         traces: [],
         executionLogs: [],
-      };
-    },
-    async materializeTerminal({ event, terminalStatus }) {
-      if (!persistSummary) return null;
-      return {
-        summaryVersion: 7,
-        turnStatus: {
-          version: 7,
-          turnScopeId: event.turnScopeId,
-          dialogProcessId: event.dialogProcessId,
-          status: terminalStatus.command,
-          reason: terminalStatus.command === "user_stopped" ? "user_stop" : "run_completed",
-        },
       };
     },
   };

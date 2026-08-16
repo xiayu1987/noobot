@@ -7,9 +7,14 @@ const clean = (value) => String(value || "").trim();
 
 function validateAuthorityEnvelope(envelope = {}) {
   return Boolean(
-    envelope && typeof envelope === "object" && !Array.isArray(envelope) &&
-    clean(envelope.eventId) && clean(envelope.eventType) && clean(envelope.sessionId) &&
-    Number.isInteger(Number(envelope.sequence)) && Number(envelope.sequence) > 0,
+    envelope &&
+    typeof envelope === "object" &&
+    !Array.isArray(envelope) &&
+    clean(envelope.eventId) &&
+    clean(envelope.eventType) &&
+    clean(envelope.sessionId) &&
+    Number.isInteger(Number(envelope.sequence)) &&
+    Number(envelope.sequence) > 0,
   );
 }
 
@@ -36,9 +41,10 @@ export function normalizeAuthorityEventOutbox(source = []) {
   for (const item of Array.isArray(source) ? source : []) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const eventId = clean(item.eventId || item.envelope?.eventId);
-    const envelope = item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
-      ? { ...item.envelope, eventId }
-      : null;
+    const envelope =
+      item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
+        ? { ...item.envelope, eventId }
+        : null;
     if (!eventId || eventIds.has(eventId) || !validateAuthorityEnvelope(envelope)) continue;
     eventIds.add(eventId);
     normalized.push({
@@ -58,7 +64,10 @@ export function listPendingAuthorityEvents(source = [], { limit = 100 } = {}) {
     .slice(0, normalizedLimit);
 }
 
-export function recordAuthorityEventDeliveryAttempt(source = [], { eventId = "", attemptedAt = "" } = {}) {
+export function recordAuthorityEventDeliveryAttempt(
+  source = [],
+  { eventId = "", attemptedAt = "" } = {},
+) {
   const normalizedEventId = clean(eventId);
   let found = false;
   const outbox = normalizeAuthorityEventOutbox(source).map((item) => {
@@ -76,7 +85,10 @@ export function recordAuthorityEventDeliveryAttempt(source = [], { eventId = "",
   return { found, outbox };
 }
 
-export function acknowledgeAuthorityEventDelivery(source = [], { eventId = "", deliveredAt = "" } = {}) {
+export function acknowledgeAuthorityEventDelivery(
+  source = [],
+  { eventId = "", deliveredAt = "" } = {},
+) {
   const normalizedEventId = clean(eventId);
   let found = false;
   let changed = false;
@@ -100,9 +112,13 @@ export function acknowledgeAuthorityEventDelivery(source = [], { eventId = "", d
 export function findAuthorityEventEnvelope(source = [], { commandId = "", eventType = "" } = {}) {
   const normalizedCommandId = clean(commandId);
   const normalizedEventType = clean(eventType);
-  return normalizeAuthorityEventOutbox(source).find((item) =>
-    clean(item.envelope.commandId) === normalizedCommandId &&
-    clean(item.envelope.eventType) === normalizedEventType)?.envelope || null;
+  return (
+    normalizeAuthorityEventOutbox(source).find(
+      (item) =>
+        clean(item.envelope.commandId) === normalizedCommandId &&
+        clean(item.envelope.eventType) === normalizedEventType,
+    )?.envelope || null
+  );
 }
 
 /**
@@ -110,18 +126,27 @@ export function findAuthorityEventEnvelope(source = [], { commandId = "", eventT
  * watermark and the exact committed result is durably present in a command
  * receipt. Pending or unreceipted events are never removed.
  */
-export function compactAuthorityEventOutbox(source = [], {
-  deliveredThroughSequence,
-  retainDeliveredAfter = "",
-  commandReceipts = [],
-} = {}) {
+export function compactAuthorityEventOutbox(
+  source = [],
+  { deliveredThroughSequence, retainDeliveredAfter = "", commandReceipts = [] } = {},
+) {
   const watermark = Number(deliveredThroughSequence);
   if (!Number.isInteger(watermark) || watermark < 0) {
-    return { compacted: false, reason: "invalid_delivery_watermark", removed: 0, outbox: normalizeAuthorityEventOutbox(source) };
+    return {
+      compacted: false,
+      reason: "invalid_delivery_watermark",
+      removed: 0,
+      outbox: normalizeAuthorityEventOutbox(source),
+    };
   }
   const cutoff = clean(retainDeliveredAfter);
   if (!cutoff || !Number.isFinite(Date.parse(cutoff))) {
-    return { compacted: false, reason: "invalid_retention_cutoff", removed: 0, outbox: normalizeAuthorityEventOutbox(source) };
+    return {
+      compacted: false,
+      reason: "invalid_retention_cutoff",
+      removed: 0,
+      outbox: normalizeAuthorityEventOutbox(source),
+    };
   }
   const receipts = Array.isArray(commandReceipts) ? commandReceipts : [];
   const outbox = normalizeAuthorityEventOutbox(source);
@@ -129,11 +154,12 @@ export function compactAuthorityEventOutbox(source = [], {
     if (!item.delivery.deliveredAt) return true;
     if (Number(item.envelope.sequence) > watermark) return true;
     if (Date.parse(item.delivery.deliveredAt) >= Date.parse(cutoff)) return true;
-    const durableReceipt = receipts.find((receipt) =>
-      clean(receipt?.commandId) === clean(item.envelope.commandId) &&
-      clean(receipt?.eventType) === clean(item.envelope.eventType) &&
-      clean(receipt?.eventId || receipt?.envelope?.eventId) === item.eventId &&
-      validateAuthorityEnvelope(receipt?.envelope),
+    const durableReceipt = receipts.find(
+      (receipt) =>
+        clean(receipt?.commandId) === clean(item.envelope.commandId) &&
+        clean(receipt?.type) === clean(item.envelope.eventType) &&
+        clean(receipt?.eventId || receipt?.envelope?.eventId) === item.eventId &&
+        validateAuthorityEnvelope(receipt?.envelope),
     );
     return !durableReceipt;
   });

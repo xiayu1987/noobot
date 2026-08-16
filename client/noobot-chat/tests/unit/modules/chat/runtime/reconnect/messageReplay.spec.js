@@ -25,10 +25,7 @@ describe("messageReplay", () => {
     };
     const activeSession = {
       value: {
-        messages: [
-          { role: "user", content: "question", turnScopeId: "turn-1" },
-          pendingAssistant,
-        ],
+        messages: [{ role: "user", content: "question", turnScopeId: "turn-1" }, pendingAssistant],
       },
     };
 
@@ -44,13 +41,15 @@ describe("messageReplay", () => {
           dialogProcessId: "dp-1",
           turnScopeId: "turn-1",
           content: "final answer",
-          attachments: [{
-            attachmentId: "answer-attachment",
-            sessionId: "s-1",
-            attachmentSource: "test",
-            fileName: "answer.txt",
-            url: "/answer.txt",
-          }],
+          attachments: [
+            {
+              attachmentId: "answer-attachment",
+              sessionId: "s-1",
+              attachmentSource: "test",
+              fileName: "answer.txt",
+              url: "/answer.txt",
+            },
+          ],
         },
       ],
       "dp-1",
@@ -64,13 +63,15 @@ describe("messageReplay", () => {
       dialogProcessId: "dp-1",
       turnScopeId: "turn-1",
       content: "final answer",
-      attachments: [{
-        attachmentId: "answer-attachment",
-        sessionId: "s-1",
-        attachmentSource: "test",
-        fileName: "answer.txt",
-        url: "/answer.txt",
-      }],
+      attachments: [
+        {
+          attachmentId: "answer-attachment",
+          sessionId: "s-1",
+          attachmentSource: "test",
+          fileName: "answer.txt",
+          url: "/answer.txt",
+        },
+      ],
     });
   });
 
@@ -107,9 +108,13 @@ describe("messageReplay", () => {
     );
 
     expect(activeSession.value.messages).toHaveLength(2);
-    expect(activeSession.value.messages.some((messageItem) =>
-      messageItem.dialogProcessId === "dp-missing" || messageItem.content === "final answer from reconnect snapshot",
-    )).toBe(false);
+    expect(
+      activeSession.value.messages.some(
+        (messageItem) =>
+          messageItem.dialogProcessId === "dp-missing" ||
+          messageItem.content === "final answer from reconnect snapshot",
+      ),
+    ).toBe(false);
   });
 
   it("can still replace the whole active session when no dialog process overlay is requested", () => {
@@ -132,7 +137,11 @@ describe("messageReplay", () => {
 
   it("does not erase live tool events when an older reconnect snapshot patches an in-flight continuation", () => {
     const liveToolCall = { eventId: "event-tool-call", type: "tool_call", toolCallId: "call-1" };
-    const liveToolResult = { eventId: "event-tool-result", type: "tool_result", toolCallId: "call-1" };
+    const liveToolResult = {
+      eventId: "event-tool-result",
+      type: "tool_result",
+      toolCallId: "call-1",
+    };
     const assistant = {
       messageId: "message-tool-state",
       presentationMessageId: "message-tool-state",
@@ -140,30 +149,45 @@ describe("messageReplay", () => {
       pending: true,
       dialogProcessId: "shared-dialog",
       turnScopeId: "continued-turn",
-      toolTimeline: [{
-        toolCallId: "call-1",
-        call: liveToolCall,
-        result: liveToolResult,
-        callSequence: 11,
-        resultSequence: 12,
-      }],
+      toolTimeline: [
+        {
+          toolCallId: "call-1",
+          call: liveToolCall,
+          result: liveToolResult,
+          callSequence: 11,
+          resultSequence: 12,
+        },
+      ],
       messageEventState: {
         lastSequence: 12,
         consumedEventIds: ["event-tool-call", "event-tool-result"],
       },
     };
-    const activeSession = { value: { messages: [assistant], turnStatuses: [] } };
+    const activeSession = { value: { messages: [assistant] } };
 
-    applyFoldedMessagesForDialogProcess(activeSession, [{
-      messageId: "message-tool-state",
-      presentationMessageId: "message-tool-state",
-      role: "assistant",
-      pending: true,
-      dialogProcessId: "shared-dialog",
-      turnScopeId: "continued-turn",
-      activityTimeline: [{ activityId: "event-thinking", eventId: "event-thinking", type: "thinking", sequence: 8 }],
-      messageEventState: { lastSequence: 8, consumedEventIds: ["event-thinking"] },
-    }], "shared-dialog");
+    applyFoldedMessagesForDialogProcess(
+      activeSession,
+      [
+        {
+          messageId: "message-tool-state",
+          presentationMessageId: "message-tool-state",
+          role: "assistant",
+          pending: true,
+          dialogProcessId: "shared-dialog",
+          turnScopeId: "continued-turn",
+          activityTimeline: [
+            {
+              activityId: "event-thinking",
+              eventId: "event-thinking",
+              type: "thinking",
+              sequence: 8,
+            },
+          ],
+          messageEventState: { lastSequence: 8, consumedEventIds: ["event-thinking"] },
+        },
+      ],
+      "shared-dialog",
+    );
 
     expect(activeSession.value.messages[0]).toBe(assistant);
     expect(selectToolTimeline(assistant)).toHaveLength(1);

@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  isMessageEventEnvelope,
-  MESSAGE_EVENT_SEQUENCE_DOMAIN,
-} from "./message-event.mjs";
+import { isMessageEventEnvelope, MESSAGE_EVENT_SEQUENCE_DOMAIN } from "./message-event.mjs";
 import { canonicalizeTurnScopeId } from "@noobot/session-protocol/turn-scope-identity";
 
 export const WORKFLOW_RUNTIME_EVENT = Object.freeze({
@@ -47,14 +44,16 @@ export function workflowSequenceDomainForEvent(event = "") {
   if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) return WORKFLOW_SEQUENCE_DOMAIN.PLANNING;
   if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE) return WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE;
   if (event === WORKFLOW_RUNTIME_EVENT.MESSAGE) return WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
-  if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) return WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT;
+  if (event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT)
+    return WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT;
   return "";
 }
 
 export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
-  const data = record?.data && typeof record.data === "object" && !Array.isArray(record.data)
-    ? record.data
-    : record;
+  const data =
+    record?.data && typeof record.data === "object" && !Array.isArray(record.data)
+      ? record.data
+      : record;
   const event = semanticEventName(record, data);
   const expectedDomain = workflowSequenceDomainForEvent(event);
   const declaredDomain = text(record?.sequenceDomain || data?.sequenceDomain);
@@ -75,7 +74,11 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
     if (!text(data?.turnScopeId)) errors.push("missing_planning_turn_scope");
     if (!text(data?.presentationMessageId)) errors.push("missing_planning_presentation");
     if (!text(data?.workflowRunId)) errors.push("missing_planning_workflow_run");
-    if (!data?.workflowPayload || typeof data.workflowPayload !== "object" || Array.isArray(data.workflowPayload)) {
+    if (
+      !data?.workflowPayload ||
+      typeof data.workflowPayload !== "object" ||
+      Array.isArray(data.workflowPayload)
+    ) {
       errors.push("missing_planning_workflow_payload");
     }
     if (!Array.isArray(data?.nodeSessions) || !data.nodeSessions.length) {
@@ -93,16 +96,25 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
       errors.push("invalid_aggregate_version");
     }
     const messages = Array.isArray(data?.messages) ? data.messages : [];
-    if (messages.some((message = {}) => !text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId))) {
+    if (
+      messages.some(
+        (message = {}) =>
+          !text(message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId),
+      )
+    ) {
       errors.push("missing_snapshot_message_identity");
     }
   }
-  const sequence = event === WORKFLOW_RUNTIME_EVENT.PLANNING
-    ? 0
-    : event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
-      ? Number(data?.aggregateVersion || 0)
-      : Number(data?.sequence || 0);
-  if (![WORKFLOW_RUNTIME_EVENT.PLANNING, WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT].includes(event) && (!Number.isInteger(sequence) || sequence <= 0)) {
+  const sequence =
+    event === WORKFLOW_RUNTIME_EVENT.PLANNING
+      ? 0
+      : event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
+        ? Number(data?.aggregateVersion || 0)
+        : Number(data?.sequence || 0);
+  if (
+    ![WORKFLOW_RUNTIME_EVENT.PLANNING, WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT].includes(event) &&
+    (!Number.isInteger(sequence) || sequence <= 0)
+  ) {
     errors.push("invalid_authoritative_sequence");
   }
   const canonicalData = {
@@ -118,9 +130,12 @@ export function normalizeWorkflowRuntimeEvent(record = {}, { source = "unknown" 
       : {}),
     ...(event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT
       ? {
-          turnStatuses: (Array.isArray(data?.turnStatuses) ? data.turnStatuses : []).map(canonicalizeTurnScopedRecord),
-          turnTimings: (Array.isArray(data?.turnTimings) ? data.turnTimings : []).map(canonicalizeTurnScopedRecord),
-          messages: (Array.isArray(data?.messages) ? data.messages : []).map(canonicalizeTurnScopedRecord),
+          turnTimings: (Array.isArray(data?.turnTimings) ? data.turnTimings : []).map(
+            canonicalizeTurnScopedRecord,
+          ),
+          messages: (Array.isArray(data?.messages) ? data.messages : []).map(
+            canonicalizeTurnScopedRecord,
+          ),
         }
       : {}),
   };
@@ -147,9 +162,15 @@ export function workflowRuntimeEventComparable(left = {}, right = {}) {
   return leftDomain !== WORKFLOW_SEQUENCE_DOMAIN.TRANSPORT;
 }
 
-export function compareWorkflowRuntimeFacts(incoming = {}, current = {}, { defaultDomain = "" } = {}) {
-  const incomingDomain = text(incoming?.sequenceDomain || incoming?.data?.sequenceDomain) || text(defaultDomain);
-  const currentDomain = text(current?.sequenceDomain || current?.data?.sequenceDomain) || text(defaultDomain);
+export function compareWorkflowRuntimeFacts(
+  incoming = {},
+  current = {},
+  { defaultDomain = "" } = {},
+) {
+  const incomingDomain =
+    text(incoming?.sequenceDomain || incoming?.data?.sequenceDomain) || text(defaultDomain);
+  const currentDomain =
+    text(current?.sequenceDomain || current?.data?.sequenceDomain) || text(defaultDomain);
   if (
     !incomingDomain ||
     !currentDomain ||
@@ -170,11 +191,13 @@ export function compareWorkflowRuntimeFacts(incoming = {}, current = {}, { defau
     });
   }
 
-  const incomingSequence = Number(incoming?.sequence || incoming?.seq || incoming?.data?.sequence || 0);
+  const incomingSequence = Number(
+    incoming?.sequence || incoming?.seq || incoming?.data?.sequence || 0,
+  );
   const currentSequence = Number(current?.sequence || current?.seq || current?.data?.sequence || 0);
   return Object.freeze({
     comparable: true,
-    order: incomingSequence === currentSequence ? 0 : (incomingSequence > currentSequence ? 1 : -1),
+    order: incomingSequence === currentSequence ? 0 : incomingSequence > currentSequence ? 1 : -1,
     incomingDomain,
     currentDomain,
   });

@@ -53,16 +53,18 @@ test("attachment parsed event requires canonical source and parsed-result identi
     eventType: "attachment_parsed",
     sessionId: "root-session",
     turnScopeId: "client-turn:parsed-1",
-    attachments: [{
-      attachmentId: "source-attachment",
-      sessionId: "root-session",
-      attachmentSource: "user",
-      parsedResult: {
-        attachmentId: "parsed-attachment",
-        sessionId: "child-session",
-        attachmentSource: "model",
+    attachments: [
+      {
+        attachmentId: "source-attachment",
+        sessionId: "root-session",
+        attachmentSource: "user",
+        parsedResult: {
+          attachmentId: "parsed-attachment",
+          sessionId: "child-session",
+          attachmentSource: "model",
+        },
       },
-    }],
+    ],
   };
   assert.deepEqual(validateAttachmentParsedEvent(validEvent), {
     valid: true,
@@ -70,10 +72,13 @@ test("attachment parsed event requires canonical source and parsed-result identi
     errors: [],
   });
   assert.equal(validateAttachmentParsedEvent({ ...validEvent, attachments: [] }).valid, false);
-  assert.equal(validateAttachmentParsedEvent({
-    ...validEvent,
-    attachments: [{ ...validEvent.attachments[0], parsedResult: null }],
-  }).valid, false);
+  assert.equal(
+    validateAttachmentParsedEvent({
+      ...validEvent,
+      attachments: [{ ...validEvent.attachments[0], parsedResult: null }],
+    }).valid,
+    false,
+  );
 });
 
 test("turn lifecycle snapshot carries authoritative replacement tombstones", () => {
@@ -81,31 +86,39 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
     commandId: "snapshot-replacement-1",
     sessionId: "session-replacement-1",
     sequence: 8,
-    replacedTurns: [{
-      turnScopeId: "turn-old",
-      replacementDialogProcessId: "dialog-new",
-      replacementTurnScopeId: "turn-new",
-      replacementUserMessageId: "user-new",
-      commandId: "replace-command-1",
-      committedAggregateVersion: 4,
-      replacedTurnScopeIds: ["turn-old", "turn-tail"],
-      sequence: 8,
-      committedAt: "2026-08-02T10:00:00.000Z",
-    }, {
-      turnScopeId: "turn-tail",
-      replacementDialogProcessId: "dialog-new",
-      replacementTurnScopeId: "turn-new",
-      replacementUserMessageId: "user-new",
-      commandId: "replace-command-1",
-      committedAggregateVersion: 4,
-      replacedTurnScopeIds: ["turn-old", "turn-tail"],
-      sequence: 8,
-      committedAt: "2026-08-02T10:00:00.000Z",
-    }],
+    replacedTurns: [
+      {
+        turnScopeId: "turn-old",
+        replacementDialogProcessId: "dialog-new",
+        replacementTurnScopeId: "turn-new",
+        replacementUserMessageId: "user-new",
+        requestHash: "request-hash-replace-command-1",
+        commandId: "replace-command-1",
+        committedAggregateVersion: 4,
+        replacedTurnScopeIds: ["turn-old", "turn-tail"],
+        sequence: 8,
+        committedAt: "2026-08-02T10:00:00.000Z",
+      },
+      {
+        turnScopeId: "turn-tail",
+        replacementDialogProcessId: "dialog-new",
+        replacementTurnScopeId: "turn-new",
+        replacementUserMessageId: "user-new",
+        requestHash: "request-hash-replace-command-1",
+        commandId: "replace-command-1",
+        committedAggregateVersion: 4,
+        replacedTurnScopeIds: ["turn-old", "turn-tail"],
+        sequence: 8,
+        committedAt: "2026-08-02T10:00:00.000Z",
+      },
+    ],
   });
 
   assert.deepEqual(validateTurnLifecycleSnapshot(snapshot), { valid: true, errors: [] });
-  assert.deepEqual(snapshot.replacedTurns.map((item) => item.turnScopeId), ["turn-old", "turn-tail"]);
+  assert.deepEqual(
+    snapshot.replacedTurns.map((item) => item.turnScopeId),
+    ["turn-old", "turn-tail"],
+  );
   assert.deepEqual(
     validateTurnLifecycleSnapshot({ ...snapshot, replacedTurns: undefined }).errors,
     ["missing_replaced_turns"],
@@ -192,7 +205,9 @@ test("turn lifecycle envelope rejects storage locator fields", () => {
   });
   assert.equal("persistenceScope" in envelope, false);
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
-  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, ["unsupported_persistence_scope"]);
+  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, persistenceScope }).errors, [
+    "unsupported_persistence_scope",
+  ]);
 });
 
 test("turn lifecycle envelope preserves parent identity without leaking mutation intents", () => {
@@ -219,12 +234,14 @@ test("turn lifecycle envelope preserves parent identity without leaking mutation
 });
 
 test("turn lifecycle envelope rejects missing identity and invalid revision", () => {
-  const result = validateTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
-    eventType: TURN_EVENT.FAILED,
-    eventId: "evt-2",
-    revision: 0,
-    sequence: 1,
-  }));
+  const result = validateTurnLifecycleEnvelope(
+    createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.FAILED,
+      eventId: "evt-2",
+      revision: 0,
+      sequence: 1,
+    }),
+  );
   assert.equal(result.valid, false);
   assert.deepEqual(result.errors, [
     "missing_session_id",
@@ -254,12 +271,14 @@ test("turn lifecycle envelope rejects event, phase and state contradictions", ()
     summaryVersion: 1,
   });
   assert.deepEqual(validateTurnLifecycleEnvelope(envelope), { valid: true, errors: [] });
-  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, phase: TURN_PHASE.PROCESSING }).errors, [
-    "event_phase_mismatch",
-  ]);
-  assert.deepEqual(validateTurnLifecycleEnvelope({ ...envelope, state: TURN_STATE.PROCESSING }).errors, [
-    "event_state_mismatch",
-  ]);
+  assert.deepEqual(
+    validateTurnLifecycleEnvelope({ ...envelope, phase: TURN_PHASE.PROCESSING }).errors,
+    ["event_phase_mismatch"],
+  );
+  assert.deepEqual(
+    validateTurnLifecycleEnvelope({ ...envelope, state: TURN_STATE.PROCESSING }).errors,
+    ["event_state_mismatch"],
+  );
 });
 
 test("action acceptance enforces one continuation source contract", () => {
@@ -293,33 +312,51 @@ test("action acceptance enforces one continuation source contract", () => {
 });
 
 test("only authoritative processing/sending is stoppable", () => {
-  assert.equal(deriveAuthoritativeTurnCapabilities({
-    state: TURN_STATE.PROCESSING,
-    executionState: "sending",
-  }).canStop, true);
-  for (const executionState of ["reconnecting", "interaction_pending", "stopping"]) {
-    assert.equal(deriveAuthoritativeTurnCapabilities({
+  assert.equal(
+    deriveAuthoritativeTurnCapabilities({
       state: TURN_STATE.PROCESSING,
-      executionState,
-    }).canStop, false);
+      executionState: "sending",
+    }).canStop,
+    true,
+  );
+  for (const executionState of ["reconnecting", "interaction_pending", "stopping"]) {
+    assert.equal(
+      deriveAuthoritativeTurnCapabilities({
+        state: TURN_STATE.PROCESSING,
+        executionState,
+      }).canStop,
+      false,
+    );
   }
-  assert.equal(deriveAuthoritativeTurnCapabilities({
-    state: TURN_STATE.COMPLETION_REQUESTING,
-    executionState: "sending",
-  }).canStop, false);
+  assert.equal(
+    deriveAuthoritativeTurnCapabilities({
+      state: TURN_STATE.COMPLETION_REQUESTING,
+      executionState: "sending",
+    }).canStop,
+    false,
+  );
 });
 
 test("session provision intent is explicit and restricted to the first send acceptance", () => {
-  assert.deepEqual(validateSessionProvisionIntent({
-    createSessionIfAbsent: true,
-    eventType: TURN_EVENT.ACTION_ACCEPTED,
-    action: "send",
-    expectedRevision: 0,
-  }), { valid: true, requested: true, errors: [] });
+  assert.deepEqual(
+    validateSessionProvisionIntent({
+      createSessionIfAbsent: true,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      action: "send",
+      expectedRevision: 0,
+    }),
+    { valid: true, requested: true, errors: [] },
+  );
   for (const input of [
     { createSessionIfAbsent: "true", eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send" },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "resend" },
     { createSessionIfAbsent: true, eventType: TURN_EVENT.PROCESSING_STARTED, action: "send" },
-    { createSessionIfAbsent: true, eventType: TURN_EVENT.ACTION_ACCEPTED, action: "send", expectedRevision: 1 },
-  ]) assert.equal(validateSessionProvisionIntent(input).valid, false);
+    {
+      createSessionIfAbsent: true,
+      eventType: TURN_EVENT.ACTION_ACCEPTED,
+      action: "send",
+      expectedRevision: 1,
+    },
+  ])
+    assert.equal(validateSessionProvisionIntent(input).valid, false);
 });

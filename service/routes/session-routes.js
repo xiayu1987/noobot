@@ -24,7 +24,8 @@ import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol"
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = assertSessionCommand(body);
-  if (command.type !== type) throw new TypeError(`unexpected session command type: ${command.type}`);
+  if (command.type !== type)
+    throw new TypeError(`unexpected session command type: ${command.type}`);
   if (command.scope.userId !== userId || command.scope.sessionId !== sessionId) {
     throw new TypeError("session command scope does not match route identity");
   }
@@ -39,19 +40,27 @@ const WORKFLOW_RUNTIME_EVENTS = new Set([
 async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionId = "" } = {}) {
   const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
   const normalizedSessionId = String(sessionId || "").trim();
-  if (!workspacePath || !normalizedSessionId) return { events: [], error: "missing_workspace_or_session" };
+  if (!workspacePath || !normalizedSessionId)
+    return { events: [], error: "missing_workspace_or_session" };
   const workspaceRoot = path.resolve(workspacePath);
   const sessionsRoot = path.resolve(workspaceRoot, "runtime/session");
   const sessionDir = path.resolve(sessionsRoot, normalizedSessionId);
   const relativeSessionDir = path.relative(sessionsRoot, sessionDir);
-  if (!relativeSessionDir || relativeSessionDir.startsWith("..") || path.isAbsolute(relativeSessionDir)) {
+  if (
+    !relativeSessionDir ||
+    relativeSessionDir.startsWith("..") ||
+    path.isAbsolute(relativeSessionDir)
+  ) {
     return { events: [], error: "invalid_session_path" };
   }
   let records;
   try {
     records = await readJsonlArtifactFile(path.join(sessionDir, "execution.jsonl"));
   } catch (error) {
-    return { events: [], error: String(error?.code || error?.message || "execution_events_read_failed") };
+    return {
+      events: [],
+      error: String(error?.code || error?.message || "execution_events_read_failed"),
+    };
   }
   const events = [];
   const seenEventIds = new Set();
@@ -68,22 +77,26 @@ async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionI
     const workflowRunId = String(data?.workflowRunId || "").trim();
     if (!workflowRunId) continue;
     if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-      canonical = normalizeWorkflowRuntimeEvent({
-        event,
-        source: canonical.source,
-        data: {
-          ...data,
-          sessionId: String(data?.sessionId || normalizedSessionId).trim(),
-          dialogProcessId: String(data?.dialogProcessId || "").trim(),
-          turnScopeId: String(data?.turnScopeId || "").trim(),
-          presentationMessageId: String(data?.presentationMessageId || "").trim(),
-          semanticText: String(data?.semanticText || ""),
-          createdAt: data?.createdAt || data?.ts || record?.ts || "",
+      canonical = normalizeWorkflowRuntimeEvent(
+        {
+          event,
+          source: canonical.source,
+          data: {
+            ...data,
+            sessionId: String(data?.sessionId || normalizedSessionId).trim(),
+            dialogProcessId: String(data?.dialogProcessId || "").trim(),
+            turnScopeId: String(data?.turnScopeId || "").trim(),
+            presentationMessageId: String(data?.presentationMessageId || "").trim(),
+            semanticText: String(data?.semanticText || ""),
+            createdAt: data?.createdAt || data?.ts || record?.ts || "",
+          },
         },
-      }, { source: "session-detail-replay" });
+        { source: "session-detail-replay" },
+      );
       data = canonical.data;
     }
-    if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE && !String(data?.nodeExecutionId || "").trim()) continue;
+    if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE && !String(data?.nodeExecutionId || "").trim())
+      continue;
     const eventId = String(canonical.eventId || "").trim();
     if (eventId && seenEventIds.has(eventId)) continue;
     if (eventId) seenEventIds.add(eventId);
@@ -96,18 +109,26 @@ async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionI
   };
 }
 
-function filterWorkflowRuntimeProjectionForSession({ result = {}, sessionId = "", events = [] } = {}) {
+function filterWorkflowRuntimeProjectionForSession({
+  result = {},
+  sessionId = "",
+  events = [],
+} = {}) {
   const normalizedSessionId = String(sessionId || result?.sessionId || "").trim();
-  const sessionDocs = (Array.isArray(result?.sessions) ? result.sessions : []).filter((doc = {}) => {
-    const docSessionId = String(doc?.sessionId || doc?.id || "").trim();
-    return !normalizedSessionId || !docSessionId || docSessionId === normalizedSessionId;
-  });
+  const sessionDocs = (Array.isArray(result?.sessions) ? result.sessions : []).filter(
+    (doc = {}) => {
+      const docSessionId = String(doc?.sessionId || doc?.id || "").trim();
+      return !normalizedSessionId || !docSessionId || docSessionId === normalizedSessionId;
+    },
+  );
   const turnScopeIds = new Set();
   const dialogProcessIds = new Set();
   let persistedTurnCount = 0;
   const collectIdentity = (record = {}) => {
     const turnScopeId = String(record?.turnScopeId || record?.turn_scope_id || "").trim();
-    const dialogProcessId = String(record?.dialogProcessId || record?.dialog_process_id || "").trim();
+    const dialogProcessId = String(
+      record?.dialogProcessId || record?.dialog_process_id || "",
+    ).trim();
     if (turnScopeId) turnScopeIds.add(turnScopeId);
     if (dialogProcessId) dialogProcessIds.add(dialogProcessId);
   };
@@ -115,10 +136,6 @@ function filterWorkflowRuntimeProjectionForSession({ result = {}, sessionId = ""
     for (const message of Array.isArray(doc?.messages) ? doc.messages : []) {
       persistedTurnCount += 1;
       collectIdentity(message);
-    }
-    for (const status of Array.isArray(doc?.turnStatuses) ? doc.turnStatuses : []) {
-      persistedTurnCount += 1;
-      collectIdentity(status);
     }
     for (const timing of Array.isArray(doc?.turnTimings) ? doc.turnTimings : []) {
       persistedTurnCount += 1;
@@ -130,7 +147,8 @@ function filterWorkflowRuntimeProjectionForSession({ result = {}, sessionId = ""
 
   const acceptedWorkflowRunIds = new Set();
   for (const record of events) {
-    if (String(record?.event || record?.type || "").trim() !== WORKFLOW_RUNTIME_EVENT.PLANNING) continue;
+    if (String(record?.event || record?.type || "").trim() !== WORKFLOW_RUNTIME_EVENT.PLANNING)
+      continue;
     const data = record?.data && typeof record.data === "object" ? record.data : record;
     const turnScopeId = String(data?.turnScopeId || "").trim();
     const dialogProcessId = String(data?.dialogProcessId || "").trim();
@@ -164,34 +182,39 @@ function summarizeWorkflowSessionMessages(result = {}) {
         ? message.tags.map((item) => String(item || ""))
         : Object.keys(message?.tags || {});
       const suspiciousAssistantPlaceholder =
-        String(message?.role || "").trim().toLowerCase() === "assistant" &&
+        String(message?.role || "")
+          .trim()
+          .toLowerCase() === "assistant" &&
         String(message?.type || "").trim() === "message" &&
         !String(message?.content || "").trim() &&
-        Boolean(String(message?.turnScopeId || message?.dialogProcessId || "").trim());
+        Boolean(String(message?.turnScopeId || "").trim());
       if (
         String(message?.type || "").trim() !== "workflow" &&
         String(message?.pluginMeta?.source || "").trim() !== "workflow-plugin" &&
         !workflowRunId &&
         !tagKeys.includes("message") &&
         !suspiciousAssistantPlaceholder
-      ) return [];
-      return [{
-        sessionDocId: String(doc?.sessionId || ""),
-        index,
-        id: String(message?.id || message?.messageId || ""),
-        role: String(message?.role || ""),
-        type: String(message?.type || ""),
-        pluginSource: String(message?.pluginMeta?.source || ""),
-        pluginKind: String(message?.pluginMeta?.kind || ""),
-        pluginPhase: String(message?.pluginMeta?.phase || ""),
-        dialogProcessId: String(message?.dialogProcessId || ""),
-        turnScopeId: String(message?.turnScopeId || ""),
-        workflowRunId,
-        nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
-        contentLength: String(message?.content || "").length,
-        tagKeys,
-        suspiciousAssistantPlaceholder,
-      }];
+      )
+        return [];
+      return [
+        {
+          sessionDocId: String(doc?.sessionId || ""),
+          index,
+          id: String(message?.id || message?.messageId || ""),
+          role: String(message?.role || ""),
+          type: String(message?.type || ""),
+          pluginSource: String(message?.pluginMeta?.source || ""),
+          pluginKind: String(message?.pluginMeta?.kind || ""),
+          pluginPhase: String(message?.pluginMeta?.phase || ""),
+          dialogProcessId: String(message?.dialogProcessId || ""),
+          turnScopeId: String(message?.turnScopeId || ""),
+          workflowRunId,
+          nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
+          contentLength: String(message?.content || "").length,
+          tagKeys,
+          suspiciousAssistantPlaceholder,
+        },
+      ];
     }),
   );
 }
@@ -223,8 +246,12 @@ export function registerSessionRoutes(
     "/internal/plugins",
     jsonRoute(async (req, res) => {
       const refresh =
-        String(req.query?.refresh || "").trim().toLowerCase() === "1" ||
-        String(req.query?.refresh || "").trim().toLowerCase() === "true";
+        String(req.query?.refresh || "")
+          .trim()
+          .toLowerCase() === "1" ||
+        String(req.query?.refresh || "")
+          .trim()
+          .toLowerCase() === "true";
       res.json({
         ok: true,
         plugins: await pluginHost.getPluginDiagnostics({ refresh }),
@@ -236,17 +263,21 @@ export function registerSessionRoutes(
     "/internal/session/:userId/:sessionId",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
-      const mode = String(req.query?.mode || "summary").trim().toLowerCase();
-      const readSessionData = mode === "full"
-        ? bot.session.getSessionData.bind(bot.session)
-        : bot.session.getSessionDisplayData.bind(bot.session);
+      const mode = String(req.query?.mode || "summary")
+        .trim()
+        .toLowerCase();
+      const readSessionData =
+        mode === "full"
+          ? bot.session.getSessionData.bind(bot.session)
+          : bot.session.getSessionDisplayData.bind(bot.session);
       const result = await readSessionData({
         userId,
         sessionId,
       });
-      const workflowRuntimeProjection = result?.exists === false
-        ? { events: [], error: "session_not_found" }
-        : await readWorkflowRuntimeProjection({ bot, userId, sessionId });
+      const workflowRuntimeProjection =
+        result?.exists === false
+          ? { events: [], error: "session_not_found" }
+          : await readWorkflowRuntimeProjection({ bot, userId, sessionId });
       const workflowRuntimeAuditEventCount = workflowRuntimeProjection.events.length;
       workflowRuntimeProjection.events = filterWorkflowRuntimeProjectionForSession({
         result,
@@ -274,7 +305,10 @@ export function registerSessionRoutes(
             aggregateVersion: Number(doc.aggregateVersion || 0),
             turnOrderCount: Array.isArray(doc.turnOrder) ? doc.turnOrder.length : 0,
             turnOrderMessageCount: Array.isArray(doc.turnOrder)
-              ? doc.turnOrder.reduce((count, item = {}) => count + Math.max(0, Number(item.messageCount || 0)), 0)
+              ? doc.turnOrder.reduce(
+                  (count, item = {}) => count + Math.max(0, Number(item.messageCount || 0)),
+                  0,
+                )
               : 0,
             summaryMessageCount: Array.isArray(doc.messages) ? doc.messages.length : 0,
             rawMessageCount: Array.isArray(doc.rawMessages) ? doc.rawMessages.length : 0,
@@ -283,12 +317,21 @@ export function registerSessionRoutes(
             summaryStatsMessageCount: Number(doc.stats?.messageCount || 0),
             summaryStatsDisplayMessageCount: Number(doc.stats?.displayMessageCount || 0),
             summaryAssistantCount: Array.isArray(doc.messages)
-              ? doc.messages.filter((message = {}) => String(message.role || "").trim() === "assistant").length
+              ? doc.messages.filter(
+                  (message = {}) => String(message.role || "").trim() === "assistant",
+                ).length
               : 0,
             summaryAssistantActivityCount: Array.isArray(doc.messages)
-              ? doc.messages.reduce((count, message = {}) => count + (Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0), 0)
+              ? doc.messages.reduce(
+                  (count, message = {}) =>
+                    count +
+                    (Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0),
+                  0,
+                )
               : 0,
-            activeTurnScopeId: String(doc.turnLifecycleSnapshot?.activeTurn?.turnScopeId || "").trim(),
+            activeTurnScopeId: String(
+              doc.turnLifecycleSnapshot?.activeTurn?.turnScopeId || "",
+            ).trim(),
             activePresentationMessageId: String(
               doc.turnLifecycleSnapshot?.activeTurn?.presentationMessageId || "",
             ).trim(),
@@ -305,8 +348,12 @@ export function registerSessionRoutes(
               chatPresentation: message.chatPresentation,
               turnPlaceholder: message.turnPlaceholder === true,
               contentLength: typeof message.content === "string" ? message.content.length : 0,
-              activityTimelineCount: Array.isArray(message.activityTimeline) ? message.activityTimeline.length : 0,
-              toolTimelineCount: Array.isArray(message.toolTimeline) ? message.toolTimeline.length : 0,
+              activityTimelineCount: Array.isArray(message.activityTimeline)
+                ? message.activityTimeline.length
+                : 0,
+              toolTimelineCount: Array.isArray(message.toolTimeline)
+                ? message.toolTimeline.length
+                : 0,
             })),
           ),
         },
@@ -347,7 +394,10 @@ export function registerSessionRoutes(
     }
     const commandId = String(req.query?.commandId || "").trim() || crypto.randomUUID();
     const resolution = await bot.session.resolveTurnTerminalState({
-      userId, sessionId, turnScopeId, commandId,
+      userId,
+      sessionId,
+      turnScopeId,
+      commandId,
     });
     void writeRoutedRuntimeEvent({
       scope: "session",
@@ -378,7 +428,10 @@ export function registerSessionRoutes(
     });
     res.json({ ok: true, ...resolution });
   });
-  app.get("/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal", resolveTurnTerminalHandler);
+  app.get(
+    "/internal/session/:userId/:sessionId/turns/:turnScopeId/terminal",
+    resolveTurnTerminalHandler,
+  );
 
   app.get(
     "/internal/session/:userId/:sessionId/thinking-detail",
@@ -401,13 +454,14 @@ export function registerSessionRoutes(
     }),
   );
 
-
   app.post(
     "/internal/session/:userId/:sessionId/messages/delete-from",
     jsonRoute(async (req, res) => {
       const { userId, sessionId } = req.params;
       const command = decodeSessionCommand(req.body, {
-        type: SESSION_COMMAND.MESSAGE_DELETE_FROM, userId, sessionId,
+        type: SESSION_COMMAND.MESSAGE_DELETE_FROM,
+        userId,
+        sessionId,
       });
       const payload = {
         userId,
@@ -417,7 +471,8 @@ export function registerSessionRoutes(
         expectedAggregateVersion: command.expectedAggregateVersion,
         commandId: command.commandId,
       };
-      if (Array.isArray(command.payload.attachments)) payload.attachments = command.payload.attachments;
+      if (Array.isArray(command.payload.attachments))
+        payload.attachments = command.payload.attachments;
       const logDeleteMutation = (event, data = {}, level = "debug") =>
         writeRoutedRuntimeEvent({
           scope: "session",
@@ -442,14 +497,15 @@ export function registerSessionRoutes(
       try {
         const result = await bot.session.deleteFromMessage(payload);
         const messages = Array.isArray(result?.session?.messages) ? result.session.messages : [];
-        const turnStatuses = Array.isArray(result?.session?.turnStatuses) ? result.session.turnStatuses : [];
         void logDeleteMutation("service.messageDelete.committed", {
           deletedCount: Number(result?.deletedCount || 0),
           anchorIndex: Number(result?.anchorIndex ?? -1),
           deletedTurnScopeIds: Array.isArray(result?.deletedTurnScopeIds)
             ? result.deletedTurnScopeIds.map((value) => String(value || "").trim()).filter(Boolean)
             : [],
-          aggregateVersion: Number(result?.aggregateVersion || result?.session?.aggregateVersion || 0),
+          aggregateVersion: Number(
+            result?.aggregateVersion || result?.session?.aggregateVersion || 0,
+          ),
           deduplicated: result?.deduplicated === true,
           remainingMessages: messages.map((message = {}, index) => ({
             index,
@@ -460,19 +516,18 @@ export function registerSessionRoutes(
             turnScopeId: String(message?.turnScopeId || "").trim(),
             contentLength: String(message?.content || "").length,
           })),
-          remainingTurnStatuses: turnStatuses.map((status = {}) => ({
-            turnScopeId: String(status?.turnScopeId || "").trim(),
-            dialogProcessId: String(status?.dialogProcessId || "").trim(),
-            status: String(status?.status || "").trim(),
-          })),
         });
         res.json({ ok: true, ...result });
       } catch (error) {
-        void logDeleteMutation("service.messageDelete.failed", {
-          error: String(error?.message || error || "delete_failed"),
-          errorCode: String(error?.errorCode || error?.code || "").trim(),
-          statusCode: Number(error?.statusCode || 0),
-        }, "error");
+        void logDeleteMutation(
+          "service.messageDelete.failed",
+          {
+            error: String(error?.message || error || "delete_failed"),
+            errorCode: String(error?.errorCode || error?.code || "").trim(),
+            statusCode: Number(error?.statusCode || 0),
+          },
+          "error",
+        );
         throw error;
       }
     }),
@@ -481,7 +536,9 @@ export function registerSessionRoutes(
   const replaceTurnHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId } = req.params;
     const command = decodeSessionCommand(req.body, {
-      type: SESSION_COMMAND.TURN_REPLACE, userId, sessionId,
+      type: SESSION_COMMAND.TURN_REPLACE,
+      userId,
+      sessionId,
     });
     const payload = {
       userId,
@@ -493,51 +550,53 @@ export function registerSessionRoutes(
       expectedAggregateVersion: command.expectedAggregateVersion,
       commandId: command.commandId,
     };
-    if (Array.isArray(command.payload.attachments)) payload.attachments = command.payload.attachments;
-      const replaceSessionTurn = typeof bot?.replaceSessionTurn === "function"
+    if (Array.isArray(command.payload.attachments))
+      payload.attachments = command.payload.attachments;
+    const replaceSessionTurn =
+      typeof bot?.replaceSessionTurn === "function"
         ? bot.replaceSessionTurn.bind(bot)
         : bot.session.replaceTurn.bind(bot.session);
-      const result = await replaceSessionTurn(payload);
-      const lifecycle = result?.session?.turnLifecycle || {};
-      const replacedTurns = lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
+    const result = await replaceSessionTurn(payload);
+    const lifecycle = result?.session?.turnLifecycle || {};
+    const replacedTurns =
+      lifecycle?.replacedTurns && typeof lifecycle.replacedTurns === "object"
         ? lifecycle.replacedTurns
         : {};
-      void writeRoutedRuntimeEvent({
-        scope: "session",
-        source: "service",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.DEBUG,
-        level: "debug",
-        debugType: "state-machine",
-        event: "service.turnReplacement.authorityCommitted",
-        userId: String(userId || "").trim(),
-        sessionId: String(sessionId || "").trim(),
-        dialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
-        turnScopeId: String(result?.turnReplacement?.replacementTurnScopeId || "").trim(),
-        data: {
-          commandId: String(result?.turnReplacement?.commandId || "").trim(),
-          replacementDialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
-          committedAggregateVersion: Number(result?.turnReplacement?.committedAggregateVersion || 0),
-          lifecycleSequence: Number(lifecycle?.sequence || 0),
-          activeTurnScopeId: String(lifecycle?.activeTurnScopeId || "").trim(),
-          remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),
-          replacedTurnScopeIds: (result?.turnReplacement?.replacedTurnScopeIds || []).map(
-            (value) => String(value || "").trim(),
-          ).filter(Boolean),
-          tombstonedTurnScopeIds: Object.keys(replacedTurns).sort(),
-          authorityOutboxCount: Array.isArray(result?.session?.authorityEventOutbox)
-            ? result.session.authorityEventOutbox.length
-            : 0,
-          deduplicated: result?.deduplicated === true,
-        },
-      });
-      res.json({ ok: true, ...result });
+    void writeRoutedRuntimeEvent({
+      scope: "session",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level: "debug",
+      debugType: "state-machine",
+      event: "service.turnReplacement.authorityCommitted",
+      userId: String(userId || "").trim(),
+      sessionId: String(sessionId || "").trim(),
+      dialogProcessId: String(result?.turnReplacement?.replacementDialogProcessId || "").trim(),
+      turnScopeId: String(result?.turnReplacement?.replacementTurnScopeId || "").trim(),
+      data: {
+        commandId: String(result?.turnReplacement?.commandId || "").trim(),
+        replacementDialogProcessId: String(
+          result?.turnReplacement?.replacementDialogProcessId || "",
+        ).trim(),
+        committedAggregateVersion: Number(result?.turnReplacement?.committedAggregateVersion || 0),
+        lifecycleSequence: Number(lifecycle?.sequence || 0),
+        activeTurnScopeId: String(lifecycle?.activeTurnScopeId || "").trim(),
+        remainingTurnScopeIds: Object.keys(lifecycle?.turns || {}).sort(),
+        replacedTurnScopeIds: (result?.turnReplacement?.replacedTurnScopeIds || [])
+          .map((value) => String(value || "").trim())
+          .filter(Boolean),
+        tombstonedTurnScopeIds: Object.keys(replacedTurns).sort(),
+        authorityOutboxCount: Array.isArray(result?.session?.authorityEventOutbox)
+          ? result.session.authorityEventOutbox.length
+          : 0,
+        deduplicated: result?.deduplicated === true,
+      },
     });
+    res.json({ ok: true, ...result });
+  });
 
-  app.post(
-    "/internal/session/:userId/:sessionId/messages/replace-turn",
-    replaceTurnHandler,
-  );
+  app.post("/internal/session/:userId/:sessionId/messages/replace-turn", replaceTurnHandler);
 
   const renameSessionHandler = jsonRoute(async (req, res) => {
     const { userId, sessionId } = req.params;
@@ -556,102 +615,97 @@ export function registerSessionRoutes(
     res.json({ ok: true, sessionId: session.sessionId, title: session.customTitle || title });
   });
 
-  app.post(
-    "/internal/session/:userId/:sessionId/rename",
-    renameSessionHandler,
-  );
+  app.post("/internal/session/:userId/:sessionId/rename", renameSessionHandler);
 
   app.delete(
     "/internal/session/:userId/:sessionId",
     jsonRoute(
       async (req, res) => {
-      const { userId, sessionId } = req.params;
-      const normalizedSessionId = String(sessionId || "").trim();
-      const rootSessionId = await bot.session.getRootSessionId({
-        userId,
-        sessionId: normalizedSessionId,
-      });
-      let releasedConnectors = {
-        released: false,
-        sessionId: String(rootSessionId || "").trim(),
-        releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
-      };
-      const shouldReleaseRootConnectors =
-        normalizedSessionId && rootSessionId && normalizedSessionId === rootSessionId;
-      if (shouldReleaseRootConnectors) {
-        const connectorChannelStore = getConnectorChannelStore();
-        if (
-          connectorChannelStore &&
-          typeof connectorChannelStore.releaseSessionConnectors === "function"
-        ) {
-          releasedConnectors = connectorChannelStore.releaseSessionConnectors(
-            rootSessionId,
-          );
-        }
-      }
-      const result = await bot.session.deleteSessionBranch({
-        userId,
-        sessionId,
-      });
-      const deletedSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
-      await pluginHost.emitAfterSessionDelete({
-        bot,
-        userId,
-        sessionId: normalizedSessionId,
-        deletedSessionIds,
-      });
-      const deletedAttachments =
-        typeof bot.deleteScopedAttachmentsBySessionIds === "function"
-          ? await bot.deleteScopedAttachmentsBySessionIds({
-              userId,
-              sessionIds: deletedSessionIds,
-            })
-          : { deletedSessionIds: [], deletedCount: 0 };
-      const deletedToolResultOverflow =
-        typeof bot.deleteToolResultOverflowBySessionIds === "function"
-          ? await bot.deleteToolResultOverflowBySessionIds({
-              userId,
-              sessionIds: deletedSessionIds,
-            })
-          : { deletedSessionIds: [], deletedCount: 0 };
-      let deletedOrphanAttachments = { deletedSessionIds: [], deletedCount: 0 };
-      if (
-        typeof bot.pruneOrphanScopedAttachments === "function" &&
-        bot?.session &&
-        typeof bot.session.listSessionIds === "function"
-      ) {
-        const remainingSessionIds = await bot.session.listSessionIds({ userId });
-        const keepSessionIds = (Array.isArray(remainingSessionIds) ? remainingSessionIds : [])
-          .map((item) => String(item || "").trim())
-          .filter(Boolean);
-        deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
+        const { userId, sessionId } = req.params;
+        const normalizedSessionId = String(sessionId || "").trim();
+        const rootSessionId = await bot.session.getRootSessionId({
           userId,
-          keepSessionIds,
-          attachmentSources: ["subtask"],
+          sessionId: normalizedSessionId,
         });
-      }
-      let deletedConnectorHistory = false;
-      if (shouldReleaseRootConnectors) {
-        const connectorHistoryStore = getConnectorHistoryStore();
+        let releasedConnectors = {
+          released: false,
+          sessionId: String(rootSessionId || "").trim(),
+          releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
+        };
+        const shouldReleaseRootConnectors =
+          normalizedSessionId && rootSessionId && normalizedSessionId === rootSessionId;
+        if (shouldReleaseRootConnectors) {
+          const connectorChannelStore = getConnectorChannelStore();
+          if (
+            connectorChannelStore &&
+            typeof connectorChannelStore.releaseSessionConnectors === "function"
+          ) {
+            releasedConnectors = connectorChannelStore.releaseSessionConnectors(rootSessionId);
+          }
+        }
+        const result = await bot.session.deleteSessionBranch({
+          userId,
+          sessionId,
+        });
+        const deletedSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
+        await pluginHost.emitAfterSessionDelete({
+          bot,
+          userId,
+          sessionId: normalizedSessionId,
+          deletedSessionIds,
+        });
+        const deletedAttachments =
+          typeof bot.deleteScopedAttachmentsBySessionIds === "function"
+            ? await bot.deleteScopedAttachmentsBySessionIds({
+                userId,
+                sessionIds: deletedSessionIds,
+              })
+            : { deletedSessionIds: [], deletedCount: 0 };
+        const deletedToolResultOverflow =
+          typeof bot.deleteToolResultOverflowBySessionIds === "function"
+            ? await bot.deleteToolResultOverflowBySessionIds({
+                userId,
+                sessionIds: deletedSessionIds,
+              })
+            : { deletedSessionIds: [], deletedCount: 0 };
+        let deletedOrphanAttachments = { deletedSessionIds: [], deletedCount: 0 };
         if (
-          connectorHistoryStore &&
-          typeof connectorHistoryStore.deleteSessionHistory === "function"
+          typeof bot.pruneOrphanScopedAttachments === "function" &&
+          bot?.session &&
+          typeof bot.session.listSessionIds === "function"
         ) {
-          deletedConnectorHistory = await connectorHistoryStore.deleteSessionHistory({
+          const remainingSessionIds = await bot.session.listSessionIds({ userId });
+          const keepSessionIds = (Array.isArray(remainingSessionIds) ? remainingSessionIds : [])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
+          deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
             userId,
-            sessionId: rootSessionId,
+            keepSessionIds,
+            attachmentSources: ["subtask"],
           });
         }
-      }
-      res.json({
-        ok: true,
-        ...result,
-        deletedAttachments,
-        deletedOrphanAttachments,
-        deletedToolResultOverflow,
-        releasedConnectors,
-        deletedConnectorHistory,
-      });
+        let deletedConnectorHistory = false;
+        if (shouldReleaseRootConnectors) {
+          const connectorHistoryStore = getConnectorHistoryStore();
+          if (
+            connectorHistoryStore &&
+            typeof connectorHistoryStore.deleteSessionHistory === "function"
+          ) {
+            deletedConnectorHistory = await connectorHistoryStore.deleteSessionHistory({
+              userId,
+              sessionId: rootSessionId,
+            });
+          }
+        }
+        res.json({
+          ok: true,
+          ...result,
+          deletedAttachments,
+          deletedOrphanAttachments,
+          deletedToolResultOverflow,
+          releasedConnectors,
+          deletedConnectorHistory,
+        });
       },
       { fallbackErrorKey: "common.deleteSessionFailed" },
     ),
@@ -670,29 +724,26 @@ export function registerSessionRoutes(
     "/internal/attachment/:userId/:attachmentId",
     jsonRoute(
       async (req, res) => {
-      const { userId, attachmentId } = req.params;
-      const sessionId = String(req.query?.sessionId || "").trim();
-      const attachmentSource = String(req.query?.attachmentSource || "").trim();
-      if (!sessionId || !attachmentSource || !String(attachmentId || "").trim()) {
-        throw new Error(translateText("common.attachmentNotFound", req.locale));
-      }
-      const attachment = await bot.getAttachmentById({
-        userId,
-        attachmentId,
-        sessionId,
-        attachmentSource,
-      });
-      if (!attachment) throw new Error(translateText("common.attachmentNotFound", req.locale));
+        const { userId, attachmentId } = req.params;
+        const sessionId = String(req.query?.sessionId || "").trim();
+        const attachmentSource = String(req.query?.attachmentSource || "").trim();
+        if (!sessionId || !attachmentSource || !String(attachmentId || "").trim()) {
+          throw new Error(translateText("common.attachmentNotFound", req.locale));
+        }
+        const attachment = await bot.getAttachmentById({
+          userId,
+          attachmentId,
+          sessionId,
+          attachmentSource,
+        });
+        if (!attachment) throw new Error(translateText("common.attachmentNotFound", req.locale));
 
-      res.setHeader(
-        "Content-Type",
-        attachment.mimeType || "application/octet-stream",
-      );
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="${encodeURIComponent(attachment.name || attachmentId)}"`,
-      );
-      res.sendFile(attachment.absolutePath);
+        res.setHeader("Content-Type", attachment.mimeType || "application/octet-stream");
+        res.setHeader(
+          "Content-Disposition",
+          `inline; filename="${encodeURIComponent(attachment.name || attachmentId)}"`,
+        );
+        res.sendFile(attachment.absolutePath);
       },
       {
         statusCode: HTTP_STATUS.NOT_FOUND,

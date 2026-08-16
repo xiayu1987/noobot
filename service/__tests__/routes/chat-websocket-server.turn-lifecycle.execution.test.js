@@ -102,7 +102,7 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     );
     const turn = authoritative.lifecycle().turns[payload.turnScopeId];
     assert.equal(turn.state, "completed");
-    assert.equal(turn.summaryVersion, 7);
+    assert.equal(turn.summaryVersion, 1);
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
@@ -319,4 +319,3 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   assert.equal(sent[0]?.data?.eventId, first.envelope.eventId);
   assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
 });
-

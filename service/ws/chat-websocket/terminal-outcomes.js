@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
-import {
-  buildAbortErrorMessage,
-  buildStoppedPartialAssistant,
-} from "./stop-lifecycle.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { buildAbortErrorMessage, buildStoppedPartialAssistant } from "./stop-lifecycle.js";
+import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
 
 export function snapshotRunState({
   runMeta = null,
@@ -35,10 +32,19 @@ export function createTurnFinalizer({
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
       dialogProcessId: state.runMeta?.dialogProcessId || "",
-      commandId: `${String(state.runMeta?.turnScopeId || state.turnScopeId || "turn").trim()}:failed:timeout`,
+      commandId: createTurnLifecycleCommandId({
+        commandId: state.runMeta?.commandId || state.runMeta?.turnScopeId || state.turnScopeId,
+        eventType: TURN_EVENT.FAILED,
+        phase: TURN_PHASE.PROCESSING,
+      }),
       eventType: TURN_EVENT.FAILED,
       phase: TURN_PHASE.PROCESSING,
-      failure: { phase: TURN_PHASE.PROCESSING, code: "run_timeout", message: description, retryable: false },
+      failure: {
+        phase: TURN_PHASE.PROCESSING,
+        code: "run_timeout",
+        message: description,
+        retryable: false,
+      },
       terminalStatus: { command: "timeout", description, error: errorObject },
     });
     if (!failed?.applied && !failed?.deduplicated) {
@@ -57,21 +63,30 @@ export function createTurnFinalizer({
 
   const finalizeUserStopped = async (state, { result = {} } = {}) => {
     const stopPayload = state.stopPayload || state.abortSignal?.reason?.stopPayload || {};
-    const stoppedMessage = stopPayload?.message || translateText("ws.dialogStoppedByUser", state.locale);
+    const stoppedMessage =
+      stopPayload?.message || translateText("ws.dialogStoppedByUser", state.locale);
     const stoppedPartialAssistant = buildStoppedPartialAssistant({
       stopPayload,
       runMeta: state.runMeta,
       result,
       fallbackMessage: stoppedMessage,
     });
-    const stopCommandId = String(stopPayload?.commandId || `stop:${stoppedPartialAssistant.turnScopeId}`).trim();
+    const stopCommandId = String(
+      stopPayload?.commandId || `stop:${stoppedPartialAssistant.turnScopeId}`,
+    ).trim();
     const processed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
-      dialogProcessId: stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
-      commandId: `${stopCommandId}:processing-completed`,
+      dialogProcessId:
+        stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
+      commandId: createTurnLifecycleCommandId({
+        commandId: stopCommandId,
+        eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+        phase: TURN_PHASE.STOP,
+      }),
+      causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
       phase: TURN_PHASE.STOP,
       finalizePayload: { assistantMessage: stoppedPartialAssistant },
@@ -80,14 +95,20 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_processing_completed" });
       return;
     }
-    const completionCommitId = `${stopCommandId}:completed`;
+    const completionCommitId = createTurnLifecycleCommandId({
+      commandId: stopCommandId,
+      eventType: TURN_EVENT.STOP_COMPLETED,
+      phase: TURN_PHASE.STOP,
+    });
     const completed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: stoppedPartialAssistant.sessionId || state.runMeta?.sessionId || "",
       parentSessionId: state.runMeta?.parentSessionId || "",
       turnScopeId: stoppedPartialAssistant.turnScopeId || state.turnScopeId || "",
-      dialogProcessId: stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
+      dialogProcessId:
+        stoppedPartialAssistant.dialogProcessId || state.runMeta?.dialogProcessId || "",
       commandId: completionCommitId,
+      causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_COMPLETED,
       phase: TURN_PHASE.STOP,
       completionCommitId,
@@ -105,7 +126,14 @@ export function createTurnFinalizer({
   };
 
   const finalizeCompleted = async (state, { result = {}, commandId = "" } = {}) => {
-    const completionCommitId = `${String(commandId || state.runMeta?.turnScopeId || "turn").trim()}:completed`;
+    const rootCommandId = String(
+      commandId || state.runMeta?.commandId || state.runMeta?.turnScopeId || "",
+    ).trim();
+    const completionCommitId = createTurnLifecycleCommandId({
+      commandId: rootCommandId,
+      eventType: TURN_EVENT.COMPLETED,
+      phase: TURN_PHASE.COMPLETION,
+    });
     const completed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
       sessionId: result.sessionId || state.runMeta?.sessionId || "",
@@ -113,6 +141,7 @@ export function createTurnFinalizer({
       turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
       dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
       commandId: completionCommitId,
+      causationId: rootCommandId,
       eventType: TURN_EVENT.COMPLETED,
       phase: TURN_PHASE.COMPLETION,
       completionCommitId,
@@ -128,7 +157,12 @@ export function createTurnFinalizer({
         parentSessionId: state.runMeta?.parentSessionId || "",
         turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
         dialogProcessId: result.dialogProcessId || state.runMeta?.dialogProcessId || "",
-        commandId: `${completionCommitId}:failed`,
+        commandId: createTurnLifecycleCommandId({
+          commandId: rootCommandId,
+          eventType: TURN_EVENT.FAILED,
+          phase: TURN_PHASE.COMPLETION,
+        }),
+        causationId: rootCommandId,
         eventType: TURN_EVENT.FAILED,
         phase: TURN_PHASE.COMPLETION,
         failure: {
@@ -147,10 +181,7 @@ export function createTurnFinalizer({
       answer: result.answer,
       dialogProcessId: result.dialogProcessId || "",
       turnScopeId:
-        state.stopPayload?.turnScopeId ||
-        state.runMeta?.turnScopeId ||
-        state.turnScopeId ||
-        "",
+        state.stopPayload?.turnScopeId || state.runMeta?.turnScopeId || state.turnScopeId || "",
       messages: result.messages || [],
       traces: result.traces || [],
       executionLogs: result.executionLogs || [],

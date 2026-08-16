@@ -365,7 +365,7 @@ test("session artifact publication rejects duplicate persistent message UIDs", a
           ],
         },
       }),
-      (error) => error.code === "SESSION_MESSAGE_UID_DUPLICATE",
+      (error) => error instanceof TypeError && /duplicate_message_uid/.test(error.message),
     );
   }));
 
@@ -517,9 +517,6 @@ test("summary checkpoints write immutable snapshots and journal indexes", async 
       sessionDir: root,
       sessionPayload: {
         ...expandedPayload,
-        turnStatuses: [
-          { turnScopeId: "active", dialogProcessId: "dialog-active", status: "completed" },
-        ],
       },
     });
     const compactedRecords = (await readFile(journalFile, "utf8"))
@@ -628,9 +625,6 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
       sessionPayload: {
         sessionId: "continue",
         messages: [stopped],
-        turnStatuses: [
-          { turnScopeId: "t-stop", dialogProcessId: "d-stop", status: "user_stopped" },
-        ],
       },
     });
     const continuation = {
@@ -645,10 +639,6 @@ test("a stopped turn followed by continuation keeps distinct journal identities 
       sessionPayload: {
         sessionId: "continue",
         messages: [stopped, continuation],
-        turnStatuses: [
-          { turnScopeId: "t-stop", dialogProcessId: "d-stop", status: "user_stopped" },
-          { turnScopeId: "t-next", dialogProcessId: "d-next", status: "completed" },
-        ],
       },
     });
     const files = buildSessionArtifactFileMap(root);

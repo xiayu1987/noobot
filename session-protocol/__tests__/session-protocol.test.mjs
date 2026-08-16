@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import {
   SESSION_COMMAND,
   SESSION_ERROR_CODE,
+  createCommandRequestHash,
   createSessionCommand,
   createSessionSnapshot,
   decideAggregateConcurrency,
@@ -15,6 +16,17 @@ import {
   validateSessionCommand,
   validateSessionSnapshot,
 } from "../src/index.mjs";
+
+test("command fingerprints use the protocol SHA-256 algorithm without Node runtime APIs", () => {
+  assert.equal(
+    createCommandRequestHash({ hello: "世界", nested: { b: 2, a: 1 } }),
+    "0f6b2582ebc00ad8ada743a4b8d8f79b69778ed5847e6b184fbfaf874cbfd02d",
+  );
+  assert.equal(
+    createCommandRequestHash({ nested: { a: 1, b: 2 }, hello: "世界" }),
+    "0f6b2582ebc00ad8ada743a4b8d8f79b69778ed5847e6b184fbfaf874cbfd02d",
+  );
+});
 
 const scope = { userId: "user-1", sessionId: "session-1", parentSessionId: "" };
 
@@ -48,14 +60,20 @@ test("aggregate concurrency and command idempotency are deterministic", () => {
     "aggregate_version_conflict",
   );
   assert.equal(
-    decideCommandIdempotency({ commandId: "c1", requestHash: "h1", receipts: [] }).deduplicated,
+    decideCommandIdempotency({
+      commandId: "c1",
+      type: SESSION_COMMAND.TURN_COMMIT,
+      requestHash: "h1",
+      receipts: [],
+    }).deduplicated,
     false,
   );
   assert.equal(
     decideCommandIdempotency({
       commandId: "c1",
+      type: SESSION_COMMAND.TURN_COMMIT,
       requestHash: "h2",
-      receipts: [{ commandId: "c1", requestHash: "h1" }],
+      receipts: [{ commandId: "c1", type: SESSION_COMMAND.TURN_COMMIT, requestHash: "h1" }],
     }).reason,
     "command_id_reuse_conflict",
   );

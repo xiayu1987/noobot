@@ -209,9 +209,6 @@ export function useWorkflowNodeMessages({
     turnTimingsByTurnScopeId: computed(
       () => selectedNodeProjection.value.turnTimingsByTurnScopeId || {},
     ),
-    turnStatusesByTurnScopeId: computed(
-      () => selectedNodeProjection.value.turnStatusesByTurnScopeId || {},
-    ),
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   };

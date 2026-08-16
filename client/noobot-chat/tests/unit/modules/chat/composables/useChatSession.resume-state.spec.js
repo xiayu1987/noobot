@@ -42,7 +42,7 @@ function detailPayload({ sessionId, status, dialogProcessId, turnScopeId, turnLi
     sessions: [
       {
         sessionId,
-        turnStatuses: [{ status, dialogProcessId, turnScopeId }],
+
         ...(turnLifecycleSnapshot ? { turnLifecycleSnapshot } : {}),
         messages: [
           { role: RoleEnum.USER, content: "question", turnScopeId },
@@ -165,9 +165,7 @@ describe("useChatSession summary and reconnect state", () => {
       createSessionFixture({
         id: "s-snapshot",
         sessionId: "s-snapshot",
-        turnStatuses: [
-          { status: "processing", turnScopeId: "t-snapshot", dialogProcessId: "dp-snapshot" },
-        ],
+
         turnLifecycleSnapshot: {
           protocolVersion: 1,
           eventType: "turn.snapshot",
@@ -401,13 +399,6 @@ describe("useChatSession summary and reconnect state", () => {
           },
         ],
       },
-      turnStatuses: [
-        {
-          status: "completed",
-          turnScopeId: "t-async-refresh",
-          dialogProcessId: "dp-async-refresh",
-        },
-      ],
     };
     store.sessions = [
       mapSummaryToSession(summary, {
@@ -689,9 +680,6 @@ describe("useChatSession summary and reconnect state", () => {
         id: "s-stop",
         sessionId: "s-stop",
         loaded: false,
-        turnStatuses: [
-          { status: "user_stopped", turnScopeId: "turn-stop", dialogProcessId: "dp-stop" },
-        ],
       }),
     ];
     store.activeSessionId = "s-stop";
@@ -786,9 +774,6 @@ describe("useChatSession summary and reconnect state", () => {
         id: "s-refresh",
         sessionId: "s-refresh",
         loaded: false,
-        turnStatuses: [
-          { status: "user_stopped", turnScopeId: "turn-refresh", dialogProcessId: "dp-refresh" },
-        ],
       }),
     ];
     store.activeSessionId = "s-refresh";
@@ -866,12 +851,9 @@ describe("useChatSession summary and reconnect state", () => {
 
   it("does not invent a turn result when completion-summary loading fails", async () => {
     const store = useChatStore();
-    store.sessions = [
-      createSessionFixture({ id: "s-fail", sessionId: "s-fail", loaded: false, turnStatuses: [] }),
-    ];
+    store.sessions = [createSessionFixture({ id: "s-fail", sessionId: "s-fail", loaded: false })];
     store.activeSessionId = "s-fail";
     expect(selectSessionTurnRuntime(store.turnRuntimeRegistry, "s-fail").sending).toBe(false);
-    expect(store.activeSession.turnStatuses || []).toEqual([]);
   });
 
   it("a newer completed message prevents an older stopped turn from becoming the primary action", () => {
@@ -893,10 +875,6 @@ describe("useChatSession summary and reconnect state", () => {
             dialogProcessId: "dp-new",
             turnScopeId: "turn-new",
           },
-        ],
-        turnStatuses: [
-          { status: "user_stopped", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
-          { status: "completed", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
         ],
       }),
     ];

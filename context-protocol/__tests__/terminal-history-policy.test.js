@@ -7,9 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  projectTerminalHistoryMessages,
-} from "../src/terminal-history-policy.js";
+import { projectTerminalHistoryMessages } from "../src/terminal-history-policy.js";
 
 function message(overrides = {}) {
   return {
@@ -35,24 +33,59 @@ function status(overrides = {}) {
 
 test("user-stopped history ignores summary flags and projects only user, latest injection per category, and user explanation", () => {
   const source = [
-    message({ messageUid: "user-1", content: "原始问题", frontendUserMessage: true, summarized: true }),
-    message({ messageUid: "guide-old", content: "旧 guidance", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance", summarized: true }),
-    message({ messageUid: "plan", content: "最新 planning", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning", summarized: true }),
-    message({ messageUid: "call", role: "assistant", tool_calls: [{ id: "call-1", name: "read" }] }),
-    message({ messageUid: "result", role: "tool", tool_call_id: "call-1", content: "large tool result" }),
-    message({ messageUid: "guide-new", content: "最新 guidance", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance" }),
+    message({
+      messageUid: "user-1",
+      content: "原始问题",
+      frontendUserMessage: true,
+      summarized: true,
+    }),
+    message({
+      messageUid: "guide-old",
+      content: "旧 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      summarized: true,
+    }),
+    message({
+      messageUid: "plan",
+      content: "最新 planning",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "planning",
+      summarized: true,
+    }),
+    message({
+      messageUid: "call",
+      role: "assistant",
+      tool_calls: [{ id: "call-1", name: "read" }],
+    }),
+    message({
+      messageUid: "result",
+      role: "tool",
+      tool_call_id: "call-1",
+      content: "large tool result",
+    }),
+    message({
+      messageUid: "guide-new",
+      content: "最新 guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+    }),
     message({ messageUid: "partial", role: "assistant", content: "partial answer" }),
   ];
 
-  const result = projectTerminalHistoryMessages({ messages: source, turnStatuses: [status()] });
+  const result = projectTerminalHistoryMessages({ messages: source, terminalStatuses: [status()] });
 
-  assert.deepEqual(result.map((item) => item.messageUid), [
-    "user-1",
-    "plan",
-    "guide-new",
-    "turn-1::terminal_status",
-  ]);
-  assert.deepEqual(result.map((item) => item.role), ["user", "user", "user", "user"]);
+  assert.deepEqual(
+    result.map((item) => item.messageUid),
+    ["user-1", "plan", "guide-new", "turn-1::terminal_status"],
+  );
+  assert.deepEqual(
+    result.map((item) => item.role),
+    ["user", "user", "user", "user"],
+  );
   assert.ok(result.every((item) => item.summarized === false));
   assert.ok(result.every((item) => item.terminalHistoryProjection === true));
   assert.deepEqual(result.at(-1), {
@@ -82,17 +115,22 @@ for (const terminalStatus of ["error", "timeout"]) {
   test(`${terminalStatus} history projects the authoritative explanation as assistant`, () => {
     const result = projectTerminalHistoryMessages({
       messages: [message({ messageUid: "user-1", content: "原始问题", frontendUserMessage: true })],
-      turnStatuses: [status({
-        status: terminalStatus,
-        reason: terminalStatus === "error" ? "run_error" : "run_timeout",
-        description: terminalStatus === "error" ? "本轮对话异常停止" : "本轮对话运行超时",
-      })],
+      terminalStatuses: [
+        status({
+          status: terminalStatus,
+          reason: terminalStatus === "error" ? "run_error" : "run_timeout",
+          description: terminalStatus === "error" ? "本轮对话异常停止" : "本轮对话运行超时",
+        }),
+      ],
     });
 
     assert.equal(result.length, 2);
     assert.equal(result[1].role, "assistant");
     assert.equal(result[1].terminalStatus, terminalStatus);
-    assert.equal(result[1].content, terminalStatus === "error" ? "本轮对话异常停止" : "本轮对话运行超时");
+    assert.equal(
+      result[1].content,
+      terminalStatus === "error" ? "本轮对话异常停止" : "本轮对话运行超时",
+    );
   });
 }
 
@@ -103,7 +141,7 @@ test("completed rounds remain untouched for summarized filtering by the history 
   ];
   const result = projectTerminalHistoryMessages({
     messages: source,
-    turnStatuses: [status({ status: "completed", reason: "run_completed" })],
+    terminalStatuses: [status({ status: "completed", reason: "run_completed" })],
   });
   assert.equal(result, source);
   assert.equal(result[1].summarized, true);
@@ -112,55 +150,83 @@ test("completed rounds remain untouched for summarized filtering by the history 
 test("latest injected selection is scoped independently to each terminal dialog", () => {
   const source = [
     message({ messageUid: "u1", content: "q1", frontendUserMessage: true }),
-    message({ messageUid: "g1", content: "g1", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance" }),
-    message({ messageUid: "u2", content: "q2", frontendUserMessage: true, dialogProcessId: "dialog-2", turnScopeId: "turn-2" }),
-    message({ messageUid: "g2", content: "g2", injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "guidance", dialogProcessId: "dialog-2", turnScopeId: "turn-2" }),
+    message({
+      messageUid: "g1",
+      content: "g1",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+    }),
+    message({
+      messageUid: "u2",
+      content: "q2",
+      frontendUserMessage: true,
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+    }),
+    message({
+      messageUid: "g2",
+      content: "g2",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "guidance",
+      dialogProcessId: "dialog-2",
+      turnScopeId: "turn-2",
+    }),
   ];
   const result = projectTerminalHistoryMessages({
     messages: source,
-    turnStatuses: [
-      status(),
-      status({ dialogProcessId: "dialog-2", turnScopeId: "turn-2" }),
-    ],
+    terminalStatuses: [status(), status({ dialogProcessId: "dialog-2", turnScopeId: "turn-2" })],
   });
-  assert.deepEqual(result.map((item) => item.messageUid), [
-    "u1", "g1", "turn-1::terminal_status",
-    "u2", "g2", "turn-2::terminal_status",
-  ]);
+  assert.deepEqual(
+    result.map((item) => item.messageUid),
+    ["u1", "g1", "turn-1::terminal_status", "u2", "g2", "turn-2::terminal_status"],
+  );
 });
 
 test("terminal status requires the complete round identity", () => {
   assert.throws(
-    () => projectTerminalHistoryMessages({ messages: [], turnStatuses: [status({ turnScopeId: "" })] }),
+    () =>
+      projectTerminalHistoryMessages({
+        messages: [],
+        terminalStatuses: [status({ turnScopeId: "" })],
+      }),
     /requires dialogProcessId and turnScopeId/,
   );
 });
 
 test("terminal status requires its authoritative explanation", () => {
   assert.throws(
-    () => projectTerminalHistoryMessages({
-      messages: [message({ messageUid: "user-1", frontendUserMessage: true })],
-      turnStatuses: [status({ description: "" })],
-    }),
+    () =>
+      projectTerminalHistoryMessages({
+        messages: [message({ messageUid: "user-1", frontendUserMessage: true })],
+        terminalStatuses: [status({ description: "" })],
+      }),
     /requires an explanation description/,
   );
 });
 
-test("unmaterialized terminal status remains lifecycle audit data and is excluded from model history", () => {
-  const source = [message({ messageUid: "prior", turnScopeId: "prior-turn", dialogProcessId: "prior-dialog" })];
-  const result = projectTerminalHistoryMessages({
-    messages: source,
-    turnStatuses: [status()],
-  });
-  assert.deepEqual(result, source);
+test("terminal history fails closed when the terminal identity has no canonical messages", () => {
+  const source = [
+    message({ messageUid: "prior", turnScopeId: "prior-turn", dialogProcessId: "prior-dialog" }),
+  ];
+  assert.throws(
+    () =>
+      projectTerminalHistoryMessages({
+        messages: source,
+        terminalStatuses: [status()],
+      }),
+    /terminal lifecycle is missing canonical messages/,
+  );
 });
 
 test("terminal history still fails closed when a materialized round lacks its canonical frontend user message", () => {
   assert.throws(
-    () => projectTerminalHistoryMessages({
-      messages: [message({ messageUid: "tool-1", role: "tool" })],
-      turnStatuses: [status()],
-    }),
+    () =>
+      projectTerminalHistoryMessages({
+        messages: [message({ messageUid: "tool-1", role: "tool" })],
+        terminalStatuses: [status()],
+      }),
     /missing its canonical frontend user message/,
   );
 });

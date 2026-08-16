@@ -16,6 +16,7 @@
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "^2.2.0",
     "@noobot/shared": "file:../shared"
   }
 }

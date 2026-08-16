@@ -41,7 +41,6 @@ describe("workflow child unified session detail", () => {
         },
         session: {
           sessionId: childIdentity.sessionId,
-          turnStatuses: [],
           messages: [childAssistant()],
         },
         messages: [childAssistant()],

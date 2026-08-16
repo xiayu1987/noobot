@@ -5,12 +5,10 @@
  */
 import {
   createTurnLifecycleEnvelope,
+  createTurnTerminalStatus,
   deriveAuthoritativeTurnCapabilities,
-} from "@noobot/session-protocol/turn-lifecycle";
-import {
-  findAuthorityEventEnvelope,
-  normalizeAuthorityEventOutbox,
-} from "@noobot/event-protocol/outbox";
+} from "@noobot/session-protocol";
+import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 import {
   isTerminalTurnLifecycleState,
   transitionTurnLifecycle,
@@ -64,7 +62,6 @@ export function createCommittedTurnLifecycleEnvelope({ event = {}, turn = {}, ev
  */
 export function commitTurnLifecycle({
   lifecycle = {},
-  terminalMaterialization = null,
   event = {},
   eventOutbox = [],
   materializeTerminal,
@@ -72,47 +69,63 @@ export function commitTurnLifecycle({
   now = () => new Date().toISOString(),
 } = {}) {
   const normalizedOutbox = normalizeAuthorityEventOutbox(eventOutbox);
-  let materialization = null;
   let lifecycleEvent = event;
-  const requestedTerminal = event.terminalStatus && typeof event.terminalStatus === "object"
-    ? event.terminalStatus
-    : null;
+  let terminalMaterialization = null;
+  const requestedTerminal =
+    event.terminalStatus && typeof event.terminalStatus === "object" ? event.terminalStatus : null;
 
   if (requestedTerminal) {
+    const terminalStatus = createTurnTerminalStatus(requestedTerminal.command, {
+      ...requestedTerminal,
+      turnScopeId: event.turnScopeId,
+      dialogProcessId: event.dialogProcessId,
+      updatedAt: clean(event.finishedAt) || now(),
+    });
+    if (!terminalStatus)
+      return { applied: false, reason: "invalid_turn_terminal_status", lifecycle };
     if (typeof materializeTerminal !== "function") {
       return { applied: false, reason: "terminal_materializer_unavailable", lifecycle };
     }
-    const result = materializeTerminal({ terminalStatus: requestedTerminal, event });
-    if (!result?.turnStatus) {
-      return { applied: false, reason: result?.reason || "invalid_turn_status", lifecycle };
+    terminalMaterialization = materializeTerminal({
+      event,
+      terminalStatus,
+      previousSummaryVersion: Number(lifecycle?.turns?.[event.turnScopeId]?.summaryVersion || 0),
+    });
+    if (
+      !terminalMaterialization?.materialized ||
+      terminalMaterialization.terminalStatus !== terminalStatus ||
+      !Array.isArray(terminalMaterialization.messages) ||
+      !Number.isInteger(Number(terminalMaterialization.summaryVersion)) ||
+      Number(terminalMaterialization.summaryVersion) < 1
+    ) {
+      return {
+        applied: false,
+        reason: terminalMaterialization?.reason || "terminal_materialization_failed",
+        lifecycle,
+      };
     }
-    materialization = result;
     lifecycleEvent = {
       ...event,
-      summaryVersion: Number(event.summaryVersion || result.summaryVersion || 0),
+      summaryVersion: Number(terminalMaterialization.summaryVersion),
       completionCommitId: clean(event.completionCommitId || event.commandId),
-      terminalStatus: result.turnStatus,
+      terminalStatus,
     };
   }
 
   const transition = transitionTurnLifecycle(lifecycle, lifecycleEvent, now);
   if (!transition.applied) {
     const receiptEnvelope = transition.deduplicated
-      ? transition.lifecycle.commandReceipts.find((receipt) =>
-          receipt.commandId === clean(event.commandId) && receipt.eventType === clean(event.eventType),
+      ? transition.lifecycle.commandReceipts.find(
+          (receipt) =>
+            receipt.commandId === clean(event.commandId) && receipt.type === clean(event.eventType),
         )?.envelope || null
       : null;
-    // The Outbox lookup is retained only for sessions written before durable
-    // receipt results were introduced.
-    const existingEnvelope = receiptEnvelope || (transition.deduplicated
-      ? findAuthorityEventEnvelope(normalizedOutbox, event)
-      : null);
-    return { ...transition, envelope: existingEnvelope, eventOutbox: normalizedOutbox };
+    return { ...transition, envelope: receiptEnvelope, eventOutbox: normalizedOutbox };
   }
 
   const turn = transition.turn;
   if (isTerminalTurnLifecycleState(turn.state)) {
-    turn.terminalStatus = materialization?.turnStatus || turn.terminalStatus || {
+    turn.terminalStatus = turn.terminalStatus || {
       turnScopeId: turn.turnScopeId,
       dialogProcessId: turn.dialogProcessId,
       status: turn.state,
@@ -120,14 +133,15 @@ export function commitTurnLifecycle({
       updatedAt: turn.updatedAt,
     };
   }
-  const eventId = clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
+  const eventId =
+    clean(event.eventId) || clean(typeof createEventId === "function" ? createEventId() : "");
   if (!eventId) return { applied: false, reason: "event_id_unavailable", lifecycle };
   if (normalizedOutbox.some((item) => item.eventId === eventId)) {
     return { applied: false, reason: "event_id_conflict", lifecycle };
   }
   const envelope = createCommittedTurnLifecycleEnvelope({ event: lifecycleEvent, turn, eventId });
-  const receipt = transition.lifecycle.commandReceipts.find((item) =>
-    item.commandId === clean(event.commandId) && item.eventType === clean(event.eventType),
+  const receipt = transition.lifecycle.commandReceipts.find(
+    (item) => item.commandId === clean(event.commandId) && item.type === clean(event.eventType),
   );
   if (!receipt) return { applied: false, reason: "command_receipt_unavailable", lifecycle };
   receipt.eventId = eventId;
@@ -140,6 +154,6 @@ export function commitTurnLifecycle({
     ...transition,
     envelope,
     eventOutbox: nextOutbox,
-    terminalMaterialization: materialization,
+    terminalMaterialization,
   };
 }

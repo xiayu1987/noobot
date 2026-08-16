@@ -7,11 +7,7 @@ import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createContextScope, projectContextSource } from "@noobot/context-protocol";
 
 export class SessionContextService {
-  constructor({
-    globalConfig = {},
-    sessionService = null,
-    sessionMessageService = null,
-  } = {}) {
+  constructor({ globalConfig = {}, sessionService = null, sessionMessageService = null } = {}) {
     this.globalConfig = globalConfig;
     this.sessionMessageService = sessionMessageService || sessionService;
   }
@@ -24,7 +20,9 @@ export class SessionContextService {
 
   async _getSessionContextSource({ userId, sessionId, parentSessionId = "" }) {
     if (!this.sessionMessageService?.getSessionContextSource) {
-      throw new Error("session Context requires the authoritative messages and turnStatuses snapshot");
+      throw new Error(
+        "session Context requires the authoritative messages and turnLifecycle snapshot",
+      );
     }
     return this.sessionMessageService.getSessionContextSource({
       userId,
