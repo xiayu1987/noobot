@@ -11,6 +11,11 @@ import {
   createAgentCapabilityModelInvoker,
 } from "../../../../src/runtime/capability-runner/index.js";
 import { createTestAgentExecutionScope } from "../../../helpers/agent-execution-scope.js";
+import {
+  createModelResponse,
+  MODEL_CONTEXT_SEQUENCE_POLICY,
+  validateModelResponse,
+} from "@noobot/model-protocol";
 
 const modelSpec = Object.freeze({
   alias: "test",
@@ -22,6 +27,7 @@ const modelSpec = Object.freeze({
 
 function createModelPort(outputs = []) {
   let index = 0;
+  let responseSequence = 0;
   const requests = [];
   return {
     requests,
@@ -29,16 +35,43 @@ function createModelPort(outputs = []) {
       requests.push(request);
       const output = outputs[index] || outputs.at(-1) || { text: "" };
       index += 1;
-      return {
-        output: {
-          text: String(output.text || ""),
-          reasoning: String(output.reasoning || ""),
-          toolCalls: Array.isArray(output.toolCalls) ? output.toolCalls : [],
-          finishReason: String(output.finishReason || ""),
-          usage: output.usage || {},
-        },
-        execution: { attemptCount: 1, attempts: [], model: modelSpec, provider: {} },
+      responseSequence += 1;
+      const canonicalOutput = {
+        text: String(output.text || ""),
+        reasoning: String(output.reasoning || ""),
+        toolCalls: Array.isArray(output.toolCalls) ? output.toolCalls : [],
+        finishReason: String(output.finishReason || ""),
+        usage: output.usage || {},
       };
+      return createModelResponse({
+        invocation: {
+          requestId: `request-${responseSequence}`,
+          invocationId: `invocation-${responseSequence}`,
+          sessionId: "session-test",
+          parentSessionId: "",
+          dialogProcessId: "dialog-test",
+          turnScopeId: "turn-test",
+          runId: "agent:turn-test",
+          flow: request.invocation.flow,
+          purpose: request.invocation.purpose,
+          domain: request.invocation.domain,
+          contextSequencePolicy:
+            request.invocation.contextSequencePolicy ||
+            MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
+        },
+        output: canonicalOutput,
+        attempts: [
+          {
+            attempt: 1,
+            status: "completed",
+            kind: "response",
+            streaming: false,
+            output: canonicalOutput,
+          },
+        ],
+        model: modelSpec,
+        provider: {},
+      });
     },
   };
 }
@@ -80,7 +113,7 @@ test("mini-runner sends canonical requests through the host ModelPort", async ()
   });
 
   assert.equal(result.output.text, "done");
-  assert.equal(result.finishedReason, "tool_binding_disabled");
+  assert.equal(validateModelResponse(result), result);
   assert.equal(modelPort.requests.length, 1);
   assert.equal(modelPort.requests[0].invocation.purpose, "planning");
   assert.equal(modelPort.requests[0].invocation.domain, "workflow");
@@ -106,7 +139,7 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   })({ messages: [{ role: "user", content: "go" }], ctx });
 
   assert.equal(result.output.text, "done");
-  assert.equal(result.finishedReason, "no_tool_call");
+  assert.equal(validateModelResponse(result), result);
   assert.equal(executed[0].name, "echo");
   assert.deepEqual(executed[0].args, { text: "hi" });
   const secondMessages = modelPort.requests[1].messages;
@@ -117,7 +150,7 @@ test("mini-runner appends assistant tool calls and tool results before the next 
   assert.deepEqual(modelPort.requests[0].options.toolBinding, { tool_choice: "auto" });
 });
 
-test("mini-runner records rejected and missing tools without invoking them", async () => {
+test("mini-runner returns rejected and missing tool facts to the final model call", async () => {
   const modelPort = createModelPort([
     {
       text: "",
@@ -141,13 +174,10 @@ test("mini-runner records rejected and missing tools without invoking them", asy
   })({ ctx });
 
   assert.equal(executions, 0);
-  assert.deepEqual(
-    result.toolTurns[0].toolCalls.map(({ name, status }) => ({ name, status })),
-    [
-      { name: "blocked", status: "rejected" },
-      { name: "missing", status: "not_found" },
-    ],
-  );
+  assert.equal(validateModelResponse(result), result);
+  const finalMessages = modelPort.requests.at(-1).messages;
+  assert.match(finalMessages.at(-2).content, /tool not allowed: blocked/);
+  assert.match(finalMessages.at(-1).content, /tool not found: missing/);
 });
 
 test("mini-runner isolates explicit model selection and plugin headers", async () => {
@@ -203,7 +233,7 @@ test("mini-runner enforces the configured tool-turn limit and finalizes through 
     executeToolCallFn: async () => ({ toolResultText: "ok" }),
   })({ messages: [], ctx });
 
-  assert.equal(result.toolTurnLimitReached, true);
   assert.equal(result.output.text, "finalized");
+  assert.equal(validateModelResponse(result), result);
   assert.equal(modelPort.requests.length, MAX_MINI_RUNNER_TOOL_TURNS + 1);
 });

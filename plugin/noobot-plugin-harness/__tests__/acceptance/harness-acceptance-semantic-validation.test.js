@@ -268,7 +268,18 @@ test("harness acceptance semantic validation failure does not block active accep
 
   assert.equal(result.ok, true);
   assert.equal(result.phaseAcceptanceTriggered, false);
-  assert.equal(result.report.semanticValidation, undefined);
+  assert.equal(result.report, undefined);
+  assert.deepEqual(result.acceptance.summary, {
+    total: 1,
+    completed: 0,
+    inProgress: 1,
+    pending: 0,
+  });
+  assert.equal(result.acceptance.semanticValidation, undefined);
+  assert.equal(
+    agentContext.payload.harness.lastAcceptanceReport.semanticValidation,
+    undefined,
+  );
   assert.equal(
     agentContext.payload.harness.logs.acceptance.some(
       (log) => log.event === "phase_acceptance_failed",
@@ -281,6 +292,58 @@ test("harness acceptance semantic validation failure does not block active accep
     ),
     true,
   );
+});
+
+test("request_task_acceptance returns a compact receipt while retaining the full report", async () => {
+  const hookManager = createAgentHookManager();
+  registerHarnessCore(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      acceptance: { semanticValidation: false },
+    },
+  );
+  const agentContext = {
+    payload: {
+      tools: { registry: [] },
+      harness: {
+        taskChecklist: Array.from({ length: 300 }, (_, index) => ({
+          index: index + 1,
+          task: `执行验收任务 ${index + 1} ${"完整证据上下文 ".repeat(20)}`,
+        })),
+        state: {
+          flags: {},
+          counters: {},
+          signals: { successfulToolCount: 1 },
+          pending: {},
+        },
+        logs: { planning: [], guidance: [], acceptance: [], review: [] },
+      },
+    },
+  };
+
+  await hookManager.emit("agent.before_turn", createTestHookContext({ agentContext }));
+  const tool = agentContext.payload.tools.registry.find(
+    (item) => item.name === "request_task_acceptance",
+  );
+  const raw = await tool.invoke(
+    { mode: "active" },
+    {
+      configurable: {
+        noobotHookContext: createTestHookContext({ agentContext, result: { output: "done" } }),
+      },
+    },
+  );
+  const result = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const fullReport = agentContext.payload.harness.lastAcceptanceReport;
+
+  assert.equal(JSON.stringify(fullReport).length > 40000, true);
+  assert.equal(JSON.stringify(result).length < 2000, true);
+  assert.equal(result.report, undefined);
+  assert.equal(result.acceptance.summary.total, 300);
+  assert.equal(fullReport.taskChecklist.length, 300);
+  assert.equal(agentContext.payload.harness.acceptanceReports.at(-1), fullReport);
 });
 
 test("acceptance handler inject mode schedules and captures semantic validation without invoker", async () => {

@@ -31,7 +31,7 @@ import {
   maybeForceAcceptanceAtFinalOutput,
   maybeRefreshAcceptanceReportBeforeFinalOutput,
 } from "./output-finalizer.js";
-import { ensureTaskAcceptanceTool } from "./tool-injector.js";
+import { synchronizeTaskAcceptanceTool } from "./tool-injector.js";
 import { shouldUseSeparateModel } from "../shared/model/utils.js";
 import {
   resolveWorkflowMode,
@@ -333,7 +333,7 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           holder.state.flags.phaseAcceptanceTriggeredThisTurn = false;
         }
         const step1 = disableBlockedToolsInRegistry(ctx);
-        const step2 = ensureTaskAcceptanceTool(ctx, meta);
+        const step2 = synchronizeTaskAcceptanceTool(ctx, meta);
         changed = step1 || step2 || changed;
         executedPrimary = step1 === true || step2 === true;
       }
@@ -347,12 +347,12 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           changed = true;
           executedPrimary = true;
         }
-        const step = ensureTaskAcceptanceTool(ctx, meta);
+        const step = synchronizeTaskAcceptanceTool(ctx, meta);
         changed = step || changed;
         executedFollowup = step === true || executedFollowup;
       } else if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
         const step1 = disableBlockedCalls(ctx?.calls || []);
-        const step2 = ensureTaskAcceptanceTool(ctx, meta);
+        const step2 = synchronizeTaskAcceptanceTool(ctx, meta);
         changed = step1 || step2 || changed;
         executedPrimary = step1 === true || step2 === true;
       }
@@ -454,4 +454,4 @@ export function createAcceptanceHandler({ shouldProcessPrimaryToolHooks }) {
   };
 }
 
-export { ensureTaskAcceptanceTool };
+export { synchronizeTaskAcceptanceTool };

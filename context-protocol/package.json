@@ -33,7 +33,8 @@
     "./task-check-receipt": "./src/task-check-receipt.js",
     "./context-scope": "./src/context-scope.js",
     "./context-source": "./src/context-source.js",
-    "./context-build-receipt": "./src/context-build-receipt.js"
+    "./context-build-receipt": "./src/context-build-receipt.js",
+    "./dual-lane-context": "./src/dual-lane-context.js"
   },
   "scripts": {
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",

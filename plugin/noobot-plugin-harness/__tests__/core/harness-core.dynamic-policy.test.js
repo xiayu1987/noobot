@@ -14,7 +14,11 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
+import {
+  injectPrompt,
+  lockPolicyPromptForMainFlow,
+  resolvePolicyPromptSelection,
+} from "../../src/tracing/buffer-manager.js";
 import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
 import {
   applyDynamicPolicyPromptFromText,
@@ -125,7 +129,7 @@ test("dynamic policy prompt overrides default scenario policy prompt", async () 
   );
 });
 
-test("dynamic policy prompt change refreshes the unique main-flow policy selection", async () => {
+test("dynamic policy changes cannot rewrite the main-flow system prefix after first response", async () => {
   const ctx = createTestHookContext({
     agentContext: { payload: { harness: {} } },
   }, { messages: [{ role: "user", content: "continue" }] });
@@ -146,12 +150,12 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
     promptPriority: 80,
     writePrompts: false,
   });
-  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, false);
   assert.equal(
     ctx.modelContext.messages.filter((item = {}) => /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || ""))).length,
     1,
   );
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /Dynamic policy one/);
+  assert.equal(lockPolicyPromptForMainFlow(ctx), true);
 
   applyDynamicPolicyPromptFromText(ctx, [
     "[HARNESS_DYNAMIC_POLICY_PROMPT]",
@@ -161,8 +165,6 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
     "Dynamic policy two",
     "[/HARNESS_DYNAMIC_POLICY_PROMPT]",
   ].join("\n"), { source: "planning_revision", stage: "revision" });
-  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, true);
-
   await injectPrompt("agent.before_llm_call", ctx, {
     enabled: true,
     promptPolicy: true,
@@ -175,10 +177,11 @@ test("dynamic policy prompt change refreshes the unique main-flow policy selecti
     /\[HARNESS_POLICY_SELECTION\]/.test(String(item?.content || "")),
   );
   assert.equal(policyMessages.length, 1);
-  assert.match(String(policyMessages[0]?.content || ""), /scenario = programming/);
-  assert.match(String(policyMessages[0]?.content || ""), /Dynamic policy two/);
-  assert.doesNotMatch(String(policyMessages[0]?.content || ""), /Dynamic policy one/);
-  assert.equal(ctx.agentContext.payload.harness.policyPromptRefresh.pending, false);
+  assert.match(String(policyMessages[0]?.content || ""), /scenario = text/);
+  assert.match(String(policyMessages[0]?.content || ""), /Dynamic policy one/);
+  assert.doesNotMatch(String(policyMessages[0]?.content || ""), /Dynamic policy two/);
+  assert.equal(ctx.agentContext.payload.harness.dynamicPolicyPrompt.scenario, "programming");
+  assert.equal(ctx.agentContext.payload.harness.policyPromptState.phase, "locked");
 });
 
 test("harness policy prompt survives agent-side system message compaction", async () => {

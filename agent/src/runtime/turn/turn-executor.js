@@ -5,7 +5,10 @@
  */
 import { filterForModelContext } from "@noobot/context-protocol/message-policy";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { resolveModelFinalMessages } from "@noobot/context-protocol/window-reducer";
+import {
+  buildDualLaneModelContext,
+  MODEL_CONTEXT_LANE,
+} from "@noobot/context-protocol/dual-lane-context";
 import {
   resolveTurnMessagesStore,
   resolveTurnTasksStore,
@@ -58,10 +61,6 @@ export {
   formatToolCallsForStorage,
 } from "./tool-call-message.js";
 
-function normalizeBlockList(value = []) {
-  return Array.isArray(value) ? value : [];
-}
-
 function requireLoopStateModelContext(loopState = {}) {
   const modelContext = loopState?.modelContext;
   if (modelContext?.protocolVersion !== MODEL_CONTEXT_PROTOCOL_VERSION) {
@@ -99,11 +98,10 @@ function syncMessagesFromBlocks(loopState = {}) {
   if (!blocks || typeof blocks !== "object" || !Array.isArray(modelContext.messages)) {
     throw new Error("modelContext requires canonical messages and messageBlocks");
   }
-  const resolved = resolveModelFinalMessages({
-    systemMessages: normalizeBlockList(blocks.system),
-    historyMessages: normalizeBlockList(blocks.history),
-    incrementalMessages: normalizeBlockList(blocks.incremental),
-    historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
+  const resolved = buildDualLaneModelContext({
+    lane: MODEL_CONTEXT_LANE.PRIMARY,
+    modelContext,
+    primaryHistoryLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
   });
   const composed = Array.isArray(resolved?.messages) ? resolved.messages : [];
   replaceMessageProjection(modelContext, composed);

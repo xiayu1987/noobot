@@ -48,15 +48,22 @@ function overflowMessage({ measuredLength, maxChars }) {
 
 function buildReadFileSourceReference({ parsed = {}, identity }) {
   const pathRef = parsed?.path && typeof parsed.path === "object" ? parsed.path : null;
+  const view = String(pathRef?.view || "").trim();
+  const address =
+    view === "attachment" && plain(pathRef?.identity)
+      ? pathRef.identity
+      : ["workspace", "host"].includes(view)
+        ? String(pathRef?.path || "").trim()
+        : null;
+  if (!address) return null;
   const reference = {
-    address: String(pathRef?.path || "").trim(),
+    address,
     name: String(parsed?.fileName || "").trim() || "read-file-source",
     mimeType: "text/plain",
     ...(Number.isFinite(Number(parsed?.totalLines)) ? { size: Number(parsed.totalLines) } : {}),
     ...(Number.isFinite(Number(parsed?.startLine)) ? { startLine: Number(parsed.startLine) } : {}),
     ...(Number.isFinite(Number(parsed?.endLine)) ? { endLine: Number(parsed.endLine) } : {}),
   };
-  if (!reference.address || !["workspace", "host"].includes(String(pathRef?.view || ""))) return null;
   return sourceReferenceTransfer({
     transferId: identity.transferId,
     messageId: identity.messageId,

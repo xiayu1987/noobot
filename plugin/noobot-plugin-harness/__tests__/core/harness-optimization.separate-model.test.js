@@ -137,7 +137,9 @@ test("relaySeparateModelOutputAsUserMessage preserves oversized relay content wh
   const message = ctx.modelContext.messages[0] || {};
   assert.equal(message.role, "user");
   const relayContent = String(message?.content || "");
-  assert.equal(relayContent, `[来自harness外部模型输出/planning_refinement]\n${content}`);
+  assert.match(relayContent, /^\[来自harness外部模型输出\/planning_refinement\]\n/);
+  assert.match(relayContent, /不是任何工具的调用或调用结果/);
+  assert.equal(relayContent.endsWith(content), true);
   assert.equal(relayContent.includes("-TAIL"), true);
   assert.equal(typeof message?.transferEnvelopes, "object");
   assert.equal(Array.isArray(message?.transferEnvelopes), true);

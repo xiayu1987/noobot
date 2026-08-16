@@ -58,27 +58,52 @@ function resolveHarnessBucket(ctx = {}) {
   return bucket && typeof bucket === "object" ? bucket : null;
 }
 
-function shouldRefreshPolicyPromptForDynamicChange(ctx = {}, activeDynamicPolicyPrompt = null) {
+function resolvePolicyPromptScopeId(ctx = {}) {
+  return String(
+    ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId || "",
+  ).trim();
+}
+
+function resolvePolicyPromptState(ctx = {}) {
   const bucket = resolveHarnessBucket(ctx);
-  if (!bucket || !activeDynamicPolicyPrompt) return false;
-  const refresh = bucket.policyPromptRefresh && typeof bucket.policyPromptRefresh === "object"
-    ? bucket.policyPromptRefresh
-    : null;
-  if (refresh?.pending === true) return true;
+  if (!bucket) return null;
+  const scopeId = resolvePolicyPromptScopeId(ctx);
+  const current =
+    bucket.policyPromptState && typeof bucket.policyPromptState === "object"
+      ? bucket.policyPromptState
+      : null;
+  if (!current || String(current.scopeId || "") !== scopeId) {
+    bucket.policyPromptState = {
+      scopeId,
+      phase: "open",
+      injectedDynamicSignature: "",
+      lockedAt: "",
+    };
+  }
+  return bucket.policyPromptState;
+}
+
+function shouldRefreshPolicyPromptForDynamicChange(ctx = {}, activeDynamicPolicyPrompt = null) {
+  const state = resolvePolicyPromptState(ctx);
+  if (!state || state.phase === "locked" || !activeDynamicPolicyPrompt) return false;
   const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
   if (!signature) return false;
-  return String(bucket.injectedPolicyPromptSignature || "") !== signature;
+  return String(state.injectedDynamicSignature || "") !== signature;
 }
 
 function markPolicyPromptRefreshed(ctx = {}, activeDynamicPolicyPrompt = null) {
-  const bucket = resolveHarnessBucket(ctx);
-  if (!bucket || !activeDynamicPolicyPrompt) return;
+  const state = resolvePolicyPromptState(ctx);
+  if (!state || !activeDynamicPolicyPrompt) return;
   const signature = buildDynamicPolicyPromptSignature(activeDynamicPolicyPrompt);
-  if (signature) bucket.injectedPolicyPromptSignature = signature;
-  if (bucket.policyPromptRefresh && typeof bucket.policyPromptRefresh === "object") {
-    bucket.policyPromptRefresh.pending = false;
-    bucket.policyPromptRefresh.injectedAt = nowIso();
-  }
+  if (signature) state.injectedDynamicSignature = signature;
+}
+
+export function lockPolicyPromptForMainFlow(ctx = {}) {
+  const state = resolvePolicyPromptState(ctx);
+  if (!state || state.phase === "locked") return false;
+  state.phase = "locked";
+  state.lockedAt = nowIso();
+  return true;
 }
 
 function resolveAgentRuntimeFromContext(ctx = {}) {

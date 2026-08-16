@@ -5,7 +5,6 @@
  */
 import { LOCALE } from "../constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
-import { replaceMessages, resolveModelMessages } from "../../../../core/message-store.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
   const expectedRole = String(role || "").trim();
@@ -104,31 +103,6 @@ export function safeJsonStringify(value = null, space = 2) {
       message: String(error?.message || error || ""),
     });
   }
-}
-
-export function cleanupInternalForcedMessages(messages = []) {
-  if (!Array.isArray(messages)) return 0;
-  let removed = 0;
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    const marker =
-      message?.additional_kwargs?.noobotInternalMessageType ||
-      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      message?.metadata?.noobotInternalMessageType ||
-      message?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      "";
-    if (!String(marker || "").trim()) continue;
-    messages.splice(index, 1);
-    removed += 1;
-  }
-  return removed;
-}
-
-export function sanitizeInternalMessages(ctx = {}) {
-  const messages = resolveModelMessages(ctx);
-  const changed = cleanupInternalForcedMessages(messages) > 0;
-  if (changed) replaceMessages(ctx, messages);
-  return changed;
 }
 
 export function isMessageSummarized(messageItem = {}) {

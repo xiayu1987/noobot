@@ -20,7 +20,12 @@ import {
   attachmentKeys,
   transferAttachmentsForTurn,
 } from "../helpers/attachment-assertions.js";
-import { readAttachmentIndex, readSessionExecutionEvents } from "../helpers/persistence-audit.js";
+import {
+  modelInvocationTraces,
+  readAttachmentIndex,
+  readSessionExecutionEventTree,
+  readSessionExecutionEvents,
+} from "../helpers/persistence-audit.js";
 import {
   assertCanonicalToolPairs,
   assertRealtimeToolDetails,
@@ -180,6 +185,26 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   expect(String(results.find((event) => event.data?.tool === "search")?.data?.result)).toContain(
     "SEARCH-TARGET",
   );
+
+  const modelTraces = modelInvocationTraces(
+    await readSessionExecutionEventTree(noobot.userId, noobot.sessionId),
+  );
+  expect(
+    modelTraces.some(
+      (trace) =>
+        trace.data?.invocation?.purpose === "guidance" &&
+        trace.data?.invocation?.flow === "plugin.analysis",
+    ),
+    "the scenario must execute the real Harness guidance analysis model flow",
+  ).toBe(true);
+  expect(
+    modelTraces.some((trace) =>
+      trace.data?.messages?.preview?.some(
+        (message) => message.injectedMessageType === "separate_model_relay:guidance",
+      ),
+    ),
+    "Harness guidance output must be relayed into a later provider model request",
+  ).toBe(true);
 
   const completedProjectionBeforeRefresh = await readRealtimeToolProjection(noobot.page);
   await assertGeneratedFilesConverged({

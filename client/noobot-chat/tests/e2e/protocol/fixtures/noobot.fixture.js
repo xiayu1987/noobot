@@ -9,7 +9,10 @@ import { expect } from "@playwright/test";
 import { artifactTest } from "./artifacts.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "./auth.fixture.js";
 import { createSessionThroughUi } from "./session.fixture.js";
-import { assertModelInvocationTraceSet } from "../helpers/model-message-assertions.js";
+import {
+  assertModelInvocationTraceSet,
+  assertModelSystemMessages,
+} from "../helpers/model-message-assertions.js";
 import {
   MODEL_CALL_EXPECTATION,
   modelObservationPolicyForTitle,
@@ -44,9 +47,11 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
 
   let validationError = null;
   let prefixAudit = null;
+  let systemMessageAudit = null;
   try {
     if (traces.length > 0) {
       prefixAudit = assertModelInvocationTraceSet(traces, { rootSessionId: sessionId });
+      systemMessageAudit = assertModelSystemMessages(traces);
     }
     if (policy.expectation === MODEL_CALL_EXPECTATION.REQUIRED) {
       expect(
@@ -81,6 +86,7 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
     domains: [...new Set(traces.map((record) => record.data?.invocation?.domain).filter(Boolean))],
     aliases: [...new Set(traces.map((record) => record.data?.model?.alias).filter(Boolean))],
     prefixStability: prefixAudit,
+    systemMessages: systemMessageAudit,
   });
   const tracesPath = path.join(outputDir, "model-invocations.jsonl");
   const auditPath = path.join(outputDir, "model-observation-audit.json");

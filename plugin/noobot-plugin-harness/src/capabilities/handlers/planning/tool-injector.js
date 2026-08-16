@@ -58,6 +58,11 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           reason: "plan_refinement_disabled",
         };
       }
+      if (state?.flags?.planRefinementRequested === true) {
+        throw new Error("request_plan_refinement may be called only once per agent turn");
+      }
+      state.flags.planRefinementRequested = true;
+      synchronizePlanRefinementTool(toolCtx, toolMeta);
       const refinementResult = await runPlanningRefinementBySeparateModel(
         toolCtx,
         toolMeta,
@@ -97,7 +102,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
   });
 }
 
-export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
+export function synchronizePlanRefinementTool(ctx = {}, meta = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { state } = holder;
@@ -105,9 +110,16 @@ export function ensurePlanRefinementTool(ctx = {}, meta = {}) {
     clearPendingPlanRefinement(state);
     return false;
   }
-  if (state?.flags?.planningCaptured !== true) return false;
   const registry = ctx?.agentContext?.bindings?.tools;
   if (!Array.isArray(registry)) return false;
+  if (state?.flags?.planRefinementRequested === true) {
+    const next = registry.filter(
+      (tool) => String(tool?.name || "").trim() !== PLAN_REFINEMENT_TOOL_NAME,
+    );
+    if (next.length === registry.length) return false;
+    registry.splice(0, registry.length, ...next);
+    return true;
+  }
   if (registry.some((tool) => String(tool?.name || "").trim() === PLAN_REFINEMENT_TOOL_NAME)) {
     return false;
   }

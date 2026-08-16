@@ -134,21 +134,32 @@ test("harness planning injects refinement tool and tool call runs plugin-side re
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, true);
 
   const messages = [{ role: "user", content: "继续处理" }];
-  await hookManager.emit("agent.before_llm_call", {
+  const currentHookContext = {
     userId: "u11-r",
     sessionId: "s11-r",
     dialogProcessId: "dp11-r",
     messages,
     agentContext,
-  });
+  };
+  await hookManager.emit("agent.before_llm_call", currentHookContext);
   const refinementTool = agentContext.payload.tools.registry.find(
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.ok(refinementTool, "request_plan_refinement 工具应注入");
 
-  const toolResult = await refinementTool.invoke({ summary: "阶段完成，细化下一步" });
+  const toolResult = await refinementTool.invoke(
+    { summary: "阶段完成，细化下一步" },
+    { configurable: { noobotHookContext: currentHookContext } },
+  );
   assert.equal(toolResult?.ok, true);
   assert.equal(toolResult?.status, "completed");
+  assert.equal(agentContext.payload.harness.state.flags.planRefinementRequested, true);
+  assert.equal(
+    agentContext.payload.tools.registry.some(
+      (tool) => tool?.name === "request_plan_refinement",
+    ),
+    false,
+  );
   assert.equal(agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(agentContext.payload.harness.state.pending.planRefinement, false);
   assert.equal(
@@ -225,6 +236,42 @@ test("harness planning does not inject refinement tool by default in programming
     (tool) => tool?.name === "request_plan_refinement",
   );
   assert.equal(refinementTool, undefined);
+});
+
+test("harness exposes plan refinement before capture and the tool owns its not-ready state", async () => {
+  const hookManager = createAgentHookManager();
+  registerHarnessCore(
+    { hookManager },
+    {
+      trace: false,
+      promptPolicy: false,
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => createTestModelResponse("1. 执行核心任务"),
+    },
+  );
+  const agentContext = {
+    payload: {
+      tools: { registry: [] },
+      messages: { system: [], history: [] },
+      harness: {},
+    },
+  };
+
+  await hookManager.emit("agent.before_llm_call", {
+    userId: "u11-ready",
+    sessionId: "s11-ready",
+    dialogProcessId: "dp11-ready",
+    messages: [{ role: "user", content: "开始任务" }],
+    agentContext,
+  });
+  const refinementTool = agentContext.payload.tools.registry.find(
+    (tool) => tool?.name === "request_plan_refinement",
+  );
+  assert.ok(refinementTool);
+  agentContext.payload.harness.state.flags.planningCaptured = false;
+  const result = await refinementTool.invoke({ targetMainStepIndexes: [1] });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "not_ready");
 });
 
 test("harness request_plan_refinement falls back to closure meta when configurable meta lacks harness", async () => {
