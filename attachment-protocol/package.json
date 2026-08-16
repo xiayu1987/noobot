@@ -1,6 +1,6 @@
 {
   "name": "@noobot/attachment-protocol",
-  "version": "4.1.8",
+  "version": "4.1.9",
   "private": true,
   "type": "module",
   "description": "Canonical Noobot attachment identity, model, lifecycle and access-reference protocol",
