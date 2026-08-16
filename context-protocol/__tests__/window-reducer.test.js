@@ -7,11 +7,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createModelContext } from "../src/assembly/hook-context.js";
-import {
-  resolveModelFinalMessages,
-  resolveModelHistoryMessages,
-} from "../src/policy/window-reducer.js";
-import { collectDialogScopedMessagesToSummarize } from "../src/policy/summary-policy.js";
+import { resolveModelFinalMessages, resolveModelHistoryMessages } from "../src/policy/window.js";
+import { collectDialogScopedMessagesToSummarize } from "../src/policy/summary.js";
 
 function legacyUser(content, dialogProcessId, turnScopeId) {
   return {

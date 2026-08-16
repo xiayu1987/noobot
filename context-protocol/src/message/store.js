@@ -6,8 +6,8 @@
 import {
   getModelContextRuntime,
   resetModelContextMessageStore,
-} from "../assembly/model-context-runtime.js";
-import { deriveContextMessageProjectionId } from "./message-codec.js";
+} from "../assembly/model-runtime.js";
+import { deriveContextMessageProjectionId } from "./codec.js";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];

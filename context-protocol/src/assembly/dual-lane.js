@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveModelFinalMessages } from "../policy/window-reducer.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
+import { resolveModelFinalMessages } from "../policy/window.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 
 export const MODEL_CONTEXT_LANE = Object.freeze({
   PRIMARY: "primary",

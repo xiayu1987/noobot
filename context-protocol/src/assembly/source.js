@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveModelHistoryMessages } from "../policy/window-reducer.js";
-import { projectTerminalHistoryMessages } from "../policy/terminal-history-policy.js";
-import { excludeActiveContextScopeItems } from "./context-scope.js";
+import { resolveModelHistoryMessages } from "../policy/window.js";
+import { projectTerminalHistoryMessages } from "../policy/terminal-history.js";
+import { excludeActiveContextScopeItems } from "./scope.js";
 import { projectTurnTerminalStatuses } from "@noobot/session-protocol";
 
 function stableValue(value) {

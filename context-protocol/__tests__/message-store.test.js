@@ -15,11 +15,11 @@ import {
   replaceMessages,
   resolveMessagesByIds,
   writeMessageBlocks,
-} from "../src/message/message-store.js";
+} from "../src/message/store.js";
 import {
   attachModelContextRuntime,
   resolveCanonicalContextMessages,
-} from "../src/assembly/model-context-runtime.js";
+} from "../src/assembly/model-runtime.js";
 
 function attachRuntime(holder, options = {}) {
   attachModelContextRuntime(holder, options);

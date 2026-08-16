@@ -3,9 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { canonicalizeMessageStore } from "../message/message-store.js";
-import { attachModelContextRuntime } from "./model-context-runtime.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
+import { canonicalizeMessageStore } from "../message/store.js";
+import { attachModelContextRuntime } from "./model-runtime.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 
 function asObject(value) {

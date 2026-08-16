@@ -7,10 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createModelContext } from "../src/assembly/hook-context.js";
-import {
-  buildDualLaneModelContext,
-  MODEL_CONTEXT_LANE,
-} from "../src/assembly/dual-lane-context.js";
+import { buildDualLaneModelContext, MODEL_CONTEXT_LANE } from "../src/assembly/dual-lane.js";
 
 test("primary lane materializes the authoritative model context blocks", () => {
   const modelContext = createModelContext({

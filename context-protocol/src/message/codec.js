@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  TASK_SUMMARY_PROTOCOL_VERSION,
-  parseTaskSummaryReceipt,
-} from "../task/task-summary-protocol.js";
+import { TASK_SUMMARY_PROTOCOL_VERSION, parseTaskSummaryReceipt } from "../task/summary.js";
 
 const text = (value) => String(value ?? "").trim();
 

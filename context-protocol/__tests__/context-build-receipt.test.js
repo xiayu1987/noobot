@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createContextBuildReceipt } from "../src/assembly/context-build-receipt.js";
+import { createContextBuildReceipt } from "../src/assembly/build-receipt.js";
 
 const scope = { sessionId: "s", dialogProcessId: "d", turnScopeId: "t" };
 

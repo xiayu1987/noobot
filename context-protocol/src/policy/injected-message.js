@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { readMessageField } from "./message-policy.js";
+import { readMessageField } from "./message.js";
 
-export { CONTEXT_INJECTED_MESSAGE_TYPE } from "../message/injected-message-types.js";
+export { CONTEXT_INJECTED_MESSAGE_TYPE } from "../message/injected-types.js";
 
 export function resolveContextInternalMessageType(message = {}) {
   return String(readMessageField(message, "noobotInternalMessageType") || "").trim();

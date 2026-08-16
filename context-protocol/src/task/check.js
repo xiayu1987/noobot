@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import crypto from "node:crypto";
-import { TASK_CHECK_PROTOCOL_VERSION, TASK_CHECK_STATE } from "./task-check-receipt.js";
+import { TASK_CHECK_PROTOCOL_VERSION, TASK_CHECK_STATE } from "./check-receipt.js";
 
 export {
   TASK_CHECK_PROTOCOL_VERSION,
   TASK_CHECK_STATE,
   parseTaskCheckReceipt,
-} from "./task-check-receipt.js";
+} from "./check-receipt.js";
 
 export const TASK_CHECK_PROTOCOL_HEADER = "NOOBOT_TASK_CHECK/1";
 

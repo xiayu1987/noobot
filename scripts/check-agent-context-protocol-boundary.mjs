@@ -69,11 +69,11 @@ for (const file of runtimeConsumers) {
   }
 }
 
-await assertAbsent("agent/src/context/runtime-state/message-store.js");
-await assertAbsent("agent/src/context/runtime-state/context-diagnostics.js");
+await assertAbsent("agent/src/context/runtime-state/store.js");
+await assertAbsent("agent/src/context/runtime-state/diagnostics.js");
 await assertAbsent("agent/src/bot/session/context-builder.js");
-await assertAbsent("agent/src/context/session/message-context-policy.js");
-await assertAbsent("agent/src/context/session/summarized-message-policy.js");
+await assertAbsent("agent/src/context/session/message-context.js");
+await assertAbsent("agent/src/context/session/summarized-message.js");
 await assertAbsent("agent/src/session/utils/context-window-normalizer.js");
 await assertAbsent("agent/src/context/session/dialog-process-id-resolver.js");
 await assertAbsent("agent/src/context/session/message-content-utils.js");

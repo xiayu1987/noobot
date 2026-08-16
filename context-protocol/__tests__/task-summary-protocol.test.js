@@ -10,8 +10,8 @@ import {
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
   parseTaskSummaryReceipt,
-} from "../src/task/task-summary-protocol.js";
-import { recoverContextTaskSummaryToolResult } from "../src/message/message-codec.js";
+} from "../src/task/summary.js";
+import { recoverContextTaskSummaryToolResult } from "../src/message/codec.js";
 
 const valid = [
   "NOOBOT_TASK_SUMMARY/1",

@@ -8,8 +8,8 @@ import {
   AGENT_CONTEXT_KIND,
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
-} from "./agent-context-schema.js";
-import { validateAgentContextIdentity } from "./agent-context-identity.js";
+} from "./schema.js";
+import { validateAgentContextIdentity } from "./identity.js";
 
 function findSerializationError(value, path = "context", seen = new Set()) {
   if (value == null || ["string", "number", "boolean"].includes(typeof value)) return "";

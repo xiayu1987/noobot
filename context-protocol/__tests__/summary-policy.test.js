@@ -11,8 +11,8 @@ import {
   collectScopedMessagesToSummarize,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
-} from "../src/policy/summary-policy.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-message-types.js";
+} from "../src/policy/summary.js";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-types.js";
 
 test("summary retention keeps the latest injection independently in every dialog", () => {
   const injected = (id, dialogProcessId, content) => ({

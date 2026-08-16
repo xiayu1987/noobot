@@ -10,7 +10,7 @@ import {
   normalizeContextTransferEnvelopes,
   projectSessionRecordToContextMessage,
   projectSessionRecordsToContextMessages,
-} from "../src/message/session-message-projection.js";
+} from "../src/message/session-projection.js";
 
 function transferEnvelope({ transferId = "transfer-1", content = "payload" } = {}) {
   return {

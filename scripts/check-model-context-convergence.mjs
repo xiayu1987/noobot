@@ -286,8 +286,8 @@ if (!failures.some((item) => item.title.includes("injected message type inferred
   pass("injected message classification never falls back to content");
 }
 
-const SUMMARY_POLICY_PATH = "context-protocol/src/policy/summary-policy.js";
-const TERMINAL_HISTORY_POLICY_PATH = "context-protocol/src/policy/terminal-history-policy.js";
+const SUMMARY_POLICY_PATH = "context-protocol/src/policy/summary.js";
+const TERMINAL_HISTORY_POLICY_PATH = "context-protocol/src/policy/terminal-history.js";
 const latestInjectionPolicyPattern =
   /\b(?:keepLatestInjectedOnly|filterLatestInjectedMessagesByType|filterInjectedMessagesForDialog|collectLatestInjectedMessageIndexes)\b/g;
 const latestInjectionPolicyHits = [];
@@ -315,9 +315,9 @@ if (latestInjectionPolicyHits.length) {
 
 const summarizedMutationAllowed = new Set([
   SUMMARY_POLICY_PATH,
-  "context-protocol/src/message/message-store.js",
-  "context-protocol/src/mutation/context-mutation.js",
-  "context-protocol/src/policy/snapshot-policy.js",
+  "context-protocol/src/message/store.js",
+  "context-protocol/src/mutation/context.js",
+  "context-protocol/src/policy/snapshot.js",
   "agent/src/runtime/resume/model-message-snapshot-store.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
   "agent/src/session/services/session-message-service/turn-summary-checkpoint.js",
@@ -350,9 +350,9 @@ if (summarizedMutationHits.length) {
 
 const summaryMutationCallAllowed = new Set([
   SUMMARY_POLICY_PATH,
-  "context-protocol/src/message/message-store.js",
-  "context-protocol/src/mutation/context-mutation.js",
-  "context-protocol/src/policy/turn-completion-policy.js",
+  "context-protocol/src/message/store.js",
+  "context-protocol/src/mutation/context.js",
+  "context-protocol/src/policy/turn-completion.js",
   "agent/src/runtime/turn/turn-result-aggregator.js",
   "agent/src/bot/session/summary-checkpoint-committer.js",
 ]);
@@ -381,7 +381,7 @@ if (summaryMutationCallHits.length) {
   pass("summary mutation API is restricted to checkpoint commit and completed-turn finalization");
 }
 
-assertFileContains("context-protocol/src/policy/window-reducer.js", [
+assertFileContains("context-protocol/src/policy/window.js", [
   {
     name: "history excludes system-like roles",
     pattern: /isSystemLikeMessageRole\(resolveMessageRole\(message\)\)/,
@@ -396,7 +396,7 @@ assertFileContains("context-protocol/src/policy/window-reducer.js", [
       /const explicitId = resolveMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/,
   },
 ]);
-const messagePolicyText = assertFileContains("context-protocol/src/policy/message-policy.js", [
+const messagePolicyText = assertFileContains("context-protocol/src/policy/message.js", [
   {
     name: "message policy delegates canonical identity to codec",
     pattern: /return\s+resolveContextMessageId\(message\)/,
@@ -430,7 +430,7 @@ assertFileContains("agent/src/bot/session/session-execution-engine-utils.js", [
     pattern: /projectContextMessageIdentityMetadata\(messageItem\)/,
   },
 ]);
-assertFileContains("context-protocol/src/policy/block-strategy.js", [
+assertFileContains("context-protocol/src/policy/block.js", [
   {
     name: "owns canonical system/history/incremental composition",
     pattern: /export\s+function\s+buildCanonicalMessageBlocks\b/,
@@ -444,7 +444,7 @@ assertFileContains("context-protocol/src/policy/block-strategy.js", [
     pattern: /export\s+function\s+filterCurrentTurnMessagesFromHistory\b/,
   },
 ]);
-assertFileContains("context-protocol/src/policy/summary-policy.js", [
+assertFileContains("context-protocol/src/policy/summary.js", [
   {
     name: "owns summary scope marking",
     pattern: /export\s+function\s+markScopedMessagesSummarized\b/,
@@ -454,7 +454,7 @@ assertFileContains("context-protocol/src/policy/summary-policy.js", [
     pattern: /export\s+function\s+collectLatestTaskSummaryMessageIndexes\b/,
   },
 ]);
-assertFileContains("context-protocol/src/policy/terminal-history-policy.js", [
+assertFileContains("context-protocol/src/policy/terminal-history.js", [
   {
     name: "owns terminal history projection",
     pattern: /export\s+function\s+projectTerminalHistoryMessages\b/,
@@ -615,7 +615,7 @@ if (/\bmessages\s*\.\s*(?:push|splice|unshift|shift|pop)\s*\(/.test(stateCommitt
 if (!messageContextStoreText) {
   fail("authoritative Message Context write port is unavailable");
 }
-assertFileContains("context-protocol/src/policy/snapshot-policy.js", [
+assertFileContains("context-protocol/src/policy/snapshot.js", [
   {
     name: "owns snapshot serialization",
     pattern: /export\s+function\s+createModelContextSnapshot\b/,
@@ -703,7 +703,7 @@ if (historyLimitUsesTurnThreshold && centralizedHistoryLimitIsValid) {
   );
 }
 
-const windowReducerText = readRel("context-protocol/src/policy/window-reducer.js");
+const windowReducerText = readRel("context-protocol/src/policy/window.js");
 const mainHistoryResolverMatch = windowReducerText.match(
   /export\s+function\s+resolveModelHistoryMessages\s*\([\s\S]*?\n}\n/,
 );
@@ -858,7 +858,7 @@ assertFileContains("plugin/noobot-plugin-harness/src/core/model-message-context.
   },
 ]);
 
-const messageStoreText = assertFileContains("context-protocol/src/message/message-store.js", [
+const messageStoreText = assertFileContains("context-protocol/src/message/store.js", [
   {
     name: "persisted message uid owns canonical entity identity",
     pattern:

@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCanonicalMessageBlocks } from "../src/policy/block-strategy.js";
+import { buildCanonicalMessageBlocks } from "../src/policy/block.js";
 
 test("canonical blocks preserve main system history incremental composition", () => {
   const result = buildCanonicalMessageBlocks({

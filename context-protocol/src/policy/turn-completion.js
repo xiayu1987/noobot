@@ -10,8 +10,8 @@ import {
   markCurrentTurnArraySummarized,
   markCurrentTurnStoreSummarized,
   mirrorSummarizedMessagesById,
-} from "./summary-policy.js";
-import { resolveMessageId } from "./message-policy.js";
+} from "./summary.js";
+import { resolveMessageId } from "./message.js";
 
 /**
  * Applies the terminal policy for a complete dialog turn.

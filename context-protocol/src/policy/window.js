@@ -11,7 +11,7 @@ import {
   resolveMessageDialogProcessId,
   resolveMessageId,
   resolveMessageRole,
-} from "./message-policy.js";
+} from "./message.js";
 
 function recentSlice(values = [], limit = Number.POSITIVE_INFINITY) {
   const source = Array.isArray(values) ? values : [];
