@@ -519,8 +519,12 @@ test("AttachmentService.linkParsedResultToAttachment updates only the attachment
       attachmentSource: parsedAttachment.attachmentSource,
     });
 
-    const runtimeSnapshot = await readSessionArtifact({ sessionDir: path.dirname(runtimeSessionFile) });
-    const pluginSnapshot = await readSessionArtifact({ sessionDir: path.dirname(pluginSessionFile) });
+    const runtimeSnapshot = await readSessionArtifact({
+      sessionDir: path.dirname(runtimeSessionFile),
+    });
+    const pluginSnapshot = await readSessionArtifact({
+      sessionDir: path.dirname(pluginSessionFile),
+    });
     assert.equal(runtimeSnapshot.messages[0].attachments[0].parsedResult, undefined);
     assert.equal(pluginSnapshot.messages[0].attachments[0].parsedResult, undefined);
     const stored = await service.getAttachmentById({
@@ -542,7 +546,11 @@ test("index-manager persists only versioned protocol records and isolates every 
     assert.deepEqual(empty.attachments, {});
 
     await assert.rejects(
-      writeAttachIndex(basePath, { attachments: { a1: { attachmentId: "a1", name: "x.txt" } } }, scope),
+      writeAttachIndex(
+        basePath,
+        { attachments: { a1: { attachmentId: "a1", name: "x.txt" } } },
+        scope,
+      ),
       /invalid_persisted_attachment_record/,
     );
 

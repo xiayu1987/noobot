@@ -25,9 +25,7 @@ const props = defineProps({
 
 const emit = defineEmits(["preview", "preview-resolved", "download"]);
 const { translate } = useLocale();
-const attachments = computed(() =>
-  (Array.isArray(props.attachments) ? props.attachments : []),
-);
+const attachments = computed(() => (Array.isArray(props.attachments) ? props.attachments : []));
 const isImageMime = (...args) => props.isImageMime(...args);
 const canPreviewAttachment = (...args) => props.canPreviewAttachment(...args);
 const canPreviewParsedResult = (...args) =>
@@ -38,22 +36,17 @@ const formatFileSize = (...args) => props.formatFileSize(...args);
 const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
   dedupeAttachments(
-    attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin"),
+    attachments.value.filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin"),
   ),
 );
 const pluginAttachments = computed(() =>
   dedupeAttachments(
-    attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin"),
+    attachments.value.filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin"),
   ),
 );
 
 function resolveAttachmentOwnerType(attachmentItem = {}) {
-  return String(
-    attachmentItem?.owner?.type ||
-      "",
-  ).trim();
+  return String(attachmentItem?.owner?.type || "").trim();
 }
 
 function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
@@ -68,9 +61,11 @@ function dedupeAttachments(list = []) {
 }
 
 function hasParsedResultIdentity(attachmentItem = {}) {
-  return Boolean(resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  }));
+  return Boolean(
+    resolveParsedResultAccessMeta(attachmentItem, {
+      userId: String(props.userId || "").trim(),
+    }),
+  );
 }
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
@@ -100,11 +95,11 @@ function emitPreviewParsedResult(attachmentItem = {}) {
   if (!url) return;
   emit("preview-resolved", {
     attachmentId: parsedResult.attachmentId,
-    name:
-      parsedResult.name ||
-      translate("message.parsedResultDefaultName"),
+    name: parsedResult.name || translate("message.parsedResultDefaultName"),
     mimeType: parsedResult.mimeType || "text/markdown",
-    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0
+      ? { size: parsedResult.size }
+      : {}),
     previewUrl: url,
   });
 }
@@ -118,11 +113,11 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   if (!url) return;
   emit("download", {
     attachmentId: parsedResult.attachmentId,
-    name:
-      parsedResult.name ||
-      translate("message.parsedResultDefaultName"),
+    name: parsedResult.name || translate("message.parsedResultDefaultName"),
     mimeType: parsedResult.mimeType || "text/markdown",
-    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0
+      ? { size: parsedResult.size }
+      : {}),
     previewUrl: url,
   });
 }
@@ -157,7 +152,11 @@ function emitDownloadParsedResult(attachmentItem = {}) {
           {{ translate("message.pluginAttachment") }} ({{ pluginAttachments.length }})
         </span>
         <span class="plugin-attachments-action">
-          {{ pluginAttachmentsCollapsed ? translate("composer.expand") : translate("message.collapse") }}
+          {{
+            pluginAttachmentsCollapsed
+              ? translate("composer.expand")
+              : translate("message.collapse")
+          }}
         </span>
       </button>
       <div v-if="!pluginAttachmentsCollapsed" class="plugin-attachments-list">

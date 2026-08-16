@@ -24,9 +24,9 @@ function createPrepareHarness({ existingMessages = [] } = {}) {
     return message;
   });
   const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
-    const existing = activeSession.value.messages.find((message) => (
-      message.role === RoleEnum.ASSISTANT && message.messageId === messageId
-    ));
+    const existing = activeSession.value.messages.find(
+      (message) => message.role === RoleEnum.ASSISTANT && message.messageId === messageId,
+    );
     if (existing) return existing;
     const message = {
       role: RoleEnum.ASSISTANT,
@@ -105,24 +105,28 @@ describe("prepareChatSend attachment architecture", () => {
       messageText: "edited",
       turnScopeId: "client-turn:reuse",
       reuseExistingUserTurn: true,
-      userAttachments: [{
+      userAttachments: [
+        {
+          attachmentId: "att-rich",
+          sessionId: "session-a",
+          attachmentSource: "test",
+          name: "report.docx",
+          mimeType: richAttachment.mimeType,
+          size: 123,
+        },
+      ],
+    });
+
+    expect(userMessage.attachments).toEqual([
+      {
         attachmentId: "att-rich",
         sessionId: "session-a",
         attachmentSource: "test",
         name: "report.docx",
         mimeType: richAttachment.mimeType,
         size: 123,
-      }],
-    });
-
-    expect(userMessage.attachments).toEqual([{
-      attachmentId: "att-rich",
-      sessionId: "session-a",
-      attachmentSource: "test",
-      name: "report.docx",
-      mimeType: richAttachment.mimeType,
-      size: 123,
-    }]);
+      },
+    ]);
   });
 
   it("treats explicit empty userAttachments as delete-all instead of restoring old attachments", () => {
@@ -130,7 +134,14 @@ describe("prepareChatSend attachment architecture", () => {
       role: RoleEnum.USER,
       content: "old",
       turnScopeId: "client-turn:delete",
-      attachments: [{ attachmentId: "old-att", sessionId: "session-a", attachmentSource: "test", name: "old.txt" }],
+      attachments: [
+        {
+          attachmentId: "old-att",
+          sessionId: "session-a",
+          attachmentSource: "test",
+          name: "old.txt",
+        },
+      ],
     };
     const harness = createPrepareHarness({ existingMessages: [userMessage] });
 

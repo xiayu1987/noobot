@@ -512,22 +512,24 @@ describe("useChatEngine.resend replace turn", () => {
       sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/attachment-rich.docx",
       previewUrl: "/preview/attachment-rich",
       downloadUrl: "/download/attachment-rich",
-      relations: [{
-        relationType: "parsed_result",
-        sourceIdentity: {
-          attachmentId: "attachment-rich",
-          sessionId: "session-rich",
-          attachmentSource: "test",
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "attachment-rich",
+            sessionId: "session-rich",
+            attachmentSource: "test",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-rich",
+            sessionId: "session-rich",
+            attachmentSource: "test",
+          },
+          name: "AI 体系现状概览.md",
+          mimeType: "text/markdown",
+          createdAt: "2026-01-01T00:00:00.000Z",
         },
-        targetIdentity: {
-          attachmentId: "parsed-rich",
-          sessionId: "session-rich",
-          attachmentSource: "test",
-        },
-        name: "AI 体系现状概览.md",
-        mimeType: "text/markdown",
-        createdAt: "2026-01-01T00:00:00.000Z",
-      }],
+      ],
     };
     const rawAttachment = {
       name: richAttachment.name,

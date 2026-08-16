@@ -87,6 +87,17 @@ function walk(dir, out = []) {
 }
 
 const violations = [];
+const FORBIDDEN_PROTOCOL_FILES = ["attachment-protocol/src/attachment-model.js"];
+for (const relativePath of FORBIDDEN_PROTOCOL_FILES) {
+  if (existsSync(path.join(ROOT, relativePath))) {
+    violations.push({
+      field: "duplicate_attachment_model_entry",
+      file: relativePath,
+      line: 1,
+      text: "attachment model must be owned by attachment-protocol/src/model.js",
+    });
+  }
+}
 for (const relDir of TARGET_DIRS) {
   const dir = path.join(ROOT, relDir);
   for (const file of walk(dir)) {

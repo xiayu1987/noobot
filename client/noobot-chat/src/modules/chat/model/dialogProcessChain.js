@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  getMessageDialogProcessId,
-  getMessageParentDialogProcessId,
-} from "./messageIdentity.js";
+import { getMessageDialogProcessId, getMessageParentDialogProcessId } from "./messageIdentity.js";
 import {
   assertUniqueAttachmentIdentities,
   mergeAttachmentsByIdentity,

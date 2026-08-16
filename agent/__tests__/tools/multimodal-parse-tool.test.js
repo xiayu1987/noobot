@@ -142,13 +142,15 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
         );
         return {
           ...source,
-          relations: [{
-            relationType: "parsed_result",
-            sourceIdentity: request.sourceIdentity,
-            targetIdentity: request.targetAttachment.identity,
-            producer: { type: "tool", id: request.producerId },
-            createdAt: "2026-08-16T00:00:00.000Z",
-          }],
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: request.sourceIdentity,
+              targetIdentity: request.targetAttachment.identity,
+              producer: { type: "tool", id: request.producerId },
+              createdAt: "2026-08-16T00:00:00.000Z",
+            },
+          ],
         };
       },
     },
@@ -196,8 +198,14 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     ["source-1", "source-2"],
   );
   assert.ok(linkRequests.every((request) => request.producerId === "multimodal_parse"));
-  assert.equal(runtime.userMessageAttachments[0].relations[0].targetIdentity.attachmentId, "parsed-1");
-  assert.equal(runtime.userMessageAttachments[1].relations[0].targetIdentity.attachmentId, "parsed-1");
+  assert.equal(
+    runtime.userMessageAttachments[0].relations[0].targetIdentity.attachmentId,
+    "parsed-1",
+  );
+  assert.equal(
+    runtime.userMessageAttachments[1].relations[0].targetIdentity.attachmentId,
+    "parsed-1",
+  );
   assert.equal(result.ok, true);
   assert.equal(result.summary.source_attachment_backwritten_count, 2);
   assert.equal(result.summary.input_file_count, 3);

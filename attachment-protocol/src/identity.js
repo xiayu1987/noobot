@@ -11,6 +11,7 @@ import {
   requirePlainObject,
 } from "./protocol-utils.js";
 const FIELDS = new Set(["attachmentId", "sessionId", "attachmentSource"]);
+export const ATTACHMENT_IDENTITY_REF_PREFIX = "attachment:v1:";
 export function parseAttachmentIdentity(value) {
   const source = requirePlainObject(value, "invalid_attachment_identity");
   assertKnownFields(source, FIELDS, "unknown_attachment_identity_field");
@@ -35,6 +36,37 @@ export function attachmentIdentityKey(value) {
 }
 export function sameAttachmentIdentity(a, b) {
   return attachmentIdentityKey(a) === attachmentIdentityKey(b);
+}
+
+export function formatAttachmentIdentityRef(value) {
+  const identity = parseAttachmentIdentity(value);
+  const components = [identity.sessionId, identity.attachmentSource, identity.attachmentId].map(
+    (component) => encodeURIComponent(component),
+  );
+  return `${ATTACHMENT_IDENTITY_REF_PREFIX}${components.join("/")}`;
+}
+
+export function parseAttachmentIdentityRef(value) {
+  const ref = requireNonEmptyString(value, "invalid_attachment_identity_ref");
+  if (!ref.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) {
+    throw new AttachmentProtocolError("invalid_attachment_identity_ref_prefix");
+  }
+  const encodedComponents = ref.slice(ATTACHMENT_IDENTITY_REF_PREFIX.length).split("/");
+  if (encodedComponents.length !== 3 || encodedComponents.some((component) => !component)) {
+    throw new AttachmentProtocolError("invalid_attachment_identity_ref_shape");
+  }
+  let components;
+  try {
+    components = encodedComponents.map((component) => decodeURIComponent(component));
+  } catch {
+    throw new AttachmentProtocolError("invalid_attachment_identity_ref_encoding");
+  }
+  const [sessionId, attachmentSource, attachmentId] = components;
+  const identity = parseAttachmentIdentity({ attachmentId, sessionId, attachmentSource });
+  if (formatAttachmentIdentityRef(identity) !== ref) {
+    throw new AttachmentProtocolError("non_canonical_attachment_identity_ref");
+  }
+  return identity;
 }
 export function assertAttachmentBelongsToScope(value, scope) {
   const i = parseAttachmentIdentity(value);

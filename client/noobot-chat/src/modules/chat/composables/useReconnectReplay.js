@@ -3,12 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  findSessionByAnyId as findSessionByAnyIdInList,
-} from "../model/sessionIdentity.js";
-import {
-  findLatestPendingAssistantAfterLastUser,
-} from "../model/reconnectReplayModel.js";
+import { findSessionByAnyId as findSessionByAnyIdInList } from "../model/sessionIdentity.js";
+import { findLatestPendingAssistantAfterLastUser } from "../model/reconnectReplayModel.js";
 import { RoleEnum } from "../model/chatConstants.js";
 import { getMessageRole } from "../model/messageIdentity.js";
 import {
@@ -50,9 +46,7 @@ import {
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
 } from "../runtime/reconnect/messageReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
-import {
-  BackendChannelState,
-} from "../runtime/sessionRunStateMachine.js";
+import { BackendChannelState } from "../runtime/sessionRunStateMachine.js";
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
@@ -101,16 +95,15 @@ export function useReconnectReplay({
   applyTurnLifecycleSnapshot,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
-  const {
-    replayCache,
-    appliedReconnectSequenceByTurnKey,
-    appliedReconnectEventKindsByTurnKey,
-  } =
+  const { replayCache, appliedReconnectSequenceByTurnKey, appliedReconnectEventKindsByTurnKey } =
     reconnectReplayContext;
   let { replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
-    isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, { sessionId, turnScopeId });
+    isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, {
+      sessionId,
+      turnScopeId,
+    });
 
   const applyRunStateEvent = (event) => dispatchAuthoritativeRunStateEvent?.(event);
   const applyRunStateEvents = (events) => {
@@ -143,7 +136,11 @@ export function useReconnectReplay({
   };
 
   function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
-    return applyAssistantFailureStateWithContext({ targetAssistantMessage, errorMessage, translate });
+    return applyAssistantFailureStateWithContext({
+      targetAssistantMessage,
+      errorMessage,
+      translate,
+    });
   }
 
   function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
@@ -211,16 +208,17 @@ export function useReconnectReplay({
     let authoritativeEventCount = 0;
     for (const envelope of Array.isArray(messages) ? messages : []) {
       const packet = envelope?.data || {};
-      const messageEvent = packet?.event && typeof packet.event === "object"
-        ? packet.event
-        : null;
+      const messageEvent = packet?.event && typeof packet.event === "object" ? packet.event : null;
       if (!messageEvent) continue;
       authoritativeEventCount += 1;
-      const result = applyWorkflowRuntimeEvent({
-        event: "workflow_message_event",
-        data: messageEvent,
-        transportSequence: Number(packet?.seq || 0),
-      }, { source: "reconnect" });
+      const result = applyWorkflowRuntimeEvent(
+        {
+          event: "workflow_message_event",
+          data: messageEvent,
+          transportSequence: Number(packet?.seq || 0),
+        },
+        { source: "reconnect" },
+      );
       if (result?.applied === true) appliedCount += 1;
     }
     sessionLogWebSocketClient?.log?.({
@@ -250,13 +248,14 @@ export function useReconnectReplay({
       hydrateActiveSessionBeforeReplay,
       applyTurnLifecycleEnvelope,
       applyTurnLifecycleSnapshot,
-      applyPendingInteraction: (interaction) => applyReconnectInteractionRequest({
-        eventData: interaction,
-        normalizeInteractionRequestPayload,
-        tryAutoResolveInteraction,
-        isInteractionRequestHandled,
-        setPendingInteractionRequest,
-      }),
+      applyPendingInteraction: (interaction) =>
+        applyReconnectInteractionRequest({
+          eventData: interaction,
+          normalizeInteractionRequestPayload,
+          tryAutoResolveInteraction,
+          isInteractionRequestHandled,
+          setPendingInteractionRequest,
+        }),
     });
   }
 
@@ -271,7 +270,8 @@ export function useReconnectReplay({
       presentationMessageId,
       messages: (Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages
-        : []).map(summarizeStateMachineMessage),
+        : []
+      ).map(summarizeStateMachineMessage),
     }));
     const hydrated = await renderActiveSessionBeforeReplay({
       activeSession,
@@ -281,18 +281,18 @@ export function useReconnectReplay({
         replayHydrationPromise = promise;
         reconnectReplayContext.replayHydrationPromise = promise;
       },
-      onError: (error) => logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
-        sessionId: requestedSessionId,
-        error: String(error?.message || error || ""),
-      }),
+      onError: (error) =>
+        logReconnectReplaySystemEvent("reconnectReplay.hydration.failed", {
+          sessionId: requestedSessionId,
+          error: String(error?.message || error || ""),
+        }),
     });
     if (!isCurrentActiveSession(requestedSessionId)) return false;
     const presentationMessage = presentationMessageId
       ? findCanonicalMessageById?.(requestedSessionId, presentationMessageId)
       : null;
-    const protocolViolation = presentationMessageId && !presentationMessage
-      ? "presentation_missing"
-      : "";
+    const protocolViolation =
+      presentationMessageId && !presentationMessage ? "presentation_missing" : "";
     logStateMachineDebug("stateMachine.reconnect.presentationHydration.after", () => ({
       sessionId: requestedSessionId,
       dialogProcessId: String(activeTurnSnapshot?.dialogProcessId || "").trim(),
@@ -305,14 +305,13 @@ export function useReconnectReplay({
       presentationMessage: summarizeStateMachineMessage(presentationMessage),
       messages: (Array.isArray(activeSession.value?.messages)
         ? activeSession.value.messages
-        : []).map(summarizeStateMachineMessage),
+        : []
+      ).map(summarizeStateMachineMessage),
     }));
     return presentationMessageId ? Boolean(presentationMessage) : hydrated;
   }
 
-  async function reconcileSessionState({
-    sessionId = "",
-  } = {}) {
+  async function reconcileSessionState({ sessionId = "" } = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return false;
     let detailApplied = false;
@@ -320,9 +319,11 @@ export function useReconnectReplay({
       typeof chatList?.fetchSessionDetail === "function" &&
       typeof chatList?.applySessionDetail === "function"
     ) {
-      const detail = await chatList.fetchSessionDetail(normalizedSessionId, {
-        source: "reconnectProtocolReconcile",
-      }).catch(() => null);
+      const detail = await chatList
+        .fetchSessionDetail(normalizedSessionId, {
+          source: "reconnectProtocolReconcile",
+        })
+        .catch(() => null);
       if (detail) {
         chatList.applySessionDetail(detail, {
           scrollToBottom: false,
@@ -354,14 +355,10 @@ export function useReconnectReplay({
   }
 
   function markReconnectSequenceApplied(sequence = 0, identity = {}) {
-    markReconnectSequenceAppliedInConsumer(
-      appliedReconnectSequenceByTurnKey,
-      sequence,
-      {
-        ...identity,
-        appliedEventKindsByTurnKey: appliedReconnectEventKindsByTurnKey,
-      },
-    );
+    markReconnectSequenceAppliedInConsumer(appliedReconnectSequenceByTurnKey, sequence, {
+      ...identity,
+      appliedEventKindsByTurnKey: appliedReconnectEventKindsByTurnKey,
+    });
   }
 
   function findAssistantMessageByDialogProcessId(dialogProcessId = "") {
@@ -458,18 +455,19 @@ export function useReconnectReplay({
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
       isDeletedTurn,
-      onAttachmentLifecycle: (payload) => handleAttachmentLifecycleStreamEvent({
-        data: payload,
-        activeSession,
-        makeViewMessage,
-        logSessionEvent: ({ event, sessionId, dialogProcessId, turnScopeId, data: details }) =>
-          logWorkflowDiagnostics(event, {
-            sessionId,
-            dialogProcessId,
-            turnScopeId,
-            ...(details || {}),
-          }),
-      }),
+      onAttachmentLifecycle: (payload) =>
+        handleAttachmentLifecycleStreamEvent({
+          data: payload,
+          activeSession,
+          makeViewMessage,
+          logSessionEvent: ({ event, sessionId, dialogProcessId, turnScopeId, data: details }) =>
+            logWorkflowDiagnostics(event, {
+              sessionId,
+              dialogProcessId,
+              turnScopeId,
+              ...(details || {}),
+            }),
+        }),
     });
   }
 

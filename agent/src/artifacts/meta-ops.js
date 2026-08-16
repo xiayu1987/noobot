@@ -5,10 +5,7 @@
  */
 
 import { safeStr, safeNum } from "../shared/utils/shared-utils.js";
-import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
+import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -65,7 +62,8 @@ export function projectCanonicalAttachmentIdentities(attachments = [], expectedS
     throw error;
   }
   return attachments.map((attachmentItem) =>
-    projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId));
+    projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId),
+  );
 }
 
 export function canonicalAttachmentIdentityKey(attachmentItem = {}) {
@@ -97,7 +95,9 @@ export function normalizeAttachmentOwnerMeta(attachmentItem = {}) {
 
 export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalizedOwner = null) {
   void normalizedOwner;
-  const explicitTurnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : null;
+  const explicitTurnScope = isPlainObject(attachmentItem?.turnScope)
+    ? attachmentItem.turnScope
+    : null;
   const baseTurnScope = cleanPlainObject(explicitTurnScope) || {};
   const normalized = {
     turnScopeId: safeStr(baseTurnScope.turnScopeId),
@@ -110,11 +110,13 @@ export function normalizeAttachmentTurnScopeMeta(attachmentItem = {}, normalized
 export function attachmentMatchKeys(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return [];
   try {
-    return [canonicalAttachmentIdentityKey({
-      attachmentId: item.attachmentId,
-      sessionId: item.sessionId,
-      attachmentSource: item.attachmentSource,
-    })];
+    return [
+      canonicalAttachmentIdentityKey({
+        attachmentId: item.attachmentId,
+        sessionId: item.sessionId,
+        attachmentSource: item.attachmentSource,
+      }),
+    ];
   } catch {
     // Legacy records must be normalized by the single legacy adapter before
     // they enter a matching path. Access/content fields are never identity.
@@ -125,9 +127,11 @@ export function attachmentMatchKeys(item = {}) {
 export function findMatchingAttachmentMeta(source = {}, candidates = []) {
   const sourceKeys = new Set(attachmentMatchKeys(source));
   if (!sourceKeys.size) return null;
-  return (Array.isArray(candidates) ? candidates : []).find((candidate) =>
-    attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
-  ) || null;
+  return (
+    (Array.isArray(candidates) ? candidates : []).find((candidate) =>
+      attachmentMatchKeys(candidate).some((key) => sourceKeys.has(key)),
+    ) || null
+  );
 }
 
 export function normalizeAttachmentMetas(attachmentMetas = []) {
@@ -148,7 +152,9 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
         relativePath: safeStr(attachmentItem.relativePath),
         sandboxPath: safeStr(attachmentItem.sandboxPath),
         generationSource: safeStr(attachmentItem.generationSource),
-        ...(typeof attachmentItem?.isSandbox === "boolean" ? { isSandbox: attachmentItem.isSandbox } : {}),
+        ...(typeof attachmentItem?.isSandbox === "boolean"
+          ? { isSandbox: attachmentItem.isSandbox }
+          : {}),
       };
       if (!normalized.attachmentId) delete normalized.attachmentId;
       if (!normalized.clientAttachmentId) delete normalized.clientAttachmentId;
@@ -167,9 +173,7 @@ export function normalizeAttachmentMetas(attachmentMetas = []) {
     .filter(Boolean);
 }
 
-export function mapAttachmentRecordsToMetas(
-  records = [],
-) {
+export function mapAttachmentRecordsToMetas(records = []) {
   if (!Array.isArray(records)) throw new TypeError("attachment records must be an array");
   const list = records;
   return list.map((item) => {
@@ -178,8 +182,12 @@ export function mapAttachmentRecordsToMetas(
     const canonicalMeta = normalizeAttachmentMetas([item])[0] || {};
     return {
       attachmentId: safeStr(canonicalMeta.attachmentId),
-      ...(safeStr(canonicalMeta.clientAttachmentId) ? { clientAttachmentId: safeStr(canonicalMeta.clientAttachmentId) } : {}),
-      ...(safeStr(canonicalMeta.contentSha256) ? { contentSha256: safeStr(canonicalMeta.contentSha256) } : {}),
+      ...(safeStr(canonicalMeta.clientAttachmentId)
+        ? { clientAttachmentId: safeStr(canonicalMeta.clientAttachmentId) }
+        : {}),
+      ...(safeStr(canonicalMeta.contentSha256)
+        ? { contentSha256: safeStr(canonicalMeta.contentSha256) }
+        : {}),
       sessionId: canonicalMeta.sessionId,
       attachmentSource: canonicalMeta.attachmentSource,
       name: safeStr(canonicalMeta.name),
@@ -193,7 +201,9 @@ export function mapAttachmentRecordsToMetas(
       transferFilePath: safeStr(item?.transferFilePath),
       generatedByModel: item?.generatedByModel === true,
       generationSource: safeStr(canonicalMeta.generationSource),
-      ...(typeof canonicalMeta?.isSandbox === "boolean" ? { isSandbox: canonicalMeta.isSandbox } : {}),
+      ...(typeof canonicalMeta?.isSandbox === "boolean"
+        ? { isSandbox: canonicalMeta.isSandbox }
+        : {}),
       ...(owner ? { owner } : {}),
       ...(turnScope ? { turnScope } : {}),
       relations: Array.isArray(item?.relations) ? item.relations : [],

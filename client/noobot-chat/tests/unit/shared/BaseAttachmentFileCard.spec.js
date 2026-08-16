@@ -16,22 +16,24 @@ function mountCard(overrides = {}) {
         attachmentSource: "user",
         name: "source.pdf",
         mimeType: "application/pdf",
-        relations: [{
-          relationType: "parsed_result",
-          sourceIdentity: {
-            attachmentId: "source-attachment-id",
-            sessionId: "session-id",
-            attachmentSource: "user",
+        relations: [
+          {
+            relationType: "parsed_result",
+            sourceIdentity: {
+              attachmentId: "source-attachment-id",
+              sessionId: "session-id",
+              attachmentSource: "user",
+            },
+            targetIdentity: {
+              attachmentId: "parsed-attachment-id",
+              sessionId: "session-id",
+              attachmentSource: "model",
+            },
+            name: "source.md",
+            mimeType: "text/markdown",
+            createdAt: "2026-08-16T00:00:00.000Z",
           },
-          targetIdentity: {
-            attachmentId: "parsed-attachment-id",
-            sessionId: "session-id",
-            attachmentSource: "model",
-          },
-          name: "source.md",
-          mimeType: "text/markdown",
-          createdAt: "2026-08-16T00:00:00.000Z",
-        }],
+        ],
       },
       userId: "admin",
       isImageMime: () => false,

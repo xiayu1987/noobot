@@ -3,9 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveAttachmentAccessMeta,
-} from "../../../infrastructure/api/attachments/attachmentAccess.js";
+import { resolveAttachmentAccessMeta } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { mergeAttachments } from "./dialogProcessChain.js";
 import { getMessageTransferAttachments, getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import {

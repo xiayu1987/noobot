@@ -55,12 +55,14 @@ describe("useMessagePreview attachment downloads", () => {
     const attachmentService = createAttachmentService(createBlobResponse);
     const { onDownloadAttachment } = useMessagePreview({ userId: "admin", attachmentService });
 
-    await expect(onDownloadAttachment({
-      name: "missing-id.txt",
-      mimeType: "text/plain",
-      previewUrl: "https://attacker.example/file",
-      downloadUrl: "/api/internal/unrelated",
-    })).rejects.toThrow("invalid_attachment_id");
+    await expect(
+      onDownloadAttachment({
+        name: "missing-id.txt",
+        mimeType: "text/plain",
+        previewUrl: "https://attacker.example/file",
+        downloadUrl: "/api/internal/unrelated",
+      }),
+    ).rejects.toThrow("invalid_attachment_id");
 
     expect(attachmentService.fetchUrl).not.toHaveBeenCalled();
   });
@@ -138,15 +140,25 @@ describe("useMessagePreview attachment downloads", () => {
       name: "report.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       size: 2 * 1024 * 1024,
-      relations: [{
-        relationType: "parsed_result",
-        sourceIdentity: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "upload" },
-        targetIdentity: { attachmentId: "parsed-1", sessionId: "session-1", attachmentSource: "model" },
-        name: "report.md",
-        mimeType: "text/markdown",
-        size: 256,
-        createdAt: "2026-08-16T00:00:00.000Z",
-      }],
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "source-1",
+            sessionId: "session-1",
+            attachmentSource: "upload",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          name: "report.md",
+          mimeType: "text/markdown",
+          size: 256,
+          createdAt: "2026-08-16T00:00:00.000Z",
+        },
+      ],
     };
 
     expect(preview.canPreviewAttachment(attachment)).toBe(false);
@@ -164,7 +176,9 @@ describe("useMessagePreview attachment downloads", () => {
   });
 
   it("source attachment preview delegates office attachments to parsed result preview", async () => {
-    const attachmentService = createAttachmentService(() => createTextResponse("# parsed from office"));
+    const attachmentService = createAttachmentService(() =>
+      createTextResponse("# parsed from office"),
+    );
     const preview = useMessagePreview({ userId: "admin", attachmentService });
 
     await preview.openAttachmentPreview({
@@ -173,14 +187,24 @@ describe("useMessagePreview attachment downloads", () => {
       attachmentSource: "upload",
       name: "report.docx",
       mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      relations: [{
-        relationType: "parsed_result",
-        sourceIdentity: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "upload" },
-        targetIdentity: { attachmentId: "parsed-1", sessionId: "session-1", attachmentSource: "model" },
-        name: "report.md",
-        mimeType: "text/markdown",
-        createdAt: "2026-08-16T00:00:00.000Z",
-      }],
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "source-1",
+            sessionId: "session-1",
+            attachmentSource: "upload",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          name: "report.md",
+          mimeType: "text/markdown",
+          createdAt: "2026-08-16T00:00:00.000Z",
+        },
+      ],
     });
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
@@ -198,14 +222,24 @@ describe("useMessagePreview attachment downloads", () => {
       attachmentId: "source-1",
       sessionId: "session-1",
       attachmentSource: "upload",
-      relations: [{
-        relationType: "parsed_result",
-        sourceIdentity: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "upload" },
-        targetIdentity: { attachmentId: "parsed-1", sessionId: "session-1", attachmentSource: "model" },
-        name: "report.md",
-        mimeType: "text/markdown",
-        createdAt: "2026-08-16T00:00:00.000Z",
-      }],
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "source-1",
+            sessionId: "session-1",
+            attachmentSource: "upload",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-1",
+            sessionId: "session-1",
+            attachmentSource: "model",
+          },
+          name: "report.md",
+          mimeType: "text/markdown",
+          createdAt: "2026-08-16T00:00:00.000Z",
+        },
+      ],
     });
 
     expect(attachmentService.fetchUrl).toHaveBeenCalledWith(
@@ -233,5 +267,4 @@ describe("useMessagePreview attachment downloads", () => {
     expect(preview.attachmentPreviewType.value).toBe("markdown");
     expect(preview.attachmentPreviewTextContent.value).toBe("# parsed payload");
   });
-
 });

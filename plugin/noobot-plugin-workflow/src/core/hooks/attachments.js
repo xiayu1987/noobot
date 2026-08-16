@@ -7,6 +7,8 @@
 import { WORKFLOW_ATTACHMENT_SCOPE } from "../constants.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import {
+  attachmentIdentityKey,
+  parseAttachmentIdentityRef,
   projectAttachmentIdentity,
   mergeAttachmentsByIdentity,
 } from "@noobot/attachment-protocol";
@@ -54,7 +56,9 @@ export function normalizeAttachmentRefs(input = []) {
 }
 
 export function isAllUserAttachmentRef(ref = "") {
-  const normalized = String(ref || "").trim().toLowerCase();
+  const normalized = String(ref || "")
+    .trim()
+    .toLowerCase();
   return WORKFLOW_ATTACHMENT_SCOPE.USER_ALL_TOKENS.includes(normalized);
 }
 
@@ -64,13 +68,18 @@ export function resolveNodeInputAttachments({ ctx = {}, semanticNode = {} } = {}
   const refs = normalizeAttachmentRefs(semanticNode?.attachments || []);
   if (!refs.length) return [];
   if (refs.some(isAllUserAttachmentRef)) return userAttachments;
+  const attachmentsByIdentity = new Map(
+    userAttachments.map((attachment) => [
+      attachmentIdentityKey(projectAttachmentIdentity(attachment)),
+      attachment,
+    ]),
+  );
   const selected = [];
   for (const ref of refs) {
-    const matches = userAttachments.filter((attachment) => (
-      String(attachment?.attachmentId || "").trim() === ref
-    ));
-    if (matches.length > 1) throw new Error(`ambiguous_attachment_id:${ref}`);
-    if (matches.length === 1) selected.push(matches[0]);
+    const identity = parseAttachmentIdentityRef(ref);
+    const attachment = attachmentsByIdentity.get(attachmentIdentityKey(identity));
+    if (!attachment) throw new Error(`workflow_attachment_not_available:${ref}`);
+    selected.push(attachment);
   }
   return mergeAttachments([], selected);
 }
@@ -116,17 +125,21 @@ export function buildWorkflowTransferPayloadFromAttachments({
   intent = {},
   meta = {},
 } = {}) {
-  const metas = (Array.isArray(attachments) ? attachments : [])
-    .filter((item) => item && typeof item === "object" && !Array.isArray(item));
+  const metas = (Array.isArray(attachments) ? attachments : []).filter(
+    (item) => item && typeof item === "object" && !Array.isArray(item),
+  );
   if (!metas.length) return normalizeWorkflowTransferPayload();
-  if (!String(transferId || "").trim() || !String(messageId || "").trim()) throw new Error("workflow transfer identity is required");
-  const refs = metas.map((item, index) => createAttachmentReference({
-    identity: assertTransferAttachmentIdentity(item),
-    role: index === 0 ? "primary" : "secondary",
-    name: item.name,
-    mimeType: item.mimeType,
-    size: Number.isSafeInteger(item.size) && item.size >= 0 ? item.size : undefined,
-  }));
+  if (!String(transferId || "").trim() || !String(messageId || "").trim())
+    throw new Error("workflow transfer identity is required");
+  const refs = metas.map((item, index) =>
+    createAttachmentReference({
+      identity: assertTransferAttachmentIdentity(item),
+      role: index === 0 ? "primary" : "secondary",
+      name: item.name,
+      mimeType: item.mimeType,
+      size: Number.isSafeInteger(item.size) && item.size >= 0 ? item.size : undefined,
+    }),
+  );
   const envelope = createTransferEnvelope({
     transferId: String(transferId).trim(),
     messageId: String(messageId).trim(),
@@ -147,11 +160,7 @@ export function resolveWorkflowTransferAttachmentReferences(payload = {}) {
   const source = transferPayload.transferEnvelopes;
   return source.flatMap((envelope = {}) => {
     assertTransferEnvelope(envelope);
-    const references = envelope?.payload?.mode === "attachment"
-      ? envelope.payload.attachments
-      : [];
+    const references = envelope?.payload?.mode === "attachment" ? envelope.payload.attachments : [];
     return (Array.isArray(references) ? references : []).map((reference) => ({ ...reference }));
   });
 }
-
-

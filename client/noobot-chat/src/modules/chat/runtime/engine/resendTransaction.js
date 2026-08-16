@@ -226,10 +226,12 @@ export function createResendMessageTransaction({
     const originalInputValue = input?.value;
     const sessionId = resolveSessionId(activeSession, activeSessionId);
     const resendTurnScopeId = normalizeTrimmedString(options?.turnScopeId) || createTurnScopeId();
-    const operation = messageOperationStore?.registerOperation(operationSeed({
-      sessionId,
-      turnScopeId: resendTurnScopeId,
-    }));
+    const operation = messageOperationStore?.registerOperation(
+      operationSeed({
+        sessionId,
+        turnScopeId: resendTurnScopeId,
+      }),
+    );
     if (!normalizeTrimmedString(operation?.opId)) {
       throw new TypeError("resend command registration failed: missing_command_id");
     }
@@ -250,9 +252,10 @@ export function createResendMessageTransaction({
     );
     const authoritativeAttachments = dedupeAttachmentMetas(
       userTargetMessage?.attachments || [],
-    ).filter((attachment) => !removedAttachmentKeys.has(
-      attachmentIdentityKey(projectAttachmentIdentity(attachment)),
-    ));
+    ).filter(
+      (attachment) =>
+        !removedAttachmentKeys.has(attachmentIdentityKey(projectAttachmentIdentity(attachment))),
+    );
     const keptAttachments = dedupeAttachmentMetas([
       ...authoritativeAttachments,
       ...(Array.isArray(options?.attachments) ? options.attachments : []),

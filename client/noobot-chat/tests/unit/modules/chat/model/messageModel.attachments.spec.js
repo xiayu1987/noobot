@@ -20,22 +20,24 @@ describe("messageModel attachment normalization", () => {
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             size: 1407731,
             attachmentSource: "user",
-            relations: [{
-              relationType: "parsed_result",
-              sourceIdentity: {
-                attachmentId: "source-a",
-                sessionId: "session-a",
-                attachmentSource: "user",
+            relations: [
+              {
+                relationType: "parsed_result",
+                sourceIdentity: {
+                  attachmentId: "source-a",
+                  sessionId: "session-a",
+                  attachmentSource: "user",
+                },
+                targetIdentity: {
+                  attachmentId: "parsed-a",
+                  sessionId: "session-a",
+                  attachmentSource: "model",
+                },
+                name: "parsed-a.md",
+                mimeType: "text/markdown",
+                createdAt: "2026-01-01T00:00:00.000Z",
               },
-              targetIdentity: {
-                attachmentId: "parsed-a",
-                sessionId: "session-a",
-                attachmentSource: "model",
-              },
-              name: "parsed-a.md",
-              mimeType: "text/markdown",
-              createdAt: "2026-01-01T00:00:00.000Z",
-            }],
+            ],
           },
         ],
       },
@@ -46,14 +48,16 @@ describe("messageModel attachment normalization", () => {
     expect(viewMessage.attachments[0]).toEqual(
       expect.objectContaining({
         attachmentId: "source-a",
-        relations: [expect.objectContaining({
-          relationType: "parsed_result",
-          targetIdentity: {
-            attachmentId: "parsed-a",
-            sessionId: "session-a",
-            attachmentSource: "model",
-          },
-        })],
+        relations: [
+          expect.objectContaining({
+            relationType: "parsed_result",
+            targetIdentity: {
+              attachmentId: "parsed-a",
+              sessionId: "session-a",
+              attachmentSource: "model",
+            },
+          }),
+        ],
       }),
     );
   });

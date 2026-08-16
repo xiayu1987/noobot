@@ -110,13 +110,15 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
         return {
           session: {
             sessionId: "s1",
-            messages: [{
-              messageUid: "sm_scoped_snapshot",
-              role: "assistant",
-              content: "ok",
-              dialogProcessId: "dialog-scoped-snapshot",
-              turnScopeId: "turn-scoped-snapshot",
-            }],
+            messages: [
+              {
+                messageUid: "sm_scoped_snapshot",
+                role: "assistant",
+                content: "ok",
+                dialogProcessId: "dialog-scoped-snapshot",
+                turnScopeId: "turn-scoped-snapshot",
+              },
+            ],
           },
           turnTasks: [{ taskId: "t1" }],
         };

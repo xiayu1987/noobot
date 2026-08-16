@@ -37,7 +37,7 @@ export function parsePersistedAttachmentRecordV1(value) {
     descriptor = parseAttachmentDescriptor(s.descriptor);
   if (!sameAttachmentIdentity(identity, descriptor.identity))
     throw new AttachmentProtocolError("persisted_attachment_identity_mismatch");
-  const relations = s.relations === undefined ? [] : s.relations;
+  const relations = s.relations;
   if (!Array.isArray(relations)) {
     throw new AttachmentProtocolError("invalid_attachment_relations");
   }

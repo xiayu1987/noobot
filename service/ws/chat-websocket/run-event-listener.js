@@ -16,7 +16,10 @@ import {
   parentOwnsChildRunEventData,
 } from "./child-run-events.js";
 import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
-import { createAttachmentLifecycleEvent, projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  createAttachmentLifecycleEvent,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 function assertCanonicalAttachments(attachments = []) {
   const source = Array.isArray(attachments) ? attachments : [];

@@ -70,7 +70,9 @@ export { createSessionMessageUid };
 
 export function normalizeMessageEntity(message = {}, now = () => new Date().toISOString()) {
   const normalizedAttachments = Array.isArray(message?.attachments)
-    ? dedupeAttachmentsByIdentity(message.attachments.map(normalizeSessionAttachment).filter(Boolean))
+    ? dedupeAttachmentsByIdentity(
+        message.attachments.map(normalizeSessionAttachment).filter(Boolean),
+      )
     : [];
   // Provider/runtime IDs may be scoped to one model run. They are retained for
   // streaming correlation, while messageUid is the persistence identity.
