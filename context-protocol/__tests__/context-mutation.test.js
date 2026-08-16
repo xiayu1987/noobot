@@ -12,8 +12,8 @@ import {
   createContextMutation,
   dispatchContextMutation,
   removeContextMessagesByIds,
-} from "../src/mutation/context-mutation.js";
-import { getModelContextRevision } from "../src/assembly/model-context-runtime.js";
+} from "../src/mutation/context.js";
+import { getModelContextRevision } from "../src/assembly/model-runtime.js";
 
 test("model context document excludes runtime capabilities and is JSON serializable", () => {
   const document = createModelContext({

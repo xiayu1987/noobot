@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveAgentContextIdentity } from "./agent-context-identity.js";
+import { resolveAgentContextIdentity } from "./identity.js";
 
 export function getAgentContextIdentity(context = {}) {
   return resolveAgentContextIdentity(context);

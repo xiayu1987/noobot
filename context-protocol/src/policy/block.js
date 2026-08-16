@@ -10,13 +10,13 @@ import {
   resolveMessageRole,
   resolveToolCallId,
   readMessageField,
-} from "./message-policy.js";
-import { isTaskSummaryToolMessage } from "./summary-policy.js";
-import { resolveModelFinalMessages } from "./window-reducer.js";
+} from "./message.js";
+import { isTaskSummaryToolMessage } from "./summary.js";
+import { resolveModelFinalMessages } from "./window.js";
 import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
-} from "../message/message-codec.js";
+} from "../message/codec.js";
 
 function text(value) {
   return String(value || "").trim();

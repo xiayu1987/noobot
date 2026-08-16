@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS } from "./agent-context-schema.js";
+import { REQUIRED_AGENT_CONTEXT_IDENTITY_FIELDS } from "./schema.js";
 
 function text(value) {
   return String(value || "").trim();

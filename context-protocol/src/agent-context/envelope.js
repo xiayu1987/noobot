@@ -8,10 +8,10 @@ import {
   AGENT_CONTEXT_KIND,
   AGENT_CONTEXT_PROTOCOL_VERSION,
   MODEL_CONTEXT_PROTOCOL_VERSION,
-} from "./agent-context-schema.js";
-import { normalizeAgentContextIdentity } from "./agent-context-identity.js";
-import { assertValidAgentContextEnvelope } from "./agent-context-validation.js";
-import { createContextBuildReceipt } from "../assembly/context-build-receipt.js";
+} from "./schema.js";
+import { normalizeAgentContextIdentity } from "./identity.js";
+import { assertValidAgentContextEnvelope } from "./validation.js";
+import { createContextBuildReceipt } from "../assembly/build-receipt.js";
 
 function plainObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DEFAULT_TASK_SUMMARY_TOOL_NAME } from "./summary-policy.js";
+import { DEFAULT_TASK_SUMMARY_TOOL_NAME } from "./summary.js";
 
 export const MAIN_CONTEXT_POLICY = Object.freeze({
   policyVersion: 1,

@@ -9,8 +9,8 @@ import test from "node:test";
 import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
-} from "../src/policy/injected-message-policy.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../src/message/injected-message-types.js";
+} from "../src/policy/injected-message.js";
+import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../src/message/injected-types.js";
 
 test("internal message type uses the context protocol field codec", () => {
   assert.equal(

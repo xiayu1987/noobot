@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyTurnCompletionPolicy } from "../src/policy/turn-completion-policy.js";
+import { applyTurnCompletionPolicy } from "../src/policy/turn-completion.js";
 
 test("turn completion marks eligible model messages and canonical store", () => {
   const messages = [

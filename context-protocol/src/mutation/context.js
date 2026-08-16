@@ -12,13 +12,13 @@ import {
   replaceMessageProjection,
   replaceMessages,
   writeMessageBlocks,
-} from "../message/message-store.js";
+} from "../message/store.js";
 import {
   commitModelContextRevision,
   getModelContextRevision,
   getModelContextRuntime,
-} from "../assembly/model-context-runtime.js";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/agent-context-schema.js";
+} from "../assembly/model-runtime.js";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 
 export const CONTEXT_MUTATION_PROTOCOL_VERSION = 2;
 

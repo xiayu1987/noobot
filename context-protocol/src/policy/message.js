@@ -13,7 +13,7 @@ import {
   recoverContextTaskSummaryToolResult,
   resolveContextToolCallId,
   resolveContextToolCalls,
-} from "../message/message-codec.js";
+} from "../message/codec.js";
 
 function text(value) {
   return String(value || "").trim();

@@ -10,9 +10,9 @@ import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   projectRecoveredMessagesToIdentity,
-} from "../src/policy/snapshot-policy.js";
+} from "../src/policy/snapshot.js";
 import { createModelContext } from "../src/assembly/hook-context.js";
-import { appendMessage } from "../src/message/message-store.js";
+import { appendMessage } from "../src/message/store.js";
 
 const identity = {
   userId: "admin",

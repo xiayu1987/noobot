@@ -10,7 +10,7 @@ import test from "node:test";
 import {
   fingerprintDiagnosticMessages,
   summarizeDiagnosticMessages,
-} from "../src/assembly/context-diagnostics.js";
+} from "../src/assembly/diagnostics.js";
 
 test("context diagnostics records compact role and dialog dimensions", () => {
   const summary = summarizeDiagnosticMessages(

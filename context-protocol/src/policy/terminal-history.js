@@ -10,7 +10,7 @@ import {
   resolveInjectedMessageType,
   resolveMessageDialogProcessId,
   resolveMessageRole,
-} from "./message-policy.js";
+} from "./message.js";
 
 export const TERMINAL_HISTORY_STATUS = Object.freeze({
   USER_STOPPED: "user_stopped",

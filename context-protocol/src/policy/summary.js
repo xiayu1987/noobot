@@ -15,8 +15,8 @@ import {
   resolveMessageId,
   resolveToolCallId,
   shouldMarkCurrentTurnSummarizedByPolicy,
-} from "./message-policy.js";
-import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-message-types.js";
+} from "./message.js";
+import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
 
 export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
 export const DEFAULT_TASK_CHECK_TOOL_NAME = "task_check";
