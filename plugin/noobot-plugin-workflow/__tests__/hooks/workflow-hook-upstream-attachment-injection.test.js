@@ -44,6 +44,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
       mode: "on",
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -157,6 +158,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
       mode: "on",
       parallelNodeExecution: true,
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",

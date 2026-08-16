@@ -9,8 +9,6 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
-import { materializeModelContext } from "@noobot/context-protocol/window-reducer";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -194,58 +192,17 @@ export function normalizeWorkflowSemanticContextMessage(message = {}, locale = "
 }
 
 export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
-  const modelContext = resolveAuthoritativeModelContext(ctx);
-  const fallbackMessages = (() => {
-    const direct = Array.isArray(modelContext?.messages) ? modelContext.messages : [];
-    if (direct.length) return direct;
-    const blocks = modelContext?.messageBlocks;
-    if (blocks) {
-      const system = Array.isArray(blocks.system) ? blocks.system : [];
-      const history = Array.isArray(blocks.history) ? blocks.history : [];
-      const incremental = Array.isArray(blocks.incremental) ? blocks.incremental : [];
-      const conversationSeed = [...history, ...incremental];
-      if (typeof options?.resolveMessageBlock === "function") {
-        try {
-          const resolvedSystem = options.resolveMessageBlock({
-            scope: "system",
-            messages: system,
-            ctx,
-          });
-          const resolvedConversation = options.resolveMessageBlock({
-            scope: "conversation",
-            messages: conversationSeed,
-            ctx,
-          });
-          const normalizedSystem = Array.isArray(resolvedSystem) ? resolvedSystem : system;
-          const normalizedConversation = Array.isArray(resolvedConversation)
-            ? resolvedConversation
-            : conversationSeed;
-          return [...normalizedSystem, ...normalizedConversation];
-        } catch {
-        }
-      }
-      return [...system, ...conversationSeed];
-    }
-    const materialized = materializeModelContext(modelContext);
-    if (materialized.messages.length) return materialized.messages;
-    return [];
-  })();
-  if (typeof options?.resolveModelMessages === "function") {
-    try {
-      const resolved = options.resolveModelMessages({
-        ctx,
-        purpose: WORKFLOW_SEMANTIC.PURPOSE,
-        messages: fallbackMessages,
-      });
-      if (Array.isArray(resolved)) {
-        return resolved
-          .map((item = {}) => normalizeWorkflowSemanticContextMessage(item, locale))
-          .filter((item) => item && String(item.content || "").trim());
-      }
-    } catch {
-    }
+  if (typeof options?.resolveModelMessages !== "function") {
+    throw new TypeError("workflow semantic context requires the authoritative modelContext resolver");
   }
-  return fallbackMessages
+  const resolved = options.resolveModelMessages({
+    ctx,
+    purpose: WORKFLOW_SEMANTIC.PURPOSE,
+  });
+  if (!Array.isArray(resolved)) {
+    throw new TypeError("workflow semantic modelContext resolver must return a message array");
+  }
+  return resolved
     .map((item = {}) => normalizeWorkflowSemanticContextMessage(item, locale))
     .filter((item) => item && String(item.content || "").trim());
 }

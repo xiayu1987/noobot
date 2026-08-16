@@ -17,11 +17,16 @@ import {
 } from "../shared/storage/atomic-file-write.js";
 
 export class StorageService {
-  constructor({ pathResolver, atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS } = {}) {
+  constructor({
+    pathResolver,
+    atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
+    platform = process.platform,
+  } = {}) {
     this.pathResolver = pathResolver;
     this.atomicRenameRetryDelaysMs = Array.isArray(atomicRenameRetryDelaysMs)
       ? atomicRenameRetryDelaysMs
       : ATOMIC_RENAME_RETRY_DELAYS_MS;
+    this.platform = platform;
   }
 
   async exists(filePath = "") {
@@ -67,6 +72,7 @@ export class StorageService {
       rename: fsRename,
       remove: fsRm,
       retryDelaysMs: this.atomicRenameRetryDelaysMs,
+      platform: this.platform,
     });
   }
 }

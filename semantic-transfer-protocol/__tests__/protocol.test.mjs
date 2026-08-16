@@ -103,6 +103,37 @@ test("creates a source reference envelope without persisting an attachment", () 
   assert.equal(validateTransferEnvelope(envelope).ok, true);
 });
 
+test("creates a source reference envelope for a canonical attachment identity", () => {
+  const address = {
+    attachmentId: "attachment-source-1",
+    sessionId: "session-source-1",
+    attachmentSource: "model",
+  };
+  const envelope = sourceReferenceTransfer({
+    transferId: "tr-attachment-source",
+    messageId: "m-attachment-source",
+    identity,
+    direction: "output",
+    reference: { address, name: "result.txt", startLine: 1, endLine: 400 },
+    intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+  });
+  assert.deepEqual(envelope.payload.reference.address, address);
+  assert.equal(validateTransferEnvelope(envelope).ok, true);
+});
+
+test("rejects inferred or incomplete attachment source addresses", () => {
+  assert.throws(() =>
+    sourceReferenceTransfer({
+      transferId: "tr-invalid-source",
+      messageId: "m-invalid-source",
+      identity,
+      direction: "output",
+      reference: { address: { attachmentId: "attachment-source-1" }, name: "result.txt" },
+      intent: { source: "tool", reason: "read_file_source_reference", scenario: "tool", strategy: "tool_output" },
+    }),
+  );
+});
+
 test("decides attachment without fallback when content exceeds limit", () => {
   assert.equal(
     decideTransfer({

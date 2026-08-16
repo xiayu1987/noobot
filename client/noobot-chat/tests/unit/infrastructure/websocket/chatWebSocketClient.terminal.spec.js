@@ -10,6 +10,7 @@ import {
   flushPromises,
   MockWebSocket,
   setupWebSocketTestHooks,
+  streamCommand,
 } from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();
@@ -101,7 +102,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     let resolved = false;
 
     const streamPromise = client
-      .stream({ action: "chat", sessionId: "s-1", turnScopeId: "turn-live" }, onEvent)
+      .stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-live" }), onEvent)
       .then(() => {
         resolved = true;
       });
@@ -114,6 +115,19 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     await vi.advanceTimersByTimeAsync(30);
     await flushPromises();
 
+    expect(resolved).toBe(false);
+
+    const committedTurn = {
+      sessionId: "s-1",
+      turnScopeId: "turn-live",
+      aggregateVersion: 2,
+      userMessage: { messageId: "user-live", role: "user", content: "visible" },
+    };
+    socket.emit("turn_committed", committedTurn);
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_committed",
+      data: committedTurn,
+    });
     expect(resolved).toBe(false);
 
     socket.emit("message", {
@@ -237,7 +251,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     let settled = false;
 
     const streamPromise = client
-      .stream({ action: "chat", turnScopeId: "main-turn", dialogProcessId: "main-dp" }, vi.fn())
+      .stream(streamCommand({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }), vi.fn())
       .then(
         () => {
           settled = true;
@@ -273,7 +287,7 @@ describe("chatWebSocketClient stream terminal semantics and isolation", () => {
     let resolved = false;
 
     const streamPromise = client
-      .stream({ action: "chat", turnScopeId: "main-turn", dialogProcessId: "main-dp" }, vi.fn())
+      .stream(streamCommand({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }), vi.fn())
       .then(() => {
         resolved = true;
       });

@@ -12,6 +12,7 @@
     "test": "node --test __tests__/*.test.mjs"
   },
   "dependencies": {
-    "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol"
+    "@noobot/execution-isolation-protocol": "file:../execution-isolation-protocol",
+    "@noobot/platform-compatibility": "file:../platform-compatibility"
   }
 }

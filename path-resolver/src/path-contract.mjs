@@ -7,10 +7,9 @@ import {
   filePath,
   isAbsolutePathAnyPlatform,
   normalizePathForPlatform,
-  normalizePathPlatform,
   normalizeSlashPath,
-  PATH_PLATFORMS,
 } from "./platform.mjs";
+import { PLATFORM, normalizePlatform } from "@noobot/platform-compatibility/platform";
 
 export const PATH_REF_VIEWS = Object.freeze({
   WORKSPACE: "workspace",
@@ -44,9 +43,9 @@ export const PATH_CAPABILITIES = Object.freeze({
 });
 
 export const PLATFORM_PROTECTED_ROOTS = deepFreeze({
-  [PATH_PLATFORMS.LINUX]: ["/proc", "/sys", "/dev"],
-  [PATH_PLATFORMS.MACOS]: ["/dev"],
-  [PATH_PLATFORMS.WINDOWS]: [],
+  [PLATFORM.LINUX]: ["/proc", "/sys", "/dev"],
+  [PLATFORM.MACOS]: ["/dev"],
+  [PLATFORM.WINDOWS]: [],
 });
 
 function deepFreeze(value) {
@@ -320,7 +319,7 @@ export function resolvePathPolicy(globalConfig = {}, { platform = process.platfo
     ]),
   );
   const configuredRegularUser = configuredRoles.regularUser || configuredRoles.regular_user || {};
-  const executionPlatform = normalizePathPlatform(platform);
+  const executionPlatform = normalizePlatform(platform);
   const platformDefaults = mergePolicy(BUILTIN_PATH_POLICY, {
     roles: {
       superAdmin: {
@@ -410,9 +409,7 @@ export function authorizePathRef({
         capability,
       });
     const candidate = executionPath || pathRef.path;
-    const denied = (hostRule.deniedRoots || []).some((root) =>
-      isPathWithinRoot(root, candidate),
-    );
+    const denied = (hostRule.deniedRoots || []).some((root) => isPathWithinRoot(root, candidate));
     const allowed = (hostRule.allowedRoots || []).some(
       (root) => root === "<host-filesystem>" || isPathWithinRoot(root, candidate),
     );

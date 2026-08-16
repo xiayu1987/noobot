@@ -1,0 +1,465 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+
+import { createSessionServices } from "../../src/session/index.js";
+import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
+import { withTempWorkspace, exists, canonicalMessages } from "./session-repository-boundary.summaries.fixtures.js";
+
+test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-05-14T00:00:00.000Z" },
+    );
+
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "A" });
+    await runtime.sessionCrudService.ensureSession(userId, "A", "");
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: "B",
+      parentSessionId: "A",
+    });
+    await runtime.sessionCrudService.ensureSession(userId, "B", "A");
+
+    const userContentTail = "__USER_CONTENT_COMPLETE_TAIL__";
+    const assistantContentTail = "__ASSISTANT_CONTENT_COMPLETE_TAIL__";
+    const workflowContentTail = "__WORKFLOW_CONTENT_COMPLETE_TAIL__";
+    const longUserContent = `show attachment ${"user-long-content-".repeat(400)}${userContentTail}`;
+    const longAssistantContent = `final answer ${"assistant-long-content-".repeat(400)}${assistantContentTail}`;
+    const longWorkflowContent = `workflow final ${"workflow-long-content-".repeat(400)}${workflowContentTail}`;
+    const workflowTransferEnvelope = {
+      protocol: "noobot.semantic-transfer",
+      version: 2,
+      transferId: "transfer:sm-workflow-final:plugin:workflow-node:output:workflow:result",
+      messageId: "sm-workflow-final",
+      identity: {
+        sessionId: "B",
+        turnScopeId: "turn-workflow",
+        runId: "run-workflow",
+        producer: { type: "plugin", id: "workflow-node" },
+      },
+      direction: "output",
+      payload: {
+        mode: "attachment",
+        attachments: [
+          {
+            identity: { attachmentId: "att-workflow-1", sessionId: "B", attachmentSource: "model" },
+            role: "primary",
+            name: "workflow-result.md",
+            mimeType: "text/markdown",
+            size: 321,
+          },
+        ],
+      },
+      intent: {
+        source: "plugin",
+        reason: "workflow_result",
+        scenario: "harness",
+        strategy: "harness_summary",
+      },
+      meta: { persisted: true },
+    };
+
+    const sessionB = await runtime.repositories.sessionRepository.findById(userId, "B", "A");
+    sessionB.messages = canonicalMessages(
+      [
+        {
+          id: "u1",
+          messageId: "u1",
+          messageUid: "sm-u1",
+          role: "user",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          content: longUserContent,
+          attachments: [{ attachmentId: "att-1", name: "a.txt", mimeType: "text/plain", size: 12 }],
+        },
+        {
+          id: "i1",
+          role: "system",
+          injectedMessage: true,
+          content: "injected secret should not be in summary",
+        },
+        {
+          id: "a1",
+          role: "assistant",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          content: longAssistantContent,
+          activityTimeline: [
+            {
+              eventId: "activity-1",
+              event: "thinking",
+              sequence: 1,
+              sequenceDomain: "message-event",
+              sequenceScopeId: "a1",
+              authority: "authoritative",
+              text: "full thinking",
+            },
+          ],
+          toolTimeline: [
+            {
+              key: "call:call-1",
+              toolCallId: "call-1",
+              status: "completed",
+              call: { eventId: "tool-call-1" },
+              resultEvent: {
+                eventId: "tool-result-1",
+                transferEnvelopes: [],
+              },
+            },
+          ],
+          tool_calls: [
+            { id: "call-1", function: { name: "write_file", arguments: { path: "/tmp/a" } } },
+          ],
+          rawMessages: [{ role: "assistant", content: "raw" }],
+        },
+        {
+          id: "plugin-attachment-assistant",
+          role: "assistant",
+          turnScopeId: "turn-scope-plugin",
+          content: "plugin attachment result",
+          attachments: [
+            {
+              attachmentId: "att-plugin-1",
+              sessionId: "B",
+              attachmentSource: "model",
+              name: "harness-plan-text.txt",
+              mimeType: "text/plain",
+              size: 123,
+              owner: { type: "plugin", id: "harness-plugin" },
+              generationSource: "harness_plan",
+            },
+          ],
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          turnScopeId: "turn-scope-u1",
+          dialogProcessId: "dp-u1",
+          tool_call_id: "call-1",
+          content: JSON.stringify({
+            toolName: "write_file",
+            state: "OK",
+            resolvedPath: "/workspace/u1/project/a.txt",
+            fileName: "a.txt",
+          }),
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          tool_call_id: "call-2",
+          content: "ordinary tool result should not be in summary".repeat(20),
+        },
+        {
+          id: "w1",
+          role: "assistant",
+          type: "workflow",
+          turnScopeId: "turn-scope-workflow",
+          presentationMessageId: "w1",
+          chatPresentation: true,
+          content: longWorkflowContent,
+          activityTimeline: [
+            {
+              eventId: "workflow-activity-1",
+              event: "workflow_semantic_response",
+              sequence: 1,
+              sequenceDomain: "message-event",
+              sequenceScopeId: "w1",
+              authority: "authoritative",
+            },
+          ],
+          pluginMessage: true,
+          pluginMeta: {
+            pluginId: "p1",
+            source: "workflow-plugin",
+            kind: "workflow",
+            phase: "final",
+            nodeName: "Done",
+            internalState: { huge: true },
+            payload: {
+              workflowRunId: "workflow-run-1",
+              semantic: {
+                nodes: [
+                  { id: "start", type: "state", stateType: "start", name: "Start" },
+                  { id: "act", type: "action", name: "Action", task: "Do work" },
+                ],
+                flowtos: [{ from: "start", to: "act", extra: { keep: true } }],
+              },
+              execution: {
+                workflowRunId: "workflow-run-1",
+                instanceId: "workflow-run-1",
+                completed: true,
+                status: "success",
+                nodeAgentRuns: [
+                  {
+                    stepId: "step-act",
+                    nodeDialogId: "dialog-act",
+                    nodeSessionId: "session-act",
+                    stepStatus: "success",
+                    step: { nodeId: "act", nodeName: "Action", type: "action" },
+                    nodeResultTransferEnvelopes: [workflowTransferEnvelope],
+                    nodeResultText: "large node result should be dropped".repeat(80),
+                  },
+                ],
+              },
+              nodeSessions: [
+                {
+                  nodeId: "act",
+                  nodeName: "Action",
+                  dialogId: "dialog-act",
+                  sessionId: "session-act",
+                  stepStatus: "success",
+                  transferEnvelopes: [workflowTransferEnvelope],
+                  nodeResultText: "large node session result should be dropped".repeat(80),
+                },
+              ],
+              diagnostics: { huge: "debug detail should be dropped" },
+            },
+          },
+          transferEnvelopes: [workflowTransferEnvelope],
+        },
+        {
+          id: "u2",
+          role: "user",
+          type: "message",
+          dialogProcessId: "dp-tool-only",
+          content: "run tool only thinking details",
+        },
+        {
+          id: "tool-display-assistant",
+          role: "assistant",
+          type: "message",
+          dialogProcessId: "dp-tool-only",
+          content: "tool only final answer",
+          toolTimeline: [
+            {
+              key: "call:tool-only-1",
+              toolCallId: "tool-only-1",
+              status: "running",
+              call: { eventId: "tool-only-call-1" },
+            },
+            {
+              key: "call:tool-only-2",
+              toolCallId: "tool-only-2",
+              status: "completed",
+              call: { eventId: "tool-only-call-2" },
+              resultEvent: { eventId: "tool-only-result-2" },
+            },
+          ],
+        },
+        {
+          role: "assistant",
+          type: "tool_call",
+          dialogProcessId: "dp-tool-only",
+          tool_calls: [
+            { id: "call-tool-only", function: { name: "search", arguments: { q: "demo" } } },
+          ],
+        },
+        {
+          role: "tool",
+          type: "tool_result",
+          dialogProcessId: "dp-tool-only",
+          tool_call_id: "call-tool-only",
+          content: "tool only result detail should not be in summary",
+        },
+      ],
+      "lightweight_b",
+    );
+    await runtime.repositories.sessionRepository.save(userId, sessionB, "A");
+
+    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      "B",
+      "A",
+    );
+    const summaryFile = path.join(scopeB.sessionDir, "session-summary.json");
+    const persistedSession = await readSessionArtifact({ sessionDir: scopeB.sessionDir });
+    assert.equal(
+      persistedSession.messages.every((item) => "turnScopeId" in item),
+      true,
+    );
+    let summary = JSON.parse(await readFile(summaryFile, "utf8"));
+    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    assert.equal(summary.sessionId, "B");
+    assert.equal(summary.messages.length, 6);
+    assert.equal(
+      summary.messages.every((item) => "turnScopeId" in item),
+      true,
+    );
+    assert.deepEqual(
+      (({ id, messageId, messageUid }) => ({ id, messageId, messageUid }))(summary.messages[0]),
+      { id: "u1", messageId: "u1", messageUid: "sm-u1" },
+    );
+    assert.equal(summary.stats.messageCount, 11);
+    assert.equal(summary.stats.displayMessageCount, 6);
+    assert.equal(summary.stats.injectedMessageCount, 1);
+    assert.equal(summary.stats.thinkingMessageCount, 3);
+    assert.equal(summary.stats.attachmentCount, 3);
+    assert.equal(summary.stats.toolLogCount, 5);
+    assert.equal(summary.stats.displayToolLogCount, 0);
+    assert.equal(summary.stats.hasToolDetails, true);
+    assert.equal("toolLogSummaries" in summary, false);
+    assert.equal(summary.messages.find((item) => item.id === "a1").toolTimeline, undefined);
+    assert.equal(
+      typeof summary.messages.find((item) => item.id === "a1").thinkingDetailRef?.file,
+      "string",
+    );
+    const hydratedSummary = await runtime.repositories.sessionRepository.readSessionDisplaySummary(
+      userId,
+      "B",
+      "A",
+    );
+    const assistantMessage = hydratedSummary.messages.find((item) => item.id === "a1");
+    assert.equal(assistantMessage.toolTimeline.length, 1);
+    assert.equal(assistantMessage.toolTimeline[0].status, "completed");
+    assert.equal("log" in assistantMessage.toolTimeline[0].resultEvent, false);
+    assert.equal(assistantMessage.toolTimeline[0].resultEvent.turnScopeId, undefined);
+    assert.equal("writtenFiles" in assistantMessage.toolTimeline[0].resultEvent, false);
+    assert.equal(
+      JSON.stringify(assistantMessage.toolTimeline).includes("ordinary tool result"),
+      false,
+    );
+
+    const userMessage = summary.messages.find((item) => item.id === "u1");
+    assert.equal(userMessage.turnScopeId, "turn-scope-u1");
+    assert.equal(userMessage.content, longUserContent);
+    assert.equal(userMessage.content.endsWith(userContentTail), true);
+    assert.equal(userMessage.content.includes(`${userContentTail}…`), false);
+    assert.deepEqual(userMessage.attachments, [
+      {
+        attachmentId: "att-1",
+        name: "a.txt",
+        mimeType: "text/plain",
+        size: 12,
+      },
+    ]);
+    assert.equal("id" in userMessage.attachments[0], false);
+    assert.equal("type" in userMessage.attachments[0], false);
+    assert.equal("source" in userMessage.attachments[0], false);
+    assert.equal(assistantMessage.content, longAssistantContent);
+    assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
+    assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
+    assert.equal(assistantMessage.hasThinkingDetails, true);
+    assert.equal(assistantMessage.thinkingDetailCount, 2);
+    assert.equal("realtimeLogs" in assistantMessage, false);
+    assert.equal("completedToolLogs" in assistantMessage, false);
+    assert.equal("rawMessages" in assistantMessage, false);
+    const pluginAttachmentAssistant = summary.messages.find(
+      (item) => item.id === "plugin-attachment-assistant",
+    );
+    assert.deepEqual(pluginAttachmentAssistant.attachments, [
+      {
+        attachmentId: "att-plugin-1",
+        name: "harness-plan-text.txt",
+        mimeType: "text/plain",
+        size: 123,
+        attachmentSource: "model",
+        sessionId: "B",
+        owner: { type: "plugin", id: "harness-plugin" },
+        generationSource: "harness_plan",
+      },
+    ]);
+    assert.equal("id" in pluginAttachmentAssistant.attachments[0], false);
+    assert.equal("type" in pluginAttachmentAssistant.attachments[0], false);
+    assert.equal("source" in pluginAttachmentAssistant.attachments[0], false);
+    const toolOnlyAssistantMessage = summary.messages.find(
+      (item) => item.id === "tool-display-assistant",
+    );
+    assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
+    assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
+    assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 2);
+    assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
+    assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
+    assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);
+    const workflowMessage = summary.messages.find((item) => item.id === "w1");
+    assert.equal(workflowMessage.type, "workflow");
+    assert.equal(workflowMessage.pluginMeta.payload.workflowRunId, "workflow-run-1");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.workflowRunId, "workflow-run-1");
+    assert.equal(workflowMessage.pluginMeta.payload.execution.instanceId, "workflow-run-1");
+    assert.equal(workflowMessage.content, longWorkflowContent);
+    assert.equal(workflowMessage.content.endsWith(workflowContentTail), true);
+    assert.equal(workflowMessage.content.includes(`${workflowContentTail}…`), false);
+    assert.equal(workflowMessage.pluginMeta.source, "workflow-plugin");
+    assert.equal(workflowMessage.pluginMeta.nodeName, "Done");
+    assert.equal("internalState" in workflowMessage.pluginMeta, false);
+    assert.equal(workflowMessage.pluginMeta.payload.execution.completed, true);
+    assert.equal(workflowMessage.pluginMeta.payload.execution.status, "success");
+    assert.equal(
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].stepStatus,
+      "success",
+    );
+    assert.equal(workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].step.nodeId, "act");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].stepStatus, "success");
+    assert.equal(workflowMessage.pluginMeta.payload.nodeSessions[0].nodeId, "act");
+    assert.equal(workflowMessage.pluginMeta.payload.semantic.nodes.length, 2);
+    assert.equal(
+      "nodeResultText" in workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0],
+      false,
+    );
+    assert.equal("nodeResultText" in workflowMessage.pluginMeta.payload.nodeSessions[0], false);
+    assert.equal("diagnostics" in workflowMessage.pluginMeta.payload, false);
+    assert.equal("transferEnvelopes" in workflowMessage, true);
+    assert.equal(Array.isArray(workflowMessage.transferEnvelopes), true);
+    assert.equal(workflowMessage.transferEnvelopes[0].protocol, "noobot.semantic-transfer");
+    assert.equal("filePath" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal(
+      workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+      "att-workflow-1",
+    );
+    assert.equal(
+      workflowMessage.transferEnvelopes[0].payload.attachments[0].identity.sessionId,
+      "B",
+    );
+    assert.equal("files" in workflowMessage.transferEnvelopes[0], false);
+    assert.equal(
+      workflowMessage.pluginMeta.payload.execution.nodeAgentRuns[0].nodeResultTransferEnvelopes[0]
+        .payload.attachments[0].identity.attachmentId,
+      "att-workflow-1",
+    );
+    assert.equal(
+      workflowMessage.pluginMeta.payload.nodeSessions[0].transferEnvelopes[0].payload.attachments[0]
+        .identity.attachmentId,
+      "att-workflow-1",
+    );
+    assert.equal(JSON.stringify(summary).includes("injected secret"), false);
+
+    await writeFile(
+      summaryFile,
+      JSON.stringify({ schemaVersion: 4, sessionId: "B", depth: 2, messages: [] }),
+      "utf8",
+    );
+    await assert.rejects(
+      runtime.sessionCrudService.getSessionDisplayData({ userId, sessionId: "B" }),
+      (error) => error?.code === "SESSION_DISPLAY_SUMMARY_MAINTENANCE_REQUIRED",
+    );
+    const maintenance = await runtime.sessionCrudService.maintainSessionDisplaySummaries({
+      userId,
+    });
+    assert.deepEqual(maintenance.rebuiltSessionIds, ["B"]);
+    const displayData = await runtime.sessionCrudService.getSessionDisplayData({
+      userId,
+      sessionId: "B",
+    });
+    assert.equal(displayData.summary, true);
+    assert.equal(displayData.sessions.length, 1);
+    assert.equal(displayData.sessions[0].depth, 2);
+    assert.equal("toolLogSummaries" in displayData.sessions[0], false);
+    summary = JSON.parse(await readFile(summaryFile, "utf8"));
+    assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
+    assert.equal(summary.sessionId, "B");
+    assert.equal("depth" in summary, false);
+  });
+});

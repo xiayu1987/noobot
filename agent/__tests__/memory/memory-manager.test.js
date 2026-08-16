@@ -265,6 +265,13 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
     calls.slice(0, 2).map((call) => call.request.invocation.flow),
     ["memory.summary", "memory.experience.daily"],
   );
+  for (const call of calls) {
+    assert.deepEqual(
+      call.request.messages.map((message) => message.role),
+      ["system", "user"],
+    );
+    assert.match(call.request.messages[0].content, /memory processor|记忆处理器/i);
+  }
   const longMemoryDoc = await readFile(path.join(userRoot, "memory/long-memory.md"), "utf8");
   assert.match(longMemoryDoc, /使用专用记忆模型/);
   const summaryRoot = path.join(userRoot, "memory/daily_summary");

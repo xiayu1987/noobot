@@ -30,6 +30,23 @@ import {
   resolveWorkflowDialogProcessId,
 } from "../helpers/workflow-hook-session-strategy-helper.js";
 
+function assertSystemBlockPrecedesConversation(messages = []) {
+  const roles = messages.map((message = {}) => String(message?.role || "").trim());
+  const firstConversationIndex = roles.findIndex((role) => role !== "system");
+  const lastSystemIndex = roles.lastIndexOf("system");
+  assert.equal(lastSystemIndex >= 0, true);
+  assert.equal(firstConversationIndex > lastSystemIndex, true);
+}
+
+function resolveTestModelMessages({ ctx = {} } = {}) {
+  const blocks = ctx?.modelContext?.messageBlocks || {};
+  return [
+    ...(Array.isArray(blocks.system) ? blocks.system : []),
+    ...(Array.isArray(blocks.history) ? blocks.history : []),
+    ...(Array.isArray(blocks.incremental) ? blocks.incremental : []),
+  ];
+}
+
 test("workflow semantic planning passes conversation context before current user task", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -42,7 +59,7 @@ test("workflow semantic planning passes conversation context before current user
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
-      resolveModelMessages: ({ messages = [] } = {}) => messages.slice(0, 2),
+      resolveModelMessages: (payload = {}) => resolveTestModelMessages(payload).slice(0, 2),
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
@@ -86,18 +103,28 @@ test("workflow semantic planning passes conversation context before current user
   });
 
   assert.equal(invokerCalls.length, 1);
+  assert.equal(invokerCalls[0]?.prompt, "");
   const semanticMessages = invokerCalls[0]?.messages || [];
-  assert.equal(semanticMessages[0]?.role, "user");
-  assert.equal(semanticMessages[0]?.content, "前文：我要处理报销审批");
-  assert.equal(semanticMessages[1]?.role, "assistant");
-  assert.equal(semanticMessages[1]?.content, "已记录报销审批背景");
+  assertSystemBlockPrecedesConversation(semanticMessages);
+  assert.equal(semanticMessages[0]?.role, "system");
+  assert.equal(semanticMessages[0]?.content, "emit workflow dsl");
+  assert.equal(
+    semanticMessages.filter((message = {}) => message?.content === "emit workflow dsl").length,
+    1,
+  );
+  const historyUserIndex = semanticMessages.findIndex(
+    (message = {}) => message?.content === "前文：我要处理报销审批",
+  );
+  assert.equal(semanticMessages[historyUserIndex]?.role, "user");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.role, "assistant");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.content, "已记录报销审批背景");
   assert.equal(semanticMessages.at(-1)?.role, "user");
   assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请基于前文生成工作流/);
 });
 
 
 
-test("workflow semantic planning falls back to messageBlocks context when ctx.messages is empty", async () => {
+test("workflow semantic planning uses the authoritative resolver when the flat projection is empty", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
   const invokerCalls = [];
@@ -109,11 +136,7 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
-      resolveMessageBlock: ({ scope = "", messages = [] } = {}) => {
-        if (scope === "conversation") return messages.slice(0, 2);
-        return messages;
-      },
-      resolveModelMessages: ({ messages = [] } = {}) => messages,
+      resolveModelMessages: resolveTestModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
@@ -162,12 +185,15 @@ test("workflow semantic planning falls back to messageBlocks context when ctx.me
 
   assert.equal(invokerCalls.length, 1);
   const semanticMessages = invokerCalls[0]?.messages || [];
+  assertSystemBlockPrecedesConversation(semanticMessages);
   assert.equal(semanticMessages[0]?.role, "system");
   assert.equal(semanticMessages[0]?.content, "你是流程专家");
-  assert.equal(semanticMessages[1]?.role, "user");
-  assert.equal(semanticMessages[1]?.content, "背景：这是采购审批流程");
-  assert.equal(semanticMessages[2]?.role, "assistant");
-  assert.equal(semanticMessages[2]?.content, "收到采购审批背景");
+  const historyUserIndex = semanticMessages.findIndex(
+    (message = {}) => message?.content === "背景：这是采购审批流程",
+  );
+  assert.equal(semanticMessages[historyUserIndex]?.role, "user");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.role, "assistant");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.content, "收到采购审批背景");
   assert.equal(semanticMessages.at(-1)?.role, "user");
   assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请根据上下文继续生成工作流/);
 });
@@ -186,6 +212,7 @@ test("workflow semantic planning includes current available tools like harness p
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
@@ -234,6 +261,7 @@ test("workflow semantic planning includes current available tools like harness p
   assert.equal(invokerCalls.length, 1);
   assert.deepEqual(invokerCalls[0]?.toolAllowlist, ["search_docs", "write_file"]);
   const semanticMessages = invokerCalls[0]?.messages || [];
+  assertSystemBlockPrecedesConversation(semanticMessages);
   const availableToolsMessage = semanticMessages.find((item = {}) =>
     String(item?.content || "").includes("当前可用工具"),
   );
@@ -260,6 +288,7 @@ test("workflow semantic planning reads available tools from the canonical agentC
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
@@ -330,6 +359,7 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       mode: "on",
       semanticModel: "semantic-model",
       semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: resolveTestModelMessages,
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
@@ -393,9 +423,12 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
 
   assert.equal(invokerCalls.length, 1);
   const semanticMessages = invokerCalls[0]?.messages || [];
-  assert.equal(semanticMessages[0]?.role, "user");
-  assert.equal(semanticMessages[0]?.content, "历史背景：审批流程包含财务复核");
-  assert.equal(semanticMessages[1]?.role, "assistant");
-  assert.equal(semanticMessages[1]?.content, "已记录财务复核约束");
+  assertSystemBlockPrecedesConversation(semanticMessages);
+  const historyUserIndex = semanticMessages.findIndex(
+    (message = {}) => message?.content === "历史背景：审批流程包含财务复核",
+  );
+  assert.equal(semanticMessages[historyUserIndex]?.role, "user");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.role, "assistant");
+  assert.equal(semanticMessages[historyUserIndex + 1]?.content, "已记录财务复核约束");
   assert.match(String(semanticMessages.at(-1)?.content || ""), /当前用户消息:\n请结合上下文生成工作流/);
 });

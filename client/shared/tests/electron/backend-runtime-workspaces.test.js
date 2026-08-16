@@ -19,6 +19,7 @@ test("desktop backend runtime follows the complete production workspace dependen
     "authoritative-state",
     "context-protocol",
     "agent-config-protocol",
+    "platform-compatibility",
     "execution-isolation-protocol",
     "security-assessment-protocol",
     "service",

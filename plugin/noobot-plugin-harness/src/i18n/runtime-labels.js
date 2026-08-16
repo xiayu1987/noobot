@@ -11,6 +11,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
   [LOCALE.ZH_CN]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[来自harness外部模型输出/{purpose}]",
+    separateModelRelayCapabilityBoundaryNotice:
+      "协议边界：这是 Harness 辅助能力输出，不是任何工具的调用或调用结果；只有 assistant 工具调用及其对应 tool 结果可证明工具已执行。",
     separateModelScriptContentRiskNotice:
       "[风险等级：高：原因：因未按照外部模型输出规范禁止输出脚本内容]",
     reviewHeader: "[Harness-Review]",
@@ -74,7 +76,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     postPlanFollowupRevision:
       "计划修正已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRefinement:
-      "计划细化已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
+      "Harness 内部计划细化能力已完成；这不表示 request_plan_refinement 工具已被调用。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     responsibilityStagePlanning: "规划",
     responsibilityStageRevision: "计划修正",
     responsibilityStageRefinement: "计划细化",
@@ -179,7 +181,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryTextNextActionRules:
       "文本场景的 [NEXT_EXECUTION_SUGGESTION] 必须且只允许输出 1 个 [NEXT_ACTION] 文本块；action 只能是 consume、extract、draft、expand、revise、verify、ask_user、final 之一；target、batch_mode、batch_scope、output_goal、coverage_check、result_state、artifact_path、reason 按字段含义填写；blocking 根据统一场景策略填写 true|false。",
     guidanceSummaryRules:
-      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出下一步可执行建议。",
+      "要求：必须参考 system 中的【当前完整计划清单】作为当前完整计划，并参考【上一次小结】（若存在）累积更新；本轮小结必须整合上一轮小结结果：仍有效的已完成事项、进行中事项、风险、待办和证据都要保留或更新，不得遗漏；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；本轮小结要基于上一轮小结、详细信息和当前完整计划清单生成；SUMMARY_OVERVIEW 保持简短、面向主流程决策；每条小结必须包含 plan 与 evidence，evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；用 [status=todo] 输出待处理风险点（写清影响与建议缓解动作）；SUMMARY_DETAIL 写充分细节；SUMMARY_DETAIL 后必须输出 [NEXT_EXECUTION_SUGGESTION]，集中给出 checkpoint 后主流程任务的唯一下一步动作，不是小结辅助流程自身的下一步；只要仍有可执行的 in-progress 或 todo，必须指向最高优先级未完成项，禁止仅因本次小结已经生成就填写 final。",
     previousSummaryContextHeader: "【上一次小结】",
     checklistTaskDefaultNameTemplate: "任务 {index}",
     planChecklistContextHeader: "【当前完整计划清单】",
@@ -272,6 +274,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
     separateModelRelayPrefix: "[Relay from harness external model/{purpose}]",
+    separateModelRelayCapabilityBoundaryNotice:
+      "Protocol boundary: this is Harness auxiliary-capability output, not a tool call or tool result; only an assistant tool call and its matching tool result prove that a tool ran.",
     separateModelScriptContentRiskNotice:
       "[Risk level: high: reason: script content was output contrary to the external model output specification]",
     reviewHeader: "[Harness-Review]",
@@ -335,7 +339,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     postPlanFollowupRevision:
       "Plan revision is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     postPlanFollowupRefinement:
-      "Plan refinement is done. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
+      "The Harness internal plan-refinement capability is complete; this does not mean the request_plan_refinement tool was called. Prefer continuing with tools in plan order; for complex tasks, avoid trying to finish everything in one pass and proceed in planned batches; follow the unified scenario policy below for how to proceed.",
     responsibilityStagePlanning: "planning",
     responsibilityStageRevision: "plan revision",
     responsibilityStageRefinement: "plan refinement",
@@ -437,7 +441,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceSummaryTextNextActionRules:
       "For text scenarios, [NEXT_EXECUTION_SUGGESTION] must contain exactly one [NEXT_ACTION] text block; action must be one of consume, extract, draft, expand, revise, verify, ask_user, final; target, batch_mode, batch_scope, output_goal, coverage_check, result_state, artifact_path, and reason must follow the field meanings; set blocking=true|false according to the unified scenario policy.",
     guidanceSummaryRules:
-      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with centralized actionable next execution suggestions.",
+      "Rules: use the [Current Complete Plan Checklist] system context as the current complete plan, and use [Previous Summary] when present for cumulative updates; this summary must integrate the previous summary results: keep or update all still-valid completed items, in-progress items, risks, todos, and evidence without omissions; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; produce this summary based on the previous summary, detailed notes, and the current complete plan checklist; SUMMARY_OVERVIEW should be short and action-oriented for main agent context; every summary item must include plan and evidence; evidence must come from context, tool results, or model final output and must not be fabricated; include pending risk points with [status=todo] (plus impact and mitigation hints); SUMMARY_DETAIL contains detailed evidence and can be longer; after SUMMARY_DETAIL, output [NEXT_EXECUTION_SUGGESTION] with exactly one next action for the main task after the checkpoint, not for the summary auxiliary flow itself; whenever an executable in-progress or todo item remains, point to the highest-priority unfinished item and never use final merely because this summary was generated.",
     previousSummaryContextHeader: "[Previous Summary]",
     checklistTaskDefaultNameTemplate: "Task {index}",
     planChecklistContextHeader: "[Current Complete Plan Checklist]",

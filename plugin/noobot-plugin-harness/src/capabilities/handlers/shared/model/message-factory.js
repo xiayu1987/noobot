@@ -6,6 +6,10 @@
 import { extractRawTextContent } from "../message/utils.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 import {
+  buildDualLaneModelContext,
+  MODEL_CONTEXT_LANE,
+} from "@noobot/context-protocol/dual-lane-context";
+import {
   buildContentOriginKey,
   MESSAGE_ORIGIN_KIND,
   markMessageAsContext,
@@ -208,28 +212,27 @@ export function buildCapabilityModelMessages({
     .filter((item) => item && String(item.content || "").trim());
   const constraintMessages = normalizeTextList(constraints)
     .map((content) => markProtocolMessage({ role: "system", content }, "constraint"));
-  const agentSystemMessages = flattenedAgentMessages.filter((item = {}) =>
-    isSystemLikeRole(item.role),
-  );
-  const agentConversationMessages = flattenedAgentMessages.filter((item = {}) =>
-    !isSystemLikeRole(item.role),
-  );
-  const systemMessages = [...agentSystemMessages, ...constraintMessages];
-  const conversationMessages = [...agentConversationMessages];
+  const protocolSystemMessages = [...constraintMessages];
+  const taskMessages = [];
   const resolvedTaskRole = normalizeModelMessageRole(taskRole, "user");
   const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
-    const target = isSystemLikeRole(resolvedTaskRole) ? systemMessages : conversationMessages;
+    const target = isSystemLikeRole(resolvedTaskRole) ? protocolSystemMessages : taskMessages;
     target.push(markProtocolMessage({ role: resolvedTaskRole, content: normalizedTask }, "task"));
   }
   for (const content of normalizedPostTaskSystemMessages) {
-    systemMessages.push(markProtocolMessage({ role: "system", content }, "post-system"));
+    protocolSystemMessages.push(markProtocolMessage({ role: "system", content }, "post-system"));
   }
   for (const content of normalizedPostTaskMessages) {
-    const target = isSystemLikeRole(resolvedPostTaskRole) ? systemMessages : conversationMessages;
+    const target = isSystemLikeRole(resolvedPostTaskRole) ? protocolSystemMessages : taskMessages;
     target.push(markProtocolMessage({ role: resolvedPostTaskRole, content }, "post-message"));
   }
-  return [...systemMessages, ...conversationMessages];
+  return buildDualLaneModelContext({
+    lane: MODEL_CONTEXT_LANE.AUXILIARY,
+    sourceMessages: flattenedAgentMessages,
+    protocolSystemMessages,
+    taskMessages,
+  }).messages;
 }
 
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
+import { getAgentCommandIdentity } from "@noobot/agent-transport-protocol";
 
 const TERMINAL_CHANNEL_STATES = Object.freeze([
   "user_stopped",
@@ -35,10 +36,14 @@ export function isTerminalChannelStateEvent(event = "", data = {}) {
 }
 
 export function isEventForStreamScope(data = {}, payload = {}) {
-  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
+  const identity = getAgentCommandIdentity(payload);
+  const payloadSessionId = normalizeTrimmedString(identity.sessionId);
+  const eventSessionId = normalizeTrimmedString(data?.sessionId);
+  if (payloadSessionId && eventSessionId && payloadSessionId !== eventSessionId) return false;
+  const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
   if (payloadTurnScopeId && eventTurnScopeId && payloadTurnScopeId !== eventTurnScopeId) return false;
-  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
+  const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
   const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
   return !(
     payloadDialogProcessId &&
@@ -49,8 +54,9 @@ export function isEventForStreamScope(data = {}, payload = {}) {
 
 export function canSettleStreamForEvent(data = {}, payload = {}) {
   if (!isEventForStreamScope(data, payload)) return false;
-  const payloadTurnScopeId = normalizeTrimmedString(payload?.turnScopeId);
-  const payloadDialogProcessId = normalizeTrimmedString(payload?.dialogProcessId);
+  const identity = getAgentCommandIdentity(payload);
+  const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
+  const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
   if (!payloadTurnScopeId && !payloadDialogProcessId) return true;
   return Boolean(
     normalizeTrimmedString(data?.turnScopeId) ||

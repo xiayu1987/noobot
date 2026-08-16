@@ -118,3 +118,45 @@ test("read_file: 大文件结果由 semantic-transfer 返回源文件引用而�
   assert.equal("files" in envelope, false);
   assert.equal("storage" in envelope, false);
 });
+
+test("read_file: 附件大结果保留完整附件身份作为唯一源引用", async () => {
+  const attachmentIdentity = {
+    attachmentId: "attachment-overflow-source",
+    sessionId: "s-1",
+    attachmentSource: "model",
+  };
+  const transferred = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_result_text",
+    call: { id: "tool-call-read-attachment-overflow", name: "read_file" },
+    toolResultText: JSON.stringify({
+      toolName: "read_file",
+      ok: true,
+      path: { view: "attachment", identity: attachmentIdentity },
+      fileName: "acceptance-result.txt",
+      startLine: 1,
+      endLine: 400,
+      totalLines: 800,
+      content: "y".repeat(LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars + 1),
+    }),
+    runtime: { userConfig: { tools: { maxToolResultChars: 512 } } },
+    agentContext: null,
+    sessionId: "s-1",
+    identity: {
+      transferId: "transfer:m-attachment:tool:tool-call-read-attachment-overflow:output:tool_result_text",
+      messageId: "m-attachment",
+      sessionId: "s-1",
+      turnScopeId: "t-1",
+      runId: "r-1",
+      producer: { type: "tool", id: "tool-call-read-attachment-overflow" },
+    },
+  });
+  const result = parseToolResult(transferred.toolResultText);
+  assert.equal(result.ok, true);
+  assert.equal(result.overflowed, true);
+  assert.deepEqual(
+    result.transferEnvelopes?.[0]?.payload?.reference?.address,
+    attachmentIdentity,
+  );
+  assert.equal(result.transferEnvelopes?.[0]?.payload?.mode, "source_reference");
+});

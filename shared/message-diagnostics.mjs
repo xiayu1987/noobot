@@ -51,21 +51,42 @@ function stableValue(value) {
   );
 }
 
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined);
+}
+
 function providerMessageValue(message = {}) {
   const dictionary = typeof message?.toDict === "function" ? message.toDict() : null;
-  if (dictionary?.data && typeof dictionary.data === "object") {
-    const { response_metadata: omittedResponseMetadata, ...data } = dictionary.data;
-    void omittedResponseMetadata;
-    return { type: dictionary.type, data };
-  }
-  const {
-    response_metadata: omittedResponseMetadata,
-    responseMetadata: omittedResponseMetadataCamel,
-    ...providerFields
-  } = message && typeof message === "object" ? message : {};
-  void omittedResponseMetadata;
-  void omittedResponseMetadataCamel;
-  return providerFields;
+  const dictionaryData = dictionary?.data && typeof dictionary.data === "object"
+    ? dictionary.data
+    : {};
+  const role = resolveDiagnosticRole(message) || String(dictionary?.type || "").trim();
+  const content = firstDefined(
+    message?.content,
+    message?.lc_kwargs?.content,
+    dictionaryData.content,
+    "",
+  );
+  const name = firstDefined(message?.name, message?.lc_kwargs?.name, dictionaryData.name);
+  const toolCalls = firstDefined(
+    message?.tool_calls,
+    message?.lc_kwargs?.tool_calls,
+    dictionaryData.tool_calls,
+    message?.additional_kwargs?.tool_calls,
+    message?.lc_kwargs?.additional_kwargs?.tool_calls,
+  );
+  const toolCallId = firstDefined(
+    message?.tool_call_id,
+    message?.lc_kwargs?.tool_call_id,
+    dictionaryData.tool_call_id,
+  );
+  return {
+    role,
+    content,
+    ...(name !== undefined ? { name } : {}),
+    ...(toolCalls !== undefined ? { tool_calls: toolCalls } : {}),
+    ...(toolCallId !== undefined ? { tool_call_id: toolCallId } : {}),
+  };
 }
 
 function sha256(value) {
@@ -79,7 +100,7 @@ export function fingerprintDiagnosticMessages(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
   const fingerprints = source.map((message) => sha256(providerMessageValue(message)));
   return {
-    fingerprintProtocolVersion: 1,
+    fingerprintProtocolVersion: 2,
     fingerprints,
     sequenceHash: sha256(fingerprints),
   };
@@ -146,7 +167,7 @@ export function resolveDiagnosticRole(message = {}) {
   return type;
 }
 
-function messageTraceItem(message = {}, index = 0, block = "") {
+function messageEvidenceItem(message = {}, index = 0, block = "") {
   const content = resolveContent(message);
   return {
     index,
@@ -168,6 +189,13 @@ function messageTraceItem(message = {}, index = 0, block = "") {
       undefined,
     contentLength: content.length,
     contentHash: textHash(content),
+  };
+}
+
+function messageTraceItem(message = {}, index = 0, block = "") {
+  const content = resolveContent(message);
+  return {
+    ...messageEvidenceItem(message, index, block),
     contentPreview: content.replace(/\s+/g, " ").slice(0, DEFAULT_CONTENT_CHARS),
   };
 }
@@ -182,6 +210,7 @@ export function summarizeDiagnosticMessages(
     count: source.length,
     ...summarizeMessageDimensions(source),
     ...fingerprintDiagnosticMessages(source),
+    evidence: source.map((message, index) => messageEvidenceItem(message, index, block)),
     preview: source
       .slice(0, safeLimit)
       .map((message, index) => messageTraceItem(message, index, block)),

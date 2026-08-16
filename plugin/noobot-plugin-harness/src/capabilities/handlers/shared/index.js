@@ -57,11 +57,9 @@ export {
 } from "./tool-utils.js";
 
 export {
-  cleanupInternalForcedMessages,
   extractRawTextContent,
   isMessageSummarized,
   safeJsonStringify,
-  sanitizeInternalMessages,
 } from "./message/utils.js";
 
 export {

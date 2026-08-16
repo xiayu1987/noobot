@@ -65,7 +65,6 @@ test("execute_script: ordinary users require sandbox isolation", async () => {
   assert.match(sandboxTools.find((item) => item?.name === "execute_script").description, /bash/);
 });
 import {
-  decodeCommandOutput,
   run,
 } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
@@ -83,18 +82,6 @@ const TEST_TRANSFER_IDENTITY = Object.freeze({
 function invokeScript(tool, args) {
   return tool.invoke(args, { configurable: { transferIdentity: TEST_TRANSFER_IDENTITY } });
 }
-
-test("execute_script: Windows localized shell output is normalized to UTF-8", () => {
-  const gbkText = Buffer.from([0xb2, 0xbb, 0xca, 0xc7]);
-  assert.equal(
-    decodeCommandOutput(gbkText, { platform: "win32", locale: "zh-CN" }),
-    "不是",
-  );
-  assert.equal(
-    decodeCommandOutput(Buffer.from("中文", "utf8"), { platform: "win32", locale: "zh-CN" }),
-    "中文",
-  );
-});
 
 test("execute_script: command 超过 semantic-transfer 阈值时保存附件并直接提示", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-guard-"));

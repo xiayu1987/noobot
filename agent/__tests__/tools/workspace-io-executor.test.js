@@ -19,6 +19,7 @@ test("workspace atomic writes use the canonical transient rename policy", async 
   const executor = createWorkspaceIoExecutor({
     executionPolicy: workspacePolicy(),
     atomicRenameRetryDelaysMs: [1],
+    platform: "win32",
     fileSystem: {
       mkdir: async () => {},
       writeFile: async (filePath, content) => files.set(filePath, content),
@@ -45,6 +46,36 @@ test("workspace atomic writes use the canonical transient rename policy", async 
   assert.equal(files.get("C:/workspace/project/a.txt"), "patched-line\n");
   assert.deepEqual(removed, []);
 });
+
+for (const platform of ["linux", "darwin"]) {
+  test(`workspace atomic writes do not retry permission errors on ${platform}`, async () => {
+    let renameAttempts = 0;
+    const removed = [];
+    const executor = createWorkspaceIoExecutor({
+      executionPolicy: workspacePolicy(),
+      atomicRenameRetryDelaysMs: [1, 1],
+      platform,
+      fileSystem: {
+        mkdir: async () => {},
+        writeFile: async () => {},
+        rename: async () => {
+          renameAttempts += 1;
+          const error = new Error("permission denied");
+          error.code = "EACCES";
+          throw error;
+        },
+        rm: async (filePath) => removed.push(filePath),
+      },
+    });
+
+    await assert.rejects(
+      () => executor.writeText("/workspace/project/a.txt", "content"),
+      /permission denied/,
+    );
+    assert.equal(renameAttempts, 1);
+    assert.equal(removed.length, 1);
+  });
+}
 
 test("workspace atomic writes fail immediately for non-transient rename errors", async () => {
   let renameAttempts = 0;

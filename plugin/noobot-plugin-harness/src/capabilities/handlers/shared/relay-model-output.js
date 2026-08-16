@@ -35,6 +35,10 @@ export function relaySeparateModelOutputAsUserMessage(
   const prefix = translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, {
     purpose: String(purpose || "").trim() || "unknown",
   });
+  const capabilityBoundaryNotice = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.RELAY.CAPABILITY_BOUNDARY_NOTICE,
+  );
   const riskNotice = containsExecutableScriptText(text)
     ? ` ${translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SCRIPT_CONTENT_RISK_NOTICE)}`
     : "";
@@ -44,7 +48,7 @@ export function relaySeparateModelOutputAsUserMessage(
   if (!messages) return false;
   const injection = injectMessageWithPolicy(ctx, {
     role: "user",
-    content: `${prefix}${riskNotice}\n${text}`,
+    content: `${prefix}${riskNotice}\n${capabilityBoundaryNotice}\n${text}`,
     injectedMessageType: `separate_model_relay:${String(purpose || "unknown").trim() || "unknown"}`,
     purpose: String(purpose || "").trim() || undefined,
     pluginFlow: normalizedPluginFlow,

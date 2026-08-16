@@ -60,6 +60,7 @@
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",
     "@noobot/model-protocol": "file:../model-protocol",
     "@noobot/model-runtime": "file:../model-runtime",
+    "@noobot/platform-compatibility": "file:../platform-compatibility",
     "@noobot/hook-protocol": "file:../hook-protocol",
     "@noobot/runtime-events": "file:../runtime-events",
     "@noobot/sanitize": "file:../sanitize",

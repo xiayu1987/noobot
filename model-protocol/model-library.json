@@ -10,6 +10,9 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "low",
       "description": "OpenAI flagship model for complex reasoning, coding, and agent workflows",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]

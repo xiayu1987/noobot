@@ -3,8 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import fs from "node:fs";
+import {
+  resolveCommandShimExecutable,
+  terminateProcessTree,
+} from "@noobot/platform-compatibility/process";
 import { clientFilePath as path } from "../../path-resolver.js";
 import {
   buildDependencyRuntimeEnv,
@@ -36,7 +40,7 @@ export function createDesktopServiceManager({
   requestDependencySetup,
   inspectDependencies = async () => [],
   spawnProcess = spawn,
-  execFileProcess = execFile,
+  terminateProcess = terminateProcessTree,
   fetchImpl = fetch,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
@@ -46,19 +50,7 @@ export function createDesktopServiceManager({
 
   function stopManagedChildProcess(child) {
     if (!child) return;
-    const pid = Number(child.pid || 0);
-    if (process.platform === "win32" && Number.isInteger(pid) && pid > 0) {
-      execFileProcess(
-        "taskkill",
-        ["/PID", String(pid), "/T", "/F"],
-        {
-          windowsHide: true,
-        },
-        () => {},
-      );
-      return;
-    }
-    child.kill("SIGTERM");
+    void terminateProcess(child, "SIGTERM", { processGroup: false });
   }
 
   function syncPackagedProxyConfig(proxyName) {
@@ -194,9 +186,7 @@ export function createDesktopServiceManager({
     const isPackaged = app.isPackaged;
     const command = isPackaged
       ? process.execPath
-      : process.platform === "win32"
-        ? "npm.cmd"
-        : "npm";
+      : resolveCommandShimExecutable("npm", process.platform);
     const cwd = isPackaged ? packagedBackendRoot : repoRoot;
     const userDataPath = app.getPath("userData");
     const configDir = process.env.NOOBOT_CONFIG_DIR || path.join(userDataPath, "config");
@@ -287,9 +277,7 @@ export function createDesktopServiceManager({
     const isPackaged = app.isPackaged;
     const command = isPackaged
       ? process.execPath
-      : process.platform === "win32"
-        ? "npm.cmd"
-        : "npm";
+      : resolveCommandShimExecutable("npm", process.platform);
     const args = isPackaged
       ? [path.join(packagedBackendRoot, "agent-proxy", "agent-proxy.js")]
       : ["run", "-w", "agent-proxy", "start"];

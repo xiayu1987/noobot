@@ -94,6 +94,12 @@ test('masks structured and contextual secrets but leaves paths and ordinary hash
   assert.match(output, /path=\/home\/admin\/private\/project/);
 });
 
+test('does not interpret digit runs inside protocol hashes as bank cards', async () => {
+  const contentHash = 'sha256:392683007315ab09b24c88f3635a306244e2f69ba8fa882103543b12a3165b34';
+  const output = await sanitizeToolResultText(JSON.stringify({ contentHash }));
+  assert.equal(JSON.parse(output).contentHash, contentHash);
+});
+
 test('masks short bearer tokens without changing content shape', () => {
   const input = 'authorization=Bearer test.jwt.token';
   const output = sanitizeSecrets(input);

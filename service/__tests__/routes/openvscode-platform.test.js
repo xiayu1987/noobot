@@ -6,14 +6,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  createOpenVSCodeService,
-  taskkillProcessTreeBestEffort,
-} from "../../services/openvscode-service.js";
-import {
-  DEFAULT_HOST,
-  IDE_TOKEN_QUERY_KEY,
-} from "../../services/openvscode/config.js";
+import { createOpenVSCodeService } from "../../services/openvscode-service.js";
+import { DEFAULT_HOST, IDE_TOKEN_QUERY_KEY } from "../../services/openvscode/config.js";
 
 test("openvscode: local defaults remain valid after service module extraction", () => {
   assert.equal(DEFAULT_HOST, "127.0.0.1");
@@ -25,35 +19,4 @@ test("openvscode: extracted proxy resolves instances through the service registr
 
   assert.equal(service.canHandleRequest("/ide/missing/"), true);
   assert.equal(await service.resolveInstanceFromUrl("/ide/missing/?tkn=test"), null);
-});
-
-test("openvscode: Windows process tree cleanup uses taskkill with numeric pid", () => {
-  const calls = [];
-  const ok = taskkillProcessTreeBestEffort("1234", {
-    execFileImpl: (command, args, options, callback) => {
-      calls.push({ command, args, options });
-      callback?.(null, "", "");
-    },
-  });
-
-  assert.equal(ok, true);
-  assert.deepEqual(calls, [
-    {
-      command: "taskkill",
-      args: ["/PID", "1234", "/T", "/F"],
-      options: { windowsHide: true },
-    },
-  ]);
-});
-
-test("openvscode: Windows process tree cleanup rejects invalid pids", () => {
-  const calls = [];
-  const ok = taskkillProcessTreeBestEffort("1234 & calc", {
-    execFileImpl: (...args) => {
-      calls.push(args);
-    },
-  });
-
-  assert.equal(ok, false);
-  assert.deepEqual(calls, []);
 });

@@ -382,6 +382,7 @@ test("workflow hook owns the turn and never falls back to main agent when semant
     options: {
       enabled: true,
       mode: "on",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => {
         throw new Error("semantic explode");
       },
@@ -419,6 +420,7 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     options: {
       enabled: true,
       mode: "on",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",

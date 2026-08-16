@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  resolveModelFinalMessages,
-} from "@noobot/context-protocol/window-reducer";
+  buildDualLaneModelContext,
+  MODEL_CONTEXT_LANE,
+} from "@noobot/context-protocol/dual-lane-context";
 import { normalizeMessageForModelRuntime } from "./session-execution-engine-utils.js";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import { summarizeDiagnosticBlocks, summarizeDiagnosticMessages } from "@noobot/context-protocol/context-diagnostics";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 const PLUGIN_DEEP_MERGE_KEYS = new Set([
@@ -19,29 +19,6 @@ const PLUGIN_DEEP_MERGE_KEYS = new Set([
   "acceptance",
   "review",
 ]);
-
-function requireAuthoritativeMessageBlocks(ctx = {}) {
-  const modelContext = ctx?.modelContext;
-  if (Number(modelContext?.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
-    throw new Error(`resolveModelMessages requires modelContext protocolVersion=${MODEL_CONTEXT_PROTOCOL_VERSION}`);
-  }
-  const blocks = modelContext?.messageBlocks;
-  if (!blocks || typeof blocks !== "object" || Array.isArray(blocks)) {
-    throw new Error("resolveModelMessages requires authoritative modelContext.messageBlocks");
-  }
-  return blocks;
-}
-
-function resolveBlockMessages(blocks = null, blockName = "") {
-  if (Array.isArray(blocks?.[blockName])) return blocks[blockName];
-  return [];
-}
-
-function normalizeMessagesForModelRuntime(messages = []) {
-  return messages
-    .map((item) => normalizeMessageForModelRuntime(item))
-    .filter(Boolean);
-}
 
 export class ModelMessageRuntimeHelpers {
   constructor({ session = null } = {}) {
@@ -76,17 +53,16 @@ export class ModelMessageRuntimeHelpers {
   createResolveModelMessages({ pluginOptions = {} } = {}) {
     void pluginOptions;
     return ({ ctx = {}, purpose = "" } = {}) => {
-      const blocks = requireAuthoritativeMessageBlocks(ctx);
-      const resolved = resolveModelFinalMessages({
-        systemMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "system")),
-        historyMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "history")),
-        incrementalMessages: normalizeMessagesForModelRuntime(resolveBlockMessages(blocks, "incremental")),
-        historyLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
+      const resolved = buildDualLaneModelContext({
+        lane: MODEL_CONTEXT_LANE.PRIMARY,
+        modelContext: ctx?.modelContext,
+        projectPrimaryMessage: normalizeMessageForModelRuntime,
+        primaryHistoryLimit: TURN_THRESHOLDS.session.mainModelHistoryRoundLimit,
       });
       emitModelContextTrace(ctx?.agentContext?.bindings?.runtime || null, "resolve_model_messages", {
         purpose: String(purpose || "").trim(),
         blockSource: "ctx.modelContext.messageBlocks",
-        blocks: summarizeDiagnosticBlocks(blocks),
+        blocks: summarizeDiagnosticBlocks(ctx.modelContext.messageBlocks),
         resolvedMessages: summarizeDiagnosticMessages(resolved.messages),
       });
       return resolved.messages;

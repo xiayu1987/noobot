@@ -5,7 +5,11 @@
  */
 import { flushAllManifests, flushAllJsonlBuffers } from "../store/store.js";
 import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
-import { injectPrompt, traceHook } from "../tracing/buffer-manager.js";
+import {
+  injectPrompt,
+  lockPolicyPromptForMainFlow,
+  traceHook,
+} from "../tracing/buffer-manager.js";
 import { safeError } from "../data/record-builders.js";
 import {
   emitHarnessHookProgress,
@@ -97,6 +101,9 @@ export function createRegisterHarnessHooks(deps = {}) {
                   globalBootstrap,
                 },
               });
+              if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
+                lockPolicyPromptForMainFlow(ctx);
+              }
               emitHarnessHookProgressFn(ctx, "capability_runtime_done", { point });
 
               if (

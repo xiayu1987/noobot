@@ -27,6 +27,7 @@ function resolveRepoRoot() {
 
 const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [
+  "platform-compatibility",
   "agent",
   "service",
   "agent-proxy",
@@ -89,6 +90,7 @@ const PACKAGE_SCRIPT_RULES = [
   },
 ];
 const SOURCE_ALLOWLIST = new Map([
+  ["platform-compatibility/src/platform.js", new Map([["bash-shell", [/^BASH: "bash",$/]]])],
   [
     "agent/src/tools/execution/script-tool/process-exec.js",
     new Map([
@@ -99,16 +101,8 @@ const SOURCE_ALLOWLIST = new Map([
     ]),
   ],
   [
-    "service/services/openvscode/process.js",
-    new Map([["signal-kill", [/process\.kill\(pid, "SIG(?:TERM|KILL)"\)/]]]),
-  ],
-  [
     "client/noobot-chat/src/modules/chat/composables/message/useMessagePreview/constants.js",
     new Map([["bash-shell", [/^"bash",$/]]]),
-  ],
-  [
-    "client/shared/electron/runtime/services.js",
-    new Map([["signal-kill", [/^child\.kill\("SIGTERM"\);$/]]]),
   ],
 ]);
 

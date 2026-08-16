@@ -79,8 +79,9 @@ test("inject-mode summary defaults to injecting full summary to main agent witho
   );
 });
 
-test("inject-mode summary saves detail as a V2 attachment transfer and injects its overview", async () => {
+test("inject-mode summary persists and injects the same complete Harness summary", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  let persistedSummaryPayload = null;
   const ctx = {
     userId: "admin",
     sessionId: "s1",
@@ -98,6 +99,11 @@ test("inject-mode summary saves detail as a V2 attachment transfer and injects i
         "## 详细明细",
         "- 执行了命令A",
         "- 发现风险B",
+        "[NEXT_EXECUTION_SUGGESTION]",
+        "[NEXT_ACTION]",
+        "action = do",
+        "target = step5",
+        "reason = continue from the checkpoint",
         "[SUMMARY_END]",
       ].join("\n"),
     },
@@ -107,6 +113,7 @@ test("inject-mode summary saves detail as a V2 attachment transfer and injects i
           sharedTools: {
             semanticTransfer: {
               async transferSemanticContent(payload = {}) {
+                persistedSummaryPayload = payload;
                 return {
                   transferEnvelopes: [attachmentTransfer({
                     transferId: "transfer-summary-detail-1",
@@ -155,19 +162,25 @@ test("inject-mode summary saves detail as a V2 attachment transfer and injects i
   assert.match(String(harnessBucket.summaryText || ""), /^1\. \[plan=2\]\[status=done\] 完成模块分析/m);
   assert.doesNotMatch(String(harnessBucket.summaryText || ""), /SUMMARY_DETAIL/);
 
-  const injectedDetailMessage = [...ctx.modelContext.messages]
+  const injectedSummaryMessage = [...ctx.modelContext.messages]
     .reverse()
     .find(
       (item = {}) =>
         String(item?.role || "").trim() === "user" &&
-        String(item?.content || "").includes("summary_detail") &&
-        String(item?.content || "").includes("完成模块分析"),
+        String(item?.content || "").includes("[SUMMARY_OVERVIEW]") &&
+        Array.isArray(item?.transferEnvelopes),
     );
-  assert.ok(injectedDetailMessage);
-  assert.equal(Array.isArray(injectedDetailMessage?.transferEnvelopes), true);
-  assert.equal(injectedDetailMessage?.transferEnvelopes?.[0]?.version, 2);
-  assert.equal(injectedDetailMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-summary-detail-1");
-  assert.equal(injectedDetailMessage?.attachments, undefined);
+  assert.ok(injectedSummaryMessage);
+  assert.match(String(injectedSummaryMessage?.content || ""), /\[SUMMARY_OVERVIEW\]/);
+  assert.match(String(injectedSummaryMessage?.content || ""), /## 详细明细/);
+  assert.match(String(injectedSummaryMessage?.content || ""), /- 执行了命令A/);
+  assert.match(String(injectedSummaryMessage?.content || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
+  assert.match(String(injectedSummaryMessage?.content || ""), /target = step5/);
+  assert.equal(persistedSummaryPayload?.detail, ctx.ai.content);
+  assert.equal(Array.isArray(injectedSummaryMessage?.transferEnvelopes), true);
+  assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.version, 2);
+  assert.equal(injectedSummaryMessage?.transferEnvelopes?.[0]?.payload?.attachments?.[0]?.identity?.attachmentId, "att-summary-detail-1");
+  assert.equal(injectedSummaryMessage?.attachments, undefined);
 
   assert.doesNotMatch(
     ctx.modelContext.messages.map((item = {}) => String(item?.content || "")).join("\n"),

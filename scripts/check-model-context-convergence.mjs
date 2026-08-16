@@ -37,6 +37,7 @@ const SOURCE_ROOTS = [
   path.join(ROOT, "context-protocol", "src"),
   path.join(ROOT, "agent", "src"),
   path.join(ROOT, "plugin", "noobot-plugin-harness", "src"),
+  path.join(ROOT, "plugin", "noobot-plugin-workflow", "src"),
 ];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx"]);
 const IGNORE_PATH_PARTS = [
@@ -585,12 +586,9 @@ if (!mainIncrementalResolverText) {
 }
 
 const helpersText = assertFileContains("agent/src/bot/session/model-message-runtime-helpers.js", [
-  { name: "uses protocol final resolver", pattern: /@noobot\/context-protocol\/window-reducer[\s\S]*?resolveModelFinalMessages/ },
-  { name: "requires authoritative modelContext", pattern: /requireAuthoritativeMessageBlocks\(ctx\)/ },
-  { name: "resolves system block", pattern: /resolveBlockMessages\(blocks,\s*["']system["']\)/ },
-  { name: "resolves history block", pattern: /resolveBlockMessages\(blocks,\s*["']history["']\)/ },
-  { name: "resolves incremental block", pattern: /resolveBlockMessages\(blocks,\s*["']incremental["']\)/ },
-  { name: "explicit block arrays are the only block source", pattern: /function\s+resolveBlockMessages[\s\S]*?Array\.isArray\(blocks\?\.\[blockName\]\)[\s\S]*?return\s+blocks\[blockName\][\s\S]*?return\s+\[\]/ },
+  { name: "uses dual-lane context protocol", pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/ },
+  { name: "declares primary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.PRIMARY/ },
+  { name: "passes authoritative modelContext", pattern: /modelContext:\s*ctx\?\.modelContext/ },
 ]);
 if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText)) {
   if (/includePayloadBlocks/.test(helpersText) && /typeof\s+agentPayloadMessages\s*===\s*["']object["']\s*&&\s*!Array\.isArray\(agentPayloadMessages\)/.test(helpersText)) {
@@ -601,7 +599,8 @@ if (helpersText && /ctx\?\.agentContext\?\.payload\?\.messages/.test(helpersText
 }
 
 assertFileContains("agent/src/runtime/turn/turn-executor.js", [
-  { name: "main turn uses protocol final resolver", pattern: /@noobot\/context-protocol\/window-reducer[\s\S]*?resolveModelFinalMessages/ },
+  { name: "main turn uses dual-lane context protocol", pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/ },
+  { name: "main turn declares primary lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.PRIMARY/ },
 ]);
 
 assertFileContains("agent/src/context/index.js", [
@@ -685,9 +684,14 @@ assertFileContains("agent/src/runtime/turn/turn-executor.js", [
 ]);
 
 assertFileContains("plugin/noobot-plugin-harness/src/capabilities/handlers/shared/model/message-factory.js", [
-  { name: "splits agent system messages", pattern: /agentSystemMessages/ },
-  { name: "splits agent conversation messages", pattern: /agentConversationMessages/ },
-  { name: "capability order system before conversation", pattern: /return\s+\[\s*\.\.\.systemMessages\s*,\s*\.\.\.conversationMessages\s*\]/ },
+  { name: "uses dual-lane context protocol", pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/ },
+  { name: "declares auxiliary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.AUXILIARY/ },
+]);
+
+assertFileContains("plugin/noobot-plugin-workflow/src/core/orchestrator/semantic-resolution.js", [
+  { name: "uses dual-lane context protocol", pattern: /@noobot\/context-protocol\/dual-lane-context[\s\S]*?buildDualLaneModelContext/ },
+  { name: "declares auxiliary context lane", pattern: /lane:\s*MODEL_CONTEXT_LANE\.AUXILIARY/ },
+  { name: "capability runner receives no second prompt source", pattern: /prompt:\s*["']["']/ },
 ]);
 
 const loopControlText = assertFileContains("agent/src/runtime/loop-control.js", [
