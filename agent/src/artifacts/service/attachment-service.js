@@ -59,12 +59,7 @@ export class AttachmentService {
     return resolveSourceAttachment(this, payload);
   }
 
-  async readAttachmentContent({
-    userId,
-    attachmentId,
-    sessionId = "",
-    attachmentSource = "",
-  }) {
+  async readAttachmentContent({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return readAttachmentContent(this, {
       userId,
       attachmentId,
@@ -77,11 +72,7 @@ export class AttachmentService {
     return deleteScopedAttachmentsBySessionIds(this, { userId, sessionIds });
   }
 
-  async pruneOrphanScopedAttachments({
-    userId,
-    keepSessionIds = [],
-    attachmentSources = [],
-  } = {}) {
+  async pruneOrphanScopedAttachments({ userId, keepSessionIds = [], attachmentSources = [] } = {}) {
     return pruneOrphanScopedAttachments(this, { userId, keepSessionIds, attachmentSources });
   }
 }

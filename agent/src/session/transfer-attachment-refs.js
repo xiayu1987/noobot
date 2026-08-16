@@ -52,10 +52,17 @@ export function compactSessionAttachmentRef(reference = {}) {
   if (!name || !mimeType) return null;
   const output = { ...identity, name, mimeType };
   for (const key of [
-    "size", "relativePath", "sandboxPath", "path",
-    "previewUrl", "downloadUrl", "isSandbox", "generationSource",
+    "size",
+    "relativePath",
+    "sandboxPath",
+    "path",
+    "previewUrl",
+    "downloadUrl",
+    "isSandbox",
+    "generationSource",
   ]) {
-    if (reference[key] !== undefined && reference[key] !== null && reference[key] !== "") output[key] = reference[key];
+    if (reference[key] !== undefined && reference[key] !== null && reference[key] !== "")
+      output[key] = reference[key];
   }
   const relations = parseAttachmentRelations(reference.relations);
   if (relations.length) output.relations = relations;
@@ -101,11 +108,12 @@ export function compactTransferEnvelopes(envelopes = []) {
 }
 
 export function collectAttachmentRefsFromTransferEnvelopes(envelopes = []) {
-  return dedupeAttachmentsByIdentity(compactTransferEnvelopes(envelopes).flatMap((envelope) =>
-    envelope.payload.mode === "attachment"
-      ? envelope.payload.attachments
-      : [],
-  ), (reference) => reference.identity);
+  return dedupeAttachmentsByIdentity(
+    compactTransferEnvelopes(envelopes).flatMap((envelope) =>
+      envelope.payload.mode === "attachment" ? envelope.payload.attachments : [],
+    ),
+    (reference) => reference.identity,
+  );
 }
 
 export function dedupeAttachmentRefs(refs = []) {

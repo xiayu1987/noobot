@@ -45,7 +45,9 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
     identity,
     descriptor: {
       identity,
-      ...(safeStr(record?.clientAttachmentId) ? { clientAttachmentId: safeStr(record.clientAttachmentId) } : {}),
+      ...(safeStr(record?.clientAttachmentId)
+        ? { clientAttachmentId: safeStr(record.clientAttachmentId) }
+        : {}),
       name: safeStr(record?.name),
       mimeType: safeStr(record?.mimeType, DEFAULT_MIME_TYPE),
       ...(record?.owner && typeof record.owner === "object" && !Array.isArray(record.owner)
@@ -53,7 +55,9 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
         : {}),
       ...(Number.isSafeInteger(Number(record?.size)) ? { size: Number(record.size) } : {}),
       ...(safeStr(record?.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
-      ...(safeStr(record?.generationSource) ? { generationSource: safeStr(record.generationSource) } : {}),
+      ...(safeStr(record?.generationSource)
+        ? { generationSource: safeStr(record.generationSource) }
+        : {}),
       ...(record?.generatedByModel === true ? { generatedByModel: true } : {}),
     },
     storageRef: { kind: "attachment-store", ref },

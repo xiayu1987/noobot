@@ -104,9 +104,11 @@ export function useMessagePreview({
   }
 
   function resolveParsedResultUrl(attachmentItem = {}) {
-    return resolveParsedResultAccessMeta(attachmentItem, {
-      userId: String(userId || "").trim(),
-    })?.url || "";
+    return (
+      resolveParsedResultAccessMeta(attachmentItem, {
+        userId: String(userId || "").trim(),
+      })?.url || ""
+    );
   }
 
   function resolveHostAccessChannel({ useHostChannel = false, desktopHostApi = null } = {}) {
@@ -332,9 +334,7 @@ export function useMessagePreview({
     const parsedItem = buildParsedResultPreviewItem(attachmentItem);
     await runDownloadFromUrl({
       url: resolveParsedResultUrl(attachmentItem),
-      fileName:
-        parsedItem?.name ||
-        translate("message.parsedResultDefaultName"),
+      fileName: parsedItem?.name || translate("message.parsedResultDefaultName"),
       errorI18nKey: "message.downloadFailed",
     });
   }
@@ -578,9 +578,11 @@ export function useMessagePreview({
     }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
     if (officeLike) {
-      return Boolean(resolveParsedResultAccessMeta(attachmentItem, {
-        userId: String(userId || "").trim(),
-      }));
+      return Boolean(
+        resolveParsedResultAccessMeta(attachmentItem, {
+          userId: String(userId || "").trim(),
+        }),
+      );
     }
     return (
       isImagePreviewType(mimeType, name, isImageMime) ||
@@ -713,9 +715,11 @@ export function useMessagePreview({
     const name = String(attachmentItem?.name || "").trim();
     if (
       (isOfficeMime(mimeType) || isOfficeFile(name)) &&
-      Boolean(resolveParsedResultAccessMeta(attachmentItem, {
-        userId: String(userId || "").trim(),
-      }))
+      Boolean(
+        resolveParsedResultAccessMeta(attachmentItem, {
+          userId: String(userId || "").trim(),
+        }),
+      )
     ) {
       await openParsedResultPreview(attachmentItem);
       return;

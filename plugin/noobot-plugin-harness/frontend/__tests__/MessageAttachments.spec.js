@@ -24,9 +24,11 @@ vi.mock("noobot-chat/plugin-api/ui", () => ({
     emits: ["preview", "download", "preview-parsed-result", "download-parsed-result"],
     computed: {
       parsedRelation() {
-        return this.attachmentItem.relations?.find(
-          (relation) => relation.relationType === "parsed_result",
-        ) || null;
+        return (
+          this.attachmentItem.relations?.find(
+            (relation) => relation.relationType === "parsed_result",
+          ) || null
+        );
       },
       parsedResultName() {
         return this.parsedRelation?.name || this.translate("message.parsedResultDefaultName");
@@ -81,22 +83,24 @@ function mountMessageAttachments(overrides = {}) {
           attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          relations: [{
-            relationType: "parsed_result",
-            sourceIdentity: {
-              attachmentId: "src-1",
-              sessionId: "session-1",
-              attachmentSource: "user",
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "src-1",
+                sessionId: "session-1",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "parsed-1",
+                sessionId: "session-1",
+                attachmentSource: "model",
+              },
+              name: "source.md",
+              mimeType: "text/markdown",
+              createdAt: "2026-01-01T00:00:00.000Z",
             },
-            targetIdentity: {
-              attachmentId: "parsed-1",
-              sessionId: "session-1",
-              attachmentSource: "model",
-            },
-            name: "source.md",
-            mimeType: "text/markdown",
-            createdAt: "2026-01-01T00:00:00.000Z",
-          }],
+          ],
         },
       ],
       isImageMime: () => false,
@@ -209,23 +213,25 @@ describe("MessageAttachments parsed result", () => {
           attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          relations: [{
-            relationType: "parsed_result",
-            sourceIdentity: {
-              attachmentId: "src-1",
-              sessionId: "session-1",
-              attachmentSource: "user",
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "src-1",
+                sessionId: "session-1",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "parsed-1",
+                sessionId: "session-1",
+                attachmentSource: "model",
+              },
+              name: "source.multimodal-parse.md",
+              mimeType: "text/markdown",
+              producer: { type: "tool", id: "multimodal_parse" },
+              createdAt: "2026-01-01T00:00:00.000Z",
             },
-            targetIdentity: {
-              attachmentId: "parsed-1",
-              sessionId: "session-1",
-              attachmentSource: "model",
-            },
-            name: "source.multimodal-parse.md",
-            mimeType: "text/markdown",
-            producer: { type: "tool", id: "multimodal_parse" },
-            createdAt: "2026-01-01T00:00:00.000Z",
-          }],
+          ],
         },
       ],
     });

@@ -35,17 +35,18 @@ describe("chatEngine streamHandlers transport boundary", () => {
     mimeType: "text/markdown",
     createdAt: "2026-08-16T00:00:00.000Z",
   };
-  const parsedEvent = (overrides = {}) => createAttachmentLifecycleEvent({
-    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-    eventVersion: 1,
-    messageId: "attachment-event-1",
-    identity,
-    status: ATTACHMENT_LIFECYCLE.PARSED,
-    occurredAt: "2026-08-16T00:00:00.000Z",
-    turnScopeId: "client-turn:parsed-test",
-    relation,
-    ...overrides,
-  });
+  const parsedEvent = (overrides = {}) =>
+    createAttachmentLifecycleEvent({
+      eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+      eventVersion: 1,
+      messageId: "attachment-event-1",
+      identity,
+      status: ATTACHMENT_LIFECYCLE.PARSED,
+      occurredAt: "2026-08-16T00:00:00.000Z",
+      turnScopeId: "client-turn:parsed-test",
+      relation,
+      ...overrides,
+    });
 
   it("projects a parsed-result relation onto the canonical user attachment", () => {
     const userMessage = {
@@ -88,10 +89,12 @@ describe("chatEngine streamHandlers transport boundary", () => {
   });
 
   it("rejects invalid lifecycle data instead of silently dropping protocol violations", () => {
-    expect(() => handleAttachmentLifecycleStreamEvent({
-      data: { eventType: ATTACHMENT_EVENT_TYPE.PARSED },
-      activeSession: { value: { messages: [] } },
-    })).toThrow();
+    expect(() =>
+      handleAttachmentLifecycleStreamEvent({
+        data: { eventType: ATTACHMENT_EVENT_TYPE.PARSED },
+        activeSession: { value: { messages: [] } },
+      }),
+    ).toThrow();
   });
 
   it("uses the same relation projection during a live run and hydration", () => {
@@ -99,11 +102,13 @@ describe("chatEngine streamHandlers transport boundary", () => {
     const userMessage = makeViewMessage({
       role: "user",
       sessionId: "session-1",
-      attachments: [{
-        ...identity,
-        name: "source.docx",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      }],
+      attachments: [
+        {
+          ...identity,
+          name: "source.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        },
+      ],
     });
 
     handleAttachmentLifecycleStreamEvent({

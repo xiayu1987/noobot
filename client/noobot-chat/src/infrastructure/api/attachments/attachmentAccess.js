@@ -22,10 +22,7 @@ export function resolveAttachmentAccessMeta(attachmentItem = {}, { userId = "" }
   };
 }
 
-export function resolveParsedResultAccessMeta(
-  attachmentItem = {},
-  { userId = "" } = {},
-) {
+export function resolveParsedResultAccessMeta(attachmentItem = {}, { userId = "" } = {}) {
   const sourceIdentity = projectAttachmentIdentity(attachmentItem);
   const relation = findAttachmentRelation(attachmentItem.relations, {
     relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,

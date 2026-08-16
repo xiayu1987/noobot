@@ -7,9 +7,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { readdir } from "node:fs/promises";
 
-import {
-  VALID_ATTACHMENT_SOURCES,
-} from "../constants.js";
+import { VALID_ATTACHMENT_SOURCES } from "../constants.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { fatalSystemError, recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -35,7 +33,11 @@ export function normalizeSource(source) {
   return normalized;
 }
 
-export function resolveAttachmentScope({ sessionId = "", attachmentSource = "", requireSessionId = false } = {}) {
+export function resolveAttachmentScope({
+  sessionId = "",
+  attachmentSource = "",
+  requireSessionId = false,
+} = {}) {
   void requireSessionId;
   const normalizedSessionId = safeStr(sessionId);
   if (!normalizedSessionId) {

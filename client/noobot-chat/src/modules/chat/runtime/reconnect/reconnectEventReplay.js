@@ -105,7 +105,9 @@ export async function applyReconnectEventReplay({
   if (runtimeRouted) return runtimeResult || { applied: true };
   if (replayEvent === StreamEventEnum.ATTACHMENT_LIFECYCLE) {
     let event;
-    try { event = createAttachmentLifecycleEvent(data); } catch (error) {
+    try {
+      event = createAttachmentLifecycleEvent(data);
+    } catch (error) {
       logWorkflowDiagnostics("frontend.workflowReplay.attachmentParsedRejected", {
         sessionId: _trimStr(data?.identity?.sessionId),
         dialogProcessId: _trimStr(data?.dialogProcessId),
@@ -131,8 +133,10 @@ export async function applyReconnectEventReplay({
   if (!protocolResult.valid) {
     return { applied: false, reason: "unsupported_replay_event", errors: protocolResult.errors };
   }
-  if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT) return applyExecutionSnapshot?.(data || {});
-  if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN) return applyExecutionChildren?.(data || {});
+  if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT)
+    return applyExecutionSnapshot?.(data || {});
+  if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN)
+    return applyExecutionChildren?.(data || {});
   if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data || {});
   if (replayEvent === StreamEventEnum.TURN_SNAPSHOT) {
     logStateMachineDebug("stateMachine.reconnect.eventSnapshot.before", () => ({

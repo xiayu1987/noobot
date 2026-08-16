@@ -54,14 +54,21 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: { attachmentId: "att_1", sessionId: "test-session", attachmentSource: "model" },
-        role: "primary",
-        name: "a.md",
-        mimeType: "text/markdown",
-      }],
+      attachments: [
+        {
+          identity: { attachmentId: "att_1", sessionId: "test-session", attachmentSource: "model" },
+          role: "primary",
+          name: "a.md",
+          mimeType: "text/markdown",
+        },
+      ],
     },
-    intent: { source: "plugin", reason: "semantic_transfer_tool_result", scenario: "tool", strategy: "tool_result_text" },
+    intent: {
+      source: "plugin",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: { persisted: true },
   };
   const normalized = normalizeMessageEntity({
@@ -71,7 +78,10 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   });
   assert.equal("transferEnvelopes" in normalized, true);
   assert.deepEqual(normalized.transferEnvelopes, [envelope]);
-  assert.equal(normalized.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att_1");
+  assert.equal(
+    normalized.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att_1",
+  );
 });
 
 test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
@@ -199,15 +209,20 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];
 
   assert.equal(
-    "attachments" in normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
+    "attachments" in
+      normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
     false,
   );
   assert.equal(
-    "attachments" in normalizeMessageEntity({ role: "user", content: "snake", attachment_metas: snakeAttachments }),
+    "attachments" in
+      normalizeMessageEntity({
+        role: "user",
+        content: "snake",
+        attachment_metas: snakeAttachments,
+      }),
     false,
   );
 });
-
 
 test("normalizeMessageEntity preserves thinking timing fields", () => {
   const normalized = normalizeMessageEntity({

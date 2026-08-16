@@ -11,16 +11,17 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readSessionArtifact, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import {
   buildSessionDisplaySummary,
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
 } from "../../src/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(
-    path.join(os.tmpdir(), "noobot-session-boundary-"),
-  );
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
   try {
     return await fn(workspaceRoot);
   } finally {
@@ -48,13 +49,15 @@ test("session display summary should keep canonical attachment fields", () => {
         messageId: "assistant-canonical",
         presentationMessageId: "assistant-canonical",
         turnScopeId: "turn-canonical",
-        attachments: [{
-          attachmentId: "att-canonical",
-          sessionId: "s-attachments",
-          attachmentSource: "model",
-          name: "canonical.txt",
-          mimeType: "text/plain",
-        }],
+        attachments: [
+          {
+            attachmentId: "att-canonical",
+            sessionId: "s-attachments",
+            attachmentSource: "model",
+            name: "canonical.txt",
+            mimeType: "text/plain",
+          },
+        ],
       },
     ],
   });
@@ -85,22 +88,24 @@ test("session display summary keeps rich attachment fields for preview and parse
             sandboxPath: "/sandbox/report.docx",
             previewUrl: "/api/attachments/att-rich/preview",
             downloadUrl: "/api/attachments/att-rich/download",
-            relations: [{
-              relationType: "parsed_result",
-              sourceIdentity: {
-                attachmentId: "att-rich",
-                sessionId: "s-rich-attachments",
-                attachmentSource: "user",
+            relations: [
+              {
+                relationType: "parsed_result",
+                sourceIdentity: {
+                  attachmentId: "att-rich",
+                  sessionId: "s-rich-attachments",
+                  attachmentSource: "user",
+                },
+                targetIdentity: {
+                  attachmentId: "att-parsed",
+                  sessionId: "s-rich-attachments",
+                  attachmentSource: "model",
+                },
+                name: "report.md",
+                mimeType: "text/markdown",
+                createdAt: "2026-08-16T00:00:00.000Z",
               },
-              targetIdentity: {
-                attachmentId: "att-parsed",
-                sessionId: "s-rich-attachments",
-                attachmentSource: "model",
-              },
-              name: "report.md",
-              mimeType: "text/markdown",
-              createdAt: "2026-08-16T00:00:00.000Z",
-            }],
+            ],
           },
         ],
       },
@@ -117,22 +122,24 @@ test("session display summary keeps rich attachment fields for preview and parse
     relativePath: "runtime/attach/s-rich-attachments/user/report.docx",
     sandboxPath: "/sandbox/report.docx",
     path: "/workspace/report.docx",
-    relations: [{
-      relationType: "parsed_result",
-      sourceIdentity: {
-        attachmentId: "att-rich",
-        sessionId: "s-rich-attachments",
-        attachmentSource: "user",
+    relations: [
+      {
+        relationType: "parsed_result",
+        sourceIdentity: {
+          attachmentId: "att-rich",
+          sessionId: "s-rich-attachments",
+          attachmentSource: "user",
+        },
+        targetIdentity: {
+          attachmentId: "att-parsed",
+          sessionId: "s-rich-attachments",
+          attachmentSource: "model",
+        },
+        name: "report.md",
+        mimeType: "text/markdown",
+        createdAt: "2026-08-16T00:00:00.000Z",
       },
-      targetIdentity: {
-        attachmentId: "att-parsed",
-        sessionId: "s-rich-attachments",
-        attachmentSource: "model",
-      },
-      name: "report.md",
-      mimeType: "text/markdown",
-      createdAt: "2026-08-16T00:00:00.000Z",
-    }],
+    ],
     downloadUrl: "/api/attachments/att-rich/download",
     previewUrl: "/api/attachments/att-rich/preview",
   });
@@ -149,7 +156,8 @@ test("session display summary derives attachments from transfer envelopes", () =
           {
             protocol: "noobot.semantic-transfer",
             version: 2,
-            transferId: "transfer:message-transfer-attachments:plugin:harness-plugin:output:tool_result_text:structured",
+            transferId:
+              "transfer:message-transfer-attachments:plugin:harness-plugin:output:tool_result_text:structured",
             messageId: "message-transfer-attachments",
             identity: {
               sessionId: "s-transfer-attachments",
@@ -160,19 +168,26 @@ test("session display summary derives attachments from transfer envelopes", () =
             direction: "output",
             payload: {
               mode: "attachment",
-              attachments: [{
-                identity: {
-                  attachmentId: "att-transfer-1",
-                  sessionId: "s-transfer-attachments",
-                  attachmentSource: "model",
+              attachments: [
+                {
+                  identity: {
+                    attachmentId: "att-transfer-1",
+                    sessionId: "s-transfer-attachments",
+                    attachmentSource: "model",
+                  },
+                  role: "primary",
+                  name: "result.md",
+                  mimeType: "text/markdown",
+                  size: 44,
                 },
-                role: "primary",
-                name: "result.md",
-                mimeType: "text/markdown",
-                size: 44,
-              }],
+              ],
             },
-            intent: { source: "plugin", reason: "semantic_transfer_tool_result", scenario: "tool", strategy: "tool_result_text" },
+            intent: {
+              source: "plugin",
+              reason: "semantic_transfer_tool_result",
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
             meta: { persisted: true },
           },
         ],
@@ -182,7 +197,10 @@ test("session display summary derives attachments from transfer envelopes", () =
 
   assert.equal(summary.stats.attachmentCount, 1);
   assert.equal(summary.messages[0].attachments, undefined);
-  assert.equal(summary.messages[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att-transfer-1");
+  assert.equal(
+    summary.messages[0].transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att-transfer-1",
+  );
 });
 
 test("session display summary binds completed tool artifacts to one explicit assistant turn", () => {
@@ -195,24 +213,55 @@ test("session display summary binds completed tool artifacts to one explicit ass
         content: "first result",
         turnScopeId: "turn-one",
         dialogProcessId: "dialog-one",
-        toolTimeline: [{
-          key: "call:call-one",
-          toolCallId: "call-one",
-          tool: "execute_script",
-          status: "completed",
-          resultEvent: {
-            eventId: "event-one",
-            transferEnvelopes: [{
-              protocol: "noobot.semantic-transfer", version: 2,
-              transferId: "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
-              messageId: "assistant-one",
-              identity: { sessionId: "s-tool-artifacts", turnScopeId: "turn-one", runId: "run-one", producer: { type: "tool", id: "call-one" } },
-              direction: "output",
-              payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "artifact-one", sessionId: "s-tool-artifacts", attachmentSource: "tool" }, role: "primary", name: "stdout.txt", mimeType: "text/plain" }] },
-              intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" }, meta: { persisted: true },
-            }],
+        toolTimeline: [
+          {
+            key: "call:call-one",
+            toolCallId: "call-one",
+            tool: "execute_script",
+            status: "completed",
+            resultEvent: {
+              eventId: "event-one",
+              transferEnvelopes: [
+                {
+                  protocol: "noobot.semantic-transfer",
+                  version: 2,
+                  transferId:
+                    "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
+                  messageId: "assistant-one",
+                  identity: {
+                    sessionId: "s-tool-artifacts",
+                    turnScopeId: "turn-one",
+                    runId: "run-one",
+                    producer: { type: "tool", id: "call-one" },
+                  },
+                  direction: "output",
+                  payload: {
+                    mode: "attachment",
+                    attachments: [
+                      {
+                        identity: {
+                          attachmentId: "artifact-one",
+                          sessionId: "s-tool-artifacts",
+                          attachmentSource: "tool",
+                        },
+                        role: "primary",
+                        name: "stdout.txt",
+                        mimeType: "text/plain",
+                      },
+                    ],
+                  },
+                  intent: {
+                    source: "tool",
+                    reason: "tool_result",
+                    scenario: "tool",
+                    strategy: "tool_result_text",
+                  },
+                  meta: { persisted: true },
+                },
+              ],
+            },
           },
-        }],
+        ],
       },
       {
         id: "assistant-two",
@@ -228,15 +277,43 @@ test("session display summary binds completed tool artifacts to one explicit ass
         toolName: "execute_script",
         turnScopeId: "turn-one",
         dialogProcessId: "dialog-one",
-        transferEnvelopes: [{
-          protocol: "noobot.semantic-transfer", version: 2,
-          transferId: "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
-          messageId: "assistant-one",
-          identity: { sessionId: "s-tool-artifacts", turnScopeId: "turn-one", runId: "run-one", producer: { type: "tool", id: "call-one" } },
-          direction: "output",
-          payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "artifact-one", sessionId: "s-tool-artifacts", attachmentSource: "tool" }, role: "primary", name: "stdout.txt", mimeType: "text/plain" }] },
-          intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" }, meta: { persisted: true },
-        }],
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            version: 2,
+            transferId: "transfer:assistant-one:tool:call-one:output:tool_result_text:artifact",
+            messageId: "assistant-one",
+            identity: {
+              sessionId: "s-tool-artifacts",
+              turnScopeId: "turn-one",
+              runId: "run-one",
+              producer: { type: "tool", id: "call-one" },
+            },
+            direction: "output",
+            payload: {
+              mode: "attachment",
+              attachments: [
+                {
+                  identity: {
+                    attachmentId: "artifact-one",
+                    sessionId: "s-tool-artifacts",
+                    attachmentSource: "tool",
+                  },
+                  role: "primary",
+                  name: "stdout.txt",
+                  mimeType: "text/plain",
+                },
+              ],
+            },
+            intent: {
+              source: "tool",
+              reason: "tool_result",
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
+            meta: { persisted: true },
+          },
+        ],
       },
     ],
   });
@@ -245,7 +322,10 @@ test("session display summary binds completed tool artifacts to one explicit ass
   const second = summary.messages.find((item) => item.id === "assistant-two");
   assert.equal("toolLogSummaries" in summary, false);
   assert.equal(first.toolTimeline.length, 1);
-  assert.equal(first.toolTimeline[0].resultEvent.attachments[0].identity.attachmentId, "artifact-one");
+  assert.equal(
+    first.toolTimeline[0].resultEvent.attachments[0].identity.attachmentId,
+    "artifact-one",
+  );
   assert.equal("writtenFiles" in first.toolTimeline[0].resultEvent, false);
   assert.equal(second.toolTimeline, undefined);
   assert.equal(summary.stats.displayToolLogCount, 1);
@@ -270,14 +350,43 @@ test("session display summary does not guess ownership for an unmatched tool art
         tool_call_id: "call-other",
         turnScopeId: "turn-other",
         dialogProcessId: "dialog-other",
-        transferEnvelopes: [{
-          protocol: "noobot.semantic-transfer", version: 2,
-          transferId: "transfer:other:tool:call-other:output:tool_result_text:artifact",
-          messageId: "other", identity: { sessionId: "s-unmatched-artifact", turnScopeId: "turn-other", runId: "run-other", producer: { type: "tool", id: "call-other" } },
-          direction: "output",
-          payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "artifact-other", sessionId: "s-unmatched-artifact", attachmentSource: "tool" }, role: "primary", name: "other.txt", mimeType: "text/plain" }] },
-          intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_result_text" }, meta: { persisted: true },
-        }],
+        transferEnvelopes: [
+          {
+            protocol: "noobot.semantic-transfer",
+            version: 2,
+            transferId: "transfer:other:tool:call-other:output:tool_result_text:artifact",
+            messageId: "other",
+            identity: {
+              sessionId: "s-unmatched-artifact",
+              turnScopeId: "turn-other",
+              runId: "run-other",
+              producer: { type: "tool", id: "call-other" },
+            },
+            direction: "output",
+            payload: {
+              mode: "attachment",
+              attachments: [
+                {
+                  identity: {
+                    attachmentId: "artifact-other",
+                    sessionId: "s-unmatched-artifact",
+                    attachmentSource: "tool",
+                  },
+                  role: "primary",
+                  name: "other.txt",
+                  mimeType: "text/plain",
+                },
+              ],
+            },
+            intent: {
+              source: "tool",
+              reason: "tool_result",
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
+            meta: { persisted: true },
+          },
+        ],
       },
     ],
   });

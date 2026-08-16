@@ -11,10 +11,17 @@ import { fsRm } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
 
-export async function deleteScopedAttachmentsBySessionIds(service, { userId, sessionIds = [] } = {}) {
+export async function deleteScopedAttachmentsBySessionIds(
+  service,
+  { userId, sessionIds = [] } = {},
+) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scopedRoot = attachScopedRoot(basePath);
-  const normalizedIds = [...new Set((Array.isArray(sessionIds) ? sessionIds : []).map((sid) => safeStr(sid)).filter(Boolean))];
+  const normalizedIds = [
+    ...new Set(
+      (Array.isArray(sessionIds) ? sessionIds : []).map((sid) => safeStr(sid)).filter(Boolean),
+    ),
+  ];
   if (!normalizedIds.length) return { deletedSessionIds: [], deletedCount: 0 };
 
   const deleted = [];
@@ -22,24 +29,27 @@ export async function deleteScopedAttachmentsBySessionIds(service, { userId, ses
     try {
       await fsRm(path.join(scopedRoot, sid), { recursive: true, force: true });
       deleted.push(sid);
-    } catch {
-    }
+    } catch {}
   }
   return { deletedSessionIds: deleted, deletedCount: deleted.length };
 }
 
 export async function pruneOrphanScopedAttachments(
   service,
-  {
-    userId,
-    keepSessionIds = [],
-    attachmentSources = [],
-  } = {},
+  { userId, keepSessionIds = [], attachmentSources = [] } = {},
 ) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scopedRoot = attachScopedRoot(basePath);
-  const sourceSet = new Set((Array.isArray(attachmentSources) ? attachmentSources : []).map((source) => safeStr(source).toLowerCase()).filter(Boolean));
-  const keepSet = new Set((Array.isArray(keepSessionIds) ? keepSessionIds : []).map((sid) => safeStr(sid)).filter(Boolean));
+  const sourceSet = new Set(
+    (Array.isArray(attachmentSources) ? attachmentSources : [])
+      .map((source) => safeStr(source).toLowerCase())
+      .filter(Boolean),
+  );
+  const keepSet = new Set(
+    (Array.isArray(keepSessionIds) ? keepSessionIds : [])
+      .map((sid) => safeStr(sid))
+      .filter(Boolean),
+  );
 
   let sessionEntries = [];
   try {
@@ -79,8 +89,7 @@ export async function pruneOrphanScopedAttachments(
         await fsRm(sessionPath, { recursive: false, force: true });
         deletedSessionIds.push(sessionId);
       }
-    } catch {
-    }
+    } catch {}
   }
 
   return { deletedSessionIds, deletedCount: deletedSessionIds.length };

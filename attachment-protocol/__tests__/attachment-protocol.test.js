@@ -9,11 +9,13 @@ import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
+  formatAttachmentIdentityRef,
   createAttachmentLifecycleEvent,
   createAttachmentSetUpdate,
   parseAttachmentAccessRef,
   parseAttachmentDescriptor,
   parseAttachmentIdentity,
+  parseAttachmentIdentityRef,
   projectAttachmentIdentity,
   parseAttachmentUiView,
   parsePersistedAttachmentRecord,
@@ -51,6 +53,25 @@ test("canonical identity is exactly the stable triple", () => {
   assert.throws(
     () => parseAttachmentIdentity({ attachmentId: "att-1", sessionId: "session-1" }),
     /invalid_attachment_source/,
+  );
+});
+
+test("canonical identity refs preserve the complete identity without inference", () => {
+  const identityWithReservedCharacters = {
+    attachmentId: "att/1",
+    sessionId: "session:1",
+    attachmentSource: "user upload",
+  };
+  const ref = formatAttachmentIdentityRef(identityWithReservedCharacters);
+  assert.equal(ref, "attachment:v1:session%3A1/user%20upload/att%2F1");
+  assert.deepEqual(parseAttachmentIdentityRef(ref), identityWithReservedCharacters);
+  assert.throws(
+    () => parseAttachmentIdentityRef("att/1"),
+    /invalid_attachment_identity_ref_prefix/,
+  );
+  assert.throws(
+    () => parseAttachmentIdentityRef("attachment:v1:session%3a1/user/att-1"),
+    /non_canonical_attachment_identity_ref/,
   );
 });
 
@@ -96,6 +117,7 @@ test("persistence, runtime, access and UI models stay separate", () => {
     identity,
     descriptor: descriptor(),
     storageRef: { kind: "attachment-store", ref: "scope/att-1" },
+    relations: [],
     createdAt: "2026-08-07T00:00:00.000Z",
     updatedAt: "2026-08-07T00:00:00.000Z",
   });
@@ -136,6 +158,7 @@ test("persistence, runtime, access and UI models stay separate", () => {
         identity,
         descriptor: { ...descriptor(), identity: { ...identity, attachmentId: "att-2" } },
         storageRef: { kind: "attachment-store", ref: "scope/att-1" },
+        relations: [],
         createdAt: "now",
         updatedAt: "now",
       }),
@@ -188,6 +211,19 @@ test("persisted records are explicitly versioned and relations are source-bound"
   assert.throws(
     () => parsePersistedAttachmentRecord({ identity }),
     /unsupported_attachment_record_schema/,
+  );
+  assert.throws(
+    () =>
+      parsePersistedAttachmentRecord({
+        schema: ATTACHMENT_RECORD_SCHEMA,
+        version: 1,
+        identity,
+        descriptor: descriptor(),
+        storageRef: { kind: "attachment-store", ref: "scope/att-1" },
+        createdAt: "2026-08-07T00:00:00.000Z",
+        updatedAt: "2026-08-07T00:00:00.000Z",
+      }),
+    /invalid_attachment_relations/,
   );
   const relation = {
     relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,

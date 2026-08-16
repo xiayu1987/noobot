@@ -138,7 +138,10 @@ test("normalizeAttachmentMetas accepts only canonical attachment fields", () => 
     generationSource: "semantic_transfer_tool_output",
   });
   assert.throws(
-    () => normalizeAttachmentMetas([{ id: "att_legacy", sessionId: "session_1", attachmentSource: "user" }]),
+    () =>
+      normalizeAttachmentMetas([
+        { id: "att_legacy", sessionId: "session_1", attachmentSource: "user" },
+      ]),
     (error) => error?.errorCode === "INVALID_CANONICAL_ATTACHMENT",
   );
 });
@@ -172,12 +175,14 @@ test("mapAttachmentRecordsToMetas projects canonical runtime records without inf
       sandboxPath: "/workspace/result.md",
       isSandbox: false,
       generationSource: "semantic_transfer_tool_output",
-      relations: [{
-        relationType: "parsed_result",
-        sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
-        targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
-        createdAt: "2026-07-11T00:00:00.000Z",
-      }],
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+          targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
+          createdAt: "2026-07-11T00:00:00.000Z",
+        },
+      ],
       turnScope: {
         dialogProcessId: "dialog_1",
       },
@@ -193,11 +198,13 @@ test("mapAttachmentRecordsToMetas projects canonical runtime records without inf
   assert.equal(meta.sandboxPath, "/workspace/result.md");
   assert.equal(meta.isSandbox, false);
   assert.equal(meta.generationSource, "semantic_transfer_tool_output");
-  assert.deepEqual(meta.relations, [{
-    relationType: "parsed_result",
-    sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
-    targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
-    createdAt: "2026-07-11T00:00:00.000Z",
-  }]);
+  assert.deepEqual(meta.relations, [
+    {
+      relationType: "parsed_result",
+      sourceIdentity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+      targetIdentity: { attachmentId: "parsed_1", sessionId: "s1", attachmentSource: "parsed" },
+      createdAt: "2026-07-11T00:00:00.000Z",
+    },
+  ]);
   assert.equal(meta.turnScope?.dialogProcessId, "dialog_1");
 });

@@ -13,11 +13,19 @@ import {
   findAttachmentRelation,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { getTransferAttachments, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer-adapter/index.js";
+import {
+  getTransferAttachments,
+  materializeTextForToolResult,
+  TRANSFER_SOURCE,
+} from "../../transfer-adapter/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
-import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../constants/index.js";
+import {
+  ARTIFACT_GENERATION_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
+  TOOL_NAME,
+} from "../constants/index.js";
 
 function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
   const normalized = String(input || "").trim();
@@ -62,7 +70,11 @@ export function normalizePersistedAttachments(persistedOutput) {
   return Array.isArray(persistedOutput?.attachments) ? persistedOutput.attachments : [];
 }
 
-export async function backwriteParsedAttachment({ runtime, sourceAttachmentMeta, parsedAttachment }) {
+export async function backwriteParsedAttachment({
+  runtime,
+  sourceAttachmentMeta,
+  parsedAttachment,
+}) {
   if (String(sourceAttachmentMeta?.attachmentSource || "").trim() !== "user") return null;
   const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
   const targetAttachment = parsedAttachment?.identity
@@ -72,11 +84,11 @@ export async function backwriteParsedAttachment({ runtime, sourceAttachmentMeta,
   const userId = String(runtime?.userId || "").trim();
   if (!targetAttachment || !attachmentService || !userId) return null;
   const updated = await attachmentService.linkParsedResultToAttachment({
-      userId,
-      sourceIdentity,
-      targetAttachment,
-      producerId: TOOL_NAME.MULTIMODAL_PARSE,
-    });
+    userId,
+    sourceIdentity,
+    targetAttachment,
+    producerId: TOOL_NAME.MULTIMODAL_PARSE,
+  });
   updateRuntimeUserMessageAttachment(runtime, sourceIdentity.attachmentId, updated);
   const identity = projectAttachmentIdentity(updated);
   const relation = findAttachmentRelation(updated.relations, {

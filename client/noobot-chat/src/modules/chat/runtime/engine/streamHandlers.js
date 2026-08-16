@@ -10,10 +10,7 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
-import {
-  normalizeTrimmedString,
-  stripInternalEventPlaceholderLines,
-} from "./utils.js";
+import { normalizeTrimmedString, stripInternalEventPlaceholderLines } from "./utils.js";
 import {
   attachmentIdentityKey,
   ATTACHMENT_EVENT_TYPE,
@@ -51,7 +48,9 @@ function resolveFirstResponseNavigator({
 function canonicalAttachmentProjectionKey(attachment = {}) {
   const attachmentId = String(attachment?.attachmentId || "").trim();
   const sessionId = String(attachment?.sessionId || "").trim();
-  const attachmentSource = String(attachment?.attachmentSource || "").trim().toLowerCase();
+  const attachmentSource = String(attachment?.attachmentSource || "")
+    .trim()
+    .toLowerCase();
   if (attachmentId && sessionId && attachmentSource) {
     return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
   }
@@ -135,9 +134,7 @@ export function handleAttachmentLifecycleStreamEvent({
     data: { incomingCount: 1 },
   });
   const eventKey = canonicalAttachmentProjectionKey(event.identity);
-  const messages = Array.isArray(activeSession.value.messages)
-    ? activeSession.value.messages
-    : [];
+  const messages = Array.isArray(activeSession.value.messages) ? activeSession.value.messages : [];
   let matchedCount = 0;
   for (const message of messages) {
     if (getMessageRole(message) !== "user" || !Array.isArray(message?.attachments)) continue;
@@ -146,7 +143,11 @@ export function handleAttachmentLifecycleStreamEvent({
       if (canonicalKey !== eventKey) return existing;
       matchedCount += 1;
       const lifecycle = reduceAttachmentLifecycle(existing.attachmentLifecycle, event);
-      const updated = { ...existing, attachmentLifecycle: lifecycle, relations: lifecycle.relations };
+      const updated = {
+        ...existing,
+        attachmentLifecycle: lifecycle,
+        relations: lifecycle.relations,
+      };
       return typeof makeViewMessage === "function"
         ? makeViewMessage({ attachments: [updated] })?.attachments?.[0] || updated
         : updated;
@@ -231,7 +232,9 @@ export function handleDoneStreamEvent({
       {
         state: BackendChannelState.COMPLETED,
         sessionId: String(data?.sessionId || activeSession?.value?.sessionId || ""),
-        dialogProcessId: String(getMessageDialogProcessId(botMessage) || data?.dialogProcessId || ""),
+        dialogProcessId: String(
+          getMessageDialogProcessId(botMessage) || data?.dialogProcessId || "",
+        ),
         turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
         sourceEvent: "done",
         updatedAtMs: nowMs(),

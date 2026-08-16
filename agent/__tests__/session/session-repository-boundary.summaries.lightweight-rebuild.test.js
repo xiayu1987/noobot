@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -13,7 +12,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
-import { withTempWorkspace, exists, canonicalMessages } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  withTempWorkspace,
+  exists,
+  canonicalMessages,
+} from "./session-repository-boundary.summaries.fixtures.js";
 
 test("session display summary should keep chat view lightweight and rebuild stale files", async () => {
   await withTempWorkspace(async (workspaceRoot) => {

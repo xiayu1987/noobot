@@ -44,21 +44,29 @@ test("workflow hook passes planned user attachments to node sub-session", async 
       capabilityModelInvoker: async (payload = {}) => {
         semanticRequestMessages.push(...(Array.isArray(payload?.messages) ? payload.messages : []));
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=read type=action name="读取附件" task="请读取并总结用户附件" attachments="att-user-1"',
-            'NODE id=end type=state stateType=end name="结束"',
-            "EDGE from=start to=read",
-            "EDGE from=read to=end",
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=read type=action name="读取附件" task="请读取并总结用户附件" attachments="attachment:v1:s-input-att/user/att-user-1"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=read",
+              "EDGE from=read to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => {
         subSessionCalls.push(payload);
         return {
-          lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+          lifecycle: {
+            executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+            executionKind: "agent",
+            state: "completed",
+            revision: 4,
+            sequence: 4,
+          },
           sessionId: "node-session-read",
           dialogProcessId: "node-dialog-read",
           result: {
@@ -111,9 +119,8 @@ test("workflow hook passes planned user attachments to node sub-session", async 
 
   const semanticPrompt = String(semanticRequestMessages[0]?.content || "");
   assert.match(semanticPrompt, /用户附件/);
-  assert.match(semanticPrompt, /attachmentId=att-user-1/);
-  assert.match(semanticPrompt, /sessionId=s-input-att/);
-  assert.match(semanticPrompt, /attachmentSource=user/);
+  assert.match(semanticPrompt, /identityRef=attachment:v1:s-input-att\/user\/att-user-1/);
+  assert.doesNotMatch(semanticPrompt, /sessionId=|attachmentSource=/);
   assert.doesNotMatch(semanticPrompt, /ATTACHMENT id=/);
-  assert.match(semanticPrompt, /attachments="user:\*"|attachmentId=att-user-1/);
+  assert.match(semanticPrompt, /attachments="user:\*"|identityRef=attachment:v1:/);
 });

@@ -24,13 +24,16 @@ export function buildPublicRecord(basePath, record) {
   const turnScope = normalizeAttachmentTurnScopeMeta(record, owner);
   return {
     attachmentId: identity.attachmentId,
-    ...(safeStr(record.clientAttachmentId) ? { clientAttachmentId: safeStr(record.clientAttachmentId) } : {}),
+    ...(safeStr(record.clientAttachmentId)
+      ? { clientAttachmentId: safeStr(record.clientAttachmentId) }
+      : {}),
     ...(safeStr(record.contentSha256) ? { contentSha256: safeStr(record.contentSha256) } : {}),
     name: safeStr(record.name),
     mimeType: safeStr(record.mimeType, DEFAULT_MIME_TYPE),
     size: safeNum(record.size),
     path: safeStr(record.path),
-    relativePath: safeStr(record.relativePath) || normalizeRelativePath(basePath, safeStr(record.path)),
+    relativePath:
+      safeStr(record.relativePath) || normalizeRelativePath(basePath, safeStr(record.path)),
     createdAt: safeStr(record.createdAt, new Date().toISOString()),
     sessionId: identity.sessionId,
     attachmentSource: identity.attachmentSource,

@@ -48,31 +48,36 @@ test("run-event-listener forwards committed session version as a first-class eve
     },
   });
 
-  assert.deepEqual(frames, [{
-    event: "turn_committed",
-    data: {
-      sessionId: "root-session",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      aggregateVersion: 7,
-      userMessage: {
-        messageUid: "sm_1",
-        messageId: "frontend-user-1",
-        role: "user",
+  assert.deepEqual(frames, [
+    {
+      event: "turn_committed",
+      data: {
         sessionId: "root-session",
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
-        attachments: [{ attachmentId: "attachment-1", sessionId: "root-session" }],
+        aggregateVersion: 7,
+        userMessage: {
+          messageUid: "sm_1",
+          messageId: "frontend-user-1",
+          role: "user",
+          sessionId: "root-session",
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+          attachments: [{ attachmentId: "attachment-1", sessionId: "root-session" }],
+        },
       },
     },
-  }]);
+  ]);
 });
 
 test("run-event-listener forwards workflow planning frames verbatim", () => {
   const frames = [];
   const received = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -122,7 +127,10 @@ test("run-event-listener forwards workflow planning frames verbatim", () => {
 test("run-event-listener validates and forwards versioned attachment lifecycle facts", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -161,17 +169,21 @@ test("run-event-listener validates and forwards versioned attachment lifecycle f
 test("run-event-listener rejects attachment events with incomplete identity", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
   });
 
   assert.throws(
-    () => listener.onEvent({
-      event: "attachments_saved",
-      data: { attachments: [{ attachmentId: "att-1", sessionId: "root-session" }] },
-    }),
+    () =>
+      listener.onEvent({
+        event: "attachments_saved",
+        data: { attachments: [{ attachmentId: "att-1", sessionId: "root-session" }] },
+      }),
     /invalid_attachment_source/,
   );
   assert.deepEqual(frames, []);
@@ -216,7 +228,10 @@ test("run-event-listener preserves the safe Agent transport consumption proof", 
 test("run-event-listener forwards workflow node state frames verbatim", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -252,7 +267,10 @@ test("run-event-listener forwards workflow node state frames verbatim", () => {
 test("run-event-listener routes workflow child deltas with sub session identity", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -286,7 +304,10 @@ test("run-event-listener routes workflow child deltas with sub session identity"
 test("run-event-listener rejects malformed authoritative envelopes instead of legacy normalization", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
@@ -296,20 +317,21 @@ test("run-event-listener rejects malformed authoritative envelopes instead of le
   });
 
   assert.throws(
-    () => listener.onEvent({
-      event: "tool_call_end",
-      data: {
-        envelopeKind: "noobot.message_event",
-        envelopeVersion: 2,
-        eventId: "evt-incomplete",
-        eventType: "tool_call_end",
-        sessionId: "sub-session",
-        messageId: "msg-1",
-        sequence: 1,
-        workflowRunId: "workflow-1",
-        nodeExecutionId: "node-1",
-      },
-    }),
+    () =>
+      listener.onEvent({
+        event: "tool_call_end",
+        data: {
+          envelopeKind: "noobot.message_event",
+          envelopeVersion: 2,
+          eventId: "evt-incomplete",
+          eventType: "tool_call_end",
+          sessionId: "sub-session",
+          messageId: "msg-1",
+          sequence: 1,
+          workflowRunId: "workflow-1",
+          nodeExecutionId: "node-1",
+        },
+      }),
     /invalid authoritative message event envelope/,
   );
   assert.deepEqual(frames, []);
@@ -318,23 +340,43 @@ test("run-event-listener rejects malformed authoritative envelopes instead of le
 test("run-event-listener separates root and child authoritative message channels", () => {
   const frames = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: true,
     registerActiveRun: () => {},
   });
   const base = {
-    envelopeKind: "noobot.message_event", envelopeVersion: 2,
-    eventType: "tool_call_start", messageId: "msg-1", presentationMessageId: "presentation-1", sequence: 1,
-    tool: "read_file", toolCallId: "call-1", args: {},
+    envelopeKind: "noobot.message_event",
+    envelopeVersion: 2,
+    eventType: "tool_call_start",
+    messageId: "msg-1",
+    presentationMessageId: "presentation-1",
+    sequence: 1,
+    tool: "read_file",
+    toolCallId: "call-1",
+    args: {},
     timestamp: "2026-01-01T00:00:00.000Z",
   };
-  listener.onEvent({ event: "tool_call_start", data: {
-    ...base, eventId: "evt-root", sessionId: "root-session",
-  } });
-  listener.onEvent({ event: "tool_call_start", data: {
-    ...base, eventId: "evt-child", sessionId: "child-session", parentSessionId: "root-session",
-  } });
+  listener.onEvent({
+    event: "tool_call_start",
+    data: {
+      ...base,
+      eventId: "evt-root",
+      sessionId: "root-session",
+    },
+  });
+  listener.onEvent({
+    event: "tool_call_start",
+    data: {
+      ...base,
+      eventId: "evt-child",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+    },
+  });
   assert.equal(frames[0].event, "message_event");
   assert.equal(frames[0].data.route.scope, "main_session");
   assert.equal(frames[1].event, "subagent_message_event");
@@ -345,7 +387,10 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
   const frames = [];
   const routed = [];
   const listener = createRunEventListener({
-    sendEvent: (event, data) => { frames.push({ event, data }); return true; },
+    sendEvent: (event, data) => {
+      frames.push({ event, data });
+      return true;
+    },
     sessionId: "root-session",
     textStreamingEnabled: false,
     registerActiveRun: () => {},
@@ -359,30 +404,65 @@ test("non-streaming delivery suppresses only deltas and preserves root and workf
     presentationMessageId: "presentation-1",
     timestamp: "2026-01-01T00:00:00.000Z",
   };
-  listener.onEvent({ event: "llm_delta", data: {
-    ...base, eventId: "delta-root", eventType: "llm_delta",
-    sessionId: "root-session", sequence: 1, text: "hidden",
-  } });
-  listener.onEvent({ event: "main_model_content", data: {
-    ...base, eventId: "final-root", eventType: "main_model_content",
-    sessionId: "root-session", sequence: 2, text: "root final",
-  } });
-  listener.onEvent({ event: "llm_delta", data: {
-    ...base, eventId: "delta-child", eventType: "llm_delta",
-    sessionId: "child-session", parentSessionId: "root-session",
-    sequence: 1, text: "hidden child",
-  } });
-  listener.onEvent({ event: "main_model_content", data: {
-    ...base, eventId: "final-child", eventType: "main_model_content",
-    sessionId: "child-session", parentSessionId: "root-session",
-    sequence: 2, text: "child final",
-  } });
+  listener.onEvent({
+    event: "llm_delta",
+    data: {
+      ...base,
+      eventId: "delta-root",
+      eventType: "llm_delta",
+      sessionId: "root-session",
+      sequence: 1,
+      text: "hidden",
+    },
+  });
+  listener.onEvent({
+    event: "main_model_content",
+    data: {
+      ...base,
+      eventId: "final-root",
+      eventType: "main_model_content",
+      sessionId: "root-session",
+      sequence: 2,
+      text: "root final",
+    },
+  });
+  listener.onEvent({
+    event: "llm_delta",
+    data: {
+      ...base,
+      eventId: "delta-child",
+      eventType: "llm_delta",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      sequence: 1,
+      text: "hidden child",
+    },
+  });
+  listener.onEvent({
+    event: "main_model_content",
+    data: {
+      ...base,
+      eventId: "final-child",
+      eventType: "main_model_content",
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      sequence: 2,
+      text: "child final",
+    },
+  });
 
-  assert.deepEqual(frames.map((frame) => frame.event), ["message_event", "subagent_message_event"]);
-  assert.deepEqual(frames.map((frame) => frame.data.event.text), ["root final", "child final"]);
-  assert.deepEqual(routed.map((item) => item.delivery), [
-    "suppressed", "delivered", "suppressed", "delivered",
-  ]);
+  assert.deepEqual(
+    frames.map((frame) => frame.event),
+    ["message_event", "subagent_message_event"],
+  );
+  assert.deepEqual(
+    frames.map((frame) => frame.data.event.text),
+    ["root final", "child final"],
+  );
+  assert.deepEqual(
+    routed.map((item) => item.delivery),
+    ["suppressed", "delivered", "suppressed", "delivered"],
+  );
   assert.equal(routed[0].suppressionReason, "non_streaming_delta");
   assert.equal(routed[1].textStreamingEnabled, false);
   assert.equal(routed[1].sequenceScopeId, "msg-1");
@@ -425,11 +505,10 @@ test("authoritative final content awaits the canonical transport result with com
   };
 
   let settled = false;
-  const delivery = listener.onEvent({ event: event.eventType, data: event })
-    .then((result) => {
-      settled = true;
-      return result;
-    });
+  const delivery = listener.onEvent({ event: event.eventType, data: event }).then((result) => {
+    settled = true;
+    return result;
+  });
   await Promise.resolve();
   assert.equal(settled, false);
   assert.equal(frames.length, 1);

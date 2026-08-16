@@ -122,14 +122,24 @@ describe("messageModel attachments and semantic transfer", () => {
             attachmentSource: "test",
             name: "source.pdf",
             mimeType: "application/pdf",
-            relations: [{
-              relationType: "parsed_result",
-              sourceIdentity: { attachmentId: "src-1", sessionId: "s1", attachmentSource: "test" },
-              targetIdentity: { attachmentId: "parsed-1", sessionId: "s1", attachmentSource: "test" },
-              name: "source.md",
-              mimeType: "text/markdown",
-              createdAt: "2026-08-16T00:00:00.000Z",
-            }],
+            relations: [
+              {
+                relationType: "parsed_result",
+                sourceIdentity: {
+                  attachmentId: "src-1",
+                  sessionId: "s1",
+                  attachmentSource: "test",
+                },
+                targetIdentity: {
+                  attachmentId: "parsed-1",
+                  sessionId: "s1",
+                  attachmentSource: "test",
+                },
+                name: "source.md",
+                mimeType: "text/markdown",
+                createdAt: "2026-08-16T00:00:00.000Z",
+              },
+            ],
           },
         ],
       },
@@ -139,10 +149,12 @@ describe("messageModel attachments and semantic transfer", () => {
     expect(message.attachments).toHaveLength(1);
     expect(message.attachments[0]).toMatchObject({
       attachmentId: "src-1",
-      relations: [expect.objectContaining({
-        relationType: "parsed_result",
-        targetIdentity: { attachmentId: "parsed-1", sessionId: "s1", attachmentSource: "test" },
-      })],
+      relations: [
+        expect.objectContaining({
+          relationType: "parsed_result",
+          targetIdentity: { attachmentId: "parsed-1", sessionId: "s1", attachmentSource: "test" },
+        }),
+      ],
     });
   });
 
@@ -210,5 +222,4 @@ describe("messageModel attachments and semantic transfer", () => {
 
     expect(message.attachments).toEqual([]);
   });
-
 });
