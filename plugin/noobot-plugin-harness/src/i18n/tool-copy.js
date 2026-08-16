@@ -11,7 +11,8 @@ export const I18N_TOOL_COPY = Object.freeze({
     taskAcceptanceToolDescription:
       "请求任务验收：按 harness 插件任务清单输出验收报告；mode=active(主动) 或 forced(强行)。",
     taskAcceptanceModeDescription: "验收模式：active(主动) 或 forced(强行)。",
-    planRefinementToolDescription: "在总计划完成后触发计划细化流程。",
+    planRefinementToolDescription:
+      "显式调用 request_plan_refinement，在总计划完成后触发计划细化流程。只有本工具的真实调用及对应工具结果才表示本工具已执行；Harness 自动计划细化不计作本工具调用。",
     planRefinementNotReadyReason: "总计划流程尚未完成",
     planRefinementConvergedReason: "未找到可细化的主步骤",
     planRefinementFailedReason: "插件侧细化失败",
@@ -51,7 +52,8 @@ export const I18N_TOOL_COPY = Object.freeze({
     taskAcceptanceToolDescription:
       "Request task acceptance: validate completion against the harness checklist; mode=active or forced.",
     taskAcceptanceModeDescription: "Acceptance mode: active or forced.",
-    planRefinementToolDescription: "Trigger planning refinement flow after main plan is ready.",
+    planRefinementToolDescription:
+      "Explicitly call request_plan_refinement to trigger planning refinement after the main plan is ready. Only this tool's actual call and matching tool result prove it ran; automatic Harness plan refinement does not count as this tool call.",
     planRefinementNotReadyReason: "main planning flow is not completed yet",
     planRefinementConvergedReason: "no refinable main step found",
     planRefinementFailedReason: "plugin-side refinement failed",

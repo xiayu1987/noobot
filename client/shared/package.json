@@ -13,6 +13,7 @@
   "dependencies": {
     "@noobot/agent-config-protocol": "file:../../agent-config-protocol",
     "@noobot/model-protocol": "file:../../model-protocol",
+    "@noobot/platform-compatibility": "file:../../platform-compatibility",
     "@noobot/runtime-events": "file:../../runtime-events",
     "@noobot/shared": "file:../../shared"
   },

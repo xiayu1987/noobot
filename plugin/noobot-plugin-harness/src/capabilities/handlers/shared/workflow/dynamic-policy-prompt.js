@@ -89,24 +89,13 @@ export function applyDynamicPolicyPromptFromText(ctx = {}, text = "", meta = {})
     ? ctx.agentContext.bindings.extensions.harness
     : null;
   if (!bucket) return null;
-  const previousSignature = buildDynamicPolicyPromptSignature(bucket.dynamicPolicyPrompt);
   const record = {
     ...parsed,
     source: normalizeText(meta?.source) || "unknown",
     stage: normalizeText(meta?.stage) || "unknown",
     updatedAt: new Date().toISOString(),
   };
-  const nextSignature = buildDynamicPolicyPromptSignature(record);
   bucket.dynamicPolicyPrompt = record;
-  if (nextSignature && nextSignature !== previousSignature) {
-    bucket.policyPromptRefresh = {
-      pending: true,
-      reason: "dynamic_policy_prompt_changed",
-      signature: nextSignature,
-      previousSignature,
-      updatedAt: record.updatedAt,
-    };
-  }
   return record;
 }
 

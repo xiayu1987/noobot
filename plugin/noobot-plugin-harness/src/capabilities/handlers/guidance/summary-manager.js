@@ -29,7 +29,7 @@ export function recordLatestSummaryFullText(ctx = {}, summaryFullText = "") {
   return bucket.summaryFullText;
 }
 
-export function shouldSaveSummaryDetailToAttachment(meta = {}) {
+export function shouldSaveSummaryToAttachment(meta = {}) {
   return (
     meta?.harness?.summaryDetailSaveToAttachment === true ||
     meta?.harness?.saveSummaryDetailToAttachment === true
@@ -78,18 +78,18 @@ export function resolvePreviousSummaryContextText(ctx = {}) {
   return latestCompleteSummaryText;
 }
 
-export function recordSummaryDetailTransferEnvelopes(ctx = {}, transferPayload = {}) {
+export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
   const envelopes = Array.isArray(transferPayload?.transferEnvelopes)
     ? transferPayload.transferEnvelopes
     : [];
-  if (!Array.isArray(bucket.summaryDetailTransferEnvelopes)) {
-    bucket.summaryDetailTransferEnvelopes = [];
+  if (!Array.isArray(bucket.summaryTransferEnvelopes)) {
+    bucket.summaryTransferEnvelopes = [];
   }
   const envelopeKey = (envelope = {}) => `${envelope.transferId}:${envelope.messageId}`;
-  const seen = new Set(bucket.summaryDetailTransferEnvelopes.map(envelopeKey));
+  const seen = new Set(bucket.summaryTransferEnvelopes.map(envelopeKey));
   for (const envelope of envelopes) {
     if (envelope?.payload?.mode !== "attachment") continue;
     for (const reference of envelope.payload.attachments || []) {
@@ -97,8 +97,8 @@ export function recordSummaryDetailTransferEnvelopes(ctx = {}, transferPayload =
     }
     const key = envelopeKey(envelope);
     if (key && seen.has(key)) continue;
-    bucket.summaryDetailTransferEnvelopes.push(envelope);
+    bucket.summaryTransferEnvelopes.push(envelope);
     if (key) seen.add(key);
   }
-  return bucket.summaryDetailTransferEnvelopes;
+  return bucket.summaryTransferEnvelopes;
 }

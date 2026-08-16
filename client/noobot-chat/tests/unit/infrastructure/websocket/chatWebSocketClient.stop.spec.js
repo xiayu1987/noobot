@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { MockWebSocket, setupWebSocketTestHooks } from "./chatWebSocketClientTestFixtures.js";
+import { MockWebSocket, setupWebSocketTestHooks, streamCommand } from "./chatWebSocketClientTestFixtures.js";
 import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
 
 function stopCommand({
@@ -33,12 +33,11 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
     let resolved = false;
-    const streamPromise = client.stream({
-      action: "chat",
+    const streamPromise = client.stream(streamCommand({
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
-    }, vi.fn()).then(() => {
+    }), vi.fn()).then(() => {
       resolved = true;
     });
 

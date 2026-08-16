@@ -76,6 +76,12 @@ function required(value, code) {
   if (typeof value !== "string" || !value.trim()) throw new Error(code);
   return value.trim();
 }
+function normalizeSourceReferenceAddress(value) {
+  if (typeof value === "string") return required(value, "invalid_source_reference_address");
+  const identity = parseAttachmentIdentity(value);
+  if (!identity) throw new Error("invalid_source_reference_address");
+  return identity;
+}
 function known(value, keys, code) {
   for (const key of Object.keys(value))
     if (!keys.has(key)) throw new Error(`${code}:${key}`);
@@ -226,10 +232,13 @@ export function attachmentTransfer({ attachments, ...options } = {}) {
 export function sourceReferenceTransfer({ reference, ...options } = {}) {
   if (!plain(reference)) throw new Error("invalid_source_reference");
   known(reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
-  required(reference.address, "invalid_source_reference_address");
+  const address = normalizeSourceReferenceAddress(reference.address);
   return createTransferEnvelope({
     ...options,
-    payload: { mode: TRANSFER_MODE.SOURCE_REFERENCE, reference: clean(reference) },
+    payload: {
+      mode: TRANSFER_MODE.SOURCE_REFERENCE,
+      reference: clean({ ...reference, address }),
+    },
   });
 }
 
@@ -287,7 +296,7 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     } else if (value.payload.mode === TRANSFER_MODE.SOURCE_REFERENCE) {
       if (!plain(value.payload.reference)) throw new Error("source_reference_required");
       known(value.payload.reference, SOURCE_REFERENCE_KEYS, "unknown_source_reference_field");
-      required(value.payload.reference.address, "invalid_source_reference_address");
+      normalizeSourceReferenceAddress(value.payload.reference.address);
       if (value.payload.content !== undefined || value.payload.attachments !== undefined) {
         throw new Error("source_reference_payload_exclusive");
       }

@@ -18,6 +18,7 @@ import {
 export function createWorkspaceIoExecutor({
   executionPolicy,
   atomicRenameRetryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
+  platform = process.platform,
   fileSystem = {},
 } = {}) {
   const policy = assertToolExecutionPolicy(executionPolicy);
@@ -51,6 +52,7 @@ export function createWorkspaceIoExecutor({
         rename: operations.rename,
         remove: operations.rm,
         retryDelaysMs: atomicRenameRetryDelaysMs,
+        platform,
       });
     },
     async remove(filePath) {

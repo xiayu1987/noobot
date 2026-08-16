@@ -42,7 +42,6 @@ export function createChatEngineSender({
   allowUserInteraction,
   applyConversationState,
   applyConversationStateFromEvent,
-  applySessionDetail,
   appendMessage,
   findCanonicalMessageById,
   findCanonicalMessagesById,
@@ -59,7 +58,6 @@ export function createChatEngineSender({
   connectorTypeSet,
   upsertConnectedConnectorInPanelState,
   ensureConnected,
-  fetchSessionDetail,
   foldMessagesForView,
   safeConfirm,
   safeConfirmLevel,
@@ -97,8 +95,6 @@ export function createChatEngineSender({
   const logSessionEvent = (event = {}) => sessionLogWebSocketClient?.log?.(event);
   const sessionAggregateVersionManager = createSessionAggregateVersionManager({
     activeSession,
-    fetchSessionDetail,
-    applySessionDetail: (detail) => applySessionDetail(detail, { scrollToBottom: false }),
     log: logResendDebug,
   });
   return async function send(options = {}) {
@@ -366,9 +362,8 @@ export function createChatEngineSender({
       const streamResult = await sessionAggregateVersionManager.runAggregateVersionedStream({
         buildPayload: buildPayloadForCurrentVersion,
         stream: streamOnce,
-        refreshOptions: {
+        conflictOptions: {
           sessionId,
-          detailOptions: { source: "sendVersionConflict" },
           logContext: { turnScopeId },
         },
       });

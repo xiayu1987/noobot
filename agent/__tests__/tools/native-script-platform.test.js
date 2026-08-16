@@ -9,13 +9,12 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
 import {
-  buildNativeProcessEnv,
-  buildNativeCapabilityProcessEnv,
-  cleanupNativeTaskDirectory,
-  resolveNativeBrowserExecutable,
-  resolveNativeLibreOfficeExecutable,
-  terminateNativeProcessTree,
-} from "../../src/tools/execution/native-script-process.js";
+  buildRestrictedProcessEnv,
+  resolveBrowserExecutable,
+  resolveLibreOfficeExecutable,
+  terminateProcessTree,
+} from "@noobot/platform-compatibility/process";
+import { cleanupNativeTaskDirectory } from "../../src/tools/execution/native-script-cleanup.js";
 
 test("native task cleanup applies the cross-platform lock retry contract", async () => {
   const calls = [];
@@ -38,7 +37,7 @@ test("native task cleanup applies the cross-platform lock retry contract", async
 
 test("native process environment isolates task paths on Linux and macOS", () => {
   for (const platform of ["linux", "darwin"]) {
-    const environment = buildNativeProcessEnv({
+    const environment = buildRestrictedProcessEnv({
       home: "/task",
       temp: "/temp",
       platform,
@@ -55,7 +54,7 @@ test("native process environment isolates task paths on Linux and macOS", () => 
 });
 
 test("native process environment keeps required Windows process variables", () => {
-  const environment = buildNativeProcessEnv({
+  const environment = buildRestrictedProcessEnv({
     home: "C:/task",
     temp: "C:/temp",
     platform: "win32",
@@ -89,7 +88,7 @@ test("native process environment keeps required Windows process variables", () =
 });
 
 test("native process environment forces packaged Electron into Node mode", () => {
-  const environment = buildNativeProcessEnv({
+  const environment = buildRestrictedProcessEnv({
     home: "/task",
     temp: "/temp",
     platform: "linux",
@@ -100,11 +99,12 @@ test("native process environment forces packaged Electron into Node mode", () =>
 });
 
 test("native capability processes do not inherit Electron Node mode", () => {
-  const environment = buildNativeCapabilityProcessEnv({
+  const environment = buildRestrictedProcessEnv({
     home: "/task",
     temp: "/temp",
     platform: "linux",
     sourceEnv: { PATH: "/usr/bin", ELECTRON_RUN_AS_NODE: "1" },
+    runElectronAsNode: false,
   });
 
   assert.equal(environment.ELECTRON_RUN_AS_NODE, undefined);
@@ -112,7 +112,7 @@ test("native capability processes do not inherit Electron Node mode", () => {
 });
 
 test("native process environment preserves only declared network proxy variables", () => {
-  const environment = buildNativeProcessEnv({
+  const environment = buildRestrictedProcessEnv({
     home: "/task",
     temp: "/temp",
     platform: "linux",
@@ -131,7 +131,7 @@ test("native process environment preserves only declared network proxy variables
 
 test("native LibreOffice executable uses the host-resolved dependency path", () => {
   assert.equal(
-    resolveNativeLibreOfficeExecutable({
+    resolveLibreOfficeExecutable({
       platform: "win32",
       sourceEnv: {
         LIBRE_OFFICE_EXE: "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
@@ -139,26 +139,20 @@ test("native LibreOffice executable uses the host-resolved dependency path", () 
     }),
     "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
   );
-  assert.equal(
-    resolveNativeLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }),
-    "soffice.exe",
-  );
-  assert.equal(
-    resolveNativeLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }),
-    "libreoffice",
-  );
+  assert.equal(resolveLibreOfficeExecutable({ platform: "win32", sourceEnv: {} }), "soffice.exe");
+  assert.equal(resolveLibreOfficeExecutable({ platform: "darwin", sourceEnv: {} }), "libreoffice");
 });
 
 test("native browser executable prefers the client-resolved dependency path", () => {
   assert.equal(
-    resolveNativeBrowserExecutable({
+    resolveBrowserExecutable({
       playwrightExecutable: "/standard-cache/chromium",
       sourceEnv: { NOOBOT_PLAYWRIGHT_CHROMIUM_PATH: "/client/chromium" },
     }),
     "/client/chromium",
   );
   assert.equal(
-    resolveNativeBrowserExecutable({
+    resolveBrowserExecutable({
       playwrightExecutable: "/standard-cache/chromium",
       sourceEnv: {},
     }),
@@ -169,7 +163,7 @@ test("native browser executable prefers the client-resolved dependency path", ()
 test("native process termination waits for the Windows process tree to exit", async () => {
   const calls = [];
   let releaseTaskkill;
-  const terminated = terminateNativeProcessTree({ pid: 123 }, "SIGTERM", {
+  const terminated = terminateProcessTree({ pid: 123 }, "SIGTERM", {
     platform: "win32",
     execFileImpl: (...args) => {
       calls.push(args);
@@ -193,7 +187,7 @@ test("native process termination uses detached groups on Linux and macOS", async
   for (const platform of ["linux", "darwin"]) {
     const processKillCalls = [];
     const childKillCalls = [];
-    await terminateNativeProcessTree(
+    await terminateProcessTree(
       { pid: 456, kill: (signal) => childKillCalls.push(signal) },
       "SIGKILL",
       {

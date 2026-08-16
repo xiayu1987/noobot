@@ -81,6 +81,18 @@ export function setPendingStateWithMeta(state = {}, key = "", value = null) {
   return true;
 }
 
+export function clearPendingSummaryState(state = {}) {
+  if (!state || typeof state !== "object") return false;
+  const hadPendingSummary = state?.pending?.summary === true;
+  const hadCheckpoint = Array.isArray(state?.pending?.summaryCheckpointMessageIds);
+  const hadCharTrigger = state?.flags?.summaryByCharsPrompted === true;
+  setPendingStateWithMeta(state, "summary", false);
+  state.pending.summaryCheckpointMessageIds = null;
+  if (!state.flags || typeof state.flags !== "object") state.flags = {};
+  state.flags.summaryByCharsPrompted = false;
+  return hadPendingSummary || hadCheckpoint || hadCharTrigger;
+}
+
 export function setCaptureFlagStateWithMeta(state = {}, key = "", active = false) {
   if (!key || !state || typeof state !== "object") return false;
   if (!state.flags || typeof state.flags !== "object") state.flags = {};

@@ -28,6 +28,7 @@ test("web_search: Responses API 模式只通过 canonical ModelPort 发起操作
           format: "openai_compatible",
           providerId: "openai",
           adapterId: "openai-compatible",
+          capabilities: { web_search: true },
         },
       },
     },

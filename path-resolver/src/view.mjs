@@ -3,18 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizePathPlatform as normalizePlatform, normalizePathForPlatform, detectPathPlatform, PATH_VIEWS, normalizeSlashPath } from "./platform.mjs";
+import { normalizePlatform } from "@noobot/platform-compatibility/platform";
+import {
+  normalizePathForPlatform,
+  detectPathPlatform,
+  PATH_VIEWS,
+  normalizeSlashPath,
+} from "./platform.mjs";
 import { resolveSandboxPathMappings } from "./sandbox-mapping.mjs";
 
 function normalizeView(view = "") {
-  const value = String(view || "").trim().toLowerCase();
+  const value = String(view || "")
+    .trim()
+    .toLowerCase();
   return Object.values(PATH_VIEWS).includes(value) ? value : "";
 }
 
 function resolveHostPlatform(agentContext = null) {
-  return normalizePlatform(
-    agentContext?.context?.environment?.os?.platform || "",
-  );
+  return normalizePlatform(agentContext?.context?.environment?.os?.platform || "");
 }
 
 function explicitViewMappings(context = {}) {
@@ -26,23 +32,39 @@ function explicitViewMappings(context = {}) {
   }));
 }
 export function convertPathView({
-  path = "", sourceView = "", targetView = "", sourcePlatform = "",
-  targetPlatform = "", runtime = {}, agentContext = null, mappings = [],
+  path = "",
+  sourceView = "",
+  targetView = "",
+  sourcePlatform = "",
+  targetPlatform = "",
+  runtime = {},
+  agentContext = null,
+  mappings = [],
 } = {}) {
   const from = normalizeView(sourceView);
   const to = normalizeView(targetView);
-  if (!from || !to) throw new TypeError("sourceView and targetView must be host, sandbox, or client");
+  if (!from || !to)
+    throw new TypeError("sourceView and targetView must be host, sandbox, or client");
   const hostPlatform = resolveHostPlatform(agentContext);
-  const fromPlatformHint = normalizePlatform(sourcePlatform) || (from === PATH_VIEWS.HOST ? hostPlatform : "");
+  const fromPlatformHint =
+    normalizePlatform(sourcePlatform) || (from === PATH_VIEWS.HOST ? hostPlatform : "");
   const normalized = normalizePathForPlatform(path, { platform: fromPlatformHint });
   const fromPlatform = fromPlatformHint || detectPathPlatform(normalized);
-  const toPlatform = normalizePlatform(targetPlatform) || (to === PATH_VIEWS.HOST ? hostPlatform : "") || fromPlatform;
+  const toPlatform =
+    normalizePlatform(targetPlatform) ||
+    (to === PATH_VIEWS.HOST ? hostPlatform : "") ||
+    fromPlatform;
   let converted = normalized;
   let mapped = from === to;
-  const allMappings = explicitViewMappings({ mappings: [
-    ...resolveSandboxPathMappings(runtime).map(({ source, target }) => ({ host: source, sandbox: target })),
-    ...mappings,
-  ] });
+  const allMappings = explicitViewMappings({
+    mappings: [
+      ...resolveSandboxPathMappings(runtime).map(({ source, target }) => ({
+        host: source,
+        sandbox: target,
+      })),
+      ...mappings,
+    ],
+  });
   if (!mapped) {
     const candidates = allMappings
       .filter((item) => item[from] && item[to])
@@ -66,6 +88,9 @@ export function convertPathView({
   };
 }
 
-export const toHostPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.HOST });
-export const toSandboxPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.SANDBOX });
-export const toClientPath = (options = {}) => convertPathView({ ...options, targetView: PATH_VIEWS.CLIENT });
+export const toHostPath = (options = {}) =>
+  convertPathView({ ...options, targetView: PATH_VIEWS.HOST });
+export const toSandboxPath = (options = {}) =>
+  convertPathView({ ...options, targetView: PATH_VIEWS.SANDBOX });
+export const toClientPath = (options = {}) =>
+  convertPathView({ ...options, targetView: PATH_VIEWS.CLIENT });

@@ -408,5 +408,3 @@ export function createOpenVSCodeService({
     stopLifecycleManager,
   };
 }
-
-export { taskkillProcessTreeBestEffort } from "./openvscode/process.js";

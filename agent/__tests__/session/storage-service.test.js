@@ -37,7 +37,10 @@ test("writeJsonAtomic retries transient Windows rename EPERM errors", async () =
     },
   });
 
-  const storage = new StorageService({ atomicRenameRetryDelaysMs: [1] });
+  const storage = new StorageService({
+    atomicRenameRetryDelaysMs: [1],
+    platform: "win32",
+  });
   await storage.writeJsonAtomic("C:/workspace/runtime/session/session-tree.json", {
     ok: true,
   });
@@ -69,7 +72,10 @@ test("writeJsonAtomic cleans up temp file when rename cannot recover", async () 
     },
   });
 
-  const storage = new StorageService({ atomicRenameRetryDelaysMs: [1, 1] });
+  const storage = new StorageService({
+    atomicRenameRetryDelaysMs: [1, 1],
+    platform: "linux",
+  });
   await assert.rejects(
     () => storage.writeJsonAtomic("/tmp/session-tree.json", { ok: false }),
     /permission denied/,

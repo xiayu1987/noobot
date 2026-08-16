@@ -5,17 +5,12 @@
  */
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
+import { isTransientAtomicRenameError } from "@noobot/platform-compatibility/file-system";
 
 export const ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([25, 75, 150, 300, 600]);
 
-const ATOMIC_RENAME_RETRY_CODES = new Set(["EPERM", "EACCES", "EBUSY"]);
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-export function isRetryableAtomicRenameError(error) {
-  return ATOMIC_RENAME_RETRY_CODES.has(String(error?.code || ""));
 }
 
 export async function writeFileAtomic({
@@ -26,6 +21,7 @@ export async function writeFileAtomic({
   rename,
   remove,
   retryDelaysMs = ATOMIC_RENAME_RETRY_DELAYS_MS,
+  platform = process.platform,
 } = {}) {
   if (
     typeof writeFile !== "function" ||
@@ -46,7 +42,8 @@ export async function writeFileAtomic({
         await rename(temporary, filePath);
         return;
       } catch (error) {
-        if (attempt >= delays.length || !isRetryableAtomicRenameError(error)) throw error;
+        if (attempt >= delays.length || !isTransientAtomicRenameError(error, { platform }))
+          throw error;
         await sleep(delays[attempt]);
       }
     }

@@ -18,7 +18,7 @@ import {
   resolveTaskPath,
 } from "@noobot/path-resolver";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { buildNativeCapabilityProcessEnv } from "./native-script-process.js";
+import { buildRestrictedProcessEnv } from "@noobot/platform-compatibility/process";
 
 const LIBREOFFICE_OUTPUT_FORMATS = Object.freeze({
   docx: Object.freeze({ extension: "docx", convertTo: "docx:Office Open XML Text" }),
@@ -59,7 +59,11 @@ function runFixed(command, args, cwd, timeoutMs) {
         shell: false,
         timeout: Number(timeoutMs || 0) || undefined,
         windowsHide: true,
-        env: buildNativeCapabilityProcessEnv({ home: cwd, temp: path.join(cwd, "tmp") }),
+        env: buildRestrictedProcessEnv({
+          home: cwd,
+          temp: path.join(cwd, "tmp"),
+          runElectronAsNode: false,
+        }),
         maxBuffer: LENGTH_THRESHOLDS.nativeScript.processOutputBytes,
       },
       (error, stdout, stderr) => {
@@ -370,7 +374,9 @@ export async function createNativeScriptRuntime({
       throw new Error("output.tempFile requires a file name after a temp directory token");
     }
     if (!parentToken && child) {
-      throw new Error("output.tempFile first argument must be a tempDirectory token when a fileName is provided");
+      throw new Error(
+        "output.tempFile first argument must be a tempDirectory token when a fileName is provided",
+      );
     }
     const directory = parentToken
       ? parseTaskPath(parent, {
@@ -484,9 +490,12 @@ export async function createNativeScriptRuntime({
       const targetDir = targetDirectory.target;
       await mkdir(targetDir, { recursive: true });
       const format = resolveLibreOfficeOutputFormat(outputFormat);
+      const executable = String(libreOfficeExecutable || "").trim();
+      if (!executable) {
+        throw new Error("LibreOffice executable was not resolved by native process policy");
+      }
       const result = await runCapability(
-        String(libreOfficeExecutable || "").trim() ||
-          (process.platform === "win32" ? "soffice.exe" : "libreoffice"),
+        executable,
         [
           "--headless",
           "--nologo",

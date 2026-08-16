@@ -142,6 +142,33 @@ test("patch_file: 支持 apply_patch 和 unified_diff 协议", async () => {
   assert.equal(await fs.readFile(path.join(basePath, "a.txt"), "utf8"), "one\ntwo\nthree\n");
 });
 
+test("patch_file: 修改 Windows 文本时保留 BOM、CRLF 和末尾换行", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-patch-windows-text-"));
+  const targetPath = path.join(basePath, "windows.txt");
+  await fs.writeFile(targetPath, "\uFEFFone\r\ntwo\r\nthree\r\n", "utf8");
+  const tool = createFileTool({ agentContext: buildAgentContext(basePath) }).find(
+    (item) => item?.name === "patch_file",
+  );
+
+  const patch = [
+    "*** Begin Patch",
+    "*** Update File: windows.txt",
+    "@@",
+    " one",
+    "-two",
+    "+TWO",
+    " three",
+    "*** End Patch",
+    "",
+  ].join("\n");
+  const result = parseToolResult(
+    await tool.invoke({ riskLevel: "low", format: "apply_patch", patch }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(await fs.readFile(targetPath, "utf8"), "\uFEFFone\r\nTWO\r\nthree\r\n");
+});
+
 test("patch_file: 默认使用主流 git diff/unified_diff 并兼容 git 元数据", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-git-diff-"));
   await fs.mkdir(path.join(basePath, "src"), { recursive: true });

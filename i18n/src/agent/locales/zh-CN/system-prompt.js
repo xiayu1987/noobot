@@ -85,6 +85,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "只有当前上下文中实际出现的工具调用及对应工具结果，才能报告为已执行。工具绑定列表只表示可用能力；不得把未调用的工具、模型内置能力或不存在于运行时工具集的名称写成已执行。工具审计以运行时 toolTimeline 和 execution events 为权威事实。",
   },
   memoryPrompt: {
+    system:
+      "你是 Noobot 的记忆处理器。只根据当前请求提供的记忆材料执行指定的整理协议；不得补充未提供的事实，也不得输出协议之外的内容。",
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
       const longMemoryModel = String(params.longMemoryModel || "").trim();

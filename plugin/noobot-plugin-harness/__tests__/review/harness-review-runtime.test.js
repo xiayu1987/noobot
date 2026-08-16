@@ -511,7 +511,7 @@ test("harness review attachToFinalOutput false keeps report internal", async () 
   );
 });
 
-test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn start", async () => {
+test("harness resets acceptance lifecycle and checklist artifacts on next turn start", async () => {
   const hookManager = createAgentHookManager();
   registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
@@ -523,6 +523,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
           flags: {
             planningCaptured: true,
             acceptanceRequested: true,
+            acceptanceReviewing: true,
             acceptanceCompleted: true,
             checklistArtifactsAttached: true,
           },
@@ -548,6 +549,7 @@ test("harness resets acceptanceRequested/checklistArtifactsAttached on next turn
   });
 
   assert.equal(agentContext.payload.harness.state.flags.acceptanceRequested, false);
+  assert.equal(agentContext.payload.harness.state.flags.acceptanceReviewing, false);
   assert.equal(agentContext.payload.harness.state.flags.acceptanceCompleted, false);
   assert.equal(agentContext.payload.harness.state.flags.checklistArtifactsAttached, false);
 });

@@ -65,7 +65,8 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 用例结束后读取根 Session 的完整 execution-event tree，审计所有权威模型调用，并输出：
 
 - `protocol-evidence/model-invocations.jsonl`：本用例全部权威 provider 调用记录。
-- `protocol-evidence/model-observation-audit.json`：调用期望、计数、模型实例、Session、purpose 与 domain 汇总。
+- `protocol-evidence/model-observation-audit.json`：调用期望、计数、模型实例、Session、purpose、domain、
+  前缀稳定性及主链路/非主链路 system 消息完整性汇总。
 - `protocol-evidence/session-summary-artifact-audit.json`：根及子 Session 的轻量 summary、详情引用、哈希、计数和孤儿文件审计。
 
 统一 fixture 在每条用例结束时还会审计 Session summary 持久化协议：`session-summary.json`

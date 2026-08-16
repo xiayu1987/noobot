@@ -41,8 +41,10 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
   ).toBe(messages.count);
   expect(Array.isArray(messages.preview)).toBe(true);
   expect(messages.preview.length + Number(messages.truncated || 0)).toBe(messages.count);
+  expect(Array.isArray(messages.evidence)).toBe(true);
+  expect(messages.evidence).toHaveLength(messages.count);
   expect(Number.isInteger(messages.missingMessageIdCount)).toBe(true);
-  expect(messages.fingerprintProtocolVersion).toBe(1);
+  expect(messages.fingerprintProtocolVersion).toBe(2);
   expect(Array.isArray(messages.fingerprints)).toBe(true);
   expect(messages.fingerprints).toHaveLength(messages.count);
   expect(messages.sequenceHash).toMatch(/^[a-f0-9]{64}$/);
@@ -65,6 +67,12 @@ export function assertModelInvocationTrace(record, { rootSessionId } = {}) {
     }
     expect(message.contentHash).toMatch(/^[a-f0-9]{16}$/);
     expect(typeof message.contentPreview).toBe("string");
+  }
+  for (const message of messages.evidence) {
+    expect(typeof message.role).toBe("string");
+    expect(message.role.length).toBeGreaterThan(0);
+    expect(message.contentHash).toMatch(/^[a-f0-9]{16}$/);
+    expect(message.contentPreview).toBeUndefined();
   }
 }
 
@@ -218,6 +226,83 @@ export function auditModelPrefixStability(records = []) {
     violations,
     flows: flowAudits,
   };
+}
+
+export function auditModelSystemMessages(records = []) {
+  const invocations = [];
+  const violations = [];
+  let mainInvocationCount = 0;
+  let nonMainInvocationCount = 0;
+  let systemMessageCount = 0;
+  for (const record of Array.isArray(records) ? records : []) {
+    const invocation = record?.data?.invocation || {};
+    const messages = record?.data?.messages || {};
+    const evidence = Array.isArray(messages.evidence) ? messages.evidence : [];
+    const count = messages?.roles?.system;
+    const identity = {
+      invocationId: String(record?.data?.invocationId || ""),
+      attempt: Number(record?.data?.attempt || 0),
+      sessionId: String(record?.sessionId || ""),
+      flow: String(invocation.flow || ""),
+      purpose: String(invocation.purpose || ""),
+      domain: String(invocation.domain || ""),
+    };
+    const isMain = isMainAgentModelInvocation(record);
+    if (isMain) mainInvocationCount += 1;
+    else nonMainInvocationCount += 1;
+    if (!Number.isInteger(count) || count <= 0) {
+      violations.push({ ...identity, type: "system_message_missing", observedCount: count });
+      invocations.push({ ...identity, lane: isMain ? "main" : "non_main", systemMessageCount: 0 });
+      continue;
+    }
+    systemMessageCount += count;
+    const systemEvidence = evidence.filter((message) => message.role === "system");
+    if (systemEvidence.length !== count) {
+      violations.push({
+        ...identity,
+        type: "system_messages_not_fully_observable",
+        systemMessageCount: count,
+        observedSystemMessageCount: systemEvidence.length,
+      });
+    }
+    for (const message of systemEvidence) {
+      if (!Number.isInteger(message.contentLength) || message.contentLength <= 0) {
+        violations.push({
+          ...identity,
+          type: "system_message_empty",
+          messageIndex: message.index,
+        });
+      }
+      if (!/^[a-f0-9]{16}$/.test(String(message.contentHash || ""))) {
+        violations.push({
+          ...identity,
+          type: "system_message_hash_invalid",
+          messageIndex: message.index,
+        });
+      }
+    }
+    invocations.push({
+      ...identity,
+      lane: isMain ? "main" : "non_main",
+      systemMessageCount: count,
+      systemMessageHashes: systemEvidence.map((message) => message.contentHash),
+    });
+  }
+  return {
+    status: violations.length ? "failed" : "passed",
+    invocationCount: invocations.length,
+    mainInvocationCount,
+    nonMainInvocationCount,
+    systemMessageCount,
+    violations,
+    invocations,
+  };
+}
+
+export function assertModelSystemMessages(records = []) {
+  const audit = auditModelSystemMessages(records);
+  expect(audit.violations, "provider model system message audit violations").toEqual([]);
+  return audit;
 }
 
 export function assertRootModelInvocation(record, rootSessionId, turnScopeId) {

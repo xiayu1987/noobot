@@ -4,4 +4,4 @@
  * SPDX-License-Identifier: MIT
  */
 
-export { createAcceptanceHandler, ensureTaskAcceptanceTool } from "./acceptance/index.js";
+export { createAcceptanceHandler, synchronizeTaskAcceptanceTool } from "./acceptance/index.js";

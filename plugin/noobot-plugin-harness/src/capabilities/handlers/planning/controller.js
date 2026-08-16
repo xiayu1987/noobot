@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
-import { ensureTaskAcceptanceTool } from "../acceptance.js";
+import { synchronizeTaskAcceptanceTool } from "../acceptance.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
@@ -12,10 +12,9 @@ import {
   appendCapabilityLog,
   disableBlockedToolsInRegistry,
   ensureHarnessBucket,
-  sanitizeInternalMessages,
   shouldUseSeparateModel,
 } from "./deps.js";
-import { ensurePlanRefinementTool } from "./tool-injector.js";
+import { synchronizePlanRefinementTool } from "./tool-injector.js";
 import { maybeInjectPlanningPrompt } from "./prompt-builder.js";
 import { maybeCapturePlanningResult, runPlanningBySeparateModel } from "./capture-runner.js";
 import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
@@ -141,7 +140,7 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
     }
     if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
       const current = ensureHarnessBucket(ctx);
-      if (current?.state?.flags?.acceptanceCompleted === true) {
+      if (current?.state?.flags?.acceptanceReviewing === true) {
         return { capability, point, status: "active", changed: false };
       }
       const invariantChanged =
@@ -364,10 +363,9 @@ export function createPlanningHandler({ shouldProcessPrimaryToolHooks = () => tr
         execute: async () => {
           let changed = setupChanged;
           let planningPrimaryExecuted = false;
-          changed = sanitizeInternalMessages(ctx) || changed;
           changed = disableBlockedToolsInRegistry(ctx) || changed;
-          changed = ensureTaskAcceptanceTool(ctx, meta) || changed;
-          changed = ensurePlanRefinementTool(ctx, meta) || changed;
+          changed = synchronizeTaskAcceptanceTool(ctx, meta) || changed;
+          changed = synchronizePlanRefinementTool(ctx, meta) || changed;
           if (shouldUseSeparateModel(meta)) {
             const planningSeparateModelChanged = await runPlanningBySeparateModel(ctx, meta);
             planningPrimaryExecuted = planningSeparateModelChanged === true;

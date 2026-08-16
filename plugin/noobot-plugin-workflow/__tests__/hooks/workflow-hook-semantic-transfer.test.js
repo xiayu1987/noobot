@@ -45,6 +45,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       mode: "on",
       semanticModel: "qwen3_6_plus",
       semanticPrompt: "emit workflow dsl",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -289,6 +290,7 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
       enabled: true,
       mode: "on",
       semanticModel: "qwen3_6_plus",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",
@@ -396,6 +398,7 @@ test("workflow hook routes final attachment summary composition through semantic
       enabled: true,
       mode: "on",
       semanticModel: "qwen3_6_plus",
+      resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
         output: { text: [
           "WORKFLOW_DSL/1",

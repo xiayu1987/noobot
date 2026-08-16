@@ -134,9 +134,16 @@ export class MemoryManager {
         },
       },
     });
+    const memorySystemPrompt = String(promptI18n?.system || "").trim();
+    if (!memorySystemPrompt) {
+      throw new Error("memory system prompt is not configured");
+    }
     const invokeModel = async ({ prompt, flow, purpose }) => {
       const response = await modelPort.invoke({
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          { role: "system", content: memorySystemPrompt },
+          { role: "user", content: prompt },
+        ],
         options: { signal: abortSignal },
         invocation: {
           flow,

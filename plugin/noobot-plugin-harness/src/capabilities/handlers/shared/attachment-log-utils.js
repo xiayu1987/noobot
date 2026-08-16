@@ -185,7 +185,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         ? "harness_acceptance"
         : domain === CAPABILITY_DOMAIN.PLANNING
           ? "harness_planning"
-          : purpose === "summary_detail"
+          : purpose === "summary"
             ? "harness_summary"
             : "";
     const category =

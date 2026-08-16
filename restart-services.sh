@@ -82,6 +82,13 @@ wait_for_runtime_ready() {
 [[ -d "$AGENT_PROXY_DIR" ]] || { echo "代理目录不存在: $AGENT_PROXY_DIR" >&2; exit 1; }
 [[ -d "$MODEL_PROXY_DIR" ]] || { echo "模型代理目录不存在: $MODEL_PROXY_DIR" >&2; exit 1; }
 mkdir -p "$PM2_HOME_DIR"
+
+if ! (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet); then
+  echo "Workspace runtime dependencies changed; installing missing workspace links."
+  npm --prefix "$ROOT_DIR" install --workspaces
+  (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
+fi
+
 ensure_pm2_log_rotation
 
 export CADDY_ADDR AGENT_PROXY_UPSTREAM PORT

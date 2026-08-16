@@ -27,6 +27,7 @@ import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   requireModelContextSequencePolicy,
+  validateModelResponse,
 } from "@noobot/model-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
@@ -220,69 +221,6 @@ export function createAgentCapabilityModelInvoker({
       ? Math.min(Number(maxTurns), MAX_MINI_RUNNER_TOOL_TURNS)
       : MAX_MINI_RUNNER_TOOL_TURNS;
 
-  function buildDefaultCapabilityOutput({ targetLocale = "zh-CN", targetPurpose = "" } = {}) {
-    const isEn =
-      String(targetLocale || "")
-        .trim()
-        .toLowerCase() === "en-us";
-    const purposeValue = String(targetPurpose || "")
-      .trim()
-      .toLowerCase();
-    if (purposeValue.includes("planning")) {
-      return JSON.stringify(
-        {
-          taskOwner: "primary_task_owner",
-          taskChecklist: isEn
-            ? [
-                {
-                  index: 1,
-                  task: "Clarify scope and constraints",
-                  owner: "primary_task_owner",
-                  subOwners: [],
-                },
-                {
-                  index: 2,
-                  task: "Implement minimal safe solution",
-                  owner: "primary_task_owner",
-                  subOwners: [],
-                },
-                {
-                  index: 3,
-                  task: "Validate and summarize next actions",
-                  owner: "primary_task_owner",
-                  subOwners: [],
-                },
-              ]
-            : [
-                { index: 1, task: "澄清范围与约束", owner: "primary_task_owner", subOwners: [] },
-                {
-                  index: 2,
-                  task: "实现最小可行且安全的方案",
-                  owner: "primary_task_owner",
-                  subOwners: [],
-                },
-                {
-                  index: 3,
-                  task: "完成验证并给出后续建议",
-                  owner: "primary_task_owner",
-                  subOwners: [],
-                },
-              ],
-          meta: {
-            source: "mini_runner_default",
-            reason: "tool_turn_limit_reached",
-            maxToolTurns: MAX_MINI_RUNNER_TOOL_TURNS,
-          },
-        },
-        null,
-        0,
-      );
-    }
-    return isEn
-      ? `Tool turn limit reached (${MAX_MINI_RUNNER_TOOL_TURNS}). Please proceed with a conservative answer and clear next-step suggestions.`
-      : `已达到工具调用轮数上限（${MAX_MINI_RUNNER_TOOL_TURNS}）。请基于当前信息给出保守结论与下一步建议。`;
-  }
-
   return async function capabilityModelInvoker({
     purpose = "",
     domain = "",
@@ -300,7 +238,6 @@ export function createAgentCapabilityModelInvoker({
   } = {}) {
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
-    const traces = [];
     const runMessages = compactToolMessagesForMiniRunner(filterForModelContext(messages));
     if (prompt) {
       runMessages.unshift({ role: "system", content: String(prompt) });
@@ -373,21 +310,23 @@ export function createAgentCapabilityModelInvoker({
     }
 
     if (enableToolBinding !== true) {
-      const ai = await modelPort.invoke({
-        model: modelSpec,
-        messages: runMessages,
-        options: {
-          streaming: false,
-          signal: runtime?.abortSignal || null,
-          headers: additionalHeaders,
-        },
-        invocation: {
-          flow: flowValue,
-          purpose: normalizedPurpose,
-          domain: normalizedDomain,
-          contextSequencePolicy: normalizedContextSequencePolicy,
-        },
-      });
+      const ai = validateModelResponse(
+        await modelPort.invoke({
+          model: modelSpec,
+          messages: runMessages,
+          options: {
+            streaming: false,
+            signal: runtime?.abortSignal || null,
+            headers: additionalHeaders,
+          },
+          invocation: {
+            flow: flowValue,
+            purpose: normalizedPurpose,
+            domain: normalizedDomain,
+            contextSequencePolicy: normalizedContextSequencePolicy,
+          },
+        }),
+      );
       const text = String(ai?.output?.text || "");
       emitPluginCapabilityRealtimeLog({
         ctx,
@@ -400,24 +339,7 @@ export function createAgentCapabilityModelInvoker({
           turn: 1,
         },
       });
-      return {
-        output: ai.output,
-        execution: ai.execution,
-        toolTurns: [
-          {
-            turn: 1,
-            purpose,
-            domain,
-            model: normalizedModelName || undefined,
-            locale,
-            toolCalls: [],
-            finishedReason: "tool_binding_disabled",
-          },
-        ],
-        turn: 1,
-        finishedReason: "tool_binding_disabled",
-        toolTurnLimitReached: false,
-      };
+      return ai;
     }
 
     const effectiveAllowPolicy = Array.isArray(toolAllowlistOverride)
@@ -437,38 +359,28 @@ export function createAgentCapabilityModelInvoker({
         .filter(([name]) => Boolean(name)),
     );
 
-    let lastAssistantText = "";
-    let toolTurnLimitReached = false;
     for (let turn = 1; turn <= maxTurnCount; turn += 1) {
-      const ai = await modelPort.invoke({
-        model: modelSpec,
-        messages: runMessages,
-        tools: boundTools,
-        options: {
-          streaming: false,
-          signal: runtime?.abortSignal || null,
-          headers: additionalHeaders,
-          toolBinding: bindOptions,
-        },
-        invocation: {
-          flow: flowValue,
-          purpose: normalizedPurpose,
-          domain: normalizedDomain,
-          contextSequencePolicy: normalizedContextSequencePolicy,
-        },
-      });
+      const ai = validateModelResponse(
+        await modelPort.invoke({
+          model: modelSpec,
+          messages: runMessages,
+          tools: boundTools,
+          options: {
+            streaming: false,
+            signal: runtime?.abortSignal || null,
+            headers: additionalHeaders,
+            toolBinding: bindOptions,
+          },
+          invocation: {
+            flow: flowValue,
+            purpose: normalizedPurpose,
+            domain: normalizedDomain,
+            contextSequencePolicy: normalizedContextSequencePolicy,
+          },
+        }),
+      );
       const text = String(ai?.output?.text || "");
-      lastAssistantText = text;
       const { calls } = normalizeToolCalls(ai.output);
-      traces.push({
-        turn,
-        purpose,
-        domain,
-        model: normalizedModelName || undefined,
-        locale,
-        toolCalls: calls.map((call) => ({ name: call.name, id: call.id || "", status: "pending" })),
-      });
-      const currentTrace = traces[traces.length - 1];
       if (text || calls.length) {
         runMessages.push({
           role: "assistant",
@@ -488,14 +400,7 @@ export function createAgentCapabilityModelInvoker({
             turn,
           },
         });
-        return {
-          output: ai.output,
-          execution: ai.execution,
-          toolTurns: traces,
-          turn,
-          finishedReason: "no_tool_call",
-          toolTurnLimitReached: false,
-        };
+        return ai;
       }
 
       for (const call of calls) {
@@ -504,11 +409,6 @@ export function createAgentCapabilityModelInvoker({
           effectiveAllowPolicy?.allowSet?.size &&
           !effectiveAllowPolicy.allowSet.has(call.name)
         ) {
-          currentTrace.toolCalls = currentTrace.toolCalls.map((item) =>
-            item.name === call.name && item.id === (call.id || "")
-              ? { ...item, status: "rejected", error: `tool not allowed: ${call.name}` }
-              : item,
-          );
           runMessages.push({
             role: "tool",
             tool_call_id: call.id || "",
@@ -518,11 +418,6 @@ export function createAgentCapabilityModelInvoker({
         }
         const tool = toolMap.get(call.name) || null;
         if (!tool) {
-          currentTrace.toolCalls = currentTrace.toolCalls.map((item) =>
-            item.name === call.name && item.id === (call.id || "")
-              ? { ...item, status: "not_found", error: `tool not found: ${call.name}` }
-              : item,
-          );
           runMessages.push({
             role: "tool",
             tool_call_id: call.id || "",
@@ -544,11 +439,6 @@ export function createAgentCapabilityModelInvoker({
           runtime,
           agentContext: ctx?.agentContext || null,
         });
-        currentTrace.toolCalls = currentTrace.toolCalls.map((item) =>
-          item.name === call.name && item.id === (call.id || "")
-            ? { ...item, status: "executed" }
-            : item,
-        );
         runMessages.push({
           role: "tool",
           tool_call_id: call.id || "",
@@ -556,47 +446,29 @@ export function createAgentCapabilityModelInvoker({
         });
       }
     }
-    toolTurnLimitReached = true;
-    if (traces.length) {
-      traces[traces.length - 1] = {
-        ...traces[traces.length - 1],
-        toolTurnLimitReached: true,
-      };
-    }
 
-    let finalizedText = lastAssistantText;
-    if (!finalizedText) {
-      const finalizePrompt =
-        locale === "en-US"
-          ? "Based on the above tool results, provide the final planning answer now."
-          : "请基于以上工具结果，立即给出最终规划答案。";
-      try {
-        const finalAi = await modelPort.invoke({
-          model: modelSpec,
-          messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
-          options: {
-            streaming: false,
-            signal: runtime?.abortSignal || null,
-            headers: additionalHeaders,
-          },
-          invocation: {
-            flow: flowValue,
-            purpose: normalizedPurpose,
-            domain: normalizedDomain,
-            contextSequencePolicy: normalizedContextSequencePolicy,
-          },
-        });
-        finalizedText = String(finalAi?.output?.text || "");
-      } catch {
-        finalizedText = "";
-      }
-    }
-    if (!finalizedText) {
-      finalizedText = buildDefaultCapabilityOutput({
-        targetLocale: locale,
-        targetPurpose: purpose,
-      });
-    }
+    const finalizePrompt =
+      locale === "en-US"
+        ? "Based on the above tool results, provide the final planning answer now."
+        : "请基于以上工具结果，立即给出最终规划答案。";
+    const finalAi = validateModelResponse(
+      await modelPort.invoke({
+        model: modelSpec,
+        messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
+        options: {
+          streaming: false,
+          signal: runtime?.abortSignal || null,
+          headers: additionalHeaders,
+        },
+        invocation: {
+          flow: flowValue,
+          purpose: normalizedPurpose,
+          domain: normalizedDomain,
+          contextSequencePolicy: normalizedContextSequencePolicy,
+        },
+      }),
+    );
+    const finalizedText = String(finalAi.output.text || "");
 
     emitPluginCapabilityRealtimeLog({
       ctx,
@@ -605,30 +477,12 @@ export function createAgentCapabilityModelInvoker({
       data: {
         ...pluginCapabilityLogBase,
         output: finalizedText,
-        finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
+        finishedReason: "max_turn_reached_finalized",
         turn: maxTurnCount,
-        toolTurnLimitReached,
+        toolTurnLimitReached: true,
       },
     });
 
-    return {
-      output: Object.freeze({
-        text: finalizedText,
-        reasoning: "",
-        toolCalls: [],
-        finishReason: "",
-        usage: {},
-      }),
-      execution: Object.freeze({
-        attemptCount: 0,
-        attempts: [],
-        model: { ...modelSpec },
-        provider: {},
-      }),
-      toolTurns: traces,
-      turn: maxTurnCount,
-      finishedReason: finalizedText ? "max_turn_reached_finalized" : "max_turn_reached",
-      toolTurnLimitReached,
-    };
+    return finalAi;
   };
 }

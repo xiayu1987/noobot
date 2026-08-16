@@ -9,7 +9,6 @@ import assert from "node:assert/strict";
 import {
   parseSummaryOverviewAndDetailFromText,
   parseSummaryPatchCommands,
-  resolveSummaryDetailAttachmentText,
 } from "../../src/capabilities/handlers/shared/plan/summary-text-protocol.js";
 import {
   buildAcceptanceValidationRequestPromptText,
@@ -51,7 +50,6 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
   assert.match(String(parsed.detailText || ""), /^## 详细明细/m);
   assert.doesNotMatch(String(parsed.detailText || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(String(parsed.nextSuggestionText || ""), /下一步先处理风险B/);
-  assert.match(resolveSummaryDetailAttachmentText(parsed), /\[NEXT_EXECUTION_SUGGESTION\]\n- 下一步先处理风险B/);
 });
 
 test("summary parser falls back to plain text when blocks missing", () => {
@@ -81,6 +79,8 @@ test("summary prompts require file and line in every scenario, method only in pr
   const normalPrompt = buildGuidanceSummaryPromptText({ locale: "zh-CN" });
   assert.match(normalPrompt, /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(normalPrompt, /SUMMARY_DETAIL 后必须输出 \[NEXT_EXECUTION_SUGGESTION\]/);
+  assert.match(normalPrompt, /checkpoint 后主流程任务的唯一下一步动作/);
+  assert.match(normalPrompt, /禁止仅因本次小结已经生成就填写 final/);
   assert.match(normalPrompt, /必须整合上一轮小结结果/);
   assert.match(normalPrompt, /不得遗漏/);
   assert.doesNotMatch(normalPrompt, /\[next=下一步执行建议\]/);

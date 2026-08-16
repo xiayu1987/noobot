@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
 import { injectMessageWithPolicy } from "../../src/capabilities/handlers/shared/message/injection-utils.js";
+import { createPlanningHandler } from "../helpers/context-aware-handler-fixtures.js";
 import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
 import {
   createTestHookContext,
@@ -120,6 +121,63 @@ test("dynamic harness system injections compose before history", async () => {
     ],
   );
   assert.equal(ctx.modelContext.messageBlocks.system.at(-1)?.content, "dynamic planning context");
+});
+
+test("planning preserves typed base system context while adding harness prompts", async () => {
+  const baseSystem = {
+    role: "system",
+    content: "stable agent system context",
+    additional_kwargs: { noobotInternalMessageType: "system_context" },
+  };
+  const currentUser = {
+    role: "user",
+    content: "complete the task",
+    additional_kwargs: { frontendUserMessage: true },
+  };
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        payload: {
+          tools: { registry: [] },
+          harness: {
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
+        },
+      },
+    },
+    {
+      messages: [baseSystem, currentUser],
+      messageBlocks: {
+        system: [baseSystem],
+        history: [],
+        incremental: [currentUser],
+      },
+    },
+  );
+  const planningHandler = createPlanningHandler({
+    shouldProcessPrimaryToolHooks: () => true,
+  });
+
+  await planningHandler({
+    capability: "planning",
+    point: "agent.before_llm_call",
+    ctx,
+    meta: { harness: { planningGuidanceMode: "inject" } },
+  });
+
+  assert.equal(ctx.modelContext.messageBlocks.system.includes(baseSystem), true);
+  assert.equal(
+    ctx.modelContext.messageBlocks.system.some(
+      (message) => message?.additional_kwargs?.noobotInternalMessageType === "system_context",
+    ),
+    true,
+  );
+  assert.equal(
+    ctx.modelContext.messageBlocks.system.some(
+      (message) => message?.injectedBy === "harness-plugin",
+    ),
+    true,
+  );
 });
 
 test("main model incremental context keeps unsummarized same-type harness relays append-only", () => {

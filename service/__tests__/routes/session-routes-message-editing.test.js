@@ -125,6 +125,10 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
           const statusCode = errors.shift();
           const error = new Error(`delete-from-${statusCode}`);
           error.statusCode = statusCode;
+          if (statusCode === 409) {
+            error.errorCode = "SESSION_AGGREGATE_VERSION_CONFLICT";
+            error.currentVersion = 7;
+          }
           throw error;
         },
       },
@@ -149,6 +153,10 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       assert.equal(response.status, statusCode);
       assert.equal(payload.ok, false);
       assert.equal(payload.error, `delete-from-${statusCode}`);
+      if (statusCode === 409) {
+        assert.equal(payload.errorCode, "SESSION_AGGREGATE_VERSION_CONFLICT");
+        assert.equal(payload.currentVersion, 7);
+      }
     }
   });
 });

@@ -127,13 +127,3 @@ export function parseSummaryOverviewAndDetailFromText(text = "") {
     usedV2: true,
   };
 }
-
-export function resolveSummaryDetailAttachmentText(parsedSummary = {}) {
-  const detailText = String(parsedSummary?.detailText || "").trim();
-  const nextSuggestionText = String(parsedSummary?.nextSuggestionText || "").trim();
-  const trailingText = String(parsedSummary?.trailingText || "").trim();
-  const nextSuggestionBlock = nextSuggestionText
-    ? ["[NEXT_EXECUTION_SUGGESTION]", nextSuggestionText].join("\n")
-    : "";
-  return [detailText, nextSuggestionBlock, trailingText].filter(Boolean).join("\n\n");
-}

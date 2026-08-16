@@ -30,7 +30,9 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
   if (TURN_START_POINTS.has(normalizedPoint)) {
     state.flags.agentTurnEnded = false;
     state.flags.acceptanceRequested = false;
+    state.flags.acceptanceReviewing = false;
     state.flags.acceptanceCompleted = false;
+    state.flags.planRefinementRequested = false;
     state.flags.checklistArtifactsAttached = false;
     if (dialogProcessId) {
       state.signals.activeDialogProcessId = dialogProcessId;

@@ -87,6 +87,8 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
       "Report a tool as executed only when its actual call and corresponding result appear in the current context. The bound-tool list represents availability only. Never claim an uncalled tool, a model-internal capability, or a name absent from the runtime tool set as executed. Runtime toolTimeline and execution events are authoritative for tool auditing.",
   },
   memoryPrompt: {
+    system:
+      "You are Noobot's memory processor. Apply the requested consolidation protocol only to the memory material in the current request. Do not add facts that were not provided or output content outside the protocol.",
     experiencePatchProtocols: EXPERIENCE_PATCH_PROTOCOLS,
     prompt: (params = {}) => {
       const longMemoryModel = String(params.longMemoryModel || "").trim();
