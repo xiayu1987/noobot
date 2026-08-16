@@ -1,10 +1,10 @@
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
 
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 
 const INTERNAL_TRANSPORT_EVENTS = new Set(["turn_lifecycle_committed"]);

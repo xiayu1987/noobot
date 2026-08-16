@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@noobot/hook-protocol": "file:../hook-protocol",
+    "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../session-protocol",
     "@noobot/shared": "file:../shared"
   }

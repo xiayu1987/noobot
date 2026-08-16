@@ -366,12 +366,14 @@ test("buildInitialContext resolves session history and passes edited turnScopeId
           return {
             messages: [
               {
+                messageUid: "history-user",
                 role: "user",
                 content: "history user",
                 dialogProcessId: "history-dp",
                 turnScopeId: "client-turn:old",
               },
               {
+                messageUid: "history-assistant",
                 role: "assistant",
                 content: "history assistant",
                 dialogProcessId: "history-dp",

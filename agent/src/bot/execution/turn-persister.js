@@ -1,11 +1,11 @@
-import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 /*
  * Copyright (c) 2026 xiayu
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
 
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message-codec";
 import { emitEvent } from "../../events/index.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";

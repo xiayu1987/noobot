@@ -21,6 +21,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   ];
   const history = toConversationMessages([
     {
+      messageUid: "message-thought-signature",
       role: "assistant",
       content: "fallback text",
       rawModelContent: thoughtPayload,
@@ -43,6 +44,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
       turnScopeId: "turn-thought-signature",
     },
     {
+      messageUid: "message-task-summary-result",
       role: "tool",
       content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
       tool_call_id: "call_task_summary",
@@ -70,6 +72,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   assert.equal(aiMessage.tool_calls?.[0]?.id, "call_task_summary");
   assert.equal(aiMessage.tool_calls?.[0]?.name, "task_summary");
   assert.deepEqual(aiMessage.additional_kwargs || {}, {
+    noobotMessageId: "message-thought-signature",
     dialogProcessId: "dialog-thought-signature",
     turnScopeId: "turn-thought-signature",
   });
