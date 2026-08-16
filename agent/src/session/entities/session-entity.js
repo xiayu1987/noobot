@@ -7,21 +7,23 @@
 import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
-import { normalizeTurnStatusesEntity } from "./turn-status-entity.js";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
+import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 
 function normalizeTransferEnvelopesFromMessage(message = {}) {
   const seen = new Set();
   const source = Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [];
-  return source.map((item) => compactTransferEnvelopes([item])[0]).filter((item) => {
-    if (!item) return false;
-    const key = JSON.stringify(item);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return source
+    .map((item) => compactTransferEnvelopes([item])[0])
+    .filter((item) => {
+      if (!item) return false;
+      const key = JSON.stringify(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 function normalizeMessageUid(value = "") {
@@ -36,10 +38,20 @@ function normalizeSessionAttachment(item = {}) {
   if (!attachmentId || !name || !mimeType) return null;
   const normalized = { attachmentId, name, mimeType };
   for (const key of [
-    "size", "attachmentSource", "sessionId", "relativePath", "sandboxPath", "path",
-    "previewUrl", "downloadUrl", "isSandbox", "generationSource", "parsedResult",
+    "size",
+    "attachmentSource",
+    "sessionId",
+    "relativePath",
+    "sandboxPath",
+    "path",
+    "previewUrl",
+    "downloadUrl",
+    "isSandbox",
+    "generationSource",
+    "parsedResult",
   ]) {
-    if (item[key] !== undefined && item[key] !== null && item[key] !== "") normalized[key] = item[key];
+    if (item[key] !== undefined && item[key] !== null && item[key] !== "")
+      normalized[key] = item[key];
   }
   if (item.owner && typeof item.owner === "object" && !Array.isArray(item.owner)) {
     const type = String(item.owner.type || "").trim();
@@ -53,9 +65,7 @@ export { createSessionMessageUid };
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
+    selectedConnectors && typeof selectedConnectors === "object" ? selectedConnectors : {};
   return Object.fromEntries(
     Object.entries(source)
       .map(([connectorType, connectorName]) => [
@@ -66,19 +76,16 @@ export function normalizeSelectedConnectors(selectedConnectors = {}) {
   );
 }
 
-export function normalizeMessageEntity(
-  message = {},
-  now = () => new Date().toISOString(),
-) {
+export function normalizeMessageEntity(message = {}, now = () => new Date().toISOString()) {
   const attachmentKeys = new Set();
   const normalizedAttachments = Array.isArray(message?.attachments)
     ? message.attachments.map(normalizeSessionAttachment).filter((item) => {
-      if (!item) return false;
-      const key = `${item.sessionId || ""}:${item.attachmentSource || ""}:${item.attachmentId}`;
-      if (attachmentKeys.has(key)) return false;
-      attachmentKeys.add(key);
-      return true;
-    })
+        if (!item) return false;
+        const key = `${item.sessionId || ""}:${item.attachmentSource || ""}:${item.attachmentId}`;
+        if (attachmentKeys.has(key)) return false;
+        attachmentKeys.add(key);
+        return true;
+      })
     : [];
   // Provider/runtime IDs may be scoped to one model run. They are retained for
   // streaming correlation, while messageUid is the persistence identity.
@@ -117,10 +124,18 @@ export function normalizeMessageEntity(
     normalizedMessage.id = runtimeMessageId;
     normalizedMessage.messageId = runtimeMessageId;
   }
-  if (message?.turnCommit && typeof message.turnCommit === "object" && !Array.isArray(message.turnCommit)) {
-    const action = String(message.turnCommit.action || "").trim().toLowerCase();
+  if (
+    message?.turnCommit &&
+    typeof message.turnCommit === "object" &&
+    !Array.isArray(message.turnCommit)
+  ) {
+    const action = String(message.turnCommit.action || "")
+      .trim()
+      .toLowerCase();
     const commandId = String(message.turnCommit.commandId || "").trim();
-    const runState = String(message.turnCommit.runState || "").trim().toLowerCase();
+    const runState = String(message.turnCommit.runState || "")
+      .trim()
+      .toLowerCase();
     if (commandId) {
       normalizedMessage.turnCommit = {
         action: action === "continue" ? "continue" : "send",
@@ -163,7 +178,9 @@ export function normalizeMessageEntity(
   if (message?.frontendUserMessage === true) {
     normalizedMessage.frontendUserMessage = true;
   }
-  const messageOrigin = String(message?.messageOrigin || "").trim().toLowerCase();
+  const messageOrigin = String(message?.messageOrigin || "")
+    .trim()
+    .toLowerCase();
   if (messageOrigin === "user" || messageOrigin === "internal") {
     normalizedMessage.messageOrigin = messageOrigin;
   }
@@ -206,10 +223,7 @@ export function normalizeMessageEntity(
   if (Array.isArray(message?.tool_calls)) {
     normalizedMessage.tool_calls = message.tool_calls;
   }
-  if (
-    normalizedMessage.type === "tool_call" &&
-    !Array.isArray(normalizedMessage.tool_calls)
-  ) {
+  if (normalizedMessage.type === "tool_call" && !Array.isArray(normalizedMessage.tool_calls)) {
     normalizedMessage.tool_calls = [];
   }
   return normalizedMessage;
@@ -255,7 +269,7 @@ export function normalizeTurnTimingEntity(timing = {}) {
   if (!timing || typeof timing !== "object" || Array.isArray(timing)) return null;
   const turnScopeId = String(timing?.turnScopeId || "").trim();
   const dialogProcessId = resolveMessageDialogProcessId(timing);
-  if (!turnScopeId && !dialogProcessId) return null;
+  if (!turnScopeId) return null;
   const thinkingStartedAt = String(timing?.thinkingStartedAt || "").trim();
   const thinkingFinishedAt = String(timing?.thinkingFinishedAt || "").trim();
   const normalized = { turnScopeId, dialogProcessId };
@@ -272,29 +286,10 @@ export function normalizeTurnTimingsEntity(turnTimings = []) {
   for (const item of source) {
     const normalized = normalizeTurnTimingEntity(item);
     if (!normalized) continue;
-    const key = normalized.turnScopeId || normalized.dialogProcessId;
+    const key = normalized.turnScopeId;
     byKey.set(key, { ...(byKey.get(key) || {}), ...normalized });
   }
   return [...byKey.values()];
-}
-
-function normalizeMutationReceipts(receipts = []) {
-  return (Array.isArray(receipts) ? receipts : []).map((receipt) => {
-    if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
-    const operation = String(receipt.operation || "").trim();
-    const commandId = String(receipt.commandId || "").trim();
-    if (!operation || !commandId) return null;
-    return {
-      operation,
-      commandId,
-      aggregateVersion: Number(receipt.aggregateVersion || 0),
-      requestHash: String(receipt.requestHash || "").trim(),
-      result: receipt.result && typeof receipt.result === "object" && !Array.isArray(receipt.result)
-        ? receipt.result
-        : {},
-      committedAt: String(receipt.committedAt || "").trim(),
-    };
-  }).filter(Boolean).slice(-100);
 }
 
 function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
@@ -307,37 +302,54 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
     if (!turnScopeId || !dialogProcessId) continue;
     const checkpointRevision = Math.max(0, Number(value.checkpointRevision) || 0);
     const sessionMessages = Array.isArray(messages) ? messages : [];
-    const allMessageUids = new Set(sessionMessages
-      .map((message) => String(message?.messageUid || "").trim())
-      .filter(Boolean));
-    const ownedMessageUids = new Set(sessionMessages
-      .filter((message) =>
-        resolveMessageDialogProcessId(message) === dialogProcessId &&
-        String(message?.turnScopeId || "").trim() === turnScopeId)
-      .map((message) => String(message?.messageUid || "").trim())
-      .filter(Boolean));
+    const allMessageUids = new Set(
+      sessionMessages.map((message) => String(message?.messageUid || "").trim()).filter(Boolean),
+    );
+    const ownedMessageUids = new Set(
+      sessionMessages
+        .filter(
+          (message) =>
+            resolveMessageDialogProcessId(message) === dialogProcessId &&
+            String(message?.turnScopeId || "").trim() === turnScopeId,
+        )
+        .map((message) => String(message?.messageUid || "").trim())
+        .filter(Boolean),
+    );
     if (!ownedMessageUids.size) continue;
-    const receipts = (Array.isArray(value.receipts) ? value.receipts : []).map((receipt) => {
-      if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
-      const checkpointId = String(receipt.checkpointId || "").trim();
-      const requestHash = String(receipt.requestHash || "").trim();
-      if (!checkpointId || !requestHash) return null;
-      const persistedMessageUids = [...new Set((Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [])
-        .map((uid) => String(uid || "").trim()).filter(Boolean))];
-      const summarizedMessageUids = [...new Set((Array.isArray(receipt.summarizedMessageUids) ? receipt.summarizedMessageUids : [])
-        .map((uid) => String(uid || "").trim()).filter(Boolean))];
-      if (persistedMessageUids.some((uid) => !ownedMessageUids.has(uid))) return null;
-      if (summarizedMessageUids.some((uid) => !allMessageUids.has(uid))) return null;
-      return {
-        checkpointId,
-        checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
-        requestHash,
-        persistedMessageUids,
-        summarizedMessageUids,
-        markedCount: Math.max(0, Number(receipt.markedCount) || 0),
-        committedAt: String(receipt.committedAt || "").trim(),
-      };
-    }).filter(Boolean).slice(-50);
+    const receipts = (Array.isArray(value.receipts) ? value.receipts : [])
+      .map((receipt) => {
+        if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+        const checkpointId = String(receipt.checkpointId || "").trim();
+        const requestHash = String(receipt.requestHash || "").trim();
+        if (!checkpointId || !requestHash) return null;
+        const persistedMessageUids = [
+          ...new Set(
+            (Array.isArray(receipt.persistedMessageUids) ? receipt.persistedMessageUids : [])
+              .map((uid) => String(uid || "").trim())
+              .filter(Boolean),
+          ),
+        ];
+        const summarizedMessageUids = [
+          ...new Set(
+            (Array.isArray(receipt.summarizedMessageUids) ? receipt.summarizedMessageUids : [])
+              .map((uid) => String(uid || "").trim())
+              .filter(Boolean),
+          ),
+        ];
+        if (persistedMessageUids.some((uid) => !ownedMessageUids.has(uid))) return null;
+        if (summarizedMessageUids.some((uid) => !allMessageUids.has(uid))) return null;
+        return {
+          checkpointId,
+          checkpointRevision: Math.max(0, Number(receipt.checkpointRevision) || 0),
+          requestHash,
+          persistedMessageUids,
+          summarizedMessageUids,
+          markedCount: Math.max(0, Number(receipt.markedCount) || 0),
+          committedAt: String(receipt.committedAt || "").trim(),
+        };
+      })
+      .filter(Boolean)
+      .slice(-50);
     normalized[turnScopeId] = {
       dialogProcessId,
       turnScopeId,
@@ -350,15 +362,14 @@ function normalizeTurnSummaryCheckpoints(checkpoints = {}, messages = []) {
 
 export function normalizeSessionEntity(
   session = {},
-  {
-    now = () => new Date().toISOString(),
-    sessionId = "",
-    parentSessionId = "",
-  } = {},
+  { now = () => new Date().toISOString(), sessionId = "", parentSessionId = "" } = {},
 ) {
   if ("version" in session || "revision" in session) {
-    throw new TypeError("legacy session version fields are not supported; run the session protocol migration");
+    throw new TypeError(
+      "legacy session version fields are not supported; run the session protocol migration",
+    );
   }
+  assertSessionAggregateInvariants(session);
   const nowValue = now();
   const normalizedSessionId = String(session?.sessionId || sessionId || "").trim();
   const normalizedParentSessionId = String(
@@ -366,7 +377,6 @@ export function normalizeSessionEntity(
   ).trim();
   const normalizedShortMemoryCheckpoint = Number(session?.shortMemoryCheckpoint);
   const normalizedCustomTitle = String(session?.customTitle || "").trim();
-  const normalizedMutationReceipts = normalizeMutationReceipts(session?.mutationReceipts || []);
   const normalizedMessages = normalizeMessagesEntity(session?.messages || [], now, {
     sessionId: normalizedSessionId,
   });
@@ -388,7 +398,6 @@ export function normalizeSessionEntity(
     messages: normalizedMessages,
     dialogOrder: normalizeDialogOrderEntity(session?.dialogOrder || [], normalizedMessages),
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
-    turnStatuses: normalizeTurnStatusesEntity(session?.turnStatuses || [], now),
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
     selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
@@ -397,23 +406,17 @@ export function normalizeSessionEntity(
   };
   if (normalizedCustomTitle) normalizedSession.customTitle = normalizedCustomTitle;
   else delete normalizedSession.customTitle;
-  if (normalizedMutationReceipts.length) normalizedSession.mutationReceipts = normalizedMutationReceipts;
-  else delete normalizedSession.mutationReceipts;
   if (Object.keys(normalizedTurnSummaryCheckpoints).length) {
     normalizedSession.turnSummaryCheckpoints = normalizedTurnSummaryCheckpoints;
   } else {
     delete normalizedSession.turnSummaryCheckpoints;
   }
   delete normalizedSession.turnTerminalCommits;
-  return normalizedSession;
+  return assertSessionAggregateInvariants(normalizedSession);
 }
 
-export function normalizeSessionTreeEntity(
-  tree = {},
-  now = () => new Date().toISOString(),
-) {
-  const nodes =
-    tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
+export function normalizeSessionTreeEntity(tree = {}, now = () => new Date().toISOString()) {
+  const nodes = tree?.nodes && typeof tree.nodes === "object" ? { ...tree.nodes } : {};
   for (const [nodeId, node] of Object.entries(nodes)) {
     const normalizedNodeId = String(nodeId || "").trim();
     if (!normalizedNodeId) {
@@ -422,11 +425,7 @@ export function normalizeSessionTreeEntity(
     }
     const normalizedChildren = Array.isArray(node?.children)
       ? Array.from(
-          new Set(
-            node.children
-              .map((childId) => String(childId || "").trim())
-              .filter(Boolean),
-          ),
+          new Set(node.children.map((childId) => String(childId || "").trim()).filter(Boolean)),
         )
       : [];
     nodes[normalizedNodeId] = {

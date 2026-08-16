@@ -27,7 +27,12 @@ import {
 } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
-import { SESSION_ERROR_CODE, TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import {
+  SESSION_ERROR_CODE,
+  TURN_EVENT,
+  TURN_PHASE,
+  createTurnLifecycleCommandId,
+} from "@noobot/session-protocol";
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
@@ -102,7 +107,11 @@ export function createMessageRunHandler({
       parentSessionId: state.currentRunMeta?.parentSessionId || "",
       turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
       dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
-      commandId: `${commandBase}:failed:${phase}`,
+      commandId: createTurnLifecycleCommandId({
+        commandId: commandBase,
+        eventType: TURN_EVENT.FAILED,
+        phase,
+      }),
       eventType: TURN_EVENT.FAILED,
       phase,
       failure: {
@@ -232,7 +241,12 @@ export function createMessageRunHandler({
       parentSessionId,
       turnScopeId: state.currentTurnScopeId,
       dialogProcessId,
-      commandId,
+      commandId: createTurnLifecycleCommandId({
+        commandId,
+        eventType: TURN_EVENT.ACTION_ACCEPTED,
+        phase: TURN_PHASE.ACTION,
+      }),
+      causationId: commandId,
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
@@ -529,7 +543,12 @@ export function createMessageRunHandler({
             lifecycleData?.dialogProcessId ||
             state.currentRunMeta?.dialogProcessId ||
             dialogProcessId,
-          commandId: `${commandId}:processing-started`,
+          commandId: createTurnLifecycleCommandId({
+            commandId,
+            eventType: TURN_EVENT.PROCESSING_STARTED,
+            phase: TURN_PHASE.PROCESSING,
+          }),
+          causationId: commandId,
           eventType: TURN_EVENT.PROCESSING_STARTED,
           phase: TURN_PHASE.PROCESSING,
           executionState: "sending",
@@ -605,7 +624,12 @@ export function createMessageRunHandler({
       turnScopeId: state.currentTurnScopeId,
       dialogProcessId:
         result?.dialogProcessId || state.currentRunMeta?.dialogProcessId || dialogProcessId,
-      commandId: `${commandId}:processing-completed`,
+      commandId: createTurnLifecycleCommandId({
+        commandId,
+        eventType: TURN_EVENT.PROCESSING_COMPLETED,
+        phase: TURN_PHASE.COMPLETION,
+      }),
+      causationId: commandId,
       eventType: TURN_EVENT.PROCESSING_COMPLETED,
       phase: TURN_PHASE.COMPLETION,
     });

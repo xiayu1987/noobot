@@ -21,8 +21,14 @@ import {
 const clean = (value) => String(value || "").trim();
 
 export function createAuthoritativeTurnSnapshot({
-  lifecycle: lifecycleSource = {}, turnTimings = [], commandId = "", userId = "",
-  sessionId = "", knownSequence, terminalLimit = 10, terminalTurnScopeIds = [],
+  lifecycle: lifecycleSource = {},
+  turnTimings = [],
+  commandId = "",
+  userId = "",
+  sessionId = "",
+  knownSequence,
+  terminalLimit = 10,
+  terminalTurnScopeIds = [],
   generatedAt = new Date().toISOString(),
 } = {}) {
   const lifecycle = normalizeTurnLifecycleEntity(lifecycleSource);
@@ -30,16 +36,23 @@ export function createAuthoritativeTurnSnapshot({
     (Array.isArray(terminalTurnScopeIds) ? terminalTurnScopeIds : []).map(clean).filter(Boolean),
   );
   const activeTurn = lifecycle.turns[lifecycle.activeTurnScopeId]
-    ? { ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], turnTimings), sessionId: clean(sessionId) }
+    ? {
+        ...projectTurnLifecycleTiming(lifecycle.turns[lifecycle.activeTurnScopeId], turnTimings),
+        sessionId: clean(sessionId),
+      }
     : null;
   const limit = Math.max(0, Math.min(100, Number(terminalLimit) || 10));
   const recentTerminalTurns = Object.values(lifecycle.turns)
-    .filter((turn) => (
-      terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnLifecycleState(turn.state)
-    ))
+    .filter(
+      (turn) =>
+        terminalTurnScopes.has(turn.turnScopeId) && isTerminalTurnLifecycleState(turn.state),
+    )
     .sort((left, right) => Number(right.sequence) - Number(left.sequence))
     .slice(0, limit)
-    .map((turn) => ({ ...projectTurnLifecycleTiming(turn, turnTimings), sessionId: clean(sessionId) }));
+    .map((turn) => ({
+      ...projectTurnLifecycleTiming(turn, turnTimings),
+      sessionId: clean(sessionId),
+    }));
   return createTurnLifecycleSnapshot({
     commandId,
     userId,
@@ -55,8 +68,13 @@ export function createAuthoritativeTurnSnapshot({
 }
 
 export function resolveAuthoritativeTurnTerminal({
-  lifecycle: lifecycleSource = {}, turnTimings = [], commandId = "", sessionId = "",
-  turnScopeId = "", aggregateVersion = null, retryAfterMs = 250,
+  lifecycle: lifecycleSource = {},
+  turnTimings = [],
+  commandId = "",
+  sessionId = "",
+  turnScopeId = "",
+  aggregateVersion = null,
+  retryAfterMs = 250,
 } = {}) {
   const normalizedCommandId = clean(commandId);
   const normalizedSessionId = clean(sessionId);
@@ -77,17 +95,28 @@ export function resolveAuthoritativeTurnTerminal({
     : null;
   if (!turn) {
     return createTurnTerminalResolution({
-      ...base, reason: "turn_not_found", retryable: true, retryAfterMs,
+      ...base,
+      reason: "turn_not_found",
+      retryable: true,
+      retryAfterMs,
     });
   }
   if (!isTerminalTurnLifecycleState(turn.state)) {
     return createTurnTerminalResolution({
-      ...base, reason: "turn_not_terminal", retryable: true, retryAfterMs, turn,
+      ...base,
+      reason: "turn_not_terminal",
+      retryable: true,
+      retryAfterMs,
+      turn,
     });
   }
   if (!turn.terminalStatus) {
     return createTurnTerminalResolution({
-      ...base, reason: "terminal_status_not_ready", retryable: true, retryAfterMs, turn,
+      ...base,
+      reason: "terminal_status_not_ready",
+      retryable: true,
+      retryAfterMs,
+      turn,
     });
   }
   return createTurnTerminalResolution({ ...base, resolved: true, turn });
@@ -114,11 +143,14 @@ export function projectAuthoritativeExecution(turn = {}, session = {}) {
     sequence: Number(timedTurn.sequence || 0),
     summaryVersion: Number(timedTurn.summaryVersion || 0),
     capabilities: deriveAuthoritativeTurnCapabilities(timedTurn),
-    failure: timedTurn.failure && typeof timedTurn.failure === "object" ? { ...timedTurn.failure } : null,
+    failure:
+      timedTurn.failure && typeof timedTurn.failure === "object" ? { ...timedTurn.failure } : null,
     continuationSource: timedTurn.continuationSource || null,
     continuedByTurnScopeId: clean(timedTurn.continuedByTurnScopeId),
     startedAt: clean(timedTurn.startedAt),
     finishedAt: clean(timedTurn.finishedAt),
+    thinkingStartedAt: clean(timedTurn.thinkingStartedAt),
+    thinkingFinishedAt: clean(timedTurn.thinkingFinishedAt),
     createdAt: clean(timedTurn.createdAt),
     updatedAt: clean(timedTurn.updatedAt),
   };
@@ -137,19 +169,25 @@ function isNewer(left, right) {
 function stableObject(value) {
   if (Array.isArray(value)) return value.map(stableObject);
   if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableObject(value[key])]));
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableObject(value[key])]),
+  );
 }
 
 function ownershipFingerprint(execution = {}) {
-  return JSON.stringify(stableObject({
-    executionKind: clean(execution.executionKind).toLowerCase(),
-    sessionId: clean(execution.sessionId),
-    parentSessionId: clean(execution.parentSessionId),
-    turnScopeId: clean(execution.turnScopeId),
-    parentExecutionId: clean(execution.parentExecutionId),
-    rootExecutionId: clean(execution.rootExecutionId),
-    origin: execution.origin && typeof execution.origin === "object" ? execution.origin : {},
-  }));
+  return JSON.stringify(
+    stableObject({
+      executionKind: clean(execution.executionKind).toLowerCase(),
+      sessionId: clean(execution.sessionId),
+      parentSessionId: clean(execution.parentSessionId),
+      turnScopeId: clean(execution.turnScopeId),
+      parentExecutionId: clean(execution.parentExecutionId),
+      rootExecutionId: clean(execution.rootExecutionId),
+      origin: execution.origin && typeof execution.origin === "object" ? execution.origin : {},
+    }),
+  );
 }
 
 export function buildAuthoritativeExecutionReadModel(sessions = []) {
@@ -182,40 +220,54 @@ export function buildAuthoritativeExecutionReadModel(sessions = []) {
         byId.delete(execution.executionId);
         continue;
       }
-      if (!conflicts.has(execution.executionId) && isNewer(execution, current)) byId.set(execution.executionId, execution);
+      if (!conflicts.has(execution.executionId) && isNewer(execution, current))
+        byId.set(execution.executionId, execution);
     }
   }
   return { executions: [...byId.values()], conflicts };
 }
 
-export function queryAuthoritativeExecution(readModel, { executionId, generatedAt = new Date().toISOString() } = {}) {
+export function queryAuthoritativeExecution(
+  readModel,
+  { executionId, generatedAt = new Date().toISOString() } = {},
+) {
   const id = clean(executionId);
   if (!id) return { found: false, reason: "missing_execution" };
   const conflict = readModel.conflicts.get(id);
   if (conflict) return { found: false, reason: conflict.reason, conflict };
   const execution = readModel.executions.find((item) => item.executionId === id);
-  return execution ? { found: true, execution, generatedAt } : { found: false, reason: "execution_not_found" };
+  return execution
+    ? { found: true, execution, generatedAt }
+    : { found: false, reason: "execution_not_found" };
 }
 
-export function queryAuthoritativeExecutionTree(readModel, {
-  executionId = "", rootExecutionId = "", generatedAt = new Date().toISOString(),
-} = {}) {
+export function queryAuthoritativeExecutionTree(
+  readModel,
+  { executionId = "", rootExecutionId = "", generatedAt = new Date().toISOString() } = {},
+) {
   const requestedExecutionId = clean(executionId);
   const requestedRootId = clean(rootExecutionId);
   const conflict = readModel.conflicts.get(requestedExecutionId || requestedRootId);
   if (conflict) return { found: false, reason: conflict.reason, conflict };
   const selected = requestedExecutionId
     ? readModel.executions.find((item) => item.executionId === requestedExecutionId)
-    : readModel.executions.find((item) => item.executionId === requestedRootId || item.rootExecutionId === requestedRootId);
-  if ((requestedExecutionId || requestedRootId) && !selected) return { found: false, reason: "execution_not_found" };
+    : readModel.executions.find(
+        (item) => item.executionId === requestedRootId || item.rootExecutionId === requestedRootId,
+      );
+  if ((requestedExecutionId || requestedRootId) && !selected)
+    return { found: false, reason: "execution_not_found" };
   const rootId = requestedRootId || selected?.rootExecutionId || selected?.executionId || "";
   const scoped = rootId
-    ? readModel.executions.filter((item) => item.executionId === rootId || item.rootExecutionId === rootId)
+    ? readModel.executions.filter(
+        (item) => item.executionId === rootId || item.rootExecutionId === rootId,
+      )
     : readModel.executions;
   const tree = buildExecutionTree(scoped);
   return {
     found: true,
-    execution: requestedExecutionId ? tree.executions[requestedExecutionId] || null : tree.executions[rootId] || null,
+    execution: requestedExecutionId
+      ? tree.executions[requestedExecutionId] || null
+      : tree.executions[rootId] || null,
     rootExecutionId: rootId,
     tree,
     generatedAt,

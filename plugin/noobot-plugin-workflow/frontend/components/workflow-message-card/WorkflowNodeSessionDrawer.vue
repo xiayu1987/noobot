@@ -33,7 +33,6 @@ const props = defineProps({
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
   turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
-  turnStatusesByTurnScopeId: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -58,7 +57,9 @@ let mobileMediaQuery;
 
 const executionTreeRows = computed(() => {
   const items = Array.isArray(props.executionDirectory) ? props.executionDirectory : [];
-  const byId = new Map(items.map((item = {}) => [String(item.executionId || "").trim(), item]).filter(([id]) => id));
+  const byId = new Map(
+    items.map((item = {}) => [String(item.executionId || "").trim(), item]).filter(([id]) => id),
+  );
   const children = new Map();
   for (const [id, item] of byId) {
     const parentId = String(item.parentExecutionId || "").trim();
@@ -77,7 +78,8 @@ const executionTreeRows = computed(() => {
     visited.add(id);
     const childIds = children.get(id) || [];
     rows.push({ execution: byId.get(id), depth, hasChildren: childIds.length > 0 });
-    if (expandedExecutionIds.value.has(id)) childIds.forEach((childId) => visit(childId, depth + 1));
+    if (expandedExecutionIds.value.has(id))
+      childIds.forEach((childId) => visit(childId, depth + 1));
   };
   roots.forEach((id) => visit(id, 0));
   [...byId.keys()].filter((id) => !visited.has(id)).forEach((id) => visit(id, 0));
@@ -86,17 +88,22 @@ const executionTreeRows = computed(() => {
 
 const selectedExecution = computed(() => {
   const selectedId = String(props.selectedExecutionId || "").trim();
-  return (Array.isArray(props.executionDirectory) ? props.executionDirectory : [])
-    .find((item = {}) => String(item.executionId || "").trim() === selectedId) || null;
+  return (
+    (Array.isArray(props.executionDirectory) ? props.executionDirectory : []).find(
+      (item = {}) => String(item.executionId || "").trim() === selectedId,
+    ) || null
+  );
 });
 
-const canStopSelectedExecution = computed(() => Boolean(
-  props.stopExecution &&
-  props.selectedExecutionId &&
-  selectedExecution.value?.capabilities?.canStop === true &&
-  selectedExecution.value?.terminal !== true &&
-  selectedExecution.value?.lifecycle?.terminal !== true,
-));
+const canStopSelectedExecution = computed(() =>
+  Boolean(
+    props.stopExecution &&
+    props.selectedExecutionId &&
+    selectedExecution.value?.capabilities?.canStop === true &&
+    selectedExecution.value?.terminal !== true &&
+    selectedExecution.value?.lifecycle?.terminal !== true,
+  ),
+);
 
 async function stopSelectedExecution() {
   const executionId = String(props.selectedExecutionId || "").trim();
@@ -115,26 +122,34 @@ async function stopSelectedExecution() {
   }
 }
 
-watch(() => props.selectedExecutionId, () => {
-  stopError.value = "";
-});
+watch(
+  () => props.selectedExecutionId,
+  () => {
+    stopError.value = "";
+  },
+);
 
 function toggleExecution(executionId = "") {
   const id = String(executionId || "").trim();
   if (!id) return;
   const next = new Set(expandedExecutionIds.value);
-  if (next.has(id)) next.delete(id); else next.add(id);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
   expandedExecutionIds.value = next;
 }
 
-watch(() => props.executionDirectory, (items = []) => {
-  const next = new Set(expandedExecutionIds.value);
-  for (const item of items) {
-    const id = String(item?.executionId || "").trim();
-    if (id && (id === props.selectedExecutionId || !item?.parentExecutionId)) next.add(id);
-  }
-  expandedExecutionIds.value = next;
-}, { immediate: true, deep: true });
+watch(
+  () => props.executionDirectory,
+  (items = []) => {
+    const next = new Set(expandedExecutionIds.value);
+    for (const item of items) {
+      const id = String(item?.executionId || "").trim();
+      if (id && (id === props.selectedExecutionId || !item?.parentExecutionId)) next.add(id);
+    }
+    expandedExecutionIds.value = next;
+  },
+  { immediate: true, deep: true },
+);
 
 function getScrollWrap() {
   return messageScrollRef.value?.wrapRef || null;
@@ -158,7 +173,12 @@ watch(
     viewerVisible.value,
     props.selectedNodeSessionId,
     props.displayNodeMessages.length,
-    props.displayNodeMessages.map((item = {}) => `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`).join("|"),
+    props.displayNodeMessages
+      .map(
+        (item = {}) =>
+          `${String(item?.content || "").length}:${JSON.stringify(item?.thinking || null).length}:${Array.isArray(item?.thinkingSteps) ? item.thinkingSteps.length : 0}:${Array.isArray(item?.toolLogs) ? item.toolLogs.length : 0}:${JSON.stringify(item?.turnTimings || item?.timings || null).length}`,
+      )
+      .join("|"),
   ],
   ([visible, sessionId], previous = []) => {
     if (!visible) return;
@@ -185,7 +205,9 @@ watch(
       0,
     ),
     messageCount: props.displayNodeMessages.length,
-    runningMessageCount: props.displayNodeMessages.filter((message = {}) => message?.pending === true).length,
+    runningMessageCount: props.displayNodeMessages.filter(
+      (message = {}) => message?.pending === true,
+    ).length,
     messages: props.displayNodeMessages.map((message = {}) => ({
       messageId: String(message?.presentationMessageId || message?.messageId || message?.id || ""),
       role: String(message?.role || ""),
@@ -197,24 +219,20 @@ watch(
       contentLength: String(message?.content || "").length,
     })),
     timingCount: props.displayNodeMessages.reduce(
-      (count, message = {}) => count + (Array.isArray(message?.turnTimings || message?.timings)
-        ? (message.turnTimings || message.timings).length
-        : 0),
+      (count, message = {}) =>
+        count +
+        (Array.isArray(message?.turnTimings || message?.timings)
+          ? (message.turnTimings || message.timings).length
+          : 0),
       0,
     ),
     sessionTimingCount: props.selectedNodeSessionDocs.reduce(
-      (count, session = {}) => count + (Array.isArray(session?.turnTimings) ? session.turnTimings.length : 0),
+      (count, session = {}) =>
+        count + (Array.isArray(session?.turnTimings) ? session.turnTimings.length : 0),
       0,
     ),
     projectedTimingCount: Object.keys(props.turnTimingsByTurnScopeId || {}).length,
     projectedTimingTurnScopeIds: Object.keys(props.turnTimingsByTurnScopeId || {}),
-    projectedStatusCount: Object.keys(props.turnStatusesByTurnScopeId || {}).length,
-    projectedStatusTurnScopeIds: Object.keys(props.turnStatusesByTurnScopeId || {}),
-    projectedStatuses: Object.entries(props.turnStatusesByTurnScopeId || {}).map(([turnScopeId, status = {}]) => ({
-      turnScopeId,
-      status: String(status?.status || status?.state || ""),
-      dialogProcessId: String(status?.dialogProcessId || ""),
-    })),
   }),
   (renderState) => {
     if (!renderState.visible) return;
@@ -253,144 +271,175 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
     header-class="workflow-node-session-drawer__header noobot-side-drawer__header"
     class="workflow-node-session-drawer noobot-side-drawer"
   >
-    <el-scrollbar ref="messageScrollRef" class="workflow-node-session-scroll" @scroll="updateFollowRealtime">
-    <div
-      v-loading="viewerLoading"
-      class="workflow-node-session-content"
-      :element-loading-text="translate('workflow.loadingNodeSession')"
-      element-loading-background="var(--noobot-panel-bg)"
+    <el-scrollbar
+      ref="messageScrollRef"
+      class="workflow-node-session-scroll"
+      @scroll="updateFollowRealtime"
     >
-      <BaseMessageErrorAlert :error="viewerError" />
-      <template v-if="!viewerError">
-        <div v-if="attemptExecutionIds.length || executionDirectory.length" class="workflow-execution-directory">
-          <div class="workflow-execution-directory__title">Agent executions</div>
-          <div v-if="selectedExecutionId" class="workflow-execution-directory__actions">
-            <button
-              type="button"
-              class="workflow-execution-directory__stop"
-              :disabled="!canStopSelectedExecution || Boolean(stopPendingExecutionId)"
-              @click="stopSelectedExecution"
-            >{{ stopPendingExecutionId ? 'Stopping…' : 'Stop execution' }}</button>
-            <span v-if="stopError" class="workflow-execution-directory__stop-error">{{ stopError }}</span>
-          </div>
-          <div v-if="attemptExecutionIds.length" class="workflow-execution-directory__group">
-            <span class="workflow-execution-directory__label">Attempts</span>
-            <button
-              v-for="(executionId, index) in attemptExecutionIds"
-              :key="executionId"
-              type="button"
-              class="workflow-execution-directory__item"
-              :class="{ 'is-selected': executionId === selectedExecutionId }"
-              @click="$emit('execution-select', executionId)"
-            >Attempt {{ index + 1 }}</button>
-          </div>
-          <div v-if="executionDirectory.length" class="workflow-execution-directory__group">
-            <span class="workflow-execution-directory__label">Execution tree</span>
-            <button
-              v-for="row in executionTreeRows"
-              :key="row.execution.executionId"
-              type="button"
-              class="workflow-execution-directory__item"
-              :class="{ 'is-selected': row.execution.executionId === selectedExecutionId }"
-              :style="{ marginLeft: `${row.depth * 16}px` }"
-              @click="$emit('execution-select', row.execution.executionId)"
-            >
-              <span v-if="row.hasChildren" @click.stop="toggleExecution(row.execution.executionId)">
-                {{ expandedExecutionIds.has(row.execution.executionId) ? '▾' : '▸' }}
-              </span>
-              {{ row.execution.executionKind || 'agent' }} · {{ row.execution.stage || row.execution.state || 'pending' }}
-            </button>
-          </div>
-        </div>
-        <div v-if="selectedRuntimeNode" class="workflow-runtime-panel">
-          <div class="workflow-runtime-panel-header">
-            <div>
-              <div class="workflow-runtime-panel-title">
-                {{
-                  selectedRuntimeNode?.nodeName ||
-                  selectedRuntimeNode?.nodeId ||
-                  translate("workflow.actionNode")
-                }}
-                ·
-                {{ translate("workflow.runtimeState") }}
-              </div>
-              <div class="workflow-runtime-panel-subtitle">
-                {{ translate("workflow.runtimeInspectorSubtitle") }}
-              </div>
-            </div>
-          </div>
-          <div class="workflow-runtime-panel-body">
-            <div
-              v-for="(stateBox, stateIndex) in selectedRuntimeBoxes"
-              :key="`${String(selectedRuntimeNode?.nodeId || resolveDialogProcessId(selectedRuntimeNode) || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
-              class="workflow-runtime-state-box"
-            >
-              <div class="workflow-runtime-state-title">
-                <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
-                <span class="workflow-runtime-state-count">
-                  {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
-                </span>
-              </div>
+      <div
+        v-loading="viewerLoading"
+        class="workflow-node-session-content"
+        :element-loading-text="translate('workflow.loadingNodeSession')"
+        element-loading-background="var(--noobot-panel-bg)"
+      >
+        <BaseMessageErrorAlert :error="viewerError" />
+        <template v-if="!viewerError">
+          <div
+            v-if="attemptExecutionIds.length || executionDirectory.length"
+            class="workflow-execution-directory"
+          >
+            <div class="workflow-execution-directory__title">Agent executions</div>
+            <div v-if="selectedExecutionId" class="workflow-execution-directory__actions">
               <button
-                v-for="(stepItem, stepIndex) in (stateBox?.steps || [])"
-                :key="`${String(stepItem?.stepId || resolveDialogProcessId(stepItem) || stepIndex)}-${stepIndex}`"
                 type="button"
-                class="workflow-runtime-step-box"
-                :class="[
-                  resolveStatusClass(stepItem),
-                  {
-                    'is-selected': resolveDialogProcessId(stepItem) === selectedGraphDialogProcessId,
-                    'is-disabled': !stepHasSession(stepItem),
-                  },
-                ]"
-                :disabled="!stepHasSession(stepItem)"
-                @click.stop="$emit('runtime-step-click', stepItem)"
+                class="workflow-execution-directory__stop"
+                :disabled="!canStopSelectedExecution || Boolean(stopPendingExecutionId)"
+                @click="stopSelectedExecution"
               >
-                <span class="workflow-runtime-step-name">{{ resolveStepLabel(stepItem, stepIndex) }}</span>
-                <span class="workflow-runtime-step-status">{{ resolveStatusLabel(stepItem) }}</span>
+                {{ stopPendingExecutionId ? "Stopping…" : "Stop execution" }}
               </button>
-              <BaseEmptyHint
-                v-if="!(stateBox?.steps || []).length"
-                class="workflow-runtime-step-empty"
-                :text="translate('workflow.noStepBox')"
-              />
+              <span v-if="stopError" class="workflow-execution-directory__stop-error">{{
+                stopError
+              }}</span>
+            </div>
+            <div v-if="attemptExecutionIds.length" class="workflow-execution-directory__group">
+              <span class="workflow-execution-directory__label">Attempts</span>
+              <button
+                v-for="(executionId, index) in attemptExecutionIds"
+                :key="executionId"
+                type="button"
+                class="workflow-execution-directory__item"
+                :class="{ 'is-selected': executionId === selectedExecutionId }"
+                @click="$emit('execution-select', executionId)"
+              >
+                Attempt {{ index + 1 }}
+              </button>
+            </div>
+            <div v-if="executionDirectory.length" class="workflow-execution-directory__group">
+              <span class="workflow-execution-directory__label">Execution tree</span>
+              <button
+                v-for="row in executionTreeRows"
+                :key="row.execution.executionId"
+                type="button"
+                class="workflow-execution-directory__item"
+                :class="{ 'is-selected': row.execution.executionId === selectedExecutionId }"
+                :style="{ marginLeft: `${row.depth * 16}px` }"
+                @click="$emit('execution-select', row.execution.executionId)"
+              >
+                <span
+                  v-if="row.hasChildren"
+                  @click.stop="toggleExecution(row.execution.executionId)"
+                >
+                  {{ expandedExecutionIds.has(row.execution.executionId) ? "▾" : "▸" }}
+                </span>
+                {{ row.execution.executionKind || "agent" }} ·
+                {{ row.execution.stage || row.execution.state || "pending" }}
+              </button>
             </div>
           </div>
-        </div>
-        <AgentExecutionView
-          v-if="selectedRuntimeStep && (selectedExecutionId || selectedNodeSessionId)"
-          :execution-id="selectedExecutionId || selectedNodeSessionId"
-          channel-context="workflow-node"
-          :messages="displayNodeMessages"
-          :all-messages="nodeSessionAllMessages"
-          :session-docs="selectedNodeSessionDocs"
-          :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
-          :turn-statuses-by-turn-scope-id="turnStatusesByTurnScopeId"
-          :user-id="userId"
-          :render-markdown="renderMarkdown"
-          :format-time="formatTime"
-          :format-file-size="formatFileSize"
-          :is-image-mime="isImageMime"
-          :stop-execution="stopExecution"
-          :empty-text="viewerLoading ? '' : (viewerState === 'pending' ? translate('workflow.nodeSessionPending') : translate('workflow.noNodeSessionContent'))"
-          attachment-preview-dialog-class="workflow-session-preview-dialog"
-          file-preview-dialog-class="workflow-session-preview-dialog"
-          @open-thinking-details="$emit('open-thinking-details', $event)"
-        />
-        <div
-          v-if="selectedRuntimeStep && runningPlaceholderViewModel"
-          class="workflow-node-running-placeholder"
-          data-testid="workflow-node-running-placeholder"
-        >
-          {{ translate("workflow.nodeSessionPending") }}
-        </div>
-        <BaseEmptyHint
-          v-else-if="selectedRuntimeStep && !viewerLoading"
-          class="workflow-node-empty"
-          :text="viewerState === 'pending' ? translate('workflow.nodeSessionPending') : translate('workflow.noNodeSessionContent')"
-        />
-      </template>
-    </div>
+          <div v-if="selectedRuntimeNode" class="workflow-runtime-panel">
+            <div class="workflow-runtime-panel-header">
+              <div>
+                <div class="workflow-runtime-panel-title">
+                  {{
+                    selectedRuntimeNode?.nodeName ||
+                    selectedRuntimeNode?.nodeId ||
+                    translate("workflow.actionNode")
+                  }}
+                  ·
+                  {{ translate("workflow.runtimeState") }}
+                </div>
+                <div class="workflow-runtime-panel-subtitle">
+                  {{ translate("workflow.runtimeInspectorSubtitle") }}
+                </div>
+              </div>
+            </div>
+            <div class="workflow-runtime-panel-body">
+              <div
+                v-for="(stateBox, stateIndex) in selectedRuntimeBoxes"
+                :key="`${String(selectedRuntimeNode?.nodeId || resolveDialogProcessId(selectedRuntimeNode) || '')}-${String(stateBox?.actionNodeStateId || stateIndex)}`"
+                class="workflow-runtime-state-box"
+              >
+                <div class="workflow-runtime-state-title">
+                  <span>{{ resolveStateBoxLabel(stateBox, stateIndex) }}</span>
+                  <span class="workflow-runtime-state-count">
+                    {{ translate("workflow.stepCount", { count: (stateBox?.steps || []).length }) }}
+                  </span>
+                </div>
+                <button
+                  v-for="(stepItem, stepIndex) in stateBox?.steps || []"
+                  :key="`${String(stepItem?.stepId || resolveDialogProcessId(stepItem) || stepIndex)}-${stepIndex}`"
+                  type="button"
+                  class="workflow-runtime-step-box"
+                  :class="[
+                    resolveStatusClass(stepItem),
+                    {
+                      'is-selected':
+                        resolveDialogProcessId(stepItem) === selectedGraphDialogProcessId,
+                      'is-disabled': !stepHasSession(stepItem),
+                    },
+                  ]"
+                  :disabled="!stepHasSession(stepItem)"
+                  @click.stop="$emit('runtime-step-click', stepItem)"
+                >
+                  <span class="workflow-runtime-step-name">{{
+                    resolveStepLabel(stepItem, stepIndex)
+                  }}</span>
+                  <span class="workflow-runtime-step-status">{{
+                    resolveStatusLabel(stepItem)
+                  }}</span>
+                </button>
+                <BaseEmptyHint
+                  v-if="!(stateBox?.steps || []).length"
+                  class="workflow-runtime-step-empty"
+                  :text="translate('workflow.noStepBox')"
+                />
+              </div>
+            </div>
+          </div>
+          <AgentExecutionView
+            v-if="selectedRuntimeStep && (selectedExecutionId || selectedNodeSessionId)"
+            :execution-id="selectedExecutionId || selectedNodeSessionId"
+            channel-context="workflow-node"
+            :messages="displayNodeMessages"
+            :all-messages="nodeSessionAllMessages"
+            :session-docs="selectedNodeSessionDocs"
+            :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
+            :user-id="userId"
+            :render-markdown="renderMarkdown"
+            :format-time="formatTime"
+            :format-file-size="formatFileSize"
+            :is-image-mime="isImageMime"
+            :stop-execution="stopExecution"
+            :empty-text="
+              viewerLoading
+                ? ''
+                : viewerState === 'pending'
+                  ? translate('workflow.nodeSessionPending')
+                  : translate('workflow.noNodeSessionContent')
+            "
+            attachment-preview-dialog-class="workflow-session-preview-dialog"
+            file-preview-dialog-class="workflow-session-preview-dialog"
+            @open-thinking-details="$emit('open-thinking-details', $event)"
+          />
+          <div
+            v-if="selectedRuntimeStep && runningPlaceholderViewModel"
+            class="workflow-node-running-placeholder"
+            data-testid="workflow-node-running-placeholder"
+          >
+            {{ translate("workflow.nodeSessionPending") }}
+          </div>
+          <BaseEmptyHint
+            v-else-if="selectedRuntimeStep && !viewerLoading"
+            class="workflow-node-empty"
+            :text="
+              viewerState === 'pending'
+                ? translate('workflow.nodeSessionPending')
+                : translate('workflow.noNodeSessionContent')
+            "
+          />
+        </template>
+      </div>
     </el-scrollbar>
   </el-drawer>
 </template>
@@ -442,27 +491,77 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   margin-bottom: 12px;
 }
 
-.workflow-execution-directory { margin-bottom: 12px; padding: 10px; border: 1px solid var(--noobot-msg-assistant-border); border-radius: 8px; }
-.workflow-execution-directory__title { margin-bottom: 8px; font-weight: 600; }
-.workflow-execution-directory__actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.workflow-execution-directory__stop { border: 1px solid var(--el-color-danger); border-radius: 6px; padding: 4px 10px; color: var(--el-color-danger); background: transparent; cursor: pointer; }
-.workflow-execution-directory__stop:disabled { opacity: .45; cursor: not-allowed; }
-.workflow-execution-directory__stop-error { color: var(--el-color-danger); font-size: 12px; }
-.workflow-execution-directory__group { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.workflow-execution-directory__label { flex-basis: 100%; color: var(--noobot-text-secondary); font-size: 12px; }
-.workflow-execution-directory__item { border: 1px solid var(--noobot-msg-assistant-border); border-radius: 6px; padding: 5px 10px; color: var(--noobot-text-main); background: var(--noobot-panel-bg); cursor: pointer; }
-.workflow-execution-directory__item.is-selected { border-color: rgb(var(--workflow-accent-rgb)); color: rgb(var(--workflow-accent-rgb)); }
+.workflow-execution-directory {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: 8px;
+}
+.workflow-execution-directory__title {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.workflow-execution-directory__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.workflow-execution-directory__stop {
+  border: 1px solid var(--el-color-danger);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--el-color-danger);
+  background: transparent;
+  cursor: pointer;
+}
+.workflow-execution-directory__stop:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.workflow-execution-directory__stop-error {
+  color: var(--el-color-danger);
+  font-size: 12px;
+}
+.workflow-execution-directory__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.workflow-execution-directory__label {
+  flex-basis: 100%;
+  color: var(--noobot-text-secondary);
+  font-size: 12px;
+}
+.workflow-execution-directory__item {
+  border: 1px solid var(--noobot-msg-assistant-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--noobot-text-main);
+  background: var(--noobot-panel-bg);
+  cursor: pointer;
+}
+.workflow-execution-directory__item.is-selected {
+  border-color: rgb(var(--workflow-accent-rgb));
+  color: rgb(var(--workflow-accent-rgb));
+}
 
 .workflow-node-session-item:last-child {
   margin-bottom: 0;
 }
 
 .workflow-runtime-panel {
-  border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, rgb(var(--workflow-accent-rgb)) 22%);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, rgb(var(--workflow-accent-rgb)) 22%);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 14px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, rgb(var(--workflow-accent-rgb)) 6%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 94%,
+    rgb(var(--workflow-accent-rgb)) 6%
+  );
 }
 
 .workflow-runtime-panel-header {
@@ -533,12 +632,18 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   color: var(--noobot-text-primary);
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background 0.16s ease;
 }
 
 .workflow-runtime-step-box:hover:not(:disabled) {
   border-color: rgba(var(--workflow-accent-rgb), 0.58);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 90%, rgb(var(--workflow-accent-rgb)) 10%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 90%,
+    rgb(var(--workflow-accent-rgb)) 10%
+  );
 }
 
 .workflow-runtime-step-box.is-selected {
@@ -579,7 +684,11 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 
 .workflow-runtime-step-box.running .workflow-runtime-step-status {
-  color: color-mix(in srgb, rgb(var(--workflow-accent-strong-rgb)) 82%, var(--noobot-text-primary) 18%);
+  color: color-mix(
+    in srgb,
+    rgb(var(--workflow-accent-strong-rgb)) 82%,
+    var(--noobot-text-primary) 18%
+  );
   background: rgba(var(--workflow-accent-strong-rgb), 0.12);
 }
 

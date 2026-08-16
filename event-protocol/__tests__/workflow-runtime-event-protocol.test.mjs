@@ -22,23 +22,26 @@ test("canonicalizes every turn-scoped workflow snapshot fact", () => {
       workflowRunId: "run-1",
       nodeExecutionId: "node-1",
       aggregateVersion: 1,
-      turnStatuses: [{ turnScopeId: "workflow-node_node-1", status: "completed" }],
-      turnTimings: [{ turnScopeId: "workflow-node_node-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
+      turnTimings: [
+        { turnScopeId: "workflow-node_node-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" },
+      ],
       messages: [{ id: "message-1", turnScopeId: "workflow-node_node-1" }],
     },
   });
   assert.equal(normalized.valid, true);
-  assert.equal(normalized.data.turnStatuses[0].turnScopeId, "workflow-node:node-1");
   assert.equal(normalized.data.turnTimings[0].turnScopeId, "workflow-node:node-1");
   assert.equal(normalized.data.messages[0].turnScopeId, "workflow-node:node-1");
 });
 
 test("normalizes workflow node state without borrowing transport sequence", () => {
-  const event = normalizeWorkflowRuntimeEvent({
-    event: "workflow_node_state_committed",
-    transportSequence: 900,
-    data: { workflowRunId: "run-1", nodeExecutionId: "node-1", sequence: 3, revision: 2 },
-  }, { source: "live" });
+  const event = normalizeWorkflowRuntimeEvent(
+    {
+      event: "workflow_node_state_committed",
+      transportSequence: 900,
+      data: { workflowRunId: "run-1", nodeExecutionId: "node-1", sequence: 3, revision: 2 },
+    },
+    { source: "live" },
+  );
 
   assert.equal(event.valid, true);
   assert.equal(event.event, WORKFLOW_RUNTIME_EVENT.NODE_STATE);
@@ -153,24 +156,33 @@ test("workflow messages require complete stable node ownership", () => {
 });
 
 test("events from different sequence domains are never comparable", () => {
-  assert.equal(workflowRuntimeEventComparable(
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE },
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE },
-  ), false);
+  assert.equal(
+    workflowRuntimeEventComparable(
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE },
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE },
+    ),
+    false,
+  );
 });
 
 test("orders facts only inside one explicit sequence domain", () => {
-  assert.deepEqual(compareWorkflowRuntimeFacts(
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 2, sequence: 1 },
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 1, sequence: 999 },
-  ), {
-    comparable: true,
-    order: 1,
-    incomingDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
-    currentDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
-  });
-  assert.equal(compareWorkflowRuntimeFacts(
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, sequence: 999 },
-    { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE, sequence: 1 },
-  ).comparable, false);
+  assert.deepEqual(
+    compareWorkflowRuntimeFacts(
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 2, sequence: 1 },
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, revision: 1, sequence: 999 },
+    ),
+    {
+      comparable: true,
+      order: 1,
+      incomingDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+      currentDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+    },
+  );
+  assert.equal(
+    compareWorkflowRuntimeFacts(
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.MESSAGE, sequence: 999 },
+      { sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE, sequence: 1 },
+    ).comparable,
+    false,
+  );
 });

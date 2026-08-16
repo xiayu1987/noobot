@@ -126,6 +126,7 @@ export function makeTurnReplacementResponse({
       replacementDialogProcessId,
       replacementTurnScopeId: replacementUser.turnScopeId,
       replacementUserMessageId: replacementUser.messageId,
+      requestHash: `test-request:${commandId}`,
       committedAt: "2026-07-31T00:00:00.000Z",
     }),
   };

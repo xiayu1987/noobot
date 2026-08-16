@@ -58,9 +58,11 @@ function normalizeTerminalStatus(status = {}) {
 }
 
 function isOriginalUserMessage(message = {}) {
-  return resolveMessageRole(message) === "user" &&
+  return (
+    resolveMessageRole(message) === "user" &&
     message?.frontendUserMessage === true &&
-    !isInjectedMessage(message);
+    !isInjectedMessage(message)
+  );
 }
 
 function latestInjectedMessages(messages = []) {
@@ -111,10 +113,10 @@ function buildTerminalExplanation(status = {}) {
   };
 }
 
-export function projectTerminalHistoryMessages({ messages = [], turnStatuses = [] } = {}) {
+export function projectTerminalHistoryMessages({ messages = [], terminalStatuses = [] } = {}) {
   const source = Array.isArray(messages) ? messages : [];
   const statusByIdentity = new Map();
-  for (const statusValue of Array.isArray(turnStatuses) ? turnStatuses : []) {
+  for (const statusValue of Array.isArray(terminalStatuses) ? terminalStatuses : []) {
     const status = normalizeTerminalStatus(statusValue);
     if (!status) continue;
     statusByIdentity.set(terminalIdentityKey(status), status);
@@ -129,15 +131,12 @@ export function projectTerminalHistoryMessages({ messages = [], turnStatuses = [
     scoped.push(message);
     messagesByIdentity.set(identity, scoped);
   }
-  // A terminal lifecycle record can be durably written before commitTurn has
-  // materialized the canonical round messages (for example, when the commit
-  // itself loses an aggregate-version race). Such a record is authoritative
-  // lifecycle audit data, but it is not a model-history item yet. Keep the
-  // projection sourced exclusively from canonical messages and omit the
-  // unmaterialized status instead of inventing a message or blocking the next
-  // turn.
   for (const identity of [...statusByIdentity.keys()]) {
-    if (!messagesByIdentity.has(identity)) statusByIdentity.delete(identity);
+    if (!messagesByIdentity.has(identity)) {
+      throw new Error(
+        `terminal lifecycle is missing canonical messages: ${statusByIdentity.get(identity)?.turnScopeId || ""}`,
+      );
+    }
   }
   if (!statusByIdentity.size) return source;
 
@@ -155,7 +154,9 @@ export function projectTerminalHistoryMessages({ messages = [], turnStatuses = [
     const scoped = messagesByIdentity.get(identity) || [];
     const originalUser = scoped.find(isOriginalUserMessage);
     if (!originalUser) {
-      throw new Error(`terminal history round is missing its canonical frontend user message: ${status.turnScopeId}`);
+      throw new Error(
+        `terminal history round is missing its canonical frontend user message: ${status.turnScopeId}`,
+      );
     }
     projected.push(projectTerminalSourceMessage(originalUser));
     projected.push(...latestInjectedMessages(scoped).map(projectTerminalSourceMessage));

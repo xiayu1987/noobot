@@ -40,7 +40,6 @@ export function buildSessionDisplaySummary(session = {}) {
     ),
   ];
   const turnTimings = Array.isArray(session?.turnTimings) ? session.turnTimings : [];
-  const turnStatuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
   const sessionId = String(session?.sessionId || "").trim();
   const lifecycle =
     session?.turnLifecycle && typeof session.turnLifecycle === "object"
@@ -247,7 +246,6 @@ export function buildSessionDisplaySummary(session = {}) {
         : sessionId.slice(0, 8)),
     aggregateVersion: session?.aggregateVersion,
     turnTimings,
-    turnStatuses,
     turnLifecycleSnapshot,
     messages: displayMessages,
     stats: {

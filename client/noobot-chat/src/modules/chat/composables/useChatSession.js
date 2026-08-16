@@ -263,7 +263,7 @@ export function useChatSession({
       updatedAt,
     });
 
-    if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
+    if (state.toLowerCase() === "user_stopped" && sessionId && turnScopeId) {
       const currentSessionId = resolveActiveSessionIdentity();
       const currentTurn = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
@@ -275,7 +275,7 @@ export function useChatSession({
         Boolean(currentTurn) &&
         ((turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
           (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId));
-      const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
+      const reconciliationKey = `${sessionId}::${turnScopeId}`;
       if (
         identityMatches &&
         !currentTurn.terminal &&

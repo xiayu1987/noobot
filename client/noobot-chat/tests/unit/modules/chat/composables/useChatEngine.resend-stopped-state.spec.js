@@ -73,26 +73,27 @@ describe("useChatEngine.resend stopped state", () => {
     const stoppedTurnScopeId = "turn-immediate-stop";
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
-      json: async () => createTurnTerminalResolution({
-        commandId: "resolve-immediate-stop",
-        sessionId,
-        turnScopeId: stoppedTurnScopeId,
-        resolved: true,
-        aggregateVersion: 12,
-        turn: {
+      json: async () =>
+        createTurnTerminalResolution({
+          commandId: "resolve-immediate-stop",
           sessionId,
           turnScopeId: stoppedTurnScopeId,
-          dialogProcessId: "dp-immediate-stop",
-          state: "stop_completed",
-          phase: "stop",
-          revision: 5,
-          sequence: 5,
-          completionCommitId: "commit-immediate-stop",
-          summaryVersion: 5,
-          terminalStatus: { status: "user_stopped" },
-          capabilities: { actionLocked: false, canStop: false },
-        },
-      }),
+          resolved: true,
+          aggregateVersion: 12,
+          turn: {
+            sessionId,
+            turnScopeId: stoppedTurnScopeId,
+            dialogProcessId: "dp-immediate-stop",
+            state: "stop_completed",
+            phase: "stop",
+            revision: 5,
+            sequence: 5,
+            completionCommitId: "commit-immediate-stop",
+            summaryVersion: 5,
+            terminalStatus: { status: "user_stopped" },
+            capabilities: { actionLocked: false, canStop: false },
+          },
+        }),
     }));
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(
@@ -380,13 +381,6 @@ describe("useChatEngine.resend stopped state", () => {
           makeSession(sessionId, {
             messages: [user, assistant],
             rawMessages: [user, assistant],
-            turnStatuses: [
-              {
-                status: "user_stopped",
-                turnScopeId: stopped.turnScopeId,
-                dialogProcessId: stopped.dialogProcessId,
-              },
-            ],
           }),
         ],
       };

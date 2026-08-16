@@ -8,6 +8,16 @@ import assert from "node:assert/strict";
 
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 
+function emptyTurnLifecycle() {
+  return {
+    turns: {},
+    activeTurnScopeId: "",
+    nextSequence: 0,
+    commandReceipts: [],
+    replacedTurns: {},
+  };
+}
+
 test("SessionMessageService.appendTurn persists transferEnvelopes", async () => {
   const saved = [];
   const sessionRepo = {
@@ -44,12 +54,14 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
-        role: "primary",
-        name: "a.md",
-        mimeType: "text/markdown",
-      }],
+      attachments: [
+        {
+          identity: { attachmentId: "att_1", sessionId: "s1", attachmentSource: "model" },
+          role: "primary",
+          name: "a.md",
+          mimeType: "text/markdown",
+        },
+      ],
     },
     intent: {
       source: "plugin",
@@ -72,7 +84,10 @@ test("SessionMessageService.appendTurn persists transferEnvelopes", async () => 
   assert.equal("attachmentMetas" in lastMessage, false);
   assert.equal("transferEnvelopes" in lastMessage, true);
   assert.deepEqual(lastMessage?.transferEnvelopes, [envelope]);
-  assert.equal(lastMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att_1");
+  assert.equal(
+    lastMessage.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att_1",
+  );
 });
 
 test("SessionMessageService.appendTurn stores thinking timing in turnTimings without message timing", async () => {
@@ -201,9 +216,18 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
       { role: "user", content: "hi", turnScopeId: "turn-delete", dialogProcessId: "dp-delete" },
     ],
     turnTimings: [
-      { turnScopeId: "turn-delete", dialogProcessId: "dp-delete", thinkingStartedAt: "2026-07-08T00:00:00.000Z" },
-      { turnScopeId: "turn-keep", dialogProcessId: "dp-keep", thinkingFinishedAt: "2026-07-08T00:00:01.000Z" },
+      {
+        turnScopeId: "turn-delete",
+        dialogProcessId: "dp-delete",
+        thinkingStartedAt: "2026-07-08T00:00:00.000Z",
+      },
+      {
+        turnScopeId: "turn-keep",
+        dialogProcessId: "dp-keep",
+        thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
+      },
     ],
+    turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
     async resolveParentSessionId() {
@@ -225,11 +249,16 @@ test("SessionMessageService.deleteFromMessage prunes orphan turnTimings", async 
     userId: "u1",
     sessionId: "s1",
     anchor: { turnScopeId: "turn-delete" },
+    commandId: "delete-turn-timing",
   });
 
   assert.equal(saved.length, 1);
   assert.deepEqual(saved[0].turnTimings, [
-    { turnScopeId: "turn-keep", dialogProcessId: "dp-keep", thinkingFinishedAt: "2026-07-08T00:00:01.000Z" },
+    {
+      turnScopeId: "turn-keep",
+      dialogProcessId: "dp-keep",
+      thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
+    },
   ]);
 });
 
@@ -244,9 +273,18 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
       { role: "assistant", content: "old", turnScopeId: "turn-old", dialogProcessId: "dp-old" },
     ],
     turnTimings: [
-      { turnScopeId: "turn-old", dialogProcessId: "dp-old", thinkingStartedAt: "2026-07-08T00:00:00.000Z" },
-      { turnScopeId: "turn-keep", dialogProcessId: "dp-keep", thinkingFinishedAt: "2026-07-08T00:00:01.000Z" },
+      {
+        turnScopeId: "turn-old",
+        dialogProcessId: "dp-old",
+        thinkingStartedAt: "2026-07-08T00:00:00.000Z",
+      },
+      {
+        turnScopeId: "turn-keep",
+        dialogProcessId: "dp-keep",
+        thinkingFinishedAt: "2026-07-08T00:00:01.000Z",
+      },
     ],
+    turnLifecycle: emptyTurnLifecycle(),
   };
   const sessionRepo = {
     async resolveParentSessionId() {
@@ -262,6 +300,7 @@ test("SessionMessageService.replaceTurn prunes replaced turnTimings", async () =
   const service = new SessionMessageService({
     sessionRepo,
     now: () => "2026-06-07T00:00:00.000Z",
+    allocateDialogProcessId: () => "dp-new",
   });
 
   await service.replaceTurn({

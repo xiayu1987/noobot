@@ -9,7 +9,11 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { buildThinkingDetailPayload } from "noobot-agent/session";
-import express, { createSessionApp, registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+import express, {
+  createSessionApp,
+  registerSessionRoutes,
+  withTestServer,
+} from "./session-routes.helpers.js";
 
 test("session-routes: sessions 列表只读取并返回概要", async () => {
   const app = express();
@@ -74,17 +78,21 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
             sessionId: "s1",
             messageProjection: "canonical-presentation",
             summary: true,
-            sessions: [{
-              sessionId: "s1",
-              messages: [{
-                id: "a1",
-                role: "assistant",
-                content: "summary answer",
-                hasThinkingDetails: true,
-                thinkingDetailCount: 2,
-              }],
-              stats: { messageCount: 4, injectedMessageCount: 1, thinkingMessageCount: 1 },
-            }],
+            sessions: [
+              {
+                sessionId: "s1",
+                messages: [
+                  {
+                    id: "a1",
+                    role: "assistant",
+                    content: "summary answer",
+                    hasThinkingDetails: true,
+                    thinkingDetailCount: 2,
+                  },
+                ],
+                stats: { messageCount: 4, injectedMessageCount: 1, thinkingMessageCount: 1 },
+              },
+            ],
           };
         },
         getSessionData: async () => {
@@ -94,23 +102,29 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
             sessionId: "s1",
             detailMode: "full",
             messageProjection: "canonical-presentation",
-            sessions: [{
-              sessionId: "s1",
-              messages: [{
-                id: "a1",
-                role: "assistant",
-                content: "summary answer",
-                hasThinkingDetails: true,
-                thinkingDetailCount: 2,
-              }],
-              sessionDocs: [{ id: "doc-1" }],
-              rawMessages: [{
-                role: "assistant",
-                content: "raw",
-                realtimeLogs: [{ event: "thinking", text: "full thinking" }],
-                injectedMessage: true,
-              }],
-            }],
+            sessions: [
+              {
+                sessionId: "s1",
+                messages: [
+                  {
+                    id: "a1",
+                    role: "assistant",
+                    content: "summary answer",
+                    hasThinkingDetails: true,
+                    thinkingDetailCount: 2,
+                  },
+                ],
+                sessionDocs: [{ id: "doc-1" }],
+                rawMessages: [
+                  {
+                    role: "assistant",
+                    content: "raw",
+                    realtimeLogs: [{ event: "thinking", text: "full thinking" }],
+                    injectedMessage: true,
+                  },
+                ],
+              },
+            ],
           };
         },
         getRootSessionId: async () => "",
@@ -155,7 +169,9 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
 });
 
 test("session-routes: session detail rebuilds running workflow projection from persisted execution events", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-workflow-runtime-projection-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-workflow-runtime-projection-"),
+  );
   const sessionDir = path.join(workspaceRoot, "runtime/session/s-workflow");
   await fs.mkdir(sessionDir, { recursive: true });
   const records = [
@@ -180,11 +196,23 @@ test("session-routes: session detail rebuilds running workflow projection from p
     },
     {
       event: "workflow_node_state_committed",
-      data: { workflowRunId: "client-turn:one", nodeExecutionId: "node-1", status: "running", revision: 2, sequence: 2 },
+      data: {
+        workflowRunId: "client-turn:one",
+        nodeExecutionId: "node-1",
+        status: "running",
+        revision: 2,
+        sequence: 2,
+      },
     },
     {
       event: "workflow_node_state_committed",
-      data: { workflowRunId: "client-turn:one", nodeExecutionId: "node-1", status: "succeeded", revision: 3, sequence: 3 },
+      data: {
+        workflowRunId: "client-turn:one",
+        nodeExecutionId: "node-1",
+        status: "succeeded",
+        revision: 3,
+        sequence: 3,
+      },
     },
   ];
   await fs.writeFile(
@@ -198,15 +226,19 @@ test("session-routes: session detail rebuilds running workflow projection from p
         exists: true,
         sessionId: "s-workflow",
         summary: true,
-        sessions: [{
-          sessionId: "s-workflow",
-          messages: [{
-            role: "user",
-            content: "run",
-            dialogProcessId: "dialog-1",
-            turnScopeId: "client-turn:one",
-          }],
-        }],
+        sessions: [
+          {
+            sessionId: "s-workflow",
+            messages: [
+              {
+                role: "user",
+                content: "run",
+                dialogProcessId: "dialog-1",
+                turnScopeId: "client-turn:one",
+              },
+            ],
+          },
+        ],
       }),
     },
     bot: { getWorkspacePath: () => workspaceRoot },
@@ -231,7 +263,9 @@ test("session-routes: session detail rebuilds running workflow projection from p
 });
 
 test("session-routes: deleted Turn audit events are not returned as workflow UI state", async () => {
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-deleted-workflow-projection-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-deleted-workflow-projection-"),
+  );
   const sessionDir = path.join(workspaceRoot, "runtime/session/s-deleted-workflow");
   await fs.mkdir(sessionDir, { recursive: true });
   await fs.writeFile(
@@ -255,12 +289,13 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
         exists: true,
         sessionId: "s-deleted-workflow",
         summary: true,
-        sessions: [{
-          sessionId: "s-deleted-workflow",
-          messages: [],
-          turnStatuses: [],
-          turnTimings: [],
-        }],
+        sessions: [
+          {
+            sessionId: "s-deleted-workflow",
+            messages: [],
+            turnTimings: [],
+          },
+        ],
       }),
     },
     bot: { getWorkspacePath: () => workspaceRoot },
@@ -287,27 +322,78 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
         },
         getSessionThinkingDetail: async ({ dialogProcessId }) => {
           detailCalled = true;
-          return buildThinkingDetailPayload({
-            exists: true,
-            sessionId: "s1",
-            sessions: [{
+          return buildThinkingDetailPayload(
+            {
+              exists: true,
               sessionId: "s1",
-              rawMessages: [
+              sessions: [
                 {
-                  id: "a1", role: "assistant", type: "message", dialogProcessId: "dp-1", content: "answer",
-                  toolTimeline: [
-                    { key: "call:call-1", toolCallId: "call-1", status: "completed", call: { eventId: "tool-1" }, resultEvent: { eventId: "tool-2" } },
-                    { key: "call:call-2", toolCallId: "call-2", status: "running", call: { eventId: "tool-3" } },
+                  sessionId: "s1",
+                  rawMessages: [
+                    {
+                      id: "a1",
+                      role: "assistant",
+                      type: "message",
+                      dialogProcessId: "dp-1",
+                      content: "answer",
+                      toolTimeline: [
+                        {
+                          key: "call:call-1",
+                          toolCallId: "call-1",
+                          status: "completed",
+                          call: { eventId: "tool-1" },
+                          resultEvent: { eventId: "tool-2" },
+                        },
+                        {
+                          key: "call:call-2",
+                          toolCallId: "call-2",
+                          status: "running",
+                          call: { eventId: "tool-3" },
+                        },
+                      ],
+                    },
+                    {
+                      id: "i1",
+                      role: "system",
+                      dialogProcessId: "dp-1",
+                      injectedMessage: true,
+                      injectedBy: "harness-plugin",
+                      content: "injected without round",
+                    },
+                    {
+                      id: "t1",
+                      role: "assistant",
+                      type: "tool_call",
+                      dialogProcessId: "dp-1",
+                      content: "tool call",
+                    },
+                    {
+                      id: "t2",
+                      role: "tool",
+                      type: "tool_result",
+                      dialogProcessId: "dp-1",
+                      content: "tool result",
+                    },
+                    {
+                      id: "a2",
+                      role: "assistant",
+                      type: "message",
+                      dialogProcessId: "dp-2",
+                      content: "other answer",
+                    },
+                    {
+                      id: "t3",
+                      role: "assistant",
+                      type: "tool_call",
+                      dialogProcessId: "dp-2",
+                      content: "other tool",
+                    },
                   ],
                 },
-                { id: "i1", role: "system", dialogProcessId: "dp-1", injectedMessage: true, injectedBy: "harness-plugin", content: "injected without round" },
-                { id: "t1", role: "assistant", type: "tool_call", dialogProcessId: "dp-1", content: "tool call" },
-                { id: "t2", role: "tool", type: "tool_result", dialogProcessId: "dp-1", content: "tool result" },
-                { id: "a2", role: "assistant", type: "message", dialogProcessId: "dp-2", content: "other answer" },
-                { id: "t3", role: "assistant", type: "tool_call", dialogProcessId: "dp-2", content: "other tool" },
               ],
-            }],
-          }, { dialogProcessId });
+            },
+            { dialogProcessId },
+          );
         },
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
@@ -322,7 +408,9 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1`);
+    const response = await fetch(
+      `${baseUrl}/internal/session/u1/s1/thinking-detail?dialogProcessId=dp-1`,
+    );
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);

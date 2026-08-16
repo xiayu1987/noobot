@@ -28,6 +28,7 @@ import {
   assertPersistenceContextIdentity,
   createPersistenceContext,
 } from "./session-location-resolver.js";
+import { randomUUID } from "node:crypto";
 
 function createNow(now = null) {
   if (typeof now === "function") return now;
@@ -35,13 +36,13 @@ function createNow(now = null) {
 }
 
 function normalizeContextServicePayload(payload = {}) {
-  const source = payload && typeof payload === "object" && !Array.isArray(payload)
-    ? payload
-    : {};
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
   return {
     ...source,
     userConfig:
-      source.userConfig && typeof source.userConfig === "object" && !Array.isArray(source.userConfig)
+      source.userConfig &&
+      typeof source.userConfig === "object" &&
+      !Array.isArray(source.userConfig)
         ? source.userConfig
         : {},
     currentDialogProcessId: String(source.currentDialogProcessId || "").trim(),
@@ -72,7 +73,8 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
-    normalizeMessages: (messages, options = {}) => normalizeMessagesEntity(messages, nowFn, options),
+    normalizeMessages: (messages, options = {}) =>
+      normalizeMessagesEntity(messages, nowFn, options),
     normalizeSelectedConnectors,
     now: nowFn,
   });
@@ -118,6 +120,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     sessionRepo: sessionRepository,
     sessionCrudService,
     now: nowFn,
+    allocateDialogProcessId: randomUUID,
   });
 
   const executionReadService = new ExecutionReadService({
@@ -211,11 +214,14 @@ export function createSessionFacade(runtime = {}) {
   } = services;
 
   const bindPersistenceScope = (payload = {}) => {
-    const persistenceScope = payload?.persistenceScope && typeof payload.persistenceScope === "object"
-      ? payload.persistenceScope
-      : null;
+    const persistenceScope =
+      payload?.persistenceScope && typeof payload.persistenceScope === "object"
+        ? payload.persistenceScope
+        : null;
     if (!persistenceScope) return payload;
-    const allowedRoot = String(persistenceScope.allowedRoot || "").trim().replaceAll("\\", "/");
+    const allowedRoot = String(persistenceScope.allowedRoot || "")
+      .trim()
+      .replaceAll("\\", "/");
     const scopeId = String(persistenceScope.scopeId || "").trim();
     const scopeParentSessionId = String(persistenceScope.parentSessionId || "").trim();
     const requestedParentSessionId = String(payload.parentSessionId || "").trim();
@@ -421,14 +427,10 @@ export function createSessionFacade(runtime = {}) {
     },
 
     async getContextRecords(payload = {}) {
-      return sessionContextService.getContextRecords(
-        normalizeContextServicePayload(payload),
-      );
+      return sessionContextService.getContextRecords(normalizeContextServicePayload(payload));
     },
     async getContextProjection(payload = {}) {
-      return sessionContextService.getContextProjection(
-        normalizeContextServicePayload(payload),
-      );
+      return sessionContextService.getContextProjection(normalizeContextServicePayload(payload));
     },
 
     async startSkillTask(payload = {}) {
@@ -482,7 +484,10 @@ export { FileSystemSessionTreeRepository } from "./repositories/file-system-sess
 export { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
-export { SessionMutationCoordinator, sessionMutationCoordinator } from "./session-mutation-coordinator.js";
+export {
+  SessionMutationCoordinator,
+  sessionMutationCoordinator,
+} from "./session-mutation-coordinator.js";
 export {
   SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION,
   buildSessionDisplaySummary,

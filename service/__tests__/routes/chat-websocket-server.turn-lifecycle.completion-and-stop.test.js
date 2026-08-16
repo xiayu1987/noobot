@@ -100,17 +100,6 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     error.name = "AbortError";
     throw error;
   };
-  authoritative.bot.materializeTerminal = async ({ event }) => ({
-    summaryVersion: 9,
-    turnStatus: {
-      version: 9,
-      sessionId: "s-stop-authoritative",
-      turnScopeId: event.turnScopeId,
-      dialogProcessId: event.dialogProcessId,
-      status: "user_stopped",
-      reason: "user_stop",
-    },
-  });
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
     const events = await stopChatWs({
@@ -147,7 +136,7 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     );
     const turn = authoritative.lifecycle().turns["turn-stop-authoritative"];
     assert.equal(turn.state, "stop_completed");
-    assert.equal(turn.summaryVersion, 9);
+    assert.equal(turn.summaryVersion, 1);
     const stoppedEvent = events.find(
       (item) =>
         item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
@@ -207,4 +196,3 @@ test("rejected stop has no abort or interaction side effects", async () => {
   assert.equal(abortCount, 0);
   assert.equal(sent.at(-1)?.data?.errorCode, "stop_not_allowed");
 });
-

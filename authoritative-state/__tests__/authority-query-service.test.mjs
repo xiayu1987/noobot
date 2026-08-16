@@ -37,7 +37,14 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
       sequence: 3,
       turns: {
         active: turn(),
-        terminal: turn({ turnScopeId: "turn-0", executionId: "agent:turn-0", rootExecutionId: "agent:turn-0", state: "completed", phase: "completion", sequence: 1 }),
+        terminal: turn({
+          turnScopeId: "turn-0",
+          executionId: "agent:turn-0",
+          rootExecutionId: "agent:turn-0",
+          state: "completed",
+          phase: "completion",
+          sequence: 1,
+        }),
       },
     },
     turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-07-29T23:59:00.000Z" }],
@@ -48,8 +55,12 @@ test("authority builds active and terminal snapshot from one lifecycle rule", ()
     knownSequence: 3,
     generatedAt: now,
   });
-  assert.equal(snapshot.activeTurn.startedAt, "2026-07-29T23:59:00.000Z");
-  assert.deepEqual(snapshot.recentTerminalTurns.map((item) => item.turnScopeId), ["turn-0"]);
+  assert.equal(snapshot.activeTurn.startedAt, "");
+  assert.equal(snapshot.activeTurn.thinkingStartedAt, "2026-07-29T23:59:00.000Z");
+  assert.deepEqual(
+    snapshot.recentTerminalTurns.map((item) => item.turnScopeId),
+    ["turn-0"],
+  );
   assert.equal(snapshot.unchanged, true);
 });
 
@@ -77,10 +88,30 @@ test("authority snapshots only terminal Turns represented by canonical messages"
 
 test("authority owns terminal readiness decisions", () => {
   const lifecycle = { turns: { active: turn() } };
-  assert.equal(resolveAuthoritativeTurnTerminal({ lifecycle, commandId: "resolve-1", sessionId: "s1", turnScopeId: "missing" }).reason, "turn_not_found");
-  assert.equal(resolveAuthoritativeTurnTerminal({ lifecycle, commandId: "resolve-1", sessionId: "s1", turnScopeId: "turn-1" }).reason, "turn_not_terminal");
+  assert.equal(
+    resolveAuthoritativeTurnTerminal({
+      lifecycle,
+      commandId: "resolve-1",
+      sessionId: "s1",
+      turnScopeId: "missing",
+    }).reason,
+    "turn_not_found",
+  );
+  assert.equal(
+    resolveAuthoritativeTurnTerminal({
+      lifecycle,
+      commandId: "resolve-1",
+      sessionId: "s1",
+      turnScopeId: "turn-1",
+    }).reason,
+    "turn_not_terminal",
+  );
 
-  lifecycle.turns.active = turn({ state: "completed", phase: "completion", terminalStatus: { status: "completed" } });
+  lifecycle.turns.active = turn({
+    state: "completed",
+    phase: "completion",
+    terminalStatus: { status: "completed" },
+  });
   const resolved = resolveAuthoritativeTurnTerminal({
     lifecycle,
     aggregateVersion: 12,
@@ -96,12 +127,37 @@ test("authority owns terminal readiness decisions", () => {
 test("authority execution read model excludes conflicting ownership and builds trees", () => {
   const readModel = buildAuthoritativeExecutionReadModel([
     { sessionId: "root", turnLifecycle: { turns: { root: turn() } } },
-    { sessionId: "child", parentSessionId: "root", turnLifecycle: { turns: { child: turn({ turnScopeId: "child", executionId: "agent:child", parentExecutionId: "agent:turn-1", rootExecutionId: "agent:turn-1" }) } } },
-    { sessionId: "left", turnLifecycle: { turns: { left: turn({ executionId: "agent:conflict" }) } } },
-    { sessionId: "right", turnLifecycle: { turns: { right: turn({ executionId: "agent:conflict" }) } } },
+    {
+      sessionId: "child",
+      parentSessionId: "root",
+      turnLifecycle: {
+        turns: {
+          child: turn({
+            turnScopeId: "child",
+            executionId: "agent:child",
+            parentExecutionId: "agent:turn-1",
+            rootExecutionId: "agent:turn-1",
+          }),
+        },
+      },
+    },
+    {
+      sessionId: "left",
+      turnLifecycle: { turns: { left: turn({ executionId: "agent:conflict" }) } },
+    },
+    {
+      sessionId: "right",
+      turnLifecycle: { turns: { right: turn({ executionId: "agent:conflict" }) } },
+    },
   ]);
-  assert.equal(queryAuthoritativeExecution(readModel, { executionId: "agent:conflict" }).reason, "execution_identity_conflict");
-  const tree = queryAuthoritativeExecutionTree(readModel, { executionId: "agent:child", generatedAt: now });
+  assert.equal(
+    queryAuthoritativeExecution(readModel, { executionId: "agent:conflict" }).reason,
+    "execution_identity_conflict",
+  );
+  const tree = queryAuthoritativeExecutionTree(readModel, {
+    executionId: "agent:child",
+    generatedAt: now,
+  });
   assert.equal(tree.rootExecutionId, "agent:turn-1");
   assert.deepEqual(tree.tree.executions["agent:turn-1"].childExecutionIds, ["agent:child"]);
 });

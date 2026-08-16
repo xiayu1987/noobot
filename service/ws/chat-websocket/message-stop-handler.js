@@ -5,11 +5,17 @@
  */
 import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
 
 export function createMessageStopHandler({
-  state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,
-  rejectAllPendingInteractions, commitTurnLifecycle,
+  state,
+  canonicalRunOwnerId,
+  sendEvent,
+  translateText,
+  resolveBot,
+  sessionLogConfig,
+  rejectAllPendingInteractions,
+  commitTurnLifecycle,
 }) {
   const handleStop = async (command) => {
     const identity = command.identity;
@@ -24,7 +30,12 @@ export function createMessageStopHandler({
       parentSessionId: String(identity.parentSessionId || "").trim(),
       turnScopeId: targetTurnScopeId,
       dialogProcessId: String(identity.dialogProcessId || "").trim(),
-      commandId: stopCommandId,
+      commandId: createTurnLifecycleCommandId({
+        commandId: stopCommandId,
+        eventType: TURN_EVENT.STOP_ACCEPTED,
+        phase: TURN_PHASE.STOP,
+      }),
+      causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_ACCEPTED,
       phase: TURN_PHASE.STOP,
       expectedRevision: command.concurrency.expectedTurnRevision,
@@ -42,13 +53,16 @@ export function createMessageStopHandler({
     }
     state.stopRequested = true;
     state.currentTurnScopeId = targetTurnScopeId;
-    rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)));
+    rejectAllPendingInteractions(
+      new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)),
+    );
     state.currentStopPayload = {
       userId: targetUserId,
       message: translateText("ws.dialogStoppedByUser", state.currentLocale),
-      sessionId:
-        targetSessionId,
-      dialogProcessId: String(identity.dialogProcessId || state.currentRunMeta?.dialogProcessId || "").trim(),
+      sessionId: targetSessionId,
+      dialogProcessId: String(
+        identity.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+      ).trim(),
       turnScopeId: targetTurnScopeId,
       partialAssistant,
       commandId: stopCommandId,
@@ -93,7 +107,12 @@ export function createMessageStopHandler({
         };
         const processed = await commitTurnLifecycle({
           ...lifecycleContext,
-          commandId: `${stopCommandId}:processing-completed`,
+          commandId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
+          causationId: stopCommandId,
           eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
           finalizePayload: { assistantMessage: stoppedPartialAssistant },
         });
@@ -110,9 +129,18 @@ export function createMessageStopHandler({
         }
         const completed = await commitTurnLifecycle({
           ...lifecycleContext,
-          commandId: `${stopCommandId}:completed`,
+          commandId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
+          causationId: stopCommandId,
           eventType: TURN_EVENT.STOP_COMPLETED,
-          completionCommitId: `${stopCommandId}:completed`,
+          completionCommitId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
           terminalStatus: {
             command: "user_stopped",
             description: stopPayload.message,

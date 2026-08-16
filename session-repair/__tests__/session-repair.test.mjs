@@ -67,10 +67,6 @@ function aggregateConflictContinuationSession({ withCommittedMessage = false } =
         { turnScopeId: failedTurn.turnScopeId, sequence: 14 },
       ],
     },
-    turnStatuses: [
-      { turnScopeId: "unrelated-turn", status: "completed" },
-      { turnScopeId: failedTurn.turnScopeId, status: "error" },
-    ],
     authorityEventOutbox: [
       { eventId: "unrelated", envelope: { turnScopeId: "unrelated-turn" } },
       { eventId: "accepted", envelope: { turnScopeId: failedTurn.turnScopeId } },
@@ -189,7 +185,15 @@ test("reconciles session summary membership from materialized artifact ids", () 
 
 test("repairs eligible messages in completed turns without marking preserved user or final messages", () => {
   const result = reconcileCompletedTurnSummaryMarks({
-    turnStatuses: [{ dialogProcessId: "dialog-1", turnScopeId: "turn-1", status: "completed" }],
+    turnLifecycle: {
+      turns: {
+        "turn-1": {
+          dialogProcessId: "dialog-1",
+          turnScopeId: "turn-1",
+          terminalStatus: { status: "completed", reason: "run_completed" },
+        },
+      },
+    },
     messages: [
       {
         messageUid: "user-1",
@@ -245,9 +249,6 @@ test("removes an uncommitted aggregate-conflict continuation as one lifecycle re
   assert.equal(result.document.turnLifecycle.turns["turn-stopped"].continuedByTurnScopeId, "");
   assert.deepEqual(result.document.turnLifecycle.commandReceipts, [
     { turnScopeId: "unrelated-turn", sequence: 1 },
-  ]);
-  assert.deepEqual(result.document.turnStatuses, [
-    { turnScopeId: "unrelated-turn", status: "completed" },
   ]);
   assert.deepEqual(result.document.authorityEventOutbox, [
     { eventId: "unrelated", envelope: { turnScopeId: "unrelated-turn" } },

@@ -14,13 +14,45 @@ import {
 
 const now = () => "2026-07-10T00:00:00.000Z";
 
-test("legacy message terminal fields neither create turnStatuses nor survive normalization", () => {
+function terminalLifecycle({
+  turnScopeId = "t1",
+  dialogProcessId = "dp1",
+  state = "completed",
+  status = "completed",
+  reason = "run_completed",
+} = {}) {
+  return {
+    sequence: 2,
+    activeTurnScopeId: "",
+    turns: {
+      [turnScopeId]: {
+        turnScopeId,
+        dialogProcessId,
+        state,
+        sequence: 2,
+        revision: 2,
+        createdAt: now(),
+        updatedAt: now(),
+        terminalStatus: {
+          turnScopeId,
+          dialogProcessId,
+          status,
+          reason,
+          description: status,
+          updatedAt: now(),
+        },
+      },
+    },
+  };
+}
+
+test("message-local lifecycle fields cannot become authoritative terminal facts", () => {
   const session = normalizeSessionEntity({
     sessionId: "s1",
     messages: [{
       messageUid: "sm_noncanonical_terminal_user",
       role: "user",
-      content: "legacy",
+      content: "noncanonical",
       turnScopeId: "t1",
       state: "user_stopped",
       status: "user_stopped",
@@ -30,48 +62,25 @@ test("legacy message terminal fields neither create turnStatuses nor survive nor
     }],
   }, { now });
 
-  assert.deepEqual(session.turnStatuses, []);
+  assert.deepEqual(session.turnLifecycle.turns, {});
   const message = session.messages[0];
   for (const key of ["state", "status", "channelState", "stopState", "monotonicState"]) {
     assert.equal(message[key], undefined);
   }
 });
 
-test("summary projects explicit turnStatuses without message fallback", () => {
-  const session = normalizeSessionEntity({
-    sessionId: "s1",
-    messages: [{ messageUid: "sm_timeout_user", role: "user", content: "hello", turnScopeId: "t1", dialogProcessId: "dp1" }],
-    turnStatuses: [{
-      turnScopeId: "t1",
-      status: "timeout",
-      reason: "run_timeout",
-      description: "timeout",
-      createdAt: now(),
-      updatedAt: now(),
-    }],
-  }, { now });
-  const summary = buildSessionDisplaySummary(session);
-  assert.equal(summary.turnStatuses.length, 1);
-  assert.equal(summary.turnStatuses[0].status, "timeout");
-  assert.equal(summary.messages[0].state, undefined);
-  assert.equal(summary.messages[0].stopState, undefined);
-});
-
-test("summary projects an authoritative lifecycle snapshot for refresh replay", () => {
+test("summary projects only the authoritative lifecycle snapshot", () => {
   const session = normalizeSessionEntity({
     sessionId: "s-lifecycle",
     updatedAt: now(),
-    messages: [{ messageUid: "sm_lifecycle_assistant", role: "assistant", content: "done", turnScopeId: "t1", dialogProcessId: "dp1" }],
-    turnLifecycle: {
-      sequence: 2,
-      activeTurnScopeId: "",
-      turns: {
-        t1: {
-          turnScopeId: "t1", dialogProcessId: "dp1", state: "completed",
-          sequence: 2, revision: 2, createdAt: now(), updatedAt: now(),
-        },
-      },
-    },
+    messages: [{
+      messageUid: "sm_lifecycle_assistant",
+      role: "assistant",
+      content: "done",
+      turnScopeId: "t1",
+      dialogProcessId: "dp1",
+    }],
+    turnLifecycle: terminalLifecycle(),
   }, { now });
 
   const summary = buildSessionDisplaySummary(session);
@@ -80,27 +89,34 @@ test("summary projects an authoritative lifecycle snapshot for refresh replay", 
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
   assert.equal(summary.turnLifecycleSnapshot.sequence, 2);
   assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].state, "completed");
+  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].terminalStatus.status, "completed");
   assert.ok(summary.turnLifecycleSnapshot.commandId);
 });
 
-test("parent and child sessions own independent turn status values", () => {
+test("parent and child sessions own independent lifecycle aggregates", () => {
   const parent = normalizeSessionEntity({
     sessionId: "parent",
-    turnStatuses: [{ turnScopeId: "parent-turn", status: "completed", reason: "run_completed" }],
+    turnLifecycle: terminalLifecycle({ turnScopeId: "parent-turn", dialogProcessId: "parent-dialog" }),
   }, { now });
   const child = normalizeSessionEntity({
     sessionId: "child",
     parentSessionId: "parent",
-    turnStatuses: [{ turnScopeId: "child-turn", status: "timeout", reason: "run_timeout" }],
+    turnLifecycle: terminalLifecycle({
+      turnScopeId: "child-turn",
+      dialogProcessId: "child-dialog",
+      state: "processing_failed",
+      status: "error",
+      reason: "run_error",
+    }),
   }, { now });
 
-  assert.deepEqual(parent.turnStatuses.map((item) => item.turnScopeId), ["parent-turn"]);
-  assert.deepEqual(child.turnStatuses.map((item) => item.turnScopeId), ["child-turn"]);
-  child.turnStatuses[0].description = "mutated child";
-  assert.equal(parent.turnStatuses[0].description, undefined);
+  assert.deepEqual(Object.keys(parent.turnLifecycle.turns), ["parent-turn"]);
+  assert.deepEqual(Object.keys(child.turnLifecycle.turns), ["child-turn"]);
+  child.turnLifecycle.turns["child-turn"].terminalStatus.description = "mutated child";
+  assert.equal(parent.turnLifecycle.turns["parent-turn"].terminalStatus.description, "completed");
 });
 
-test("synthetic status placeholders cannot enter session persistence or summary", () => {
+test("synthetic placeholders cannot enter persistence or summary", () => {
   const session = normalizeSessionEntity({
     sessionId: "s-placeholder",
     messages: [{
@@ -117,12 +133,12 @@ test("synthetic status placeholders cannot enter session persistence or summary"
     }],
   }, { now });
 
-  assert.deepEqual(session.turnStatuses, []);
+  assert.deepEqual(session.turnLifecycle.turns, {});
   const message = session.messages[0];
   for (const key of ["synthetic", "placeholder", "turnStatusPlaceholder", "turnStatus", "state", "status"]) {
     assert.equal(message[key], undefined);
   }
   const summary = buildSessionDisplaySummary(session);
-  assert.deepEqual(summary.turnStatuses, []);
+  assert.equal(summary.turnLifecycleSnapshot.sequence, 0);
   assert.equal(summary.messages[0].turnStatusPlaceholder, undefined);
 });

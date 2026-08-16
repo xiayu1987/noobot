@@ -41,6 +41,7 @@ function replacement(commandId = "replace-old", replacementTurnScopeId = "turn-n
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId,
     replacementUserMessageId: "user-new",
+    requestHash: `request-hash-${commandId}`,
     committedAt: "2026-07-31T00:00:01.000Z",
   });
 }
@@ -66,6 +67,7 @@ test("turn replacement atomically removes lifecycle projection and outbox state"
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
+    requestHash: "request-hash-replace-old",
     commandId: "replace-old",
     committedAggregateVersion: 2,
     replacedTurnScopeIds: ["turn-old"],
@@ -126,6 +128,7 @@ test("turn replacement rejects partial or mutated replay of one command", () => 
     replacementDialogProcessId: "dialog-new",
     replacementTurnScopeId: "turn-new",
     replacementUserMessageId: "user-new",
+    requestHash: "request-hash-replace-many",
     committedAt: "2026-07-31T00:00:01.000Z",
   });
   const committed = commitTurnReplacement({
@@ -191,7 +194,10 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       presentationMessageId: "presentation-old",
       phase: TURN_PHASE.STOP,
     },
-  ].reduce((state, event) => transitionTurnLifecycle(state, event).lifecycle, sourceAccepted.lifecycle);
+  ].reduce(
+    (state, event) => transitionTurnLifecycle(state, event).lifecycle,
+    sourceAccepted.lifecycle,
+  );
   const continued = transitionTurnLifecycle(sourceStopped, {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     commandId: "continue-target",
@@ -219,6 +225,7 @@ test("turn replacement removes the authoritative Continue edge when replacing it
       replacementDialogProcessId: "dialog-replacement",
       replacementTurnScopeId: "turn-replacement",
       replacementUserMessageId: "user-replacement",
+      requestHash: "request-hash-replace-target",
       committedAt: "2026-07-31T00:00:02.000Z",
     }),
   });

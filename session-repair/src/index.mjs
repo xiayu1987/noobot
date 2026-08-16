@@ -464,9 +464,9 @@ export function reconcileCompletedTurnSummaryMarks(document = {}) {
   const next = structuredClone(document);
   const messages = Array.isArray(next.messages) ? next.messages : [];
   const completedTurns = new Set(
-    (Array.isArray(next.turnStatuses) ? next.turnStatuses : [])
-      .filter((status) => String(status?.status || "").trim() === "completed")
-      .map((status) => `${text(status?.dialogProcessId)}\u0000${text(status?.turnScopeId)}`)
+    Object.values(next.turnLifecycle?.turns || {})
+      .filter((turn) => String(turn?.terminalStatus?.status || "").trim() === "completed")
+      .map((turn) => `${text(turn?.dialogProcessId)}\u0000${text(turn?.turnScopeId)}`)
       .filter((key) => !key.startsWith("\u0000") && !key.endsWith("\u0000")),
   );
   let changed = false;
@@ -563,9 +563,6 @@ export function reconcileUncommittedAggregateConflictContinuations(document = {}
   next.turnLifecycle.commandReceipts = (
     Array.isArray(next.turnLifecycle.commandReceipts) ? next.turnLifecycle.commandReceipts : []
   ).filter((receipt) => !repairedSet.has(text(receipt?.turnScopeId)));
-  next.turnStatuses = (Array.isArray(next.turnStatuses) ? next.turnStatuses : []).filter(
-    (status) => !repairedSet.has(text(status?.turnScopeId)),
-  );
   next.authorityEventOutbox = (
     Array.isArray(next.authorityEventOutbox) ? next.authorityEventOutbox : []
   ).filter((entry) => !repairedSet.has(text(entry?.envelope?.turnScopeId)));
@@ -579,6 +576,11 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     });
   }
   const next = structuredClone(document);
+  if (Object.hasOwn(next, "turnStatuses") || Object.hasOwn(next, "mutationReceipts")) {
+    throw Object.assign(new TypeError("duplicate Session facts are not supported"), {
+      code: "SESSION_DUPLICATE_FACT_SOURCE",
+    });
+  }
   const sessionId = text(next.sessionId || suppliedSessionId);
   let changed = false;
   const migrations = [];
@@ -609,20 +611,6 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
     const result = migrateMessage(next.message, sessionId, 0);
     next.message = result.message;
     changed ||= result.changed;
-  }
-  if (Array.isArray(next.mutationReceipts)) {
-    next.mutationReceipts = next.mutationReceipts.map((receipt) => {
-      if (!("idempotencyKey" in receipt) && !("version" in receipt)) return receipt;
-      const migrated = {
-        ...receipt,
-        commandId: receipt.commandId || receipt.idempotencyKey,
-        aggregateVersion: Number(receipt.aggregateVersion || receipt.version || 0),
-      };
-      delete migrated.idempotencyKey;
-      delete migrated.version;
-      changed = true;
-      return migrated;
-    });
   }
   const replacementDialogProcessId = (replacement = {}) => {
     const replacementTurnScopeId = text(replacement.replacementTurnScopeId);
@@ -661,9 +649,6 @@ export function migrateSessionDocument(document = {}, { sessionId: suppliedSessi
   };
   for (const replacement of Object.values(next.turnLifecycle?.replacedTurns || {}))
     migrateReplacement(replacement);
-  for (const receipt of Array.isArray(next.mutationReceipts) ? next.mutationReceipts : []) {
-    migrateReplacement(receipt?.result?.turnReplacement);
-  }
   if (Object.hasOwn(next, "turnTerminalCommits")) {
     delete next.turnTerminalCommits;
     changed = true;

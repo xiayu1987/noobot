@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@noobot/hook-protocol": "file:../hook-protocol",
+    "@noobot/session-protocol": "file:../session-protocol",
     "@noobot/shared": "file:../shared"
   }
 }

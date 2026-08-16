@@ -43,13 +43,12 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedGraphDialogProcessId,
   } = useWorkflowViewerState(workflowPayload, props.workflowNodeStateRegistry);
 
-  const {
-    nodeSessions,
-    runtimeNodeSessions,
-    flowNodes,
-  } = useWorkflowRuntimeState(workflowPayload, {
-    workflowNodeStateRegistry: props.workflowNodeStateRegistry,
-  });
+  const { nodeSessions, runtimeNodeSessions, flowNodes } = useWorkflowRuntimeState(
+    workflowPayload,
+    {
+      workflowNodeStateRegistry: props.workflowNodeStateRegistry,
+    },
+  );
 
   const {
     selectedNodeSessionDocs,
@@ -58,7 +57,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     normalizedNodeSessionMessages,
     displayNodeMessages,
     turnTimingsByTurnScopeId,
-    turnStatusesByTurnScopeId,
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   } = useWorkflowNodeMessages({
@@ -140,7 +138,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     normalizedNodeSessionMessages,
     displayNodeMessages,
     turnTimingsByTurnScopeId,
-    turnStatusesByTurnScopeId,
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
     handleOpenThinkingDetails,

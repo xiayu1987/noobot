@@ -323,7 +323,7 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   assert.equal(displayLifecycle.turns.t1.executionState, "completed");
   assert.equal(restored.turns.t1.summaryVersion, 1);
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
-  assert.equal(h.reload().turnStatuses.length, 1);
+  assert.equal(restored.turns.t1.terminalStatus.status, "completed");
   assert.equal(h.reload().authorityEventOutbox.length, 4);
   assert.equal(completed.envelope.eventId, h.reload().authorityEventOutbox[3].eventId);
   assert.equal(h.reload().turnTerminalCommits, undefined);
@@ -343,7 +343,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   );
   assert.equal(h.reload().turnLifecycle.sequence, 0);
   assert.equal(h.reload().authorityEventOutbox.length, 0);
-  assert.equal(h.reload().turnStatuses.length, 0);
+  assert.deepEqual(h.reload().turnLifecycle.turns, {});
 
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
@@ -370,7 +370,6 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   );
   const afterTerminal = h.reload();
   assert.deepEqual(afterTerminal.turnLifecycle, beforeTerminal.turnLifecycle);
-  assert.deepEqual(afterTerminal.turnStatuses, beforeTerminal.turnStatuses);
   assert.deepEqual(afterTerminal.authorityEventOutbox, beforeTerminal.authorityEventOutbox);
 });
 
@@ -398,10 +397,9 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
       terminalStatus: { command: "not-a-terminal-command" },
     }),
   );
-  assert.equal(rejected.reason, "invalid_turn_status_command");
+  assert.equal(rejected.reason, "invalid_turn_terminal_status");
   const after = h.reload();
   assert.deepEqual(after.turnLifecycle, before.turnLifecycle);
-  assert.deepEqual(after.turnStatuses, before.turnStatuses);
   assert.deepEqual(after.authorityEventOutbox, before.authorityEventOutbox);
 });
 

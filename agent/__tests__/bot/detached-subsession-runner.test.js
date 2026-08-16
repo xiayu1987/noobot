@@ -524,7 +524,10 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     ],
   );
   assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
-  assert.equal(persisted.authorityEventOutbox[3].envelope.summaryVersion >= 1, true);
+  assert.equal(
+    persisted.authorityEventOutbox[3].envelope.summaryVersion,
+    persisted.turnLifecycle.turns["turn-persisted"].summaryVersion,
+  );
   assert.equal(
     persisted.authorityEventOutbox[3].envelope.completionCommitId,
     "turn-persisted:completed",

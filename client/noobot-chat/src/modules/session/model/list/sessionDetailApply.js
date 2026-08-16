@@ -46,10 +46,12 @@ export function createSessionDetailApplicator({
 } = {}) {
   function pruneMessagesFromConfirmedDeletes(messages = [], sessionId = "") {
     const source = Array.isArray(messages) ? messages : [];
-    const index = source.findIndex((messageItem) => isTurnRuntimeDeleted(
-      turnRuntimeRegistry?.value,
-      { sessionId, turnScopeId: getMessageTurnScopeId(messageItem) },
-    ));
+    const index = source.findIndex((messageItem) =>
+      isTurnRuntimeDeleted(turnRuntimeRegistry?.value, {
+        sessionId,
+        turnScopeId: getMessageTurnScopeId(messageItem),
+      }),
+    );
     return index >= 0 ? source.slice(0, index) : source;
   }
 
@@ -59,8 +61,12 @@ export function createSessionDetailApplicator({
       pending: messageItem?.pending === true,
       dialogProcessId: getMessageDialogProcessId(messageItem),
       turnScopeId: getMessageTurnScopeId(messageItem),
-      toolTimelineCount: Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline.length : 0,
-      activityTimelineCount: Array.isArray(messageItem?.activityTimeline) ? messageItem.activityTimeline.length : 0,
+      toolTimelineCount: Array.isArray(messageItem?.toolTimeline)
+        ? messageItem.toolTimeline.length
+        : 0,
+      activityTimelineCount: Array.isArray(messageItem?.activityTimeline)
+        ? messageItem.activityTimeline.length
+        : 0,
     };
   }
 
@@ -77,7 +83,9 @@ export function createSessionDetailApplicator({
     const deletedTurnScopeIds = [
       ...(Array.isArray(options.deletedTurnScopeIds) ? options.deletedTurnScopeIds : []),
       options.deleteFromTurnScopeId,
-    ].map((value) => String(value || "").trim()).filter(Boolean);
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
     if (deletedTurnScopeIds.length) {
       confirmTurnRuntimeDeletion(turnRuntimeRegistry?.value, deletedTurnScopeIds, {
         sessionId: detailSessionId,
@@ -93,9 +101,7 @@ export function createSessionDetailApplicator({
     const sessionDocs = Array.isArray(detail.sessions) ? detail.sessions : [];
     sessionItem.sessionDocs = sessionDocs;
     const mainSessionDoc =
-      sessionDocs.find((doc) => doc.sessionId === detail.sessionId) ||
-      sessionDocs[0] ||
-      {};
+      sessionDocs.find((doc) => doc.sessionId === detail.sessionId) || sessionDocs[0] || {};
     logWorkflowDiagnostics("frontend.workflowDetail.applySourceSelected", () => ({
       sessionId: detailSessionId,
       applyMode,
@@ -125,38 +131,37 @@ export function createSessionDetailApplicator({
       {
         sessionId: detailSessionId,
         messages: sessionItem.detailMessages || [],
-        turnStatuses: sessionItem.turnStatuses || [],
         turnTimings: sessionItem.turnTimings || [],
       },
       {
         sessionId: detailSessionId,
         messages: mainSessionDoc.messages,
-        turnStatuses: mainSessionDoc.turnStatuses || detail?.turnStatuses,
         turnTimings: mainSessionDoc.turnTimings,
       },
       {
         replaceFields: [
           ...(Array.isArray(mainSessionDoc.messages) ? ["messages"] : []),
-          ...(Array.isArray(mainSessionDoc.turnStatuses) || Array.isArray(detail?.turnStatuses) ? ["turnStatuses"] : []),
-          ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings) ? ["turnTimings"] : []),
+          ...(Array.isArray(mainSessionDoc.turnTimings) || Array.isArray(detail?.turnTimings)
+            ? ["turnTimings"]
+            : []),
         ],
       },
     );
-    const detailMessages = pruneMessagesFromConfirmedDeletes(canonicalDetail.messages, detailSessionId);
+    const detailMessages = pruneMessagesFromConfirmedDeletes(
+      canonicalDetail.messages,
+      detailSessionId,
+    );
     if (detailMessages !== canonicalDetail.messages) {
       canonicalDetail.messages = detailMessages;
     }
-    const turnTimings = canonicalDetail.turnTimings.filter((item) => !isTurnRuntimeDeleted(
-      turnRuntimeRegistry?.value,
-      { sessionId: detailSessionId, turnScopeId: item?.turnScopeId },
-    ));
-    const turnStatuses = canonicalDetail.turnStatuses.filter((item) => !isTurnRuntimeDeleted(
-      turnRuntimeRegistry?.value,
-      { sessionId: detailSessionId, turnScopeId: item?.turnScopeId },
-    ));
+    const turnTimings = canonicalDetail.turnTimings.filter(
+      (item) =>
+        !isTurnRuntimeDeleted(turnRuntimeRegistry?.value, {
+          sessionId: detailSessionId,
+          turnScopeId: item?.turnScopeId,
+        }),
+    );
     canonicalDetail.turnTimings = turnTimings;
-    canonicalDetail.turnStatuses = turnStatuses;
-    sessionItem.turnStatuses = turnStatuses.map((item) => ({ ...item }));
     sessionItem.turnTimings = turnTimings.map((item) => ({ ...item }));
     if (hasMessageSnapshot) {
       sessionItem.detailMessages = detailMessages.map((item) => ({ ...item }));
@@ -169,19 +174,6 @@ export function createSessionDetailApplicator({
     logWorkflowDiagnostics("frontend.sessionDetailProjection.terminalPresentation", () => ({
       sessionId: detailSessionId,
       applyMode,
-      rawTurnStatuses: (Array.isArray(mainSessionDoc?.turnStatuses)
-        ? mainSessionDoc.turnStatuses
-        : Array.isArray(detail?.turnStatuses) ? detail.turnStatuses : [])
-        .map((status = {}) => ({
-          turnScopeId: String(status?.turnScopeId || "").trim(),
-          dialogProcessId: String(status?.dialogProcessId || "").trim(),
-          status: String(status?.status || "").trim(),
-        })),
-      retainedTurnStatuses: turnStatuses.map((status = {}) => ({
-        turnScopeId: String(status?.turnScopeId || "").trim(),
-        dialogProcessId: String(status?.dialogProcessId || "").trim(),
-        status: String(status?.status || "").trim(),
-      })),
       projectedTerminalPresentations: detailProjection.messages
         .filter((messageItem) => messageItem?.turnStatusPlaceholder === true)
         .map((messageItem) => ({
@@ -201,9 +193,11 @@ export function createSessionDetailApplicator({
       authority: "session_detail",
       hasMessageSnapshot,
       detailMessageCount: detailMessages.length,
-      detailTurnScopeIds: [...new Set(
-        detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
-      )],
+      detailTurnScopeIds: [
+        ...new Set(
+          detailMessages.map((messageItem) => getMessageTurnScopeId(messageItem)).filter(Boolean),
+        ),
+      ],
     }));
     if (hasMessageSnapshot) revokeMessagePreviewUrls(sessionItem.messages || []);
 
@@ -220,14 +214,16 @@ export function createSessionDetailApplicator({
         .filter((item) => getMessageRole(item) === RoleEnum.ASSISTANT)
         .map((item) => ({
           ...summarizeToolProjection(item),
-          activityTimelineFacts: (item.activityTimeline || []).slice(0, 64).map((activity = {}) => ({
-            eventId: String(activity.eventId || ""),
-            activityKind: String(activity.type || activity.activityKind || ""),
-            sequence: Number(activity.sequence || 0),
-            sequenceDomain: String(activity.sequenceDomain || ""),
-            sequenceScopeId: String(activity.sequenceScopeId || ""),
-            authority: String(activity.authority || ""),
-          })),
+          activityTimelineFacts: (item.activityTimeline || [])
+            .slice(0, 64)
+            .map((activity = {}) => ({
+              eventId: String(activity.eventId || ""),
+              activityKind: String(activity.type || activity.activityKind || ""),
+              sequence: Number(activity.sequence || 0),
+              sequenceDomain: String(activity.sequenceDomain || ""),
+              sequenceScopeId: String(activity.sequenceScopeId || ""),
+              authority: String(activity.authority || ""),
+            })),
         })),
     }));
 
@@ -259,10 +255,12 @@ export function createSessionDetailApplicator({
     sessionItem.messageCount = sessionItem.messages.length;
     sessionItem.lastMessage = findVisibleLastMessage(sessionItem.messages);
 
-    sessionItem.title = serverSessionTitle || sessionTitleFromMessages(
-      sessionItem.messages,
-      sessionItem.title || detail.sessionId.slice(0, 8),
-    );
+    sessionItem.title =
+      serverSessionTitle ||
+      sessionTitleFromMessages(
+        sessionItem.messages,
+        sessionItem.title || detail.sessionId.slice(0, 8),
+      );
     const shouldNavigateToLastMessage =
       options.navigateToLastMessage !== false && options.scrollToBottom !== false;
     if (shouldNavigateToLastMessage) navigateToLastMessage?.();
