@@ -93,6 +93,15 @@ export function createServicePluginHost({
   let activeRouter = express.Router();
   let mountedApp = null;
   let activationContext = null;
+  let lifecycleGeneration = 0;
+  let lifecycleState = "active";
+  let disposalPromise = null;
+
+  function assertLifecycleOwnership(generation) {
+    if (lifecycleState !== "active" || generation !== lifecycleGeneration) {
+      throw new Error("service plugin activation lost lifecycle ownership");
+    }
+  }
 
   function load({ refresh = false } = {}) {
     if (refresh) return refreshPluginRuntime(runtimeOptions);
@@ -110,7 +119,9 @@ export function createServicePluginHost({
   }
 
   async function activatePlugins({ app, context = {}, refresh = false } = {}) {
+    if (lifecycleState !== "active") throw new Error("service plugin host is disposed");
     if (activationPromise && !refresh) return activationPromise;
+    const operationGeneration = lifecycleGeneration;
     const previousOperation = activationPromise;
     const operation = (async () => {
       if (previousOperation) {
@@ -121,8 +132,10 @@ export function createServicePluginHost({
           // still starts from the last committed generation.
         }
       }
+      assertLifecycleOwnership(operationGeneration);
       mountDispatcher(app);
       const runtime = await load({ refresh });
+      assertLifecycleOwnership(operationGeneration);
       for (const record of runtime.lifecycleEvents || []) reportPluginEvent(record);
       if (runtime.errors?.length) {
         throw new Error(`service plugin runtime failed: ${runtime.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`);
@@ -197,9 +210,9 @@ export function createServicePluginHost({
       let candidateRouter;
       try {
         candidateRouter = generation.commit();
+        assertLifecycleOwnership(operationGeneration);
       } catch (error) {
-        await scope.dispose();
-        throw error;
+        await scope.dispose({ cause: error });
       }
       const previousScope = activeScope;
       activeScope = scope;
@@ -223,7 +236,7 @@ export function createServicePluginHost({
       const runtime = await activatePlugins({ app, context });
       return listLoadedNoobotPluginEntries(runtime).map((entry) => ({
         pluginId: entry.pluginId,
-        activation: activeScope.activations.get(entry.pluginId),
+        activation: activeScope.getActivation(entry.pluginId),
       }));
     },
 
@@ -253,13 +266,27 @@ export function createServicePluginHost({
     },
 
     async dispose() {
-      const scope = activeScope;
-      activeScope = null;
-      activeRuntime = null;
-      activeHookManager = createHookManager();
-      activeRouter = express.Router();
-      activationPromise = null;
-      if (scope) await scope.dispose();
+      if (disposalPromise) return disposalPromise;
+      if (lifecycleState === "disposed") return;
+      lifecycleState = "disposing";
+      lifecycleGeneration += 1;
+      const pendingOperation = activationPromise;
+      disposalPromise = (async () => {
+        if (pendingOperation) {
+          try { await pendingOperation; } catch { /* Disposal owns final cleanup. */ }
+        }
+        const scope = activeScope;
+        activeScope = null;
+        activeRuntime = null;
+        activeHookManager = createHookManager();
+        activeRouter = express.Router();
+        try {
+          if (scope) await scope.dispose();
+        } finally {
+          lifecycleState = "disposed";
+        }
+      })();
+      return disposalPromise;
     },
   });
 }

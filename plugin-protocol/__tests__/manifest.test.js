@@ -106,6 +106,19 @@ test("protected host ports require their protocol permissions", () => {
   );
 });
 
+test("every required host port is available on a declared entry surface", () => {
+  assert.throws(
+    () => parsePluginManifest({
+      ...manifest,
+      requires: {
+        ...manifest.requires,
+        ports: [...manifest.requires.ports, "routes.bind"],
+      },
+    }),
+    /routes\.bind is not available on any declared plugin entry/,
+  );
+});
+
 test("plugin lifecycle and contribution identities have one protocol shape", () => {
   const identity = createPluginContributionIdentity({
     pluginId: "example",

@@ -112,6 +112,16 @@ export const pluginManifestSchema = z
     const requiredPorts = new Set(manifest.requires.ports);
     const requiredPermissions = new Set(manifest.requires.permissions);
     for (const port of requiredPorts) {
+      const supportedByDeclaredEntry = Object.values(PLUGIN_SURFACE).some(
+        (surface) => manifest.entries[surface] && PLUGIN_SURFACE_HOST_PORTS[surface].includes(port),
+      );
+      if (!supportedByDeclaredEntry) {
+        context.addIssue({
+          code: "custom",
+          path: ["requires", "ports"],
+          message: `${port} is not available on any declared plugin entry`,
+        });
+      }
       for (const permission of PLUGIN_PORT_PERMISSION_REQUIREMENTS[port] || []) {
         if (!requiredPermissions.has(permission)) {
           context.addIssue({

@@ -17,10 +17,15 @@ function normalizePath(path = []) {
   return normalized;
 }
 
-function assignFacadePath(target, path, value) {
+function assignFacadePath(target, path, value, ownedContainers) {
   let cursor = target;
   for (const segment of path.slice(0, -1)) {
-    if (!cursor[segment]) cursor[segment] = {};
+    if (!cursor[segment]) {
+      cursor[segment] = {};
+      ownedContainers.add(cursor[segment]);
+    } else if (!ownedContainers.has(cursor[segment])) {
+      throw new Error(`plugin host facade path conflicts with public context: ${path.join(".")}`);
+    }
     cursor = cursor[segment];
   }
   const leaf = path[path.length - 1];
@@ -28,23 +33,19 @@ function assignFacadePath(target, path, value) {
   cursor[leaf] = value;
 }
 
-function deepFreeze(value) {
-  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
-  for (const nested of Object.values(value)) deepFreeze(nested);
-  return Object.freeze(value);
-}
-
 export function createPluginHostFacade({ entry = null, capabilityAdapters = {}, publicContext = {} } = {}) {
   if (!entry?.manifest) throw new TypeError("loaded plugin entry is required");
   const facade = { ...(publicContext && typeof publicContext === "object" ? publicContext : {}) };
+  const ownedContainers = new Set([facade]);
   for (const port of portsForPluginSurface(entry.manifest, entry.surface)) {
     const descriptor = capabilityAdapters?.[port];
     if (!descriptor || typeof descriptor !== "object") {
       throw new Error(`plugin ${entry.pluginId} requires unavailable host port ${port}`);
     }
-    assignFacadePath(facade, normalizePath(descriptor.path), descriptor.value);
+    assignFacadePath(facade, normalizePath(descriptor.path), descriptor.value, ownedContainers);
   }
-  return deepFreeze(facade);
+  for (const container of [...ownedContainers].reverse()) Object.freeze(container);
+  return facade;
 }
 
 export function createContributionTransaction({ commit, rollback = null } = {}) {
@@ -70,8 +71,9 @@ export function createContributionTransaction({ commit, rollback = null } = {}) 
       if (state === "committed" && typeof rollback !== "function") {
         throw new Error("committed contribution transaction has no rollback operation");
       }
-      if (typeof rollback === "function") rollback(Object.freeze([...staged]), state);
+      const previousState = state;
       state = "rolled_back";
+      if (typeof rollback === "function") return rollback(Object.freeze([...staged]), previousState);
     },
   });
 }
@@ -82,49 +84,122 @@ function emitLifecycle(lifecycleSink, event, entry, options = {}) {
   return record;
 }
 
+function captureLifecycle({ lifecycleEvents, lifecycleSink, event, entry, options = {}, errors }) {
+  try {
+    const record = emitLifecycle(lifecycleSink, event, entry, options);
+    lifecycleEvents.push(record);
+    return record;
+  } catch (error) {
+    errors.push(error);
+    return null;
+  }
+}
+
 function ensureSync(value, operation) {
   if (value && typeof value.then === "function") throw new TypeError(`${operation} must be synchronous`);
   return value;
 }
 
+function cleanupError(primaryError, errors, message) {
+  if (!errors.length) return primaryError || null;
+  if (!primaryError && errors.length === 1) return errors[0];
+  return new AggregateError(
+    primaryError ? [primaryError, ...errors] : errors,
+    primaryError?.message || message,
+    primaryError ? { cause: primaryError } : undefined,
+  );
+}
+
+function captureCleanupOutcome({ lifecycleEvents, lifecycleSink, entry, successEvent, entryErrors, errors }) {
+  errors.push(...entryErrors);
+  captureLifecycle({
+    lifecycleEvents,
+    lifecycleSink,
+    event: entryErrors.length ? PLUGIN_LIFECYCLE_EVENT.FAILED : successEvent,
+    entry,
+    options: entryErrors.length ? { error: cleanupError(null, entryErrors, "plugin cleanup failed") } : {},
+    errors,
+  });
+}
+
 function createScopeHandle({ entries, activations, transactions, lifecycleEvents, lifecycleSink, synchronous }) {
   let disposed = false;
+  let disposalPromise = null;
+  const cleaned = new Set();
   const dispose = synchronous
-    ? () => {
-        if (disposed) return;
+    ? ({ cause = null } = {}) => {
+        if (disposed) {
+          if (cause) throw cause;
+          return;
+        }
+        disposed = true;
+        const errors = [];
         for (const entry of [...entries].reverse()) {
           const activation = activations.get(entry.pluginId);
-          if (!activation) continue;
-          emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.DEACTIVATING, entry);
+          if (!activation || cleaned.has(entry.pluginId)) continue;
+          cleaned.add(entry.pluginId);
+          captureLifecycle({ lifecycleEvents, lifecycleSink, event: PLUGIN_LIFECYCLE_EVENT.DEACTIVATING, entry, errors });
           const transaction = transactions.get(entry.pluginId);
-          transaction?.rollback();
-          ensureSync(activation.dispose(), `plugin ${entry.pluginId} dispose`);
-          emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.DEACTIVATED, entry);
+          const entryErrors = [];
+          try { ensureSync(transaction?.rollback(), `plugin ${entry.pluginId} rollback`); } catch (error) { entryErrors.push(error); }
+          try { ensureSync(activation.dispose(), `plugin ${entry.pluginId} dispose`); } catch (error) { entryErrors.push(error); }
+          captureCleanupOutcome({ lifecycleEvents, lifecycleSink, entry, successEvent: PLUGIN_LIFECYCLE_EVENT.DEACTIVATED, entryErrors, errors });
         }
         activations.clear();
-        disposed = true;
+        const error = cleanupError(cause, errors, "plugin scope disposal failed");
+        if (error) throw error;
       }
-    : async () => {
-        if (disposed) return;
-        for (const entry of [...entries].reverse()) {
-          const activation = activations.get(entry.pluginId);
-          if (!activation) continue;
-          emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.DEACTIVATING, entry);
-          const transaction = transactions.get(entry.pluginId);
-          await transaction?.rollback();
-          await activation.dispose();
-          emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.DEACTIVATED, entry);
-        }
-        activations.clear();
+    : ({ cause = null } = {}) => {
+        if (disposalPromise) return disposalPromise;
         disposed = true;
+        disposalPromise = (async () => {
+          const errors = [];
+          for (const entry of [...entries].reverse()) {
+            const activation = activations.get(entry.pluginId);
+            if (!activation || cleaned.has(entry.pluginId)) continue;
+            cleaned.add(entry.pluginId);
+            captureLifecycle({ lifecycleEvents, lifecycleSink, event: PLUGIN_LIFECYCLE_EVENT.DEACTIVATING, entry, errors });
+            const transaction = transactions.get(entry.pluginId);
+            const entryErrors = [];
+            try { await transaction?.rollback(); } catch (error) { entryErrors.push(error); }
+            try { await activation.dispose(); } catch (error) { entryErrors.push(error); }
+            captureCleanupOutcome({ lifecycleEvents, lifecycleSink, entry, successEvent: PLUGIN_LIFECYCLE_EVENT.DEACTIVATED, entryErrors, errors });
+          }
+          activations.clear();
+          const error = cleanupError(cause, errors, "plugin scope disposal failed");
+          if (error) throw error;
+        })();
+        return disposalPromise;
       };
   return Object.freeze({
     entries: Object.freeze([...entries]),
-    activations,
-    lifecycleEvents: Object.freeze(lifecycleEvents),
+    getActivation(pluginId) { return activations.get(String(pluginId || "").trim()); },
+    get lifecycleEvents() { return Object.freeze([...lifecycleEvents]); },
     get disposed() { return disposed; },
     dispose,
   });
+}
+
+function rollbackScopeSync({ entries, activations, transactions, lifecycleEvents, lifecycleSink, primaryError, errors = [] }) {
+  for (const entry of [...entries].reverse()) {
+    if (!transactions.has(entry.pluginId)) continue;
+    const entryErrors = [];
+    try { ensureSync(transactions.get(entry.pluginId).rollback(), `plugin ${entry.pluginId} rollback`); } catch (error) { entryErrors.push(error); }
+    try { ensureSync(activations.get(entry.pluginId)?.dispose(), `plugin ${entry.pluginId} rollback dispose`); } catch (error) { entryErrors.push(error); }
+    captureCleanupOutcome({ lifecycleEvents, lifecycleSink, entry, successEvent: PLUGIN_LIFECYCLE_EVENT.ROLLED_BACK, entryErrors, errors });
+  }
+  throw cleanupError(primaryError, errors, "plugin activation rollback failed");
+}
+
+async function rollbackScope({ entries, activations, transactions, lifecycleEvents, lifecycleSink, primaryError, errors = [] }) {
+  for (const entry of [...entries].reverse()) {
+    if (!transactions.has(entry.pluginId)) continue;
+    const entryErrors = [];
+    try { await transactions.get(entry.pluginId).rollback(); } catch (error) { entryErrors.push(error); }
+    try { await activations.get(entry.pluginId)?.dispose(); } catch (error) { entryErrors.push(error); }
+    captureCleanupOutcome({ lifecycleEvents, lifecycleSink, entry, successEvent: PLUGIN_LIFECYCLE_EVENT.ROLLED_BACK, entryErrors, errors });
+  }
+  throw cleanupError(primaryError, errors, "plugin activation rollback failed");
 }
 
 function activateScopeSync({ entries = [], hostFactory, configFactory, transactionFactory, lifecycleSink } = {}) {
@@ -132,8 +207,10 @@ function activateScopeSync({ entries = [], hostFactory, configFactory, transacti
   const activations = new Map();
   const transactions = new Map();
   const lifecycleEvents = [];
+  let currentEntry = null;
   try {
     for (const entry of selectedEntries) {
+      currentEntry = entry;
       lifecycleEvents.push(emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.ACTIVATING, entry));
       const transaction = transactionFactory?.(entry) || createContributionTransaction({
         commit: () => undefined,
@@ -149,15 +226,9 @@ function activateScopeSync({ entries = [], hostFactory, configFactory, transacti
       lifecycleEvents.push(emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.CONTRIBUTION_COMMITTED, entry));
     }
   } catch (error) {
-    const failedEntry = selectedEntries.find((entry) => transactions.has(entry.pluginId) && !activations.has(entry.pluginId)) || selectedEntries[activations.size];
-    if (failedEntry) lifecycleEvents.push(emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.FAILED, failedEntry, { error }));
-    for (const entry of [...selectedEntries].reverse()) {
-      if (!transactions.has(entry.pluginId)) continue;
-      transactions.get(entry.pluginId).rollback();
-      ensureSync(activations.get(entry.pluginId)?.dispose(), `plugin ${entry.pluginId} rollback dispose`);
-      lifecycleEvents.push(emitLifecycle(lifecycleSink, PLUGIN_LIFECYCLE_EVENT.ROLLED_BACK, entry));
-    }
-    throw error;
+    const cleanupErrors = [];
+    if (currentEntry) captureLifecycle({ lifecycleEvents, lifecycleSink, event: PLUGIN_LIFECYCLE_EVENT.FAILED, entry: currentEntry, options: { error }, errors: cleanupErrors });
+    rollbackScopeSync({ entries: selectedEntries, activations, transactions, lifecycleEvents, lifecycleSink, primaryError: error, errors: cleanupErrors });
   }
   return createScopeHandle({ entries: selectedEntries, activations, transactions, lifecycleEvents, lifecycleSink, synchronous: true });
 }
@@ -173,8 +244,10 @@ export async function createPluginActivationScope(options = {}) {
   const activations = new Map();
   const transactions = new Map();
   const lifecycleEvents = [];
+  let currentEntry = null;
   try {
     for (const entry of entries) {
+      currentEntry = entry;
       lifecycleEvents.push(emitLifecycle(options.lifecycleSink, PLUGIN_LIFECYCLE_EVENT.ACTIVATING, entry));
       const transaction = options.transactionFactory?.(entry) || createContributionTransaction({
         commit: () => undefined,
@@ -190,15 +263,9 @@ export async function createPluginActivationScope(options = {}) {
       lifecycleEvents.push(emitLifecycle(options.lifecycleSink, PLUGIN_LIFECYCLE_EVENT.CONTRIBUTION_COMMITTED, entry));
     }
   } catch (error) {
-    const failedEntry = entries.find((entry) => transactions.has(entry.pluginId) && !activations.has(entry.pluginId)) || entries[activations.size];
-    if (failedEntry) lifecycleEvents.push(emitLifecycle(options.lifecycleSink, PLUGIN_LIFECYCLE_EVENT.FAILED, failedEntry, { error }));
-    for (const entry of [...entries].reverse()) {
-      if (!transactions.has(entry.pluginId)) continue;
-      await transactions.get(entry.pluginId).rollback();
-      await activations.get(entry.pluginId)?.dispose();
-      lifecycleEvents.push(emitLifecycle(options.lifecycleSink, PLUGIN_LIFECYCLE_EVENT.ROLLED_BACK, entry));
-    }
-    throw error;
+    const cleanupErrors = [];
+    if (currentEntry) captureLifecycle({ lifecycleEvents, lifecycleSink: options.lifecycleSink, event: PLUGIN_LIFECYCLE_EVENT.FAILED, entry: currentEntry, options: { error }, errors: cleanupErrors });
+    await rollbackScope({ entries, activations, transactions, lifecycleEvents, lifecycleSink: options.lifecycleSink, primaryError: error, errors: cleanupErrors });
   }
   return createScopeHandle({ entries, activations, transactions, lifecycleEvents, lifecycleSink: options.lifecycleSink, synchronous: false });
 }
