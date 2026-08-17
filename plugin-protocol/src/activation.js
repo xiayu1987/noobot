@@ -18,6 +18,19 @@ export const PLUGIN_ACTIVATION_STATUS = Object.freeze({
   FAILED: "failed",
 });
 
+export const PLUGIN_LIFECYCLE_EVENT = Object.freeze({
+  DISCOVERED: "plugin.discovered",
+  MANIFEST_VALIDATED: "plugin.manifest_validated",
+  MODULE_LOADED: "plugin.module_loaded",
+  ACTIVATING: "plugin.activating",
+  ACTIVATED: "plugin.activated",
+  CONTRIBUTION_COMMITTED: "plugin.contribution_committed",
+  DEACTIVATING: "plugin.deactivating",
+  DEACTIVATED: "plugin.deactivated",
+  FAILED: "plugin.failed",
+  ROLLED_BACK: "plugin.rolled_back",
+});
+
 export const PLUGIN_HOST_PORT = Object.freeze({
   HOOKS_REGISTER: "hooks.register",
   HOOKS_EMIT: "hooks.emit",
@@ -28,6 +41,8 @@ export const PLUGIN_HOST_PORT = Object.freeze({
   ROUTES_BIND: "routes.bind",
   AUTHENTICATED_REQUEST: "authenticated_request",
   FRONTEND_CONTRIBUTE: "frontend.contribute",
+  SERVICE_SESSIONS_READ: "service.sessions.read",
+  SERVICE_HTTP_STATUS: "service.http.status",
 });
 
 export const PLUGIN_PERMISSION = Object.freeze({
@@ -38,6 +53,82 @@ export const PLUGIN_PERMISSION = Object.freeze({
   ARTIFACT_WRITE: "artifact.write",
   HTTP_AUTHENTICATED: "http.authenticated",
 });
+
+export const PLUGIN_PORT_PERMISSION_REQUIREMENTS = Object.freeze({
+  [PLUGIN_HOST_PORT.MODEL_INVOKE]: Object.freeze([PLUGIN_PERMISSION.MODEL_INVOKE]),
+  [PLUGIN_HOST_PORT.ARTIFACTS_WRITE]: Object.freeze([PLUGIN_PERMISSION.ARTIFACT_WRITE]),
+  [PLUGIN_HOST_PORT.AUTHENTICATED_REQUEST]: Object.freeze([PLUGIN_PERMISSION.HTTP_AUTHENTICATED]),
+  [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: Object.freeze([PLUGIN_PERMISSION.SESSION_READ]),
+});
+
+export const PLUGIN_SURFACE_HOST_PORTS = Object.freeze({
+  [PLUGIN_SURFACE.AGENT]: Object.freeze([
+    PLUGIN_HOST_PORT.HOOKS_REGISTER,
+    PLUGIN_HOST_PORT.HOOKS_EMIT,
+    PLUGIN_HOST_PORT.POLICY_PATCH,
+    PLUGIN_HOST_PORT.MODEL_INVOKE,
+    PLUGIN_HOST_PORT.ARTIFACTS_WRITE,
+    PLUGIN_HOST_PORT.EVENTS_EMIT,
+  ]),
+  [PLUGIN_SURFACE.SERVICE]: Object.freeze([
+    PLUGIN_HOST_PORT.HOOKS_REGISTER,
+    PLUGIN_HOST_PORT.HOOKS_EMIT,
+    PLUGIN_HOST_PORT.ROUTES_BIND,
+    PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ,
+    PLUGIN_HOST_PORT.SERVICE_HTTP_STATUS,
+  ]),
+  [PLUGIN_SURFACE.FRONTEND]: Object.freeze([
+    PLUGIN_HOST_PORT.AUTHENTICATED_REQUEST,
+    PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE,
+  ]),
+});
+
+export function portsForPluginSurface(manifest = {}, surface = "") {
+  const normalizedSurface = requirePluginSurface(surface);
+  const allowed = new Set(PLUGIN_SURFACE_HOST_PORTS[normalizedSurface]);
+  return Object.freeze(
+    (Array.isArray(manifest?.requires?.ports) ? manifest.requires.ports : [])
+      .filter((port) => allowed.has(port)),
+  );
+}
+
+export function createPluginContributionIdentity({ pluginId = "", surface = "", localId = "" } = {}) {
+  const normalizedPluginId = String(pluginId || "").trim();
+  const normalizedLocalId = String(localId || "").trim();
+  if (!normalizedPluginId) throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "pluginId is required");
+  if (!normalizedLocalId) throw new PluginProtocolError("PLUGIN_CONTRIBUTION_ID_REQUIRED", "localId is required");
+  return Object.freeze({
+    pluginId: normalizedPluginId,
+    surface: requirePluginSurface(surface),
+    localId: normalizedLocalId,
+  });
+}
+
+export function serializePluginContributionIdentity(identity = {}) {
+  const normalized = createPluginContributionIdentity(identity);
+  return `${normalized.pluginId}:${normalized.localId}`;
+}
+
+export function createPluginLifecycleRecord({ event = "", entry = null, error = null, details = {} } = {}) {
+  const normalizedEvent = String(event || "").trim();
+  if (!Object.values(PLUGIN_LIFECYCLE_EVENT).includes(normalizedEvent)) {
+    throw new PluginProtocolError("PLUGIN_LIFECYCLE_EVENT_INVALID", `unsupported plugin lifecycle event: ${normalizedEvent || "<empty>"}`);
+  }
+  const record = {
+    event: normalizedEvent,
+    pluginId: String(entry?.pluginId || entry?.manifest?.id || "").trim(),
+    pluginVersion: String(entry?.manifest?.version || "").trim(),
+    protocolVersion: Number(entry?.manifest?.protocolVersion || PLUGIN_PROTOCOL_VERSION),
+    surface: requirePluginSurface(entry?.surface),
+    ...(details && typeof details === "object" ? details : {}),
+  };
+  if (!record.pluginId) throw new PluginProtocolError("PLUGIN_ID_REQUIRED", "plugin lifecycle entry id is required");
+  if (error) {
+    record.errorCode = String(error?.code || "PLUGIN_ACTIVATION_FAILED");
+    record.message = String(error?.message || error);
+  }
+  return Object.freeze(record);
+}
 
 export class PluginProtocolError extends Error {
   constructor(code = "PLUGIN_PROTOCOL_ERROR", message = "plugin protocol error", details = {}) {

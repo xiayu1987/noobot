@@ -12,7 +12,11 @@ const captured = vi.hoisted(() => ({ contexts: [], manifest: Object.freeze({
   version: "1.0.0",
   entries: { frontend: "frontend.js" },
   contributes: { frontend: { extensions: [] } },
-  requires: { ports: ["frontend.contribute"], permissions: [], authenticatedRoutes: ["/api/internal/test/:id"] },
+  requires: {
+    ports: ["frontend.contribute", "authenticated_request"],
+    permissions: ["http.authenticated"],
+    authenticatedRoutes: ["/api/internal/test/:id"],
+  },
   enabledByDefault: true,
 }) }));
 
@@ -33,7 +37,12 @@ vi.mock("../../../src/plugins/generated/external-entries.js", () => ({
 
 vi.mock("../../../src/extensions/extension-registry.js", () => ({
   listExtensionContributions: vi.fn(() => []),
-  replacePluginExtensions: vi.fn(() => []),
+  createExtensionRegistryGeneration: vi.fn(() => ({
+    replacePlugin: vi.fn(() => []),
+    removePlugin: vi.fn(),
+    createGeneration: vi.fn(),
+  })),
+  publishExtensionRegistryGeneration: vi.fn(() => []),
 }));
 
 vi.mock("../../../src/infrastructure/http/authenticatedHttpService.js", () => ({

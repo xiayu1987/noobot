@@ -154,7 +154,7 @@ export async function initializeSessionRun({
   );
   for (const record of resolvedRunConfig.pluginLifecycleEvents || []) {
     emitEvent(runtimeEventListener, record.event, {
-      ...record.data,
+      ...record,
       sessionId: usedSessionId,
       dialogProcessId,
       turnScopeId,

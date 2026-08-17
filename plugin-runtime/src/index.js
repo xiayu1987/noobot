@@ -13,8 +13,10 @@ import {
   PLUGIN_PROTOCOL_VERSION,
   PLUGIN_SURFACE,
   requirePluginSurface,
-  validatePluginActivationResult,
 } from "@noobot/plugin-protocol";
+
+export * from "./core.js";
+export * from "./contributions.js";
 
 const MANIFEST_FILE_NAME = "manifest.json";
 const runtimeCache = new Map();
@@ -199,7 +201,7 @@ export function resolveLoadedNoobotPlugin(runtime = null, pluginId = "") {
 export function listPluginsContributingHook(runtime = null, point = "") {
   const normalized = String(point || "").trim();
   return listLoadedNoobotPluginEntries(runtime).filter((entry) =>
-    (contributionsForSurface(entry.manifest, entry.surface)?.hooks?.registers || []).includes(normalized),
+    (contributionsForSurface(entry.manifest, entry.surface)?.hooks?.registers || []).some((item) => item.point === normalized),
   );
 }
 
@@ -208,12 +210,6 @@ export function resolvePluginExecutionIntent(runtime = null, pluginId = "") {
   const declaration = plugin?.manifest?.contributes?.agent?.executionIntent;
   if (!declaration) return null;
   return Object.freeze({ ...declaration, pluginId: plugin.pluginId });
-}
-
-export async function activateLoadedNoobotPlugin(entry = null, { host = null, config = {} } = {}) {
-  if (!entry || typeof entry.activate !== "function") throw new TypeError("loaded plugin entry is required");
-  const result = await entry.activate(host, config);
-  return validatePluginActivationResult(result, { pluginId: entry.pluginId, surface: entry.surface });
 }
 
 export function buildNoobotPluginDiagnostics(runtime = null) {

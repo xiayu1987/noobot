@@ -9,7 +9,9 @@ import {
   PLUGIN_HOST_PORT,
   PLUGIN_PERMISSION,
   PLUGIN_PROTOCOL_VERSION,
+  PLUGIN_PORT_PERMISSION_REQUIREMENTS,
   PLUGIN_SURFACE,
+  PLUGIN_SURFACE_HOST_PORTS,
 } from "./activation.js";
 import { EXTENSION_POINT_DEFINITIONS } from "./frontend.js";
 
@@ -24,6 +26,9 @@ const frontendPointSchema = strictString.refine(
 );
 const hostPortSchema = z.enum(Object.values(PLUGIN_HOST_PORT));
 const permissionSchema = z.enum(Object.values(PLUGIN_PERMISSION));
+export const pluginHookRegistrationContributionSchema = z
+  .object({ id: strictString, point: hookPointSchema })
+  .strict();
 
 export const pluginRouteContributionSchema = z
   .object({
@@ -55,7 +60,7 @@ const surfaceContributionSchema = z
   .object({
     hooks: z
       .object({
-        registers: z.array(hookPointSchema).default([]),
+        registers: z.array(pluginHookRegistrationContributionSchema).default([]),
         emits: z.array(hookPointSchema).default([]),
       })
       .strict()
@@ -105,6 +110,18 @@ export const pluginManifestSchema = z
   .strict()
   .superRefine((manifest, context) => {
     const requiredPorts = new Set(manifest.requires.ports);
+    const requiredPermissions = new Set(manifest.requires.permissions);
+    for (const port of requiredPorts) {
+      for (const permission of PLUGIN_PORT_PERMISSION_REQUIREMENTS[port] || []) {
+        if (!requiredPermissions.has(permission)) {
+          context.addIssue({
+            code: "custom",
+            path: ["requires", "permissions"],
+            message: `${permission} is required by port ${port}`,
+          });
+        }
+      }
+    }
     const requiredPortByContribution = [
       [
         "hooks.register",
@@ -135,8 +152,26 @@ export const pluginManifestSchema = z
           message: `contributes.${surface} requires entries.${surface}`,
         });
       }
+      if (manifest.entries[surface]) {
+        const allowedPorts = new Set(PLUGIN_SURFACE_HOST_PORTS[surface]);
+        const surfaceUsesPort = {
+          [PLUGIN_HOST_PORT.HOOKS_REGISTER]: Boolean(contributes?.hooks?.registers?.length),
+          [PLUGIN_HOST_PORT.HOOKS_EMIT]: Boolean(contributes?.hooks?.emits?.length),
+          [PLUGIN_HOST_PORT.ROUTES_BIND]: Boolean(contributes?.routes?.length),
+          [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: Boolean(contributes?.extensions?.length),
+        };
+        for (const [port, used] of Object.entries(surfaceUsesPort)) {
+          if (used && !allowedPorts.has(port)) {
+            context.addIssue({
+              code: "custom",
+              path: ["contributes", surface],
+              message: `${port} is not available on ${surface}`,
+            });
+          }
+        }
+      }
       for (const point of [
-        ...(contributes?.hooks?.registers || []),
+        ...(contributes?.hooks?.registers || []).map((item) => item.point),
         ...(contributes?.hooks?.emits || []),
       ]) {
         const ownerSurface = point.startsWith("service.")
@@ -166,11 +201,12 @@ export const pluginManifestSchema = z
       }
       const registers = contributes?.hooks?.registers || [];
       const emits = contributes?.hooks?.emits || [];
-      if (new Set(registers).size !== registers.length) {
+      const registrationIds = registers.map((item) => item.id);
+      if (new Set(registrationIds).size !== registrationIds.length) {
         context.addIssue({
           code: "custom",
           path: ["contributes", surface, "hooks", "registers"],
-          message: "hook registrations must be unique",
+          message: "hook registration ids must be unique",
         });
       }
       if (new Set(emits).size !== emits.length) {
@@ -212,12 +248,15 @@ export function manifestContributesToSurface(manifest = {}, surface = "") {
   return Boolean(contributionsForSurface(manifest, surface));
 }
 
-export function requireDeclaredPluginHook(manifest = {}, surface = "", point = "") {
+export function requireDeclaredPluginHook(manifest = {}, surface = "", point = "", registrationId = "") {
   const hooks = contributionsForSurface(manifest, surface)?.hooks?.registers || [];
-  if (!hooks.includes(String(point || "").trim())) {
-    throw new TypeError(`plugin ${manifest?.id || "<unknown>"} did not declare hook ${point}`);
+  const normalizedPoint = String(point || "").trim();
+  const normalizedId = String(registrationId || "").trim();
+  const declaration = hooks.find((item) => item.point === normalizedPoint && item.id === normalizedId);
+  if (!declaration) {
+    throw new TypeError(`plugin ${manifest?.id || "<unknown>"} did not declare hook ${normalizedPoint}#${normalizedId}`);
   }
-  return point;
+  return declaration;
 }
 
 export function requireDeclaredPluginHookEmission(manifest = {}, surface = "", point = "") {
@@ -258,4 +297,62 @@ export function requireDeclaredFrontendContribution(
     );
   }
   return declaration;
+}
+
+function contributionReceiptKey(item = {}) {
+  switch (item?.type) {
+    case "hook":
+      return `hook:${String(item.registrationId || "").trim()}:${String(item.point || "").trim()}`;
+    case "route":
+      return `route:${String(item.routeId || "").trim()}`;
+    case "extension":
+      return `extension:${String(item.contributionId || "").trim()}:${String(item.point || "").trim()}`;
+    default:
+      throw new TypeError(`unsupported plugin contribution receipt type: ${String(item?.type || "<empty>")}`);
+  }
+}
+
+function declaredContributionKeys(manifest = {}, surface = "") {
+  const contributions = contributionsForSurface(manifest, surface);
+  return [
+    ...(contributions?.hooks?.registers || []).map(
+      (item) => `hook:${item.id}:${item.point}`,
+    ),
+    ...(contributions?.routes || []).map((item) => `route:${item.id}`),
+    ...(contributions?.extensions || []).map(
+      (item) => `extension:${item.id}:${item.point}`,
+    ),
+  ];
+}
+
+/**
+ * Verifies the exact set of runtime registrations against the Manifest.
+ * The Manifest is the sole declaration source: counts, hook points, or host
+ * state must never be used to infer which contribution was registered.
+ */
+export function validatePluginContributionReceipt(
+  manifest = {},
+  surface = "",
+  receipt = [],
+) {
+  const normalizedSurface = String(surface || "").trim();
+  const expected = declaredContributionKeys(manifest, normalizedSurface);
+  const actual = (Array.isArray(receipt) ? receipt : []).map(contributionReceiptKey);
+  const actualSet = new Set(actual);
+  if (actualSet.size !== actual.length) {
+    throw new TypeError(
+      `plugin ${manifest?.id || "<unknown>"} registered duplicate contributions on ${normalizedSurface}`,
+    );
+  }
+  const expectedSet = new Set(expected);
+  const missing = expected.filter((key) => !actualSet.has(key));
+  const unexpected = actual.filter((key) => !expectedSet.has(key));
+  if (missing.length || unexpected.length) {
+    throw new TypeError(
+      `plugin ${manifest?.id || "<unknown>"} contribution receipt mismatch on ${normalizedSurface}` +
+        `${missing.length ? `; missing: ${missing.join(", ")}` : ""}` +
+        `${unexpected.length ? `; unexpected: ${unexpected.join(", ")}` : ""}`,
+    );
+  }
+  return Object.freeze([...actual]);
 }
