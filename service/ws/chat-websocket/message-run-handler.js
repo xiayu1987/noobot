@@ -350,6 +350,8 @@ export function createMessageRunHandler({
       }
     }, runTimeoutMs);
     state.currentRunMeta = {
+      commandId,
+      commandType: command.commandType,
       userId: String(userId || "").trim(),
       runOwnerId: canonicalRunOwnerId,
       sessionId: String(sessionId || "").trim(),
@@ -399,7 +401,6 @@ export function createMessageRunHandler({
     const eventListener = createRunEventListener({
       sendEvent: (...args) => publishRunEvent(runHandle, ...args),
       sessionId,
-      textStreamingEnabled,
       registerActiveRun,
       getCurrentRunMeta: () => runMeta,
       getCurrentRunHandle: () => runHandle,
@@ -467,32 +468,6 @@ export function createMessageRunHandler({
           data: eventData,
         });
       },
-      onAuthoritativeMessageRouted: (routeData = {}) => {
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          category: "debug",
-          level: "debug",
-          debugType: "workflow-diagnostics",
-          event: "service.websocket.authoritativeMessage.routed",
-          userId,
-          sessionId,
-          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
-          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
-          data: routeData,
-        });
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          category: "debug",
-          level: "debug",
-          debugType: "timeline-pipeline",
-          event: "service.timelinePipeline.authoritativeRouted",
-          userId,
-          sessionId,
-          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
-          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
-          data: routeData,
-        });
-      },
       onCommittedTurnLifecycle: async (committed = {}, context = {}) => {
         const recordDispatchFailure = (reason = "", delivered = 0) => {
           void recordServiceWebSocketLifecycle({
@@ -532,6 +507,18 @@ export function createMessageRunHandler({
           return { dispatched: false, reason, delivered: 0 };
         }
       },
+      onAuthorityEventCommitted: async (envelope = {}, context = {}) => {
+        const dispatch = await dispatchAuthorityEvents?.({
+          userId,
+          sessionId: envelope.identity.sessionId,
+          parentSessionId,
+          persistenceScope: context.persistenceScope,
+        }, (...args) => publishRunEvent(runHandle, ...args));
+        if (dispatch?.dispatched !== true) {
+          throw new Error(dispatch?.reason || "authority_event_dispatch_failed");
+        }
+        return dispatch;
+      },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
         processingStartedPromise = commitTurnLifecycle({
@@ -560,7 +547,8 @@ export function createMessageRunHandler({
           stage: lifecycleData?.stage,
         }).then((started) => {
           if (!started?.applied && !started?.deduplicated) {
-            throw new Error(started?.reason || "processing_start_failed");
+            const code = String(started?.reason || "processing_start_failed").trim();
+            throw Object.assign(new Error(code), { code });
           }
           latestAuthorityTurn = started.turn || latestAuthorityTurn;
           state.currentLifecyclePhase = TURN_PHASE.PROCESSING;

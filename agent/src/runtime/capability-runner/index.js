@@ -21,7 +21,6 @@ import { compactToolResultTextForModel } from "../../transfer-adapter/core/compa
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { createHash } from "node:crypto";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
@@ -129,7 +128,7 @@ function buildPluginCapabilityLogBase({
   };
 }
 
-function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
+async function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
   const normalizedText = String(text || "").trim();
   if (!event) return;
   const isWorkflowSemanticResponse =
@@ -151,26 +150,11 @@ function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data
     }
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
-    const suppliedIdentity = String(
-      data?.eventId || data?.pluginEventId || data?.requestId || "",
-    ).trim();
-    const stableIdentity =
-      suppliedIdentity ||
-      [
-        sessionMeta.sessionId,
-        String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
-        String(runtime?.systemRuntime?.turnScopeId || "").trim(),
-        String(data?.turn || "").trim(),
-        canonicalOutput,
-      ].join("|");
     const activityKind = isGuidanceAnalysisResponse ? "guidance_analysis" : "workflow_semantic";
     const activityEvent = isGuidanceAnalysisResponse
       ? GUIDANCE_ANALYSIS_RESPONSE_EVENT
       : "workflow_semantic_response";
-    const eventIdPrefix = isGuidanceAnalysisResponse ? "guidance-analysis" : "workflow_semantic";
-    const eventId = `${eventIdPrefix}:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
-    emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
-      eventId,
+    await emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
       event: activityEvent,
       type: activityKind,
       category: "system",
@@ -322,7 +306,7 @@ export function createAgentCapabilityModelInvoker({
         }),
       );
       const text = String(ai?.output?.text || "");
-      emitPluginCapabilityRealtimeLog({
+      await emitPluginCapabilityRealtimeLog({
         ctx,
         event: "plugin_capability_response",
         text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
@@ -383,7 +367,7 @@ export function createAgentCapabilityModelInvoker({
         });
       }
       if (!calls.length) {
-        emitPluginCapabilityRealtimeLog({
+        await emitPluginCapabilityRealtimeLog({
           ctx,
           event: "plugin_capability_response",
           text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
@@ -464,7 +448,7 @@ export function createAgentCapabilityModelInvoker({
     );
     const finalizedText = String(finalAi.output.text || "");
 
-    emitPluginCapabilityRealtimeLog({
+    await emitPluginCapabilityRealtimeLog({
       ctx,
       event: "plugin_capability_response",
       text: `Plugin 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,

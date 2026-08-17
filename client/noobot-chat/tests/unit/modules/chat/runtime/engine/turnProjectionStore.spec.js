@@ -4,24 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { classifyRealtimeLog } from "../../../../../../src/app/state/sessionMessageState.js";
+import { classifyRealtimeLog } from "../../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 import {
   dispatchTurnEnvelope,
   hydrateTurnSnapshot,
   TURN_PROJECTION_SOURCE,
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { setThinkingReplayDebugLogSink } from "../../../../../../src/modules/debug/loggers/thinkingReplayDebugLogger.js";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 const identity = { sessionId: "session-1", turnScopeId: "turn-1" };
 const message = () => ({ ...identity, id: "message-1", messageId: "message-1", content: "" });
-const envelope = (overrides) => ({
-  envelopeKind: "noobot.message_event",
-  envelopeVersion: 2,
+const envelope = (overrides) => canonicalMessageEvent({
   sessionId: identity.sessionId,
   turnScopeId: identity.turnScopeId,
   messageId: "message-1",
   presentationMessageId: "message-1",
-  timestamp: "2026-01-01T00:00:00.000Z",
+  occurredAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
 });
 const events = [
@@ -99,8 +98,6 @@ describe("turnProjectionStore convergence", () => {
     const debug = vi.fn((debugType, factory) => factory());
     setThinkingReplayDebugLogSink({ debug, isEnabled: () => true });
     const event = envelope({
-      envelopeVersion: 2,
-      envelopeKind: "noobot.message_event",
       eventId: "guidance-1",
       eventType: "thinking",
       presentationMessageId: "message-1",
@@ -127,8 +124,8 @@ describe("turnProjectionStore convergence", () => {
         event: "frontend.turnProjection.envelopeObserved",
         data: expect.objectContaining({
           source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
+          protocolFamily: "message.timeline",
+          protocolVersion: 3,
           eventId: "guidance-1",
           messageId: "message-1",
           presentationMessageId: "message-1",
@@ -160,7 +157,7 @@ describe("turnProjectionStore convergence", () => {
       eventId: "evt-1",
       sequence: 1,
       source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
-      authority: "none",
+      authority: "authoritative",
       applied: true,
       reason: "applied",
       messageEffect: "none",
@@ -168,14 +165,13 @@ describe("turnProjectionStore convergence", () => {
     expect(result.turnKey).toBeTruthy();
   });
 
-  it("rejects an invalid v2 presentation identity before buffering sequence state", () => {
+  it("rejects an invalid presentation identity before buffering sequence state", () => {
     const target = message();
     const result = dispatchTurnEnvelope({
       targetMessage: target,
       envelope: envelope({
-        envelopeVersion: 2,
         presentationMessageId: "",
-        eventId: "invalid-v2",
+        eventId: "invalid-presentation",
         eventType: "llm_delta",
         sequence: 3,
         text: "must not buffer",
@@ -311,8 +307,7 @@ describe("turnProjectionStore convergence", () => {
       }),
     ];
     multiMessageEvents.forEach((eventItem) => {
-      eventItem.envelopeVersion = 2;
-      eventItem.presentationMessageId = "optimistic-turn-message";
+      eventItem.payload.presentationMessageId = "optimistic-turn-message";
     });
 
     const results = multiMessageEvents.map((eventItem) =>

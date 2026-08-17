@@ -327,13 +327,26 @@ export function validateAgentCommand(command) {
   return { valid: errors.length === 0, errors };
 }
 
+export function validateAgentCommandEnvelope(command) {
+  const errors = [];
+  if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
+  if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION)
+    errors.push("unsupported_protocol_version");
+  const commandType = clean(command.commandType).toLowerCase();
+  if (!COMMAND_TYPE_SET.has(commandType)) errors.push("unsupported_command_type");
+  if (!clean(command.commandId)) errors.push("missing_command_id");
+  validateIdentity(command, errors);
+  return { valid: errors.length === 0, errors };
+}
+
 export class AgentTransportProtocolError extends Error {
-  constructor(errors = []) {
+  constructor(errors = [], command = null) {
     super(`invalid_agent_command: ${errors.join(", ")}`);
     this.name = "AgentTransportProtocolError";
     this.code = "INVALID_AGENT_COMMAND";
     this.errorCode = this.code;
     this.errors = [...errors];
+    this.command = command;
     this.statusCode = 400;
   }
 }
@@ -348,7 +361,13 @@ export function parseAgentCommand(rawCommand) {
     throw new AgentTransportProtocolError(["invalid_json"]);
   }
   const validation = validateAgentCommand(command);
-  if (!validation.valid) throw new AgentTransportProtocolError(validation.errors);
+  if (!validation.valid) {
+    const envelopeValidation = validateAgentCommandEnvelope(command);
+    throw new AgentTransportProtocolError(
+      validation.errors,
+      envelopeValidation.valid ? command : null,
+    );
+  }
   return command;
 }
 

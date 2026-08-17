@@ -19,8 +19,8 @@ import {
   normalizeTurnContinuationSource,
   normalizeCommandReceipts,
   projectTurnTiming,
-  validateTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
+import { validateProtocolEvent, EVENT_FAMILY } from "@noobot/event-protocol";
 
 const clean = (value) => String(value || "").trim();
 const integer = (value, fallback = 0) =>
@@ -119,11 +119,12 @@ export function normalizeTurnLifecycleEntity(source = {}) {
     };
   }
   const commandReceipts = normalizeCommandReceipts(source?.commandReceipts).map((item) => {
-    const eventId = clean(item.eventId || item.envelope?.eventId);
+    const eventId = clean(item.eventId);
     const envelope =
       item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
-        ? { ...item.envelope, eventId }
+        ? item.envelope
         : null;
+    const envelopeValidation = validateProtocolEvent(envelope || {});
     return {
       ...item,
       commandId: clean(item.commandId),
@@ -139,7 +140,12 @@ export function normalizeTurnLifecycleEntity(source = {}) {
       sequence: integer(item.sequence),
       committedAt: clean(item.committedAt),
       eventId,
-      envelope: validateTurnLifecycleEnvelope(envelope || {}).valid ? envelope : null,
+      envelope:
+        envelopeValidation.valid &&
+        envelopeValidation.descriptor?.family === EVENT_FAMILY.TURN_LIFECYCLE &&
+        clean(envelope?.identity?.eventId) === eventId
+          ? envelope
+          : null,
     };
   });
   const activeTurnScopeId = clean(source?.activeTurnScopeId);

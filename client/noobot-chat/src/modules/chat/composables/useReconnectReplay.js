@@ -33,7 +33,6 @@ import {
 import {
   applyReconnectMessagesToActiveSessionReplay,
   consumeReconnectReplayCacheForSession,
-  markReconnectSequenceApplied as markReconnectSequenceAppliedInConsumer,
 } from "../runtime/reconnect/replayCacheConsumer.js";
 import {
   applyAssistantFailureState as applyAssistantFailureStateWithContext,
@@ -92,11 +91,11 @@ export function useReconnectReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent: reduceWorkflowRuntimeEvent,
+  reduceSubSessionMessageEvent,
   applyTurnLifecycleSnapshot,
 } = {}) {
   const reconnectReplayContext = createReconnectReplayContext();
-  const { replayCache, appliedReconnectSequenceByTurnKey, appliedReconnectEventKindsByTurnKey } =
-    reconnectReplayContext;
+  const { replayCache } = reconnectReplayContext;
   let { replayHydrationPromise } = reconnectReplayContext;
   const protocolReconcileAttempts = new Map();
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
@@ -112,8 +111,8 @@ export function useReconnectReplay({
   };
 
   const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
-    const event = String(record?.event || "");
-    const data = record?.data || {};
+    const event = String(record?.identity?.eventType || "");
+    const data = record?.payload || {};
     sessionLogWebSocketClient?.log?.({
       category: "debug",
       level: "debug",
@@ -206,19 +205,10 @@ export function useReconnectReplay({
   async function applySubSessionReplayMessages(messages = [], context = {}) {
     let appliedCount = 0;
     let authoritativeEventCount = 0;
-    for (const envelope of Array.isArray(messages) ? messages : []) {
-      const packet = envelope?.data || {};
-      const messageEvent = packet?.event && typeof packet.event === "object" ? packet.event : null;
+    for (const messageEvent of Array.isArray(messages) ? messages : []) {
       if (!messageEvent) continue;
       authoritativeEventCount += 1;
-      const result = applyWorkflowRuntimeEvent(
-        {
-          event: "workflow_message_event",
-          data: messageEvent,
-          transportSequence: Number(packet?.seq || 0),
-        },
-        { source: "reconnect" },
-      );
+      const result = reduceSubSessionMessageEvent?.(messageEvent);
       if (result?.applied === true) appliedCount += 1;
     }
     sessionLogWebSocketClient?.log?.({
@@ -255,6 +245,7 @@ export function useReconnectReplay({
           tryAutoResolveInteraction,
           isInteractionRequestHandled,
           setPendingInteractionRequest,
+          clearPendingInteraction,
         }),
     });
   }
@@ -354,13 +345,6 @@ export function useReconnectReplay({
     });
   }
 
-  function markReconnectSequenceApplied(sequence = 0, identity = {}) {
-    markReconnectSequenceAppliedInConsumer(appliedReconnectSequenceByTurnKey, sequence, {
-      ...identity,
-      appliedEventKindsByTurnKey: appliedReconnectEventKindsByTurnKey,
-    });
-  }
-
   function findAssistantMessageByDialogProcessId(dialogProcessId = "") {
     return findAssistantMessageByDialogProcessIdWithContext(activeSession, dialogProcessId);
   }
@@ -431,11 +415,8 @@ export function useReconnectReplay({
       messages,
       dialogProcessId,
       turnScopeId,
-      appliedReconnectSequenceByTurnKey,
-      appliedReconnectEventKindsByTurnKey,
       classifyRealtimeLog,
       envelopeCallbacks: createReconnectReplayEnvelopeCallbacks(),
-      markReconnectSequenceApplied,
       navigateToLastMessage,
       processStore,
     });
@@ -454,6 +435,16 @@ export function useReconnectReplay({
       applyExecutionChildren,
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
+      applyPendingInteraction: (interaction) =>
+        applyReconnectInteractionRequest({
+          eventData: interaction,
+          normalizeInteractionRequestPayload,
+          tryAutoResolveInteraction,
+          isInteractionRequestHandled,
+          setPendingInteractionRequest,
+          clearPendingInteraction,
+        }),
+      applySubSessionReplayMessages,
       isDeletedTurn,
       onAttachmentLifecycle: (payload) =>
         handleAttachmentLifecycleStreamEvent({
@@ -476,7 +467,6 @@ export function useReconnectReplay({
     applyReconnectEvent,
     applyChannelState,
     replayCache,
-    appliedReconnectSequenceByTurnKey,
     isTestMode: import.meta.env.MODE === "test",
   });
 }

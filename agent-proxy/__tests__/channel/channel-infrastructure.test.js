@@ -16,6 +16,30 @@ import {
   TURN_PHASE,
   TURN_STATE,
 } from "@noobot/session-protocol";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+
+function canonicalTurnLifecycle(domainEnvelope) {
+  return createEventEnvelope({
+    family: EVENT_FAMILY.TURN_LIFECYCLE,
+    identity: {
+      eventId: domainEnvelope.eventId,
+      eventType: "turn_lifecycle",
+      sessionId: domainEnvelope.sessionId,
+      turnScopeId: domainEnvelope.turnScopeId,
+      messageId: domainEnvelope.messageId,
+    },
+    causality: { commandId: domainEnvelope.commandId },
+    ordering: {
+      domain: "session",
+      scopeId: domainEnvelope.sessionId,
+      sequence: domainEnvelope.sequence,
+      revision: domainEnvelope.revision,
+    },
+    producer: { type: "test", id: "agent-proxy-channel-infrastructure" },
+    occurredAt: domainEnvelope.occurredAt,
+    payload: domainEnvelope,
+  });
+}
 
 test("channel event journal is the bounded ordered replay source", () => {
   const journal = new ChannelEventJournal({ maxEvents: 2 });
@@ -96,7 +120,7 @@ test("authoritative lifecycle delivery remains pending until the browser receipt
   assert.equal(manager.sendChannelEvent(channel, socket, {
     sequence: 7,
     event: "turn_lifecycle",
-    data: lifecycle,
+    data: canonicalTurnLifecycle(lifecycle),
   }).result, "sent");
   assert.equal(socket.__agentProxyPendingLifecycleDeliveries.has("event-1"), true);
   assert.equal(socket.__agentProxyLastSequenceByChannel?.[channel.key], undefined);
@@ -157,14 +181,14 @@ test("authoritative lifecycle delivery is ordered by browser receipts within a t
   assert.equal(manager.sendChannelEvent(channel, socket, {
     sequence: 12,
     event: "turn_lifecycle",
-    data: started,
+    data: canonicalTurnLifecycle(started),
   }).result, "sent");
   assert.equal(manager.sendChannelEvent(channel, socket, {
     sequence: 13,
     event: "turn_lifecycle",
-    data: completed,
+    data: canonicalTurnLifecycle(completed),
   }).result, "queued");
-  assert.deepEqual(socket.sent.map((item) => item.data.eventId), ["event-ordered-2"]);
+  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), ["event-ordered-2"]);
 
   const receipt = manager.acknowledgeTurnLifecycleDelivery(
     socket,
@@ -172,7 +196,7 @@ test("authoritative lifecycle delivery is ordered by browser receipts within a t
   );
   assert.equal(receipt.acknowledged, true);
   assert.equal(receipt.nextDeliveryResult?.result, "sent");
-  assert.deepEqual(socket.sent.map((item) => item.data.eventId), [
+  assert.deepEqual(socket.sent.map((item) => item.data.identity.eventId), [
     "event-ordered-2",
     "event-ordered-3",
   ]);
@@ -228,7 +252,7 @@ test("unacknowledged lifecycle exhausts retries and retires the unreliable socke
   manager.sendChannelEvent(channel, socket, {
     sequence: 11,
     event: "turn_lifecycle",
-    data: lifecycle,
+    data: canonicalTurnLifecycle(lifecycle),
   });
 
   for (let attempt = 1; attempt < config.turnLifecycleDeliveryMaxAttempts; attempt += 1) {

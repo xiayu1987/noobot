@@ -279,7 +279,7 @@ export class SessionExecutionRunner {
         resolvedTurnScopeId,
         syncLifecycleRuntimeState,
       });
-      commitAuthoritativeFinalResult({
+      await commitAuthoritativeFinalResult({
         result: agentResult,
         runtime: dispatchRuntime,
       });

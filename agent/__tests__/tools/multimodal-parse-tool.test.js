@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createMultimodalParseTool } from "../../src/tools/ai-models/multimodal-parse-tool.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createEventEnvelope } from "@noobot/event-protocol";
 
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:multimodal-parse:output",
@@ -151,6 +152,22 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
               createdAt: "2026-08-16T00:00:00.000Z",
             },
           ],
+        };
+      },
+    },
+    sessionManager: {
+      async commitAuthorityEvent({ family, identity, causality, ordering, producer, payload }) {
+        return {
+          committed: true,
+          envelope: createEventEnvelope({
+            family,
+            identity: { ...identity, eventId: `attachment-authority:${identity.messageId}`, sessionId: "session-1" },
+            causality,
+            ordering: { ...ordering, sequence: 1 },
+            producer,
+            occurredAt: payload.occurredAt,
+            payload,
+          }),
         };
       },
     },

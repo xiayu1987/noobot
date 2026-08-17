@@ -5,8 +5,23 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { applyReconnectDataReplay } from "../../../../../../src/modules/chat/runtime/reconnect/reconnectDataReplay.js";
-import { createReplayBatch } from "@noobot/event-protocol";
-import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
+import {
+  createEventEnvelope,
+  createReplayBatch,
+  createTurnSnapshotEnvelope,
+  EVENT_FAMILY,
+  INTERACTION_EVENT_TYPE,
+  INTERACTION_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  createTurnLifecycleSnapshot,
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_STATE,
+} from "@noobot/session-protocol";
+
+const REPLAY_ORDERING_DOMAIN = "turn-lifecycle";
 
 function snapshot({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, state = TURN_STATE.PROCESSING } = {}) {
   return createTurnLifecycleSnapshot({
@@ -37,10 +52,74 @@ function batch({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, events
     sessionId,
     streamId: `stream-${sessionId}`,
     requestId: `reconnect-${sessionId}`,
-    snapshot: baseline,
+    snapshot: createTurnSnapshotEnvelope(baseline, {
+      eventId: `snapshot-event-${sessionId}-${sequence}`,
+      producer: { type: "test", id: "reconnect-data-replay" },
+    }),
     snapshotSequence: sequence,
+    orderingDomain: REPLAY_ORDERING_DOMAIN,
+    orderingScopeId: sessionId,
     events,
     pendingInteractions,
+  });
+}
+
+function lifecycleEvent(sequence) {
+  const payload = createTurnLifecycleEnvelope({
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    eventId: `event-${sequence}`,
+    commandId: "command-1",
+    sessionId: "s-1",
+    turnScopeId: "turn-1",
+    messageId: "message-turn-1",
+    presentationMessageId: "message-turn-1",
+    dialogProcessId: "dp-turn-1",
+    revision: 3,
+    sequence,
+    phase: "processing",
+    state: "processing",
+    action: "send",
+    executionState: "sending",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  return createEventEnvelope({
+    family: EVENT_FAMILY.TURN_LIFECYCLE,
+    identity: {
+      eventId: payload.eventId,
+      eventType: TURN_LIFECYCLE_WIRE_EVENT,
+      sessionId: payload.sessionId,
+      turnScopeId: payload.turnScopeId,
+      messageId: payload.messageId,
+    },
+    causality: { commandId: payload.commandId },
+    ordering: { domain: REPLAY_ORDERING_DOMAIN, scopeId: payload.sessionId, sequence, revision: payload.revision },
+    producer: { type: "test", id: "reconnect-data-replay" },
+    occurredAt: payload.occurredAt,
+    payload,
+  });
+}
+
+function pendingInteraction(requestId) {
+  const payload = {
+    requestId,
+    dialogProcessId: "dp-1",
+    interactionType: "approval",
+    content: "approve?",
+    lifecycle: "pending",
+  };
+  return createEventEnvelope({
+    family: EVENT_FAMILY.INTERACTION_REQUEST,
+    identity: {
+      eventId: `${requestId}-event`,
+      eventType: INTERACTION_EVENT_TYPE.REQUEST,
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+    },
+    causality: {},
+    ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId, sequence: 1 },
+    producer: { type: "test", id: "reconnect-data-replay" },
+    occurredAt: "2026-01-01T00:01:00.000Z",
+    payload,
   });
 }
 
@@ -70,16 +149,7 @@ describe("applyReconnectDataReplay", () => {
 
   it("applies the Authority snapshot before the ordered event tail", async () => {
     const baseline = snapshot({ sequence: 4 });
-    const event = {
-      protocol: { name: "@noobot/event-protocol", version: 1, schema: "turn.lifecycle" },
-      identity: {
-        eventId: "event-5", eventType: "turn.processing_started", commandId: "command-1",
-        sessionId: "s-1", turnScopeId: "turn-1",
-      },
-      ordering: { streamId: "stream-s-1", streamSequence: 5, aggregateRevision: 3 },
-      payload: { state: "processing", phase: "processing", executionState: "sending" },
-      metadata: { producer: "authoritative-state", occurredAt: "2026-01-01T00:00:00.000Z" },
-    };
+    const event = lifecycleEvent(5);
     const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
@@ -117,12 +187,7 @@ describe("applyReconnectDataReplay", () => {
   });
 
   it("reconciles a sequence gap and never applies the invalid tail", async () => {
-    const event = {
-      protocol: { name: "@noobot/event-protocol", version: 1, schema: "turn.lifecycle" },
-      identity: { eventId: "event-7", eventType: "turn.processing_started", commandId: "command-1", sessionId: "s-1", turnScopeId: "turn-1" },
-      ordering: { streamId: "stream-s-1", streamSequence: 7, aggregateRevision: 3 },
-      payload: { state: "processing" }, metadata: { producer: "authoritative-state" },
-    };
+    const event = lifecycleEvent(7);
     const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
@@ -133,29 +198,17 @@ describe("applyReconnectDataReplay", () => {
   });
 
   it("applies only complete pending interaction records from the batch", async () => {
-    const interaction = {
-      event: "interaction_request",
-      data: {
-        requestId: "request-1", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1",
-        interactionType: "approval", content: "approve?",
-      },
-    };
+    const interaction = pendingInteraction("request-1");
     const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
       ...f,
     });
-    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction.data);
+    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction.payload);
   });
 
   it("materializes pending interactions after session activation and hydration", async () => {
-    const interaction = {
-      event: "interaction_request",
-      data: {
-        requestId: "request-order", sessionId: "s-1", dialogProcessId: "dp-1", turnScopeId: "turn-1",
-        interactionType: "approval", content: "approve?",
-      },
-    };
+    const interaction = pendingInteraction("request-order");
     const order = [];
     const f = fixture({
       ensureReconnectSessionActive: vi.fn(async () => { order.push("activate"); }),

@@ -6,26 +6,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  EVENT_CATEGORY,
-  EVENT_DEFINITION_CATEGORY,
-  EVENT_TYPE,
-  getEventDefinition,
-  validateEventType,
+  EVENT_AUTHORITY,
+  EVENT_FAMILY,
+  EVENT_REDUCER_TARGET,
+  getEventFamily,
+  getEventFamilyByWireEvent,
   validateInteractionRequestPayload,
   isPendingInteractionReplay,
   INTERACTION_LIFECYCLE,
   isTerminalInteractionLifecycle,
 } from "../src/index.js";
 
-test("event registry classifies interaction, data and transport events", () => {
-  assert.equal(getEventDefinition("turn.completed"), null);
-  assert.equal(
-    getEventDefinition(EVENT_TYPE.INTERACTION_REQUEST).category,
-    EVENT_CATEGORY.INTERACTION,
-  );
-  assert.equal(getEventDefinition(EVENT_TYPE.DELTA).category, EVENT_CATEGORY.DATA);
-  assert.equal(getEventDefinition(EVENT_TYPE.RECONNECT_DATA).category, EVENT_CATEGORY.TRANSPORT);
-  assert.equal(validateEventType("unknown").valid, false);
+test("event family registry delegates authoritative domain events only", () => {
+  assert.equal(getEventFamilyByWireEvent("turn.completed"), null);
+  assert.equal(getEventFamilyByWireEvent("delta"), null);
+  assert.equal(getEventFamilyByWireEvent("reconnect_data"), null);
+  const interaction = getEventFamily(EVENT_FAMILY.INTERACTION_REQUEST);
+  assert.equal(interaction.authority, EVENT_AUTHORITY.AUTHORITATIVE);
+  assert.equal(interaction.reducerTarget, EVENT_REDUCER_TARGET.INTERACTION);
+  assert.equal(getEventFamilyByWireEvent("interaction_request"), interaction);
 });
 
 test("interaction lifecycle is canonical and terminal states require resolvedBy", () => {
@@ -48,8 +47,8 @@ test("interaction lifecycle is canonical and terminal states require resolvedBy"
 
 test("replay interaction records are atomic and complete", () => {
   const valid = {
-    event: "interaction_request",
-    data: {
+    identity: { eventType: "interaction_request" },
+    payload: {
       requestId: "request-1",
       sessionId: "session-1",
       dialogProcessId: "process-1",
@@ -61,15 +60,15 @@ test("replay interaction records are atomic and complete", () => {
   assert.equal(
     isPendingInteractionReplay({
       ...valid,
-      data: { ...valid.data, requestId: "" },
+      payload: { ...valid.payload, requestId: "" },
     }),
     false,
   );
-  assert.equal(isPendingInteractionReplay({ event: "delta", data: valid.data }), false);
+  assert.equal(isPendingInteractionReplay({ identity: { eventType: "delta" }, payload: valid.payload }), false);
   assert.equal(
     isPendingInteractionReplay({
       ...valid,
-      data: { ...valid.data, lifecycle: "failed", resolvedBy: "system" },
+      payload: { ...valid.payload, lifecycle: "failed", resolvedBy: "system" },
     }),
     false,
   );

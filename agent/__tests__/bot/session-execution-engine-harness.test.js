@@ -16,6 +16,7 @@ import { createStateCommitter } from "../../src/runtime/tool-execution/state-com
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
+import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -340,6 +341,9 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       savedCurrentTurnTasksPayload = payload;
     },
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-execution-engine-harness",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -396,6 +400,21 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       };
     },
   });
+
+  const originalBuildContextBuilder = engine._buildContextBuilder.bind(engine);
+  engine._buildContextBuilder = (options = {}) => {
+    const builder = originalBuildContextBuilder(options);
+    const bindSessionManager = async (build) => {
+      const scope = await build();
+      scope.bindings.runtime.sessionManager = sessionManager;
+      return scope;
+    };
+    return {
+      ...builder,
+      buildInitialContext: (payload) => bindSessionManager(() => builder.buildInitialContext(payload)),
+      buildContinueContext: (payload) => bindSessionManager(() => builder.buildContinueContext(payload)),
+    };
+  };
 
   const result = await engine.runSession({
     userId: "u1",

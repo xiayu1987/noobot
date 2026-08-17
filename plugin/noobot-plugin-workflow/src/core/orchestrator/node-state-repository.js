@@ -26,8 +26,6 @@ const STARTABLE_STATUSES = new Set([
   WORKFLOW_NODE_STATUS.READY,
 ]);
 
-const globalWorkflowNodeStateStore = new Map();
-
 function normalizeText(value = "") {
   return String(value || "").trim();
 }
@@ -67,12 +65,11 @@ function normalizeIdentity(input = {}) {
     dialogProcessId: normalizeText(identity.dialogProcessId),
     agentDialogProcessId: normalizeText(identity.agentDialogProcessId),
     turnScopeId: normalizeText(identity.turnScopeId),
-    sessionId: normalizeText(identity.sessionId || identity.nodeSessionId),
+    nodeSessionId: normalizeText(identity.nodeSessionId),
     activeChildExecutionId: normalizeText(identity.activeChildExecutionId || identity.childExecutionId),
     attemptExecutionIds: Array.isArray(identity.attemptExecutionIds)
       ? identity.attemptExecutionIds.map(normalizeText).filter(Boolean)
       : [],
-    parentSessionId: normalizeText(identity.parentSessionId),
     nodeId: normalizeText(identity.nodeId),
     nodeName: normalizeText(identity.nodeName || identity.name || identity.nodeId),
     attempt: Math.max(1, Math.floor(Number(identity.attempt || 1) || 1)),
@@ -139,7 +136,7 @@ function toSnapshot(run = {}) {
 
 function isSameTarget(current = {}, next = {}) {
   return normalizeStatus(current.status) === normalizeStatus(next.status)
-    && normalizeText(current.sessionId) === normalizeText(next.sessionId || next.nodeSessionId)
+    && normalizeText(current.nodeSessionId) === normalizeText(next.nodeSessionId)
     && normalizeText(current.agentDialogProcessId) === normalizeText(next.agentDialogProcessId || current.agentDialogProcessId)
     && normalizeText(current.activeChildExecutionId) === normalizeText(next.childExecutionId || current.activeChildExecutionId)
     && JSON.stringify(current.failure || null) === JSON.stringify(normalizeFailure(next.failure));
@@ -214,7 +211,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
       return toSnapshot(run);
     },
 
-    async commit({ workflowRunId = "", nodeExecutionId = "", status = "", expectedRevision = null, sessionId = "", agentDialogProcessId = "", childExecutionId = "", failure = null } = {}) {
+    async commit({ workflowRunId = "", nodeExecutionId = "", status = "", expectedRevision = null, nodeSessionId = "", agentDialogProcessId = "", childExecutionId = "", failure = null } = {}) {
       const runId = normalizeText(workflowRunId);
       const executionId = normalizeText(nodeExecutionId);
       const run = getRun(runId);
@@ -223,12 +220,12 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
       if (!current) throw new Error(`workflow node state not found: ${executionId}`);
       const nextStatus = normalizeStatus(status);
       if (expectedRevision != null && Number(expectedRevision) !== Number(current.revision)) {
-        if (isSameTarget(current, { status: nextStatus, sessionId, agentDialogProcessId, childExecutionId, failure })) {
+        if (isSameTarget(current, { status: nextStatus, nodeSessionId, agentDialogProcessId, childExecutionId, failure })) {
           return { applied: false, deduplicated: true, node: cloneJson(current), snapshot: toSnapshot(run) };
         }
         throw new Error(`workflow node revision conflict: expected ${expectedRevision}, actual ${current.revision}`);
       }
-      if (isSameTarget(current, { status: nextStatus, sessionId, agentDialogProcessId, childExecutionId, failure })) {
+      if (isSameTarget(current, { status: nextStatus, nodeSessionId, agentDialogProcessId, childExecutionId, failure })) {
         return { applied: false, deduplicated: true, node: cloneJson(current), snapshot: toSnapshot(run) };
       }
       assertLegalTransition(current, nextStatus);
@@ -241,7 +238,7 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
         revision,
         sequence,
         eventId: createEventId({ workflowRunId: runId, nodeExecutionId: executionId, revision }),
-        sessionId: normalizeText(sessionId || current.sessionId),
+        nodeSessionId: normalizeText(nodeSessionId || current.nodeSessionId),
         agentDialogProcessId: normalizeText(agentDialogProcessId || current.agentDialogProcessId),
         activeChildExecutionId: normalizeText(childExecutionId || current.activeChildExecutionId),
         attemptExecutionIds: normalizeText(childExecutionId)
@@ -268,15 +265,6 @@ export function createInMemoryWorkflowNodeStateRepository({ initialState = null 
   };
 }
 
-let defaultRepository = null;
-
-export function getDefaultWorkflowNodeStateRepository() {
-  if (!defaultRepository) {
-    defaultRepository = createInMemoryWorkflowNodeStateRepository({ initialState: globalWorkflowNodeStateStore });
-  }
-  return defaultRepository;
-}
-
 export function resolveWorkflowNodeStateRepository(options = {}) {
   const candidate = options?.workflowNodeStateRepository;
   if (
@@ -287,5 +275,5 @@ export function resolveWorkflowNodeStateRepository(options = {}) {
   ) {
     return candidate;
   }
-  return getDefaultWorkflowNodeStateRepository();
+  throw new Error("workflowNodeStateRepository is required");
 }

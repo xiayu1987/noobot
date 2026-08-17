@@ -518,11 +518,10 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const mainModelToolTurnContent = String(finalAiContentText || "").trim();
   if (eventListener?.onEvent && mainModelToolTurnContent && calls.length) {
-    emitMessageEvent(eventListener, runtime, "main_model_content", {
+    await emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,
       output: mainModelToolTurnContent,
-      eventId: `model-content:${assistantMessageId || presentationMessageId || "turn"}`,
     });
   }
 

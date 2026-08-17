@@ -10,6 +10,8 @@ import {
 } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  createEventEnvelope,
+  EVENT_FAMILY,
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
@@ -51,7 +53,7 @@ export function createTestLifecycleEnvelope({
   persistenceScope,
 } = {}) {
   const facts = TEST_EVENT_FACTS[eventType];
-  return createTurnLifecycleEnvelope({
+  const payload = createTurnLifecycleEnvelope({
     eventId,
     commandId: `${eventId}:command`,
     eventType,
@@ -70,7 +72,31 @@ export function createTestLifecycleEnvelope({
     executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
     completionCommitId: eventType === TURN_EVENT.COMPLETED ? `${eventId}:completion` : "",
     summaryVersion: eventType === TURN_EVENT.COMPLETED ? 1 : 0,
-    persistenceScope,
+  });
+  return createEventEnvelope({
+    family: EVENT_FAMILY.TURN_LIFECYCLE,
+    identity: {
+      eventId: payload.eventId,
+      eventType: "turn_lifecycle",
+      sessionId: payload.sessionId,
+      turnScopeId: payload.turnScopeId,
+      messageId: payload.messageId,
+      executionId: payload.executionId,
+    },
+    causality: {
+      commandId: payload.commandId,
+      causationId: payload.commandId,
+      correlationId: payload.turnScopeId,
+    },
+    ordering: {
+      domain: "session",
+      scopeId: payload.sessionId,
+      sequence: payload.sequence,
+      revision: payload.revision,
+    },
+    producer: { type: "test", id: "service-turn-lifecycle-fixture" },
+    occurredAt: payload.occurredAt,
+    payload,
   });
 }
 
@@ -130,9 +156,19 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       if (result.found) eventOutbox = result.outbox;
       return { recorded: result.found, reason: result.reason };
     },
-    async acknowledgeAuthorityEvent({ eventId } = {}) {
+    async acknowledgeAuthorityEvent({
+      eventId,
+      consumerId,
+      orderingDomain,
+      orderingScopeId,
+      sequence,
+    } = {}) {
       const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
         eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
         deliveredAt: new Date().toISOString(),
       });
       if (result.found) eventOutbox = result.outbox;

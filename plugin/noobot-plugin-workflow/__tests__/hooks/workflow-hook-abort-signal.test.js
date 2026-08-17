@@ -17,6 +17,7 @@ import {
   createAttachmentPersister,
   createSemanticTransferTool,
   createBaseContext,
+  installTurnMessageEventRuntimeFixture,
   createContextWithSharedTools,
   getBeforeDispatch,
   runWorkflowHook,
@@ -79,7 +80,6 @@ test("workflow hook aborts node sub-session when parent stop signal fires", asyn
       },
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -148,19 +148,19 @@ test("workflow waits for every parallel node sub-session to stop before planner 
       },
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  await assert.rejects(() => beforeDispatch.handler({
+  const context = installTurnMessageEventRuntimeFixture({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
     userMessage: "请并行执行工作流",
     runConfig: { locale: "zh-CN" },
     abortSignal: abortController.signal,
-  }), (error) => error?.name === "AbortError");
+  });
+  await assert.rejects(() => beforeDispatch.handler(context), (error) => error?.name === "AbortError");
 
   assert.equal(startedNodes, 2);
   assert.deepEqual(new Set(settledNodes), new Set(["节点A", "节点B"]));

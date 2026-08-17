@@ -26,6 +26,7 @@ import {
   applyTurnTimingUpdate,
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 
 describe("useChatEngine.send-stream", () => {
   it("uses one preallocated identity for the local user message and transport payload", async () => {
@@ -317,7 +318,7 @@ describe("useChatEngine.send-stream", () => {
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
   });
 
-  it("accepts active stream events without turnScopeId and still finalizes frontend completion", async () => {
+  it("does not infer assistant identity from non-canonical stream events without turnScopeId", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       onEvent({
         event: "message",
@@ -375,7 +376,7 @@ describe("useChatEngine.send-stream", () => {
 
     const assistant = assistantMessage(activeSession);
     expect(result).toBe(true);
-    expect(assistant?.dialogProcessId).toBe("dp-missing-turn");
+    expect(assistant?.dialogProcessId).toBeUndefined();
     expect(selectToolTimelineLogs(assistant)).toEqual([]);
     await vi.waitFor(() => expect(sending.value).toBe(false));
     expect(activeTurnRuntime.value?.sessionId).toBe(activeSession.value.sessionId);
@@ -433,34 +434,22 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.DELTA,
         data: { dialogProcessId: "dp-new", text: "partial " },
       });
-      onEvent({
-        event: "message_event",
-        data: {
-          channelKind: "message_event",
-          channelVersion: 1,
-          route: { scope: "main_session", sessionId: "local-1" },
-          event: {
-            envelopeKind: "noobot.message_event",
-            envelopeVersion: 2,
-            eventId: "evt-final-answer",
-            eventType: "authoritative_final_content",
-            sessionId: "local-1",
-            messageId: "model-output-final-answer",
-            presentationMessageId: payload.presentation.assistantMessageId,
-            dialogProcessId: "dp-new",
-            turnScopeId: payload.identity.turnScopeId,
-            sequence: 1,
-            timestamp: "2026-07-22T05:00:01.000Z",
-            text: "final answer",
-            output: "final answer",
-            modelAlias: "alias-a",
-            modelName: "model-a",
-            modelRuns: [{ runId: "r1" }],
-            attachments: [{ name: "f1" }],
-            tool_calls: [{ id: "tc1" }],
-          },
-        },
-      });
+      onEvent(createAuthoritativeMessageEnvelope("authoritative_final_content", {
+        eventId: "evt-final-answer",
+        sessionId: "local-1",
+        messageId: "model-output-final-answer",
+        presentationMessageId: payload.presentation.assistantMessageId,
+        dialogProcessId: "dp-new",
+        turnScopeId: payload.identity.turnScopeId,
+        seq: 1,
+        text: "final answer",
+        output: "final answer",
+        modelAlias: "alias-a",
+        modelName: "model-a",
+        modelRuns: [{ runId: "r1" }],
+        attachments: [{ name: "f1" }],
+        tool_calls: [{ id: "tc1" }],
+      }));
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -667,20 +656,22 @@ describe("useChatEngine.send-stream", () => {
     expect(sending.value).toBe(false);
   });
 
-  it("terminal completed channel_state triggers frontend completion detail without DONE event", async () => {
+  it("authoritative message and terminal events complete the Turn while channel_state stays transport-only", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending", {
         turnScopeId: payload.identity.turnScopeId,
       });
-      onEvent({
-        event: StreamEventEnum.DELTA,
-        data: {
-          sessionId: "local-channel-complete",
-          dialogProcessId: "dp-channel-complete",
-          turnScopeId: payload.identity.turnScopeId,
-          text: "overlay answer",
-        },
-      });
+      onEvent(createAuthoritativeMessageEnvelope("authoritative_final_content", {
+        eventId: "evt-channel-final-content",
+        sessionId: "local-channel-complete",
+        messageId: "model-output-channel-complete",
+        presentationMessageId: payload.presentation.assistantMessageId,
+        dialogProcessId: "dp-channel-complete",
+        turnScopeId: payload.identity.turnScopeId,
+        seq: 1,
+        text: "overlay answer",
+        output: "overlay answer",
+      }));
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
         turnScopeId: payload.identity.turnScopeId,
       });

@@ -11,11 +11,13 @@ import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/consta
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
+  canonicalMessageEvent,
   FakeUpstreamWebSocket,
   getEvent,
   listEvents,
   sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -38,11 +40,10 @@ test("data-plane events do not create channel business state from start payload"
   manager.attachSubscriber(channel, client);
   client.sentEvents = [];
 
-  manager.pushChannelEvent(channel, "thinking", {
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
     sessionId: "session-turn-scope",
-    dialogProcessId: "dp-turn-scope",
-    seq: 1,
-  });
+    turnScopeId: "turn-scope-1",
+  }));
 
   assert.equal(listEvents(client, "channel_state").length, 0);
   assert.equal(channel.conversationStateByDialogProcessId.has("dp-turn-scope"), false);

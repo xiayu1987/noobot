@@ -7,8 +7,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
 import { startServerWithWs, closeServer, callChatWs, createProtocolTestCommand } from "./chat-websocket-server.test-helpers.js";
+import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
 
-test("chat-websocket-server: non-user abort does not persist or emit user_stopped", async () => {
+test("chat-websocket-server: non-user abort emits only authoritative failure and failed receipt", async () => {
   const server = await startServerWithWs({
     bot: {
       runSession: async () => {
@@ -31,9 +36,18 @@ test("chat-websocket-server: non-user abort does not persist or emit user_stoppe
       },
     });
 
-    assert.equal(events.some((item) => item?.event === "user_stopped"), false);
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /upstream aborted unexpectedly/);
+    const failedLifecycle = events.find(
+      (item) =>
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.FAILED,
+    );
+    assert.equal(failedLifecycle?.data?.identity?.turnScopeId, "turn-non-user-abort");
+    const failedReceipt = events.find(
+      (item) =>
+        item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+        item?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+    );
+    assert.match(String(failedReceipt?.data?.error?.message || ""), /upstream aborted unexpectedly/);
   } finally {
     await closeServer(server);
   }
@@ -116,8 +130,22 @@ test("chat-websocket-server: request userId cannot override the authenticated ow
 
     assert.equal(runCalls, 1);
     assert.equal(turnStatusWrites, 0);
-    assert.equal(events.some((item) => item?.event === "done"), true);
-    assert.equal(events.some((item) => item?.event === "error"), false);
+    assert.equal(
+      events.some(
+        (item) =>
+          item?.event === "turn_lifecycle" &&
+          item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
+      ),
+      true,
+    );
+    assert.equal(
+      events.some(
+        (item) =>
+          item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          item?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+      ),
+      false,
+    );
   } finally {
     await closeServer(server);
   }

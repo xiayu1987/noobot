@@ -13,34 +13,35 @@ import {
 import { createRunEventListener } from "../../../../../../../../service/ws/chat-websocket/run-event-listener.js";
 import { shouldProjectSubSessionEvent } from "../../../../../../src/modules/chat/runtime/engine/sendFlow.js";
 import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
 
 function applyMessageEvent(store, eventName, data) {
-  return store.applyWorkflowRuntimeEvent({
-    event: "workflow_message_event",
-    data: { ...data, eventType: data?.eventType || eventName },
-  }, { source: "test" });
+  return store.reduceSubSessionMessageEvent(canonicalMessageEvent({
+    ...data,
+    eventType: data?.eventType || eventName,
+    eventId: data?.eventId,
+    sequence: data?.sequence,
+  }), { source: "test" });
 }
 
 function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent({
-    event: "workflow_session_snapshot_loaded",
-    data: {
+  return store.applyWorkflowRuntimeEvent(canonicalWorkflowSessionSnapshot({
       aggregateVersion: 1,
-      parentSessionId: "parent-session",
+      authoritySessionId: "parent-session",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
       ...sessionDoc,
-    },
-  }, { source: "test_snapshot" });
+  }), { source: "test_snapshot" });
 }
 
-function deliverPacketToStore(store, frame) {
-  const wireFrame = JSON.parse(JSON.stringify(frame));
-  expect(shouldProjectSubSessionEvent(wireFrame.event, wireFrame.data)).toBe(true);
-  return applyMessageEvent(store,
-    wireFrame.data.event.eventType,
-    wireFrame.data.event,
-  );
+function deliverPacketToStore(store, envelope) {
+  const wireEnvelope = JSON.parse(JSON.stringify(envelope));
+  expect(shouldProjectSubSessionEvent(
+    wireEnvelope.identity.eventType,
+    wireEnvelope,
+  )).toBe(true);
+  return store.reduceSubSessionMessageEvent(wireEnvelope, { source: "test" });
 }
 
 describe("authoritative message event end-to-end fidelity", () => {
@@ -48,23 +49,37 @@ describe("authoritative message event end-to-end fidelity", () => {
     setActivePinia(createPinia());
   });
 
-  it("preserves Mermaid thinking through tool results and snapshot takeover", () => {
+  it("preserves Mermaid thinking through tool results and snapshot takeover", async () => {
     const store = useChatStore();
     const frames = [];
     const produced = [];
     const runtime = {
       sessionId: "child-session",
+      userId: "user-1",
       systemRuntime: {
         sessionId: "child-session",
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
       },
+      sessionManager: {
+        commitMessageEvent: async ({ payload, sessionId, turnScopeId, messageId }) => ({
+          committed: true,
+          envelope: canonicalMessageEvent({
+            ...payload,
+            eventId: `${messageId}:${payload.eventType}:${produced.length + 1}`,
+            sessionId,
+            turnScopeId,
+            messageId,
+            sequence: produced.length + 1,
+          }),
+        }),
+      },
     };
     const listener = createRunEventListener({
       sessionId: "parent-session",
-      textStreamingEnabled: true,
-      sendEvent(event, data) {
-        frames.push({ event, data });
+      onAuthorityEventCommitted(envelope) {
+        frames.push(envelope);
+        return true;
       },
     });
 
@@ -79,7 +94,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     });
     const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
     expect(modelMessageId).not.toBe(messageId);
-    produced.push(emitMessageEvent(listener, runtime, "main_model_content", {
+    produced.push(await emitMessageEvent(listener, runtime, "main_model_content", {
       sessionId: "child-session",
       parentSessionId: "parent-session",
       dialogProcessId: "child-dialog",
@@ -90,7 +105,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       output: "```mermaid\ngraph TD; A-->B\n```",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
     }));
-    produced.push(emitMessageEvent(listener, runtime, "tool_call_end", {
+    produced.push(await emitMessageEvent(listener, runtime, "tool_call_end", {
       sessionId: "child-session",
       parentSessionId: "parent-session",
       dialogProcessId: "child-dialog",
@@ -104,10 +119,9 @@ describe("authoritative message event end-to-end fidelity", () => {
 
     expect(frames).toHaveLength(2);
     frames.forEach((frame, index) => {
-      expect(frame.event).toBe("subagent_message_event");
-      expect(frame.data.event).toEqual(produced[index]);
-      expect(frame.data.event.sequenceScopeId).toBe(messageId);
-      expect(frame.data.route).not.toHaveProperty("messageId");
+      expect(frame).toEqual(produced[index]);
+      expect(frame.identity.eventType).toBe("message_event");
+      expect(frame.ordering.scopeId).toBe(messageId);
       expect(deliverPacketToStore(store, frame).applied).toBe(true);
     });
 
@@ -132,7 +146,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       }),
     ]);
     expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
-      produced.map((event) => event.eventId),
+      produced.map((event) => event.identity.eventId),
     );
 
     applySessionSnapshot(store, {
@@ -154,7 +168,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     expect(session.messages[0].activityTimeline).toHaveLength(1);
     expect(session.messages[0].toolTimeline).toHaveLength(1);
     expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
-      produced.map((event) => event.eventId),
+      produced.map((event) => event.identity.eventId),
     );
     expect(session.messages[0]).not.toHaveProperty("thinking");
     expect(session.messages[0]).not.toHaveProperty("toolResult");

@@ -7,13 +7,10 @@
 export { emitEvent } from "./emitter.js";
 export { setEventAdapter, getEventAdapter } from "./adapter.js";
 export { createExecutionEventListener } from "./execution-listener.js";
+export { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
 export { createLlmDeltaVisibilityFilter } from "./llm-filter.js";
 export { classifyExecutionEvent } from "./log-normalizer.js";
 export {
-  MESSAGE_EVENT_ENVELOPE_KIND,
-  MESSAGE_EVENT_ENVELOPE_VERSION,
-  isMessageEventEnvelope,
-  assertMessageEventEnvelope,
-  createMessageEvent,
-  emitPreparedMessageEvent,
+  assertMessageEventPayload,
+  createMessageEventPayload,
 } from "./message-event-stream.js";

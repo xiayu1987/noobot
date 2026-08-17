@@ -11,6 +11,7 @@ import { SessionExecutionEngine } from "../../src/bot/session/session-execution-
 import { BotManager } from "../../src/bot/index.js";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
   const persistedTurns = [];
@@ -61,6 +62,9 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       savedCurrentTurnTasksPayload = payload;
     },
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-closure-flow",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -209,6 +213,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         return createTestAgentExecutionScope(
           {
             currentTurnMessages: createCurrentTurnMessagesStore(),
+            sessionManager,
             runtimeModel: String(runConfig?.runtimeModel || ""),
             userMessageAttachments: [
               {
@@ -381,6 +386,9 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     async saveCurrentTurnTasks() {},
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-closure-continue-flow",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -428,6 +436,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       return createTestAgentExecutionScope(
         {
           currentTurnMessages: createCurrentTurnMessagesStore(),
+          sessionManager,
           runtimeModel: String(runConfig?.runtimeModel || ""),
           attachmentMetas: [],
           systemRuntime: { dialogProcessId },
@@ -444,6 +453,7 @@ test("continue mode closed-loop: should build continue context and persist paren
       return createTestAgentExecutionScope(
         {
           currentTurnMessages: createCurrentTurnMessagesStore(),
+          sessionManager,
           runtimeModel: "",
           attachmentMetas: [],
           systemRuntime: { dialogProcessId, sessionId },

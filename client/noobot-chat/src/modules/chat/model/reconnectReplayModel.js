@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RoleEnum, StreamEventEnum } from "./chatConstants.js";
+import { RoleEnum } from "./chatConstants.js";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
@@ -26,12 +26,6 @@ import {
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import { hydrateTurnSnapshot } from "../runtime/engine/turnProjectionStore.js";
 import { isPendingInteractionReplay } from "@noobot/event-protocol";
-
-function isReconnectTerminalEvent(eventName = "") {
-  return [StreamEventEnum.DONE, StreamEventEnum.USER_STOPPED, StreamEventEnum.ERROR].includes(
-    String(eventName || "").trim(),
-  );
-}
 
 function isSessionEntryRunning(sessionEntry = {}) {
   const sessionId = String(sessionEntry?.sessionId || "").trim();
@@ -100,66 +94,6 @@ function findLatestPendingAssistantAfterLastUser(messages = []) {
     return messageItem;
   }
   return null;
-}
-
-function getReconnectEnvelopeSequence(envelope = {}) {
-  return Number(envelope?.data?.seq || envelope?.sequence || 0);
-}
-
-function splitReconnectMessagesByTurnIdentity(messages = [], fallbackDialogProcessId = "") {
-  const normalizedFallback = String(fallbackDialogProcessId || "").trim();
-  const groups = new Map();
-  for (const envelope of Array.isArray(messages) ? messages : []) {
-    const envelopeDpId = String(envelope?.data?.dialogProcessId || "").trim();
-    const turnScopeId = String(
-      envelope?.data?.turnScopeId || envelope?.data?.messageEvent?.turnScopeId || "",
-    ).trim();
-    const dialogProcessId = envelopeDpId || normalizedFallback;
-    const groupKey = JSON.stringify([dialogProcessId, turnScopeId]);
-    if (!groups.has(groupKey)) groups.set(groupKey, { dialogProcessId, turnScopeId, messages: [] });
-    groups.get(groupKey).messages.push(envelope);
-  }
-  return Array.from(groups.values());
-}
-
-const splitReconnectMessagesByDialogProcessId = splitReconnectMessagesByTurnIdentity;
-
-function resolveDialogProcessIdFromReplay(messages = [], fallbackDialogProcessId = "") {
-  const fallback = String(fallbackDialogProcessId || "").trim();
-  if (fallback) return fallback;
-  const matchedEnvelope = (Array.isArray(messages) ? messages : []).find((envelope) =>
-    String(envelope?.data?.dialogProcessId || "").trim(),
-  );
-  return String(matchedEnvelope?.data?.dialogProcessId || "").trim();
-}
-
-function isReconnectTerminalBatch(messages = []) {
-  return (Array.isArray(messages) ? messages : []).some((envelope) =>
-    isReconnectTerminalEvent(envelope?.event || ""),
-  );
-}
-
-function findReconnectDoneEnvelopeWithMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).find(
-    (envelope) =>
-      String(envelope?.event || "").trim() === StreamEventEnum.DONE &&
-      Array.isArray(envelope?.data?.messages) &&
-      envelope.data.messages.length,
-  );
-}
-
-function getReconnectMaxSequence(messages = [], fallbackSeq = 0) {
-  return (Array.isArray(messages) ? messages : []).reduce(
-    (maxSeq, envelope) => Math.max(maxSeq, getReconnectEnvelopeSequence(envelope)),
-    Number(fallbackSeq || 0),
-  );
-}
-
-function collectReconnectDeltaText(messages = []) {
-  return (Array.isArray(messages) ? messages : [])
-    .filter((envelope) => String(envelope?.event || "").trim() === StreamEventEnum.DELTA)
-    .map((envelope) => String(envelope?.data?.text || ""))
-    .join("");
 }
 
 function normalizeMessageContentForCompare(content = "") {
@@ -355,24 +289,15 @@ function patchMessageObjectPreservingUiState(
 }
 
 export {
-  collectReconnectDeltaText,
   findLatestPendingAssistantAfterLastUser,
   findRecoverableReconnectSessionId,
-  findReconnectDoneEnvelopeWithMessages,
   findReusableMessageObject,
   getLastUserMessageIndex,
-  getReconnectEnvelopeSequence,
-  getReconnectMaxSequence,
   isDialogProcessRecoverable,
-  isReconnectTerminalBatch,
-  isReconnectTerminalEvent,
   isSessionEntryRunning,
   mergeCurrentUserMessagesIntoFoldedMessages,
   messageCompareKey,
   normalizeMessageContentForCompare,
   parseMessageTimeMs,
   patchMessageObjectPreservingUiState,
-  resolveDialogProcessIdFromReplay,
-  splitReconnectMessagesByDialogProcessId,
-  splitReconnectMessagesByTurnIdentity,
 };

@@ -19,6 +19,10 @@ import {
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
 import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
 
 test("chat-websocket-server: stop persists and emits authoritative stop completion identity", async () => {
@@ -75,14 +79,14 @@ test("chat-websocket-server: stop persists and emits authoritative stop completi
     );
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(stoppedEvent?.data?.sessionId, "s1");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-new");
-    assert.equal(stoppedEvent?.data?.phase, "stop");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
   } finally {
     await closeServer(server);
   }
@@ -133,7 +137,7 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
         if (
           !stopSent &&
           parsed?.event === "turn_lifecycle" &&
-          parsed?.data?.capabilities?.canStop === true
+          parsed?.data?.payload?.capabilities?.canStop === true
         ) {
           stopSent = true;
           ws.send(
@@ -142,7 +146,7 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
                 action: "stop",
                 sessionId: "s1",
                 turnScopeId: "turn-slow",
-                expectedRevision: parsed.data.revision,
+                expectedRevision: parsed.data.ordering.revision,
                 partialAssistant: {
                   dialogProcessId: "dp-slow",
                   turnScopeId: "turn-slow",
@@ -153,14 +157,13 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
         }
         if (
           parsed?.event === "turn_lifecycle" &&
-          parsed?.data?.eventType === TURN_EVENT.STOP_ACCEPTED
+          parsed?.data?.payload?.eventType === TURN_EVENT.STOP_ACCEPTED
         ) {
           resolve(parsed);
         }
         if (
           (parsed?.event === "turn_lifecycle" &&
-            parsed?.data?.eventType === TURN_EVENT.STOP_COMPLETED) ||
-          parsed?.event === "done"
+            parsed?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED)
         ) {
           reject(new Error(`unexpected terminal event before run settled: ${parsed.event}`));
         }
@@ -168,9 +171,9 @@ test("chat-websocket-server: stop emits authoritative acceptance before run sett
       ws.on("error", reject);
       setTimeout(() => reject(new Error("stopping event timeout")), 1000);
     });
-    assert.equal(stoppingEvent?.data?.turnScopeId, "turn-slow");
-    assert.equal(stoppingEvent?.data?.dialogProcessId, "dp-slow");
-    assert.equal(stoppingEvent?.data?.phase, "stop");
+    assert.equal(stoppingEvent?.data?.identity?.turnScopeId, "turn-slow");
+    assert.equal(stoppingEvent?.data?.payload?.dialogProcessId, "dp-slow");
+    assert.equal(stoppingEvent?.data?.payload?.phase, "stop");
     resolveRun();
     ws.close();
   } finally {
@@ -237,13 +240,13 @@ test("chat-websocket-server: stop request emits authoritative stop completion wh
     );
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(stoppedEvent?.data?.sessionId, "s1");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-normal-after-stop");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-normal-after-stop");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-normal-after-stop");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-normal-after-stop");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
   } finally {
     await closeServer(server);
   }
@@ -296,11 +299,11 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
 
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(stoppedEvent?.data?.sessionId, "s-backfill");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-result-backfill");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-backfill");
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-backfill");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-result-backfill");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-backfill");
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.sessionId,
       "s-backfill",
@@ -325,11 +328,11 @@ test("chat-websocket-server: authoritative stop completion and persistence backf
     );
     const authoritativeTerminal = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(authoritativeTerminal?.data?.state, "stop_completed");
-    assert.equal(authoritativeTerminal?.data?.summaryVersion, 1);
-    assert.equal(authoritativeTerminal?.data?.turnScopeId, "turn-backfill");
+    assert.equal(authoritativeTerminal?.data?.payload?.state, "stop_completed");
+    assert.equal(authoritativeTerminal?.data?.payload?.summaryVersion, 1);
+    assert.equal(authoritativeTerminal?.data?.identity?.turnScopeId, "turn-backfill");
   } finally {
     await closeServer(server);
   }
@@ -419,9 +422,19 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
         if (result.found) authorityEventOutbox = result.outbox;
         return { recorded: result.found };
       },
-      acknowledgeAuthorityEvent: async ({ eventId } = {}) => {
+      acknowledgeAuthorityEvent: async ({
+        eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
+      } = {}) => {
         const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
           eventId,
+          consumerId,
+          orderingDomain,
+          orderingScopeId,
+          sequence,
           deliveredAt: new Date().toISOString(),
         });
         if (result.found) authorityEventOutbox = result.outbox;
@@ -462,7 +475,7 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
           messages.push(parsed);
           if (
             parsed?.event === "turn_lifecycle" &&
-            parsed?.data?.eventType === TURN_EVENT.STOP_COMPLETED
+            parsed?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED
           ) {
             ws.close(1000, "idle_stop_persisted");
           }
@@ -485,15 +498,15 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       .filter((item) => item?.event === "turn_lifecycle")
       .map((item) => item.data);
     assert.deepEqual(
-      wireLifecycleEvents.map((item) => item.eventType),
+      wireLifecycleEvents.map((item) => item.payload.eventType),
       [TURN_EVENT.STOP_ACCEPTED, TURN_EVENT.STOP_PROCESSING_COMPLETED, TURN_EVENT.STOP_COMPLETED],
     );
     assert.equal(
-      wireLifecycleEvents.every((item) => item.turnScopeId === "turn-idle-stop"),
+      wireLifecycleEvents.every((item) => item.identity.turnScopeId === "turn-idle-stop"),
       true,
     );
     assert.equal(
-      wireLifecycleEvents.every((item) => item.dialogProcessId === "dp-idle-stop"),
+      wireLifecycleEvents.every((item) => item.payload.dialogProcessId === "dp-idle-stop"),
       true,
     );
     assert.equal(
@@ -501,15 +514,15 @@ test("chat-websocket-server: idle stop persists an authoritative user_stopped te
       false,
     );
     const authoritativeTerminal = wireLifecycleEvents.find(
-      (item) => item.eventType === TURN_EVENT.STOP_COMPLETED,
+      (item) => item.payload.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(authoritativeTerminal?.sessionId, "session-idle-stop");
-    assert.equal(authoritativeTerminal?.turnScopeId, "turn-idle-stop");
-    assert.equal(authoritativeTerminal?.dialogProcessId, "dp-idle-stop");
-    assert.equal(authoritativeTerminal?.phase, "stop");
-    assert.equal(authoritativeTerminal?.state, "stop_completed");
-    assert.ok(authoritativeTerminal?.eventId);
-    assert.equal(authoritativeTerminal?.summaryVersion, 1);
+    assert.equal(authoritativeTerminal?.identity?.sessionId, "session-idle-stop");
+    assert.equal(authoritativeTerminal?.identity?.turnScopeId, "turn-idle-stop");
+    assert.equal(authoritativeTerminal?.payload?.dialogProcessId, "dp-idle-stop");
+    assert.equal(authoritativeTerminal?.payload?.phase, "stop");
+    assert.equal(authoritativeTerminal?.payload?.state, "stop_completed");
+    assert.ok(authoritativeTerminal?.identity?.eventId);
+    assert.equal(authoritativeTerminal?.payload?.summaryVersion, 1);
     assert.equal(persistedStopPayload?.partialAssistant?.turnScopeId, "turn-idle-stop");
     assert.equal(
       events.some((item) => item?.event === "error"),
@@ -559,14 +572,20 @@ test("chat-websocket-server: stop without an authoritative Turn is rejected", as
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         messages.push(parsed);
-        if (parsed?.event === "error") ws.close(1000, "stop_rejected");
+        if (parsed?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
+          ws.close(1000, "stop_rejected");
+        }
       });
       ws.on("close", () => resolve(messages));
       ws.on("error", reject);
     });
 
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.equal(errorEvent?.data?.errorCode, "turn_message_identity_incomplete");
+    const errorEvent = events.find(
+      (item) =>
+        item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+        item?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+    );
+    assert.equal(errorEvent?.data?.error?.code, "turn_message_identity_incomplete");
     assert.equal(
       events.some((item) => item?.event === "channel_state"),
       false,

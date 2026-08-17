@@ -7,25 +7,22 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { applyExecutionTree } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { canonicalMessageEvent } from "../helpers/messageEventFixture.js";
+import { canonicalWorkflowRuntimeEvent, canonicalWorkflowSessionSnapshot } from "../helpers/workflowRuntimeEventFixture.js";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
-function applyMessageEvent(store, eventName, data) {
-  return store.applyWorkflowRuntimeEvent({
-    event: "workflow_message_event",
-    data: { ...data, eventType: data?.eventType || eventName },
-  }, { source: "test" });
+function applyMessageEvent(store, envelope) {
+  return store.reduceSubSessionMessageEvent(envelope, { source: "test" });
 }
 
 function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent({
-    event: "workflow_session_snapshot_loaded",
-    data: {
-      aggregateVersion: 1,
-      parentSessionId: "main-session-1",
-      workflowRunId: "workflow-1",
-      nodeExecutionId: "node-1",
-      ...sessionDoc,
-    },
-  }, { source: "test_snapshot" });
+  return store.applyWorkflowRuntimeEvent(canonicalWorkflowSessionSnapshot({
+    aggregateVersion: 1,
+    parentSessionId: "main-session-1",
+    workflowRunId: "workflow-1",
+    nodeExecutionId: "node-1",
+    ...sessionDoc,
+  }), { source: "test_snapshot" });
 }
 
 function createSubSessionEvent(overrides = {}) {
@@ -36,9 +33,7 @@ function createSubSessionEvent(overrides = {}) {
           String(overrides.status || "") ? "message_status" : "llm_delta"
   );
   const messageId = overrides.messageId || "msg-assistant-1";
-  return {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
+  return canonicalMessageEvent({
     sessionId: "sub-session-1",
     parentSessionId: "main-session-1",
     dialogProcessId: "dialog-1",
@@ -50,13 +45,11 @@ function createSubSessionEvent(overrides = {}) {
     eventId: "event-1",
     messageId,
     presentationMessageId: overrides.presentationMessageId || messageId,
-    sequenceDomain: "message-event",
-    sequenceScopeId: messageId,
     eventType,
-    timestamp: "2026-01-01T00:00:00.000Z",
+    occurredAt: "2026-01-01T00:00:00.000Z",
     ...(eventType === "llm_delta" ? { text: String(overrides.text ?? overrides.content ?? "") } : {}),
     ...overrides,
-  };
+  });
 }
 
 describe("useChatStore sub session projection", () => {
@@ -67,7 +60,7 @@ describe("useChatStore sub session projection", () => {
 
   it("keeps sub session projection isolated from main session storage", () => {
     const store = useChatStore();
-    const result = applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ content: "hello" }));
+    const result = applyMessageEvent(store, createSubSessionEvent({ content: "hello" }));
 
     expect(result.applied).toBe(true);
     expect(store.sessions).toEqual([]);
@@ -83,8 +76,8 @@ describe("useChatStore sub session projection", () => {
 
   it("applies strict eventId dedupe for repeated realtime events", () => {
     const store = useChatStore();
-    const first = applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ content: "he" }));
-    const second = applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ content: "llo" }));
+    const first = applyMessageEvent(store, createSubSessionEvent({ content: "he" }));
+    const second = applyMessageEvent(store, createSubSessionEvent({ content: "llo" }));
 
     expect(first.applied).toBe(true);
     expect(second.applied).toBe(false);
@@ -95,10 +88,10 @@ describe("useChatStore sub session projection", () => {
 
   it("deduplicates the same child message sequence received from parent and child channels", () => {
     const store = useChatStore();
-    const first = applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    const first = applyMessageEvent(store, createSubSessionEvent({
       eventId: "parent-channel-event", sequence: 1, content: "文件写入成功。",
     }));
-    const duplicate = applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    const duplicate = applyMessageEvent(store, createSubSessionEvent({
       eventId: "child-channel-event", sequence: 1, content: "文件写入成功。",
     }));
 
@@ -110,13 +103,13 @@ describe("useChatStore sub session projection", () => {
 
   it("converges workflow child streaming and non-streaming content on the final event", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "delta-1", sequence: 1, eventType: "llm_delta", text: "draft ",
     }));
-    applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "delta-2", sequence: 2, eventType: "llm_delta", text: "tokens",
     }));
-    applyMessageEvent(store, "authoritative_final_content", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "final-3", sequence: 3, eventType: "authoritative_final_content",
       text: "authoritative final", output: "authoritative final",
     }));
@@ -131,16 +124,16 @@ describe("useChatStore sub session projection", () => {
 
   it("merges delta, thinking, tool and lifecycle updates in sequence order", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventType: "llm_delta", eventId: "event-1", sequence: 1, content: "he", pending: true, status: "sending" }));
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "llo" }));
-    applyMessageEvent(store, "subagent_thinking", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({ eventType: "llm_delta", eventId: "event-1", sequence: 1, content: "he", pending: true, status: "sending" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "llo" }));
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "event-3",
       sequence: 3,
       eventType: "thinking",
       text: "plan",
       content: "",
     }));
-    applyMessageEvent(store, "subagent_tool_call", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "event-4",
       sequence: 4,
       eventType: "tool_call_start",
@@ -148,7 +141,7 @@ describe("useChatStore sub session projection", () => {
       toolCallId: "call-search",
       content: "",
     }));
-    applyMessageEvent(store, "subagent_tool_result", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "event-5",
       sequence: 5,
       eventType: "tool_call_end",
@@ -158,9 +151,7 @@ describe("useChatStore sub session projection", () => {
       success: true,
       content: "",
     }));
-    store.applyWorkflowRuntimeEvent({
-      event: "workflow_node_state_committed",
-      data: {
+    store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
         eventId: "event-6",
         sequence: 6,
         revision: 1,
@@ -172,8 +163,7 @@ describe("useChatStore sub session projection", () => {
         dialogProcessId: "dialog-1",
         turnScopeId: "turn-1",
         status: "completed",
-      },
-    }, { source: "test" });
+      }), { source: "test" });
 
     const session = store.selectSubSessionMessages("sub-session-1");
     expect(session?.messages).toHaveLength(1);
@@ -192,7 +182,7 @@ describe("useChatStore sub session projection", () => {
 
   it("projects canonical backend tool envelopes into the assistant tool timeline", () => {
     const store = useChatStore();
-    const started = applyMessageEvent(store, "tool_call_start", createSubSessionEvent({
+    const started = applyMessageEvent(store, createSubSessionEvent({
       eventType: "tool_call_start",
       eventId: "tool-start-1",
       sequence: 1,
@@ -200,7 +190,7 @@ describe("useChatStore sub session projection", () => {
       args: { filePath: "notes.txt" },
       toolCallId: "call-1",
     }));
-    const ended = applyMessageEvent(store, "tool_call_end", createSubSessionEvent({
+    const ended = applyMessageEvent(store, createSubSessionEvent({
       eventType: "tool_call_end",
       eventId: "tool-end-1",
       sequence: 2,
@@ -243,7 +233,7 @@ describe("useChatStore sub session projection", () => {
       }],
     });
 
-    const result = applyMessageEvent(store, "tool_call_start", createSubSessionEvent({
+    const result = applyMessageEvent(store, createSubSessionEvent({
       eventType: "tool_call_start",
       eventId: "tool-start-after-refresh",
       sequence: 1,
@@ -271,6 +261,7 @@ describe("useChatStore sub session projection", () => {
       sessionId: "sub-session-1",
       messages: [{
         id: "persisted-shell-id",
+        messageId: "persisted-shell-id",
         role: "assistant",
         content: "",
         turnScopeId: "turn-1",
@@ -278,7 +269,7 @@ describe("useChatStore sub session projection", () => {
       }],
     });
 
-    const result = applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    const result = applyMessageEvent(store, createSubSessionEvent({
       eventId: "canonical-event-1",
       messageId: "canonical-message-1",
       sequence: 1,
@@ -299,7 +290,7 @@ describe("useChatStore sub session projection", () => {
 
   it("keeps stable identities separate when a different REST message arrives after realtime", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       eventId: "canonical-event-1",
       messageId: "canonical-message-1",
       sequence: 1,
@@ -310,6 +301,7 @@ describe("useChatStore sub session projection", () => {
       sessionId: "sub-session-1",
       messages: [{
         id: "persisted-shell-id",
+        messageId: "persisted-shell-id",
         role: "assistant",
         content: "",
         turnScopeId: "turn-1",
@@ -329,8 +321,8 @@ describe("useChatStore sub session projection", () => {
 
   it("keeps events ordered when realtime updates arrive out of sequence", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }));
-    const earlier = applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "first" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "event-2", sequence: 2, content: "second" }));
+    const earlier = applyMessageEvent(store, createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "first" }));
 
     expect(earlier.applied).toBe(false);
     expect(earlier.reason).toBe("stale");
@@ -339,7 +331,7 @@ describe("useChatStore sub session projection", () => {
 
   it("rejects a message-event cursor declared for another message scope", () => {
     const store = useChatStore();
-    const result = applyMessageEvent(store, "subagent_delta", createSubSessionEvent({
+    const result = applyMessageEvent(store, createSubSessionEvent({
       sequenceDomain: "message-event",
       sequenceScopeId: "different-message",
       content: "must not apply",
@@ -368,7 +360,7 @@ describe("useChatStore sub session projection", () => {
       }],
     });
 
-    const result = applyMessageEvent(store, "llm_delta", createSubSessionEvent({
+    const result = applyMessageEvent(store, createSubSessionEvent({
       eventId: "event-live-1",
       sequence: 1,
       revision: 1,
@@ -390,6 +382,7 @@ describe("useChatStore sub session projection", () => {
       status: "running",
       messages: [{
         id: "runtime-assistant-shell",
+        messageId: "runtime-assistant-shell",
         role: "assistant",
         content: "",
         turnScopeId: "turn-1",
@@ -400,10 +393,7 @@ describe("useChatStore sub session projection", () => {
       }],
     });
 
-    const result = store.applyWorkflowRuntimeEvent({
-      event: "workflow_message_event",
-      transportSequence: 47,
-      data: createSubSessionEvent({
+    const result = store.reduceSubSessionMessageEvent(createSubSessionEvent({
         eventId: "authoritative-final-1",
         eventType: "authoritative_final_content",
         messageId: "authoritative-assistant-1",
@@ -411,8 +401,7 @@ describe("useChatStore sub session projection", () => {
         revision: 1,
         text: "authoritative child result",
         output: "authoritative child result",
-      }),
-    }, { source: "live" });
+      }), { source: "live" });
 
     expect(result).toMatchObject({ applied: true });
     expect(store.selectSubSessionMessages("sub-session-1").messages).toEqual([
@@ -426,7 +415,7 @@ describe("useChatStore sub session projection", () => {
       }),
     ]);
     expect(store.selectSubSessionMessages("sub-session-1").sequenceByScopeKey)
-      .toMatchObject({ "message-event:authoritative-assistant-1": 1 });
+      .toMatchObject({ "authoritative-assistant-1": 1 });
   });
 
   it("keeps node terminal state while reducing an interleaved sequence one final message", () => {
@@ -439,19 +428,14 @@ describe("useChatStore sub session projection", () => {
       dialogProcessId: "runtime-node-dialog",
       turnScopeId: "turn-1",
     };
-    store.applyWorkflowRuntimeEvent({
-      event: "workflow_node_state_committed",
-      data: {
+    store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
         ...identity,
         status: "running",
         revision: 2,
         sequence: 5,
         eventId: "node-running-5",
-      },
-    }, { source: "live" });
-    const finalMessage = store.applyWorkflowRuntimeEvent({
-      event: "workflow_message_event",
-      data: createSubSessionEvent({
+      }), { source: "live" });
+    const finalMessage = store.reduceSubSessionMessageEvent(createSubSessionEvent({
         ...identity,
         eventId: "authoritative-final-after-node-state",
         eventType: "authoritative_final_content",
@@ -460,18 +444,14 @@ describe("useChatStore sub session projection", () => {
         revision: 1,
         text: "done",
         output: "done",
-      }),
-    }, { source: "live" });
-    const terminal = store.applyWorkflowRuntimeEvent({
-      event: "workflow_node_state_committed",
-      data: {
+      }), { source: "live" });
+    const terminal = store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
         ...identity,
         status: "succeeded",
         revision: 3,
         sequence: 6,
         eventId: "node-succeeded-6",
-      },
-    }, { source: "live" });
+      }), { source: "live" });
 
     expect(finalMessage).toMatchObject({ applied: true });
     expect(terminal).toMatchObject({ applied: true });
@@ -492,7 +472,7 @@ describe("useChatStore sub session projection", () => {
 
   it("merges a persisted snapshot without erasing realtime increments", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
     const snapshot = applySessionSnapshot(store, {
       sessionId: "sub-session-1",
       parentSessionId: "main-session-1",
@@ -502,8 +482,8 @@ describe("useChatStore sub session projection", () => {
       nodeExecutionId: "node-1",
       status: "processing",
       messages: [
-        { id: "msg-assistant-1", role: "assistant", content: "hello", sequence: 1 },
-        { id: "msg-2", role: "assistant", content: "world", sequence: 2 },
+        { id: "msg-assistant-1", messageId: "msg-assistant-1", role: "assistant", content: "hello", sequence: 1 },
+        { id: "msg-2", messageId: "msg-2", role: "assistant", content: "world", sequence: 2 },
       ],
     });
 
@@ -542,7 +522,7 @@ describe("useChatStore sub session projection", () => {
 
   it("projects terminal workflow node state onto the isolated child session", () => {
     const store = useChatStore();
-    store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data: {
+    store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
       workflowRunId: "workflow-1",
       nodeExecutionId: "node-1",
       sessionId: "sub-session-1",
@@ -553,13 +533,13 @@ describe("useChatStore sub session projection", () => {
       eventId: "node-running",
       revision: 1,
       sequence: 1,
-    } });
+    }));
     applySessionSnapshot(store, {
       sessionId: "sub-session-1",
       status: "running",
-      messages: [{ role: "user", content: "request", turnScopeId: "turn-1" }],
+      messages: [{ id: "msg-user-request", messageId: "msg-user-request", role: "user", content: "request", turnScopeId: "turn-1" }],
     });
-    store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data: {
+    store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
       workflowRunId: "workflow-1",
       nodeExecutionId: "node-1",
       sessionId: "sub-session-1",
@@ -570,7 +550,7 @@ describe("useChatStore sub session projection", () => {
       eventId: "node-succeeded",
       revision: 2,
       sequence: 2,
-    } });
+    }));
 
     const session = store.selectSubSessionMessages("sub-session-1");
     expect(session.status).toBe("");
@@ -580,7 +560,7 @@ describe("useChatStore sub session projection", () => {
 
   it("does not overwrite existing realtime content when snapshot messages are empty", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
     applySessionSnapshot(store, {
       sessionId: "sub-session-1",
       messages: [],
@@ -593,7 +573,7 @@ describe("useChatStore sub session projection", () => {
 
   it("combines snapshot-owned lifecycle fields with realtime canonical timelines", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_thinking", createSubSessionEvent({
+    applyMessageEvent(store, createSubSessionEvent({
       content: "answer",
       eventType: "thinking",
       text: "Read the source",
@@ -631,15 +611,15 @@ describe("useChatStore sub session projection", () => {
 
   it("lets authoritative snapshot message ids replace realtime temporary identities without duplicates", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "assistant-1", sequence: 1, content: "hello" }));
-    applyMessageEvent(store, "subagent_tool_call", createSubSessionEvent({ eventId: "tool-1", sequence: 2, toolCallId: "call-1", toolCall: { name: "search" }, content: "" }));
-    applyMessageEvent(store, "subagent_tool_result", createSubSessionEvent({ eventId: "tool-2", sequence: 3, toolCallId: "call-1", toolResult: { output: "ok" }, content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "assistant-1", sequence: 1, content: "hello" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "tool-1", sequence: 2, toolCallId: "call-1", toolCall: { name: "search" }, content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "tool-2", sequence: 3, toolCallId: "call-1", toolResult: { output: "ok" }, content: "" }));
 
     applySessionSnapshot(store, {
       sessionId: "sub-session-1",
       messages: [
-        { id: "msg-assistant-1", role: "assistant", content: "hello", turnScopeId: "turn-1", sequence: 1 },
-        { id: "msg-tool-1", role: "tool", content: "ok", toolCallId: "call-1", sequence: 2 },
+        { id: "msg-assistant-1", messageId: "msg-assistant-1", role: "assistant", content: "hello", turnScopeId: "turn-1", sequence: 1 },
+        { id: "msg-tool-1", messageId: "msg-tool-1", role: "tool", content: "ok", toolCallId: "call-1", sequence: 2 },
       ],
     });
 
@@ -652,10 +632,10 @@ describe("useChatStore sub session projection", () => {
 
   it("keeps multiple assistant turns and distinct tool calls separate during realtime projection", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "assistant-1", messageId: "msg-1", turnScopeId: "turn-1", sequence: 1, content: "first" }));
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "assistant-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 1, content: "second" }));
-    applyMessageEvent(store, "tool_call_start", createSubSessionEvent({ eventType: "tool_call_start", eventId: "tool-1", messageId: "msg-2", turnScopeId: "turn-2", sequence: 2, toolCallId: "call-1", tool: "one", content: "" }));
-    applyMessageEvent(store, "tool_call_start", createSubSessionEvent({ eventType: "tool_call_start", eventId: "tool-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 3, toolCallId: "call-2", tool: "two", content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "assistant-1", messageId: "msg-1", turnScopeId: "turn-1", sequence: 1, content: "first" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "assistant-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 1, content: "second" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventType: "tool_call_start", eventId: "tool-1", messageId: "msg-2", turnScopeId: "turn-2", sequence: 2, toolCallId: "call-1", tool: "one", content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventType: "tool_call_start", eventId: "tool-2", messageId: "msg-2", turnScopeId: "turn-2", sequence: 3, toolCallId: "call-2", tool: "two", content: "" }));
 
     const messages = store.selectSubSessionMessages("sub-session-1")?.messages || [];
     expect(messages.map((message) => message.content)).toEqual(["first", "second"]);
@@ -663,8 +643,8 @@ describe("useChatStore sub session projection", () => {
     expect(messages[1].toolTimeline[1]).toMatchObject({ tool: "two" });
     expect(messages[1].messageEventState.consumedEventIds).toHaveLength(3);
     expect(store.selectSubSessionMessages("sub-session-1")?.sequenceByScopeKey).toMatchObject({
-      "message-event:msg-1": 1,
-      "message-event:msg-2": 3,
+      "msg-1": 1,
+      "msg-2": 3,
     });
   });
 
@@ -679,7 +659,7 @@ describe("useChatStore sub session projection", () => {
     store.sessions.push({ sessionId: "main-session", messages: [{ id: "main-message", content: "main" }] });
     applySessionSnapshot(store, {
       sessionId: "child-session",
-      messages: [{ id: "child-message", content: "child" }],
+      messages: [{ id: "child-message", messageId: "child-message", content: "child" }],
     });
     applyExecutionTree(store.turnRuntimeRegistry, {
       rootExecutionId: "main-execution",
@@ -728,16 +708,16 @@ describe("useChatStore sub session projection", () => {
 
   it("does not create an empty placeholder for lifecycle-only updates", () => {
     const store = useChatStore();
-    const result = store.applyWorkflowRuntimeEvent({
-      event: "workflow_node_state_committed",
-      data: {
+    const result = store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(
+      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      {
         eventId: "event-lifecycle", sequence: 1, revision: 1,
         sequenceDomain: "workflow-node-state", status: "processing",
         sessionId: "sub-session-1", parentSessionId: "main-session-1",
         workflowRunId: "workflow-1", nodeExecutionId: "node-1",
         dialogProcessId: "dialog-1", turnScopeId: "turn-1",
       },
-    }, { source: "test" });
+    ), { source: "test" });
 
     expect(result.applied).toBe(true);
     expect(result).not.toHaveProperty("message");
@@ -747,17 +727,17 @@ describe("useChatStore sub session projection", () => {
 
   it("merges lifecycle-only updates into an existing runtime message", () => {
     const store = useChatStore();
-    applyMessageEvent(store, "subagent_delta", createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
-    store.applyWorkflowRuntimeEvent({
-      event: "workflow_node_state_committed",
-      data: {
+    applyMessageEvent(store, createSubSessionEvent({ eventId: "event-1", sequence: 1, content: "hello" }));
+    store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(
+      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      {
         eventId: "event-lifecycle", sequence: 2, revision: 2,
         sequenceDomain: "workflow-node-state", status: "completed",
         sessionId: "sub-session-1", parentSessionId: "main-session-1",
         workflowRunId: "workflow-1", nodeExecutionId: "node-1",
         dialogProcessId: "dialog-1", turnScopeId: "turn-1",
       },
-    }, { source: "test" });
+    ), { source: "test" });
 
     expect(store.selectSubSessionMessages("sub-session-1")?.messages).toHaveLength(1);
     expect(store.selectSubSessionMessages("sub-session-1")?.messages[0]).toMatchObject({ content: "hello" });

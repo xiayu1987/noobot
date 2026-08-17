@@ -9,6 +9,7 @@ import {
   TURN_TRANSPORT_SEQUENCE_DOMAIN,
 } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 describe("turnTransportEnvelope", () => {
   it("keeps transport and message-event sequence domains isolated", () => {
@@ -16,23 +17,13 @@ describe("turnTransportEnvelope", () => {
       event: "message_event",
       source: "reconnect",
       data: {
+        ...canonicalMessageEvent({
+          eventId: "event-1", eventType: "main_model_content", messageId: "message-1",
+          presentationMessageId: "message-1", sessionId: "session-1",
+          dialogProcessId: "dialog-1", turnScopeId: "turn-1", sequence: 7,
+          occurredAt: "2026-07-26T00:00:00.000Z", text: "result",
+        }),
         seq: 85,
-        event: {
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
-          eventId: "event-1",
-          eventType: "main_model_content",
-          messageId: "message-1",
-          presentationMessageId: "message-1",
-          sequenceDomain: "message-event",
-          sequenceScopeId: "message-1",
-          sessionId: "session-1",
-          dialogProcessId: "dialog-1",
-          turnScopeId: "turn-1",
-          sequence: 7,
-          timestamp: "2026-07-26T00:00:00.000Z",
-          text: "result",
-        },
       },
     });
 
@@ -44,7 +35,6 @@ describe("turnTransportEnvelope", () => {
     expect(normalized.messageEventCursor).toMatchObject({
       sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
       sequenceScopeId: "message-1",
-      sequenceKey: "message-event:message-1",
       sequence: 7,
       eventId: "event-1",
     });
@@ -58,22 +48,11 @@ describe("turnTransportEnvelope", () => {
   it("does not treat an inner message sequence as a transport cursor", () => {
     const normalized = normalizeTurnTransportEnvelope({
       event: "message_event",
-      data: {
-        event: {
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
-          eventId: "event-2",
-          eventType: "thinking",
-          messageId: "message-2",
-          presentationMessageId: "message-2",
-          sequenceDomain: "message-event",
-          sequenceScopeId: "message-2",
-          sessionId: "session-2",
-          sequence: 99,
-          timestamp: "2026-07-26T00:00:00.000Z",
-          text: "thinking",
-        },
-      },
+      data: canonicalMessageEvent({
+          eventId: "event-2", eventType: "thinking", messageId: "message-2",
+          presentationMessageId: "message-2", sessionId: "session-2", sequence: 99,
+          occurredAt: "2026-07-26T00:00:00.000Z", text: "thinking",
+        }),
     });
 
     expect(normalized.transportCursor.sequence).toBe(0);

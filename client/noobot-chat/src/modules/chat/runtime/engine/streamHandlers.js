@@ -8,9 +8,8 @@ import {
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
-  normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
-import { normalizeTrimmedString, stripInternalEventPlaceholderLines } from "./utils.js";
+import { normalizeTrimmedString } from "./utils.js";
 import {
   attachmentIdentityKey,
   ATTACHMENT_EVENT_TYPE,
@@ -23,7 +22,6 @@ import {
   normalizeInteractionRequestPayload,
   resolveConnectorStatusPayload,
 } from "../interactionPayload.js";
-import { BackendChannelState } from "../sessionRunStateMachine.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 
 function markFirstStreamEvent(botMessage) {
@@ -55,29 +53,6 @@ function canonicalAttachmentProjectionKey(attachment = {}) {
     return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
   }
   return "";
-}
-
-export function handleDeltaStreamEvent({
-  data,
-  botMessage,
-  navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
-  locateSendingStartedMessageOnce,
-}) {
-  const notifyFirstResponse = resolveFirstResponseNavigator({
-    navigateOnFirstResponseOnce,
-    scrollOnFirstResponseOnce,
-  });
-  const chunkText = stripInternalEventPlaceholderLines(data?.text || "");
-  if (data?.dialogProcessId && !getMessageDialogProcessId(botMessage)) {
-    botMessage.dialogProcessId = normalizeTrimmedString(data.dialogProcessId);
-  }
-  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
-  botMessage.content += chunkText;
-  if (chunkText) {
-    markFirstStreamEvent(botMessage);
-    notifyFirstResponse();
-  }
 }
 
 export function handleConnectorStatusStreamEvent({
@@ -204,51 +179,7 @@ export function handleInteractionRequestStreamEvent({
   return true;
 }
 
-export function handleDoneStreamEvent({
-  data,
-  botMessage,
-  activeSession,
-  activeSessionId,
-  clearPendingInteraction,
-  navigateOnFirstResponseOnce,
-  scrollOnFirstResponseOnce,
-  locateDoneMessage,
-  applyConversationState,
-  locateSendingStartedMessageOnce,
-  suppressCompletionConversationState,
-}) {
-  const notifyFirstResponse = resolveFirstResponseNavigator({
-    navigateOnFirstResponseOnce,
-    scrollOnFirstResponseOnce,
-  });
-  clearPendingInteraction();
-  markFirstStreamEvent(botMessage);
-  botMessage.dialogProcessId = data?.dialogProcessId || getMessageDialogProcessId(botMessage) || "";
-  notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce });
-  activeSession.value.loaded = true;
-  if (!suppressCompletionConversationState && botMessage?.pending !== false) {
-    const turnMeta = normalizeTurnMeta(data);
-    applyConversationState?.(
-      {
-        state: BackendChannelState.COMPLETED,
-        sessionId: String(data?.sessionId || activeSession?.value?.sessionId || ""),
-        dialogProcessId: String(
-          getMessageDialogProcessId(botMessage) || data?.dialogProcessId || "",
-        ),
-        turnScopeId: String(getMessageTurnScopeId(botMessage) || turnMeta.turnScopeId || ""),
-        sourceEvent: "done",
-        updatedAtMs: nowMs(),
-      },
-      { botMessage },
-    );
-  }
-}
-
 export function handleBasicStreamEvent(event, context = {}) {
-  if (event === StreamEventEnum.DELTA) {
-    handleDeltaStreamEvent(context);
-    return true;
-  }
   if (event === StreamEventEnum.CONNECTOR_STATUS) {
     handleConnectorStatusStreamEvent(context);
     return true;

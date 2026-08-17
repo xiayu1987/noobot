@@ -9,13 +9,24 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
+  canonicalInteractionRequest,
+  canonicalMessageEvent,
   createMockSocket,
   getEvent,
   listEvents,
   FakeUpstreamWebSocket,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { authoritativeSnapshot } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
-import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  createAgentTransportError,
+  createTurnStopCommand,
+} from "@noobot/agent-transport-protocol";
+import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_TYPE, MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
+import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 test("channel transport preserves strict event payloads during broadcast and replay", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -39,14 +50,28 @@ test("channel transport preserves strict event payloads during broadcast and rep
   };
   const live = createMockSocket();
   manager.attachSubscriber(channel, live);
-  const envelope = manager.pushChannelEvent(channel, "attachment_lifecycle", lifecycle);
+  const attachmentEnvelope = createEventEnvelope({
+    family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    identity: {
+      eventId: lifecycle.messageId,
+      eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+      sessionId,
+      messageId: lifecycle.messageId,
+    },
+    causality: {},
+    ordering: { domain: "attachment-lifecycle", scopeId: "attachment-1:session-strict-payload:user", sequence: 1 },
+    producer: { type: "test", id: "agent-proxy-test" },
+    occurredAt: lifecycle.occurredAt,
+    payload: lifecycle,
+  });
+  const envelope = manager.pushChannelEvent(channel, ATTACHMENT_LIFECYCLE_WIRE_EVENT, attachmentEnvelope);
   manager.broadcastChannelEvent(channel, envelope);
 
-  assert.deepEqual(getEvent(live, "attachment_lifecycle")?.data, lifecycle);
+  assert.deepEqual(getEvent(live, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);
 
   const replay = createMockSocket();
   manager.replayChannelEvents(channel, replay, 0);
-  assert.deepEqual(getEvent(replay, "attachment_lifecycle")?.data, lifecycle);
+  assert.deepEqual(getEvent(replay, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);
 });
 
 test("reconnect projects a pending interaction without mutating its strict payload", async () => {
@@ -56,17 +81,14 @@ test("reconnect projects a pending interaction without mutating its strict paylo
     userId: "user-1",
     sessionId,
   });
-  const pendingInteraction = {
-    event: "interaction_request",
-    data: {
-      requestId: "interaction-strict-1",
-      sessionId,
-      dialogProcessId: "dialog-strict-1",
-      turnScopeId: "turn-strict-1",
-      interactionType: "confirmation",
-      prompt: "Confirm operation",
-    },
-  };
+  const pendingInteraction = canonicalInteractionRequest({
+    requestId: "interaction-strict-1",
+    sessionId,
+    dialogProcessId: "dialog-strict-1",
+    turnScopeId: "turn-strict-1",
+    interactionType: "confirmation",
+    content: "Confirm operation",
+  });
   channel.pendingInteractionRequests.set("interaction-strict-1", pendingInteraction);
   const reconnect = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
@@ -141,21 +163,21 @@ test("upstream snapshot responses resolve and release the reconnect command", as
     "message",
     JSON.stringify({
       event: "turn_snapshot",
-      data: {
+      data: authoritativeSnapshot({
         commandId: "snapshot-command-1",
         sessionId: "session-snapshot-response",
         sequence: 2,
-      },
+      }),
     }),
   );
 
   assert.deepEqual(resolution, {
     ok: true,
-    snapshot: {
+    snapshot: authoritativeSnapshot({
       commandId: "snapshot-command-1",
       sessionId: "session-snapshot-response",
       sequence: 2,
-    },
+    }),
   });
   assert.equal(channel.pendingSnapshotRequests.size, 0);
 });
@@ -180,11 +202,13 @@ test("upstream snapshot errors resolve and release the reconnect command", () =>
   upstream.emit(
     "message",
     JSON.stringify({
-      event: "error",
-      data: {
+      event: AGENT_TRANSPORT_EVENT.ERROR,
+      data: createAgentTransportError({
+        code: "snapshot_not_found",
+        message: "snapshot not found",
         commandId: "snapshot-command-error",
-        errorCode: "snapshot_not_found",
-      },
+        identity: { sessionId: "session-snapshot-error" },
+      }),
     }),
   );
 
@@ -471,22 +495,11 @@ test("successful upstream messages bypass session logs and retain data-plane met
     "message",
     JSON.stringify({
       event: "message_event",
-      data: {
-        event: {
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
-          eventId: "event-1",
-          eventType: "main_model_content",
-          messageId: "message-1",
-          presentationMessageId: "message-1",
-          sequence: 1,
-          timestamp: "2026-01-01T00:00:00.000Z",
-          sessionId: "session-upstream-content",
-          turnScopeId: "turn-1",
-          dialogProcessId: "dialog-1",
-          payload: { content: "authoritative result" },
-        },
-      },
+      data: canonicalMessageEvent({
+        sessionId: "session-upstream-content",
+        eventType: MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
+        text: "authoritative result",
+      }),
     }),
   );
 
@@ -521,7 +534,7 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
 
-  const terminal = {
+  const terminalPayload = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventId: "terminal-live-1",
     commandId: "terminal-live-command",
@@ -538,11 +551,12 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
     completionCommitId: "terminal-live-command",
     summaryVersion: 4,
   };
+  const terminal = authoritativeLifecycle(terminalPayload);
   upstream.emit("message", JSON.stringify({ event: "turn_lifecycle", data: terminal }));
 
   assert.deepEqual(
     listEvents(client, "turn_lifecycle").map((item) => item.data),
-    [terminal],
+    [JSON.parse(JSON.stringify(terminal))],
   );
   assert.equal(listEvents(client, "channel_state").length, 0);
   assert.equal(

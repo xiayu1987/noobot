@@ -15,6 +15,7 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 const classify = (event) => ({
   ...event,
@@ -30,28 +31,17 @@ const classify = (event) => ({
       : event.text || event.output || "",
 });
 
-const authoritative = (eventType, sequence, extra = {}) => ({
-  event: "message_event",
+const authoritative = (eventType, sequence, extra = {}) => canonicalMessageEvent({
+  eventId: `event-${sequence}`,
+  eventType,
+  sessionId: "session-1",
+  messageId: "message-1",
+  presentationMessageId: "message-1",
+  dialogProcessId: "dialog-1",
+  turnScopeId: "turn-1",
   sequence,
-  data: {
-    channelKind: "message_event",
-    channelVersion: 1,
-    route: { scope: "main_session", sessionId: "session-1" },
-    event: {
-      envelopeKind: "noobot.message_event",
-      envelopeVersion: 2,
-      eventId: `event-${sequence}`,
-      eventType,
-      sessionId: "session-1",
-      messageId: "message-1",
-      presentationMessageId: "message-1",
-      dialogProcessId: "dialog-1",
-      turnScopeId: "turn-1",
-      sequence,
-      timestamp: `2026-07-22T05:00:0${sequence}.000Z`,
-      ...extra,
-    },
-  },
+  occurredAt: `2026-07-22T05:00:0${sequence}.000Z`,
+  ...extra,
 });
 
 const canonicalFindFor = (targetMessage) => (sessionId, messageId) => {
@@ -105,7 +95,7 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     expect(applied).toBe(false);
-    expect(envelope.data.event.messageId).toBe("");
+    expect(envelope.identity.messageId).toBe("");
   });
 
   it("uses the canonical reducer and consumes no-text tool events idempotently", () => {
@@ -156,7 +146,6 @@ describe("reconnect authoritative message event replay", () => {
       content: "",
     };
     const guidance = (sequence, output) => authoritative("thinking", sequence, {
-      envelopeVersion: 2,
       eventId: `guidance-analysis-${sequence}`,
       messageId: "model-message-1",
       presentationMessageId: "message-1",
@@ -220,13 +209,13 @@ describe("reconnect authoritative message event replay", () => {
     for (const envelope of events) {
       dispatchTurnEnvelope({
         targetMessage: normalLive,
-        envelope: envelope.data.event,
+        envelope,
         classifyRealtimeLog: classify,
         source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
       });
       dispatchTurnEnvelope({
         targetMessage: reconnectLive,
-        envelope: envelope.data.event,
+        envelope,
         classifyRealtimeLog: classify,
         source: TURN_PROJECTION_SOURCE.RECONNECT_LIVE,
       });
@@ -250,7 +239,7 @@ describe("reconnect authoritative message event replay", () => {
     const targetMessage = { messageId: "message-1", turnScopeId: "turn-stopped" };
     const result = dispatchTurnEnvelope({
       targetMessage,
-      envelope: authoritative("llm_delta", 1, { turnScopeId: "turn-continuation", text: "wrong" }).data.event,
+      envelope: authoritative("llm_delta", 1, { turnScopeId: "turn-continuation", text: "wrong" }),
       classifyRealtimeLog: classify,
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
     });
@@ -264,7 +253,7 @@ describe("reconnect authoritative message event replay", () => {
     for (const sequence of [1, 2]) {
       dispatchTurnEnvelope({
         targetMessage,
-        envelope: authoritative("llm_delta", sequence, { text: String(sequence) }).data.event,
+        envelope: authoritative("llm_delta", sequence, { text: String(sequence) }),
         classifyRealtimeLog: classify,
       });
     }
@@ -281,12 +270,12 @@ describe("reconnect authoritative message event replay", () => {
     const ordered = { messageId: "message-1", turnScopeId: "turn-1" };
     const reordered = { messageId: "message-1", turnScopeId: "turn-1" };
     const events = [
-      authoritative("llm_delta", 1, { text: "A" }).data.event,
-      authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }).data.event,
+      authoritative("llm_delta", 1, { text: "A" }),
+      authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }),
       authoritative("tool_call_end", 3, {
         tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
-      }).data.event,
-      authoritative("llm_delta", 4, { text: "B" }).data.event,
+      }),
+      authoritative("llm_delta", 4, { text: "B" }),
     ];
     for (const envelope of events) dispatchTurnEnvelope({ targetMessage: ordered, envelope, classifyRealtimeLog: classify });
     for (const envelope of [events[0], events[2], events[1], events[3], events[2]]) {
@@ -307,7 +296,7 @@ describe("reconnect authoritative message event replay", () => {
     const continuation = { sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" };
     const toolCall = authoritative("tool_call_start", 1, {
       tool: "read_file", toolCallId: "call-continue", args: {}, dialogProcessId: "shared-dialog",
-    }).data.event;
+    });
     const conflict = dispatchTurnEnvelope({ targetMessage: stopped, envelope: toolCall, classifyRealtimeLog: classify });
     dispatchTurnEnvelope({ targetMessage: continuation, envelope: toolCall, classifyRealtimeLog: classify });
     const staleSnapshot = hydrateTurnSnapshot({

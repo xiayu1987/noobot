@@ -82,7 +82,6 @@ test("workflow semantic planning passes conversation context before current user
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -159,7 +158,6 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -235,7 +233,6 @@ test("workflow semantic planning includes current available tools like harness p
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -311,7 +308,6 @@ test("workflow semantic planning reads available tools from the canonical agentC
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -382,7 +378,6 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 

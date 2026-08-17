@@ -3,12 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_PROXY_ERROR, EVENT_TYPE, CONVERSATION_STATE } from "../../shared/constants.js";
+import { AGENT_PROXY_ERROR, CONVERSATION_STATE } from "../../shared/constants.js";
 import { config } from "../../shared/config.js";
 import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
-import { TURN_EVENT, validateTurnLifecycleReceipt } from "@noobot/session-protocol";
-import { createAgentTransportEvent } from "@noobot/agent-transport-protocol";
+import {
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  validateTurnLifecycleReceipt,
+} from "@noobot/session-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  createAgentTransportError,
+  createAgentTransportEvent,
+} from "@noobot/agent-transport-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -132,13 +140,14 @@ class SubscriberBroadcastMethods {
   sendChannelEvent(channel, targetSocket, envelope) {
     if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
     const deliveryEnvelope = this.projectChannelEventForDelivery(channel, envelope);
-    if (envelope?.event !== EVENT_TYPE.TURN_LIFECYCLE) {
+    if (envelope?.event !== TURN_LIFECYCLE_WIRE_EVENT) {
       return this.sendSocketEvent(targetSocket, deliveryEnvelope);
     }
-    const eventData = envelope?.data || {};
-    const eventId = String(eventData.eventId || "").trim();
-    const sessionId = String(eventData.sessionId || "").trim();
-    const turnScopeId = String(eventData.turnScopeId || "").trim();
+    const eventEnvelope = envelope?.data || {};
+    const eventData = eventEnvelope?.payload || {};
+    const eventId = String(eventEnvelope?.identity?.eventId || "").trim();
+    const sessionId = String(eventEnvelope?.identity?.sessionId || "").trim();
+    const turnScopeId = String(eventEnvelope?.identity?.turnScopeId || "").trim();
     if (!channel || !eventId || !sessionId || !turnScopeId) {
       return { result: "failed", reason: "invalid_lifecycle_delivery_identity" };
     }
@@ -161,8 +170,8 @@ class SubscriberBroadcastMethods {
       sessionId,
       turnScopeId,
       dialogProcessId: String(eventData.dialogProcessId || "").trim(),
-      lifecycleSequence: Number(eventData.sequence || 0),
-      transportSequence: Number(envelope?.sequence || eventData.seq || 0),
+      lifecycleSequence: Number(eventEnvelope?.ordering?.sequence || 0),
+      transportSequence: Number(envelope?.sequence || 0),
       queueKey,
       attempts: 0,
       timer: null,
@@ -278,7 +287,7 @@ class SubscriberBroadcastMethods {
       const sendResult = this.sendChannelEvent(channel, targetSocket, eventEnvelope);
       if (
         !isAcceptedChannelDelivery(sendResult) ||
-        eventEnvelope.event === EVENT_TYPE.TURN_LIFECYCLE
+        eventEnvelope.event === TURN_LIFECYCLE_WIRE_EVENT
       ) {
         continue;
       }
@@ -301,22 +310,23 @@ class SubscriberBroadcastMethods {
   broadcastChannelEvent(channel, envelope) {
     if (!channel || !envelope) return;
     const eventData = envelope?.data || {};
+    const lifecycle = eventData?.payload || {};
     const terminalLifecycle =
-      envelope?.event === EVENT_TYPE.TURN_LIFECYCLE &&
-      TERMINAL_TURN_EVENTS.has(String(eventData?.eventType || "").trim());
+      envelope?.event === TURN_LIFECYCLE_WIRE_EVENT &&
+      TERMINAL_TURN_EVENTS.has(String(lifecycle?.eventType || "").trim());
     if (!channel.subscribers.size && terminalLifecycle) {
       this.logSessionEvent(channel, {
         category: "transport",
         level: "warn",
         event: "agentProxy.channel.terminalLifecycle.deliveryDeferred",
-        sessionId: eventData.sessionId,
-        dialogProcessId: eventData.dialogProcessId,
-        turnScopeId: eventData.turnScopeId,
+        sessionId: eventData?.identity?.sessionId,
+        dialogProcessId: lifecycle.dialogProcessId,
+        turnScopeId: eventData?.identity?.turnScopeId,
         data: {
           channelKey: channel.key,
-          eventId: String(eventData.eventId || "").trim(),
-          eventType: String(eventData.eventType || "").trim(),
-          sequence: Number(eventData.sequence || 0),
+          eventId: String(eventData?.identity?.eventId || "").trim(),
+          eventType: String(lifecycle.eventType || "").trim(),
+          sequence: Number(eventData?.ordering?.sequence || 0),
           reason: "no_subscriber",
         },
       });
@@ -334,15 +344,15 @@ class SubscriberBroadcastMethods {
           this.logSessionEvent(channel, {
             category: "transport",
             event: "agentProxy.channel.terminalLifecycle.delivery",
-            sessionId: eventData.sessionId,
-            dialogProcessId: eventData.dialogProcessId,
-            turnScopeId: eventData.turnScopeId,
+            sessionId: eventData?.identity?.sessionId,
+            dialogProcessId: lifecycle.dialogProcessId,
+            turnScopeId: eventData?.identity?.turnScopeId,
             data: {
               channelKey: channel.key,
               connectionId: ensureConnectionId(subscriberSocket),
-              eventId: String(eventData.eventId || "").trim(),
-              eventType: String(eventData.eventType || "").trim(),
-              lifecycleSequence: Number(eventData.sequence || 0),
+              eventId: String(eventData?.identity?.eventId || "").trim(),
+              eventType: String(lifecycle.eventType || "").trim(),
+              lifecycleSequence: Number(eventData?.ordering?.sequence || 0),
               transportSequence: Number(envelope?.sequence || 0),
               result: "buffered_for_reconnect",
             },
@@ -358,15 +368,15 @@ class SubscriberBroadcastMethods {
           category: "transport",
           level: deliveryAccepted ? "info" : "warn",
           event: "agentProxy.channel.terminalLifecycle.delivery",
-          sessionId: eventData.sessionId,
-          dialogProcessId: eventData.dialogProcessId,
-          turnScopeId: eventData.turnScopeId,
+          sessionId: eventData?.identity?.sessionId,
+          dialogProcessId: lifecycle.dialogProcessId,
+          turnScopeId: eventData?.identity?.turnScopeId,
           data: {
             channelKey: channel.key,
             connectionId,
-            eventId: String(eventData.eventId || "").trim(),
-            eventType: String(eventData.eventType || "").trim(),
-            lifecycleSequence: Number(eventData.sequence || 0),
+            eventId: String(eventData?.identity?.eventId || "").trim(),
+            eventType: String(lifecycle.eventType || "").trim(),
+            lifecycleSequence: Number(eventData?.ordering?.sequence || 0),
             transportSequence: Number(envelope?.sequence || 0),
             bufferedAmount: Number(subscriberSocket.bufferedAmount || 0),
             result: sendResult.result,
@@ -390,7 +400,7 @@ class SubscriberBroadcastMethods {
       }
       if (!deliveryAccepted) continue;
       this.recordSuccessfulDataPlaneOperation("deliveries");
-      if (envelope?.event === EVENT_TYPE.TURN_LIFECYCLE) continue;
+      if (envelope?.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
       subscriberSocket.__agentProxyLastSequenceByChannel =
         subscriberSocket.__agentProxyLastSequenceByChannel || {};
       subscriberSocket.__agentProxyLastSequenceByChannel[channel.key] = Number(
@@ -403,7 +413,7 @@ class SubscriberBroadcastMethods {
     if (!channel || !stateItem) return;
     this.broadcastChannelEvent(channel, {
       sequence: Number(channel?.eventSequence || 0),
-      event: EVENT_TYPE.CHANNEL_STATE,
+      event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
       data: this._buildConversationStatePayload(channel, stateItem, {
         updatedAtMs: Number(stateItem?.updatedAtMs || nowMs()),
       }),
@@ -423,7 +433,7 @@ class SubscriberBroadcastMethods {
       (left, right) => Number(left?.updatedAtMs || 0) - Number(right?.updatedAtMs || 0),
     );
     return stateList.map((stateItem) => ({
-      event: EVENT_TYPE.CHANNEL_STATE,
+      event: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,
       data: this._buildConversationStatePayload(channel, stateItem, {
         updatedAtMs: Number(stateItem?.updatedAtMs || 0),
       }),
@@ -488,11 +498,15 @@ class SubscriberBroadcastMethods {
       String(targetSocket?.__agentProxyLocale || "").trim(),
     );
     this.sendSocketEvent(targetSocket, {
-      event: EVENT_TYPE.ERROR,
-      data: {
-        error:
-          String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
-      },
+      event: AGENT_TRANSPORT_EVENT.ERROR,
+      data: createAgentTransportError({
+        code: "AGENT_PROXY_ERROR",
+        message: String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
+        identity: {
+          sessionId: targetSocket?.__agentProxySessionId,
+          turnScopeId: targetSocket?.__agentProxyTurnScopeId,
+        },
+      }),
     });
   }
 }

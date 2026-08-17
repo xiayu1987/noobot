@@ -6,6 +6,7 @@
 import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import { sendFailedCommandReceipt } from "./command-receipt.js";
 
 export function createMessageStopHandler({
   state,
@@ -41,13 +42,9 @@ export function createMessageStopHandler({
       expectedRevision: command.concurrency.expectedTurnRevision,
     });
     if (!accepted?.applied && !accepted?.deduplicated) {
-      sendEvent("error", {
-        error: accepted?.reason || "stop_not_allowed",
-        errorCode: accepted?.reason || "stop_not_allowed",
-        failurePhase: TURN_PHASE.STOP,
-        sessionId: targetSessionId,
-        turnScopeId: targetTurnScopeId,
-        currentRevision: accepted?.currentRevision,
+      sendFailedCommandReceipt(sendEvent, command, {
+        code: accepted?.reason || "stop_not_allowed",
+        message: accepted?.reason || "stop_not_allowed",
       });
       return;
     }
@@ -117,13 +114,9 @@ export function createMessageStopHandler({
           finalizePayload: { assistantMessage: stoppedPartialAssistant },
         });
         if (!processed?.applied && !processed?.deduplicated) {
-          sendEvent("error", {
-            error: processed?.reason || "stop_processing_completed_failed",
-            errorCode: processed?.reason || "stop_processing_completed_failed",
-            failurePhase: TURN_PHASE.STOP,
-            sessionId: stopPayload.sessionId,
-            dialogProcessId: stopPayload.dialogProcessId,
-            turnScopeId: stopPayload.turnScopeId,
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: processed?.reason || "stop_processing_completed_failed",
+            message: processed?.reason || "stop_processing_completed_failed",
           });
           return;
         }
@@ -165,13 +158,9 @@ export function createMessageStopHandler({
           },
         });
         if (!completed?.applied && !completed?.deduplicated) {
-          sendEvent("error", {
-            error: completed?.reason || "stop_completed_failed",
-            errorCode: completed?.reason || "stop_completed_failed",
-            failurePhase: TURN_PHASE.STOP,
-            sessionId: stopPayload.sessionId,
-            dialogProcessId: stopPayload.dialogProcessId,
-            turnScopeId: stopPayload.turnScopeId,
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: completed?.reason || "stop_completed_failed",
+            message: completed?.reason || "stop_completed_failed",
           });
           return;
         }

@@ -4,11 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../../shared/config.js";
-import { EVENT_TYPE, CHANNEL_STATUS } from "../../shared/constants.js";
+import { CHANNEL_STATUS } from "../../shared/constants.js";
 import { createChannelKey, nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import { createReplayBatch, isPendingInteractionReplay } from "@noobot/event-protocol";
-import { createTurnSnapshotCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  createTurnSnapshotCommand,
+} from "@noobot/agent-transport-protocol";
+import { TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 
 class ReconnectMethods {
   async handleReconnect(socket, payload = {}) {
@@ -16,6 +20,9 @@ class ReconnectMethods {
       throw new Error("unsupported_reconnect_message_cursor");
     }
     this.clearPendingLifecycleDeliveries(socket);
+    const supersededTransaction = socket.__agentProxyReconnectTransaction;
+    socket.__agentProxyReconnectTransaction = null;
+    supersededTransaction?.cancel?.("reconnect_superseded");
     const currentSessionId = String(payload?.currentSessionId || "").trim();
     const requestId = String(payload?.requestId || "").trim();
     const knownLifecycleSequenceMap = payload?.knownLifecycleSequenceMap || {};
@@ -63,7 +70,7 @@ class ReconnectMethods {
     });
     if (!reconnectChannelKeys.length) {
       this.sendSocketEvent(socket, {
-        event: EVENT_TYPE.RECONNECT_DATA,
+        event: AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
         data: {
           currentSessionId,
           sessions: [],
@@ -71,7 +78,7 @@ class ReconnectMethods {
         },
       });
       this.sendSocketEvent(socket, {
-        event: EVENT_TYPE.RECONNECT_COMPLETE,
+        event: AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
         data: {
           totalSessions: 0,
           requestId,
@@ -88,7 +95,27 @@ class ReconnectMethods {
     const sessionsMap = new Map();
     const channelsBySessionId = new Map();
     const snapshotRequests = [];
-    const reconnectTransaction = { eventBuffer: [], channelStateBaseline: [] };
+    const reconnectTransaction = {
+      eventBuffer: [],
+      channelStateBaseline: [],
+      snapshotRequests,
+      cancelled: false,
+      cancel: (reason = "reconnect_cancelled") => {
+        if (reconnectTransaction.cancelled) return;
+        reconnectTransaction.cancelled = true;
+        for (const request of snapshotRequests) {
+          const pendingRequest = request.channel?.pendingSnapshotRequests?.get(request.commandId);
+          request.channel?.pendingSnapshotRequests?.delete(request.commandId);
+          pendingRequest?.resolve?.({ ok: false, reason });
+          request.channel?.transport?.closeOwnedConnection(
+            request.queryConnection,
+            1000,
+            reason,
+            { purpose: "snapshot_query" },
+          );
+        }
+      },
+    };
     socket.__agentProxyReconnectTransaction = reconnectTransaction;
 
     for (const channelKey of reconnectChannelKeys) {
@@ -121,6 +148,8 @@ class ReconnectMethods {
         sessionId: channelSessionId,
         replayBatch: createReplayBatch({
           sessionId: channelSessionId,
+          orderingDomain: "session",
+          orderingScopeId: channelSessionId,
           snapshotSequence: knownLifecycleSequence,
           events: lifecycleReplay.events,
           pendingInteractions,
@@ -213,13 +242,15 @@ class ReconnectMethods {
       });
       const sessionEntry = sessionsMap.get(sessionId);
       if (result?.ok === true && result.snapshot) {
-        const snapshotSequence = Number(result.snapshot?.sequence || 0);
+        const snapshotSequence = Number(result.snapshot?.ordering?.sequence || 0);
         sessionEntry.replayBatch = createReplayBatch({
           ...sessionEntry.replayBatch,
           snapshot: result.snapshot,
           snapshotSequence,
+          orderingDomain: "session",
+          orderingScopeId: sessionId,
           events: (sessionEntry.replayBatch?.events || []).filter(
-            (event) => Number(event?.sequence || 0) > snapshotSequence,
+            (event) => Number(event?.ordering?.sequence || 0) > snapshotSequence,
           ),
         });
         this.logSessionEvent(channel, {
@@ -229,9 +260,9 @@ class ReconnectMethods {
             sessionId,
             commandId,
             snapshotSequence,
-            activeTurnScopeId: String(result.snapshot?.activeTurnScopeId || "").trim(),
-            replacedTurnScopeIds: (Array.isArray(result.snapshot?.replacedTurns)
-              ? result.snapshot.replacedTurns
+            activeTurnScopeId: String(result.snapshot?.payload?.activeTurnScopeId || "").trim(),
+            replacedTurnScopeIds: (Array.isArray(result.snapshot?.payload?.replacedTurns)
+              ? result.snapshot.payload.replacedTurns
               : []
             )
               .map((replacement) => String(replacement?.turnScopeId || "").trim())
@@ -272,7 +303,7 @@ class ReconnectMethods {
     }
 
     this.sendSocketEvent(socket, {
-      event: EVENT_TYPE.RECONNECT_DATA,
+      event: AGENT_TRANSPORT_EVENT.RECONNECT_DATA,
       data: {
         currentSessionId,
         sessions: sessions.map(({ replayBatch, ...session }) => ({
@@ -294,7 +325,7 @@ class ReconnectMethods {
       const bufferedChannel = this.channelStore.get(bufferedEvent.channelKey);
       const sendResult = this.sendChannelEvent(bufferedChannel, socket, envelope);
       if (!["sent", "queued"].includes(sendResult.result)) continue;
-      if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) continue;
+      if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) continue;
       socket.__agentProxyLastSequenceByChannel ||= {};
       socket.__agentProxyLastSequenceByChannel[bufferedEvent.channelKey] = Number(
         bufferedEvent.sequence || 0,
@@ -302,7 +333,7 @@ class ReconnectMethods {
     }
 
     this.sendSocketEvent(socket, {
-      event: EVENT_TYPE.RECONNECT_COMPLETE,
+      event: AGENT_TRANSPORT_EVENT.RECONNECT_COMPLETE,
       data: {
         totalSessions: sessions.length,
         requestId,

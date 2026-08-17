@@ -24,7 +24,10 @@ import {
   normalizeAuthorityEventOutbox,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol/outbox";
-import { commitTurnLifecycle } from "../src/application/commit-turn-lifecycle.js";
+import {
+  commitTurnLifecycle,
+  createCommittedTurnLifecycleEnvelope,
+} from "../src/application/commit-turn-lifecycle.js";
 import { transitionTurnLifecycle } from "../src/domain/turn-lifecycle-entity.js";
 
 test("turn lifecycle receipt identifies one authoritative delivery without carrying state", () => {
@@ -99,37 +102,50 @@ test("turn lifecycle envelope does not expose persistence locators", () => {
 });
 
 test("authority outbox tracks attempts and acknowledges delivery idempotently", () => {
-  const envelope = createTurnLifecycleEnvelope({
+  const envelope = createCommittedTurnLifecycleEnvelope({
+    event: {
     eventType: TURN_EVENT.PROCESSING_STARTED,
     eventId: "outbox-event-1",
     commandId: "outbox-command-1",
     sessionId: "outbox-session-1",
     turnScopeId: "outbox-turn-1",
+    },
+    turn: {
     messageId: "outbox-message-1",
     presentationMessageId: "outbox-presentation-1",
     revision: 1,
     sequence: 1,
     phase: TURN_PHASE.PROCESSING,
     state: TURN_STATE.PROCESSING,
+    updatedAt: "2026-07-18T00:00:00.000Z",
+    },
   });
   const initial = normalizeAuthorityEventOutbox([
-    { eventId: envelope.eventId, envelope, committedAt: envelope.updatedAt },
+    { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
   ]);
   assert.equal(listPendingAuthorityEvents(initial).length, 1);
   const attempted = recordAuthorityEventDeliveryAttempt(initial, {
-    eventId: envelope.eventId,
+    eventId: envelope.identity.eventId,
     attemptedAt: "2026-07-18T00:00:01.000Z",
   });
   assert.equal(attempted.found, true);
   assert.equal(attempted.outbox[0].delivery.attempts, 1);
   const acknowledged = acknowledgeAuthorityEventDelivery(attempted.outbox, {
-    eventId: envelope.eventId,
+    eventId: envelope.identity.eventId,
+    consumerId: "service-websocket",
+    orderingDomain: envelope.ordering.domain,
+    orderingScopeId: envelope.ordering.scopeId,
+    sequence: envelope.ordering.sequence,
     deliveredAt: "2026-07-18T00:00:02.000Z",
   });
   assert.equal(acknowledged.changed, true);
   assert.equal(listPendingAuthorityEvents(acknowledged.outbox).length, 0);
   const replay = acknowledgeAuthorityEventDelivery(acknowledged.outbox, {
-    eventId: envelope.eventId,
+    eventId: envelope.identity.eventId,
+    consumerId: "service-websocket",
+    orderingDomain: envelope.ordering.domain,
+    orderingScopeId: envelope.ordering.scopeId,
+    sequence: envelope.ordering.sequence,
     deliveredAt: "2026-07-18T00:00:03.000Z",
   });
   assert.equal(replay.found, true);
@@ -158,13 +174,20 @@ test("durable command receipt returns the original envelope after outbox compact
   });
   assert.equal(committed.applied, true);
   assert.equal(committed.lifecycle.commandReceipts[0].eventId, "durable-event-1");
-  assert.equal(committed.lifecycle.commandReceipts[0].envelope.eventId, "durable-event-1");
+  assert.equal(committed.lifecycle.commandReceipts[0].envelope.identity.eventId, "durable-event-1");
 
   const delivered = acknowledgeAuthorityEventDelivery(committed.eventOutbox, {
     eventId: "durable-event-1",
+    consumerId: "service-websocket",
+    orderingDomain: committed.envelope.ordering.domain,
+    orderingScopeId: committed.envelope.ordering.scopeId,
+    sequence: committed.envelope.ordering.sequence,
     deliveredAt: "2026-07-18T00:00:01.000Z",
   }).outbox;
   const compacted = compactAuthorityEventOutbox(delivered, {
+    consumerId: "service-websocket",
+    orderingDomain: committed.envelope.ordering.domain,
+    orderingScopeId: committed.envelope.ordering.scopeId,
     deliveredThroughSequence: 1,
     retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
     commandReceipts: committed.lifecycle.commandReceipts,
@@ -179,23 +202,28 @@ test("durable command receipt returns the original envelope after outbox compact
     createEventId: () => "must-not-be-used",
   });
   assert.equal(replay.deduplicated, true);
-  assert.equal(replay.envelope.eventId, "durable-event-1");
+  assert.equal(replay.envelope.identity.eventId, "durable-event-1");
 });
 
 test("outbox compaction never removes pending, unreceipted, recent or above-watermark events", () => {
   const envelope = (eventId, sequence) =>
-    createTurnLifecycleEnvelope({
+    createCommittedTurnLifecycleEnvelope({
+      event: {
       eventType: TURN_EVENT.PROCESSING_STARTED,
       eventId,
       commandId: `command-${eventId}`,
       sessionId: "session-1",
       turnScopeId: "turn-1",
+      },
+      turn: {
       messageId: "message-1",
       presentationMessageId: "presentation-1",
       revision: sequence,
       sequence,
       phase: TURN_PHASE.PROCESSING,
       state: TURN_STATE.PROCESSING,
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      },
     });
   const source = [
     {
@@ -223,8 +251,8 @@ test("outbox compaction never removes pending, unreceipted, recent or above-wate
     },
   ];
   const receipts = source.slice(2).map((item) => ({
-    commandId: item.envelope.commandId,
-    eventType: item.envelope.eventType,
+    commandId: item.envelope.causality.commandId,
+    type: item.envelope.payload.eventType,
     eventId: item.eventId,
     envelope: item.envelope,
   }));

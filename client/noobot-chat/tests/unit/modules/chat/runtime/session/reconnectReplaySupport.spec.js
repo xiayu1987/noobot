@@ -30,7 +30,7 @@ describe("reconnectReplay support modules", () => {
       isTestMode: false,
     });
 
-    expect(api.__test).toEqual(internals);
+    expect(api.__test).toEqual({ replayCache: internals.replayCache });
     expect(productionApi.__test).toBeUndefined();
   });
 

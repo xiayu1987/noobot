@@ -15,7 +15,7 @@ describe("reconnect replay error normalization", () => {
     expect(normalizeReplayError(null)).toBe("");
   });
 
-  it("does not let a legacy object error mutate a canonical message", () => {
+  it("rejects a removed legacy error wrapper without mutating a canonical message", () => {
     const targetMessage = { error: "", pending: true };
 
     const applied = applyReconnectEnvelopeToTargetMessage({
@@ -28,7 +28,7 @@ describe("reconnect replay error normalization", () => {
       terminalDialogProcessIdSet: new Set(),
     });
 
-    expect(applied).toBe(true);
+    expect(applied).toBe(false);
     expect(targetMessage.error).toBe("");
     expect(targetMessage.error).not.toBe("[object Object]");
   });

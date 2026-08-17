@@ -4,8 +4,5 @@
  * SPDX-License-Identifier: MIT
  */
 
-export {
-  MESSAGE_EVENT_ENVELOPE_KIND,
-  assertMessageEventEnvelope,
-  isMessageEventEnvelope,
-} from "@noobot/event-protocol/message-event";
+export { validateProtocolEvent } from "@noobot/event-protocol";
+export { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "noobot-agent/event";

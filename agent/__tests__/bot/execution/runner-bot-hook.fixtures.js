@@ -10,6 +10,11 @@ import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
 
 export const NOOP_EVENT_LISTENER = Object.freeze({ onEvent() {} });
 
@@ -83,10 +88,39 @@ export function createRunner({
   assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
 } = {}) {
+  let authorityEventSequence = 0;
+  const sessionManager = {
+    async commitMessageEvent({ sessionId, turnScopeId, messageId, commandId, correlationId, payload }) {
+      authorityEventSequence += 1;
+      return {
+        committed: true,
+        envelope: createEventEnvelope({
+          family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          identity: {
+            eventId: `test-authority-event-${authorityEventSequence}`,
+            eventType: MESSAGE_EVENT_WIRE_EVENT,
+            sessionId,
+            turnScopeId,
+            messageId,
+          },
+          causality: { commandId, correlationId },
+          ordering: {
+            domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+            scopeId: messageId,
+            sequence: authorityEventSequence,
+          },
+          producer: { type: "test", id: "runner-bot-hook-fixture" },
+          occurredAt: new Date().toISOString(),
+          payload,
+        }),
+      };
+    },
+  };
   const initializeCanonicalRunSessionRuntime = async (payload = {}) => {
     const initialized = await initializeRunSessionRuntime(payload);
     return {
       ...(initialized || {}),
+      sessionManager: initialized?.sessionManager || sessionManager,
       runtimeEventListener:
         initialized?.runtimeEventListener || payload?.eventListener || NOOP_EVENT_LISTENER,
     };
@@ -95,6 +129,7 @@ export function createRunner({
     const prepared = await prepareAgentTurnExecution(payload);
     const runtime = prepared?.runtimeAgentContext?.bindings?.runtime;
     if (runtime && typeof runtime === "object") {
+      runtime.sessionManager = runtime.sessionManager || sessionManager;
       const currentStore = runtime.currentTurnMessages;
       const isCanonicalStore =
         typeof currentStore?.push === "function" &&

@@ -7,19 +7,13 @@ import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
 import {
   normalizeSessionThinkingRouteText as normalizeRouteText,
-  readJsonlArtifactFile,
 } from "noobot-agent/session";
 import crypto from "node:crypto";
-import path from "node:path";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
-import {
-  normalizeWorkflowRuntimeEvent,
-  WORKFLOW_RUNTIME_EVENT,
-} from "@noobot/event-protocol/workflow-runtime-event";
 import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 
@@ -31,140 +25,6 @@ function decodeSessionCommand(body, { type, userId, sessionId }) {
     throw new TypeError("session command scope does not match route identity");
   }
   return command;
-}
-
-const WORKFLOW_RUNTIME_EVENTS = new Set([
-  "workflow_planning_message_prepared",
-  "workflow_node_state_committed",
-]);
-
-async function readWorkflowRuntimeProjection({ bot = null, userId = "", sessionId = "" } = {}) {
-  const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
-  const normalizedSessionId = String(sessionId || "").trim();
-  if (!workspacePath || !normalizedSessionId)
-    return { events: [], error: "missing_workspace_or_session" };
-  const workspaceRoot = path.resolve(workspacePath);
-  const sessionsRoot = path.resolve(workspaceRoot, "runtime/session");
-  const sessionDir = path.resolve(sessionsRoot, normalizedSessionId);
-  const relativeSessionDir = path.relative(sessionsRoot, sessionDir);
-  if (
-    !relativeSessionDir ||
-    relativeSessionDir.startsWith("..") ||
-    path.isAbsolute(relativeSessionDir)
-  ) {
-    return { events: [], error: "invalid_session_path" };
-  }
-  let records;
-  try {
-    records = await readJsonlArtifactFile(path.join(sessionDir, "execution.jsonl"));
-  } catch (error) {
-    return {
-      events: [],
-      error: String(error?.code || error?.message || "execution_events_read_failed"),
-    };
-  }
-  const events = [];
-  const seenEventIds = new Set();
-  let invalidEventCount = 0;
-  for (const record of Array.isArray(records) ? records : []) {
-    let canonical = normalizeWorkflowRuntimeEvent(record, { source: "session-detail-replay" });
-    const event = canonical.event;
-    if (!WORKFLOW_RUNTIME_EVENTS.has(event)) continue;
-    if (!canonical.valid) {
-      invalidEventCount += 1;
-      continue;
-    }
-    let data = canonical.data;
-    const workflowRunId = String(data?.workflowRunId || "").trim();
-    if (!workflowRunId) continue;
-    if (event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-      canonical = normalizeWorkflowRuntimeEvent(
-        {
-          event,
-          source: canonical.source,
-          data: {
-            ...data,
-            sessionId: String(data?.sessionId || normalizedSessionId).trim(),
-            dialogProcessId: String(data?.dialogProcessId || "").trim(),
-            turnScopeId: String(data?.turnScopeId || "").trim(),
-            presentationMessageId: String(data?.presentationMessageId || "").trim(),
-            semanticText: String(data?.semanticText || ""),
-            createdAt: data?.createdAt || data?.ts || record?.ts || "",
-          },
-        },
-        { source: "session-detail-replay" },
-      );
-      data = canonical.data;
-    }
-    if (event === WORKFLOW_RUNTIME_EVENT.NODE_STATE && !String(data?.nodeExecutionId || "").trim())
-      continue;
-    const eventId = String(canonical.eventId || "").trim();
-    if (eventId && seenEventIds.has(eventId)) continue;
-    if (eventId) seenEventIds.add(eventId);
-    events.push(canonical);
-  }
-  return {
-    events,
-    error: invalidEventCount ? `invalid_runtime_events:${invalidEventCount}` : "",
-    invalidEventCount,
-  };
-}
-
-function filterWorkflowRuntimeProjectionForSession({
-  result = {},
-  sessionId = "",
-  events = [],
-} = {}) {
-  const normalizedSessionId = String(sessionId || result?.sessionId || "").trim();
-  const sessionDocs = (Array.isArray(result?.sessions) ? result.sessions : []).filter(
-    (doc = {}) => {
-      const docSessionId = String(doc?.sessionId || doc?.id || "").trim();
-      return !normalizedSessionId || !docSessionId || docSessionId === normalizedSessionId;
-    },
-  );
-  const turnScopeIds = new Set();
-  const dialogProcessIds = new Set();
-  let persistedTurnCount = 0;
-  const collectIdentity = (record = {}) => {
-    const turnScopeId = String(record?.turnScopeId || record?.turn_scope_id || "").trim();
-    const dialogProcessId = String(
-      record?.dialogProcessId || record?.dialog_process_id || "",
-    ).trim();
-    if (turnScopeId) turnScopeIds.add(turnScopeId);
-    if (dialogProcessId) dialogProcessIds.add(dialogProcessId);
-  };
-  for (const doc of sessionDocs) {
-    for (const message of Array.isArray(doc?.messages) ? doc.messages : []) {
-      persistedTurnCount += 1;
-      collectIdentity(message);
-    }
-    for (const timing of Array.isArray(doc?.turnTimings) ? doc.turnTimings : []) {
-      persistedTurnCount += 1;
-      collectIdentity(timing);
-    }
-  }
-  if (!persistedTurnCount) return [];
-  if (!turnScopeIds.size && !dialogProcessIds.size) return events;
-
-  const acceptedWorkflowRunIds = new Set();
-  for (const record of events) {
-    if (String(record?.event || record?.type || "").trim() !== WORKFLOW_RUNTIME_EVENT.PLANNING)
-      continue;
-    const data = record?.data && typeof record.data === "object" ? record.data : record;
-    const turnScopeId = String(data?.turnScopeId || "").trim();
-    const dialogProcessId = String(data?.dialogProcessId || "").trim();
-    if (
-      (turnScopeId && turnScopeIds.has(turnScopeId)) ||
-      (dialogProcessId && dialogProcessIds.has(dialogProcessId))
-    ) {
-      const workflowRunId = String(data?.workflowRunId || "").trim();
-      if (workflowRunId) acceptedWorkflowRunIds.add(workflowRunId);
-    }
-  }
-  return events.filter((record = {}) => {
-    const data = record?.data && typeof record.data === "object" ? record.data : record;
-    return acceptedWorkflowRunIds.has(String(data?.workflowRunId || "").trim());
-  });
 }
 
 function summarizeWorkflowSessionMessages(result = {}) {
@@ -275,16 +135,6 @@ export function registerSessionRoutes(
         userId,
         sessionId,
       });
-      const workflowRuntimeProjection =
-        result?.exists === false
-          ? { events: [], error: "session_not_found" }
-          : await readWorkflowRuntimeProjection({ bot, userId, sessionId });
-      const workflowRuntimeAuditEventCount = workflowRuntimeProjection.events.length;
-      workflowRuntimeProjection.events = filterWorkflowRuntimeProjectionForSession({
-        result,
-        sessionId,
-        events: workflowRuntimeProjection.events,
-      });
       const sessionDocs = Array.isArray(result?.sessions) ? result.sessions : [];
       void writeRoutedRuntimeEvent({
         scope: "session",
@@ -379,12 +229,9 @@ export function registerSessionRoutes(
             0,
           ),
           workflowCandidates: summarizeWorkflowSessionMessages(result),
-          workflowRuntimeAuditEventCount,
-          workflowRuntimeEventCount: workflowRuntimeProjection.events.length,
-          workflowRuntimeProjectionError: workflowRuntimeProjection.error,
         },
       });
-      res.json({ ok: true, ...result, workflowRuntimeEvents: workflowRuntimeProjection.events });
+      res.json({ ok: true, ...result });
     }),
   );
 

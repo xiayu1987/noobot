@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export { EVENT_TYPE } from "@noobot/event-protocol";
-
 export const CHANNEL_STATUS = {
   IDLE: "idle",
   CONNECTING: "connecting",

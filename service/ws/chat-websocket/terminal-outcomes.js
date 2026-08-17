@@ -6,6 +6,11 @@
 import { recordServiceWebSocketRuntimeError } from "./runtime-events.js";
 import { buildAbortErrorMessage, buildStoppedPartialAssistant } from "./stop-lifecycle.js";
 import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
 
 export function snapshotRunState({
   runMeta = null,
@@ -25,6 +30,20 @@ export function createTurnFinalizer({
   webSocket,
   commitTurnLifecycle,
 } = {}) {
+  const sendCommandReceipt = (state, outcome, error = null) => sendEvent(
+    AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    createAgentCommandReceipt({
+      commandId: state.runMeta?.commandId,
+      commandType: state.runMeta?.commandType,
+      outcome,
+      identity: {
+        sessionId: state.runMeta?.sessionId,
+        turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId,
+        dialogProcessId: state.runMeta?.dialogProcessId,
+      },
+      error,
+    }),
+  );
   const finalizeTimeout = async (state, { description = "", errorObject = null } = {}) => {
     const failed = await commitTurnLifecycle({
       userId: state.runMeta?.userId || "",
@@ -51,12 +70,9 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "timeout" });
       return;
     }
-    sendEvent("error", {
-      error: description,
-      sessionId: state.runMeta?.sessionId || "",
-      dialogProcessId: state.runMeta?.dialogProcessId || "",
-      turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus: failed.turnStatus,
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
+      code: "run_timeout",
+      message: description,
     });
     webSocket.close(1011, "timeout");
   };
@@ -122,6 +138,7 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "stop_completed" });
       return;
     }
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.STOPPED);
     webSocket.close(1000, "user_stopped");
   };
 
@@ -175,18 +192,7 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "completed" });
       return;
     }
-    const turnStatus = completed.turnStatus;
-    sendEvent("done", {
-      sessionId: result.sessionId,
-      answer: result.answer,
-      dialogProcessId: result.dialogProcessId || "",
-      turnScopeId:
-        state.stopPayload?.turnScopeId || state.runMeta?.turnScopeId || state.turnScopeId || "",
-      messages: result.messages || [],
-      traces: result.traces || [],
-      executionLogs: result.executionLogs || [],
-      turnStatus,
-    });
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED);
     webSocket.close(1000, "done");
   };
 
@@ -217,12 +223,9 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
       return;
     }
-    sendEvent("error", {
-      error: errorMessage,
-      sessionId: state.runMeta?.sessionId || "",
-      dialogProcessId: state.runMeta?.dialogProcessId || "",
-      turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus: committed.turnStatus,
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
+      code: String(error?.code || "run_aborted"),
+      message: errorMessage,
     });
     webSocket.close(1011, "aborted");
   };
@@ -243,15 +246,9 @@ export function createTurnFinalizer({
       rejectUnpersistedTurnStatus({ runMeta: state.runMeta, status: "error" });
       return;
     }
-    sendEvent("error", {
-      error: errorMessage,
-      status: Number(error?.statusCode || error?.status || 0) || undefined,
-      errorCode: String(error?.errorCode || error?.code || "").trim() || undefined,
-      currentVersion: error?.currentVersion,
-      sessionId: state.runMeta?.sessionId || "",
-      dialogProcessId: state.runMeta?.dialogProcessId || "",
-      turnScopeId: state.runMeta?.turnScopeId || state.turnScopeId || "",
-      turnStatus: committed.turnStatus,
+    sendCommandReceipt(state, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED, {
+      code: String(error?.errorCode || error?.code || "run_failed"),
+      message: errorMessage,
     });
     webSocket.close(1011, "error");
   };

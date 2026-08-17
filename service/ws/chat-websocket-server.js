@@ -11,13 +11,15 @@ import {
 } from "./chat-websocket/runtime-events.js";
 import { registerWebSocketUpgrade } from "./chat-websocket/connection-upgrade.js";
 import { createUserInteractionBridge } from "./chat-websocket/user-interaction-bridge.js";
+import { createInteractionAuthorityBridge } from "./chat-websocket/interaction-authority-bridge.js";
 import { createTurnFinalizer, snapshotRunState } from "./chat-websocket/terminal-outcomes.js";
 import { createConnectionState } from "./chat-websocket/connection-state.js";
 import { createMessageHandler } from "./chat-websocket/message-handler.js";
 import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "./chat-websocket/authority-event-dispatcher.js";
 import { recoverSnapshotOrphan, recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
-import { TURN_LIFECYCLE_WIRE_EVENT, validateTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { validateProtocolEvent } from "@noobot/event-protocol";
+import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 import {
   detachRunTransport,
   findActiveRun,
@@ -89,13 +91,22 @@ export function registerChatWebSocketServer(
 
     let eventSequence = 0;
     const sendEvent = (eventName, data = {}, transportContext = {}) => {
-      if (eventName === TURN_LIFECYCLE_WIRE_EVENT) {
-        const validation = validateTurnLifecycleEnvelope(data);
+      const protocolEnvelope = data?.protocol?.name === "@noobot/event-protocol" ? data : null;
+      if (protocolEnvelope) {
+        const validation = validateProtocolEvent(protocolEnvelope);
         if (!validation.valid) {
           logConnection("service.authorityOutbox.eventRejected", {
-            eventId: String(data?.eventId || "").trim(),
-            eventType: String(data?.eventType || "").trim(),
+            eventId: String(protocolEnvelope?.identity?.eventId || "").trim(),
+            eventType: String(protocolEnvelope?.identity?.eventType || "").trim(),
             errors: validation.errors,
+          });
+          return false;
+        }
+        if (protocolEnvelope.identity.eventType !== eventName) {
+          logConnection("service.authorityOutbox.eventRejected", {
+            eventId: String(protocolEnvelope.identity.eventId || "").trim(),
+            eventType: String(protocolEnvelope.identity.eventType || "").trim(),
+            errors: ["transport_event_type_mismatch"],
           });
           return false;
         }
@@ -105,10 +116,16 @@ export function registerChatWebSocketServer(
           ? data.event
           : null;
       const eventType = String(
-        authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType || "",
+        protocolEnvelope?.payload?.eventType ||
+          authoritativeEvent?.eventType ||
+          data?.eventType ||
+          data?.messageEvent?.eventType ||
+          "",
       ).trim();
       const transportDiagnostic = {
-        eventId: String(authoritativeEvent?.eventId || data?.eventId || "").trim(),
+        eventId: String(
+          protocolEnvelope?.identity?.eventId || authoritativeEvent?.eventId || data?.eventId || "",
+        ).trim(),
         eventType,
         messageId: String(authoritativeEvent?.messageId || data?.messageId || "").trim(),
         presentationMessageId: String(
@@ -123,8 +140,8 @@ export function registerChatWebSocketServer(
       }
       const toolFrame = eventType === "tool_call_start" || eventType === "tool_call_end";
       const terminalLifecycle =
-        eventName === "turn_lifecycle" &&
-        ["turn.completed", "turn.stop_completed", "turn.failed"].includes(eventType);
+        eventName === TURN_LIFECYCLE_WIRE_EVENT &&
+        [TURN_EVENT.COMPLETED, TURN_EVENT.STOP_COMPLETED, TURN_EVENT.FAILED].includes(eventType);
       if (webSocket.readyState !== 1) {
         if (authoritativeEvent) {
           logConnection("service.websocket.messageEvent.sendRejected", transportDiagnostic);
@@ -153,7 +170,7 @@ export function registerChatWebSocketServer(
       }
       eventSequence += 1;
       const enrichedData =
-        eventName === "attachment_lifecycle"
+        protocolEnvelope || eventName === "attachment_lifecycle"
           ? data
           : {
               ...(data && typeof data === "object" ? data : {}),
@@ -233,18 +250,21 @@ export function registerChatWebSocketServer(
     const rejectUnpersistedTurnStatus = ({ runMeta = {}, status = "" } = {}) => {
       const errorCode = "turn_status_persistence_failed";
       const errorMessage = `failed to persist terminal turn status: ${String(status || "unknown").trim()}`;
-      sendEvent("error", {
-        error: errorMessage,
-        errorCode,
-        sessionId: String(runMeta?.sessionId || "").trim(),
-        dialogProcessId: String(runMeta?.dialogProcessId || "").trim(),
-        turnScopeId: String(runMeta?.turnScopeId || state.currentTurnScopeId || "").trim(),
-        turnStatus: null,
+      void recordServiceWebSocketRuntimeError({
+        sessionLogConfig,
+        event: "service.websocket.turnStatusPersistenceFailed",
+        error: new Error(errorMessage),
+        userId: runMeta?.userId,
+        sessionId: runMeta?.sessionId,
+        dialogProcessId: runMeta?.dialogProcessId,
+        turnScopeId: runMeta?.turnScopeId || state.currentTurnScopeId,
+        data: { errorCode, status },
       });
       webSocket.close(1011, errorCode);
     };
 
     const dispatchAuthorityEvents = createAuthorityEventDispatcher({ resolveBot, sendEvent });
+    const commitInteractionRequest = createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents });
     const commitTurnLifecycle = createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents });
     const recoverPersistedTurnFinalize = (request = {}) =>
       recoverTurnFinalize({
@@ -278,6 +298,7 @@ export function registerChatWebSocketServer(
       finalizeGenericError,
     } = createTurnFinalizer({
       sendEvent,
+      commitInteractionRequest,
       rejectUnpersistedTurnStatus,
       resolveBot,
       translateText,
@@ -334,12 +355,6 @@ export function registerChatWebSocketServer(
           sessionLogConfig,
           event: "service.websocket.message.unhandledFailure",
           data: { errorType: error?.name || "Error", errorCode: String(error?.code || "") },
-        });
-        sendEvent("error", {
-          error: error?.message || translateText("ws.unknownError", state.currentLocale),
-          errorCode: String(error?.errorCode || error?.code || "message_handler_failed"),
-          sessionId: state.currentRunMeta?.sessionId || "",
-          turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
         });
         try {
           webSocket.close(1011, "message handler failed");

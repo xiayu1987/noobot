@@ -20,13 +20,13 @@ import {
 } from "../../../debug/loggers/stateMachineLogger.js";
 
 function hasValidTurnLifecycleSnapshot(sessionEntry = {}) {
-  const snapshot = sessionEntry?.replayBatch?.snapshot;
+  const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
   return Boolean(snapshot && typeof snapshot === "object" && validateTurnLifecycleSnapshot(snapshot).valid);
 }
 
 function resolveAuthoritativeActiveTurn(sessionEntry = {}) {
   const sessionId = _trimStr(sessionEntry?.sessionId);
-  const authoritativeRun = sessionEntry?.replayBatch?.snapshot?.activeTurn;
+  const authoritativeRun = sessionEntry?.replayBatch?.snapshot?.payload?.activeTurn;
   const authoritativeRunMeta = normalizeTurnMeta({ ...authoritativeRun, sessionId });
   const hasConsistentAuthoritativeRun =
     _trimStr(authoritativeRunMeta.sessionId) === sessionId &&
@@ -93,7 +93,7 @@ export async function applyReconnectDataReplay({
   // A reconnect transaction has exactly one Authority baseline. Events are a
   // tail after that baseline, never an alternative snapshot source.
   for (const sessionEntry of reconnectSessions) {
-    const snapshot = sessionEntry?.replayBatch?.snapshot;
+    const snapshot = sessionEntry?.replayBatch?.snapshot?.payload;
     if (!snapshot || typeof snapshot !== "object") continue;
     logStateMachineDebug("stateMachine.reconnect.snapshot.received", () => ({
       ...summarizeTurnLifecycleSnapshot(snapshot),
@@ -108,7 +108,7 @@ export async function applyReconnectDataReplay({
   }
   for (const sessionEntry of reconnectSessions) {
     const snapshot = hasValidTurnLifecycleSnapshot(sessionEntry)
-      ? sessionEntry.replayBatch.snapshot
+      ? sessionEntry.replayBatch.snapshot.payload
       : null;
     const snapshotSequence = Number(sessionEntry?.replayBatch?.snapshotSequence || 0);
     const lifecycleEvents = Array.isArray(sessionEntry?.replayBatch?.events)
@@ -116,6 +116,8 @@ export async function applyReconnectDataReplay({
       : [];
     const replayResult = replayEventTail({
       snapshotSequence,
+      orderingDomain: sessionEntry.replayBatch.ordering.domain,
+      orderingScopeId: sessionEntry.replayBatch.ordering.scopeId,
       events: lifecycleEvents,
       apply: () => {},
     });
@@ -132,8 +134,8 @@ export async function applyReconnectDataReplay({
       sessionId,
       snapshotSequence,
       eventCount: lifecycleEvents.length,
-      firstSequence: Number(lifecycleEvents[0]?.ordering?.streamSequence || lifecycleEvents[0]?.sequence || 0),
-      lastSequence: Number(lifecycleEvents.at(-1)?.ordering?.streamSequence || lifecycleEvents.at(-1)?.sequence || 0),
+      firstSequence: Number(lifecycleEvents[0]?.ordering?.sequence || 0),
+      lastSequence: Number(lifecycleEvents.at(-1)?.ordering?.sequence || 0),
     }));
     const results = [];
     for (const envelope of lifecycleEvents) {
@@ -194,7 +196,7 @@ export async function applyReconnectDataReplay({
   for (const sessionEntry of reconnectSessions) {
     for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
       if (isPendingInteractionReplay(interaction)) {
-        await applyPendingInteraction?.(interaction.data);
+        await applyPendingInteraction?.(interaction.payload);
       }
     }
   }

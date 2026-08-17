@@ -515,7 +515,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   });
 
   assert.deepEqual(
-    persisted.authorityEventOutbox.map((entry) => entry.envelope.eventType),
+    persisted.authorityEventOutbox.map((entry) => entry.envelope.payload.eventType),
     [
       "turn.action_accepted",
       "turn.processing_started",
@@ -525,11 +525,11 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   );
   assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
   assert.equal(
-    persisted.authorityEventOutbox[3].envelope.summaryVersion,
+    persisted.authorityEventOutbox[3].envelope.payload.summaryVersion,
     persisted.turnLifecycle.turns["turn-persisted"].summaryVersion,
   );
   assert.equal(
-    persisted.authorityEventOutbox[3].envelope.completionCommitId,
+    persisted.authorityEventOutbox[3].envelope.payload.completionCommitId,
     "turn-persisted:completed",
   );
 });

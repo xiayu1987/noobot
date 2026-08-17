@@ -12,8 +12,11 @@ import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  createEventEnvelope,
   listPendingAuthorityEvents,
+  normalizeAuthorityEventOutbox,
   recordAuthorityEventDeliveryAttempt,
+  validateProtocolEvent,
 } from "@noobot/event-protocol";
 import {
   AGENT_COMMAND,
@@ -222,14 +225,56 @@ export async function startServerWithWs({
       }),
     acknowledgeAuthorityEvent:
       suppliedBot.acknowledgeAuthorityEvent ||
-      (async ({ eventId } = {}) => {
+      (async ({
+        eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
+      } = {}) => {
         const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
           eventId,
+          consumerId,
+          orderingDomain,
+          orderingScopeId,
+          sequence,
           deliveredAt: new Date().toISOString(),
         });
         if (result.found) authorityEventOutbox = result.outbox;
         return { acknowledged: result.found };
       }),
+    commitTestAuthorityEvent: async ({
+      family,
+      identity,
+      causality,
+      ordering,
+      producer,
+      payload,
+    } = {}) => {
+      const sequence = Math.max(1, Number(ordering?.sequence) || ++authorityEventSequence);
+      const envelope = createEventEnvelope({
+        family,
+        schemaVersion: 1,
+        identity: {
+          ...identity,
+          eventId: String(identity?.eventId || `test-authority-event-${authorityEventSequence}`),
+        },
+        causality,
+        ordering: { ...ordering, sequence },
+        producer,
+        occurredAt: new Date().toISOString(),
+        payload,
+      });
+      const validation = validateProtocolEvent(envelope);
+      if (!validation.valid) {
+        throw new TypeError(`invalid test authority event: ${validation.errors.join(",")}`);
+      }
+      authorityEventOutbox = normalizeAuthorityEventOutbox([
+        ...authorityEventOutbox,
+        { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
+      ]);
+      return envelope;
+    },
   };
   const { mapAgentRunCommand } = createChatRunService({
     getBot: () => testBot,
@@ -264,6 +309,7 @@ export async function startServerWithWs({
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
     server,
+    bot: testBot,
     registered,
     address: (...args) => server.address(...args),
   };
@@ -381,7 +427,7 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
         if (
           !stopSent &&
           parsed?.event === "turn_lifecycle" &&
-          parsed?.data?.capabilities?.canStop === true
+          parsed?.data?.payload?.capabilities?.canStop === true
         ) {
           stopSent = true;
           ws.send(
@@ -390,7 +436,7 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
                 action: "stop",
                 sessionId: stopPayload.sessionId || payload.sessionId,
                 turnScopeId: stopPayload.turnScopeId || payload.turnScopeId,
-                expectedRevision: stopPayload.expectedRevision ?? parsed.data.revision,
+                expectedRevision: stopPayload.expectedRevision ?? parsed.data.ordering.revision,
                 ...stopPayload,
               }),
             ),

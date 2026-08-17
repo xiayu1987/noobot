@@ -40,8 +40,11 @@ import {
 } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
-import { replayEventTail } from "@noobot/event-protocol";
-import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { createEventEnvelope, EVENT_FAMILY, replayEventTail } from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_LIFECYCLE_WIRE_EVENT,
+} from "@noobot/session-protocol";
 
 const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revision, sequence }) =>
   createTurnLifecycleEnvelope({
@@ -109,6 +112,27 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     const realtime = createTurnRuntimeRegistryState();
     for (const event of events) applyTurnLifecycleEnvelope(realtime, event);
 
+    const protocolEvents = events.map((payload) => createEventEnvelope({
+      family: EVENT_FAMILY.TURN_LIFECYCLE,
+      identity: {
+        eventId: payload.eventId,
+        eventType: TURN_LIFECYCLE_WIRE_EVENT,
+        sessionId: payload.sessionId,
+        turnScopeId: payload.turnScopeId,
+        messageId: payload.messageId,
+      },
+      causality: { commandId: payload.commandId },
+      ordering: {
+        domain: "session",
+        scopeId: payload.sessionId,
+        sequence: payload.sequence,
+        revision: payload.revision,
+      },
+      producer: { type: "test", id: "turn-runtime-registry" },
+      occurredAt: payload.occurredAt,
+      payload,
+    }));
+
     const recovered = createTurnRuntimeRegistryState();
     const baseline = snapshot({
       commandId: events[1].commandId,
@@ -127,8 +151,10 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     expect(
       replayEventTail({
         snapshotSequence: 2,
-        events: events.slice(2),
-        apply: (event) => applyTurnLifecycleEnvelope(recovered, event),
+        orderingDomain: "session",
+        orderingScopeId: "s1",
+        events: protocolEvents.slice(2),
+        apply: (event) => applyTurnLifecycleEnvelope(recovered, event.payload),
       }),
     ).toMatchObject({ applied: true, lastSequence: 4 });
 

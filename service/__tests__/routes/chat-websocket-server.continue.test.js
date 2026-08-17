@@ -12,6 +12,10 @@ import {
   stopChatWs,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
 
 function stoppedLifecycle({
   sessionId = "s1",
@@ -117,12 +121,13 @@ test("chat-websocket-server: continue action passes stopped snapshot identity th
     assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
     const acceptedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.ACTION_ACCEPTED,
     );
-    assert.equal(acceptedEvent?.data?.sessionId, "s1");
-    assert.equal(acceptedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(acceptedEvent?.data?.action, "continue");
-    assert.deepEqual(acceptedEvent?.data?.continuationSource, {
+    assert.equal(acceptedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(acceptedEvent?.data?.identity?.turnScopeId, "turn-new");
+    assert.equal(acceptedEvent?.data?.payload?.action, "continue");
+    assert.deepEqual(acceptedEvent?.data?.payload?.continuationSource, {
       dialogProcessId: "dp-stopped",
       turnScopeId: "turn-stopped",
     });
@@ -170,14 +175,17 @@ test("chat-websocket-server: a consumed stopped source is rejected before a seco
     });
 
     assert.equal(runSessionCalls, 1);
-    const errorEvent = rejectedEvents.find((item) => item?.event === "error");
-    assert.equal(errorEvent?.data?.error, "continue_source_consumed");
+    const receipt = rejectedEvents.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "continue_source_consumed");
     assert.equal(
       rejectedEvents.some(
         (item) =>
           item?.event === "turn_lifecycle" &&
-          item?.data?.turnScopeId === "turn-new-2" &&
-          item?.data?.eventType === "turn.action_accepted",
+          item?.data?.identity?.turnScopeId === "turn-new-2" &&
+          item?.data?.payload?.eventType === TURN_EVENT.ACTION_ACCEPTED,
       ),
       false,
     );
@@ -210,8 +218,11 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
         config: { locale: "zh-CN" },
       },
     });
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
     assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
@@ -247,8 +258,11 @@ test("chat-websocket-server: continue action does not fallback to current dialog
         config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
       },
     });
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
     assert.equal(runSessionCalled, false);
     assert.equal(turnStatusWrites, 0);
   } finally {
@@ -314,8 +328,8 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
       events.some(
         (item) =>
           item?.event === "turn_lifecycle" &&
-          item?.data?.eventType === TURN_EVENT.STOP_ACCEPTED &&
-          item?.data?.turnScopeId === "turn-new",
+          item?.data?.payload?.eventType === TURN_EVENT.STOP_ACCEPTED &&
+          item?.data?.identity?.turnScopeId === "turn-new",
       ),
       true,
     );
@@ -325,14 +339,15 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
     );
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-new");
-    assert.equal(stoppedEvent?.data?.phase, "stop");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-continue-stop");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
     assert.equal(
       capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
       "turn-new",

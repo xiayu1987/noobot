@@ -18,7 +18,6 @@ import {
 } from "./attachments.js";
 import {
   buildWorkflowDialogRelativeDir,
-  emitWorkflowRuntimeEvent,
   persistWorkflowNodeResultAttachment,
 } from "./persistence.js";
 import {
@@ -351,24 +350,6 @@ export async function runNodeAgent({
     nodeId: String(identity?.nodeId || pendingStep?.nodeId || "").trim(),
     nodeName: String(identity?.nodeName || pendingStep?.nodeName || "").trim(),
   };
-  await emitWorkflowRuntimeEvent({
-    options,
-    ctx,
-    dialogProcessId: nodeDialogProcessId,
-    event: "workflow_node_subsession_started",
-    data: {
-      instanceId: String(instanceId || "").trim(),
-      workflowRunId,
-      nodeExecutionId,
-      commandId: nodeCommandId,
-      transition: Number(transition || 0),
-      turnScopeId: nodeTurnScopeId,
-      nodeId: resolvedNodeIdentity.nodeId,
-      nodeName: resolvedNodeIdentity.nodeName,
-      dialogProcessId: nodeDialogProcessId,
-      nodeIdentity: resolvedNodeIdentity,
-    },
-  });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
   const nodeInputAttachments = resolveNodeInputAttachments({
     ctx,
@@ -537,28 +518,6 @@ export async function runNodeAgent({
         throw error;
       }
       throwIfWorkflowAborted(ctx);
-      await emitWorkflowRuntimeEvent({
-        options,
-        ctx,
-        dialogProcessId: nodeDialogProcessId,
-        event: "workflow_node_subsession_succeeded",
-        data: {
-          instanceId: String(instanceId || "").trim(),
-          workflowRunId,
-          nodeExecutionId,
-          commandId: nodeCommandId,
-          dialogProcessId: nodeDialogProcessId,
-          turnScopeId: nodeTurnScopeId,
-          nodeId: resolvedNodeIdentity.nodeId,
-          nodeName: resolvedNodeIdentity.nodeName,
-          nodeSessionId: String(subSession?.sessionId || "").trim(),
-          persistedDir: String(subSession?.persisted?.outputDir || "").trim(),
-          nodeIdentity: {
-            ...resolvedNodeIdentity,
-            sessionId: String(subSession?.sessionId || "").trim(),
-          },
-        },
-      });
     } catch (error) {
       if (isWorkflowAbortError(error, ctx)) {
         throw error;
@@ -572,25 +531,6 @@ export async function runNodeAgent({
       if (error?.lifecycle && typeof error.lifecycle === "object") {
         subSession = { lifecycle: error.lifecycle };
       }
-      await emitWorkflowRuntimeEvent({
-        options,
-        ctx,
-        dialogProcessId: nodeDialogProcessId,
-        event: "workflow_node_subsession_failed",
-        level: "error",
-        data: {
-          instanceId: String(instanceId || "").trim(),
-          workflowRunId,
-          nodeExecutionId,
-          commandId: nodeCommandId,
-          dialogProcessId: nodeDialogProcessId,
-          turnScopeId: nodeTurnScopeId,
-          nodeId: resolvedNodeIdentity.nodeId,
-          nodeName: resolvedNodeIdentity.nodeName,
-          message: failureMessage,
-          nodeIdentity: resolvedNodeIdentity,
-        },
-      });
       if (!subSession) subSession = null;
     }
     if (subSession) {
