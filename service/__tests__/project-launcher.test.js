@@ -134,7 +134,7 @@ test("project launcher initializes a known provider from the model library", asy
 
   const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
   assert.equal(globalConfig.providers?.["gpt_5_4"]?.reasoning_effort, "medium");
-  assert.equal(globalConfig.providers?.["gpt_5_4"]?.tool_reasoning_effort, "low");
+  assert.equal(globalConfig.providers?.["gpt_5_4"]?.tool_reasoning_effort, "medium");
 });
 
 test("project launcher preserves explicit provider reasoning settings during incremental sync", async (t) => {
