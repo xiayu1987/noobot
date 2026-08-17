@@ -30,6 +30,7 @@ export * from "./lifecycle/turn-capability.js";
 export * from "./lifecycle/turn-continuation.js";
 export * from "./lifecycle/turn-replacement.js";
 export * from "./lifecycle/turn-timing.js";
+export * from "./lifecycle/execution-abort.js";
 export * from "./aggregate/session-aggregate-core.js";
 export * from "./aggregate/session-invariants.js";
 export * from "./aggregate/message-turn-partition.js";

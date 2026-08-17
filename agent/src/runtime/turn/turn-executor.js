@@ -521,7 +521,6 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     await emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,
-      output: mainModelToolTurnContent,
     });
   }
 

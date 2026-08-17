@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeRunIdentityPart } from "./run-registry.js";
+import {
+  EXECUTION_ABORT_TYPE,
+  isExecutionAbortError,
+  resolveExecutionAbortMessage,
+  resolveExecutionAbortType,
+} from "@noobot/session-protocol/execution-abort";
 
 export function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, result = {}, fallbackMessage = "" } = {}) {
   const sourcePartial = stopPayload?.partialAssistant && typeof stopPayload.partialAssistant === "object"
@@ -34,21 +40,14 @@ export function buildStoppedPartialAssistant({ stopPayload = {}, runMeta = {}, r
 }
 
 export function isAbortLikeError(error) {
-  const normalizedName = String(error?.name || "").trim().toLowerCase();
-  const message = String(error?.message || "").trim().toLowerCase();
-  const code = String(error?.code || "").trim().toUpperCase();
-  return (
-    normalizedName === "aborterror" ||
-    code === "ABORT_ERR" ||
-    message === "aborterror" ||
-    message.includes("aborterror") ||
-    message.includes("aborted") ||
-    message.includes("stopped by user")
-  );
+  return isExecutionAbortError({ error });
 }
 
 export function isUserStopAbortReason(reason = {}) {
-  return reason && typeof reason === "object" && String(reason?.type || "").trim() === "user_stop";
+  return (
+    resolveExecutionAbortType({ abortSignal: { aborted: true, reason } }) ===
+    EXECUTION_ABORT_TYPE.USER_STOP
+  );
 }
 
 export function isUserStopRunAbort({ stopRequested = false, abortSignal = null } = {}) {
@@ -56,18 +55,16 @@ export function isUserStopRunAbort({ stopRequested = false, abortSignal = null }
 }
 
 export function isSocketCloseRunAbort(abortSignal = null) {
-  const reason = abortSignal?.reason;
-  return reason && typeof reason === "object" && String(reason?.type || "").trim() === "socket_close";
+  return resolveExecutionAbortType({ abortSignal }) === EXECUTION_ABORT_TYPE.SOCKET_CLOSE;
 }
 
 export function buildAbortErrorMessage({ error = null, abortSignal = null, currentLocale = "", translateText = (key) => key } = {}) {
-  const reason = abortSignal?.reason;
-  const reasonType = reason && typeof reason === "object" ? String(reason?.type || "").trim() : "";
-  const reasonText = reason && typeof reason === "object" ? String(reason?.reason || "").trim() : "";
-  return (
-    String(error?.message || "").trim() ||
-    reasonText ||
-    (reasonType ? `run aborted: ${reasonType}` : "") ||
-    translateText("ws.unknownError", currentLocale)
-  );
+  const reasonType = resolveExecutionAbortType({ error, abortSignal });
+  return resolveExecutionAbortMessage({
+    error,
+    abortSignal,
+    fallback: reasonType
+      ? `run aborted: ${reasonType}`
+      : translateText("ws.unknownError", currentLocale),
+  });
 }

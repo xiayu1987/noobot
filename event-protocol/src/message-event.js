@@ -62,9 +62,17 @@ export function resolveMessageEventPresentationId(value = {}) {
 
 /** Validates the Message domain payload. Cross-domain identity and ordering
  * belong exclusively to the Event Protocol v3 envelope. */
-export function validateMessageEventPayload(value = {}) {
+export function validateMessageEventPayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return Object.freeze({
+      valid: false,
+      errors: Object.freeze(["payload_not_object"]),
+    });
+  }
   const errors = [];
-  if (!value || typeof value !== "object" || Array.isArray(value)) errors.push("payload_not_object");
+  for (const field of ["tool_call_id", "tool_call", "tool_result", "toolCall", "toolResult", "model", "output"]) {
+    if (Object.hasOwn(value, field)) errors.push(`noncanonical_${field}`);
+  }
   if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
   const workflowRunId = text(value?.workflowRunId);
   const nodeExecutionId = text(value?.nodeExecutionId);
@@ -81,8 +89,7 @@ export function validateMessageEventPayload(value = {}) {
   }
   if (
     REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) &&
-    typeof value?.text !== "string" &&
-    typeof value?.output !== "string"
+    typeof value?.text !== "string"
   )
     errors.push("missing_content");
   if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
@@ -98,38 +105,21 @@ export function validateMessageEventPayload(value = {}) {
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {
     if (!text(value?.tool)) errors.push("missing_tool");
-    if (!text(value?.toolCallId || value?.tool_call_id)) errors.push("missing_tool_call_id");
+    if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
     if (
       value?.args !== undefined &&
       (typeof value.args !== "object" || value.args === null || Array.isArray(value.args))
     ) {
       errors.push("invalid_tool_args");
     }
-    if ((value?.toolCall ?? value?.tool_call)?.riskLevel !== undefined) {
-      errors.push("noncanonical_nested_tool_risk");
-    }
     errors.push(...validateToolSecurityAssessment(value));
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END) {
-    if (!text(value?.toolCallId || value?.tool_call_id)) errors.push("missing_tool_call_id");
-    if (
-      !("result" in (value || {})) &&
-      !("toolResult" in (value || {})) &&
-      !("tool_result" in (value || {}))
-    ) {
+    if (!text(value?.toolCallId)) errors.push("missing_tool_call_id");
+    if (!("result" in (value || {}))) {
       errors.push("missing_tool_result");
     }
     if (typeof value?.success !== "boolean") errors.push("missing_tool_success");
-    const explicitToolResult = value?.toolResult ?? value?.tool_result;
-    if (
-      explicitToolResult?.success !== undefined &&
-      explicitToolResult.success !== value?.success
-    ) {
-      errors.push("conflicting_tool_success");
-    }
-    if (explicitToolResult?.riskLevel !== undefined) {
-      errors.push("noncanonical_nested_tool_risk");
-    }
     errors.push(...validateToolSecurityAssessment(value));
   }
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
@@ -159,9 +149,7 @@ export function projectMessageEventContent(event = {}) {
       content:
         typeof event?.text === "string"
           ? event.text
-          : typeof event?.output === "string"
-            ? event.output
-            : "",
+          : "",
     });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
@@ -170,7 +158,7 @@ export function projectMessageEventContent(event = {}) {
 export function projectMessageEventMetadata(event = {}) {
   const metadata = {};
   const modelAlias = text(event?.modelAlias);
-  const modelName = text(event?.modelName || event?.model);
+  const modelName = text(event?.modelName);
   if (modelAlias) metadata.modelAlias = modelAlias;
   if (modelName) metadata.modelName = modelName;
   return Object.freeze(metadata);
@@ -182,9 +170,7 @@ export function projectAuthoritativeFinalMessage(event = {}) {
     content:
       typeof event?.text === "string"
         ? event.text
-        : typeof event?.output === "string"
-          ? event.output
-          : "",
+        : "",
   };
   if (Array.isArray(event?.attachments) && event.attachments.length > 0) {
     projection.attachments = Object.freeze([...event.attachments]);
@@ -202,24 +188,11 @@ export function isAuthoritativeFinalContentEvent(event = {}) {
 
 export function projectMessageEventToolFacets(event = {}) {
   const eventType = text(event?.eventType);
-  const toolCallId = text(event?.toolCallId || event?.tool_call_id);
-  const explicitToolCall = event?.toolCall ?? event?.tool_call;
-  const explicitToolResult = event?.toolResult ?? event?.tool_result;
-  const withoutRiskLevel = (value) => {
-    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-    const projected = { ...value };
-    delete projected.riskLevel;
-    return projected;
-  };
+  const toolCallId = text(event?.toolCallId);
   const assessedRiskLevel = normalizeSecurityRiskLevel(
     event?.securityAssessment?.effectiveRiskLevel,
   );
-  const toolCall = explicitToolCall
-    ? {
-        ...withoutRiskLevel(explicitToolCall),
-        ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
-      }
-    : eventType === "tool_call_start" && text(event?.tool)
+  const toolCall = eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START && text(event?.tool)
       ? {
           id: toolCallId,
           name: text(event.tool),
@@ -231,14 +204,11 @@ export function projectMessageEventToolFacets(event = {}) {
         }
       : undefined;
   const toolResult =
-    eventType === "tool_call_end" && (explicitToolResult || event?.result !== undefined)
+    eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END && event?.result !== undefined
       ? {
-          ...withoutRiskLevel(explicitToolResult),
-          toolCallId: text(
-            explicitToolResult?.toolCallId || explicitToolResult?.tool_call_id || toolCallId,
-          ),
-          name: text(explicitToolResult?.name || event?.tool),
-          output: explicitToolResult?.output ?? event.result,
+          toolCallId,
+          name: text(event?.tool),
+          output: event.result,
           success: event.success,
           ...(assessedRiskLevel ? { riskLevel: assessedRiskLevel } : {}),
         }

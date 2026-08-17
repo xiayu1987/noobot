@@ -106,7 +106,6 @@ describe("turnProjectionStore convergence", () => {
       sequenceScopeId: "message-1",
       authority: "authoritative",
       text: "analysis",
-      output: "analysis",
     });
 
     expect(
@@ -133,7 +132,6 @@ describe("turnProjectionStore convergence", () => {
           sequenceScopeId: "message-1",
           authority: "authoritative",
           textLength: 8,
-          outputLength: 8,
           eventTimestamp: "2026-01-01T00:00:00.000Z",
           reducerObservedAt: expect.any(String),
           sourceToReducerLatencyMs: expect.any(Number),
@@ -303,7 +301,6 @@ describe("turnProjectionStore convergence", () => {
         sequence: 1,
         timestamp: "2026-01-01T00:00:07.000Z",
         text: "finished",
-        output: "finished",
       }),
     ];
     multiMessageEvents.forEach((eventItem) => {

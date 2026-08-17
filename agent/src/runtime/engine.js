@@ -111,7 +111,6 @@ export async function emitAuthoritativeFinalMessageContent({ result = {}, runtim
       : [];
   const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
-    output: finalOutput,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     category: "model",
     type: "authoritative_final_content",

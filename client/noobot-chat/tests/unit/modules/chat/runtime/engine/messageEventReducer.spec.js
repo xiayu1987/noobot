@@ -273,7 +273,6 @@ describe("reduceMessageEvent", () => {
           eventType: "authoritative_final_content",
           sequence: 2,
           text: "search complete",
-          output: "search complete",
           transferEnvelopes: [transferEnvelope],
         }),
       ).result,
@@ -360,7 +359,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 3,
         text: "authoritative final",
-        output: "authoritative final",
       }),
     );
 
@@ -372,7 +370,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 1,
         text: "authoritative final",
-        output: "authoritative final",
       }),
     );
 
@@ -449,7 +446,6 @@ describe("reduceMessageEvent", () => {
           eventId: "evt-final-payload",
           eventType: "authoritative_final_content",
           text: "complete final",
-          output: "complete final",
           attachments,
           transferEnvelopes,
         }),
@@ -487,7 +483,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 3,
         text: "done",
-        output: "done",
       }),
     );
 
@@ -536,7 +531,6 @@ describe("reduceMessageEvent", () => {
           eventType: "authoritative_final_content",
           sequence: 1,
           text: "authoritative final",
-          output: "authoritative final",
         }),
       ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
@@ -606,7 +600,6 @@ describe("reduceMessageEvent", () => {
           toolCallId: "",
           args: undefined,
           text: "guidance analysis",
-          output: "guidance analysis",
         }),
       ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
@@ -620,7 +613,6 @@ describe("reduceMessageEvent", () => {
       toolCallId: "",
       args: undefined,
       text: "intermediate model analysis",
-      output: "intermediate model analysis",
     });
 
     expect(reduce(target, projected).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);

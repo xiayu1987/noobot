@@ -143,7 +143,6 @@ export function dispatchTurnEnvelope({
       sequenceScopeId: String(envelope?.ordering?.scopeId || ""),
       authority: "authoritative",
       textLength: String(envelope?.payload?.text || "").length,
-      outputLength: String(envelope?.payload?.output || "").length,
       eventTimestamp,
       reducerObservedAt: new Date(reducerObservedAtMs).toISOString(),
       sourceToReducerLatencyMs: Number.isFinite(eventTimestampMs)

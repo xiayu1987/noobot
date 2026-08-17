@@ -59,19 +59,25 @@ export function validateInteractionRequestPayload(data = {}) {
   if (data.timeoutMs !== undefined && (!Number.isInteger(data.timeoutMs) || data.timeoutMs <= 0)) {
     return { valid: false, reason: "invalid_timeout_ms", missing: [] };
   }
-  const lifecycle = normalizeInteractionLifecycle(
-    data.lifecycle || data.interactionData?.lifecycle,
-  );
+  const interactionData = data.interactionData;
   if (
-    String(data.lifecycle || data.interactionData?.lifecycle || "").trim() &&
+    interactionData &&
+    typeof interactionData === "object" &&
+    ["lifecycle", "resolvedBy", "ackMode", "notification"].some((key) =>
+      Object.hasOwn(interactionData, key),
+    )
+  ) {
+    return { valid: false, reason: "noncanonical_interaction_control", missing: [] };
+  }
+  const lifecycle = normalizeInteractionLifecycle(data.lifecycle);
+  if (
+    String(data.lifecycle || "").trim() &&
     lifecycle === INTERACTION_LIFECYCLE.PENDING &&
-    clean(data.lifecycle || data.interactionData?.lifecycle).toLowerCase() !== lifecycle
+    clean(data.lifecycle).toLowerCase() !== lifecycle
   ) {
     return { valid: false, reason: "invalid_lifecycle", missing: [] };
   }
-  const resolvedBy = normalizeInteractionResolvedBy(
-    data.resolvedBy || data.interactionData?.resolvedBy,
-  );
+  const resolvedBy = normalizeInteractionResolvedBy(data.resolvedBy);
   if (isTerminalInteractionLifecycle(lifecycle) && !resolvedBy) {
     return { valid: false, reason: "missing_terminal_resolved_by", missing: ["resolvedBy"] };
   }
@@ -99,7 +105,7 @@ export function isPendingInteractionReplay(record = {}) {
   const validation = validateInteractionRequestPayload(payload);
   return (
     validation.valid &&
-    normalizeInteractionLifecycle(payload.lifecycle || payload.interactionData?.lifecycle) ===
+    normalizeInteractionLifecycle(payload.lifecycle) ===
       INTERACTION_LIFECYCLE.PENDING
   );
 }

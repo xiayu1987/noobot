@@ -66,22 +66,10 @@ export function resolveConnectorStatusPayload(payload = {}) {
 
 export function normalizeInteractionRequestPayload(payload = {}) {
   const interactionData = normalizeInteractionData(payload?.interactionData);
-  const lifecycle = normalizeInteractionLifecycle(
-    payload?.lifecycle || interactionData?.lifecycle || "",
-  );
-  const ackMode = normalizeInteractionAckMode(
-    payload?.ackMode ||
-      interactionData?.ackMode ||
-      "",
-  );
-  const resolvedBy = normalizeInteractionResolvedBy(
-    payload?.resolvedBy ||
-      interactionData?.resolvedBy ||
-      "",
-  );
-  const notification = normalizeInteractionNotification(
-    payload?.notification || interactionData?.notification || {},
-  );
+  const lifecycle = normalizeInteractionLifecycle(payload?.lifecycle);
+  const ackMode = normalizeInteractionAckMode(payload?.ackMode);
+  const resolvedBy = normalizeInteractionResolvedBy(payload?.resolvedBy);
+  const notification = normalizeInteractionNotification(payload?.notification);
   return {
     requestId: String(payload?.requestId || ""),
     content: String(payload?.content || ""),

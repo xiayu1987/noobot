@@ -5,7 +5,10 @@
  */
 import path from "node:path";
 import process from "node:process";
-import { migrateConfigFileToCurrentProtocol } from "@noobot/agent-config-protocol";
+import {
+  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  synchronizeConfigFileFromTemplate,
+} from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
 import {
   parseCliOptions,
@@ -14,8 +17,6 @@ import {
   resolveConfiguredWorkspaceTemplatePath,
   resolveLauncherGlobalConfigPath,
 } from "./cli.js";
-import { mergeIncremental, pruneBuiltInConfigParams } from "./config-merge.js";
-import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
 import {
   ensureAgentProxyConfig,
   ensureModelProxyConfig,
@@ -143,15 +144,11 @@ async function syncWhenGlobalConfigExists({
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
-  const mergedGlobal = migrateConfigFileToCurrentProtocol(
-    pruneBuiltInConfigParams(
-      mergeIncremental({
-        template: pruneBuiltInConfigParams(globalExampleConfig),
-        target: pruneBuiltInConfigParams(globalConfig),
-        excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
-      }),
-    ),
-  );
+  const mergedGlobal = synchronizeConfigFileFromTemplate({
+    template: globalExampleConfig,
+    target: globalConfig,
+    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  });
 
   const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();
   const mergedGlobalLocalized = existingConfigLanguage

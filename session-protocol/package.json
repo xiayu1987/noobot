@@ -9,6 +9,7 @@
     "./turn-lifecycle": "./src/turn-lifecycle.js",
     "./package.json": "./package.json",
     "./execution-lifecycle": "./src/execution-lifecycle.js",
+    "./execution-abort": "./src/lifecycle/execution-abort.js",
     "./turn-commit": "./src/turn-commit.js",
     "./turn-scope-identity": "./src/turn-scope-identity.js"
   },

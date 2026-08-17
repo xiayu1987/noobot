@@ -201,7 +201,6 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-terminal",
       seq: 2,
       text: "A",
-      output: "A",
     });
     await api.applyCanonicalMessageEvent("llm_delta", {
       sessionId: "s-1",

@@ -8,9 +8,11 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
   collectConfigTemplateKeys,
+  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   ensureModelProviderInConfigFile,
   migrateConfigFileToCurrentProtocol,
   normalizeConfigParamsDocument,
+  synchronizeConfigFileFromTemplate,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
 
@@ -19,12 +21,6 @@ export function createDesktopConfigManager({
   packagedBackendRoot,
   appendDesktopLog = () => {},
 } = {}) {
-  const deploymentOwnedConfigRoots = new Set([
-    "workspace_root",
-    "workspace_template_path",
-    "super_admin",
-  ]);
-
   function isPlainObject(input) {
     return input !== null && typeof input === "object" && !Array.isArray(input);
   }
@@ -192,28 +188,6 @@ export function createDesktopConfigManager({
 
   function deepClone(input) {
     return JSON.parse(JSON.stringify(input));
-  }
-
-  function mergeIncremental({ template, target, rootDepth = 0 } = {}) {
-    if (Array.isArray(template)) return target === undefined ? deepClone(template) : target;
-    if (!isPlainObject(template)) return target === undefined ? template : target;
-    const output = isPlainObject(target) ? deepClone(target) : {};
-    const targetObject = isPlainObject(target) ? target : {};
-    for (const [key, templateValue] of Object.entries(template)) {
-      if (rootDepth === 0 && deploymentOwnedConfigRoots.has(key)) continue;
-      if (!Object.prototype.hasOwnProperty.call(targetObject, key)) {
-        output[key] = deepClone(templateValue);
-      } else if (isPlainObject(templateValue) && isPlainObject(targetObject[key])) {
-        output[key] = mergeIncremental({
-          template: templateValue,
-          target: targetObject[key],
-          rootDepth: rootDepth + 1,
-        });
-      } else {
-        output[key] = targetObject[key];
-      }
-    }
-    return output;
   }
 
   function copyDirectoryContents({ from, to }) {
@@ -412,9 +386,10 @@ export function createDesktopConfigManager({
     if (!isPlainObject(templateJson)) return false;
     const targetExists = fs.existsSync(targetFilePath);
     const targetJson = targetExists ? readJsonFile(targetFilePath, {}) : {};
-    const merged = migrateConfigFileToCurrentProtocol(
-      mergeIncremental({ template: templateJson, target: targetJson }),
-    );
+    const merged = synchronizeConfigFileFromTemplate({
+      template: templateJson,
+      target: targetJson,
+    });
     if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
       writeJsonFile(targetFilePath, merged);
       return true;
@@ -462,9 +437,11 @@ export function createDesktopConfigManager({
     const hasConfiguredExecutionIsolationMode = Boolean(
       String(currentConfig?.security?.execution_isolation?.mode || "").trim(),
     );
-    const mergedConfig = migrateConfigFileToCurrentProtocol(
-      mergeIncremental({ template: exampleConfig, target: currentConfig }),
-    );
+    const mergedConfig = synchronizeConfigFileFromTemplate({
+      template: exampleConfig,
+      target: currentConfig,
+      excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+    });
     mergedConfig.workspace_root = workspaceRootPath;
     mergedConfig.workspace_template_path = workspaceTemplatePath;
     if (!hasConfiguredExecutionIsolationMode)

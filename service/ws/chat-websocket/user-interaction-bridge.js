@@ -163,8 +163,6 @@ export function createUserInteractionBridge({
             resolvedBy: "system",
             interactionData: {
               ...(requestItem.payload?.interactionData || {}),
-              lifecycle: "failed",
-              resolvedBy: "system",
               reason: "timeout",
               error: { code: "user_interaction_timeout", message: error.message },
             },

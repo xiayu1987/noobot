@@ -350,7 +350,6 @@ describe("useChatSession reconnect replay", () => {
         turnScopeId: "turn-new",
         seq: 1,
         text: "new final answer",
-        output: "new final answer",
         modelAlias: "alias-1",
       }));
       onReconnectData({

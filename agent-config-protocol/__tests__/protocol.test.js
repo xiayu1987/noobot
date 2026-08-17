@@ -31,6 +31,8 @@ import {
   createPluginConfigPlan,
   selectModelAlias,
   resolveMultimodalDefaultModelSelection,
+  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  synchronizeConfigFileFromTemplate,
 } from "../src/index.js";
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
@@ -319,6 +321,46 @@ test("current config migration removes every retired config path and prunes empt
   assert.deepEqual(migrated.attachments.limits, { max_file_size_bytes: 1024 });
 });
 
+test("current config migration preserves active tool and runtime configuration", () => {
+  const config = {
+    runTimeoutMs: 120000,
+    attachments: {
+      maxFileCount: 5,
+      allowedExtensions: [".pdf"],
+    },
+    tools: {
+      delegate_task_async: {
+        enabled: true,
+        waitTimeoutMs: 30000,
+        maxSubAgentDepth: 2,
+      },
+      task_summary: {
+        enabled: true,
+        phaseSummaryLoopTurns: 10,
+      },
+      request_help: {
+        enabled: true,
+        helpPromptLoopTurns: 10,
+      },
+    },
+    plugins: {
+      workflow: {
+        enabled: false,
+        timeoutMs: 18000000,
+        maxAutoTransitions: 10,
+        maxParallelNodeAgents: 3,
+        miniRunnerMaxTurns: 3,
+      },
+      harness: {
+        enabled: true,
+        miniRunnerMaxTurns: 5,
+      },
+    },
+  };
+
+  assert.deepEqual(migrateConfigFileToCurrentProtocol(config), config);
+});
+
 test("config params document is the only values, descriptions, and catalog authority", () => {
   const document = normalizeConfigParamsDocument({
     values: { api_key: " key ", empty: "  " },
@@ -390,6 +432,51 @@ test("template resolution has one explicit source order and unresolved policy", 
     () => resolveConfigTemplates("${MISSING}", { lookup, unresolved: "fallback" }),
     /unsupported unresolved config template policy/,
   );
+});
+
+test("config synchronization recursively adds template nodes through one protocol", () => {
+  const synchronized = synchronizeConfigFileFromTemplate({
+    template: {
+      workspace_root: "/template",
+      providers: {
+        primary: {
+          reasoning_effort: "medium",
+          tool_reasoning_effort: "medium",
+          capabilities: { web_search: true },
+        },
+        added: { enabled: true },
+      },
+      tools: {
+        execute_script: { enabled: true, sandbox_mode: true },
+        read_file: { enabled: true },
+        delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
+      },
+    },
+    target: {
+      workspace_root: "/configured",
+      providers: { primary: { reasoning_effort: "high" } },
+      user_only: true,
+    },
+    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  });
+
+  assert.deepEqual(synchronized, {
+    workspace_root: "/configured",
+    providers: {
+      primary: {
+        reasoning_effort: "high",
+        tool_reasoning_effort: "medium",
+        capabilities: { web_search: true },
+      },
+      added: { enabled: true },
+    },
+    user_only: true,
+    tools: {
+      execute_script: { enabled: true },
+      read_file: { enabled: true },
+      delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
+    },
+  });
 });
 
 test("build, migration, and validation pipeline exposes one result contract", async () => {

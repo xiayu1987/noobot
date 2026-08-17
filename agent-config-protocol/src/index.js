@@ -18,6 +18,7 @@ export * from "./multimodal-config.js";
 export * from "./pipeline/migration.js";
 export * from "./pipeline/validation.js";
 export * from "./pipeline/effective-config.js";
+export * from "./pipeline/synchronization.js";
 export * from "./policy/scenario-policy.js";
 export * from "./policy/user-override.js";
 export * from "./policy/tool-policy.js";

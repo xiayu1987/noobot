@@ -49,15 +49,14 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
   const next = Array.isArray(timeline) ? timeline.map((item) => ({ ...item })) : [];
   const index = next.findIndex((item) => item.key === key);
   const current = index >= 0 ? next[index] : { key, toolCallId };
-  const { toolCall, toolResult } = projectMessageEventToolFacets(payload);
   const eventFact = createToolEventFact(envelope);
 
   const updated =
     payload.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START
       ? {
           ...current,
-          tool: text(payload.tool || toolCall?.name || current.tool),
-          args: toolCall?.args ?? payload.args ?? current.args ?? {},
+          tool: text(payload.tool || current.tool),
+          args: payload.args ?? current.args ?? {},
           call: eventFact,
           riskLevel: normalizeSecurityRiskLevel(payload?.securityAssessment?.effectiveRiskLevel),
           status: current.resultEvent ? resolveCanonicalToolTimelineStatus(current) : "running",
@@ -65,8 +64,8 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
       : (() => {
           const entry = {
             ...current,
-            tool: text(payload.tool || toolResult?.name || current.tool),
-            result: toolResult?.output ?? payload.result,
+            tool: text(payload.tool || current.tool),
+            result: payload.result,
             success: payload.success,
             resultEvent: eventFact,
             riskLevel: normalizeSecurityRiskLevel(payload?.securityAssessment?.effectiveRiskLevel),

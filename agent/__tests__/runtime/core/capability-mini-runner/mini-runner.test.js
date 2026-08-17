@@ -16,6 +16,8 @@ import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   validateModelResponse,
 } from "@noobot/model-protocol";
+import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
+import { createCanonicalMessageEventSessionManager } from "../../../helpers/canonical-message-event-session-manager.js";
 
 const modelSpec = Object.freeze({
   alias: "test",
@@ -118,6 +120,43 @@ test("mini-runner sends canonical requests through the host ModelPort", async ()
   assert.equal(modelPort.requests[0].invocation.purpose, "planning");
   assert.equal(modelPort.requests[0].invocation.domain, "workflow");
   assert.equal(modelPort.requests[0].options.streaming, false);
+});
+
+test("guidance analysis publishes only the canonical Message Event content field", async () => {
+  const modelPort = createModelPort([{ text: "guidance result" }]);
+  const committedEvents = [];
+  const { ctx, runtime } = createContext({
+    modelPort,
+    eventListener: {
+      onEvent(event) {
+        committedEvents.push(event);
+      },
+    },
+  });
+  runtime.userId = "test-user";
+  runtime.sessionManager = createCanonicalMessageEventSessionManager();
+  runtime.systemRuntime.sessionId = "session-test";
+  runtime.systemRuntime.dialogProcessId = "dialog-test";
+  bindAssistantMessageEventStream(runtime, {
+    messageId: "message-test",
+    presentationMessageId: "presentation-test",
+  });
+
+  await createInvoker({ enableToolBinding: false })({
+    purpose: "guidance",
+    domain: "guidance",
+    pluginFlow: "analysis",
+    chain: "auxiliary",
+    messages: [{ role: "user", content: "review" }],
+    ctx,
+  });
+
+  const payload = committedEvents.find(
+    (event = {}) => event?.event === "authority_event_committed",
+  )?.data?.envelope?.payload;
+  assert.equal(payload?.eventType, "thinking");
+  assert.equal(payload?.text, "guidance result");
+  assert.equal(Object.hasOwn(payload, "output"), false);
 });
 
 test("mini-runner appends assistant tool calls and tool results before the next request", async () => {

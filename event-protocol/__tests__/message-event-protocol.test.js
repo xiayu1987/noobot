@@ -86,6 +86,15 @@ test("message payload requires complete workflow ownership", () => {
   );
 });
 
+test("message payload validation is total for non-object input", () => {
+  for (const value of [null, undefined, "invalid", []]) {
+    assert.deepEqual(validateMessageEventPayload(value), {
+      valid: false,
+      errors: ["payload_not_object"],
+    });
+  }
+});
+
 test("message payload owns presentation identity and content semantics", () => {
   const current = payload();
   assert.equal(resolveMessageEventPresentationId(current), "presentation-1");
@@ -136,15 +145,18 @@ test("message payload validates and projects tool facts", () => {
   assert.equal(hasMessageEventToolPayload(payload()), true);
 });
 
-test("message payload keeps top-level tool success as the only terminal authority", () => {
-  const conflicting = payload({
+test("message payload rejects nested and aliased tool facts", () => {
+  const noncanonical = payload({
     eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_END,
     result: { ok: true },
     success: false,
     toolResult: { tool_call_id: "call-1", output: { ok: true }, success: true },
   });
-  assert.deepEqual(validateMessageEventPayload(conflicting).errors, ["conflicting_tool_success"]);
-  assert.equal(projectMessageEventToolFacets(conflicting).toolResult.success, false);
+  assert.deepEqual(validateMessageEventPayload(noncanonical).errors, ["noncanonical_toolResult"]);
+  assert.deepEqual(
+    validateMessageEventPayload(payload({ tool_call_id: "call-1" })).errors,
+    ["noncanonical_tool_call_id"],
+  );
 });
 
 test("message payload validates and projects canonical tool risk", () => {
