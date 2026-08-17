@@ -35,7 +35,7 @@ import {
   buildProviderFromTemplate,
   normalizeProviderAlias,
   resolveEnvNamesByFormat,
-  resolveTemplateProvider,
+  resolveProviderTemplate,
 } from "./provider.js";
 import { fileExists, isPlainObject, readJsonStrict, writeJson, deepClone } from "./utils.js";
 
@@ -74,9 +74,7 @@ async function initializeGlobalConfigWhenMissing({
 
   const providers = isPlainObject(globalConfig.providers) ? { ...globalConfig.providers } : {};
   const aliasExists = isPlainObject(providers[providerAlias]);
-  const providerSeed = aliasExists
-    ? providers[providerAlias]
-    : resolveTemplateProvider(providers, answers.format);
+  const providerSeed = resolveProviderTemplate(providers, providerAlias);
   providers[providerAlias] = buildProviderFromTemplate({
     providerTemplate: providerSeed,
     format: answers.format,

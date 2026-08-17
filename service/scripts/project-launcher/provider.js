@@ -5,6 +5,7 @@
  */
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
+import { resolveModelLibraryProvider } from "@noobot/model-protocol";
 import {
   deepClone,
   fileExists,
@@ -101,24 +102,14 @@ export function buildProviderFromTemplate({
     }
   }
 
-  if (format === "openai_compatible" && !hasOwnProperty(baseProvider, "reasoning_effort")) {
-    baseProvider.reasoning_effort = "low";
-  }
-  if (format === "openai_compatible" && !hasOwnProperty(baseProvider, "tool_reasoning_effort")) {
-    baseProvider.tool_reasoning_effort = "low";
-  }
-
   return baseProvider;
 }
 
-export function resolveTemplateProvider(providers = {}, format = "") {
+export function resolveProviderTemplate(providers = {}, providerAlias = "") {
   const sourceProviders = isPlainObject(providers) ? providers : {};
-  const matchedProvider = Object.values(sourceProviders).find(
-    (provider) => String(provider?.format || "").trim() === format,
-  );
-  if (isPlainObject(matchedProvider)) return matchedProvider;
-  const firstProvider = Object.values(sourceProviders).find((provider) => isPlainObject(provider));
-  return isPlainObject(firstProvider) ? firstProvider : null;
+  const alias = String(providerAlias || "").trim();
+  if (isPlainObject(sourceProviders[alias])) return sourceProviders[alias];
+  return resolveModelLibraryProvider(alias);
 }
 
 export function normalizeBuiltinScenarioConfigForLauncher(

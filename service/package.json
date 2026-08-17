@@ -42,6 +42,7 @@
     "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/hook-protocol": "file:../hook-protocol",
+    "@noobot/model-protocol": "file:../model-protocol",
     "@langchain/core": "^1.2.6",
     "@langchain/openai": "^1.5.7",
     "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",
