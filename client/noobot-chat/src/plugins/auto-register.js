@@ -5,69 +5,120 @@
  */
 import { externalFrontendPluginEntries } from "./generated/external-entries.js";
 import {
+  createExtensionRegistryGeneration,
   listExtensionContributions,
-  replacePluginExtensions,
+  publishExtensionRegistryGeneration,
 } from "../extensions/extension-registry.js";
 import {
   EXTENSION_POINTS,
+  PLUGIN_HOST_PORT,
   requireDeclaredFrontendContribution,
-  validatePluginActivationResult,
 } from "@noobot/plugin-protocol";
+import {
+  createContributionTransaction,
+  createPluginActivationScope,
+  createPluginHostFacade,
+} from "@noobot/plugin-runtime/core";
 import { createScopedAuthenticatedHttpService } from "../infrastructure/http/authenticatedHttpService.js";
 import { logWorkflowDiagnostics } from "../modules/debug/loggers/workflowDiagnosticsLogger.js";
 
-export async function registerExternalFrontendPlugins() {
-  for (const item of externalFrontendPluginEntries) {
+let activeScope = null;
+let activeGeneration = null;
+
+function loadedFrontendEntries() {
+  return externalFrontendPluginEntries.map((item) => {
     const pluginId = String(item?.pluginId || "").trim();
-    const pluginName = String(item?.name || pluginId).trim();
-    const manifest = item?.manifest;
-    const pluginModule = typeof item?.loadModule === "function" ? await item.loadModule() : item?.module;
-    const activate = typeof pluginModule?.activate === "function" ? pluginModule.activate : null;
-    if (!activate) throw new Error(`[frontend-plugin] ${pluginName} must export activate`);
-    const stagedContributions = [];
-    const registeredContributionKeys = new Set();
-      const activation = await activate({
-        contributeExtension(point, contribution = {}) {
-          requireDeclaredFrontendContribution(manifest, contribution?.id, point);
-          const key = `${point}#${contribution.id}`;
-          if (registeredContributionKeys.has(key)) {
-            throw new Error(`plugin ${pluginId} registered duplicate frontend contribution ${key}`);
-          }
-          registeredContributionKeys.add(key);
-          stagedContributions.push({ point, contribution });
-          return true;
-        },
+    return {
+      pluginId,
+      manifest: item.manifest,
+      surface: "frontend",
+      item,
+      async activate(host, config) {
+        const pluginModule = typeof item?.loadModule === "function" ? await item.loadModule() : item?.module;
+        if (typeof pluginModule?.activate !== "function") {
+          throw new Error(`[frontend-plugin] ${String(item?.name || pluginId).trim()} must export activate`);
+        }
+        return pluginModule.activate(host, config);
+      },
+    };
+  });
+}
+
+export async function registerExternalFrontendPlugins() {
+  const generation = createExtensionRegistryGeneration();
+  const scope = await createPluginActivationScope({
+    entries: loadedFrontendEntries(),
+    configFactory: (entry) => entry.manifest.configuration?.defaults || {},
+    transactionFactory: (entry) => {
+      return createContributionTransaction({
+        commit: (staged) => generation.replacePlugin(entry.pluginId, staged),
+        rollback: () => generation.removePlugin(entry.pluginId),
+      });
+    },
+    hostFactory: (entry, transaction) => createPluginHostFacade({
+      entry,
+      publicContext: {
         extensionPoints: EXTENSION_POINTS,
-        services: Object.freeze({
-          authenticatedRequest: createScopedAuthenticatedHttpService({
-            routePatterns: manifest.requires.authenticatedRoutes,
-          }),
+        pluginMeta: Object.freeze({
+          pluginId: entry.pluginId,
+          name: String(entry.item?.name || entry.pluginId).trim(),
+          version: String(entry.item?.version || "").trim(),
+          protocolVersion: entry.manifest.protocolVersion,
         }),
-        pluginMeta: {
-          pluginId,
-          name: pluginName,
-          version: String(item?.version || "").trim(),
-          protocolVersion: manifest.protocolVersion,
-        },
         logger: console,
-      });
-      validatePluginActivationResult(activation, { pluginId, surface: "frontend" });
-      const declared = manifest.contributes.frontend.extensions;
-      if (registeredContributionKeys.size !== declared.length) {
-        throw new Error(`plugin ${pluginId} registered ${stagedContributions.length} of ${declared.length} declared frontend contributions`);
-      }
-      const committed = replacePluginExtensions(pluginId, stagedContributions);
-      const runtimeContributions = listExtensionContributions(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE)
-        .filter((entry) => entry.pluginId === pluginId);
-      logWorkflowDiagnostics("frontend.pluginRuntime.pluginRegistered", {
-        pluginId,
-        protocolVersion: manifest.protocolVersion,
-        contributionIds: committed.map((entry) => entry.id),
-        runtimeContributionIds: runtimeContributions.map((entry) => entry.id),
-      });
-      console.info(
-        `[frontend-plugin] registered ${pluginName}: ${committed.length} contributions` +
-        `${runtimeContributions.length ? `, runtime=${runtimeContributions.map((entry) => entry.id).join(",")}` : ""}`,
-      );
+      },
+      capabilityAdapters: {
+        [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: {
+          path: ["contributeExtension"],
+          value(point, contribution = {}) {
+            requireDeclaredFrontendContribution(entry.manifest, contribution?.id, point);
+            const key = `${point}#${contribution.id}`;
+            if (transaction.receipt().some((item) => `${item.point}#${item.contribution.id}` === key)) {
+              throw new Error(`plugin ${entry.pluginId} registered duplicate frontend contribution ${key}`);
+            }
+            transaction.stage({
+              type: "extension",
+              contributionId: contribution.id,
+              point,
+              contribution,
+            });
+            return true;
+          },
+        },
+        [PLUGIN_HOST_PORT.AUTHENTICATED_REQUEST]: {
+          path: ["services", "authenticatedRequest"],
+          value: createScopedAuthenticatedHttpService({ routePatterns: entry.manifest.requires.authenticatedRoutes }),
+        },
+      },
+    }),
+  });
+  publishExtensionRegistryGeneration(generation);
+  const previousScope = activeScope;
+  activeScope = scope;
+  activeGeneration = generation;
+  if (previousScope) await previousScope.dispose();
+  for (const entry of scope.entries) {
+    const committed = listExtensionContributions().filter((item) => item.pluginId === entry.pluginId);
+    const runtimeContributions = listExtensionContributions(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE).filter((item) => item.pluginId === entry.pluginId);
+    logWorkflowDiagnostics("frontend.pluginRuntime.pluginRegistered", {
+      pluginId: entry.pluginId,
+      protocolVersion: entry.manifest.protocolVersion,
+      contributionIds: committed.map((item) => item.id),
+      runtimeContributionIds: runtimeContributions.map((item) => item.id),
+    });
+    console.info(`[frontend-plugin] registered ${entry.item?.name || entry.pluginId}: ${committed.length} contributions`);
   }
+  return scope;
+}
+
+export async function disposeExternalFrontendPlugins() {
+  const scope = activeScope;
+  activeScope = null;
+  if (activeGeneration) {
+    const emptyGeneration = activeGeneration.createGeneration();
+    for (const entry of scope?.entries || []) emptyGeneration.removePlugin(entry.pluginId);
+    publishExtensionRegistryGeneration(emptyGeneration);
+    activeGeneration = emptyGeneration;
+  }
+  if (scope) await scope.dispose();
 }

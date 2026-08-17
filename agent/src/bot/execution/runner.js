@@ -102,6 +102,7 @@ export class SessionExecutionRunner {
     let resolvedRuntimeEventListener = eventListener;
     let lifecycle = null;
     let lifecycleRuntime = null;
+    let pluginActivationScope = null;
     const persistStoppedSnapshotFromRuntime = (source = "") => {
       return saveStoppedModelMessageSnapshotCandidate({
         globalConfig: lifecycleRuntime?.globalConfig || {},
@@ -157,6 +158,8 @@ export class SessionExecutionRunner {
       } = initializedRun;
       resolvedParentAsyncResultContainer = initializedParentAsyncResultContainer;
       resolvedRunConfig = initializedRunConfig;
+      pluginActivationScope = initializedRunConfig?.pluginActivationScope || null;
+      delete initializedRunConfig.pluginActivationScope;
       resolvedUsedSessionId = usedSessionId;
       resolvedDialogProcessId = dialogProcessId;
       resolvedRuntimeEventListener = runtimeEventListener;
@@ -336,6 +339,8 @@ export class SessionExecutionRunner {
         caller,
         message,
       });
+    } finally {
+      pluginActivationScope?.dispose();
     }
   }
 }

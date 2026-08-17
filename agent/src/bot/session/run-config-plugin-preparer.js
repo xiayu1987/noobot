@@ -5,12 +5,16 @@
  */
 import { createHookManager } from "@noobot/hook-protocol";
 import {
+  PLUGIN_HOST_PORT,
   PLUGIN_SURFACE,
   requireDeclaredPluginHook,
   requireDeclaredPluginHookEmission,
-  validatePluginActivationResult,
+  serializePluginContributionIdentity,
 } from "@noobot/plugin-protocol";
 import {
+  createContributionTransaction,
+  createPluginActivationScopeSync,
+  createPluginHostFacade,
   listLoadedNoobotPluginEntries,
   resolvePluginExecutionIntent,
 } from "@noobot/plugin-runtime";
@@ -29,8 +33,6 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
   TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
-
-const activationsByManager = new WeakMap();
 
 function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -54,12 +56,6 @@ function managerForPoint(point = "", agentHooks, orchestrationHooks) {
   return normalized.startsWith("bot.") || normalized.startsWith("workflow.")
     ? orchestrationHooks
     : agentHooks;
-}
-
-function scopeHandlerId(pluginId = "", handlerId = "") {
-  const normalized = String(handlerId || "").trim();
-  if (!normalized) throw new TypeError(`plugin ${pluginId} hook handler id is required`);
-  return `${pluginId}:${normalized}`;
 }
 
 export class RunConfigPluginPreparer {
@@ -149,7 +145,7 @@ export class RunConfigPluginPreparer {
     const next = { ...options, enabled: true, mode: "on", basePath };
     next.frontendThresholdsEnabled = runConfig?.frontendThresholdsEnabled === true;
     const registeredHooks = entry.manifest.contributes.agent?.hooks?.registers || [];
-    const hasAgentLifecycle = registeredHooks.some((point) => point.startsWith("agent."));
+    const hasAgentLifecycle = registeredHooks.some(({ point }) => point.startsWith("agent."));
     const hasExecutionIntent = Boolean(entry.manifest.contributes.agent?.executionIntent);
 
     if (hasAgentLifecycle) {
@@ -206,6 +202,7 @@ export class RunConfigPluginPreparer {
   }
 
   prepareRunConfig({ userId = "", runConfig = {}, userConfig = {} } = {}) {
+    runConfig?.pluginActivationScope?.dispose?.();
     const { entries: loadedEntries, plan } = this.createConfigPlan({ runConfig, userConfig });
     const selected = new Set(plan.plugins.map((plugin) => plugin.pluginId));
     const entries = loadedEntries.filter((entry) => selected.has(entry.pluginId));
@@ -232,82 +229,65 @@ export class RunConfigPluginPreparer {
       normalizeStringArray: (input) => this.normalizeStringArray(input),
     });
     const configuredPlugins = { ...plainObject(runConfig?.plugins) };
-    const activated = activationsByManager.get(agentHooks) || new Map();
-    const pluginLifecycleEvents = [];
-
     for (const entry of entries) {
       const options = this.resolveOptions({ entry, userId, runConfig, userConfig });
       configuredPlugins[entry.pluginId] = options;
-      if (activated.has(entry.pluginId)) continue;
-      const host = Object.freeze({
-        hooks: Object.freeze({
-          register: (point, handler, registrationOptions = {}) => {
-            requireDeclaredPluginHook(entry.manifest, PLUGIN_SURFACE.AGENT, point);
-            const manager = managerForPoint(point, agentHooks, orchestrationHooks);
-            return manager.on(point, handler, {
-              ...registrationOptions,
-              id: scopeHandlerId(entry.pluginId, registrationOptions?.id),
-            });
-          },
-          emit: (point, payload, emitOptions) => {
-            requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.AGENT, point);
-            return managerForPoint(point, agentHooks, orchestrationHooks).emit(
-              point,
-              payload,
-              emitOptions,
-            );
-          },
-        }),
-        policy: Object.freeze({ patch: (patch) => policy.patch(patch) }),
-      });
-      let result;
-      try {
-        result = entry.activate(host, options);
-        if (result && typeof result.then === "function") {
-          throw new TypeError(`agent plugin ${entry.pluginId} activate must be synchronous`);
-        }
-        activated.set(
-          entry.pluginId,
-          validatePluginActivationResult(result, {
-            pluginId: entry.pluginId,
-            surface: PLUGIN_SURFACE.AGENT,
-          }),
-        );
-      } catch (error) {
-        error.pluginLifecycleEvent = {
-          event: "plugin.failed",
-          data: {
-            pluginId: entry.pluginId,
-            pluginVersion: entry.manifest.version,
-            protocolVersion: entry.manifest.protocolVersion,
-            surface: PLUGIN_SURFACE.AGENT,
-            errorCode: String(error?.code || "PLUGIN_ACTIVATION_FAILED"),
-            message: String(error?.message || error),
-          },
-        };
-        throw error;
-      }
-      pluginLifecycleEvents.push({
-        event: "plugin.activated",
-        data: {
-          pluginId: entry.pluginId,
-          pluginVersion: entry.manifest.version,
-          protocolVersion: entry.manifest.protocolVersion,
-          surface: PLUGIN_SURFACE.AGENT,
-        },
-      });
-      pluginLifecycleEvents.push({
-        event: "plugin.contribution_committed",
-        data: {
-          pluginId: entry.pluginId,
-          pluginVersion: entry.manifest.version,
-          protocolVersion: entry.manifest.protocolVersion,
-          surface: PLUGIN_SURFACE.AGENT,
-          hookCount: entry.manifest.contributes.agent?.hooks?.registers?.length || 0,
-        },
-      });
     }
-    activationsByManager.set(agentHooks, activated);
+    const pluginLifecycleEvents = [];
+    const pluginActivationScope = createPluginActivationScopeSync({
+      entries,
+      lifecycleSink: (record) => pluginLifecycleEvents.push(record),
+      configFactory: (entry) => configuredPlugins[entry.pluginId],
+      transactionFactory: () => createContributionTransaction({
+        commit: () => undefined,
+        rollback: (staged) => {
+          for (const item of [...staged].reverse()) item.unregister?.();
+        },
+      }),
+      hostFactory: (entry, transaction) => createPluginHostFacade({
+        entry,
+        capabilityAdapters: {
+          [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
+            path: ["hooks", "register"],
+            value(point, handler, registrationOptions = {}) {
+              const declaration = requireDeclaredPluginHook(
+                entry.manifest,
+                PLUGIN_SURFACE.AGENT,
+                point,
+                registrationOptions?.id,
+              );
+              const manager = managerForPoint(point, agentHooks, orchestrationHooks);
+              const unregister = manager.on(point, handler, {
+                ...registrationOptions,
+                id: serializePluginContributionIdentity({
+                  pluginId: entry.pluginId,
+                  surface: entry.surface,
+                  localId: registrationOptions?.id,
+                }),
+              });
+              transaction.stage({
+                type: "hook",
+                point: declaration.point,
+                registrationId: declaration.id,
+                unregister,
+              });
+              return unregister;
+            },
+          },
+          [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
+            path: ["hooks", "emit"],
+            value(point, payload, emitOptions) {
+              requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.AGENT, point);
+              return managerForPoint(point, agentHooks, orchestrationHooks).emit(point, payload, emitOptions);
+            },
+          },
+          [PLUGIN_HOST_PORT.POLICY_PATCH]: {
+            path: ["policy", "patch"],
+            value: (patch) => policy.patch(patch),
+          },
+        },
+      }),
+    });
 
     const toolPolicyPatch = policy.snapshot();
     const shouldAttachPolicy =
@@ -321,6 +301,7 @@ export class RunConfigPluginPreparer {
       hookManager: agentHooks,
       botHookManager: orchestrationHooks,
       pluginLifecycleEvents,
+      pluginActivationScope,
       ...(shouldAttachPolicy
         ? {
             toolPolicy: mergeToolPolicyPatch({

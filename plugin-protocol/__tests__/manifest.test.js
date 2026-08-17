@@ -7,11 +7,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPluginActivationResult,
+  createPluginContributionIdentity,
+  createPluginLifecycleRecord,
   parsePluginManifest,
+  PLUGIN_LIFECYCLE_EVENT,
   PLUGIN_PROTOCOL_VERSION,
   requireDeclaredFrontendContribution,
   requireDeclaredPluginHook,
   requireDeclaredPluginHookEmission,
+  validatePluginContributionReceipt,
 } from "../src/index.js";
 
 const manifest = {
@@ -21,7 +25,7 @@ const manifest = {
   version: "1.0.0",
   entries: { agent: "src/agent.js", frontend: "frontend/index.js" },
   contributes: {
-    agent: { hooks: { registers: ["agent.before_turn"], emits: ["workflow.node_agent_execute"] } },
+    agent: { hooks: { registers: [{ id: "before-turn", point: "agent.before_turn" }], emits: ["workflow.node_agent_execute"] } },
     frontend: { extensions: [{ id: "example-card", point: "message.card.pre" }] },
   },
   requires: {
@@ -35,9 +39,9 @@ const manifest = {
 test("manifest V2 is strict and surface-owned", () => {
   const parsed = parsePluginManifest(manifest);
   assert.equal(parsed.id, "example");
-  assert.equal(
-    requireDeclaredPluginHook(parsed, "agent", "agent.before_turn"),
-    "agent.before_turn",
+  assert.deepEqual(
+    requireDeclaredPluginHook(parsed, "agent", "agent.before_turn", "before-turn"),
+    { id: "before-turn", point: "agent.before_turn" },
   );
   assert.equal(
     requireDeclaredPluginHookEmission(parsed, "agent", "workflow.node_agent_execute"),
@@ -59,10 +63,64 @@ test("manifest V2 is strict and surface-owned", () => {
   );
 });
 
+test("contribution receipts must exactly match structured declarations", () => {
+  assert.deepEqual(
+    validatePluginContributionReceipt(manifest, "agent", [
+      { type: "hook", registrationId: "before-turn", point: "agent.before_turn" },
+    ]),
+    ["hook:before-turn:agent.before_turn"],
+  );
+  assert.throws(
+    () => validatePluginContributionReceipt(manifest, "agent", [
+      { type: "hook", registrationId: "before-turn", point: "agent.after_turn" },
+    ]),
+    /missing: hook:before-turn:agent\.before_turn.*unexpected: hook:before-turn:agent\.after_turn/,
+  );
+  assert.throws(
+    () => validatePluginContributionReceipt(manifest, "agent", [
+      { type: "hook", registrationId: "before-turn", point: "agent.before_turn" },
+      { type: "hook", registrationId: "before-turn", point: "agent.before_turn" },
+    ]),
+    /duplicate contributions/,
+  );
+});
+
 test("activation result has one protocol shape", () => {
   const result = createPluginActivationResult({ pluginId: "example", surface: "agent" });
   assert.equal(result.protocolVersion, PLUGIN_PROTOCOL_VERSION);
   assert.equal(result.pluginId, "example");
   assert.equal(result.surface, "agent");
   assert.equal(result.status, "activated");
+});
+
+test("protected host ports require their protocol permissions", () => {
+  assert.throws(
+    () => parsePluginManifest({
+      ...manifest,
+      requires: {
+        ...manifest.requires,
+        ports: [...manifest.requires.ports, "model.invoke"],
+      },
+    }),
+    /model\.invoke is required by port model\.invoke/,
+  );
+});
+
+test("plugin lifecycle and contribution identities have one protocol shape", () => {
+  const identity = createPluginContributionIdentity({
+    pluginId: "example",
+    surface: "frontend",
+    localId: "card",
+  });
+  assert.deepEqual(identity, { pluginId: "example", surface: "frontend", localId: "card" });
+  const record = createPluginLifecycleRecord({
+    event: PLUGIN_LIFECYCLE_EVENT.ACTIVATED,
+    entry: { pluginId: "example", surface: "frontend", manifest },
+  });
+  assert.equal(record.event, "plugin.activated");
+  assert.equal(record.pluginId, "example");
+  assert.throws(
+    () => createPluginLifecycleRecord({ event: "plugin.unknown", entry: { pluginId: "example", surface: "frontend", manifest } }),
+    /unsupported plugin lifecycle event/,
+  );
 });
