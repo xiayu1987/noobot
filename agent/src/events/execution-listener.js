@@ -6,6 +6,7 @@
 
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
+import { projectExecutionTransportPayload } from "./transport-payload.js";
 
 const INTERNAL_TRANSPORT_EVENTS = new Set(["turn_lifecycle_committed"]);
 
@@ -73,8 +74,8 @@ export function createExecutionEventListener({
   });
 
   const forwardUpstream = ({ event, data, ts }) => {
-    const enrichedData = enrichEventData(data, defaults);
-    const diagnostic = summarizeDelivery(event, enrichedData);
+    const transportData = projectExecutionTransportPayload({ event, data, route: defaults });
+    const diagnostic = summarizeDelivery(event, transportData);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
     const task = deliveryTail.then(async () => {
       if (shouldDiagnose) {
@@ -91,7 +92,7 @@ export function createExecutionEventListener({
         });
       }
       try {
-        const result = await upstream?.onEvent?.({ event, data: enrichedData, ts });
+        const result = await upstream?.onEvent?.({ event, data: transportData, ts });
         if (result === false) {
           const error = new Error("upstream rejected event delivery");
           error.code = "EVENT_UPSTREAM_DELIVERY_REJECTED";

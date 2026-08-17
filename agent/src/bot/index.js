@@ -24,10 +24,10 @@ export class BotManager {
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
 
-    this.sessionRuntime = createSessionServices(globalConfig);
+    this.attach = new AttachmentService(globalConfig);
+    this.sessionRuntime = createSessionServices(globalConfig, { attachmentService: this.attach });
     this.session = createSessionFacade(this.sessionRuntime);
     this.memory = new MemoryManager(globalConfig);
-    this.attach = new AttachmentService(globalConfig);
     this.skill = new SkillService(globalConfig);
 
     this.workspaceService = new WorkspaceService({ globalConfig });

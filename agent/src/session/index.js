@@ -29,6 +29,7 @@ import {
   createPersistenceContext,
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
+import { AttachmentService } from "../artifacts/index.js";
 
 function createNow(now = null) {
   if (typeof now === "function") return now;
@@ -50,8 +51,12 @@ function normalizeContextServicePayload(payload = {}) {
   };
 }
 
-export function createSessionServices(globalConfig = {}, { now = null } = {}) {
+export function createSessionServices(
+  globalConfig = {},
+  { now = null, attachmentService = null } = {},
+) {
   const nowFn = createNow(now);
+  const canonicalAttachmentService = attachmentService || new AttachmentService(globalConfig);
   const pathResolver = new PathResolver(globalConfig || {});
   const storageService = new StorageService({ pathResolver });
 
@@ -113,6 +118,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     taskRepo: taskRepository,
     treeRepo: sessionTreeRepository,
     sessionTreeService,
+    attachmentService: canonicalAttachmentService,
     now: nowFn,
   });
 
@@ -148,6 +154,7 @@ export function createSessionServices(globalConfig = {}, { now = null } = {}) {
     pathResolver,
     sessionPathResolver,
     storageService,
+    attachmentService: canonicalAttachmentService,
     createScopedPersistenceContext({
       userId = "",
       sessionId = "",

@@ -20,6 +20,10 @@ import { tTool } from "../core/tool-i18n.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { TOOL_NAME } from "../constants/index.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import {
+  buildDualLaneModelContext,
+  MODEL_CONTEXT_LANE,
+} from "@noobot/context-protocol/assembly/dual-lane";
 
 export const REQUEST_HELP_TOOL_NAME = TOOL_NAME.REQUEST_HELP;
 const DEFAULT_HELP_SERVICES = [];
@@ -240,9 +244,14 @@ async function invokeHelpModel({ helpContent, runtime, toolConfig, globalConfig,
   if (!modelPort || typeof modelPort.invoke !== "function") {
     throw new Error("request help requires runtime.modelPort");
   }
+  const modelContext = buildDualLaneModelContext({
+    lane: MODEL_CONTEXT_LANE.AUXILIARY,
+    protocolSystemMessages: [tTool(runtime, "tools.request_help.modelSystemPrompt")],
+    taskMessages: [{ role: "user", content: helpContent }],
+  });
   const response = await modelPort.invoke({
     model: modelSpec,
-    messages: [{ role: "user", content: helpContent }],
+    messages: modelContext.messages,
     options: {
       streaming: false,
       signal: runtime?.abortSignal || undefined,

@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 export {
+  isDraftAttachmentItem,
+  mergeAttachmentDisplayItems,
   resolveAttachmentAccessMeta,
+  resolveAttachmentDisplayKey,
   resolveParsedResultAccessMeta,
 } from "../infrastructure/api/attachments/attachmentAccess.js";

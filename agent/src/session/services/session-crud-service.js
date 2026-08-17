@@ -13,6 +13,7 @@ import { resolveAuthoritativeTurnTerminal } from "@noobot/authoritative-state/ap
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { buildThinkingDetailPayload } from "../session-thinking-detail.js";
 import { reconcileSessionSummaryIndex } from "@noobot/session-repair";
+import { projectSessionAttachmentState } from "./session-attachment-projection.js";
 
 function projectSessionTreeDepth(summary = {}, depth = 0) {
   const normalizedDepth = Number.isFinite(Number(depth)) ? Number(depth) : 0;
@@ -28,12 +29,14 @@ export class SessionCrudService {
     taskRepo = null,
     treeRepo,
     sessionTreeService = null,
+    attachmentService,
     now = () => new Date().toISOString(),
   } = {}) {
     this.sessionRepo = sessionRepo;
     this.taskRepo = taskRepo;
     this.treeRepo = treeRepo;
     this.sessionTreeService = sessionTreeService;
+    this.attachmentService = attachmentService;
     this.now = now;
   }
 
@@ -165,13 +168,19 @@ export class SessionCrudService {
         buildSessionDisplaySummary(currentBundle.session),
         depth,
       );
-      sessions.push({
-        ...currentBundle.session,
-        ...displayProjection,
-        sessionId: currentSessionId,
-        parentSessionId: currentParentSessionId,
-        rawMessages,
-      });
+      sessions.push(
+        await projectSessionAttachmentState({
+          attachmentService: this.attachmentService,
+          userId,
+          session: {
+            ...currentBundle.session,
+            ...displayProjection,
+            sessionId: currentSessionId,
+            parentSessionId: currentParentSessionId,
+            rawMessages,
+          },
+        }),
+      );
     }
 
     return {
@@ -321,14 +330,18 @@ export class SessionCrudService {
       }
       if (!summary) continue;
       sessions.push(
-        projectSessionTreeDepth(
-          {
-            ...summary,
-            sessionId: currentSessionId,
-            parentSessionId: currentParentSessionId,
-          },
-          depth,
-        ),
+        await projectSessionAttachmentState({
+          attachmentService: this.attachmentService,
+          userId,
+          session: projectSessionTreeDepth(
+            {
+              ...summary,
+              sessionId: currentSessionId,
+              parentSessionId: currentParentSessionId,
+            },
+            depth,
+          ),
+        }),
       );
     }
 

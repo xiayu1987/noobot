@@ -7,11 +7,32 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildParsedResultPreviewItem,
+  mergeAttachmentDisplayItems,
   resolveAttachmentAccessMeta,
+  resolveAttachmentDisplayKey,
   resolveParsedResultAccessMeta,
 } from "../../../../src/infrastructure/api/attachments/attachmentAccess.js";
 
 describe("attachmentAccess", () => {
+  it("keeps draft and canonical attachment display identities explicit", () => {
+    const draft = {
+      clientAttachmentId: "draft-1",
+      name: "pending.png",
+      mimeType: "image/png",
+    };
+    const canonical = {
+      attachmentId: "file-1",
+      sessionId: "session-1",
+      attachmentSource: "user",
+      name: "pending.png",
+    };
+
+    expect(resolveAttachmentDisplayKey(draft)).toBe("draft:draft-1");
+    expect(resolveAttachmentDisplayKey(canonical)).toContain("canonical:");
+    expect(resolveParsedResultAccessMeta(draft)).toBeNull();
+    expect(mergeAttachmentDisplayItems([draft], [canonical])).toEqual([draft, canonical]);
+  });
+
   it("ignores explicit source urls and builds access from attachment identity", () => {
     expect(
       resolveAttachmentAccessMeta(

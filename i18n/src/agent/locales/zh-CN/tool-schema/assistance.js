@@ -21,6 +21,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
     },
     texts: {
+      "tools.request_help.modelSystemPrompt":
+        "你是独立帮助模型。分析帮助请求并返回简洁、可执行的建议；不得声称已执行未实际发生的操作。",
       "tools.request_help.helpContentRequired": "helpContent 必填",
       "tools.request_help.requestFailed": "帮助请求失败",
       "tools.request_help.webSearchHelpUnavailable":
@@ -107,8 +109,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.taskIdMissing": "图片生成任务 ID 缺失",
       "tools.multimodal.taskTimeout": (params = {}) =>
         `图片生成任务超时：${String(params.taskId || "").trim()}`,
-      "tools.multimodal.trySwitchApiType":
-        "请检查该模型配置的图片生成接口类型。",
+      "tools.multimodal.trySwitchApiType": "请检查该模型配置的图片生成接口类型。",
     },
   },
   multimodal_parse: {

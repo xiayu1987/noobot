@@ -258,6 +258,85 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
   );
 });
 
+test("successive summary checkpoints preserve the latest task_check before the current summary", async () => {
+  const messages = [
+    {
+      messageUid: "old-check-call",
+      role: "assistant",
+      tool_calls: [{ id: "old-check", name: "task_check" }],
+    },
+    {
+      messageUid: "old-check-result",
+      role: "tool",
+      toolName: "task_check",
+      tool_call_id: "old-check",
+      content: "old",
+    },
+    {
+      messageUid: "old-summary-call",
+      role: "assistant",
+      tool_calls: [{ id: "old-summary", name: "task_summary" }],
+    },
+    {
+      messageUid: "old-summary-result",
+      role: "tool",
+      toolName: "task_summary",
+      tool_call_id: "old-summary",
+      content: "old summary",
+    },
+    {
+      messageUid: "latest-check-call",
+      role: "assistant",
+      tool_calls: [{ id: "latest-check", name: "task_check" }],
+    },
+    {
+      messageUid: "latest-check-result",
+      role: "tool",
+      toolName: "task_check",
+      tool_call_id: "latest-check",
+      content: "latest",
+    },
+    {
+      messageUid: "current-summary-call",
+      role: "assistant",
+      tool_calls: [{ id: "current-summary", name: "task_summary" }],
+    },
+  ];
+  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  let checkpointPayload = null;
+
+  await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        checkpointPayload = payload;
+        return { committed: true, markedCount: 5, checkpointRevision: 2 };
+      },
+    },
+    turnPersister: { async appendAgentMessages() {} },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: {
+      source: "task_summary",
+      summarizedMessageIds: messages.map((message) => message.messageUid),
+    },
+  });
+
+  assert.deepEqual(checkpointPayload.summarizedMessageUids, [
+    "old-check-call",
+    "old-check-result",
+    "old-summary-call",
+    "old-summary-result",
+    "current-summary-call",
+  ]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["latest-check-call", "latest-check-result"],
+  );
+});
+
 test("summary checkpoint does not replay messages already persisted by the timeline checkpoint", async () => {
   const runtime = {
     currentTurnMessages: createCurrentTurnMessagesStore([
