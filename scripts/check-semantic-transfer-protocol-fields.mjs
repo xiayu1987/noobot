@@ -60,7 +60,6 @@ const ATTACHMENT_LEGACY_FIELDS = [
 const ATTACHMENT_LEGACY_ALLOWED_PREFIXES = ["agent/src/artifacts/"];
 const ATTACHMENT_LEGACY_ALLOWED_FILES = new Set([
   "agent/src/artifacts/runtime/artifact-service.js",
-  "agent/src/runtime/facade/agent-runtime-facade.js",
 ]);
 
 function isAttachmentLegacyAllowed(relPath = "") {
