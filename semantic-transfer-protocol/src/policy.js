@@ -28,7 +28,7 @@ export function normalizeTransferPolicy({
 } = {}) {
   if (!policy || typeof policy !== "object" || Array.isArray(policy))
     throw new Error("invalid_transfer_policy");
-  const preference = policy.preference ?? policy.prefer ?? TRANSFER_PREFERENCE.AUTO;
+  const preference = policy.preference ?? TRANSFER_PREFERENCE.AUTO;
   if (!Object.values(TRANSFER_PREFERENCE).includes(preference))
     throw new Error("invalid_transfer_preference");
   return Object.freeze({
@@ -43,8 +43,14 @@ export function decideTransfer({
   forceAttachment = false,
   policy: inputPolicy = {},
   capabilities = {},
+  maxDirectChars = LENGTH_THRESHOLDS.semanticTransfer.directChars,
+  previewChars = LENGTH_THRESHOLDS.semanticTransfer.previewChars,
 } = {}) {
-  const policy = normalizeTransferPolicy({ policy: inputPolicy });
+  const policy = normalizeTransferPolicy({
+    policy: inputPolicy,
+    maxDirectChars,
+    previewChars,
+  });
   const length = typeof content === "string" ? content.length : Number(content?.length || 0);
   if (forceAttachment || policy.preference === TRANSFER_PREFERENCE.ATTACHMENT) {
     if (!policy.allowAttachment || capabilities.attachmentPersistence === false)

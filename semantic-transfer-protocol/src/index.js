@@ -10,6 +10,7 @@ import {
 } from "@noobot/attachment-protocol";
 import { assertSemanticTransferRegistration } from "./registry.js";
 export * from "./registry.js";
+export * from "./policy.js";
 
 export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
 export const TRANSFER_VERSION = 2;
@@ -287,6 +288,12 @@ export function validateTransferEnvelope(value, { strict = false } = {}) {
     } else throw new Error("invalid_payload_mode");
     if (!plain(value.intent)) throw new Error("invalid_intent");
     known(value.intent, INTENT_KEYS, "unknown_intent_field");
+    assertSemanticTransferRegistration({
+      scenario: value.intent.scenario,
+      strategy: value.intent.strategy,
+      category: value.intent.category,
+      businessPoint: value.intent.businessPoint,
+    });
     if (!plain(value.meta)) throw new Error("invalid_meta");
     known(value.meta, META_KEYS, "unknown_meta_field");
     if (value.meta.attributes !== undefined && !plain(value.meta.attributes))
@@ -304,6 +311,72 @@ export function assertTransferEnvelope(value) {
   return value;
 }
 export function transferIdentityKey(value) {
-  return `${required(value.transferId, "invalid_transfer_id")}:${required(value.messageId, "invalid_message_id")}`;
+  return JSON.stringify([
+    required(value.transferId, "invalid_transfer_id"),
+    required(value.messageId, "invalid_message_id"),
+  ]);
+}
+
+function collectTransferEnvelopeCandidates(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function stableProtocolValue(value) {
+  if (Array.isArray(value)) return value.map(stableProtocolValue);
+  if (!plain(value)) return value;
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map((key) => [key, stableProtocolValue(value[key])]),
+  );
+}
+
+function protocolValueKey(value) {
+  return JSON.stringify(stableProtocolValue(value));
+}
+
+export function mergeTransferEnvelopes(...values) {
+  const result = [];
+  const identities = new Map();
+  for (const value of values) {
+    for (const candidate of collectTransferEnvelopeCandidates(value)) {
+      const envelope = assertTransferEnvelope(candidate);
+      const identityKey = transferIdentityKey(envelope);
+      const contentKey = protocolValueKey(envelope);
+      const existingContentKey = identities.get(identityKey);
+      if (existingContentKey === undefined) {
+        identities.set(identityKey, contentKey);
+        result.push(envelope);
+      } else if (existingContentKey !== contentKey) {
+        throw new Error(`transfer_identity_conflict:${identityKey}`);
+      }
+    }
+  }
+  return Object.freeze(result);
+}
+
+export function normalizeTransferEnvelopes(value = null) {
+  return mergeTransferEnvelopes(value);
+}
+
+export function getTransferAttachmentReferences(value = null) {
+  const result = [];
+  const identities = new Map();
+  for (const envelope of normalizeTransferEnvelopes(value)) {
+    if (envelope.payload.mode !== TRANSFER_MODE.ATTACHMENT) continue;
+    for (const reference of envelope.payload.attachments) {
+      const identityKey = attachmentIdentityKey(reference.identity);
+      const contentKey = protocolValueKey(reference);
+      const existingContentKey = identities.get(identityKey);
+      if (existingContentKey === undefined) {
+        identities.set(identityKey, contentKey);
+        result.push(reference);
+      } else if (existingContentKey !== contentKey) {
+        throw new Error(`transfer_attachment_identity_conflict:${identityKey}`);
+      }
+    }
+  }
+  return Object.freeze(result);
 }
 export { attachmentIdentityKey };

@@ -16,8 +16,8 @@ import {
 import {
   getTransferAttachments,
   materializeTextForToolResult,
-  TRANSFER_SOURCE,
 } from "../../transfer-adapter/index.js";
+import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";

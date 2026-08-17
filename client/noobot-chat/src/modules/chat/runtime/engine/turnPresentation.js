@@ -11,7 +11,7 @@ import {
 } from "../../model/messageIdentity.js";
 import { isTurnRuntimeDeleted } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import { getMessageTransferEnvelopes, mergeTransferEnvelopes } from "../../model/transferEnvelopes.js";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -331,36 +331,17 @@ export function selectTurnPresentations({
     if (!key) continue;
     const envelopes = getMessageTransferEnvelopes(message);
     if (!envelopes.length) continue;
-    const existing = envelopesByTurn.get(key) || [];
-    const seen = new Set(
-      existing.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`),
-    );
-    for (const envelope of envelopes) {
-      const identity = `${envelope?.transferId || ""}:${envelope?.messageId || ""}`;
-      if (seen.has(identity)) continue;
-      seen.add(identity);
-      existing.push(envelope);
-    }
-    envelopesByTurn.set(key, existing);
+    envelopesByTurn.set(key, mergeTransferEnvelopes(envelopesByTurn.get(key) || [], envelopes));
   }
   const projectedSourceMessages = sourceMessages.map((message) => {
     if (getMessageRole(message) !== "assistant") return message;
     const messageKey = messageTurnKey(message, activeSessionId);
     const envelopes = envelopesByTurn.get(messageKey) || [];
     if (!envelopes.length) return message;
-    const existing = getMessageTransferEnvelopes(message);
-    const seen = new Set(
-      existing.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`),
-    );
-    const merged = [...existing];
-    for (const envelope of envelopes) {
-      const identity = `${envelope?.transferId || ""}:${envelope?.messageId || ""}`;
-      if (!seen.has(identity)) {
-        seen.add(identity);
-        merged.push(envelope);
-      }
-    }
-    return { ...message, transferEnvelopes: merged };
+    return {
+      ...message,
+      transferEnvelopes: mergeTransferEnvelopes(getMessageTransferEnvelopes(message), envelopes),
+    };
   });
   const terminalStatuses = terminalStatusesFromRuntime(turnRuntimeRegistry, activeSessionId).filter(
     (status) =>

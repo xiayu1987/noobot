@@ -84,14 +84,16 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   );
 });
 
-test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
-  const normalized = normalizeMessageEntity({
-    role: "assistant",
-    content: "done",
-    transferEnvelopes: { protocol: "noobot.semantic-transfer" },
-  });
-
-  assert.equal("transferEnvelopes" in normalized, false);
+test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
+  assert.throws(
+    () =>
+      normalizeMessageEntity({
+        role: "assistant",
+        content: "done",
+        transferEnvelopes: { protocol: "noobot.semantic-transfer" },
+      }),
+    /invalid_transfer_envelope:invalid_version/,
+  );
 });
 
 test("normalizeMessageEntity omits empty attachments", () => {

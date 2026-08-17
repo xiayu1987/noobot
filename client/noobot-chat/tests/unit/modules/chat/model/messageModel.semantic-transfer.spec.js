@@ -101,13 +101,11 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("rejects path-based transfer payloads without rebuilding an attachment", () => {
-    const message = buildViewMessage({
+    expect(() => buildViewMessage({
       role: "assistant",
       content: "done",
       transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }],
-    });
-    expect(message.transferEnvelopes).toEqual([]);
-    expect(message.attachments).toEqual([]);
+    })).toThrow("invalid_transfer_envelope:forbidden_path_field:envelope.filePath");
   });
 
   it("preserves canonical parsed-result relations without creating derived fields", () => {

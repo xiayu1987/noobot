@@ -15,7 +15,11 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import {
+  IDENTITY,
+  createRuntime,
+  hasChromiumCapability,
+} from "./native-script-tool.fixtures.js";
 
 test("execute_native_script rejects host runtime escape syntax before execution", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-guard-"));
@@ -255,7 +259,11 @@ log(String(ffmpeg.run));
   );
 });
 
-test("execute_native_script browser rejects non-HTTP navigation protocols", async () => {
+test("execute_native_script browser rejects non-HTTP navigation protocols", async (t) => {
+  if (!(await hasChromiumCapability())) {
+    t.skip("Playwright Chromium is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-protocol-"));
   const runtime = createRuntime(basePath);
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });

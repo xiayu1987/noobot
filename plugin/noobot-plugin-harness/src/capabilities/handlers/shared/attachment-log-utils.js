@@ -16,7 +16,7 @@ import {
   resolveCurrentTurnMessagesStore,
 } from "./message/injected-message-utils.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
-import { assertTransferEnvelope, transferIdentityKey } from "@noobot/semantic-transfer-protocol";
+import { mergeTransferEnvelopes, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {
@@ -29,9 +29,7 @@ function normalizeString(value = "") {
 
 export function normalizeTransferPayload(payload = {}) {
   const source = isPlainObject(payload) ? payload : {};
-  const transferEnvelopes = Array.isArray(source.transferEnvelopes)
-    ? source.transferEnvelopes.map((envelope) => assertTransferEnvelope(envelope))
-    : [];
+  const transferEnvelopes = normalizeTransferEnvelopes(source.transferEnvelopes || []);
   return {
     transferEnvelopes,
   };
@@ -41,16 +39,10 @@ export function applyTransferPayloadToMessage(message = {}, payload = {}) {
   if (!message || typeof message !== "object") return message;
   const transferPayload = normalizeTransferPayload(payload);
   if (transferPayload.transferEnvelopes.length) {
-    const existing = Array.isArray(message.transferEnvelopes) ? message.transferEnvelopes : [];
-    const merged = existing.map((envelope) => assertTransferEnvelope(envelope));
-    const seen = new Set(merged.map((envelope) => transferIdentityKey(envelope)));
-    for (const envelope of transferPayload.transferEnvelopes) {
-      const key = transferIdentityKey(envelope);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(envelope);
-    }
-    message.transferEnvelopes = merged;
+    message.transferEnvelopes = mergeTransferEnvelopes(
+      message.transferEnvelopes || [],
+      transferPayload.transferEnvelopes,
+    );
   }
   return message;
 }

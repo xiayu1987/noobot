@@ -8,6 +8,7 @@ import { config } from "../../shared/config.js";
 import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";
 import { TURN_EVENT, validateTurnLifecycleReceipt } from "@noobot/session-protocol";
+import { createAgentTransportEvent } from "@noobot/agent-transport-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -130,8 +131,9 @@ class SubscriberBroadcastMethods {
 
   sendChannelEvent(channel, targetSocket, envelope) {
     if (!targetSocket) return { result: "skipped", reason: "socket_missing" };
+    const deliveryEnvelope = this.projectChannelEventForDelivery(channel, envelope);
     if (envelope?.event !== EVENT_TYPE.TURN_LIFECYCLE) {
-      return this.sendSocketEvent(targetSocket, envelope);
+      return this.sendSocketEvent(targetSocket, deliveryEnvelope);
     }
     const eventData = envelope?.data || {};
     const eventId = String(eventData.eventId || "").trim();
@@ -153,7 +155,7 @@ class SubscriberBroadcastMethods {
     const queueKey = `${channel.key}\u0000${sessionId}\u0000${turnScopeId}`;
     const delivery = {
       channel,
-      envelope,
+      envelope: deliveryEnvelope,
       eventId,
       eventType: String(eventData.eventType || "").trim(),
       sessionId,
@@ -173,6 +175,16 @@ class SubscriberBroadcastMethods {
       return { result: "queued", reason: "waiting_for_prior_receipt" };
     }
     return this._deliverPendingLifecycle(targetSocket, delivery);
+  }
+
+  projectChannelEventForDelivery(channel, envelope) {
+    if (!channel || !envelope) return envelope;
+    const channelSessionId = String(this._extractSessionIdFromChannelKey(channel.key) || "").trim();
+    return createAgentTransportEvent({
+      event: envelope.event,
+      data: envelope.data,
+      channelSessionId,
+    });
   }
 
   _deliverPendingLifecycle(targetSocket, delivery) {
@@ -456,6 +468,9 @@ class SubscriberBroadcastMethods {
         JSON.stringify({
           event: envelope.event,
           data: envelope.data,
+          ...(String(envelope.channelSessionId || "").trim()
+            ? { channelSessionId: String(envelope.channelSessionId).trim() }
+            : {}),
         }),
       );
       return { result: "sent", reason: "" };

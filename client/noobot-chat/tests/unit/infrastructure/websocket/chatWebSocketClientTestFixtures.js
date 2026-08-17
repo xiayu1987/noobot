@@ -34,8 +34,14 @@ export class MockWebSocket {
     this.onclose?.({ code, reason });
   }
 
-  emit(event, data = {}) {
-    this.onmessage?.({ data: JSON.stringify({ event, data }) });
+  emit(event, data = {}, channelSessionId = "") {
+    this.onmessage?.({
+      data: JSON.stringify({
+        event,
+        data,
+        ...(channelSessionId ? { channelSessionId } : {}),
+      }),
+    });
   }
 }
 

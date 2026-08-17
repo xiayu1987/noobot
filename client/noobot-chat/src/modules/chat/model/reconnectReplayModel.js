@@ -7,7 +7,7 @@ import { RoleEnum, StreamEventEnum } from "./chatConstants.js";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-  normalizeTransferEnvelopes,
+  mergeTransferEnvelopes,
 } from "./transferEnvelopes.js";
 import { getMessageAttachments } from "./messageModel.js";
 import {
@@ -176,25 +176,8 @@ function hasArrayItems(value = null) {
   return Array.isArray(value) && value.length > 0;
 }
 
-function buildTransferEnvelopeKey(envelope = {}) {
-  return [envelope?.protocol, envelope?.version, envelope?.transferId, envelope?.messageId]
-    .map((item) => String(item || "").trim())
-    .filter(Boolean)
-    .join("::");
-}
-
-function mergeTransferEnvelopes(...values) {
-  const merged = [];
-  const seen = new Set();
-  for (const value of values) {
-    for (const envelope of normalizeTransferEnvelopes(value)) {
-      const key = buildTransferEnvelopeKey(envelope) || JSON.stringify(envelope);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(envelope);
-    }
-  }
-  return merged;
+function mergeReplayTransferEnvelopes(...values) {
+  return mergeTransferEnvelopes(...values);
 }
 
 function messageCompareKey(messageItem = {}) {
@@ -342,7 +325,7 @@ function patchMessageObjectPreservingUiState(
       targetMessage.modelRuns = existingModelRuns;
     }
   }
-  const mergedTransferEnvelopes = mergeTransferEnvelopes(
+  const mergedTransferEnvelopes = mergeReplayTransferEnvelopes(
     existingTransferEnvelopes,
     sourceTransferEnvelopes,
   );

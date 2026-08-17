@@ -22,11 +22,16 @@ function transferEnvelope({ transferId = "transfer-1", content = "payload" } = {
       sessionId: "session-1",
       turnScopeId: "turn-1",
       runId: "run-1",
-      producer: { type: "model", id: "model-1" },
+      producer: { type: "tool", id: "call-1" },
     },
     direction: "output",
     payload: { mode: "direct", content },
-    intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: {},
   };
 }
@@ -78,9 +83,9 @@ test("Session Record projection rejects malformed collections and transfer facts
     /attachments to be an array/,
   );
   assert.throws(() => normalizeContextTransferEnvelopes([{}]), /invalid_transfer_envelope/);
-  assert.throws(
-    () => normalizeContextTransferEnvelopes([transferEnvelope(), transferEnvelope()]),
-    /transfer identity conflict/,
+  assert.deepEqual(
+    normalizeContextTransferEnvelopes([transferEnvelope(), transferEnvelope()]),
+    [transferEnvelope()],
   );
   assert.throws(
     () =>
@@ -88,6 +93,6 @@ test("Session Record projection rejects malformed collections and transfer facts
         transferEnvelope(),
         transferEnvelope({ content: "conflicting payload" }),
       ]),
-    /transfer identity conflict/,
+    /transfer_identity_conflict/,
   );
 });

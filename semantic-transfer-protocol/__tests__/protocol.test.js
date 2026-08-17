@@ -15,6 +15,10 @@ import {
   getToolInputPolicy,
   getToolOutputPolicy,
   hasToolInputPolicy,
+  assertTransferEnvelope,
+  getTransferAttachmentReferences,
+  mergeTransferEnvelopes,
+  transferIdentityKey,
 } from "../src/index.js";
 import { decideTransfer } from "../src/policy.js";
 
@@ -223,4 +227,56 @@ test("tool input and output policies come from the protocol registry", () => {
   assert.equal(getToolOutputPolicy("multimodal_generate").type, "attachment_bytes");
   assert.throws(() => getToolInputPolicy("unknown"), /tool_input_policy_not_registered/);
   assert.throws(() => getToolOutputPolicy("unknown"), /tool_output_policy_not_registered/);
+});
+
+
+test("strict validation rejects unregistered incoming semantics", () => {
+  const envelope = directTransfer({
+    transferId: "strict-registration",
+    messageId: "m-strict-registration",
+    identity,
+    direction: "output",
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    content: "ok",
+  });
+  const invalid = { ...envelope, intent: { ...envelope.intent, strategy: "unknown" } };
+  assert.throws(() => assertTransferEnvelope(invalid), /semantic_transfer_strategy_not_registered/);
+});
+
+test("transfer identity key is unambiguous", () => {
+  assert.notEqual(
+    transferIdentityKey({ transferId: "a:b", messageId: "c" }),
+    transferIdentityKey({ transferId: "a", messageId: "b:c" }),
+  );
+});
+
+test("mergeTransferEnvelopes is ordered, idempotent, and rejects identity conflicts", () => {
+  const envelope = directTransfer({
+    transferId: "merge-1",
+    messageId: "merge-message",
+    identity,
+    direction: "output",
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    content: "same",
+  });
+  assert.deepEqual(mergeTransferEnvelopes([envelope], envelope), [envelope]);
+  assert.throws(
+    () => mergeTransferEnvelopes(envelope, { ...envelope, payload: { ...envelope.payload, content: "different" } }),
+    /transfer_identity_conflict/,
+  );
+});
+
+test("attachment references have one canonical conflict-aware projection", () => {
+  const envelope = attachmentTransfer({
+    transferId: "refs-1",
+    messageId: "refs-message",
+    identity,
+    direction: "output",
+    intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
+    attachments: [{
+      identity: { attachmentId: "ref-1", sessionId: "s1", attachmentSource: "model" },
+      name: "result.txt",
+    }],
+  });
+  assert.equal(getTransferAttachmentReferences([envelope, envelope]).length, 1);
 });

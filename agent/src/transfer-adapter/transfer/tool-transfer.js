@@ -5,14 +5,15 @@
  */
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
-  TRANSFER_DIRECTION,
   TRANSFER_REASON,
-  TRANSFER_SOURCE,
 } from "../core/constants.js";
 import {
   createTransferEnvelope,
+  decideTransfer,
   directTransfer,
+  TRANSFER_DIRECTION,
   TRANSFER_MODE,
+  TRANSFER_SOURCE,
   getToolInputPolicy,
 } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
@@ -250,14 +251,15 @@ export async function transferToolInput({
     resolveToolResultInlineTextLimit(runtime),
     0,
   );
-  const shouldPersist =
-    forceAttachment === true ||
-    callOverflow?.forceAttachment === true ||
-    normalizedText.length > maxInline;
+  const decision = decideTransfer({
+    content: normalizedText,
+    forceAttachment: forceAttachment === true || callOverflow?.forceAttachment === true,
+    policy: { maxDirectChars: maxInline },
+  });
   const inputExceeded =
-    callOverflow?.exceeded === true || normalizedText.length > maxInline;
+    callOverflow?.exceeded === true || decision.reason === "threshold_exceeded";
 
-  if (!shouldPersist) {
+  if (decision.mode === TRANSFER_MODE.DIRECT) {
     const envelopeMeta = buildToolInputTransferMeta({
       baseMeta: resolvedMeta,
       normalizedText,

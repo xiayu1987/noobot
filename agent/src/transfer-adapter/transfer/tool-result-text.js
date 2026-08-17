@@ -3,7 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON } from "../core/constants.js";
+import {
+  decideTransfer,
+  normalizeTransferEnvelopes,
+  TRANSFER_MODE,
+  TRANSFER_SOURCE,
+} from "@noobot/semantic-transfer-protocol";
 import { firstNormalizedString } from "../core/compact.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import {
@@ -47,9 +53,7 @@ export function buildTextResultFields({
   strategy = "tool_result_text",
 } = {}) {
   const normalizedText = String(text || "");
-  const normalizedTransferEnvelopes = Array.isArray(transferEnvelopes)
-    ? transferEnvelopes.filter((item) => item && typeof item === "object" && !Array.isArray(item))
-    : [];
+  const normalizedTransferEnvelopes = normalizeTransferEnvelopes(transferEnvelopes);
   const maxInline = toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
   const maxPreview = toSafePositiveInt(previewChars, DEFAULT_PREVIEW_CHARS, 0);
   const shouldInline = !forcePreview && normalizedText.length <= maxInline;
@@ -106,9 +110,13 @@ export async function materializeTextForToolResult({
     inlineMaxChars == null
       ? resolveToolResultInlineTextLimit(runtime)
       : toSafePositiveInt(inlineMaxChars, DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, 0);
-  const shouldPersist = alwaysPersist || normalizedText.length > maxInline;
+  const decision = decideTransfer({
+    content: normalizedText,
+    forceAttachment: alwaysPersist,
+    policy: { maxDirectChars: maxInline },
+  });
   let persisted = null;
-  if (shouldPersist) {
+  if (decision.mode === TRANSFER_MODE.ATTACHMENT) {
     persisted = await persistTransferFile({
       runtime,
       agentContext,
@@ -130,15 +138,13 @@ export async function materializeTextForToolResult({
     });
   }
 
-  const persistedTransferEnvelopes = Array.isArray(persisted?.transferEnvelopes)
-    ? persisted.transferEnvelopes.filter(
-        (item) => item && typeof item === "object" && !Array.isArray(item),
-      )
-    : [];
-  if (shouldPersist && !persistedTransferEnvelopes.length) {
+  const persistedTransferEnvelopes = normalizeTransferEnvelopes(
+    persisted?.transferEnvelopes,
+  );
+  if (decision.mode === TRANSFER_MODE.ATTACHMENT && !persistedTransferEnvelopes.length) {
     throw new Error("semantic_transfer_attachment_persistence_required");
   }
-  const transferEnvelopes = shouldPersist
+  const transferEnvelopes = decision.mode === TRANSFER_MODE.ATTACHMENT
     ? persistedTransferEnvelopes
     : [
         createDirectTransferEnvelope({

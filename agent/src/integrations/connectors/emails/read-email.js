@@ -6,29 +6,15 @@
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeEmailConnectionInfo } from "./connection.js";
 import { MIME_TYPE } from "../../../shared/constants/index.js";
+import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 const INLINE_ATTACHMENT_ITEM_PREFIX = "INLINE";
 const INLINE_ATTACHMENT_BLOCK_START = "[INLINE_ATTACHMENTS]";
 const INLINE_ATTACHMENT_BLOCK_END = "[/INLINE_ATTACHMENTS]";
 const INLINE_ATTACHMENT_TITLE_TEXT = "INLINE_ATTACHMENTS";
 
-function appendUniqueTransferEnvelope(target = [], envelope = null, seenKeys = new Set()) {
-  if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return;
-  const key = JSON.stringify(envelope);
-  if (seenKeys.has(key)) return;
-  seenKeys.add(key);
-  target.push(envelope);
-}
-
 function normalizeTransferEnvelopesFromPayload(payload = null) {
-  const transferEnvelopes = [];
-  const seenKeys = new Set();
-  if (Array.isArray(payload?.transferEnvelopes)) {
-    for (const envelope of payload.transferEnvelopes) {
-      appendUniqueTransferEnvelope(transferEnvelopes, envelope, seenKeys);
-    }
-  }
-  return transferEnvelopes;
+  return normalizeTransferEnvelopes(payload?.transferEnvelopes || []);
 }
 
 async function saveEmailAttachments({

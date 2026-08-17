@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { TRANSFER_REASON, TRANSFER_SOURCE } from "./constants.js";
+import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_REASON } from "./constants.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -11,11 +12,6 @@ function normalizeString(value = "") {
 
 const KNOWN_SOURCES = new Set(Object.values(TRANSFER_SOURCE));
 const KNOWN_REASONS = new Set(Object.values(TRANSFER_REASON));
-
-const SOURCE_ALIAS = Object.freeze({
-  child_agent: TRANSFER_SOURCE.CHILD_AGENT,
-  bot_plugin: TRANSFER_SOURCE.PLUGIN,
-});
 
 const REASON_ALIAS = Object.freeze({
   semantic_transfer: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
@@ -29,7 +25,6 @@ export function normalizeTransferSource(
   const normalized = normalizeString(value).toLowerCase();
   if (!normalized) return fallback;
   if (KNOWN_SOURCES.has(normalized)) return normalized;
-  if (SOURCE_ALIAS[normalized]) return SOURCE_ALIAS[normalized];
   return allowCustom ? normalized : fallback;
 }
 

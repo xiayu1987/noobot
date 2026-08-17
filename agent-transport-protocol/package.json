@@ -9,6 +9,7 @@
     "./commands": "./src/commands.js",
     "./run-preferences": "./src/run-preferences.js",
     "./diagnostics": "./src/diagnostics.js",
+    "./events": "./src/events.js",
     "./package.json": "./package.json",
     "./bot-dispatch": "./src/bot-dispatch.js"
   },

@@ -15,6 +15,8 @@ import {
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
+  createAgentTransportEvent,
+  getAgentTransportEventSessionId,
   getAgentCommandIdentity,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
@@ -220,8 +222,9 @@ export function createChatWebSocketClient({
         let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const event = String(parsed?.event || "message");
-          const data = parsed?.data || {};
+          const transportEvent = createAgentTransportEvent(parsed);
+          const { event, data } = transportEvent;
+          const channelSessionId = getAgentTransportEventSessionId(transportEvent);
           parsedEvent = event;
           parsedData = data;
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
@@ -259,7 +262,7 @@ export function createChatWebSocketClient({
                 : "unowned";
           const dispatchEligible = owner !== "unowned";
           if (owner === "unowned" && event === "message_event") {
-            pendingMessageEvents.push({ event, data });
+            pendingMessageEvents.push(transportEvent);
             return;
           }
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
@@ -303,11 +306,11 @@ export function createChatWebSocketClient({
             acknowledgeTurnLifecycleReceipt(ws, event, data);
           }
           if (owner === "reconnect_handler") {
-            activeReconnectContext.handleProtocolEvent({ event, data });
+            activeReconnectContext.handleProtocolEvent(transportEvent);
           } else if (owner === "stream_handler") {
-            activeStreamContext.handleProtocolEvent({ event, data });
+            activeStreamContext.handleProtocolEvent(transportEvent);
           } else if (owner === "transport_live_subscriber") {
-            liveEventSubscriber({ event, data });
+            liveEventSubscriber(transportEvent);
           }
           logWorkflowDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
@@ -541,13 +544,24 @@ export function createChatWebSocketClient({
         if (!streamSocket) return;
         unregisterHandshakeHandlers();
         unregisterStreamHandlers();
-        const handleProtocolEvent = ({ event, data }) => {
+        const handleProtocolEvent = (transportEvent) => {
           if (settled) return;
           try {
+            const { event, data } = transportEvent;
+            const channelSessionId = getAgentTransportEventSessionId(transportEvent);
             if (event === "transport_ready") return;
-            onEvent({ event, data });
-            const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
-            const eventCanSettleCurrentStream = canSettleStreamForEvent(data, payload);
+            const eventMatchesCurrentStream = isEventForStreamScope(
+              data,
+              payload,
+              channelSessionId,
+            );
+            if (!eventMatchesCurrentStream) return;
+            onEvent(transportEvent);
+            const eventCanSettleCurrentStream = canSettleStreamForEvent(
+              data,
+              payload,
+              channelSessionId,
+            );
             if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
               finalize(() => reject(createStreamEventError(data, translateText)));
               return;
@@ -590,7 +604,9 @@ export function createChatWebSocketClient({
           };
           const pending = pendingMessageEvents.splice(0, pendingMessageEvents.length);
           for (const packet of pending) {
-            if (isEventForStreamScope(packet.data, payload)) handleProtocolEvent(packet);
+            if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
+              handleProtocolEvent(packet);
+            }
             else pendingMessageEvents.push(packet);
           }
         }
