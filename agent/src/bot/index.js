@@ -122,6 +122,10 @@ export class BotManager {
     });
   }
 
+  deleteSessionMemoryBySessionIds({ userId, sessionIds = [] } = {}) {
+    return this.memory.deleteSessionMemoryBySessionIds({ userId, sessionIds });
+  }
+
   async deleteToolResultOverflowBySessionIds({ userId, sessionIds = [] } = {}) {
     const basePath = String(this.getWorkspacePath(userId) || "").trim();
     const normalizedIds = [

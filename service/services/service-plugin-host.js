@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  collectSessionDeletionHookResult,
+  createHookManager,
+  HOOK_POINT,
+} from "@noobot/hook-protocol";
 import {
   PLUGIN_SURFACE,
   requireDeclaredPluginHook,
@@ -164,22 +168,32 @@ export function createServicePluginHost({
       return buildNoobotPluginDiagnostics(runtime);
     },
 
-    async emitAfterSessionDelete({ bot = null, userId = "", sessionId = "", deletedSessionIds = [] } = {}) {
+    async emitAfterSessionDelete({
+      bot = null,
+      userId = "",
+      sessionId = "",
+      deletedSessionIds = [],
+      remainingSessionIds = [],
+    } = {}) {
       if (!activationPromise) throw new Error("service plugins must be activated during HTTP startup");
       await activationPromise;
       const basePath = bot && typeof bot.getWorkspacePath === "function"
         ? String(bot.getWorkspacePath(userId) || "").trim()
         : "";
-      if (!basePath) return;
-      await hookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
+      if (!basePath) return collectSessionDeletionHookResult();
+      const hookResult = await hookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
         deletedSessionIds: Array.isArray(deletedSessionIds)
           ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
           : [],
+        remainingSessionIds: Array.isArray(remainingSessionIds)
+          ? remainingSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+          : [],
         basePath,
         executionScope: "primary",
       });
+      return collectSessionDeletionHookResult(hookResult);
     },
 
     async dispose() {
