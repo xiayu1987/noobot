@@ -13,13 +13,17 @@ import { resetRunState } from "./connection-state.js";
 import { TURN_PHASE } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
+  createAgentCommandReceipt,
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { createMessageQueryHandlers } from "./message-query-handlers.js";
 import { createMessageStopHandler } from "./message-stop-handler.js";
 import { createMessageRunHandler } from "./message-run-handler.js";
+import { sendFailedCommandReceipt } from "./command-receipt.js";
 
 export function createMessageHandler({
   state,
@@ -99,15 +103,30 @@ export function createMessageHandler({
       }
       if (!RUN_COMMAND_TYPES.includes(commandType)) throw new Error("unsupported_agent_command");
       if (state.isRunning) {
-        sendEvent("error", { error: translateText("ws.sessionAlreadyRunning", state.currentLocale) });
+        sendFailedCommandReceipt(sendEvent, command, {
+          code: "session_already_running",
+          message: translateText("ws.sessionAlreadyRunning", state.currentLocale),
+        });
         return;
       }
       runMessageStarted = true;
       const runResult = await handleRun(command, {
         onRunBound: (handle) => { boundRunHandle = handle; },
       });
-      if (runResult?.rebound === true) runMessageStarted = false;
+      if (runResult?.rebound === true) {
+        runMessageStarted = false;
+        sendEvent(
+          AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+          createAgentCommandReceipt({
+            commandId: command.commandId,
+            commandType: command.commandType,
+            outcome: AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND,
+            identity: command.identity,
+          }),
+        );
+      }
     } catch (error) {
+      if (!parsedCommand && error?.command) parsedCommand = error.command;
       if (!runMessageStarted || !state.currentRunMeta) {
         void recordServiceAgentTransportDebug({
           sessionLogConfig,
@@ -130,14 +149,12 @@ export function createMessageHandler({
           event: "service.websocket.request.rejected",
           data: { errorType: error?.name || "Error", errorCode: String(error?.errorCode || error?.code || "") },
         });
-        sendEvent("error", {
-          error: error?.message || translateText("ws.unknownError", state.currentLocale),
-          status: Number(error?.statusCode || error?.status || 0) || undefined,
-          errorCode: String(error?.errorCode || error?.code || "").trim() || undefined,
-          currentVersion: error?.currentVersion,
-          sessionId: state.currentRunMeta?.sessionId || "",
-          turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
-        });
+        if (parsedCommand) {
+          sendFailedCommandReceipt(sendEvent, parsedCommand, {
+            code: String(error?.errors?.[0] || error?.errorCode || error?.code || "invalid_command").trim(),
+            message: error?.message || translateText("ws.unknownError", state.currentLocale),
+          });
+        }
         webSocket.close(1008, "invalid request");
         return;
       }

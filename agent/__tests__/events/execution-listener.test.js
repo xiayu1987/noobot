@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   ATTACHMENT_EVENT_TYPE,
   ATTACHMENT_LIFECYCLE,
@@ -49,7 +50,8 @@ test("execution listener forwards the authoritative persistence scope and its de
     },
   });
 
-  assert.equal(persisted.length, 0);
+  await listener.flushPersistence();
+  assert.equal(persisted.length, 1);
   assert.equal(result, delivered);
   assert.equal(forwarded.length, 1);
   assert.deepEqual(forwarded[0].data.envelope, {
@@ -166,11 +168,25 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
     },
   });
 
-  await listener.onEvent({ event: "attachment_lifecycle", data: lifecycle });
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    identity: {
+      eventId: "attachment-authority-event-a",
+      eventType: "attachment_lifecycle",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      messageId: lifecycle.messageId,
+    },
+    ordering: { domain: "attachment-lifecycle", scopeId: "source-a:session-a:user", sequence: 1 },
+    producer: { type: "tool", id: "multimodal_parse" },
+    occurredAt: lifecycle.occurredAt,
+    payload: lifecycle,
+  });
+  await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
 
-  assert.deepEqual(forwarded, { event: "attachment_lifecycle", data: lifecycle, ts: forwarded.ts });
-  assert.equal("dialogProcessId" in forwarded.data, false);
-  assert.equal("parentSessionId" in forwarded.data, false);
+  assert.equal(forwarded.event, "authority_event_committed");
+  assert.deepEqual(forwarded.data.envelope, envelope);
+  assert.deepEqual(forwarded.data.envelope.payload, lifecycle);
 });
 
 test("execution listener classifies context identity diagnostics under one protocol category", async () => {
@@ -248,15 +264,27 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
     },
   });
 
-  const delivered = await listener.onEvent({
-    event: "authoritative_final_content",
-    data: {
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
       eventId: "event-final",
-      eventType: "authoritative_final_content",
+      eventType: "message_event",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
       messageId: "message-final",
+    },
+    ordering: { domain: "message-event", scopeId: "message-final", sequence: 1 },
+    producer: { type: "agent", id: "test-agent" },
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    payload: {
+      eventType: "authoritative_final_content",
       presentationMessageId: "presentation-final",
       text: "complete body",
     },
+  });
+  const delivered = await listener.onEvent({
+    event: "authority_event_committed",
+    data: { envelope },
   });
 
   assert.equal(delivered, false);
@@ -264,6 +292,7 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
     listener.flushDelivery(),
     (error) =>
       error?.code === "EVENT_UPSTREAM_DELIVERY_FAILED" &&
-      error?.failures?.[0]?.eventId === "event-final",
+      error?.failures?.[0]?.eventId === "event-final" &&
+      error?.failures?.[0]?.sourceEvent === "authority_event_committed",
   );
 });

@@ -11,11 +11,15 @@ import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/consta
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
+  canonicalInteractionRequest,
+  canonicalMessageEvent,
   FakeUpstreamWebSocket,
   getEvent,
   listEvents,
   sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -41,12 +45,9 @@ test("reconnect state should be consistent for all same-user clients across chan
     const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId });
     channel.ownerApiKey = "api-key-1";
     channel.ownerUserId = "user-1";
-    manager.pushChannelEvent(channel, "thinking", {
-      sessionId,
-      dialogProcessId: dpId,
-      seq: 1,
-      text: item.status,
-    });
+    manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
+      sessionId, turnScopeId: `turn-${item.status}`, text: item.status,
+    }));
     channel.status = item.status;
   }
 
@@ -97,12 +98,7 @@ test("reconnect state should be isolated between different users", () => {
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, "delta", {
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    seq: 1,
-    text: "hello",
-  });
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({ text: "hello" }));
 
   const otherUserClient = createMockSocket({ apiKey: "api-key-2", userId: "user-2" });
   manager.handleReconnect(otherUserClient, {
@@ -114,26 +110,22 @@ test("reconnect state should be isolated between different users", () => {
   assert.deepEqual(reconnectData?.data?.sessions || [], []);
 });
 
-test("reconnect should include conversationStates snapshot", () => {
+test("reconnect should include pending interactions without a conversationStates snapshot", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, "thinking", {
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    seq: 1,
-  });
-  manager.pushChannelEvent(channel, "interaction_request", {
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
+  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, canonicalInteractionRequest({
     sessionId: "session-1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
     requestId: "req-1",
     content: "confirm",
-    seq: 2,
-  });
+    sequence: 2,
+  }));
 
   const client = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
   manager.handleReconnect(client, {
@@ -145,9 +137,9 @@ test("reconnect should include conversationStates snapshot", () => {
     (item) => String(item?.sessionId || "") === "session-1",
   );
   const pendingInteraction = sessionEntry?.replayBatch?.pendingInteractions?.find(
-    (item) => String(item?.data?.requestId || item?.requestId || "") === "req-1",
+    (item) => item?.payload?.requestId === "req-1",
   );
-  assert.equal(pendingInteraction?.data?.dialogProcessId || pendingInteraction?.dialogProcessId, "dp-1");
+  assert.equal(pendingInteraction?.payload?.dialogProcessId, "dp-1");
   assert.equal("conversationStates" in sessionEntry, false);
   assert.equal("currentRun" in sessionEntry, false);
 });
@@ -199,11 +191,7 @@ test("reconnect does not expose the removed data-plane cache-expiry branch", () 
   channel.status = "connecting";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, "thinking", {
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    seq: 1,
-  });
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
 
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.handleReconnect(client, {

@@ -248,12 +248,15 @@ export function createReconnectCoordinator({
             identity: { sessionId },
             query: payload,
           }), { expectedEvents: [expectedEvent] });
-          const result = await reconnectReplay.applyReconnectEvent(response?.event, response?.data || {});
+          const result = await reconnectReplay.applyReconnectEvent(
+            response?.identity?.eventType,
+            response,
+          );
           logStateMachineDebug("stateMachine.reconnect.executionQuery.after", () => ({
             sessionId: reconnectSessionId,
             commandType: action,
             commandId,
-            responseEvent: String(response?.event || ""),
+            responseEvent: String(response?.identity?.eventType || ""),
             applied: result?.applied === true,
             reason: String(result?.reason || ""),
           }));

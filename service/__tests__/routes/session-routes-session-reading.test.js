@@ -168,7 +168,7 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
   });
 });
 
-test("session-routes: session detail rebuilds running workflow projection from persisted execution events", async () => {
+test("session-routes: session detail does not project workflow state from observability logs", async () => {
   const workspaceRoot = await fs.mkdtemp(
     path.join(os.tmpdir(), "noobot-workflow-runtime-projection-"),
   );
@@ -248,17 +248,7 @@ test("session-routes: session detail rebuilds running workflow projection from p
     const response = await fetch(`${baseUrl}/internal/session/u1/s-workflow`);
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(payload.workflowRuntimeEvents.length, 3);
-    assert.equal(payload.workflowRuntimeEvents[0].data.turnScopeId, "client-turn:one");
-    assert.equal(
-      payload.workflowRuntimeEvents[0].data.presentationMessageId,
-      "assistant-presentation-one",
-    );
-    assert.equal(payload.workflowRuntimeEvents[0].sequenceDomain, "workflow-planning");
-    assert.equal(payload.workflowRuntimeEvents[1].data.status, "running");
-    assert.equal(payload.workflowRuntimeEvents[2].data.status, "succeeded");
-    assert.equal(payload.workflowRuntimeEvents[2].data.revision, 3);
-    assert.equal(payload.workflowRuntimeEvents[2].sequenceDomain, "workflow-node-state");
+    assert.equal("workflowRuntimeEvents" in payload, false);
   });
 });
 
@@ -305,7 +295,7 @@ test("session-routes: deleted Turn audit events are not returned as workflow UI 
     const response = await fetch(`${baseUrl}/internal/session/u1/s-deleted-workflow`);
     const payload = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(payload.workflowRuntimeEvents, []);
+    assert.equal("workflowRuntimeEvents" in payload, false);
   });
 });
 

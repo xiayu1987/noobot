@@ -578,7 +578,7 @@ export async function executeToolCallInTurn(options = {}) {
   const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
   const initialRiskAssessment = createToolRiskAssessment(call);
   const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
-  emitMessageEvent(eventListener, runtime, "tool_call_start", {
+  await emitMessageEvent(eventListener, runtime, "tool_call_start", {
     turn,
     tool: call?.name,
     args: call?.args || {},
@@ -587,7 +587,7 @@ export async function executeToolCallInTurn(options = {}) {
     securityAssessment: initialRiskAssessment.current,
   });
   const result = await executeToolCall(options);
-  emitMessageEvent(eventListener, runtime, "tool_call_end", {
+  await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
     tool: call?.name,
     result: String(result?.toolResultText || ""),

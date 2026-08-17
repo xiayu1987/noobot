@@ -7,7 +7,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
-  flushPromises,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
+import {
+  emitCommandReceipt,
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,
@@ -15,293 +20,116 @@ import {
 
 setupWebSocketTestHooks();
 
-describe("chatWebSocketClient stream terminal semantics and isolation", () => {
-  it("does not resolve after completed channel_state before DONE", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-    });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
-    const onEvent = vi.fn();
-    let resolved = false;
+function startScopedStream(client, overrides = {}, onEvent = vi.fn()) {
+  const payload = streamCommand({
+    sessionId: "s-1",
+    dialogProcessId: "main-dp",
+    turnScopeId: "main-turn",
+    ...overrides,
+  });
+  return { payload, onEvent, promise: client.stream(payload, onEvent) };
+}
 
-    const streamPromise = client.stream({ action: "chat" }, onEvent).then(() => {
-      resolved = true;
-    });
+describe("chatWebSocketClient stream terminal semantics and isolation", () => {
+  it("does not resolve from channel_state and resolves only from the matching command receipt", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const { payload, promise } = startScopedStream(client);
+    const socket = MockWebSocket.instances[0];
+    let resolved = false;
+    promise.then(() => { resolved = true; });
 
     socket.emit(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
-      dialogProcessId: "dp-1",
+      dialogProcessId: "main-dp",
+      turnScopeId: "main-turn",
       state: "completed",
       seq: 2,
     });
-
-    expect(onEvent).toHaveBeenCalledWith({
-      event: StreamEventEnum.CHANNEL_STATE,
-      data: {
-        sessionId: "s-1",
-        dialogProcessId: "dp-1",
-        state: "completed",
-        seq: 2,
-      },
-    });
+    await vi.advanceTimersByTimeAsync(100);
     expect(resolved).toBe(false);
 
-    await vi.advanceTimersByTimeAsync(19);
-    expect(resolved).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(resolved).toBe(false);
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      seq: 3,
-    });
-    await streamPromise;
+    emitCommandReceipt(socket, payload);
+    await promise;
     expect(resolved).toBe(true);
   });
 
   it("does not resolve stream for non-terminal channel_state", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-    });
-    client.connect();
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const { payload, promise } = startScopedStream(client);
     const socket = MockWebSocket.instances[0];
     let settled = false;
-
-    client.stream({ action: "chat" }, vi.fn()).then(
-      () => {
-        settled = true;
-      },
-      () => {
-        settled = true;
-      },
-    );
+    promise.finally(() => { settled = true; });
 
     socket.emit(StreamEventEnum.CHANNEL_STATE, {
       sessionId: "s-1",
-      dialogProcessId: "dp-1",
+      dialogProcessId: "main-dp",
+      turnScopeId: "main-turn",
       state: "sending",
       seq: 1,
     });
-
     await vi.advanceTimersByTimeAsync(100);
     expect(settled).toBe(false);
+
+    emitCommandReceipt(socket, payload);
+    await promise;
   });
 
   it("does not settle a scoped stream from an unscoped no_conversation prelude", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-    });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
+    const { payload, promise } = startScopedStream(client, {}, onEvent);
+    const socket = MockWebSocket.instances[0];
     let resolved = false;
+    promise.then(() => { resolved = true; });
 
-    const streamPromise = client
-      .stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-live" }), onEvent)
-      .then(() => {
-        resolved = true;
-      });
-
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      state: "no_conversation",
-      seq: 0,
-    });
+    socket.emit(StreamEventEnum.CHANNEL_STATE, { sessionId: "s-1", state: "no_conversation", seq: 0 });
     await vi.advanceTimersByTimeAsync(30);
-    await flushPromises();
-
     expect(resolved).toBe(false);
 
-    const committedTurn = {
-      sessionId: "s-1",
-      turnScopeId: "turn-live",
-      aggregateVersion: 2,
-      userMessage: { messageId: "user-live", role: "user", content: "visible" },
-    };
-    socket.emit("turn_committed", committedTurn);
-    expect(onEvent).toHaveBeenCalledWith({
-      event: "turn_committed",
-      data: committedTurn,
-    });
-    expect(resolved).toBe(false);
-
-    socket.emit("message", {
-      sessionId: "s-1",
-      dialogProcessId: "dp-live",
-      turnScopeId: "turn-live",
-      seq: 1,
-      text: "still running",
-    });
-    expect(onEvent).toHaveBeenCalledWith({
-      event: "message",
-      data: expect.objectContaining({
-        dialogProcessId: "dp-live",
-        turnScopeId: "turn-live",
-      }),
-    });
-    expect(resolved).toBe(false);
-
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-live",
-      turnScopeId: "turn-live",
-      seq: 2,
-    });
-    await streamPromise;
+    emitCommandReceipt(socket, payload);
+    await promise;
     expect(resolved).toBe(true);
   });
 
-  it.each(["cancelled"])("resolves after %s terminal channel_state", async (state) => {
+  it("delivers a failed command receipt before rejecting", async () => {
     const client = createChatWebSocketClient({
       resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-    });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
-    let resolved = false;
-
-    const streamPromise = client.stream({ action: "chat" }, vi.fn()).then(() => {
-      resolved = true;
-    });
-
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      state,
-      seq: 2,
-    });
-
-    await vi.advanceTimersByTimeAsync(20);
-    await streamPromise;
-    expect(resolved).toBe(true);
-  });
-
-  it("keeps DONE as the immediate stream terminator", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 1000,
-    });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
-    let resolved = false;
-
-    const streamPromise = client.stream({ action: "chat" }, vi.fn()).then(() => {
-      resolved = true;
-    });
-
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      state: "completed",
-      seq: 2,
-    });
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      dialogProcessId: "dp-1",
-      seq: 3,
-    });
-
-    await streamPromise;
-    expect(resolved).toBe(true);
-  });
-
-  it("delivers ERROR events before rejecting", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
       translateText: (key) => key,
     });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
     const onEvent = vi.fn();
+    const { payload, promise } = startScopedStream(client, {}, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const receipt = emitCommandReceipt(socket, payload, {
+      outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+      error: { code: "stream_failed", message: "boom" },
+    });
 
-    const streamPromise = client.stream({ action: "chat" }, onEvent);
-    const errorData = { error: "boom", sessionId: "s-1", dialogProcessId: "dp-1", seq: 4 };
-    socket.emit(StreamEventEnum.ERROR, errorData);
-
-    await expect(streamPromise).rejects.toThrow("boom");
-    expect(onEvent).toHaveBeenCalledWith({ event: StreamEventEnum.ERROR, data: errorData });
-    socket.close(1011, "server_error");
+    await expect(promise).rejects.toThrow("boom");
+    expect(onEvent).toHaveBeenCalledWith({
+      event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+      data: receipt,
+    });
   });
 
-  it.each([
-    [StreamEventEnum.DONE, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
-    [StreamEventEnum.USER_STOPPED, { turnScopeId: "doc-turn", dialogProcessId: "doc-dp" }],
-    [
-      StreamEventEnum.ERROR,
-      { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", error: "multimodal_parse failed" },
-    ],
-    [
-      StreamEventEnum.CHANNEL_STATE,
-      { turnScopeId: "doc-turn", dialogProcessId: "doc-dp", state: "user_stopped" },
-    ],
-  ])("does not settle current stream for unrelated %s events", async (event, data) => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-      translateText: (key) => key,
-    });
-    client.connect();
+  it("does not settle the current stream from an unrelated command receipt", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const { payload, promise } = startScopedStream(client);
     const socket = MockWebSocket.instances[0];
     let settled = false;
+    promise.finally(() => { settled = true; });
 
-    const streamPromise = client
-      .stream(streamCommand({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }), vi.fn())
-      .then(
-        () => {
-          settled = true;
-        },
-        () => {
-          settled = true;
-        },
-      );
-
-    socket.emit(event, { sessionId: "s-1", seq: 10, ...data });
+    socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, createAgentCommandReceipt({
+      commandId: "test-stream:unrelated-turn",
+      commandType: payload.commandType,
+      outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+      identity: { sessionId: "s-1", turnScopeId: "unrelated-turn", dialogProcessId: "doc-dp" },
+      occurredAt: "2026-01-01T00:00:00.000Z",
+    }));
     await vi.advanceTimersByTimeAsync(50);
-    await Promise.resolve();
-
     expect(settled).toBe(false);
 
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      turnScopeId: "main-turn",
-      dialogProcessId: "main-dp",
-      seq: 11,
-    });
-    await streamPromise;
+    emitCommandReceipt(socket, payload);
+    await promise;
     expect(settled).toBe(true);
-  });
-
-  it("still settles stream for matching turn terminal events", async () => {
-    const client = createChatWebSocketClient({
-      resolveWebSocketUrl: () => "ws://test",
-      terminalChannelStateGraceMs: 20,
-    });
-    client.connect();
-    const socket = MockWebSocket.instances[0];
-    let resolved = false;
-
-    const streamPromise = client
-      .stream(streamCommand({ turnScopeId: "main-turn", dialogProcessId: "main-dp" }), vi.fn())
-      .then(() => {
-        resolved = true;
-      });
-
-    socket.emit(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1",
-      turnScopeId: "main-turn",
-      dialogProcessId: "main-dp",
-      state: "user_stopped",
-      seq: 12,
-    });
-    await vi.advanceTimersByTimeAsync(20);
-
-    await streamPromise;
-    expect(resolved).toBe(true);
   });
 });

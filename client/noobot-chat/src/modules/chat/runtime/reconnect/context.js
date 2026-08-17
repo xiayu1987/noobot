@@ -7,8 +7,6 @@
 export function createReconnectReplayContext() {
   return {
     replayCache: {},
-    appliedReconnectSequenceByTurnKey: {},
-    appliedReconnectEventKindsByTurnKey: {},
     replayHydrationPromise: null,
   };
 }

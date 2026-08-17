@@ -26,6 +26,10 @@ import {
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
@@ -87,10 +91,11 @@ test("processing-start persistence rejection is observed while Agent execution i
         config: { turnScopeId: "turn-processing-rejected" },
       },
     });
-    assert.equal(
-      events.some((item) => item?.event === "error"),
-      true,
-    );
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "session_not_found");
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);
@@ -114,10 +119,11 @@ test("message listener boundary contains failures raised by terminal error persi
         config: { turnScopeId: "turn-terminal-boundary" },
       },
     });
-    assert.equal(
-      events.some((item) => item?.event === "error"),
-      true,
-    );
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "agent_init_failed");
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);
@@ -145,13 +151,9 @@ test("summary persistence failure never commits authoritative completed", async 
       TURN_EVENT.FAILED,
     ]);
     assert.equal(
-      events.some((item) => item?.event === "done"),
-      false,
-    );
-    assert.equal(
       events
         .filter((item) => item?.event === "turn_lifecycle")
-        .some((item) => item?.data?.eventType === TURN_EVENT.COMPLETED),
+        .some((item) => item?.data?.payload?.eventType === TURN_EVENT.COMPLETED),
       false,
     );
     assert.equal(
@@ -183,14 +185,14 @@ for (const [failureAt, expectedPhase] of [
         .filter((item) => item?.event === "turn_lifecycle")
         .map((item) => item.data);
       assert.deepEqual(
-        lifecycleEvents.map((item) => item.eventType),
+        lifecycleEvents.map((item) => item.payload.eventType),
         [
           TURN_EVENT.ACTION_ACCEPTED,
           ...(failureAt === "processing" ? [TURN_EVENT.PROCESSING_STARTED] : []),
           TURN_EVENT.FAILED,
         ],
       );
-      const failed = lifecycleEvents.at(-1);
+      const failed = lifecycleEvents.at(-1).payload;
       assert.equal(failed.phase, expectedPhase);
       assert.equal(failed.failure.phase, expectedPhase);
       assert.equal(

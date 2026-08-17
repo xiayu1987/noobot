@@ -8,10 +8,8 @@ import {
   validateSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
 
-export const MESSAGE_EVENT_ENVELOPE_KIND = "noobot.message_event";
-export const MESSAGE_EVENT_ENVELOPE_VERSION = 2;
+export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
-export const MESSAGE_EVENT_SEQUENCE_SCOPE_KIND = "message";
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
   LLM_DELTA: "llm_delta",
@@ -62,51 +60,12 @@ export function resolveMessageEventPresentationId(value = {}) {
   return text(value?.presentationMessageId);
 }
 
-export function resolveMessageEventSequenceIdentity(value = {}) {
-  const sequenceDomain = text(value?.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN;
-  const sequenceScopeId = text(value?.sequenceScopeId || value?.messageId);
-  const sequence = Number(value?.sequence || 0);
-  return Object.freeze({
-    sequenceDomain,
-    sequenceScopeKind: MESSAGE_EVENT_SEQUENCE_SCOPE_KIND,
-    sequenceScopeId,
-    sequence,
-    sequenceKey: sequenceDomain && sequenceScopeId ? `${sequenceDomain}:${sequenceScopeId}` : "",
-  });
-}
-
-export function isMessageEventEnvelope(value = {}) {
-  const envelopeVersion = Number(value?.envelopeVersion);
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    value.envelopeKind === MESSAGE_EVENT_ENVELOPE_KIND &&
-    envelopeVersion === MESSAGE_EVENT_ENVELOPE_VERSION &&
-    text(value.eventId) &&
-    text(value.eventType) &&
-    text(value.sessionId) &&
-    text(value.messageId) &&
-    text(value.presentationMessageId) &&
-    Number.isInteger(Number(value.sequence)) &&
-    Number(value.sequence) > 0 &&
-    text(value.timestamp),
-  );
-}
-
-export function validateMessageEventEnvelope(value = {}) {
+/** Validates the Message domain payload. Cross-domain identity and ordering
+ * belong exclusively to the Event Protocol v3 envelope. */
+export function validateMessageEventPayload(value = {}) {
   const errors = [];
-  if (!isMessageEventEnvelope(value)) errors.push("invalid_envelope_identity");
-  const sequenceIdentity = resolveMessageEventSequenceIdentity(value);
-  const declaredSequenceDomain = text(value?.sequenceDomain);
-  const declaredSequenceScopeId = text(value?.sequenceScopeId);
-  if (declaredSequenceDomain && declaredSequenceDomain !== MESSAGE_EVENT_SEQUENCE_DOMAIN) {
-    errors.push("sequence_domain_mismatch");
-  }
-  if (declaredSequenceScopeId && declaredSequenceScopeId !== text(value?.messageId)) {
-    errors.push("sequence_scope_mismatch");
-  }
-  if (!sequenceIdentity.sequenceKey) errors.push("missing_sequence_scope");
+  if (!value || typeof value !== "object" || Array.isArray(value)) errors.push("payload_not_object");
+  if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
   const workflowRunId = text(value?.workflowRunId);
   const nodeExecutionId = text(value?.nodeExecutionId);
   if (Boolean(workflowRunId) !== Boolean(nodeExecutionId)) {
@@ -176,11 +135,11 @@ export function validateMessageEventEnvelope(value = {}) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
-export function assertMessageEventEnvelope(value = {}) {
-  const validation = validateMessageEventEnvelope(value);
+export function assertMessageEventPayload(value = {}) {
+  const validation = validateMessageEventPayload(value);
   if (!validation.valid) {
     throw new TypeError(
-      `invalid authoritative message event envelope: ${validation.errors.join(",")}`,
+      `invalid message event payload: ${validation.errors.join(",")}`,
     );
   }
   return value;

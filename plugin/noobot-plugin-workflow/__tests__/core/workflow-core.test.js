@@ -63,19 +63,16 @@ function createMockBotHookManager() {
 test("normalizeOptions keeps injected strategy functions", () => {
   const subSessionRunner = async () => null;
   const workflowDialogPersister = async () => null;
-  const workflowEventLogger = async () => null;
   const options = normalizeOptions({
     enabled: true,
     mode: "on",
     subSessionRunner,
     workflowDialogPersister,
-    workflowEventLogger,
   });
   assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
   assert.equal(options.subSessionRunner, subSessionRunner);
   assert.equal(options.workflowDialogPersister, workflowDialogPersister);
-  assert.equal(options.workflowEventLogger, workflowEventLogger);
 });
 
 test("normalizeOptions keeps workflow extension hooks", () => {

@@ -6,9 +6,37 @@
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import {
+  AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+  createAgentTransportError,
+} from "@noobot/agent-transport-protocol";
+import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import { flushPromises, MockWebSocket, setupWebSocketTestHooks, streamCommand } from "./chatWebSocketClientTestFixtures.js";
 
 setupWebSocketTestHooks();
+
+function emitCompletedCommand(socket, commandId, sessionId, turnScopeId) {
+  socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, createAgentCommandReceipt({
+    commandId,
+    commandType: AGENT_COMMAND.SEND,
+    outcome: AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+    identity: { sessionId, turnScopeId },
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  }));
+}
+
+function messageEvent(overrides = {}) {
+  return canonicalMessageEvent({
+    eventType: "llm_delta",
+    messageId: "stream-message",
+    text: "",
+    ...overrides,
+  });
+}
 
 describe("chatWebSocketClient reconnect and event dispatch", () => {
   it("reuses the bootstrap socket for the initial reconnect handshake", async () => {
@@ -49,28 +77,34 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
-    socket.emit("message", {
+    const thinkingEvent = canonicalMessageEvent({
+      eventId: "thinking-live-replay",
+      eventType: "thinking",
       sessionId: "s-live-replay",
-      dialogProcessId: "dp-live-replay",
       turnScopeId: "turn-live-replay",
-      seq: 2,
+      messageId: "message-live-replay",
+      sequence: 2,
       text: "continued thinking",
     });
-    socket.emit(StreamEventEnum.DELTA, {
+    const contentEvent = canonicalMessageEvent({
+      eventId: "content-live-replay",
+      eventType: "llm_delta",
       sessionId: "s-live-replay",
-      dialogProcessId: "dp-live-replay",
       turnScopeId: "turn-live-replay",
-      seq: 3,
-      content: "continued answer",
+      messageId: "message-live-replay",
+      sequence: 3,
+      text: "continued answer",
     });
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, thinkingEvent);
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, contentEvent);
 
     expect(onReconnectData).toHaveBeenNthCalledWith(1, {
-      event: "message",
-      data: expect.objectContaining({ text: "continued thinking", seq: 2 }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: thinkingEvent,
     });
     expect(onReconnectData).toHaveBeenNthCalledWith(2, {
-      event: StreamEventEnum.DELTA,
-      data: expect.objectContaining({ content: "continued answer", seq: 3 }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: contentEvent,
     });
   });
 
@@ -85,23 +119,25 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const socket = MockWebSocket.instances[0];
     socket.onopen?.();
     const reconnectRequestId = JSON.parse(socket.sent[0]).requestId;
-    const childEventData = {
-      requestId: "stream:original-business-turn",
+    const childEventData = canonicalMessageEvent({
+      eventId: "evt-child-tool-start",
+      eventType: "tool_call_start",
       sessionId: "child-session",
-      dialogProcessId: "child-dialog",
       turnScopeId: "workflow-node:node-1",
-      seq: 42,
-      event: {
-        eventId: "evt-child-tool-start",
-        type: "tool_call_start",
-        sequence: 1,
-      },
-    };
+      messageId: "child-message",
+      sequence: 1,
+      parentSessionId: "root-session",
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      toolCallId: "call-1",
+      tool: "read_file",
+    });
+    childEventData.causality.commandId = "stream:original-business-turn";
 
-    socket.emit("subagent_message_event", childEventData);
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, childEventData);
 
     expect(onReconnectData).toHaveBeenCalledWith({
-      event: "subagent_message_event",
+      event: MESSAGE_EVENT_WIRE_EVENT,
       data: childEventData,
     });
 
@@ -120,12 +156,19 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     });
     const socket = MockWebSocket.instances[0];
 
-    socket.emit("subagent_message_event", {
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
+      eventId: "child-tool-99",
+      eventType: "tool_call_start",
       sessionId: "child-session",
-      dialogProcessId: "child-dialog",
       turnScopeId: "workflow-node:node-1",
-      event: { type: "tool_call_start", sequence: 99 },
-    });
+      messageId: "child-message",
+      sequence: 99,
+      parentSessionId: "root-session",
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      toolCallId: "call-99",
+      tool: "read_file",
+    }));
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
@@ -140,7 +183,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       turnScopeId: "turn-live-owner",
     }), onStreamEvent);
     const socket = MockWebSocket.instances[0];
-    const streamRequestId = JSON.parse(socket.sent[0]).requestId;
+    const streamRequestId = JSON.parse(socket.sent[0]).commandId;
     const reconnectPromise = client.reconnect({
       currentSessionId: "s-live-owner",
       userId: "u-1",
@@ -149,26 +192,21 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
-    socket.emit(StreamEventEnum.DELTA, {
+    const ownedEvent = messageEvent({
+      eventId: "owned-message",
       sessionId: "s-live-owner",
       turnScopeId: "turn-live-owner",
-      requestId: streamRequestId,
-      seq: 2,
-      content: "owned by stream",
+      text: "owned by stream",
     });
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, ownedEvent);
 
     expect(onStreamEvent).toHaveBeenCalledWith({
-      event: StreamEventEnum.DELTA,
-      data: expect.objectContaining({ content: "owned by stream" }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: ownedEvent,
     });
     expect(onReconnectData).not.toHaveBeenCalled();
 
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-live-owner",
-      turnScopeId: "turn-live-owner",
-      requestId: streamRequestId,
-      seq: 3,
-    });
+    emitCompletedCommand(socket, streamRequestId, "s-live-owner", "turn-live-owner");
     await streamPromise;
   });
 
@@ -197,19 +235,21 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       revision: 1,
       sequence: 1,
     });
-    socket.emit(StreamEventEnum.DELTA, {
+    const overlapMessage = messageEvent({
+      eventId: "overlap-message",
       sessionId: "s-overlap",
       turnScopeId: "turn-overlap",
-      content: "run is active",
+      text: "run is active",
     });
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, overlapMessage);
 
     expect(onStreamEvent).toHaveBeenCalledWith({
       event: StreamEventEnum.TURN_LIFECYCLE,
       data: expect.objectContaining({ eventType: "turn.action_accepted" }),
     });
     expect(onStreamEvent).toHaveBeenCalledWith({
-      event: StreamEventEnum.DELTA,
-      data: expect.objectContaining({ content: "run is active" }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: overlapMessage,
     });
     expect(onReconnectData).not.toHaveBeenCalled();
 
@@ -220,10 +260,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     await reconnectPromise;
     expect(onStreamEvent).toHaveBeenCalledTimes(2);
 
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-overlap",
-      turnScopeId: "turn-overlap",
-    });
+    emitCompletedCommand(socket, "turn-overlap", "s-overlap", "turn-overlap");
     await streamPromise;
   });
 
@@ -232,7 +269,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const onEvent = vi.fn();
     const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), onEvent);
     const socket = MockWebSocket.instances[0];
-    const streamRequestId = JSON.parse(socket.sent[0]).requestId;
+    const streamRequestId = JSON.parse(socket.sent[0]).commandId;
 
     const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
     expect(MockWebSocket.instances).toHaveLength(1);
@@ -240,11 +277,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     expect(JSON.parse(socket.sent[1])).not.toHaveProperty("currentTurnScopeId");
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
     await reconnectPromise;
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      requestId: streamRequestId,
-    });
+    emitCompletedCommand(socket, streamRequestId, "s-1", "turn-1");
 
     await expect(streamPromise).resolves.toBeUndefined();
     expect(socket.readyState).toBe(MockWebSocket.OPEN);
@@ -258,7 +291,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const streamSocket = MockWebSocket.instances[0];
     const onEvent = vi.fn();
     const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), onEvent);
-    const streamRequestId = JSON.parse(streamSocket.sent[0]).requestId;
+    const streamRequestId = JSON.parse(streamSocket.sent[0]).commandId;
     streamSocket.readyState = MockWebSocket.CLOSING;
 
     const reconnectPromise = client.reconnect({
@@ -274,21 +307,18 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
 
     expect(streamSocket.readyState).toBe(MockWebSocket.CLOSED);
     expect(reconnectSocket.readyState).toBe(MockWebSocket.OPEN);
-    reconnectSocket.emit(StreamEventEnum.DELTA, {
+    const continuedEvent = messageEvent({
+      eventId: "continued-message",
       sessionId: "s-1",
       turnScopeId: "turn-1",
-      requestId: streamRequestId,
-      content: "continued",
+      text: "continued",
     });
-    reconnectSocket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      requestId: streamRequestId,
-    });
+    reconnectSocket.emit(MESSAGE_EVENT_WIRE_EVENT, continuedEvent);
+    emitCompletedCommand(reconnectSocket, streamRequestId, "s-1", "turn-1");
     await expect(streamPromise).resolves.toBeUndefined();
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({
-      event: StreamEventEnum.DELTA,
-      data: expect.objectContaining({ content: "continued" }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: continuedEvent,
     }));
   });
 
@@ -296,7 +326,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), vi.fn());
     const firstSocket = MockWebSocket.instances[0];
-    const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
+    const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
     const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
     const replacementSocket = MockWebSocket.instances[1];
@@ -307,11 +337,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     replacementSocket.emit("transport_ready", { serverInstanceId: "proxy-after-reconnect" });
 
     expect(client.getTransportStatus().serverInstanceId).toBe("proxy-after-reconnect");
-    replacementSocket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      requestId: streamRequestId,
-    });
+    emitCompletedCommand(replacementSocket, streamRequestId, "s-1", "turn-1");
     await streamPromise;
   });
 
@@ -319,7 +345,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const streamPromise = client.stream(streamCommand({ sessionId: "s-1", turnScopeId: "turn-1" }), vi.fn());
     const firstSocket = MockWebSocket.instances[0];
-    const streamRequestId = JSON.parse(firstSocket.sent[0]).requestId;
+    const streamRequestId = JSON.parse(firstSocket.sent[0]).commandId;
     firstSocket.readyState = MockWebSocket.CLOSING;
     const reconnectPromise = client.reconnect({ currentSessionId: "s-1", userId: "u-1" });
     const replacementSocket = MockWebSocket.instances[1];
@@ -340,11 +366,7 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
       event: "turn_snapshot",
       data: { commandId: "snapshot-after-reconnect", sessionId: "s-1" },
     });
-    replacementSocket.emit(StreamEventEnum.DONE, {
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      requestId: streamRequestId,
-    });
+    emitCompletedCommand(replacementSocket, streamRequestId, "s-1", "turn-1");
     await streamPromise;
   });
 
@@ -361,18 +383,18 @@ describe("chatWebSocketClient reconnect and event dispatch", () => {
     const socket = MockWebSocket.instances[0];
 
     socket.onopen?.();
-    const errorData = {
-      sessionId: "s-1",
-      dialogProcessId: "dp-failed",
-      seq: 36,
-      error: "failed attempt",
-    };
-    socket.emit(StreamEventEnum.ERROR, errorData);
+    const errorData = createAgentTransportError({
+      code: "replayed_failure",
+      message: "failed attempt",
+      identity: { sessionId: "s-1", dialogProcessId: "dp-failed" },
+      occurredAt: "2026-01-01T00:00:00.000Z",
+    });
+    socket.emit(AGENT_TRANSPORT_EVENT.ERROR, errorData);
     socket.emit(StreamEventEnum.RECONNECT_COMPLETE, { totalSessions: 1 });
 
     await expect(reconnectPromise).resolves.toEqual({ totalSessions: 1 });
     expect(onReconnectData).toHaveBeenCalledWith({
-      event: StreamEventEnum.ERROR,
+      event: AGENT_TRANSPORT_EVENT.ERROR,
       data: errorData,
     });
   });

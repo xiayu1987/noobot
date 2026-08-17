@@ -6,7 +6,6 @@
 import { config } from "../../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
-  EVENT_TYPE,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   UPSTREAM_CLOSE_REASON,
@@ -17,11 +16,46 @@ import {
 } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
 import { writeAgentTransportDebugEvent } from "../../runtime-events/agent-transport-debug-runtime-events.js";
-import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_SNAPSHOT_WIRE_EVENT,
+} from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
+  AGENT_TRANSPORT_EVENT,
+  createAgentTransportError,
+  validateAgentCommandReceipt,
+  validateAgentTransportError,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
+import { validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  TURN_COMMITTED_WIRE_EVENT,
+  assertTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
+
+function assertUpstreamDataPlaneEvent(eventName, eventData) {
+  if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
+    const validation = validateAgentTransportError(eventData);
+    if (!validation.valid) throw new TypeError(validation.errors.join(","));
+    return;
+  }
+  if (eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
+    const validation = validateAgentCommandReceipt(eventData);
+    if (!validation.valid) throw new TypeError(validation.errors.join(","));
+    return;
+  }
+  if (eventName === TURN_COMMITTED_WIRE_EVENT) {
+    assertTurnCommittedEventData(eventData);
+    return;
+  }
+  const validation = validateProtocolEvent(eventData);
+  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  if (String(eventData?.identity?.eventType || "").trim() !== eventName) {
+    throw new TypeError("wire_event_identity_mismatch");
+  }
+}
 
 class UpstreamConnectionMethods {
 
@@ -84,10 +118,11 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       event: "agentProxy.upstream.connect.skipped",
       data: { channelKey: channel.key, reason: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
-      error: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
-      transport: true,
-    });
+    const errorEnvelope = this.pushChannelEvent(channel, AGENT_TRANSPORT_EVENT.ERROR, createAgentTransportError({
+      code: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
+      message: AGENT_PROXY_ERROR.UPSTREAM_URL_EMPTY,
+      identity: { sessionId: channel.startPayload?.sessionId },
+    }));
     this.broadcastChannelEvent(channel, errorEnvelope);
     return;
   }
@@ -167,10 +202,12 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
         event: "agentProxy.upstream.initialPayload.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
-        error: String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD),
-        transport: true,
-      });
+      const message = String(error?.message || AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD);
+      const errorEnvelope = this.pushChannelEvent(channel, AGENT_TRANSPORT_EVENT.ERROR, createAgentTransportError({
+        code: AGENT_PROXY_ERROR.FAILED_TO_SEND_PAYLOAD,
+        message,
+        identity: { sessionId: channel.startPayload?.sessionId },
+      }));
       this.broadcastChannelEvent(channel, errorEnvelope);
       this.closeUpstreamChannel(channel, 1011, UPSTREAM_CLOSE_REASON.SEND_FAILED);
     }
@@ -179,20 +216,26 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
   message: ({ rawData }) => {
     try {
       const parsed = JSON.parse(String(rawData || "{}"));
-      const eventName = String(parsed?.event || EVENT_TYPE.MESSAGE).trim() || EVENT_TYPE.MESSAGE;
+      const eventName = String(parsed?.event || "").trim();
+      if (!eventName) throw new TypeError("missing_upstream_event");
       const eventData =
         parsed?.data && typeof parsed.data === "object" ? parsed.data : {};
+      const isQueryResponse =
+        eventName === TURN_SNAPSHOT_WIRE_EVENT ||
+        Boolean(String(eventData?.commandId || "").trim() && channel.pendingExecutionRequests?.has(String(eventData.commandId).trim()));
+      if (!isQueryResponse) assertUpstreamDataPlaneEvent(eventName, eventData);
+      const lifecycle = eventData?.payload || {};
       if (
-        eventName === EVENT_TYPE.TURN_LIFECYCLE &&
-        String(eventData?.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED
+        eventName === TURN_LIFECYCLE_WIRE_EVENT &&
+        String(lifecycle?.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED
       ) {
         const summary = summarizeAgentTransportCommand(channel.startPayload, {
           accepted: true,
           consumedByService: true,
           transport: "websocket",
           lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-          lifecycleEventId: String(eventData?.eventId || "").trim(),
-          lifecycleRevision: Number(eventData?.revision || 0),
+          lifecycleEventId: String(eventData?.identity?.eventId || "").trim(),
+          lifecycleRevision: Number(eventData?.ordering?.revision || 0),
         });
         this.logSessionEvent(channel, {
           category: "debug",
@@ -209,8 +252,8 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
           },
         });
       }
-      if (eventName === EVENT_TYPE.TURN_SNAPSHOT) {
-        const commandId = String(eventData?.commandId || "").trim();
+      if (eventName === TURN_SNAPSHOT_WIRE_EVENT) {
+        const commandId = String(eventData?.causality?.commandId || "").trim();
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
         if (requester) {
           channel.pendingSnapshotRequests.delete(commandId);
@@ -231,13 +274,13 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
         this.sendSocketEvent(executionRequester, { event: eventName, data: eventData });
         return;
       }
-      if (eventName === EVENT_TYPE.ERROR) {
+      if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
         const requester = commandId ? channel.pendingSnapshotRequests?.get(commandId) : null;
         if (typeof requester?.resolve === "function") {
           channel.pendingSnapshotRequests.delete(commandId);
           requester.resolve({
             ok: false,
-            reason: String(eventData?.errorCode || eventData?.error || "snapshot_failed"),
+            reason: eventData.code,
           });
           return;
         }
@@ -252,10 +295,12 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
         event: "agentProxy.upstream.message.error",
         data: { channelKey: channel.key, error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT) },
       });
-      const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
-        error: String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT),
-        transport: true,
-      });
+      const message = String(error?.message || AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT);
+      const errorEnvelope = this.pushChannelEvent(channel, AGENT_TRANSPORT_EVENT.ERROR, createAgentTransportError({
+        code: AGENT_PROXY_ERROR.INVALID_UPSTREAM_EVENT,
+        message,
+        identity: { sessionId: channel.startPayload?.sessionId },
+      }));
       this.broadcastChannelEvent(channel, errorEnvelope);
       this.closeUpstreamChannel(
         channel,
@@ -300,10 +345,12 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       event: "agentProxy.upstream.error",
       data: { channelKey: channel.key, error: String(error?.message || "upstream websocket error") },
     });
-    const errorEnvelope = this.pushChannelEvent(channel, EVENT_TYPE.TRANSPORT_ERROR, {
-      error: String(error?.message || "upstream websocket error"),
-      transport: true,
-    });
+    const message = String(error?.message || "upstream websocket error");
+    const errorEnvelope = this.pushChannelEvent(channel, AGENT_TRANSPORT_EVENT.ERROR, createAgentTransportError({
+      code: "UPSTREAM_WEBSOCKET_ERROR",
+      message,
+      identity: { sessionId: channel.startPayload?.sessionId },
+    }));
     this.broadcastChannelEvent(channel, errorEnvelope);
   },
   handlerError: ({ error, handlerName }) => {

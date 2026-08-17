@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  isMessageEventEnvelope,
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
   resolveMessageEventPresentationId,
-  resolveMessageEventSequenceIdentity,
-  validateMessageEventEnvelope,
 } from "@noobot/event-protocol/message-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
@@ -55,22 +54,20 @@ function canonicalTurnScopeId(currentValue = "", incomingValue = "") {
 }
 
 function eventTime(eventData = {}) {
-  return (
-    eventData?.timestamp || eventData?.updatedAt || eventData?.createdAt || new Date().toISOString()
-  );
+  return eventData?.occurredAt || "";
 }
 
 function compareMessageEventOrder(left = {}, right = {}) {
-  const leftIdentity = resolveMessageEventSequenceIdentity(left);
-  const rightIdentity = resolveMessageEventSequenceIdentity(right);
+  const leftIdentity = { sequenceKey: left?.ordering?.scopeId, sequence: Number(left?.ordering?.sequence || 0) };
+  const rightIdentity = { sequenceKey: right?.ordering?.scopeId, sequence: Number(right?.ordering?.sequence || 0) };
   if (
     leftIdentity.sequenceKey &&
     leftIdentity.sequenceKey === rightIdentity.sequenceKey &&
     leftIdentity.sequence !== rightIdentity.sequence
   )
     return leftIdentity.sequence - rightIdentity.sequence;
-  const leftTime = Date.parse(text(left?.timestamp || left?.updatedAt || left?.createdAt));
-  const rightTime = Date.parse(text(right?.timestamp || right?.updatedAt || right?.createdAt));
+  const leftTime = Date.parse(text(left?.occurredAt));
+  const rightTime = Date.parse(text(right?.occurredAt));
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
     return leftTime - rightTime;
   }
@@ -78,7 +75,7 @@ function compareMessageEventOrder(left = {}, right = {}) {
 }
 
 function authoritativeSubSessionMessageId(eventData = {}) {
-  return text(resolveMessageEventPresentationId(eventData));
+  return text(resolveMessageEventPresentationId(eventData?.payload));
 }
 
 function summarizeSubSessionMessage(message = {}) {
@@ -147,7 +144,7 @@ function normalizeSubSessionSnapshotMessage(snapshot = {}) {
     rawEvents: _rawEvents,
     ...canonicalSnapshot
   } = snapshot && typeof snapshot === "object" ? snapshot : {};
-  if (text(canonicalSnapshot?.sequenceDomain) === WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) {
+  if (text(canonicalSnapshot?.sequenceDomain) === MESSAGE_EVENT_SEQUENCE_DOMAIN) {
     return canonicalSnapshot;
   }
   const {
@@ -249,27 +246,24 @@ export function createSubSessionStore({
     return result;
   }
 
-  function upsertSubSessionEvent(eventName = "", eventData = {}) {
-    if (!isMessageEventEnvelope(eventData)) {
-      return { applied: false, reason: "not_authoritative_message_event" };
-    }
-    const envelopeValidation = validateMessageEventEnvelope(eventData);
-    const sequenceIdentityErrors = envelopeValidation.errors.filter(
-      (error) => String(error).startsWith("sequence_") || error === "missing_sequence_scope",
-    );
-    if (sequenceIdentityErrors.length) {
+  function upsertSubSessionEvent(eventData = {}) {
+    const envelopeValidation = validateProtocolEvent(eventData);
+    if (!envelopeValidation.valid || envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
       return {
         applied: false,
         reason: "invalid_authoritative_message_event",
-        errors: sequenceIdentityErrors,
+        errors: envelopeValidation.errors,
       };
     }
-    const sequenceDomain = text(eventData?.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE;
-    if (sequenceDomain !== WORKFLOW_SEQUENCE_DOMAIN.MESSAGE) {
-      return { applied: false, reason: "sequence_domain_mismatch" };
+    const identity = eventData.identity;
+    const payload = eventData.payload;
+    const ordering = eventData.ordering;
+    if (!payload.workflowRunId || !payload.nodeExecutionId) {
+      return { applied: false, reason: "not_workflow_message_event" };
     }
-    const projectionEventName = text(eventData?.eventType);
-    const sessionId = text(eventData?.sessionId || eventData?.subSessionId);
+    const sequenceDomain = text(ordering.domain);
+    const projectionEventName = text(payload.eventType);
+    const sessionId = text(identity.sessionId);
     if (!sessionId) return { applied: false, reason: "missing_session" };
     const registry = subSessionMessageRegistry.value || createSubSessionMessageRegistry();
     if (!registry.sessions) registry.sessions = {};
@@ -279,19 +273,19 @@ export function createSubSessionStore({
       eventsById: {},
       sequence: 0,
     };
-    const eventId = text(eventData?.eventId);
+    const eventId = text(identity.eventId);
     if (
       !eventId ||
       !projectionEventName ||
       !authoritativeSubSessionMessageId(eventData) ||
-      Number(eventData?.sequence) <= 0
+      Number(ordering.sequence) <= 0
     ) {
       return { applied: false, reason: "invalid_authoritative_message_event" };
     }
     if (eventId && currentSession.eventsById?.[eventId]) {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
-    const incomingSequenceIdentity = resolveMessageEventSequenceIdentity(eventData);
+    const incomingSequenceIdentity = { sequenceKey: ordering.scopeId, sequence: Number(ordering.sequence) };
     const appliedSequence = Number(
       currentSession.sequenceByScopeKey?.[incomingSequenceIdentity.sequenceKey] || 0,
     );
@@ -303,7 +297,7 @@ export function createSubSessionStore({
       return { applied: false, reason: "duplicate_sequence", current: currentSession };
     }
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
-    const incoming = { ...eventData, sessionId, eventId, sequenceDomain };
+    const incoming = eventData;
     const messageKey = authoritativeSubSessionMessageId(incoming);
     const existingIndex = messageKey
       ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
@@ -313,26 +307,26 @@ export function createSubSessionStore({
       id: messageKey,
       messageId: messageKey,
       presentationMessageId: messageKey,
-      sourceMessageId: text(eventData?.messageId),
+      sourceMessageId: text(identity.messageId),
       role: "assistant",
       content: "",
       sessionId,
-      parentSessionId: text(eventData?.parentSessionId),
-      dialogProcessId: text(eventData?.dialogProcessId),
-      turnScopeId: text(eventData?.turnScopeId),
-      workflowRunId: text(eventData?.workflowRunId),
-      nodeExecutionId: text(eventData?.nodeExecutionId),
+      parentSessionId: text(payload.parentSessionId),
+      dialogProcessId: text(payload.dialogProcessId),
+      turnScopeId: text(identity.turnScopeId),
+      workflowRunId: text(payload.workflowRunId),
+      nodeExecutionId: text(payload.nodeExecutionId),
       pending: true,
       createdAt: eventTime(eventData),
       toolTimeline: [],
       activityTimeline: [],
     };
-    nextMessage.sessionId = text(nextMessage.sessionId || eventData?.sessionId);
-    nextMessage.parentSessionId = text(nextMessage.parentSessionId || eventData?.parentSessionId);
-    nextMessage.dialogProcessId = text(nextMessage.dialogProcessId || eventData?.dialogProcessId);
-    nextMessage.turnScopeId = text(nextMessage.turnScopeId || eventData?.turnScopeId);
+    nextMessage.sessionId = text(nextMessage.sessionId || identity.sessionId);
+    nextMessage.parentSessionId = text(nextMessage.parentSessionId || payload.parentSessionId);
+    nextMessage.dialogProcessId = text(nextMessage.dialogProcessId || payload.dialogProcessId);
+    nextMessage.turnScopeId = text(nextMessage.turnScopeId || identity.turnScopeId);
     nextMessage.presentationMessageId = messageKey;
-    nextMessage.sourceMessageId = text(nextMessage.sourceMessageId || eventData?.messageId);
+    nextMessage.sourceMessageId = text(nextMessage.sourceMessageId || identity.messageId);
     nextMessage.createdAt = nextMessage.createdAt || eventTime(eventData);
     if (typeof nextMessage.pending !== "boolean") nextMessage.pending = true;
     if (!nextMessage.messageId) nextMessage.messageId = messageKey;
@@ -353,34 +347,32 @@ export function createSubSessionStore({
       };
     }
     nextMessage.updatedAt = eventTime(eventData);
-    nextMessage.eventId = text(eventData?.eventId);
-    nextMessage.sequence = Number(eventData?.sequence || 0);
-    nextMessage.sequenceDomain = text(eventData?.sequenceDomain);
-    nextMessage.sequenceScopeId = resolveMessageEventSequenceIdentity(eventData).sequenceScopeId;
-    nextMessage.firstSequence = Number(nextMessage.firstSequence || eventData?.sequence || 0);
-    nextMessage.status = text(eventData?.status || eventData?.state || nextMessage.status);
-    nextMessage.pending = eventData?.pending ?? nextMessage.pending;
-    nextMessage.workflowRunId = text(eventData?.workflowRunId || nextMessage.workflowRunId);
-    nextMessage.nodeExecutionId = text(eventData?.nodeExecutionId || nextMessage.nodeExecutionId);
+    nextMessage.eventId = eventId;
+    nextMessage.sequence = Number(ordering.sequence);
+    nextMessage.sequenceDomain = sequenceDomain;
+    nextMessage.sequenceScopeId = text(ordering.scopeId);
+    nextMessage.firstSequence = Number(nextMessage.firstSequence || ordering.sequence);
+    nextMessage.workflowRunId = text(payload.workflowRunId || nextMessage.workflowRunId);
+    nextMessage.nodeExecutionId = text(payload.nodeExecutionId || nextMessage.nodeExecutionId);
     if (existingIndex >= 0) messages[existingIndex] = nextMessage;
     else messages.push(nextMessage);
     messages.sort(compareMessageEventOrder);
-    const appliedIncomingSequenceIdentity = resolveMessageEventSequenceIdentity(incoming);
+    const appliedIncomingSequenceIdentity = incomingSequenceIdentity;
     const nextSession = {
       ...currentSession,
       sessionId,
       id: sessionId,
-      parentSessionId: text(eventData?.parentSessionId || currentSession.parentSessionId),
-      dialogProcessId: text(eventData?.dialogProcessId || currentSession.dialogProcessId),
-      turnScopeId: text(eventData?.turnScopeId || currentSession.turnScopeId),
-      workflowRunId: text(eventData?.workflowRunId || currentSession.workflowRunId),
-      nodeExecutionId: text(eventData?.nodeExecutionId || currentSession.nodeExecutionId),
+      parentSessionId: text(payload.parentSessionId || currentSession.parentSessionId),
+      dialogProcessId: text(payload.dialogProcessId || currentSession.dialogProcessId),
+      turnScopeId: text(identity.turnScopeId || currentSession.turnScopeId),
+      workflowRunId: text(payload.workflowRunId || currentSession.workflowRunId),
+      nodeExecutionId: text(payload.nodeExecutionId || currentSession.nodeExecutionId),
       messages,
       eventsById: {
         ...(currentSession.eventsById || {}),
-        ...(eventId ? { [eventId]: { ...eventData, eventId } } : {}),
+        ...(eventId ? { [eventId]: eventData } : {}),
       },
-      sequence: Math.max(Number(currentSession.sequence || 0), Number(eventData?.sequence || 0)),
+      sequence: Math.max(Number(currentSession.sequence || 0), Number(ordering.sequence)),
       sequenceDomain,
       sequenceByScopeKey: {
         ...(currentSession.sequenceByScopeKey || {}),
@@ -388,22 +380,22 @@ export function createSubSessionStore({
           Number(
             currentSession.sequenceByScopeKey?.[appliedIncomingSequenceIdentity.sequenceKey] || 0,
           ),
-          Number(eventData?.sequence || 0),
+          Number(ordering.sequence),
         ),
       },
       sequenceByDomain: {
         ...(currentSession.sequenceByDomain || {}),
-        [WORKFLOW_SEQUENCE_DOMAIN.MESSAGE]: Math.max(
-          Number(currentSession.sequenceByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.MESSAGE] || 0),
-          Number(eventData?.sequence || 0),
+        [MESSAGE_EVENT_SEQUENCE_DOMAIN]: Math.max(
+          Number(currentSession.sequenceByDomain?.[MESSAGE_EVENT_SEQUENCE_DOMAIN] || 0),
+          Number(ordering.sequence),
         ),
       },
-      revision: Math.max(Number(currentSession.revision || 0), Number(eventData?.revision || 0)),
+      revision: Math.max(Number(currentSession.revision || 0), Number(ordering.revision || 0)),
       revisionByDomain: {
         ...(currentSession.revisionByDomain || {}),
-        [WORKFLOW_SEQUENCE_DOMAIN.MESSAGE]: Math.max(
-          Number(currentSession.revisionByDomain?.[WORKFLOW_SEQUENCE_DOMAIN.MESSAGE] || 0),
-          Number(eventData?.revision || 0),
+        [MESSAGE_EVENT_SEQUENCE_DOMAIN]: Math.max(
+          Number(currentSession.revisionByDomain?.[MESSAGE_EVENT_SEQUENCE_DOMAIN] || 0),
+          Number(ordering.revision || 0),
         ),
       },
       updatedAt: eventTime(eventData),
@@ -412,12 +404,12 @@ export function createSubSessionStore({
     subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
     if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
     logWorkflowDiagnostics("frontend.workflowSubSession.registryCommitted", () => ({
-      sessionId: text(eventData?.parentSessionId || sessionId),
+      sessionId: text(payload.parentSessionId || sessionId),
       nodeSessionId: sessionId,
-      dialogProcessId: text(eventData?.dialogProcessId),
-      turnScopeId: text(eventData?.turnScopeId),
-      workflowRunId: text(eventData?.workflowRunId),
-      nodeExecutionId: text(eventData?.nodeExecutionId),
+      dialogProcessId: text(payload.dialogProcessId),
+      turnScopeId: text(identity.turnScopeId),
+      workflowRunId: text(payload.workflowRunId),
+      nodeExecutionId: text(payload.nodeExecutionId),
       eventId,
       messageId: messageKey,
       eventType: projectionEventName,
@@ -565,7 +557,7 @@ export function createSubSessionStore({
       sessionId,
       messages: deduplicatedMessages,
       sequence: Number(current.sequence || 0),
-      sequenceDomain: text(current.sequenceDomain) || WORKFLOW_SEQUENCE_DOMAIN.MESSAGE,
+      sequenceDomain: text(current.sequenceDomain) || MESSAGE_EVENT_SEQUENCE_DOMAIN,
       sequenceByDomain: {
         ...(current.sequenceByDomain || {}),
         [WORKFLOW_SEQUENCE_DOMAIN.SESSION_SNAPSHOT]: aggregateVersion,

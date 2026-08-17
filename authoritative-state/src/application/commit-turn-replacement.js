@@ -128,7 +128,7 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
     (receipt) => !replacedScopes.has(clean(receipt.turnScopeId)),
   );
   const nextOutbox = normalizedOutbox.filter(
-    (item) => !replacedScopes.has(clean(item?.envelope?.turnScopeId)),
+    (item) => !replacedScopes.has(clean(item?.envelope?.identity?.turnScopeId)),
   );
   return {
     applied: true,

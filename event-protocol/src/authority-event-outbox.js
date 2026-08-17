@@ -3,19 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { validateEventEnvelope } from "./envelope.js";
+
 const clean = (value) => String(value || "").trim();
 
 function validateAuthorityEnvelope(envelope = {}) {
-  return Boolean(
-    envelope &&
-    typeof envelope === "object" &&
-    !Array.isArray(envelope) &&
-    clean(envelope.eventId) &&
-    clean(envelope.eventType) &&
-    clean(envelope.sessionId) &&
-    Number.isInteger(Number(envelope.sequence)) &&
-    Number(envelope.sequence) > 0,
-  );
+  return validateEventEnvelope(envelope).valid;
 }
 
 export const AUTHORITY_EVENT_DELIVERY_STATUS = Object.freeze({
@@ -32,6 +25,10 @@ function normalizeDelivery(item = {}) {
     attempts: Math.max(0, Number(item.deliveryAttempts ?? item.delivery?.attempts) || 0),
     lastAttemptAt: clean(item.lastAttemptAt || item.delivery?.lastAttemptAt),
     deliveredAt,
+    consumerId: clean(item.consumerId || item.delivery?.consumerId),
+    orderingDomain: clean(item.orderingDomain || item.delivery?.orderingDomain),
+    orderingScopeId: clean(item.orderingScopeId || item.delivery?.orderingScopeId),
+    sequence: Number(item.sequence ?? item.delivery?.sequence) || 0,
   };
 }
 
@@ -40,17 +37,22 @@ export function normalizeAuthorityEventOutbox(source = []) {
   const eventIds = new Set();
   for (const item of Array.isArray(source) ? source : []) {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const eventId = clean(item.eventId || item.envelope?.eventId);
+    const eventId = clean(item.eventId);
     const envelope =
       item.envelope && typeof item.envelope === "object" && !Array.isArray(item.envelope)
-        ? { ...item.envelope, eventId }
+        ? item.envelope
         : null;
-    if (!eventId || eventIds.has(eventId) || !validateAuthorityEnvelope(envelope)) continue;
+    if (
+      !eventId ||
+      eventId !== clean(envelope?.identity?.eventId) ||
+      eventIds.has(eventId) ||
+      !validateAuthorityEnvelope(envelope)
+    ) continue;
     eventIds.add(eventId);
     normalized.push({
       eventId,
       envelope,
-      committedAt: clean(item.committedAt || envelope.occurredAt || envelope.updatedAt),
+      committedAt: clean(item.committedAt || envelope.occurredAt),
       delivery: normalizeDelivery(item),
     });
   }
@@ -87,14 +89,26 @@ export function recordAuthorityEventDeliveryAttempt(
 
 export function acknowledgeAuthorityEventDelivery(
   source = [],
-  { eventId = "", deliveredAt = "" } = {},
+  { eventId = "", consumerId = "", orderingDomain = "", orderingScopeId = "", sequence, deliveredAt = "" } = {},
 ) {
   const normalizedEventId = clean(eventId);
+  const normalizedConsumerId = clean(consumerId);
+  const normalizedDomain = clean(orderingDomain);
+  const normalizedScopeId = clean(orderingScopeId);
+  const normalizedSequence = Number(sequence);
+  if (!normalizedConsumerId || !normalizedDomain || !normalizedScopeId || !Number.isInteger(normalizedSequence) || normalizedSequence < 1) {
+    return { found: false, changed: false, reason: "invalid_delivery_acknowledgement", outbox: normalizeAuthorityEventOutbox(source) };
+  }
   let found = false;
   let changed = false;
   const outbox = normalizeAuthorityEventOutbox(source).map((item) => {
     if (item.eventId !== normalizedEventId) return item;
     found = true;
+    if (
+      item.envelope.ordering.domain !== normalizedDomain ||
+      item.envelope.ordering.scopeId !== normalizedScopeId ||
+      Number(item.envelope.ordering.sequence) !== normalizedSequence
+    ) return item;
     if (item.delivery.deliveredAt) return item;
     changed = true;
     return {
@@ -103,35 +117,30 @@ export function acknowledgeAuthorityEventDelivery(
         ...item.delivery,
         status: AUTHORITY_EVENT_DELIVERY_STATUS.DELIVERED,
         deliveredAt: clean(deliveredAt),
+        consumerId: normalizedConsumerId,
+        orderingDomain: normalizedDomain,
+        orderingScopeId: normalizedScopeId,
+        sequence: normalizedSequence,
       },
     };
   });
   return { found, changed, outbox };
 }
 
-export function findAuthorityEventEnvelope(source = [], { commandId = "", eventType = "" } = {}) {
-  const normalizedCommandId = clean(commandId);
-  const normalizedEventType = clean(eventType);
-  return (
-    normalizeAuthorityEventOutbox(source).find(
-      (item) =>
-        clean(item.envelope.commandId) === normalizedCommandId &&
-        clean(item.envelope.eventType) === normalizedEventType,
-    )?.envelope || null
-  );
-}
-
 /**
- * Removes delivered events only after the caller supplies an explicit consumer
- * watermark and the exact committed result is durably present in a command
- * receipt. Pending or unreceipted events are never removed.
+ * Removes events only from explicit durable delivery acknowledgements for one
+ * consumer and one ordering stream. No domain fact or command receipt is used
+ * to infer delivery.
  */
 export function compactAuthorityEventOutbox(
   source = [],
-  { deliveredThroughSequence, retainDeliveredAfter = "", commandReceipts = [] } = {},
+  { consumerId = "", orderingDomain = "", orderingScopeId = "", deliveredThroughSequence, retainDeliveredAfter = "" } = {},
 ) {
+  const normalizedConsumerId = clean(consumerId);
+  const normalizedDomain = clean(orderingDomain);
+  const normalizedScopeId = clean(orderingScopeId);
   const watermark = Number(deliveredThroughSequence);
-  if (!Number.isInteger(watermark) || watermark < 0) {
+  if (!normalizedConsumerId || !normalizedDomain || !normalizedScopeId || !Number.isInteger(watermark) || watermark < 0) {
     return {
       compacted: false,
       reason: "invalid_delivery_watermark",
@@ -148,20 +157,14 @@ export function compactAuthorityEventOutbox(
       outbox: normalizeAuthorityEventOutbox(source),
     };
   }
-  const receipts = Array.isArray(commandReceipts) ? commandReceipts : [];
   const outbox = normalizeAuthorityEventOutbox(source);
   const retained = outbox.filter((item) => {
     if (!item.delivery.deliveredAt) return true;
-    if (Number(item.envelope.sequence) > watermark) return true;
+    if (item.delivery.consumerId !== normalizedConsumerId) return true;
+    if (item.delivery.orderingDomain !== normalizedDomain || item.delivery.orderingScopeId !== normalizedScopeId) return true;
+    if (item.delivery.sequence > watermark) return true;
     if (Date.parse(item.delivery.deliveredAt) >= Date.parse(cutoff)) return true;
-    const durableReceipt = receipts.find(
-      (receipt) =>
-        clean(receipt?.commandId) === clean(item.envelope.commandId) &&
-        clean(receipt?.type) === clean(item.envelope.eventType) &&
-        clean(receipt?.eventId || receipt?.envelope?.eventId) === item.eventId &&
-        validateAuthorityEnvelope(receipt?.envelope),
-    );
-    return !durableReceipt;
+    return false;
   });
   return {
     compacted: retained.length !== outbox.length,

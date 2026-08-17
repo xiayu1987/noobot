@@ -343,6 +343,14 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.appendTurns(payload);
     },
 
+    async commitMessageEvent(payload = {}) {
+      return sessionMessageService.commitMessageEvent(bindPersistenceScope(payload));
+    },
+
+    async commitAuthorityEvent(payload = {}) {
+      return sessionMessageService.commitAuthorityEvent(bindPersistenceScope(payload));
+    },
+
     async commitTurn(payload = {}) {
       return sessionMessageService.commitTurn(payload);
     },

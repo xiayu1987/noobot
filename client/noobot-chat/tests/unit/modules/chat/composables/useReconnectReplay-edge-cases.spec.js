@@ -9,6 +9,7 @@ import {
   createCanonicalAssistant,
   createFixture,
   createFakeProcessStore,
+  createInteractionEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
@@ -73,14 +74,16 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
     ];
 
-    const result = await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
+    const interaction = createInteractionEnvelope({
       requestId: "req-late",
-      sessionId: "s-1",
       dialogProcessId: "dp-late",
-      turnScopeId: "turn-missing",
       interactionType: "confirm",
-      payload: { content: "continue?" },
-    });
+      content: "continue?",
+    }, { sessionId: "s-1", turnScopeId: "turn-missing" });
+    const result = await api.applyReconnectEvent(
+      interaction.identity.eventType,
+      interaction,
+    );
 
     expect(result?.applied).not.toBe(false);
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(

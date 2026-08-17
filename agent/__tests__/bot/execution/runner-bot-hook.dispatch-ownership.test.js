@@ -106,14 +106,16 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  const thinkingEvent = events.find(
-    (item = {}) => item.event === "thinking" && item?.data?.event === "workflow_semantic_response",
+  const committedEvent = events.find(
+    (item = {}) => item.event === "authority_event_committed"
+      && item?.data?.envelope?.payload?.event === "workflow_semantic_response",
   );
-  assert.equal(thinkingEvent?.data?.messageId, "message-workflow-semantic");
-  assert.equal(thinkingEvent?.data?.presentationMessageId, "presentation-workflow-semantic");
-  assert.equal(thinkingEvent?.data?.sequence, 1);
-  assert.equal(thinkingEvent?.data?.envelopeKind, "noobot.message_event");
-  assert.equal(thinkingEvent?.data?.sequenceDomain, "message-event");
+  const envelope = committedEvent?.data?.envelope;
+  assert.equal(envelope?.identity?.messageId, "message-workflow-semantic");
+  assert.equal(envelope?.payload?.presentationMessageId, "presentation-workflow-semantic");
+  assert.equal(envelope?.ordering?.sequence, 1);
+  assert.equal(envelope?.protocol?.version, 3);
+  assert.equal(envelope?.ordering?.domain, "message-event");
 });
 
 test("before-dispatch takeover can claim root processing before the hook completes", async () => {

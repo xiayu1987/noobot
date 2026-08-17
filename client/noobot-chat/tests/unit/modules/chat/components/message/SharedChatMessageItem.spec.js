@@ -15,6 +15,11 @@ import {
 } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { clearSessionTurnUiStates } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
+import {
+  canonicalWorkflowRuntimeEvent,
+  canonicalWorkflowSessionSnapshot,
+} from "../../helpers/workflowRuntimeEventFixture.js";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
@@ -384,17 +389,16 @@ describe("SharedChatMessageItem", () => {
   it("keeps the single outer assistant header that owns a live workflow", () => {
     const wrapper = mountItem({
       storeSetup: (store) =>
-        store.applyWorkflowRuntimeEvent({
-          event: "workflow_planning_message_prepared",
-          data: {
+        store.applyWorkflowRuntimeEvent(
+          canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
             workflowRunId: "turn-workflow",
-            sessionId: "session-1",
+            authoritySessionId: "session-1",
             dialogProcessId: "dialog-workflow",
             turnScopeId: "turn-workflow",
             semanticText: "WORKFLOW_DSL/1",
             nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
-          },
-        }),
+          }),
+        ),
       messageItem: {
         id: "workflow-thinking-host",
         role: "assistant",
@@ -425,17 +429,16 @@ describe("SharedChatMessageItem", () => {
     });
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
 
-    useChatStore().applyWorkflowRuntimeEvent({
-      event: "workflow_planning_message_prepared",
-      data: {
+    useChatStore().applyWorkflowRuntimeEvent(
+      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
         workflowRunId: "workflow-late",
-        sessionId: "session-late",
+        authoritySessionId: "session-late",
         dialogProcessId: "dialog-workflow-late",
         turnScopeId: "turn-workflow-late",
         semanticText: "WORKFLOW_DSL/1",
         nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
-      },
-    });
+      }),
+    );
     await nextTick();
 
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
@@ -554,11 +557,9 @@ describe("SharedChatMessageItem", () => {
     const wrapper = mountItem({
       storeSetup: (store) =>
         store.applyWorkflowRuntimeEvent(
-          {
-            event: "workflow_session_snapshot_loaded",
-            data: {
-              sessionId: "child-session",
-              parentSessionId: "parent-session",
+          canonicalWorkflowSessionSnapshot({
+              nodeSessionId: "child-session",
+              authoritySessionId: "parent-session",
               workflowRunId: "workflow-run-1",
               nodeExecutionId: "node-execution-1",
               aggregateVersion: 1,
@@ -570,8 +571,7 @@ describe("SharedChatMessageItem", () => {
                   thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
                 },
               ],
-            },
-          },
+            }),
           { source: "test_snapshot" },
         ),
       messageItem: {
@@ -628,11 +628,9 @@ describe("SharedChatMessageItem", () => {
           updatedAt: "2026-07-29T09:44:50.000Z",
         });
         store.applyWorkflowRuntimeEvent(
-          {
-            event: "workflow_session_snapshot_loaded",
-            data: {
-              sessionId: "child-session-terminal",
-              parentSessionId: "parent-session",
+          canonicalWorkflowSessionSnapshot({
+              nodeSessionId: "child-session-terminal",
+              authoritySessionId: "parent-session",
               workflowRunId: "workflow-run-1",
               nodeExecutionId: "node-execution-1",
               aggregateVersion: 1,
@@ -644,8 +642,7 @@ describe("SharedChatMessageItem", () => {
                   thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
                 },
               ],
-            },
-          },
+            }),
           { source: "test_snapshot" },
         );
       },

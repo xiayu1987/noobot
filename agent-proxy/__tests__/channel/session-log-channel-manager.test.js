@@ -9,6 +9,8 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import { CONVERSATION_SOURCE_EVENT, CONVERSATION_STATE } from "../../src/shared/constants.js";
+import { canonicalMessageEvent } from "./channel-manager.state-consistency.test-helpers.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
 test("ChannelManager omits successful data-plane logs but retains state logs", () => {
   const records = [];
@@ -28,13 +30,9 @@ test("ChannelManager omits successful data-plane logs but retains state logs", (
   channel.apiKey = "api-key-1";
 
   records.length = 0;
-  manager.pushChannelEvent(channel, "message", {
-    sessionId: "session-1",
-    dialogProcessId: "dialog-1",
-    turnScopeId: "turn-1",
-    requestId: "request-1",
-    content: "full message should not be mirrored into summary",
-  });
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
+    text: "full message should not be mirrored into summary",
+  }));
   manager.updateConversationState(channel, {
     sessionId: "session-1",
     dialogProcessId: "dialog-1",
@@ -74,14 +72,10 @@ test("ChannelManager counts nested authoritative message events without session 
   channel.apiKey = "api-key-1";
   records.length = 0;
 
-  manager.pushChannelEvent(channel, "message", {
-    sessionId: "session-1",
-    payload: {
-      eventType: "main_model_content",
-      messageId: "message-1",
-      content: "authoritative result",
-    },
-  });
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
+    messageId: "message-1",
+    text: "authoritative result",
+  }));
 
   assert.equal(records.length, 0);
   assert.equal(manager.drainSuccessfulDataPlaneMetrics()?.channelEvents, 1);

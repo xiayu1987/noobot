@@ -155,8 +155,14 @@ export async function acknowledgeAuthorityEvent({
   parentSessionId = "",
   persistenceContext = null,
   eventId = "",
+  consumerId = "",
+  orderingDomain = "",
+  orderingScopeId = "",
+  sequence,
 } = {}) {
-  if (!userId || !sessionId || !eventId) return { acknowledged: false, reason: "missing_identity" };
+  if (!userId || !sessionId || !eventId || !consumerId || !orderingDomain || !orderingScopeId) {
+    return { acknowledged: false, reason: "missing_identity" };
+  }
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -177,8 +183,13 @@ export async function acknowledgeAuthorityEvent({
       const actualVersion = resolveAggregateVersion(session);
       const result = acknowledgeAuthorityEventDelivery(session.authorityEventOutbox, {
         eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
         deliveredAt: this.now(),
       });
+      if (result.reason) return { acknowledged: false, reason: result.reason };
       if (!result.found) return { acknowledged: false, reason: "event_not_found" };
       if (!result.changed)
         return { acknowledged: true, deduplicated: true, aggregateVersion: actualVersion };
@@ -201,9 +212,14 @@ export async function compactAuthorityEvents({
   parentSessionId = "",
   persistenceContext = null,
   deliveredThroughSequence,
+  consumerId = "",
+  orderingDomain = "",
+  orderingScopeId = "",
   retainDeliveredAfter = "",
 } = {}) {
-  if (!userId || !sessionId) return { compacted: false, reason: "missing_session" };
+  if (!userId || !sessionId || !consumerId || !orderingDomain || !orderingScopeId) {
+    return { compacted: false, reason: "missing_compaction_identity" };
+  }
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -224,8 +240,10 @@ export async function compactAuthorityEvents({
       const actualVersion = resolveAggregateVersion(session);
       const result = compactAuthorityEventOutbox(session.authorityEventOutbox, {
         deliveredThroughSequence,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
         retainDeliveredAfter,
-        commandReceipts: session.turnLifecycle?.commandReceipts,
       });
       if (result.reason || !result.compacted) return { ...result, aggregateVersion: actualVersion };
       session.authorityEventOutbox = result.outbox;

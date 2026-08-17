@@ -5,6 +5,8 @@
  */
 import { commitTurn } from "./session-message-service/commit-turn.js";
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
+import { commitMessageEvent } from "./session-message-service/message-event.js";
+import { commitAuthorityEvent } from "./session-message-service/authority-event.js";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
   acknowledgeAuthorityEvent,
@@ -112,6 +114,12 @@ export class SessionMessageService {
   }
   async appendTurns(payload = {}) {
     return appendTurns.call(this, payload);
+  }
+  async commitMessageEvent(payload = {}) {
+    return commitMessageEvent.call(this, payload);
+  }
+  async commitAuthorityEvent(payload = {}) {
+    return commitAuthorityEvent.call(this, payload);
   }
   async deleteFromMessage(payload = {}) {
     return deleteFromMessage.call(this, payload);

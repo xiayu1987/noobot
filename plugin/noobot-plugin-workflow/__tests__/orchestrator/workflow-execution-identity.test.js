@@ -8,8 +8,12 @@ import assert from "node:assert/strict";
 
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { runWorkflowExecution } from "../../src/core/orchestrator/execution-runner.js";
+import { createInMemoryWorkflowNodeStateRepository } from "../../src/core/orchestrator/node-state-repository.js";
 import { buildWorkflowPlanningNodeSessions } from "../../src/core/workflow-run-identity.js";
-import { createSemanticTransferTool } from "../helpers/workflow-hook-session-strategy-helper.js";
+import {
+  createSemanticTransferTool,
+  installTurnMessageEventRuntimeFixture,
+} from "../helpers/workflow-hook-session-strategy-helper.js";
 
 function buildSemantic() {
   return parseWorkflowDslText([
@@ -25,40 +29,37 @@ function buildSemantic() {
 
 function buildCtx() {
   const events = [];
-  return {
-    ctx: {
-      userId: "u1",
-      sessionId: "s1",
-      dialogProcessId: "d1",
-      runConfig: { streaming: false },
-      eventListener: {
-        onEvent(event) {
-          events.push(event);
-        },
+  const ctx = installTurnMessageEventRuntimeFixture({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "d1",
+    turnScopeId: "turn-workflow-test",
+    runConfig: { streaming: false, turnScopeId: "turn-workflow-test" },
+    eventListener: {
+      onEvent(event) {
+        events.push(event);
       },
-      agentContext: {
-        bindings: {
-          runtime: {
-            sharedTools: {
-              semanticTransfer: createSemanticTransferTool(),
-            },
+    },
+    agentContext: {
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: createSemanticTransferTool(),
           },
         },
       },
     },
+  });
+  return {
+    ctx,
     events,
   };
 }
 
 function buildOptions({ subSessionRunner } = {}) {
-  const events = [];
   return {
-    events,
-    workflowEventLogger: async ({ event }) => {
-      events.push(event);
-      return event;
-    },
     maxAutoTransitions: 3,
+    workflowNodeStateRepository: createInMemoryWorkflowNodeStateRepository(),
     subSessionRunner: subSessionRunner || (async ({ strategy, runConfigPatch, metadata }) => ({
       sessionId: "child-a",
       dialogProcessId: strategy.dialogProcessId,
@@ -108,12 +109,6 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(subSessionCalls[0].runConfigPatch.workflowNodeExecutionId, identity.nodeExecutionId);
   assert.equal(subSessionCalls[0].metadata.nodeExecutionId, identity.nodeExecutionId);
 
-  const started = options.events.find((item) => item?.event === "workflow_node_subsession_started");
-  const succeeded = options.events.find((item) => item?.event === "workflow_node_subsession_succeeded");
-  assert.equal(started?.nodeExecutionId, identity.nodeExecutionId);
-  assert.equal(succeeded?.nodeIdentity?.nodeExecutionId, identity.nodeExecutionId);
-  assert.equal(succeeded?.nodeIdentity?.sessionId, "child-a");
-
   const run = result.execution.nodeAgentRuns[0];
   assert.equal(run.workflowRunId, identity.workflowRunId);
   assert.equal(run.nodeExecutionId, identity.nodeExecutionId);
@@ -123,38 +118,19 @@ test("runWorkflowExecution carries planning identity through events, strategy an
   assert.equal(run.agentDialogProcessId, "actual-child-dialog-a");
   assert.equal(run.nodeSessionId, "child-a");
 
-  const persistedNodeEvents = options.events.filter((item) => item?.event === "workflow_node_state_committed");
-  const realtimeNodeEvents = realtimeEvents.filter((item) => item?.event === "workflow_node_state_committed");
-  assert.equal(persistedNodeEvents.length, 2);
-  assert.equal(realtimeNodeEvents.length, 2);
-  assert.deepEqual(
-    persistedNodeEvents.map((item) => item.status),
-    ["running", "succeeded"],
-  );
-  assert.deepEqual(
-    realtimeNodeEvents.map((item) => item.data?.status),
-    ["running", "succeeded"],
-  );
-  assert.deepEqual(
-    persistedNodeEvents.map((item) => item.sequenceDomain),
-    ["workflow-node-state", "workflow-node-state"],
-  );
-  assert.deepEqual(
-    realtimeNodeEvents.map((item) => item.data?.sequenceDomain),
-    ["workflow-node-state", "workflow-node-state"],
-  );
-  assert.equal(realtimeNodeEvents[0].data.nodeExecutionId, identity.nodeExecutionId);
-  assert.equal(realtimeNodeEvents[0].data.commandId, identity.commandId);
-  assert.equal(realtimeNodeEvents[0].data.dialogProcessId, identity.dialogProcessId);
-  assert.equal(realtimeNodeEvents[0].data.turnScopeId, identity.turnScopeId);
-  assert.equal(realtimeNodeEvents[0].data.sessionId, subSessionCalls[0].strategy.sessionId);
-  assert.equal(realtimeNodeEvents[0].data.parentSessionId, "s1");
-  assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
-  assert.equal(realtimeNodeEvents[1].data.dialogProcessId, identity.dialogProcessId);
-  assert.equal(realtimeNodeEvents[1].data.agentDialogProcessId, "actual-child-dialog-a");
-  assert.equal(persistedNodeEvents[0].parentSessionId, "s1");
-  assert.equal(realtimeNodeEvents[1].data.sessionId, "child-a");
-  assert.equal(realtimeNodeEvents[1].data.eventId, persistedNodeEvents[1].eventId);
+  assert.equal(Array.isArray(realtimeEvents), true);
+  const nodeEnvelopes = realtimeEvents
+    .filter((item) => item?.event === "authority_event_committed")
+    .map((item) => item?.data?.envelope)
+    .filter((envelope) => envelope?.identity?.eventType === "workflow_node_state_committed");
+  assert.equal(nodeEnvelopes.length, 2);
+  assert.equal(nodeEnvelopes[0].identity.sessionId, "s1");
+  assert.equal(nodeEnvelopes[0].payload.nodeSessionId, subSessionCalls[0].strategy.sessionId);
+  assert.equal(nodeEnvelopes[1].identity.sessionId, "s1");
+  assert.equal(nodeEnvelopes[1].payload.nodeSessionId, "child-a");
+  assert.equal(nodeEnvelopes[1].payload.dialogProcessId, identity.dialogProcessId);
+  assert.equal(nodeEnvelopes[1].payload.agentDialogProcessId, "actual-child-dialog-a");
+  assert.equal(nodeEnvelopes[1].identity.executionId, identity.nodeExecutionId);
 });
 
 test("runWorkflowExecution rejects duplicate planning identities for the same node attempt", async () => {

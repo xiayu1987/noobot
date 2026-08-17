@@ -6,7 +6,6 @@
 
 import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES } from "../constants.js";
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
-import { emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { endWorkflowPhase } from "./phase-events.js";
 import { runWorkflowExecution } from "./execution-runner.js";
 
@@ -21,12 +20,6 @@ export async function runWorkflowExecutionStage({
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
   throwIfWorkflowAborted(ctx);
-  await emitWorkflowRuntimeEvent({
-    options,
-    ctx,
-    event: "workflow_execution_started",
-  });
-
   const { execution, nodeAgentRuns, instanceId } = await runWorkflowExecution({
     hookManager,
     options,

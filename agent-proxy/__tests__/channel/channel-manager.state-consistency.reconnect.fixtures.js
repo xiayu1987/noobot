@@ -5,8 +5,26 @@
  */
 import {
   createTurnLifecycleEnvelope,
+  createTurnLifecycleSnapshot,
   TURN_EVENT,
 } from "@noobot/session-protocol";
+import {
+  createEventEnvelope,
+  createTurnSnapshotEnvelope,
+  EVENT_FAMILY,
+} from "@noobot/event-protocol";
+
+export function authoritativeSnapshot(fields = {}) {
+  return createTurnSnapshotEnvelope(createTurnLifecycleSnapshot({
+    generatedAt: "2026-08-17T00:00:00.000Z",
+    recentTerminalTurns: [],
+    replacedTurns: [],
+    ...fields,
+  }), {
+    eventId: fields.eventId || `${fields.commandId}:snapshot:${fields.sequence || 0}`,
+    producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
+  });
+}
 
 export function authoritativeLifecycle(fields = {}) {
   const eventType = String(fields.eventType || "").trim();
@@ -29,7 +47,7 @@ export function authoritativeLifecycle(fields = {}) {
     [TURN_EVENT.STOP_COMPLETED]: "stop",
   };
   const terminal = eventType === TURN_EVENT.COMPLETED || eventType === TURN_EVENT.STOP_COMPLETED;
-  return createTurnLifecycleEnvelope({
+  const payload = createTurnLifecycleEnvelope({
     eventType,
     eventId: fields.eventId,
     commandId: fields.commandId || `command-${fields.eventId}`,
@@ -48,5 +66,25 @@ export function authoritativeLifecycle(fields = {}) {
     summaryVersion: terminal ? 1 : 0,
     completionCommitId: terminal ? `commit-${fields.eventId}` : "",
     ...fields,
+  });
+  return createEventEnvelope({
+    family: EVENT_FAMILY.TURN_LIFECYCLE,
+    identity: {
+      eventId: payload.eventId,
+      eventType: "turn_lifecycle",
+      sessionId: payload.sessionId,
+      turnScopeId: payload.turnScopeId,
+      messageId: payload.messageId,
+    },
+    causality: { commandId: payload.commandId },
+    ordering: {
+      domain: "session",
+      scopeId: payload.sessionId,
+      sequence: payload.sequence,
+      revision: payload.revision,
+    },
+    producer: { type: "test", id: "agent-proxy-reconnect-fixture" },
+    occurredAt: payload.occurredAt,
+    payload,
   });
 }

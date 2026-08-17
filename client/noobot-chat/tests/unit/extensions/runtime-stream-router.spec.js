@@ -7,6 +7,38 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearExtensionRegistry, contributeExtension } from "../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { routeRuntimeStreamEvent } from "../../../src/extensions/runtime-stream-router.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol/workflow-runtime-event";
+
+function workflowNodeEvent() {
+  return createEventEnvelope({
+    family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    identity: {
+      eventId: "workflow-node-event-7",
+      eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      sessionId: "s-1",
+      turnScopeId: "turn-1",
+    },
+    causality: {},
+    ordering: {
+      domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+      scopeId: "workflow-1",
+      sequence: 7,
+      revision: 1,
+    },
+    producer: { type: "test", id: "runtime-stream-router" },
+    occurredAt: "2026-01-01T00:00:07.000Z",
+    payload: {
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      status: "running",
+      turnScopeId: "turn-1",
+    },
+  });
+}
 
 describe("runtime stream projector boundary", () => {
   afterEach(() => clearExtensionRegistry());
@@ -24,7 +56,7 @@ describe("runtime stream projector boundary", () => {
       provide: () => [projector],
     });
 
-    expect(routeRuntimeStreamEvent(event, {}, {})).toBe(false);
+    expect(routeRuntimeStreamEvent({ event }, {})).toBe(false);
     expect(projector).not.toHaveBeenCalled();
   });
 
@@ -35,13 +67,14 @@ describe("runtime stream projector boundary", () => {
       provide: () => [projector],
     });
 
-    expect(routeRuntimeStreamEvent("plugin_runtime_fact", { seq: 7 }, { source: "live" })).toBe(true);
+    expect(routeRuntimeStreamEvent(workflowNodeEvent(), { source: "live" })).toBe(true);
     expect(projector).toHaveBeenCalledOnce();
   });
 
   it("records registered, matched, and executable projector counts", () => {
     const logRuntimeProjectionDiagnostics = vi.fn();
-    const predicate = vi.fn(({ event }) => event === "plugin_runtime_fact");
+    const predicate = vi.fn(({ envelope }) =>
+      envelope?.identity?.eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE);
     contributeExtension(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, {
       id: "matching-projector",
       pluginId: "plugin-a",
@@ -55,7 +88,7 @@ describe("runtime stream projector boundary", () => {
       provide: () => [() => true],
     });
 
-    expect(routeRuntimeStreamEvent("plugin_runtime_fact", {}, {
+    expect(routeRuntimeStreamEvent(workflowNodeEvent(), {
       source: "live",
       logRuntimeProjectionDiagnostics,
     })).toBe(true);

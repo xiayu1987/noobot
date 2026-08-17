@@ -91,7 +91,7 @@ export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {
   return true;
 }
 
-export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
+export async function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
   const messageId = String(result?.assistantMessageId || "").trim();
@@ -109,7 +109,7 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
     : Array.isArray(result?.attachments)
       ? result.attachments
       : [];
-  const event = emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
+  const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     output: finalOutput,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
@@ -123,7 +123,7 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
 }
 
 /** The sole authoritative final-result boundary for every dispatch disposition. */
-export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
+export async function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
   const store = runtime?.currentTurnMessages;
   const promotionSources = Array.isArray(runtime?.summaryCheckpointPromotionSources)
     ? runtime.summaryCheckpointPromotionSources
@@ -162,19 +162,19 @@ export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {
   if (!commitAuthoritativeFinalOutput({ result, runtime })) {
     throw new Error("authoritative final result failed to update the canonical message");
   }
-  emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
-  const event = emitAuthoritativeFinalMessageContent({ result, runtime });
+  await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+  const event = await emitAuthoritativeFinalMessageContent({ result, runtime });
   if (!event) throw new Error("authoritative final result failed to emit its message event");
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
     ...authoritativeFinalDiagnostics(result, runtime),
-    eventId: String(event?.eventId || "").trim(),
-    messageId: String(event?.messageId || "").trim(),
-    presentationMessageId: String(event?.presentationMessageId || "").trim(),
+    eventId: String(event?.identity?.eventId || "").trim(),
+    messageId: String(event?.identity?.messageId || "").trim(),
+    presentationMessageId: String(event?.payload?.presentationMessageId || "").trim(),
   });
   return true;
 }
 
-export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
+export async function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
   const meta = readFinalStreamingResultMeta(result);
   if (meta?.streamed !== true) return false;
 
@@ -203,7 +203,7 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   if (!appendedText) return false;
 
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  emitMessageEvent(eventListener, runtime, "llm_delta", {
+  await emitMessageEvent(eventListener, runtime, "llm_delta", {
     text: appendedText,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),

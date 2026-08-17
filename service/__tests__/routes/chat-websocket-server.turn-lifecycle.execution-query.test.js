@@ -241,7 +241,10 @@ test("execution query rejects malformed and unavailable requests", async () => {
     ),
   );
   assert.deepEqual(
-    sent.map(({ data }) => data.errorCode),
-    ["INVALID_AGENT_COMMAND", "execution_query_unavailable"],
+    sent.map(({ data }) => ({ commandId: data.commandId, code: data.error?.code })),
+    [
+      { commandId: "bad", code: "missing_execution_id" },
+      { commandId: "missing-reader", code: "execution_query_unavailable" },
+    ],
   );
 });

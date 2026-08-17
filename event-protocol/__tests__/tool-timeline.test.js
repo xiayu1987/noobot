@@ -10,6 +10,9 @@ import {
   reduceCanonicalToolTimeline,
   resolveCanonicalToolTimelineStatus,
 } from "../src/tool-timeline.js";
+import { createEventEnvelope } from "../src/envelope.js";
+import { EVENT_FAMILY } from "../src/event-registry.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "../src/message-event.js";
 import {
   SECURITY_EVIDENCE_SOURCE,
   createSecurityAssessment,
@@ -26,22 +29,26 @@ const raisedAssessment = raiseSecurityAssessment(initialAssessment, {
 });
 
 function event(eventType, sequence, extra = {}) {
-  return {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    eventType,
-    eventId: `event-${sequence}`,
-    sequence,
-    messageId: "message-1",
-    presentationMessageId: "presentation-1",
-    sequenceScopeId: "message-1",
-    sequenceDomain: "message-event",
-    timestamp: `2026-08-15T01:00:0${sequence}.000Z`,
-    sessionId: "session-1",
-    toolCallId: "call-1",
-    tool: "read_file",
-    ...extra,
-  };
+  return createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: `event-${sequence}`,
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId: "session-1",
+      messageId: "message-1",
+    },
+    causality: {},
+    ordering: { domain: "message-event", scopeId: "message-1", sequence },
+    producer: { type: "agent", id: "agent-1" },
+    occurredAt: `2026-08-15T01:00:0${sequence}.000Z`,
+    payload: {
+      eventType,
+      presentationMessageId: "presentation-1",
+      toolCallId: "call-1",
+      tool: "read_file",
+      ...extra,
+    },
+  });
 }
 
 test("canonical tool timeline keeps failed terminal state across call and result order", () => {

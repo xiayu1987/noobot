@@ -28,6 +28,7 @@ export {
 
 export const TURN_LIFECYCLE_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_WIRE_EVENT = "turn_lifecycle";
+export const TURN_SNAPSHOT_WIRE_EVENT = "turn_snapshot";
 export const TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION = 3;
 export const TURN_LIFECYCLE_RECEIPT_PROTOCOL_VERSION = 1;
 export const TURN_LIFECYCLE_RECEIPT_ACTION = "turn.lifecycle.received";

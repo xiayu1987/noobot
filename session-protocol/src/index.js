@@ -7,11 +7,11 @@ export * from "./version.js";
 export * from "./identity.js";
 export * from "./policies.js";
 export * from "./turn-lifecycle.js";
+export * from "./execution-lifecycle.js";
 export * from "./errors.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
 export * from "./identity/message-identity.js";
-export * from "./identity/execution-identity.js";
 export * from "./command/session-command.js";
 export * from "./command/command-fingerprint.js";
 export {

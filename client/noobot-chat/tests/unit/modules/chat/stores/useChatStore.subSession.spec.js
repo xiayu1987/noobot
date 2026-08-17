@@ -7,50 +7,37 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { canonicalMessageEvent } from "../helpers/messageEventFixture.js";
+import { canonicalWorkflowRuntimeEvent, canonicalWorkflowSessionSnapshot } from "../helpers/workflowRuntimeEventFixture.js";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
 function applyMessageEvent(store, eventName, data) {
-  return store.applyWorkflowRuntimeEvent(
-    {
-      event: "workflow_message_event",
-      data: { ...data, eventType: data?.eventType || eventName },
-    },
-    { source: "test" },
-  );
+  return store.reduceSubSessionMessageEvent(data, { source: "test" });
 }
 
 function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent(
-    {
-      event: "workflow_session_snapshot_loaded",
-      data: {
-        aggregateVersion: 1,
-        parentSessionId: "root-session",
-        workflowRunId: "workflow-run-1",
-        nodeExecutionId: "node-execution-1",
-        ...sessionDoc,
-      },
-    },
-    { source: "test_snapshot" },
-  );
+  return store.applyWorkflowRuntimeEvent(canonicalWorkflowSessionSnapshot({
+    aggregateVersion: 1,
+    parentSessionId: "root-session",
+    workflowRunId: "workflow-run-1",
+    nodeExecutionId: "node-execution-1",
+    ...sessionDoc,
+  }), { source: "test_snapshot" });
 }
 
 function messageEvent(eventType, data = {}) {
   const messageId = data.messageId || "message-1";
-  return {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    timestamp: "2026-01-01T00:00:00.000Z",
+  return canonicalMessageEvent({
+    occurredAt: "2026-01-01T00:00:00.000Z",
     sequence: 1,
     eventType,
     parentSessionId: "root-session",
     workflowRunId: "workflow-run-1",
     nodeExecutionId: "node-execution-1",
     messageId,
-    sequenceDomain: "message-event",
     ...data,
     presentationMessageId: data.presentationMessageId || messageId,
-    sequenceScopeId: data.sequenceScopeId || messageId,
-  };
+  });
 }
 
 describe("sub-session realtime message projection", () => {
@@ -166,9 +153,7 @@ describe("sub-session realtime message projection", () => {
       }),
     );
     store.applyWorkflowRuntimeEvent(
-      {
-        event: "workflow_node_state_committed",
-        data: {
+      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
           ...identity,
           workflowRunId: "workflow-1",
           nodeExecutionId: "node-1",
@@ -181,8 +166,7 @@ describe("sub-session realtime message projection", () => {
           startedAt: "2026-01-01T00:00:00.000Z",
           completedAt: "2026-01-01T00:00:05.000Z",
           timestamp: "2026-01-01T00:00:05.000Z",
-        },
-      },
+        }),
       { source: "test" },
     );
 
@@ -376,9 +360,7 @@ describe("sub-session realtime message projection", () => {
     );
 
     store.applyWorkflowRuntimeEvent(
-      {
-        event: "workflow_node_state_committed",
-        data: {
+      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
           ...identity,
           eventId: "node-running",
           sequenceDomain: "workflow-node-state",
@@ -387,14 +369,11 @@ describe("sub-session realtime message projection", () => {
           status: "running",
           startedAt: "2026-07-30T11:54:09.626Z",
           updatedAt: "2026-07-30T11:54:09.626Z",
-        },
-      },
+        }),
       { source: "live" },
     );
     store.applyWorkflowRuntimeEvent(
-      {
-        event: "workflow_node_state_committed",
-        data: {
+      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
           ...identity,
           eventId: "node-succeeded",
           sequenceDomain: "workflow-node-state",
@@ -404,8 +383,7 @@ describe("sub-session realtime message projection", () => {
           startedAt: "2026-07-30T11:54:09.626Z",
           completedAt: "2026-07-30T11:54:21.339Z",
           updatedAt: "2026-07-30T11:54:21.339Z",
-        },
-      },
+        }),
       { source: "live" },
     );
 
@@ -420,9 +398,7 @@ describe("sub-session realtime message projection", () => {
     const store = useChatStore();
     const sessionId = "child-terminal-snapshot";
     store.applyWorkflowRuntimeEvent(
-      {
-        event: "workflow_session_snapshot_loaded",
-        data: {
+      canonicalWorkflowSessionSnapshot({
           sessionId,
           parentSessionId: "root-session",
           workflowRunId: "workflow-run-1",
@@ -435,14 +411,11 @@ describe("sub-session realtime message projection", () => {
               thinkingStartedAt: "2026-07-31T08:42:28.213Z",
             },
           ],
-        },
-      },
+        }),
       { source: "test_snapshot" },
     );
     store.applyWorkflowRuntimeEvent(
-      {
-        event: "workflow_session_snapshot_loaded",
-        data: {
+      canonicalWorkflowSessionSnapshot({
           sessionId,
           parentSessionId: "root-session",
           workflowRunId: "workflow-run-1",
@@ -456,8 +429,7 @@ describe("sub-session realtime message projection", () => {
               thinkingFinishedAt: "2026-07-31T08:43:59.859Z",
             },
           ],
-        },
-      },
+        }),
       { source: "test_snapshot" },
     );
 
@@ -469,9 +441,7 @@ describe("sub-session realtime message projection", () => {
     const store = useChatStore();
     const addWorkflow = (workflowRunId, ownerTurnScopeId, nodeExecutionId, sessionId) => {
       store.applyWorkflowRuntimeEvent(
-        {
-          event: "workflow_planning_message_prepared",
-          data: {
+        canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
             workflowRunId,
             sessionId: "parent-session",
             turnScopeId: ownerTurnScopeId,
@@ -488,8 +458,7 @@ describe("sub-session realtime message projection", () => {
               {
                 workflowRunId,
                 nodeExecutionId,
-                sessionId,
-                parentSessionId: "parent-session",
+                nodeSessionId: sessionId,
                 turnScopeId: `workflow-node:${nodeExecutionId}`,
                 eventId: `${nodeExecutionId}:ready`,
                 sequenceDomain: "workflow-node-state",
@@ -498,8 +467,7 @@ describe("sub-session realtime message projection", () => {
                 status: "ready",
               },
             ],
-          },
-        },
+          }),
         { source: "live" },
       );
     };

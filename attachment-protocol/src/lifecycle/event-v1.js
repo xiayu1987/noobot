@@ -14,6 +14,7 @@ import {
   requirePlainObject,
 } from "../protocol-utils.js";
 import { ATTACHMENT_EVENT_STATUS } from "./transition-table.js";
+export const ATTACHMENT_LIFECYCLE_WIRE_EVENT = "attachment_lifecycle";
 const FIELDS = new Set([
   "eventType",
   "eventVersion",

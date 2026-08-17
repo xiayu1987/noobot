@@ -5,55 +5,53 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  ATTACHMENT_EVENT_TYPE,
-  ATTACHMENT_LIFECYCLE,
-  ATTACHMENT_RELATION_TYPE,
-  createAttachmentLifecycleEvent,
-} from "@noobot/attachment-protocol";
-import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { createCommittedTurnLifecycleEnvelope } from "@noobot/authoritative-state/application";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
-import {
-  startServerWithWs,
-  closeServer,
-  callChatWs,
-} from "./chat-websocket-server.test-helpers.js";
 
 test("authority outbox publishes child lifecycle under the persisted child session identity", async () => {
-  const envelope = createTurnLifecycleEnvelope({
+  const envelope = createCommittedTurnLifecycleEnvelope({
     eventId: "child-event",
-    commandId: "child-command",
-    eventType: "turn.processing_started",
-    userId: "u1",
-    sessionId: "child-session",
-    parentSessionId: "parent-session",
-    turnScopeId: "child-turn",
-    messageId: "child-message",
-    presentationMessageId: "child-message",
-    dialogProcessId: "child-dialog",
-    revision: 2,
-    sequence: 2,
-    phase: "processing",
-    state: "processing",
-    action: "send",
-    executionState: "sending",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    occurredAt: "2026-01-01T00:00:00.000Z",
+    event: {
+      commandId: "child-command",
+      eventType: "turn.processing_started",
+      userId: "u1",
+      sessionId: "child-session",
+      parentSessionId: "parent-session",
+      turnScopeId: "child-turn",
+    },
+    turn: {
+      sessionId: "child-session",
+      parentSessionId: "parent-session",
+      turnScopeId: "child-turn",
+      messageId: "child-message",
+      presentationMessageId: "child-message",
+      dialogProcessId: "child-dialog",
+      revision: 2,
+      sequence: 2,
+      phase: "processing",
+      state: "processing",
+      action: "send",
+      executionState: "sending",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
   });
   const identities = [];
   let delivered = false;
   const bot = {
     async getPendingAuthorityEvents(identity) {
       identities.push(identity);
-      return { found: true, events: delivered ? [] : [{ eventId: envelope.eventId, envelope }] };
+      return {
+        found: true,
+        events: delivered ? [] : [{ eventId: envelope.identity.eventId, envelope }],
+      };
     },
     async recordAuthorityEventAttempt(identity) {
       identities.push(identity);
-      return { recorded: identity.eventId === envelope.eventId };
+      return { recorded: identity.eventId === envelope.identity.eventId };
     },
     async acknowledgeAuthorityEvent(identity) {
       identities.push(identity);
-      delivered = identity.eventId === envelope.eventId;
+      delivered = identity.eventId === envelope.identity.eventId;
       return { acknowledged: delivered };
     },
   };
@@ -83,10 +81,10 @@ test("authority outbox publishes child lifecycle under the persisted child sessi
   );
   assert.equal(events.length, 1);
   assert.equal(events[0]?.event, "turn_lifecycle");
-  assert.equal(events[0]?.data?.sessionId, "child-session");
-  assert.equal(events[0]?.data?.parentSessionId, "parent-session");
-  assert.equal(events[0]?.data?.turnScopeId, "child-turn");
-  assert.equal(events[0]?.data?.revision, 2);
+  assert.equal(events[0]?.data?.identity?.sessionId, "child-session");
+  assert.equal(events[0]?.data?.identity?.turnScopeId, "child-turn");
+  assert.equal(events[0]?.data?.payload?.parentSessionId, "parent-session");
+  assert.equal(events[0]?.data?.ordering?.revision, 2);
 });
 
 test("authority dispatcher rejects an invalid lifecycle envelope before delivery side effects", async () => {
@@ -126,455 +124,4 @@ test("authority dispatcher rejects an invalid lifecycle envelope before delivery
   assert.equal(result.dispatched, false);
   assert.equal(result.reason, "invalid_authority_event_envelope");
   assert.deepEqual(calls, { attempts: 0, sends: 0, acknowledgements: 0 });
-});
-
-test("chat-websocket-server: streaming=false 仍推系统事件且不推 delta", async () => {
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener?.onEvent?.({
-        event: "tool_call_start",
-        data: { tool: "mock_tool", args: { a: 1 }, dialogProcessId: "dp-1" },
-      });
-      eventListener?.onEvent?.({
-        event: "llm_delta",
-        data: { text: "delta-token", dialogProcessId: "dp-1" },
-      });
-      eventListener?.onEvent?.({
-        event: "tool_call_end",
-        data: { tool: "mock_tool", result: "ok", dialogProcessId: "dp-1" },
-      });
-      return {
-        sessionId: "s1",
-        dialogProcessId: "dp-1",
-        answer: "done",
-        messages: [],
-        traces: [],
-        executionLogs: [],
-      };
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        config: { streaming: false, locale: "zh-CN" },
-      },
-    });
-    const names = events.map((item) => String(item?.event || ""));
-    assert.equal(names.includes("tool_call_start"), true);
-    assert.equal(names.includes("tool_call_end"), true);
-    assert.equal(names.includes("delta"), false);
-    assert.equal(names.includes("done"), true);
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server: versioned attachment lifecycle and delta events preserve protocol identity", async () => {
-  const identity = {
-    attachmentId: "att-1",
-    sessionId: "s1",
-    attachmentSource: "user",
-  };
-  const lifecycleEvent = createAttachmentLifecycleEvent({
-    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
-    eventVersion: 1,
-    messageId: "attachment-event-1",
-    identity,
-    status: ATTACHMENT_LIFECYCLE.PARSED,
-    occurredAt: "2026-08-16T00:00:00.000Z",
-    turnScopeId: "turn-parent",
-    relation: {
-      relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
-      sourceIdentity: identity,
-      targetIdentity: {
-        attachmentId: "parsed-att-1",
-        sessionId: "s1",
-        attachmentSource: "model",
-      },
-      createdAt: "2026-08-16T00:00:00.000Z",
-    },
-  });
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener?.onEvent?.({
-        event: "attachment_lifecycle",
-        data: lifecycleEvent,
-      });
-      eventListener?.onEvent?.({
-        event: "llm_delta",
-        data: { text: "root-token", dialogProcessId: "dp-root" },
-      });
-      eventListener?.onEvent?.({
-        event: "llm_delta",
-        data: {
-          text: "sub-token",
-          dialogProcessId: "dp-subagent",
-          sessionId: "sub-session-1",
-          subAgentSessionId: "sub-session-1",
-          subAgentCall: true,
-        },
-      });
-      return {
-        sessionId: "s1",
-        dialogProcessId: "dp-root",
-        answer: "done",
-        messages: [],
-        traces: [],
-        executionLogs: [],
-      };
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        turnScopeId: "turn-parent",
-        config: { streaming: true, locale: "zh-CN" },
-      },
-    });
-
-    const attachmentsEvent = events.find((item) => item?.event === "attachment_lifecycle");
-    assert.deepEqual(attachmentsEvent?.data, lifecycleEvent);
-
-    const deltaEvent = events.find((item) => item?.event === "delta");
-    assert.equal(deltaEvent?.data?.turnScopeId, "turn-parent");
-
-    const subagentDeltaEvent = events.find((item) => item?.event === "subagent_llm_delta");
-    assert.equal(subagentDeltaEvent?.data?.sessionId, "s1");
-    assert.equal(subagentDeltaEvent?.data?.dialogProcessId, "dp-root");
-    assert.equal(subagentDeltaEvent?.data?.childSessionId, "sub-session-1");
-    assert.equal(subagentDeltaEvent?.data?.childDialogProcessId, "dp-subagent");
-    assert.equal(subagentDeltaEvent?.data?.conversationStateOwner, "parent_agent");
-    assert.equal(subagentDeltaEvent?.data?.turnScopeId, "turn-parent");
-
-    const doneEvent = events.find((item) => item?.event === "done");
-    assert.equal(doneEvent?.data?.turnScopeId, "turn-parent");
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server: child run system events are owned by parent dialog state", async () => {
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener?.onEvent?.({
-        event: "tool_call_start",
-        data: {
-          dialogProcessId: "dp-parent",
-          sessionId: "s1",
-          tool: "execute_native_script",
-        },
-      });
-      eventListener?.onEvent?.({
-        event: "session_starting",
-        data: {
-          dialogProcessId: "dp-child",
-          sessionId: "child-session-1",
-          parentSessionId: "s1",
-        },
-      });
-      eventListener?.onEvent?.({
-        event: "workspace_ready",
-        data: {
-          dialogProcessId: "dp-child",
-          sessionId: "child-session-1",
-          parentSessionId: "s1",
-        },
-      });
-      eventListener?.onEvent?.({
-        event: "tool_call_start",
-        data: {
-          dialogProcessId: "dp-child",
-          parentDialogProcessId: "dp-parent",
-          sessionId: "child-session-1",
-          parentSessionId: "s1",
-          tool: "parse_attachment",
-        },
-      });
-      return {
-        sessionId: "s1",
-        dialogProcessId: "dp-parent",
-        answer: "done",
-        messages: [],
-        traces: [],
-        executionLogs: [],
-      };
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        config: { streaming: true, locale: "zh-CN" },
-      },
-    });
-
-    const childSystemEvents = events.filter(
-      (item) =>
-        item?.data?.childSessionId === "child-session-1" &&
-        [
-          "subagent_session_starting",
-          "subagent_workspace_ready",
-          "subagent_tool_call_start",
-        ].includes(item?.event),
-    );
-    assert.equal(childSystemEvents.length, 3);
-    assert.deepEqual(
-      childSystemEvents.map((item) => item?.data?.dialogProcessId),
-      ["dp-parent", "dp-parent", "dp-parent"],
-    );
-    assert.deepEqual(
-      childSystemEvents.map((item) => item?.data?.childDialogProcessId),
-      ["dp-child", "dp-child", "dp-child"],
-    );
-    assert.deepEqual(
-      childSystemEvents.map((item) => item?.data?.childSessionId),
-      ["child-session-1", "child-session-1", "child-session-1"],
-    );
-    assert.equal(
-      childSystemEvents.every(
-        (item) =>
-          item?.data?.subAgentCall === true &&
-          item?.data?.conversationStateOwner === "parent_agent",
-      ),
-      true,
-    );
-    assert.equal(
-      events.some((item) => item?.data?.dialogProcessId === "dp-child"),
-      false,
-    );
-    const doneEvent = events.find((item) => item?.event === "done");
-    assert.equal(doneEvent?.data?.dialogProcessId, "dp-parent");
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server preserves authoritative identity for workflow child tool events", async () => {
-  const identity = {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    sessionId: "workflow-child-1",
-    parentSessionId: "s1",
-    dialogProcessId: "workflow-child-dialog",
-    parentDialogProcessId: "dp-parent",
-    turnScopeId: "workflow-child-turn",
-    messageId: "msg-workflow-1",
-    presentationMessageId: "msg-workflow-presentation-1",
-    scope: "sub_session",
-    workflowRunId: "workflow-1",
-    nodeExecutionId: "node-1",
-    timestamp: "2026-01-01T00:00:00.000Z",
-  };
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener?.onEvent?.({
-        event: "main_model_content",
-        data: {
-          ...identity,
-          eventId: "evt-thinking",
-          eventType: "main_model_content",
-          sequence: 1,
-          text: "```mermaid\ngraph TD; A-->B\n```",
-        },
-      });
-      eventListener?.onEvent?.({
-        event: "tool_call_end",
-        data: {
-          ...identity,
-          eventId: "evt-tool-result",
-          eventType: "tool_call_end",
-          sequence: 2,
-          toolCallId: "call-1",
-          tool: "read_file",
-          result: { ok: true },
-          success: true,
-        },
-      });
-      return {
-        sessionId: "s1",
-        dialogProcessId: "dp-parent",
-        answer: "done",
-        messages: [],
-        traces: [],
-        executionLogs: [],
-      };
-    },
-  });
-  try {
-    const events = await callChatWs({
-      port: server.address().port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        turnScopeId: "parent-turn",
-        config: { streaming: true, locale: "zh-CN" },
-      },
-    });
-    const messageEvents = events.filter((item) => item?.event === "subagent_message_event");
-    const thinking = messageEvents.find(
-      (item) => item?.data?.event?.eventType === "main_model_content",
-    );
-    const toolResult = messageEvents.find(
-      (item) => item?.data?.event?.eventType === "tool_call_end",
-    );
-    assert.deepEqual(thinking?.data?.event, {
-      ...identity,
-      eventId: "evt-thinking",
-      eventType: "main_model_content",
-      sequence: 1,
-      text: "```mermaid\ngraph TD; A-->B\n```",
-    });
-    assert.deepEqual(toolResult?.data?.event, {
-      ...identity,
-      eventId: "evt-tool-result",
-      eventType: "tool_call_end",
-      sequence: 2,
-      toolCallId: "call-1",
-      tool: "read_file",
-      result: { ok: true },
-      success: true,
-    });
-    assert.equal(toolResult?.data?.route?.scope, "sub_session");
-    assert.equal(toolResult?.data?.route?.workflowRunId, "workflow-1");
-    assert.equal(toolResult?.data?.route?.nodeExecutionId, "node-1");
-    assert.equal(Object.hasOwn(toolResult?.data?.route || {}, "messageId"), false);
-    assert.equal(toolResult?.data?.channelKind, "message_event");
-    assert.equal(toolResult?.data?.channelVersion, 1);
-    assert.equal(toolResult?.data?.sessionId, identity.sessionId);
-    assert.equal(toolResult?.data?.dialogProcessId, identity.dialogProcessId);
-    assert.equal(toolResult?.data?.turnScopeId, identity.turnScopeId);
-    assert.equal(toolResult?.data?.seq > 0, true);
-    assert.equal(toolResult?.data?.event?.sequence, 2);
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server: streaming=true 保持 delta 推送", async () => {
-  const server = await startServerWithWs({
-    runSession: async ({ eventListener }) => {
-      eventListener?.onEvent?.({
-        event: "llm_delta",
-        data: { text: "delta-token", dialogProcessId: "dp-1" },
-      });
-      return {
-        sessionId: "s1",
-        dialogProcessId: "dp-1",
-        answer: "done",
-        messages: [],
-        traces: [],
-        executionLogs: [],
-      };
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        config: { streaming: true, locale: "zh-CN" },
-      },
-    });
-    const names = events.map((item) => String(item?.event || ""));
-    assert.equal(names.includes("delta"), true);
-    assert.equal(names.includes("done"), true);
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server: global streaming=true should allow delta", async () => {
-  const server = await startServerWithWs({
-    bot: {
-      globalConfig: { streaming: true },
-      runSession: async ({ eventListener }) => {
-        eventListener?.onEvent?.({
-          event: "llm_delta",
-          data: { text: "delta-token", dialogProcessId: "dp-1" },
-        });
-        return {
-          sessionId: "s1",
-          dialogProcessId: "dp-1",
-          answer: "done",
-          messages: [],
-          traces: [],
-          executionLogs: [],
-        };
-      },
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        config: { locale: "zh-CN" },
-      },
-    });
-    const names = events.map((item) => String(item?.event || ""));
-    assert.equal(names.includes("delta"), true);
-    assert.equal(names.includes("done"), true);
-  } finally {
-    await closeServer(server);
-  }
-});
-
-test("chat-websocket-server: explicit streaming=false should override global streaming=true", async () => {
-  const server = await startServerWithWs({
-    bot: {
-      globalConfig: { streaming: true },
-      runSession: async ({ eventListener }) => {
-        eventListener?.onEvent?.({
-          event: "llm_delta",
-          data: { text: "delta-token", dialogProcessId: "dp-1" },
-        });
-        return {
-          sessionId: "s1",
-          dialogProcessId: "dp-1",
-          answer: "done",
-          messages: [],
-          traces: [],
-          executionLogs: [],
-        };
-      },
-    },
-  });
-  try {
-    const { port } = server.address();
-    const events = await callChatWs({
-      port,
-      payload: {
-        userId: "u1",
-        sessionId: "s1",
-        message: "hello",
-        config: { streaming: false, locale: "zh-CN" },
-      },
-    });
-    const names = events.map((item) => String(item?.event || ""));
-    assert.equal(names.includes("delta"), false);
-    assert.equal(names.includes("done"), true);
-  } finally {
-    await closeServer(server);
-  }
 });

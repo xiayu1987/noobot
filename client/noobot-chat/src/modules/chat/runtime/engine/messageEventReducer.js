@@ -11,9 +11,8 @@ import {
   projectMessageEventContent,
   projectMessageEventMetadata,
   resolveMessageEventPresentationId,
-  resolveMessageEventSequenceIdentity,
-  validateMessageEventEnvelope,
 } from "@noobot/event-protocol/message-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   initializeMessageEventState,
   resolveMessageEventLaneState,
@@ -56,34 +55,36 @@ function stateFor(message, event) {
 function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
   const presentationId = text(message.presentationMessageId);
-  const eventPresentationId = resolveMessageEventPresentationId(event);
+  const eventPresentationId = resolveMessageEventPresentationId(event.payload);
   if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId) return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
-  const eventTurn = text(event.turnScopeId);
+  const eventTurn = text(event.identity.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);
 }
 
 export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog } = {}) {
-  const validation = validateMessageEventEnvelope(event);
-  if (!validation.valid) return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
+  const validation = validateProtocolEvent(event);
+  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
+  }
   if (!targetMessage) return { result: MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING };
   if (conflicts(targetMessage, event)) return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
   const aggregateState = initializeMessageEventState(targetMessage).messageEventState;
-  if (aggregateState.consumedEventIds.includes(event.eventId)) {
+  if (aggregateState.consumedEventIds.includes(event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
   const state = stateFor(targetMessage, event);
-  if (state.consumedEventIds.includes(event.eventId)) {
+  if (state.consumedEventIds.includes(event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
-  const sequence = Number(event.sequence);
-  const sequenceScopeId = resolveMessageEventSequenceIdentity(event).sequenceScopeId;
+  const sequence = Number(event.ordering.sequence);
+  const sequenceScopeId = text(event.ordering.scopeId);
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence <= lastSequence) return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
   const gap = Boolean(lastSequence && sequence > lastSequence + 1);
 
-  const contentProjection = projectMessageEventContent(event);
+  const contentProjection = projectMessageEventContent(event.payload);
   if (
     contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND &&
     Number(state.finalContentSequence || 0) > 0
@@ -93,8 +94,8 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.APPEND) {
     targetMessage.content = String(targetMessage.content || "") + contentProjection.content;
   } else if (contentProjection.effect === MESSAGE_CONTENT_EFFECT.REPLACE) {
-    if (isAuthoritativeFinalContentEvent(event)) {
-      const finalProjection = projectAuthoritativeFinalMessage(event);
+    if (isAuthoritativeFinalContentEvent(event.payload)) {
+      const finalProjection = projectAuthoritativeFinalMessage(event.payload);
       const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
       const existingAttachments = getMessageAttachments(targetMessage);
       const existingRawAttachments = Array.isArray(targetMessage.attachments)
@@ -120,12 +121,22 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       targetMessage.content = contentProjection.content;
     }
   } else {
-    const log = classifyRealtimeLog?.(event);
-    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
+    const log = classifyRealtimeLog?.({
+      ...event.payload,
+      eventId: event.identity.eventId,
+      sessionId: event.identity.sessionId,
+      turnScopeId: event.identity.turnScopeId,
+      messageId: event.identity.messageId,
+      sequence: event.ordering.sequence,
+      sequenceDomain: event.ordering.domain,
+      sequenceScopeId,
+      timestamp: event.occurredAt,
+    });
+    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.payload.eventType)) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", () => ({
-        sessionId: text(event.sessionId || targetMessage.sessionId),
-        dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
-        turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
+        sessionId: text(event.identity.sessionId || targetMessage.sessionId),
+        dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
+        turnScopeId: text(event.identity.turnScopeId || targetMessage.turnScopeId),
         envelope: summarizeToolLogWindowItem(event),
         classified: log ? summarizeToolLogWindowItem(log) : null,
         previousLastSequence: lastSequence,
@@ -133,14 +144,14 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     }
     targetMessage.toolTimeline = reduceToolTimeline(targetMessage.toolTimeline, event);
     if (
-      event.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END &&
-      Array.isArray(event.transferEnvelopes) &&
-      event.transferEnvelopes.length
+      event.payload.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_END &&
+      Array.isArray(event.payload.transferEnvelopes) &&
+      event.payload.transferEnvelopes.length
     ) {
       const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
       targetMessage.transferEnvelopes = mergeTransferEnvelopes(
         existingEnvelopes,
-        event.transferEnvelopes,
+        event.payload.transferEnvelopes,
       );
       targetMessage.attachments = getMessageAttachments(targetMessage);
     }
@@ -149,35 +160,39 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       log
         ? {
             ...log,
-            eventId: event.eventId,
-            sequence: event.sequence,
+            eventId: event.identity.eventId,
+            sequence: event.ordering.sequence,
             sequenceScopeId,
             authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
             sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
           }
         : {
-            ...event,
+            ...event.payload,
+            eventId: event.identity.eventId,
+            sessionId: event.identity.sessionId,
+            turnScopeId: event.identity.turnScopeId,
+            sequence: event.ordering.sequence,
             sequenceScopeId,
             authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
             sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
           },
     );
-    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.eventType)) {
+    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.payload.eventType)) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", () => ({
-        sessionId: text(event.sessionId || targetMessage.sessionId),
-        dialogProcessId: text(event.dialogProcessId || targetMessage.dialogProcessId),
-        turnScopeId: text(event.turnScopeId || targetMessage.turnScopeId),
+        sessionId: text(event.identity.sessionId || targetMessage.sessionId),
+        dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
+        turnScopeId: text(event.identity.turnScopeId || targetMessage.turnScopeId),
         appliedSequence: sequence,
         timelineEntryCount: targetMessage.toolTimeline?.length || 0,
         timelineLogs: summarizeToolLogWindow(selectToolTimelineLogs(targetMessage)),
       }));
     }
   }
-  if (event.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.dialogProcessId;
-  Object.assign(targetMessage, projectMessageEventMetadata(event));
+  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.payload.dialogProcessId;
+  Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
   state.lastSequence = sequence;
-  state.consumedEventIds = [...state.consumedEventIds, event.eventId].slice(-1000);
+  state.consumedEventIds = [...state.consumedEventIds, event.identity.eventId].slice(-1000);
   syncMessageEventAggregateState(targetMessage);
   return { result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
 }

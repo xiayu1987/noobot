@@ -39,11 +39,13 @@ export const INTERACTION_EVENT_TYPE = Object.freeze({
   RESPONSE: "interaction_response",
 });
 
+export const INTERACTION_SEQUENCE_DOMAIN = "interaction";
+
 export function validateInteractionRequestPayload(data = {}) {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     return { valid: false, reason: "payload_not_object", missing: [] };
   }
-  const required = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"];
+  const required = ["requestId", "dialogProcessId"];
   const missing = required.filter((key) => !clean(data[key]));
   const hasPayload =
     typeof data.content === "string" ||
@@ -77,8 +79,7 @@ export function validateInteractionRequestPayload(data = {}) {
 }
 
 export function validateInteractionRequest(event = {}) {
-  const payload = event?.payload && typeof event.payload === "object" ? event.payload : event;
-  return validateInteractionRequestPayload(payload);
+  return validateInteractionRequestPayload(event?.payload);
 }
 
 /**
@@ -91,14 +92,10 @@ export function validateInteractionRequest(event = {}) {
  */
 export function isPendingInteractionReplay(record = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return false;
-  const eventType = clean(record?.identity?.eventType ?? record?.eventType ?? record?.event);
+  const eventType = clean(record?.identity?.eventType);
   if (eventType !== INTERACTION_EVENT_TYPE.REQUEST) return false;
-  const payload =
-    record?.payload && typeof record.payload === "object"
-      ? record.payload
-      : record?.data && typeof record.data === "object"
-        ? record.data
-        : record;
+  const payload = record?.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
   const validation = validateInteractionRequestPayload(payload);
   return (
     validation.valid &&
@@ -108,7 +105,7 @@ export function isPendingInteractionReplay(record = {}) {
 }
 
 export function validateInteractionResponsePayload(data = {}) {
-  const missing = ["requestId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
+  const missing = ["requestId", "dialogProcessId"].filter(
     (key) => !clean(data?.[key]),
   );
   return missing.length

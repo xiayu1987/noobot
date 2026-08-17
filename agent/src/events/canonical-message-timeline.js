@@ -17,6 +17,6 @@ export function isToolMessageEvent(envelope = {}) {
 
 export function isActivityMessageEvent(envelope = {}) {
   return [MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT].includes(
-    envelope?.eventType,
+    envelope?.payload?.eventType,
   );
 }

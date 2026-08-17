@@ -159,9 +159,6 @@ export function createSessionDetailRequests({
         sessionDocCount: sessionDocs.length,
         messageCount: responseMessages.length,
         workflowCandidates: summarizeWorkflowMessages(responseMessages),
-        workflowRuntimeEventCount: Array.isArray(data?.workflowRuntimeEvents)
-          ? data.workflowRuntimeEvents.length
-          : 0,
       }));
       recentSessionDetail = {
         sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
@@ -212,9 +209,6 @@ export function createSessionDetailRequests({
       detailMode: String(data?.detailMode || ""),
       schemaVersions: sessionDocs.map((doc = {}) => Number(doc?.schemaVersion || 0)),
       workflowCandidates: summarizeWorkflowMessages(responseMessages),
-      workflowRuntimeEventCount: Array.isArray(data?.workflowRuntimeEvents)
-        ? data.workflowRuntimeEvents.length
-        : 0,
     }));
     applySessionDetail(data, options);
     return data;

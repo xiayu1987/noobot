@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { afterEach, beforeEach, vi } from "vitest";
-import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+  createTurnRunCommand,
+} from "@noobot/agent-transport-protocol";
 
 export class MockWebSocket {
   static CONNECTING = 0;
@@ -54,6 +60,22 @@ export function streamCommand(identity = {}) {
     identity,
     input: { message: "test", attachments: [] },
   });
+}
+
+export function emitCommandReceipt(socket, payload, {
+  outcome = AGENT_COMMAND_RECEIPT_OUTCOME.COMPLETED,
+  error,
+} = {}) {
+  const receipt = createAgentCommandReceipt({
+    commandId: payload.commandId,
+    commandType: payload.commandType,
+    outcome,
+    identity: payload.identity,
+    error,
+    occurredAt: "2026-01-01T00:00:00.000Z",
+  });
+  socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
+  return receipt;
 }
 
 export function setupWebSocketTestHooks() {

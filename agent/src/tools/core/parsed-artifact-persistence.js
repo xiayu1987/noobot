@@ -13,6 +13,7 @@ import {
   findAttachmentRelation,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
+import { EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   getTransferAttachments,
   materializeTextForToolResult,
@@ -106,6 +107,33 @@ export async function backwriteParsedAttachment({
     runId: String(runtime?.systemRuntime?.runId || "").trim() || undefined,
     relation,
   });
-  emitEvent(runtime?.eventListener || null, "attachment_lifecycle", event);
+  const sessionId = String(runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId || "").trim();
+  const parentSessionId = String(runtime?.systemRuntime?.parentSessionId || runtime?.runConfig?.parentSessionId || "").trim();
+  const committed = await runtime?.sessionManager?.commitAuthorityEvent?.({
+    userId,
+    sessionId,
+    parentSessionId,
+    family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    identity: {
+      eventType: "attachment_lifecycle",
+      turnScopeId: event.turnScopeId,
+      messageId: event.messageId,
+    },
+    causality: { correlationId: event.runId },
+    ordering: {
+      domain: "attachment-lifecycle",
+      scopeId: [identity.attachmentId, identity.sessionId, identity.attachmentSource].join(":"),
+    },
+    producer: { type: "tool", id: TOOL_NAME.MULTIMODAL_PARSE },
+    payload: event,
+    persistenceContext: runtime?.runConfig?.persistenceContext || null,
+  });
+  if (!committed?.committed || !committed?.envelope) {
+    throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);
+  }
+  await emitEvent(runtime?.eventListener || null, "authority_event_committed", {
+    envelope: committed.envelope,
+    persistenceScope: runtime?.runConfig?.persistenceContext || null,
+  });
   return updated;
 }

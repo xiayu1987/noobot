@@ -6,7 +6,8 @@
 
 import { randomUUID } from "node:crypto";
 import { CHANNEL_TERMINAL_STATUSES, CLIENT_ROLE } from "./constants.js";
-import { isMessageEventEnvelope } from "@noobot/event-protocol/message-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
 export function ensureConnectionId(socket = null) {
   if (!socket) return "";
@@ -19,40 +20,35 @@ export function ensureConnectionId(socket = null) {
 
 export function resolveMessageEventTrace(eventName = "", data = {}, transportSequence = 0) {
   const normalizedEventName = String(eventName || "").trim();
-  const candidate = normalizedEventName === "message_event" || normalizedEventName === "subagent_message_event"
-    ? data?.event
+  const validation = normalizedEventName === MESSAGE_EVENT_WIRE_EVENT
+    ? validateProtocolEvent(data)
+    : { valid: false };
+  const authoritative = validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
+    ? data
     : null;
-  const authoritative = isMessageEventEnvelope(candidate) ? candidate : null;
   return {
-    protocolKind: authoritative ? "message_event" : "legacy",
+    protocolKind: authoritative ? "message_event" : "non_message_event",
     transportEvent: normalizedEventName,
     transportSequence: Number(transportSequence || 0),
-    eventId: String(authoritative?.eventId || "").trim(),
-    eventType: String(authoritative?.eventType || "").trim(),
-    messageId: String(authoritative?.messageId || "").trim(),
-    authoritativeSequence: Number(authoritative?.sequence || 0),
-    sessionId: String(authoritative?.sessionId || data?.sessionId || "").trim(),
-    turnScopeId: String(authoritative?.turnScopeId || data?.turnScopeId || "").trim(),
-    dialogProcessId: String(authoritative?.dialogProcessId || data?.dialogProcessId || "").trim(),
+    eventId: String(authoritative?.identity?.eventId || "").trim(),
+    eventType: String(authoritative?.identity?.eventType || "").trim(),
+    messageId: String(authoritative?.identity?.messageId || "").trim(),
+    authoritativeSequence: Number(authoritative?.ordering?.sequence || 0),
+    sessionId: String(authoritative?.identity?.sessionId || "").trim(),
+    turnScopeId: String(authoritative?.identity?.turnScopeId || "").trim(),
+    dialogProcessId: String(authoritative?.payload?.dialogProcessId || "").trim(),
   };
 }
 
 export function messageEventHasContent(eventName = "", data = {}) {
   const normalizedEventName = String(eventName || "").trim();
-  const authoritative = normalizedEventName === "message_event" || normalizedEventName === "subagent_message_event"
-    ? data?.event
-    : null;
-  const payload = authoritative?.payload && typeof authoritative.payload === "object"
-    ? authoritative.payload
-    : data?.payload && typeof data.payload === "object"
-      ? data.payload
-      : data?.messageEvent && typeof data.messageEvent === "object"
-        ? data.messageEvent
-        : authoritative || data;
+  if (normalizedEventName !== MESSAGE_EVENT_WIRE_EVENT) return false;
+  const validation = validateProtocolEvent(data);
+  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) return false;
+  const payload = data.payload;
   return Boolean(
     payload?.content || payload?.text ||
-    payload?.delta?.content || payload?.delta?.text ||
-    authoritative?.content || authoritative?.text,
+    payload?.delta?.content || payload?.delta?.text,
   );
 }
 

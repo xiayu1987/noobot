@@ -6,9 +6,11 @@
   "description": "Noobot versioned authority event protocol, replay and delivery contracts",
   "exports": {
     ".": "./src/index.js",
+    "./envelope": "./src/envelope.js",
     "./outbox": "./src/authority-event-outbox.js",
     "./package.json": "./package.json",
     "./message-event": "./src/message-event.js",
+    "./turn-snapshot": "./src/turn-snapshot.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-timeline": "./src/tool-timeline.js",
     "./workflow-runtime-event": "./src/workflow-runtime-event.js"
@@ -17,6 +19,7 @@
     "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
+    "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",
     "@noobot/shared": "file:../shared",
     "@noobot/session-protocol": "file:../session-protocol"

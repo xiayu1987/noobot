@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import { isMessageEventEnvelope } from "@noobot/event-protocol/message-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { getMessageDialogProcessId, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { nowMs } from "../../model/timeFields.js";
 import {
@@ -37,41 +38,9 @@ export function isEventForCurrentTurn(data = {}, botMessage = {}) {
   return eventTurnScopeId === botTurnScopeId;
 }
 
-export function isUserStoppedEvent(event = "") {
-  return normalizeTrimmedString(event) === StreamEventEnum.USER_STOPPED;
-}
-
 export function isCompletedChannelStateEvent(event = "", data = {}) {
   return normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
     normalizeTrimmedString(data?.state) === "completed";
-}
-
-export function requirePersistedTurnStatus(data = {}, expectedStatus = "") {
-  const turnStatus = data?.turnStatus;
-  if (!turnStatus) return null;
-  const actualStatus = normalizeTrimmedString(turnStatus?.status).toLowerCase();
-  if (actualStatus !== expectedStatus) {
-    const error = new Error(
-      `terminal event is missing persisted turn status confirmation: expected ${expectedStatus || "unknown"}`,
-    );
-    error.code = "invalid_terminal_turn_status";
-    error.data = data;
-    throw error;
-  }
-  const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
-  const eventDialogProcessId = normalizeTrimmedString(data?.dialogProcessId);
-  const statusTurnScopeId = normalizeTrimmedString(turnStatus?.turnScopeId);
-  const statusDialogProcessId = normalizeTrimmedString(turnStatus?.dialogProcessId);
-  if (
-    (eventTurnScopeId && statusTurnScopeId && eventTurnScopeId !== statusTurnScopeId) ||
-    (eventDialogProcessId && statusDialogProcessId && eventDialogProcessId !== statusDialogProcessId)
-  ) {
-    const error = new Error("terminal event turn identity does not match persisted turn status");
-    error.code = "invalid_terminal_turn_status_identity";
-    error.data = data;
-    throw error;
-  }
-  return turnStatus;
 }
 
 export function hasCompletableRunIdentity(data = {}, botMessage = {}) {
@@ -113,16 +82,15 @@ export function hasActiveTurnInFlight({ activeSession, turnRuntimeRegistry } = {
 }
 
 export function shouldProjectSubSessionEvent(event = "", data = {}) {
-  return event === "subagent_message_event" &&
-    data?.channelKind === "message_event" &&
-    Number(data?.channelVersion) === 1 &&
-    isMessageEventEnvelope(data?.event);
+  if (event !== MESSAGE_EVENT_WIRE_EVENT) return false;
+  const result = validateProtocolEvent(data);
+  return result.valid && result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+    Boolean(data?.payload?.workflowRunId && data?.payload?.nodeExecutionId);
 }
 
 export function shouldProjectMainSessionEvent(event = "", data = {}) {
-  return event === "message_event" &&
-    data?.channelKind === "message_event" &&
-    Number(data?.channelVersion) === 1 &&
-    data?.route?.scope === "main_session" &&
-    isMessageEventEnvelope(data?.event);
+  if (event !== MESSAGE_EVENT_WIRE_EVENT) return false;
+  const result = validateProtocolEvent(data);
+  return result.valid && result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+    !data?.payload?.workflowRunId && !data?.payload?.nodeExecutionId;
 }

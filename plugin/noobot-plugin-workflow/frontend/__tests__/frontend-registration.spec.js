@@ -6,6 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { routeWorkflowDiagnosticsPayload } from "../runtime/workflowDiagnosticsRoute.js";
 import { activate } from "../index.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol/workflow-runtime-event";
 
 describe("Workflow frontend registration", () => {
   it("routes node diagnostics to the parent session and preserves node identity", () => {
@@ -56,18 +61,37 @@ describe("Workflow frontend registration", () => {
     const projector = runtime?.provide?.()?.[0];
     const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
     const logRuntimeProjectionDiagnostics = vi.fn();
-    const messageEvent = { sessionId: "child", eventType: "tool_call_start", sequence: 3 };
+    const envelope = createEventEnvelope({
+      family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+      identity: {
+        eventId: "workflow-node-state-46",
+        eventType: WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+        sessionId: "root",
+        turnScopeId: "workflow-node:node-1",
+      },
+      causality: {},
+      ordering: {
+        domain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+        scopeId: "workflow-1",
+        sequence: 46,
+        revision: 3,
+      },
+      producer: { type: "test", id: "workflow-frontend-registration" },
+      occurredAt: "2026-01-01T00:00:00.000Z",
+      payload: {
+        workflowRunId: "workflow-1",
+        nodeExecutionId: "node-1",
+        nodeSessionId: "child",
+        status: "running",
+      },
+    });
 
     expect(projector({
-      event: "subagent_message_event",
-      data: { seq: 46, route: { rootSessionId: "root" }, event: messageEvent },
+      envelope,
+      descriptor: { family: EVENT_FAMILY.WORKFLOW_RUNTIME },
       context: { source: "live", applyWorkflowRuntimeEvent, logRuntimeProjectionDiagnostics },
     })).toBe(true);
-    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith({
-      event: "workflow_message_event",
-      data: messageEvent,
-      transportSequence: 46,
-    }, { source: "live" });
+    expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(envelope, { source: "live" });
     expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
       "frontend.workflowRuntime.projectorReduced",
       expect.objectContaining({ sessionId: "root", nodeSessionId: "child", applied: true }),

@@ -535,6 +535,7 @@ export function useChatSession({
     applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
     commitTurnTerminalResolution: chatStore.applyTurnTerminalResolution,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent: chatStore.reduceSubSessionMessageEvent,
     removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
     ensureConnected,
     notify,
@@ -584,6 +585,7 @@ export function useChatSession({
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent: chatStore.reduceSubSessionMessageEvent,
     applyTurnLifecycleSnapshot: (snapshot) => chatStore.applyTurnLifecycleSnapshot(snapshot),
   });
 

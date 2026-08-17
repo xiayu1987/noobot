@@ -7,8 +7,7 @@
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import { projectExecutionTransportPayload } from "./transport-payload.js";
-
-const INTERNAL_TRANSPORT_EVENTS = new Set(["turn_lifecycle_committed"]);
+import { AGENT_RUN_EVENTS } from "./run-event.js";
 
 function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
@@ -57,15 +56,15 @@ export function createExecutionEventListener({
 
   const summarizeDelivery = (event, data = {}) => ({
     sourceEvent: event,
-    eventId: String(data?.eventId || "").trim(),
-    eventType: String(data?.eventType || event || "").trim(),
-    sessionId: String(data?.sessionId || sessionId || "").trim(),
+    eventId: String(data?.envelope?.identity?.eventId || "").trim(),
+    eventType: String(data?.envelope?.identity?.eventType || event || "").trim(),
+    sessionId: String(data?.envelope?.identity?.sessionId || data?.sessionId || sessionId || "").trim(),
     parentSessionId: String(data?.parentSessionId || parentSessionId || "").trim(),
     dialogProcessId: String(data?.dialogProcessId || dialogProcessId || "").trim(),
-    turnScopeId: String(data?.turnScopeId || turnScopeId || "").trim(),
-    messageId: String(data?.messageId || "").trim(),
+    turnScopeId: String(data?.envelope?.identity?.turnScopeId || data?.turnScopeId || turnScopeId || "").trim(),
+    messageId: String(data?.envelope?.identity?.messageId || "").trim(),
     presentationMessageId: String(data?.presentationMessageId || "").trim(),
-    sequence: Number(data?.sequence || 0),
+    sequence: Number(data?.envelope?.ordering?.sequence || 0),
     contentLength: String(data?.text || data?.content || "").length,
     attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
     transferEnvelopeCount: Array.isArray(data?.transferEnvelopes)
@@ -162,10 +161,6 @@ export function createExecutionEventListener({
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      if (event === "llm_delta" || INTERNAL_TRANSPORT_EVENTS.has(event)) {
-        return forwardEvent({ event, data, ts });
-      }
-
       const { category, type } = classifyExecutionEvent(event);
       try {
         appendExecutionLog({
@@ -181,6 +176,9 @@ export function createExecutionEventListener({
         });
       } catch {}
 
+      // Execution diagnostics are persisted locally and never become client
+      // facts. Only the explicit private run contract may cross this boundary.
+      if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
       return forwardEvent({ event, data, ts });
     },
   };
