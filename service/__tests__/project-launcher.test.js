@@ -119,22 +119,52 @@ test("project launcher uses NOOBOT_GLOBAL_CONFIG_PATH when resolving global conf
   );
 });
 
-test("project launcher initializes openai compatible provider with tool_reasoning_effort", async (t) => {
+test("project launcher initializes a known provider from the model library", async (t) => {
   const serviceRoot = await makeServiceRoot();
   t.after(() => rm(serviceRoot, { recursive: true, force: true }));
 
   await runLauncher(serviceRoot, {
     env: {
       NOOBOT_MODEL_FORMAT: "openai_compatible",
-      NOOBOT_MODEL_NAME: "gpt-5.5",
+      NOOBOT_MODEL_NAME: "gpt-5.4",
       NOOBOT_MODEL_API_KEY: "test-key",
       NOOBOT_MODEL_BASE_URL: "https://example.invalid/v1",
     },
   });
 
   const globalConfig = await readJson(path.join(serviceRoot, "config", "global.config.json"));
-  assert.equal(globalConfig.providers?.["gpt_5_5"]?.reasoning_effort, "low");
-  assert.equal(globalConfig.providers?.["gpt_5_5"]?.tool_reasoning_effort, "low");
+  assert.equal(globalConfig.providers?.["gpt_5_4"]?.reasoning_effort, "medium");
+  assert.equal(globalConfig.providers?.["gpt_5_4"]?.tool_reasoning_effort, "low");
+});
+
+test("project launcher preserves explicit provider reasoning settings during incremental sync", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const globalConfigPath = path.join(serviceRoot, "config", "global.config.json");
+  const templatePath = path.join(serviceRoot, "workspace-template", "config.example.json");
+  await writeJson(globalConfigPath, {
+    workspace_root: "./workspace",
+    workspace_template_path: "./workspace-template",
+    super_admin: { user_id: "owner" },
+    preferences: { language: "zh-CN" },
+    providers: {
+      selected_model: {
+        enabled: true,
+        used_for_conversation: true,
+        format: "openai_compatible",
+        model: "gpt-5.5",
+        reasoning_effort: "medium",
+        tool_reasoning_effort: "medium",
+      },
+    },
+  });
+  await writeJson(templatePath, { preferences: { language: "zh-CN" } });
+
+  await runLauncher(serviceRoot);
+
+  const globalConfig = await readJson(globalConfigPath);
+  assert.equal(globalConfig.providers.selected_model.reasoning_effort, "medium");
+  assert.equal(globalConfig.providers.selected_model.tool_reasoning_effort, "medium");
 });
 
 test("project launcher resolves camelCase workspace config keys for existing configs", async (t) => {
