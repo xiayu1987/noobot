@@ -145,3 +145,31 @@ test("concurrent refreshes commit in request order without an older generation o
   await host.dispose();
   assert.deepEqual(disposalCounts, [1, 1, 1]);
 });
+
+test("dispose invalidates an activation in progress and cleans its candidate scope", async () => {
+  let releaseActivation;
+  let candidateDisposals = 0;
+  const activationStarted = new Promise((resolve) => {
+    releaseActivation = () => resolve({
+      protocolVersion: 2,
+      pluginId: "demo",
+      surface: "service",
+      dispose() { candidateDisposals += 1; },
+    });
+  });
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => runtimeWithActivation(() => activationStarted),
+  });
+  const registration = host.registerServiceRoutes({ use() {} }, { ports: {} });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const disposal = host.dispose();
+  releaseActivation();
+  await assert.rejects(() => registration, /lost lifecycle ownership/);
+  await disposal;
+  assert.equal(candidateDisposals, 1);
+  await assert.rejects(
+    () => host.registerServiceRoutes({ use() {} }, { ports: {} }),
+    /disposed/,
+  );
+});

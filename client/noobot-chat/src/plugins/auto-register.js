@@ -24,6 +24,13 @@ import { logWorkflowDiagnostics } from "../modules/debug/loggers/workflowDiagnos
 
 let activeScope = null;
 let activeGeneration = null;
+let lifecycleOperation = Promise.resolve();
+
+function runLifecycleOperation(operation) {
+  const result = lifecycleOperation.then(operation, operation);
+  lifecycleOperation = result.catch(() => undefined);
+  return result;
+}
 
 function loadedFrontendEntries() {
   return externalFrontendPluginEntries.map((item) => {
@@ -44,7 +51,7 @@ function loadedFrontendEntries() {
   });
 }
 
-export async function registerExternalFrontendPlugins() {
+async function activateFrontendPluginGeneration() {
   const generation = createExtensionRegistryGeneration();
   const scope = await createPluginActivationScope({
     entries: loadedFrontendEntries(),
@@ -92,7 +99,11 @@ export async function registerExternalFrontendPlugins() {
       },
     }),
   });
-  publishExtensionRegistryGeneration(generation);
+  try {
+    publishExtensionRegistryGeneration(generation);
+  } catch (error) {
+    await scope.dispose({ cause: error });
+  }
   const previousScope = activeScope;
   activeScope = scope;
   activeGeneration = generation;
@@ -111,14 +122,22 @@ export async function registerExternalFrontendPlugins() {
   return scope;
 }
 
-export async function disposeExternalFrontendPlugins() {
+export function registerExternalFrontendPlugins() {
+  return runLifecycleOperation(activateFrontendPluginGeneration);
+}
+
+async function disposeFrontendPluginGeneration() {
   const scope = activeScope;
-  activeScope = null;
   if (activeGeneration) {
     const emptyGeneration = activeGeneration.createGeneration();
     for (const entry of scope?.entries || []) emptyGeneration.removePlugin(entry.pluginId);
     publishExtensionRegistryGeneration(emptyGeneration);
     activeGeneration = emptyGeneration;
   }
+  activeScope = null;
   if (scope) await scope.dispose();
+}
+
+export function disposeExternalFrontendPlugins() {
+  return runLifecycleOperation(disposeFrontendPluginGeneration);
 }
