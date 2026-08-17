@@ -114,6 +114,68 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
   });
 });
 
+test("session-routes: plugin related session identities share the authoritative artifact cleanup", async () => {
+  const attachmentDeleteCalls = [];
+  const overflowDeleteCalls = [];
+  const memoryDeleteCalls = [];
+  const orphanPruneCalls = [];
+  const pluginCleanupCalls = [];
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getRootSessionId: async () => "s-delete",
+        deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
+        listSessionIds: async () => ["s-keep"],
+      },
+      deleteScopedAttachmentsBySessionIds: async (payload) => {
+        attachmentDeleteCalls.push(payload);
+        return { deletedCount: payload.sessionIds.length, deletedSessionIds: payload.sessionIds };
+      },
+      deleteToolResultOverflowBySessionIds: async (payload) => {
+        overflowDeleteCalls.push(payload);
+        return { deletedCount: payload.sessionIds.length, deletedSessionIds: payload.sessionIds };
+      },
+      deleteSessionMemoryBySessionIds: async (payload) => {
+        memoryDeleteCalls.push(payload);
+        return { deletedCount: payload.sessionIds.length };
+      },
+      pruneOrphanScopedAttachments: async (payload) => {
+        orphanPruneCalls.push(payload);
+        return { deletedCount: 0, deletedSessionIds: [] };
+      },
+    },
+    pluginHost: {
+      getPluginDiagnostics: async () => ({}),
+      emitAfterSessionDelete: async (payload) => {
+        pluginCleanupCalls.push(payload);
+        return {
+          deletedRelatedSessionIds: ["workflow-node-session", "s-delete"],
+          retainedRelatedSessionIds: ["workflow-node-keep"],
+        };
+      },
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-delete`, { method: "DELETE" });
+    assert.equal(response.status, 200);
+  });
+
+  const expected = { userId: "u1", sessionIds: ["s-delete", "workflow-node-session"] };
+  assert.deepEqual(attachmentDeleteCalls, [expected]);
+  assert.deepEqual(overflowDeleteCalls, [expected]);
+  assert.deepEqual(memoryDeleteCalls, [expected]);
+  assert.deepEqual(orphanPruneCalls, [
+    { userId: "u1", keepSessionIds: ["s-keep", "workflow-node-keep"] },
+  ]);
+  assert.deepEqual(pluginCleanupCalls[0]?.remainingSessionIds, ["s-keep"]);
+});
+
 test("session-routes: orphan attachment cleanup reads ids without loading Session attachment data", async () => {
   const pruneCalls = [];
   const app = express();
@@ -145,6 +207,5 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
   assert.deepEqual(pruneCalls, [{
     userId: "u1",
     keepSessionIds: ["s-keep"],
-    attachmentSources: ["subtask"],
   }]);
 });

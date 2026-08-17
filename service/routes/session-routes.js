@@ -21,6 +21,7 @@ import {
   WORKFLOW_RUNTIME_EVENT,
 } from "@noobot/event-protocol/workflow-runtime-event";
 import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
+import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = assertSessionCommand(body);
@@ -647,13 +648,29 @@ export function registerSessionRoutes(
           userId,
           sessionId,
         });
-        const deletedSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
-        await pluginHost.emitAfterSessionDelete({
+        const branchSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
+        const hasRemainingSessionIdentityAuthority =
+          typeof bot?.session?.listSessionIds === "function";
+        const listedRemainingSessionIds =
+          hasRemainingSessionIdentityAuthority
+            ? await bot.session.listSessionIds({ userId })
+            : [];
+        const remainingSessionIds = (
+          Array.isArray(listedRemainingSessionIds) ? listedRemainingSessionIds : []
+        )
+          .map((item) => String(item || "").trim())
+          .filter(Boolean);
+        const pluginCleanup = await pluginHost.emitAfterSessionDelete({
           bot,
           userId,
           sessionId: normalizedSessionId,
-          deletedSessionIds,
+          deletedSessionIds: branchSessionIds,
+          remainingSessionIds,
         });
+        const deletedSessionIds = mergeSessionDeletionIds(
+          branchSessionIds,
+          pluginCleanup?.deletedRelatedSessionIds,
+        );
         const deletedAttachments =
           typeof bot.deleteScopedAttachmentsBySessionIds === "function"
             ? await bot.deleteScopedAttachmentsBySessionIds({
@@ -668,20 +685,25 @@ export function registerSessionRoutes(
                 sessionIds: deletedSessionIds,
               })
             : { deletedSessionIds: [], deletedCount: 0 };
+        const deletedMemory =
+          typeof bot.deleteSessionMemoryBySessionIds === "function"
+            ? await bot.deleteSessionMemoryBySessionIds({
+                userId,
+                sessionIds: deletedSessionIds,
+              })
+            : { deletedCount: 0 };
         let deletedOrphanAttachments = { deletedSessionIds: [], deletedCount: 0 };
         if (
           typeof bot.pruneOrphanScopedAttachments === "function" &&
-          bot?.session &&
-          typeof bot.session.listSessionIds === "function"
+          hasRemainingSessionIdentityAuthority
         ) {
-          const remainingSessionIds = await bot.session.listSessionIds({ userId });
-          const keepSessionIds = (Array.isArray(remainingSessionIds) ? remainingSessionIds : [])
-            .map((item) => String(item || "").trim())
-            .filter(Boolean);
+          const keepSessionIds = mergeSessionDeletionIds(
+            remainingSessionIds,
+            pluginCleanup?.retainedRelatedSessionIds,
+          );
           deletedOrphanAttachments = await bot.pruneOrphanScopedAttachments({
             userId,
             keepSessionIds,
-            attachmentSources: ["subtask"],
           });
         }
         let deletedConnectorHistory = false;
@@ -703,6 +725,7 @@ export function registerSessionRoutes(
           deletedAttachments,
           deletedOrphanAttachments,
           deletedToolResultOverflow,
+          deletedMemory,
           releasedConnectors,
           deletedConnectorHistory,
         });

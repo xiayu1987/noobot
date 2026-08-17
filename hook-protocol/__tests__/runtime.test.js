@@ -7,13 +7,48 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  collectSessionDeletionHookResult,
+  createSessionDeletionHookResult,
   createHookManager,
+  mergeSessionDeletionIds,
   HookExecutionError,
   HOOK_OUTCOME_STATUS,
   HOOK_CANCELLATION_MODE,
   HOOK_POINT,
   requireHookPointDescriptor,
 } from "../src/index.js";
+
+test("session deletion hook results expose explicit related session identities", () => {
+  const result = createSessionDeletionHookResult({
+    deletedRelatedSessionIds: ["node-1", "node-1", " node-2 ", ""],
+    retainedRelatedSessionIds: ["node-3"],
+  });
+  assert.deepEqual(result.deletedRelatedSessionIds, ["node-1", "node-2"]);
+  assert.deepEqual(result.retainedRelatedSessionIds, ["node-3"]);
+  assert.deepEqual(
+    collectSessionDeletionHookResult({
+      outcomes: [
+        { status: "ok", value: result },
+        {
+          status: "failed",
+          value: {
+            deletedRelatedSessionIds: ["ignored"],
+            retainedRelatedSessionIds: ["ignored"],
+          },
+        },
+      ],
+    }),
+    {
+      deletedRelatedSessionIds: ["node-1", "node-2"],
+      retainedRelatedSessionIds: ["node-3"],
+    },
+  );
+  assert.deepEqual(mergeSessionDeletionIds(["root", "node-1"], ["node-1", "node-2"]), [
+    "root",
+    "node-1",
+    "node-2",
+  ]);
+});
 
 test("hook point descriptors own cancellation policy", () => {
   assert.equal(

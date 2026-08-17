@@ -518,21 +518,38 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));
   const planningDir = path.join(tempRoot, "runtime/workflow/planning/s-delete/dialog-1");
   const sessionDir = path.join(tempRoot, "runtime/workflow/session/s-delete/wf_node_1");
+  const retainedSessionDir = path.join(tempRoot, "runtime/workflow/session/s-keep/wf_node_2");
   const untouchedDir = path.join(tempRoot, "runtime/workflow/planning/s-keep/dialog-2");
   await fs.mkdir(planningDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
+  await fs.mkdir(retainedSessionDir, { recursive: true });
   await fs.mkdir(untouchedDir, { recursive: true });
   await fs.writeFile(path.join(planningDir, "planning.json"), '{"ok":true}\n', "utf8");
   await fs.writeFile(path.join(sessionDir, "events.jsonl"), '{"event":"ok"}\n', "utf8");
+  await fs.writeFile(
+    path.join(sessionDir, "meta.json"),
+    JSON.stringify({ sessionId: "workflow-node-session" }),
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(retainedSessionDir, "meta.json"),
+    JSON.stringify({ sessionId: "retained-workflow-node-session" }),
+    "utf8",
+  );
   await fs.writeFile(path.join(untouchedDir, "planning.json"), '{"keep":true}\n', "utf8");
 
   try {
-    await cleanupHook.handler({
+    const cleanupResult = await cleanupHook.handler({
       sessionId: "s-delete",
       deletedSessionIds: ["s-delete"],
+      remainingSessionIds: ["s-keep"],
       basePath: tempRoot,
     });
 
+    assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
+    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, [
+      "retained-workflow-node-session",
+    ]);
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-delete")));
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/session/s-delete")));
     await fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-keep"));
