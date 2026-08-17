@@ -2,14 +2,14 @@
 
 本文档记录当前代码中实际经过 `@noobot/semantic-transfer-protocol` 的信息流。它是代码现状清单，不定义第二套协议；wire contract 仍以 `semantic-transfer-protocol/src/index.js` 为唯一规范。
 
-更新日期：2026-08-08。
+更新日期：2026-08-17。
 
 ## 1. 层级边界
 
 | 层                           | 职责                                                                          | 不负责                                    |
 | ---------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
 | `attachment-protocol`        | 附件身份、descriptor、持久化记录、访问/UI 视图                                | transfer identity、方向、producer、intent |
-| `semantic-transfer-protocol` | V2 envelope、场景白名单、工具入/出口策略、direct/attachment payload、严格校验 | 文件系统、Session、路径解析               |
+| `semantic-transfer-protocol` | V2 envelope、场景白名单、工具入/出口策略、三种 payload、严格校验              | 文件系统、Session、路径解析               |
 | `agent/src/transfer-adapter` | 将运行时内容物化为附件，并创建/消费 V2 envelope                               | 定义另一种 wire shape                     |
 | `tool-runner`、插件运行时    | 选择场景、提供运行身份、传播 envelope                                         | 自行构造附件身份或路径协议                |
 
@@ -17,14 +17,15 @@
 
 ## 2. Envelope 形态
 
-当前只有两种 payload：
+当前只有三种 payload：
 
-| mode         | 内容                    | 使用条件                                   |
-| ------------ | ----------------------- | ------------------------------------------ |
-| `direct`     | `payload.content`       | 内容允许直接进入语义传递，不需要附件持久化 |
-| `attachment` | `payload.attachments[]` | 内容需要持久化，或产物本身就是可展示文件   |
+| mode               | 内容                    | 使用条件                                           |
+| ------------------ | ----------------------- | -------------------------------------------------- |
+| `direct`           | `payload.content`       | 内容允许直接进入语义传递，不需要附件持久化         |
+| `attachment`       | `payload.attachments[]` | 内容需要持久化，或产物本身就是可展示文件           |
+| `source_reference` | `payload.reference`     | 引用既有文件或附件的限定内容，不创建第二份附件事实 |
 
-两个 mode 互斥。每个 envelope 必须包含 `transferId`、`messageId`、`sessionId`、producer、direction 和 intent。
+三种 mode 互斥。每个 envelope 必须包含 `transferId`、`messageId`、`sessionId`、producer、direction 和 intent。
 
 ## 3. 场景白名单
 
