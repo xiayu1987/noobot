@@ -46,6 +46,44 @@ test("runSession emits interrupted branch lifecycle state for non-user abort err
   assert.equal(interruptedEvent.data.stoppedSnapshotPersistence.reason, "non_user_abort");
 });
 
+test("runSession projects the structured timeout reason into interrupted lifecycle state", async () => {
+  const callOrder = [];
+  const events = [];
+  const abortController = new AbortController();
+  abortController.abort({
+    type: "run_timeout",
+    reason: "run timeout after 18000000ms",
+    timeoutMs: 18000000,
+  });
+  const abortError = new Error("Request was aborted.");
+  abortError.name = "AbortError";
+  const runner = createRunner({
+    callOrder,
+    eventListener: { onEvent: (event) => events.push(event) },
+    agentRunner: async () => {
+      throw abortError;
+    },
+    finalizeRunSession: async () => ({ ok: true }),
+  });
+
+  await assert.rejects(
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        abortSignal: abortController.signal,
+      }),
+    /Request was aborted/,
+  );
+
+  const interruptedEvent = events.find(
+    (item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
+  );
+  assert.equal(interruptedEvent?.data?.stopType, "run_timeout");
+  assert.equal(interruptedEvent?.data?.error, "run timeout after 18000000ms");
+});
+
 test("runSession persists stopped model message snapshot from runtime candidate on abort", async () => {
   const callOrder = [];
   const events = [];
@@ -314,4 +352,3 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.reason, "missing_identity");
   assert.deepEqual(stoppedEvent?.data?.stoppedSnapshotPersistence?.missingIdentityFields, ["turnScopeId"]);
 });
-

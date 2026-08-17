@@ -28,6 +28,9 @@ import {
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
 import {
+  createExecutionAbortReason,
+  EXECUTION_ABORT_TYPE,
+  resolveExecutionAbortMessage,
   SESSION_ERROR_CODE,
   TURN_EVENT,
   TURN_PHASE,
@@ -342,11 +345,11 @@ export function createMessageRunHandler({
         data: { timeoutMs: runTimeoutMs },
       });
       if (state.currentAbortController) {
-        state.currentAbortController.abort({
-          type: "run_timeout",
+        state.currentAbortController.abort(createExecutionAbortReason({
+          type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT,
           reason: `run timeout after ${runTimeoutMs}ms`,
           timeoutMs: runTimeoutMs,
-        });
+        }));
       }
     }, runTimeoutMs);
     state.currentRunMeta = {
@@ -386,11 +389,11 @@ export function createMessageRunHandler({
         state.currentRunHandle.stopRequested = true;
         state.currentRunHandle.stopPayload = state.currentStopPayload;
       }
-      state.currentAbortController.abort({
-        type: "user_stop",
+      state.currentAbortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
     }
     const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
       bot: activeBot,
@@ -588,9 +591,13 @@ export function createMessageRunHandler({
     if (processingStartedPromise) await processingStartedPromise;
 
     if (state.currentRunTimedOut && state.currentAbortSignal?.aborted) {
+      const timeoutMessage = resolveExecutionAbortMessage({
+        abortSignal: state.currentAbortSignal,
+        fallback: `run timeout after ${runTimeoutMs}ms`,
+      });
       await finalizeTimeout(buildRunStateSnapshot(), {
-        description: `run timeout after ${runTimeoutMs}ms`,
-        errorObject: { message: `run timeout after ${runTimeoutMs}ms`, code: "run_timeout" },
+        description: timeoutMessage,
+        errorObject: { message: timeoutMessage, code: EXECUTION_ABORT_TYPE.RUN_TIMEOUT },
       });
       return;
     }

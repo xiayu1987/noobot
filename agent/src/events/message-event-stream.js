@@ -158,7 +158,7 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
   if (!presentationMessageId) {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
-  const toolCallId = text(data?.toolCallId || data?.tool_call_id || data?.call?.id);
+  const toolCallId = text(data?.toolCallId);
   const payload = deepFreeze({
     ...data,
     eventType: text(eventType),

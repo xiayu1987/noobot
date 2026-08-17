@@ -5,7 +5,13 @@
  */
 import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
-import { TURN_EVENT, TURN_PHASE, createTurnLifecycleCommandId } from "@noobot/session-protocol";
+import {
+  EXECUTION_ABORT_TYPE,
+  TURN_EVENT,
+  TURN_PHASE,
+  createExecutionAbortReason,
+  createTurnLifecycleCommandId,
+} from "@noobot/session-protocol";
 import { sendFailedCommandReceipt } from "./command-receipt.js";
 
 export function createMessageStopHandler({
@@ -77,11 +83,11 @@ export function createMessageStopHandler({
     if (activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted) {
       activeRun.stopRequested = true;
       activeRun.stopPayload = state.currentStopPayload;
-      activeRun.abortController.abort({
-        type: "user_stop",
+      activeRun.abortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
       return;
     }
     if (!state.isRunning || !state.currentAbortController) {
@@ -168,11 +174,11 @@ export function createMessageStopHandler({
       }
     }
     if (state.isRunning && state.currentAbortController) {
-      state.currentAbortController.abort({
-        type: "user_stop",
+      state.currentAbortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
     }
   };
 

@@ -26,12 +26,7 @@ function applySessionSnapshot(store, sessionDoc) {
 }
 
 function createSubSessionEvent(overrides = {}) {
-  const eventType = overrides.eventType || (
-    overrides.toolResult ? "tool_call_end" :
-      overrides.toolCall ? "tool_call_start" :
-        overrides.thinking ? "thinking" :
-          String(overrides.status || "") ? "message_status" : "llm_delta"
-  );
+  const eventType = overrides.eventType || "llm_delta";
   const messageId = overrides.messageId || "msg-assistant-1";
   return canonicalMessageEvent({
     sessionId: "sub-session-1",
@@ -111,7 +106,7 @@ describe("useChatStore sub session projection", () => {
     }));
     applyMessageEvent(store, createSubSessionEvent({
       eventId: "final-3", sequence: 3, eventType: "authoritative_final_content",
-      text: "authoritative final", output: "authoritative final",
+      text: "authoritative final",
     }));
 
     const message = store.selectSubSessionMessages("sub-session-1")?.messages?.[0];
@@ -400,7 +395,6 @@ describe("useChatStore sub session projection", () => {
         sequence: 1,
         revision: 1,
         text: "authoritative child result",
-        output: "authoritative child result",
       }), { source: "live" });
 
     expect(result).toMatchObject({ applied: true });
@@ -443,7 +437,6 @@ describe("useChatStore sub session projection", () => {
         sequence: 1,
         revision: 1,
         text: "done",
-        output: "done",
       }), { source: "live" });
     const terminal = store.applyWorkflowRuntimeEvent(canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, {
         ...identity,
@@ -612,8 +605,8 @@ describe("useChatStore sub session projection", () => {
   it("lets authoritative snapshot message ids replace realtime temporary identities without duplicates", () => {
     const store = useChatStore();
     applyMessageEvent(store, createSubSessionEvent({ eventId: "assistant-1", sequence: 1, content: "hello" }));
-    applyMessageEvent(store, createSubSessionEvent({ eventId: "tool-1", sequence: 2, toolCallId: "call-1", toolCall: { name: "search" }, content: "" }));
-    applyMessageEvent(store, createSubSessionEvent({ eventId: "tool-2", sequence: 3, toolCallId: "call-1", toolResult: { output: "ok" }, content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventType: "tool_call_start", eventId: "tool-1", sequence: 2, toolCallId: "call-1", tool: "search", args: {}, content: "" }));
+    applyMessageEvent(store, createSubSessionEvent({ eventType: "tool_call_end", eventId: "tool-2", sequence: 3, toolCallId: "call-1", tool: "search", result: "ok", success: true, content: "" }));
 
     applySessionSnapshot(store, {
       sessionId: "sub-session-1",

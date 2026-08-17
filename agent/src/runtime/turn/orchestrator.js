@@ -388,6 +388,7 @@ export function createTurnOrchestrator({
       const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
       handleEngineErrorFn({
         error,
+        abortSignal,
         eventListener,
         event: "turn_orchestrator_error",
         metadata: {

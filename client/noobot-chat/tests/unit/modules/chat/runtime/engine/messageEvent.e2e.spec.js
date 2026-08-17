@@ -102,7 +102,6 @@ describe("authoritative message event end-to-end fidelity", () => {
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
       text: "```mermaid\ngraph TD; A-->B\n```",
-      output: "```mermaid\ngraph TD; A-->B\n```",
       thinking: "```mermaid\ngraph TD; A-->B\n```",
     }));
     produced.push(await emitMessageEvent(listener, runtime, "tool_call_end", {
@@ -113,7 +112,7 @@ describe("authoritative message event end-to-end fidelity", () => {
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
       toolCallId: "call-1",
-      toolResult: { tool_call_id: "call-1", output: "ok" },
+      result: "ok",
       success: true,
     }));
 

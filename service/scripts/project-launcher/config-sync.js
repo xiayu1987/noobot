@@ -7,13 +7,12 @@ import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
   collectConfigTemplateKeys,
-  migrateConfigFileToCurrentProtocol,
+  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   normalizeConfigParamKey,
   normalizeConfigParamValues,
   normalizeConfigParamsDocument,
+  synchronizeConfigFileFromTemplate,
 } from "@noobot/agent-config-protocol";
-import { DEPLOYMENT_OWNED_CONFIG_ROOTS } from "./constants.js";
-import { mergeIncremental, pruneBuiltInConfigParams } from "./config-merge.js";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
 import { alignInitialModelReferencesForFile } from "./provider.js";
 import {
@@ -91,15 +90,11 @@ export async function syncJsonFileIncremental({
   const targetJson = targetExists
     ? await readJsonStrict(targetFilePath, t(locale, "labelTargetConfig"))
     : {};
-  const merged = migrateConfigFileToCurrentProtocol(
-    pruneBuiltInConfigParams(
-      mergeIncremental({
-        template: pruneBuiltInConfigParams(templateJson),
-        target: pruneBuiltInConfigParams(targetJson),
-        excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOTS,
-      }),
-    ),
-  );
+  const merged = synchronizeConfigFileFromTemplate({
+    template: templateJson,
+    target: targetJson,
+    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  });
 
   if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
     await writeJson(targetFilePath, merged);

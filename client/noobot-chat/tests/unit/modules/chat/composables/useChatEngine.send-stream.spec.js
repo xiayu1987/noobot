@@ -443,7 +443,6 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.identity.turnScopeId,
         seq: 1,
         text: "final answer",
-        output: "final answer",
         modelAlias: "alias-a",
         modelName: "model-a",
         modelRuns: [{ runId: "r1" }],
@@ -670,7 +669,6 @@ describe("useChatEngine.send-stream", () => {
         turnScopeId: payload.identity.turnScopeId,
         seq: 1,
         text: "overlay answer",
-        output: "overlay answer",
       }));
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
         turnScopeId: payload.identity.turnScopeId,

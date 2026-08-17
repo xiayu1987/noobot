@@ -426,6 +426,7 @@ export async function executeToolCall({
     const isFatal = isFatalError(error);
     handleEngineError({
       error,
+      abortSignal: runtime?.abortSignal || null,
       eventListener,
       event: "tool_call_error",
       metadata: {

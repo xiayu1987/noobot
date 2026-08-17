@@ -157,7 +157,6 @@ describe("reconnect authoritative message event replay", () => {
       pluginFlow: "analysis",
       chain: "auxiliary",
       text: output,
-      output,
     });
     const findCanonicalMessageById = canonicalFindFor(targetMessage);
 

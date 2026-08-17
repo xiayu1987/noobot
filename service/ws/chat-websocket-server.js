@@ -19,7 +19,12 @@ import { createTurnLifecycleBridge } from "./chat-websocket/turn-lifecycle-bridg
 import { createAuthorityEventDispatcher } from "./chat-websocket/authority-event-dispatcher.js";
 import { recoverSnapshotOrphan, recoverTurnFinalize } from "./chat-websocket/finalize-recovery.js";
 import { validateProtocolEvent } from "@noobot/event-protocol";
-import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
+import {
+  EXECUTION_ABORT_TYPE,
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  createExecutionAbortReason,
+} from "@noobot/session-protocol";
 import {
   detachRunTransport,
   findActiveRun,
@@ -373,11 +378,11 @@ export function registerChatWebSocketServer(
             : Buffer.isBuffer(reasonBuffer)
               ? reasonBuffer.toString("utf8")
               : "";
-        state.currentAbortController.abort({
-          type: "socket_close",
+        state.currentAbortController.abort(createExecutionAbortReason({
+          type: EXECUTION_ABORT_TYPE.SOCKET_CLOSE,
           code: Number(code || 0) || undefined,
           reason: reasonText || "websocket closed",
-        });
+        }));
       }
       if (transportStillOwned && state.currentRunHandle) {
         detachRunTransport(state.currentRunHandle, state.currentRunTransportBinding);

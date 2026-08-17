@@ -249,7 +249,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (normalizedEventName === INTERACTION_EVENT_TYPE.REQUEST) {
     const validation = validateProtocolEvent(data);
     const requestId = String(data?.payload?.requestId || "").trim();
-    const lifecycle = String(data?.payload?.lifecycle || data?.payload?.interactionData?.lifecycle || "pending").trim().toLowerCase();
+    const lifecycle = String(data?.payload?.lifecycle || "pending").trim().toLowerCase();
     const isTerminal = validation.valid && isTerminalInteractionLifecycle(lifecycle);
     if (
       !validation.valid ||
@@ -303,7 +303,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
     const protocolEnvelope = envelope.data;
     const interaction = protocolEnvelope.payload;
     const requestId = String(interaction.requestId || "").trim();
-    const lifecycle = String(interaction.lifecycle || interaction.interactionData?.lifecycle || "pending").trim().toLowerCase();
+    const lifecycle = String(interaction.lifecycle || "pending").trim().toLowerCase();
     if (isTerminalInteractionLifecycle(lifecycle)) {
       channel.pendingInteractionRequests.delete(requestId);
       this.requestChannelMap.delete(requestId);

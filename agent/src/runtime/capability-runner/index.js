@@ -159,7 +159,6 @@ async function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = ""
       type: activityKind,
       category: "system",
       text: canonicalOutput,
-      output: canonicalOutput,
       purpose: String(data?.purpose || "").trim(),
       pluginFlow: String(data?.pluginFlow || "").trim(),
       chain: String(data?.chain || "").trim(),
