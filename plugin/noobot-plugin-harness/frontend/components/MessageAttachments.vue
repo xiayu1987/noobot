@@ -6,12 +6,11 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { useLocale } from "noobot-chat/plugin-api/locale";
-import { resolveParsedResultAccessMeta } from "noobot-chat/plugin-api/attachment-domain";
 import {
-  attachmentIdentityKey,
-  mergeAttachmentsByIdentity,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
+  mergeAttachmentDisplayItems,
+  resolveAttachmentDisplayKey,
+  resolveParsedResultAccessMeta,
+} from "noobot-chat/plugin-api/attachment-domain";
 import { BaseAttachmentFileCard, BaseFileCardList } from "noobot-chat/plugin-api/ui";
 
 const props = defineProps({
@@ -49,15 +48,8 @@ function resolveAttachmentOwnerType(attachmentItem = {}) {
   return String(attachmentItem?.owner?.type || "").trim();
 }
 
-function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
-  void existingItem;
-  return incomingItem;
-}
-
 function dedupeAttachments(list = []) {
-  return mergeAttachmentsByIdentity([], Array.isArray(list) ? list : [], {
-    onConflict: mergeAttachmentDisplayMeta,
-  });
+  return mergeAttachmentDisplayItems([], Array.isArray(list) ? list : []);
 }
 
 function hasParsedResultIdentity(attachmentItem = {}) {
@@ -70,11 +62,7 @@ function hasParsedResultIdentity(attachmentItem = {}) {
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
   void attachmentIndex;
-  try {
-    return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
-  } catch {
-    return "invalid-attachment-identity";
-  }
+  return resolveAttachmentDisplayKey(attachmentItem);
 }
 
 watch(

@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
+import { projectExecutionTransportPayload } from "../../events/transport-payload.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
@@ -609,14 +610,11 @@ export function createScopedSubSessionEventListener(eventListener = null, identi
       const data = source.data && typeof source.data === "object" ? source.data : {};
       return target.forwardEvent({
         ...source,
-        data: {
-          ...data,
-          userId: String(data.userId || identity.userId || "").trim(),
-          sessionId: String(data.sessionId || identity.sessionId || "").trim(),
-          parentSessionId: String(data.parentSessionId || identity.parentSessionId || "").trim(),
-          dialogProcessId: String(data.dialogProcessId || identity.dialogProcessId || "").trim(),
-          turnScopeId: String(data.turnScopeId || identity.turnScopeId || "").trim(),
-        },
+        data: projectExecutionTransportPayload({
+          event: source.event,
+          data,
+          route: identity,
+        }),
       });
     },
   };

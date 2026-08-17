@@ -102,7 +102,7 @@ export async function commitSummaryCheckpoint({
   }
 
   const turnMessages = currentTurnMessages.toArray();
-  const summaryCallIndex = turnMessages.findIndex((message) => hasTaskSummaryToolCall(message));
+  const summaryCallIndex = turnMessages.findLastIndex((message) => hasTaskSummaryToolCall(message));
   const taskCheckScope =
     summaryCallIndex >= 0 ? turnMessages.slice(0, summaryCallIndex) : turnMessages;
   const latestTaskCheckIds = new Set(

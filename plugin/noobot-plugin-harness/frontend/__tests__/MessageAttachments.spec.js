@@ -118,6 +118,23 @@ function mountMessageAttachments(overrides = {}) {
 }
 
 describe("MessageAttachments parsed result", () => {
+  it("renders explicit draft attachments without treating them as canonical identities", () => {
+    const wrapper = mountMessageAttachments({
+      attachments: [
+        {
+          clientAttachmentId: "draft-1",
+          name: "pending.png",
+          mimeType: "image/png",
+          size: 10,
+        },
+      ],
+    });
+
+    expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(1);
+    expect(wrapper.text()).toContain("pending.png");
+    expect(wrapper.text()).not.toContain("解析结果");
+  });
+
   it("shows parsed result actions for normal attachments", () => {
     const wrapper = mountMessageAttachments();
 

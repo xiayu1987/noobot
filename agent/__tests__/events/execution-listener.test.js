@@ -7,6 +7,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createExecutionEventListener } from "../../src/events/execution-listener.js";
+import {
+  ATTACHMENT_EVENT_TYPE,
+  ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_RELATION_TYPE,
+  createAttachmentLifecycleEvent,
+} from "@noobot/attachment-protocol";
 
 test("execution listener forwards the authoritative persistence scope and its delivery barrier", async () => {
   const persisted = [];
@@ -123,6 +129,50 @@ test("execution listener forwarding port delivers without taking persistence own
   assert.equal(forwarded[0].data.invocationId, "invoke-1");
 });
 
+test("execution listener keeps strict attachment lifecycle payloads unchanged upstream", async () => {
+  let forwarded;
+  const listener = createExecutionEventListener({
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: {
+      dialogProcessId: "dialog-a",
+      onEvent: async (event) => {
+        forwarded = event;
+        return true;
+      },
+    },
+  });
+  const identity = {
+    attachmentId: "source-a",
+    sessionId: "session-a",
+    attachmentSource: "user",
+  };
+  const lifecycle = createAttachmentLifecycleEvent({
+    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+    messageId: "attachment-event-a",
+    identity,
+    status: ATTACHMENT_LIFECYCLE.PARSED,
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    turnScopeId: "turn-a",
+    relation: {
+      relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+      sourceIdentity: identity,
+      targetIdentity: {
+        attachmentId: "parsed-a",
+        sessionId: "session-a",
+        attachmentSource: "model",
+      },
+      createdAt: "2026-08-16T00:00:00.000Z",
+    },
+  });
+
+  await listener.onEvent({ event: "attachment_lifecycle", data: lifecycle });
+
+  assert.deepEqual(forwarded, { event: "attachment_lifecycle", data: lifecycle, ts: forwarded.ts });
+  assert.equal("dialogProcessId" in forwarded.data, false);
+  assert.equal("parentSessionId" in forwarded.data, false);
+});
+
 test("execution listener classifies context identity diagnostics under one protocol category", async () => {
   const persisted = [];
   const listener = createExecutionEventListener({
@@ -212,7 +262,8 @@ test("execution listener exposes rejected asynchronous upstream delivery at the 
   assert.equal(delivered, false);
   await assert.rejects(
     listener.flushDelivery(),
-    (error) => error?.code === "EVENT_UPSTREAM_DELIVERY_FAILED" &&
+    (error) =>
+      error?.code === "EVENT_UPSTREAM_DELIVERY_FAILED" &&
       error?.failures?.[0]?.eventId === "event-final",
   );
 });

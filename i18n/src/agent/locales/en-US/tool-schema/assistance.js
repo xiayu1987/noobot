@@ -21,6 +21,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       },
     },
     texts: {
+      "tools.request_help.modelSystemPrompt":
+        "You are an independent assistance model. Analyze the help request and return concise, actionable guidance. Do not claim actions that were not actually performed.",
       "tools.request_help.helpContentRequired": "helpContent is required",
       "tools.request_help.requestFailed": "Help request failed",
       "tools.request_help.webSearchHelpUnavailable":
