@@ -404,7 +404,7 @@ describe("reduceMessageEvent", () => {
     const target = message({
       content: "draft",
       attachments: [{ attachmentId: "stale" }],
-      transferEnvelopes: [{ protocol: "stale" }],
+      transferEnvelopes: [],
     });
     const attachments = [
       {
@@ -429,7 +429,7 @@ describe("reduceMessageEvent", () => {
           sessionId: "session-1",
           turnScopeId: "turn-1",
           runId: "run-1",
-          producer: { type: "agent", id: "agent-1" },
+          producer: { type: "tool", id: "call-final" },
         },
         direction: "output",
         payload: {
@@ -446,7 +446,12 @@ describe("reduceMessageEvent", () => {
             },
           ],
         },
-        intent: { source: "agent", reason: "test", scenario: "agent", strategy: "test" },
+        intent: {
+          source: "tool",
+          reason: "semantic_transfer_tool_result",
+          scenario: "tool",
+          strategy: "tool_result_text",
+        },
         meta: {},
       },
     ];

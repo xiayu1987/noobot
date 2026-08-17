@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
 import {
@@ -262,16 +263,10 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   const snapshotTransferEnvelopes = Array.isArray(targetMessage.transferEnvelopes)
     ? targetMessage.transferEnvelopes
     : [];
-  const transferKeys = new Set(currentTransferEnvelopes.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`));
-  targetMessage.transferEnvelopes = [
-    ...currentTransferEnvelopes,
-    ...snapshotTransferEnvelopes.filter((item) => {
-      const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
-      if (transferKeys.has(key)) return false;
-      transferKeys.add(key);
-      return true;
-    }),
-  ];
+  targetMessage.transferEnvelopes = mergeTransferEnvelopes(
+    currentTransferEnvelopes,
+    snapshotTransferEnvelopes,
+  );
   if (Array.isArray(snapshot?.attachments)) {
     targetMessage.attachments = mergeAttachmentSnapshot(
       currentAttachments,

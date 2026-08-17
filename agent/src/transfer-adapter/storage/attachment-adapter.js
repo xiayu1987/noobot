@@ -204,34 +204,4 @@ export async function persistTransferFile({
   });
 }
 
-export function createExistingAttachmentTransferEnvelope({
-  identity,
-  attachmentMeta = {},
-  direction = TRANSFER_DIRECTION.OUTPUT,
-  source = "service",
-  reason = "semantic_transfer_reused_attachment",
-  scenario = "service",
-  strategy = "reused_attachment",
-} = {}) {
-  const ids = requireIdentity(identity);
-  const attachmentIdentity = recordIdentity(attachmentMeta, ids.identity.sessionId);
-  const attachment = createAttachmentReference({
-    identity: attachmentIdentity,
-    role: "primary",
-    name: text(attachmentMeta.name) || "attachment",
-    mimeType: text(attachmentMeta.mimeType) || DEFAULT_TRANSFER_MIME_TYPE,
-    size:
-      Number.isSafeInteger(attachmentMeta.size) && attachmentMeta.size >= 0
-        ? attachmentMeta.size
-        : undefined,
-  });
-  return createTransferEnvelope({
-    ...ids,
-    direction,
-    payload: { mode: "attachment", attachments: [attachment] },
-    intent: { source, reason, scenario, strategy },
-    meta: { persisted: true, reused: true },
-  });
-}
-
 export { requireIdentity };

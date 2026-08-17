@@ -519,7 +519,12 @@ describe("SharedChatMessageItem", () => {
                 },
               ],
             },
-            intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+            intent: {
+              source: "tool",
+              reason: "semantic_transfer_tool_result",
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
             meta: {},
           },
         ],

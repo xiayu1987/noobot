@@ -132,6 +132,33 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     );
   });
 
+  it("uses channelSessionId only as transport routing identity", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const streamPromise = client.stream(
+      streamCommand({ sessionId: "session-route", turnScopeId: "turn-route" }),
+      onEvent,
+    );
+    const socket = MockWebSocket.instances[0];
+    const data = { turnScopeId: "turn-route", content: "routed" };
+
+    socket.emit("delta", data, "another-session");
+    expect(onEvent).not.toHaveBeenCalled();
+
+    socket.emit("delta", data, "session-route");
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "delta",
+      data,
+      channelSessionId: "session-route",
+    });
+    expect(data).not.toHaveProperty("sessionId");
+
+    socket.emit(StreamEventEnum.DONE, {
+      turnScopeId: "turn-route",
+    }, "session-route");
+    await streamPromise;
+  });
+
   it("acknowledges authoritative lifecycle before handing it to the business reducer", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();

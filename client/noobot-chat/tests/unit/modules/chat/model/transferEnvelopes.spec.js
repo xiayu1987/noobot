@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMessageTransferAttachments,
   getMessageTransferEnvelopes,
-  normalizeTransferEnvelope,
+  normalizeTransferEnvelopes,
 } from "../../../../../src/modules/chat/model/transferEnvelopes.js";
 
 const attachmentIdentity = {
@@ -49,10 +49,14 @@ const envelope = {
 };
 
 describe("transferEnvelopes", () => {
-  it("accepts only the strict V2 envelope", () => {
-    expect(normalizeTransferEnvelope(envelope)).toBe(envelope);
-    expect(normalizeTransferEnvelope({ protocol: "legacy" })).toBeNull();
-    expect(normalizeTransferEnvelope({ ...envelope, version: 1 })).toBeNull();
+  it("normalizes only strict V2 envelope collections", () => {
+    expect(normalizeTransferEnvelopes([envelope])).toEqual([envelope]);
+    expect(() => normalizeTransferEnvelopes([{ protocol: "legacy" }])).toThrow(
+      /invalid_transfer_envelope/,
+    );
+    expect(() => normalizeTransferEnvelopes([{ ...envelope, version: 1 }])).toThrow(
+      /invalid_transfer_envelope/,
+    );
   });
 
   it("projects attachment identity without any path fields", () => {
@@ -71,12 +75,12 @@ describe("transferEnvelopes", () => {
   });
 
   it("rejects legacy and path-based envelopes instead of translating them", () => {
-    expect(getMessageTransferAttachments({
+    expect(() => getMessageTransferAttachments({
       transferEnvelopes: [{ ...envelope, version: 1, files: [{ filePath: "/legacy/a.txt" }] }],
-    })).toEqual([]);
-    expect(getMessageTransferAttachments({
+    })).toThrow(/invalid_transfer_envelope/);
+    expect(() => getMessageTransferAttachments({
       transferEnvelopes: [{ ...envelope, filePath: "/legacy/a.txt" }],
-    })).toEqual([]);
+    })).toThrow(/invalid_transfer_envelope/);
   });
 
   it("collects valid envelopes from the canonical transfer field only", () => {

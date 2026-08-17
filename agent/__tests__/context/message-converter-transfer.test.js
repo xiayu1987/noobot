@@ -18,7 +18,7 @@ test("toConversationMessages keeps transferEnvelopes", () => {
       sessionId: "s1",
       turnScopeId: "t1",
       runId: "r1",
-      producer: { type: "model", id: "model-1" },
+      producer: { type: "tool", id: "call-1" },
     },
     direction: "output",
     payload: {
@@ -32,7 +32,12 @@ test("toConversationMessages keeps transferEnvelopes", () => {
         },
       ],
     },
-    intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: {},
   };
   const messages = toConversationMessages([

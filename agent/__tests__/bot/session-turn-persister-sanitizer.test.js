@@ -261,7 +261,7 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
       sessionId: "s1",
       turnScopeId: "t1",
       runId: "r1",
-      producer: { type: "model", id: "model-1" },
+      producer: { type: "tool", id: "call-final" },
     },
     direction: "output",
     payload: {
@@ -275,7 +275,12 @@ test("SessionTurnPersister persists final assistant transfer envelopes with atta
         },
       ],
     },
-    intent: { source: "model", reason: "result", scenario: "model", strategy: "model_output" },
+    intent: {
+      source: "tool",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: {},
   };
 

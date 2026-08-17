@@ -6,10 +6,9 @@
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_REASON,
-  TRANSFER_SOURCE,
 } from "../core/constants.js";
 import { persistTransferFile } from "../storage/attachment-adapter.js";
-import { validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import { TRANSFER_SOURCE, validateTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";
 import { emitSemanticTransferValidation } from "../core/validation-events.js";
 import { firstNormalizedString } from "../core/compact.js";

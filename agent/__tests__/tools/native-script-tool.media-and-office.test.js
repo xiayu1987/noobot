@@ -15,9 +15,18 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import {
+  IDENTITY,
+  createRuntime,
+  hasFfmpegCapabilities,
+  hasLibreOfficeCapability,
+} from "./native-script-tool.fixtures.js";
 
-test("execute_native_script resolves FFmpeg output tokens into collected binary attachments", async () => {
+test("execute_native_script resolves FFmpeg output tokens into collected binary attachments", async (t) => {
+  if (!(await hasFfmpegCapabilities())) {
+    t.skip("FFmpeg and FFprobe are not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-ffmpeg-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
@@ -59,7 +68,11 @@ log(probe.stdout);
   assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks/);
 });
 
-test("execute_native_script fails when LibreOffice reports success without an output artifact", async () => {
+test("execute_native_script fails when LibreOffice reports success without an output artifact", async (t) => {
+  if (!(await hasLibreOfficeCapability())) {
+    t.skip("LibreOffice is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-"));
   await fs.writeFile(path.join(basePath, "input.html"), "<html><body>test</body></html>", "utf8");
   const runtime = createRuntime(basePath);
@@ -84,7 +97,11 @@ await libreoffice.convert({ input: source, outputDirectory: output.directory, ou
   assert.doesNotMatch(result.stderr, /\/tmp\/noobot-native-|runtime\/native_tasks|\/home\/xiayu/);
 });
 
-test("execute_native_script converts a declared input token with LibreOffice", async () => {
+test("execute_native_script converts a declared input token with LibreOffice", async (t) => {
+  if (!(await hasLibreOfficeCapability())) {
+    t.skip("LibreOffice is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-input-"));
   await fs.writeFile(
     path.join(basePath, "input.html"),
@@ -133,7 +150,11 @@ log(converted.output, converted.outputBytes);
   assert.match(result.stdout, /output:\/\/0\.docx/);
 });
 
-test("execute_native_script converts a same-task output token with LibreOffice", async () => {
+test("execute_native_script converts a same-task output token with LibreOffice", async (t) => {
+  if (!(await hasLibreOfficeCapability())) {
+    t.skip("LibreOffice is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-output-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
@@ -179,7 +200,11 @@ log(converted.output);
   assert.match(result.stdout, /output:\/\/source\.docx/);
 });
 
-test("execute_native_script converts into an explicit temporary LibreOffice directory", async () => {
+test("execute_native_script converts into an explicit temporary LibreOffice directory", async (t) => {
+  if (!(await hasLibreOfficeCapability())) {
+    t.skip("LibreOffice is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-libreoffice-temp-"));
   await fs.writeFile(
     path.join(basePath, "input.html"),

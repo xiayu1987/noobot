@@ -31,7 +31,7 @@ import {
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
-import { getMessageTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import { getMessageTransferEnvelopes, mergeTransferEnvelopes } from "../../model/transferEnvelopes.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
 
 export { initializeMessageEventState } from "../../model/messageEventState.js";
@@ -102,16 +102,10 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
         : [];
       Object.assign(targetMessage, finalProjection);
       if (Array.isArray(finalProjection.transferEnvelopes)) {
-        const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
-        targetMessage.transferEnvelopes = [
-          ...existingEnvelopes,
-          ...finalProjection.transferEnvelopes.filter((item) => {
-            const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          }),
-        ];
+        targetMessage.transferEnvelopes = mergeTransferEnvelopes(
+          existingEnvelopes,
+          finalProjection.transferEnvelopes,
+        );
       }
       if (Array.isArray(finalProjection.attachments)) {
         targetMessage.attachments = finalProjection.attachments;
@@ -144,16 +138,10 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       event.transferEnvelopes.length
     ) {
       const existingEnvelopes = getMessageTransferEnvelopes(targetMessage);
-      const seen = new Set(existingEnvelopes.map((item) => `${item.transferId}:${item.messageId}`));
-      targetMessage.transferEnvelopes = [
-        ...existingEnvelopes,
-        ...event.transferEnvelopes.filter((item) => {
-          const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        }),
-      ];
+      targetMessage.transferEnvelopes = mergeTransferEnvelopes(
+        existingEnvelopes,
+        event.transferEnvelopes,
+      );
       targetMessage.attachments = getMessageAttachments(targetMessage);
     }
     targetMessage.activityTimeline = reduceActivityTimeline(

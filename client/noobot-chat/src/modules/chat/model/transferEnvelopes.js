@@ -3,59 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-
-const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
-const TRANSFER_VERSION = 2;
-const TRANSFER_MODES = new Set(["direct", "attachment"]);
-const FORBIDDEN_FIELDS = new Set([
-  "path",
-  "filePath",
-  "hostPath",
-  "relativePath",
-  "sandboxPath",
-  "transferFilePath",
-  "pathView",
-  "attachmentMeta",
-]);
-
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
-
-function containsForbiddenField(value = null) {
-  if (Array.isArray(value)) return value.some(containsForbiddenField);
-  if (!isPlainObject(value)) return false;
-  return Object.entries(value).some(([key, child]) =>
-    FORBIDDEN_FIELDS.has(key) || containsForbiddenField(child),
-  );
-}
-
-function isTransferEnvelope(value = null) {
-  return isPlainObject(value)
-    && !containsForbiddenField(value)
-    && value.protocol === TRANSFER_PROTOCOL
-    && value.version === TRANSFER_VERSION
-    && normalizeString(value.transferId)
-    && normalizeString(value.messageId)
-    && isPlainObject(value.identity)
-    && normalizeString(value.identity.sessionId)
-    && isPlainObject(value.identity.producer)
-    && normalizeString(value.identity.producer.type)
-    && normalizeString(value.identity.producer.id)
-    && TRANSFER_MODES.has(value.payload?.mode);
-}
-
-function normalizeTransferEnvelope(value = null) {
-  return isTransferEnvelope(value) ? value : null;
-}
+import {
+  getTransferAttachmentReferences as getCanonicalTransferAttachmentReferences,
+  mergeTransferEnvelopes,
+  normalizeTransferEnvelopes as normalizeCanonicalTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 
 function normalizeTransferEnvelopes(value = null) {
-  const values = Array.isArray(value) ? value : [value];
-  return values.map(normalizeTransferEnvelope).filter(Boolean);
+  return normalizeCanonicalTransferEnvelopes(value);
 }
 
 function getMessageTransferEnvelopes(messageItem = {}) {
@@ -71,36 +26,32 @@ function getMessageTransferEnvelopes(messageItem = {}) {
   for (const session of messageItem?.pluginMeta?.payload?.nodeSessions || []) {
     values.push(session?.transferEnvelopes, session?.nodeResultTransferEnvelopes);
   }
-  const seen = new Set();
-  return values.flatMap(normalizeTransferEnvelopes).filter((envelope) => {
-    const key = `${envelope.transferId}:${envelope.messageId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return mergeTransferEnvelopes(...values);
 }
 
-function getTransferAttachmentReferences(envelope = null) {
-  if (!isTransferEnvelope(envelope) || envelope.payload.mode !== "attachment") return [];
-  return Array.isArray(envelope.payload.attachments) ? envelope.payload.attachments : [];
+function getTransferAttachmentReferences(value = null) {
+  return getCanonicalTransferAttachmentReferences(value);
 }
 
 function getTransferAttachments(value = null) {
-  const envelopes = Array.isArray(value) ? value : getMessageTransferEnvelopes(value);
-  return envelopes.flatMap((envelope) => getTransferAttachmentReferences(envelope).map((reference) => ({
-    ...reference,
-    ...reference.identity,
-    attachmentId: reference.identity.attachmentId,
-    sessionId: reference.identity.sessionId,
-    attachmentSource: reference.identity.attachmentSource,
-    name: reference.name,
-    mimeType: reference.mimeType,
-    size: reference.size,
-    preview: reference.preview,
-    transferId: envelope.transferId,
-    messageId: envelope.messageId,
-    transferRole: reference.role,
-  })));
+  const envelopes = Array.isArray(value) ? normalizeTransferEnvelopes(value) : getMessageTransferEnvelopes(value);
+  return envelopes.flatMap((envelope) => {
+    if (envelope.payload.mode !== "attachment") return [];
+    return envelope.payload.attachments.map((reference) => ({
+      ...reference,
+      ...reference.identity,
+      attachmentId: reference.identity.attachmentId,
+      sessionId: reference.identity.sessionId,
+      attachmentSource: reference.identity.attachmentSource,
+      name: reference.name,
+      mimeType: reference.mimeType,
+      size: reference.size,
+      preview: reference.preview,
+      transferId: envelope.transferId,
+      messageId: envelope.messageId,
+      transferRole: reference.role,
+    }));
+  });
 }
 
 function getMessageTransferAttachments(messageItem = {}) {
@@ -112,7 +63,6 @@ export {
   getMessageTransferEnvelopes,
   getTransferAttachments,
   getTransferAttachmentReferences,
-  isTransferEnvelope,
-  normalizeTransferEnvelope,
+  mergeTransferEnvelopes,
   normalizeTransferEnvelopes,
 };

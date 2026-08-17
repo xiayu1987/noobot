@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { assertTransferEnvelope, transferIdentityKey } from "@noobot/semantic-transfer-protocol";
+import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 const SESSION_CONTEXT_ROLES = new Set(["system", "user", "assistant", "tool"]);
 
@@ -41,16 +41,7 @@ export function normalizeContextTransferEnvelopes(envelopes = []) {
   if (!Array.isArray(envelopes)) {
     throw new TypeError("Session Context transferEnvelopes must be an array");
   }
-  const identities = new Set();
-  return envelopes.map((envelope) => {
-    assertTransferEnvelope(envelope);
-    const key = transferIdentityKey(envelope);
-    if (identities.has(key)) {
-      throw new TypeError(`Session Context transfer identity conflict: ${key}`);
-    }
-    identities.add(key);
-    return envelope;
-  });
+  return normalizeTransferEnvelopes(envelopes);
 }
 
 export function projectSessionRecordToContextMessage(record = {}) {

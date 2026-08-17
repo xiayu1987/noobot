@@ -115,7 +115,12 @@ test("workflow attachment operations reject incomplete identity", () => {
                 },
               ],
             },
-            intent: { source: "tool", reason: "test", scenario: "test", strategy: "test" },
+            intent: {
+              source: "plugin",
+              reason: "workflow_task_result",
+              scenario: "workflow",
+              strategy: "workflow_subagent",
+            },
             meta: {},
           },
         ],

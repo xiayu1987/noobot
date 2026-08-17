@@ -35,10 +35,11 @@ export function isTerminalChannelStateEvent(event = "", data = {}) {
   );
 }
 
-export function isEventForStreamScope(data = {}, payload = {}) {
+export function isEventForStreamScope(data = {}, payload = {}, channelSessionId = "") {
   const identity = getAgentCommandIdentity(payload);
   const payloadSessionId = normalizeTrimmedString(identity.sessionId);
-  const eventSessionId = normalizeTrimmedString(data?.sessionId);
+  const eventSessionId =
+    normalizeTrimmedString(data?.sessionId) || normalizeTrimmedString(channelSessionId);
   if (payloadSessionId && eventSessionId && payloadSessionId !== eventSessionId) return false;
   const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
@@ -52,8 +53,8 @@ export function isEventForStreamScope(data = {}, payload = {}) {
   );
 }
 
-export function canSettleStreamForEvent(data = {}, payload = {}) {
-  if (!isEventForStreamScope(data, payload)) return false;
+export function canSettleStreamForEvent(data = {}, payload = {}, channelSessionId = "") {
+  if (!isEventForStreamScope(data, payload, channelSessionId)) return false;
   const identity = getAgentCommandIdentity(payload);
   const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);

@@ -74,7 +74,6 @@
     "test:e2e:execution-isolation": "npm run -w agent test:e2e:execution-isolation",
     "check:i18n-imports": "npm run --workspaces --if-present check:i18n-imports",
     "check:plugin-frontend-i18n": "node ./scripts/check-plugin-frontend-i18n.mjs",
-    "check:semantic-transfer-compat": "node ./scripts/check-semantic-transfer-compat.mjs",
     "check:parent-sessionid-unification": "node ./scripts/check-parent-sessionid-unification.mjs",
     "check:workflow-dialog-process-static-guard": "node --test plugin/noobot-plugin-workflow/__tests__/core/workflow-dialog-process-static-guard.test.js",
     "check:plugin-harness-src-i18n": "node ./scripts/check-plugin-harness-src-i18n.mjs",

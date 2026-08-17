@@ -15,7 +15,7 @@ import {
 test("materializeOutputResult creates direct V2 envelope below the threshold", async () => {
   const result = await materializeOutputResult({
     content: "abcdef",
-    policy: { prefer: "auto", maxDirectChars: 10 },
+    policy: { preference: "auto", maxDirectChars: 10 },
     identity: identity(),
     intent: { source: "tool", reason: "test", scenario: "tool", strategy: "tool_output" },
   });
@@ -29,11 +29,11 @@ test("materializeOutputResult does not silently fall back when attachment persis
   await assert.rejects(
     () => materializeOutputResult({
       content: "abcdef",
-      policy: { prefer: "attachment", allowAttachmentPersist: false },
+      policy: { preference: "attachment", allowAttachment: false },
       identity: identity(),
       runtime: { userId: "u1" },
     }),
-    /semantic_transfer_attachment_service_required/,
+    /attachment_persistence_required/,
   );
 });
 

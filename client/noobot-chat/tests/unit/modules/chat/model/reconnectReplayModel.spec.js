@@ -233,10 +233,24 @@ describe("reconnectReplayModel", () => {
   it("patchMessageObjectPreservingUiState keeps non-degrading content and transfer fields", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",
-      version: 1,
+      version: 2,
+      transferId: "transfer-existing",
+      messageId: "message-existing",
+      identity: {
+        sessionId: "session-transfer",
+        turnScopeId: "turn-existing",
+        runId: "run-existing",
+        producer: { type: "tool", id: "call-existing" },
+      },
       direction: "output",
-      transport: "file",
-      filePath: "/workspace/a.txt",
+      payload: { mode: "direct", content: "existing transfer" },
+      intent: {
+        source: "tool",
+        reason: "semantic_transfer_tool_result",
+        scenario: "tool",
+        strategy: "tool_result_text",
+      },
+      meta: {},
     };
     const target = {
       content: "existing content",
@@ -282,7 +296,12 @@ describe("reconnectReplayModel", () => {
       },
       direction: "output",
       payload: { mode: "direct", content: id },
-      intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+      intent: {
+        source: "tool",
+        reason: "semantic_transfer_tool_result",
+        scenario: "tool",
+        strategy: "tool_result_text",
+      },
       meta: {},
     });
     const existingTransferEnvelope = makeEnvelope("old");

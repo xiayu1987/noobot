@@ -6,10 +6,10 @@
 import {
   DEFAULT_TRANSFER_MIME_TYPE,
   TRANSFER_REASON,
-  TRANSFER_SOURCE,
 } from "../core/constants.js";
 import {
   directTransfer,
+  TRANSFER_SOURCE,
   validateTransferEnvelope,
 } from "@noobot/semantic-transfer-protocol";
 import { resolveTransferIntent } from "../core/intent.js";

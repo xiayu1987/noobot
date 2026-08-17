@@ -6,7 +6,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { cp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { attachmentTransfer, assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
 import { projectTurnCompletionMessages } from "@noobot/context-protocol";
 import {
   SESSION_COMMAND,
@@ -318,92 +318,23 @@ function stableId(prefix, parts) {
   return `${prefix}_${createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32)}`;
 }
 
-function migrateTransferEnvelopeV1(envelope, message, envelopeIdentity) {
-  if (envelope?.protocol !== "noobot.semantic-transfer" || Number(envelope?.version) !== 1) {
-    return assertTransferEnvelope(envelope);
-  }
-  if (envelope.transport !== "file" || !Array.isArray(envelope.files) || !envelope.files.length) {
-    throw Object.assign(new Error("Semantic Transfer V1 envelope cannot be migrated losslessly"), {
-      code: "SESSION_TRANSFER_V1_UNMIGRATABLE",
-    });
-  }
-  const messageId = text(message.messageId || message.id || message.messageUid);
-  const sessionId = text(message.sessionId || envelope.files[0]?.sessionId);
-  const turnScopeId = text(message.turnScopeId);
-  const producerId = text(message.messageUid || messageId);
-  if (!messageId || !sessionId || !turnScopeId || !producerId) {
-    throw Object.assign(
-      new Error("Semantic Transfer V1 migration requires canonical message and Turn identity"),
-      {
-        code: "SESSION_TRANSFER_V1_IDENTITY_REQUIRED",
-      },
-    );
-  }
-  const attachments = envelope.files.map((file) => {
-    const metadata =
-      file?.attachmentMeta && typeof file.attachmentMeta === "object" ? file.attachmentMeta : file;
-    return {
-      identity: {
-        attachmentId: text(metadata?.attachmentId),
-        sessionId: text(metadata?.sessionId),
-        attachmentSource: text(metadata?.attachmentSource),
-      },
-      role: text(file?.role || metadata?.role) || "primary",
-      name: text(file?.name || metadata?.name),
-      mimeType: text(file?.mimeType || metadata?.mimeType) || "application/octet-stream",
-      ...(Number.isSafeInteger(Number(file?.size ?? metadata?.size)) &&
-      Number(file?.size ?? metadata?.size) >= 0
-        ? { size: Number(file?.size ?? metadata?.size) }
-        : {}),
-    };
-  });
-  return attachmentTransfer({
-    transferId: stableId("transfer_migrated", [producerId, envelopeIdentity]),
-    messageId,
-    identity: {
-      sessionId,
-      turnScopeId,
-      producer: { type: "session-repair", id: producerId },
-    },
-    direction: text(envelope.direction) || "output",
-    attachments,
-    intent: {
-      source: "service",
-      reason: "session_protocol_migration",
-      scenario: envelopeIdentity.includes("nodeResultTransferEnvelopes") ? "workflow" : "tool",
-      strategy: envelopeIdentity.includes("nodeResultTransferEnvelopes")
-        ? "workflow_subagent"
-        : "tool_output",
-    },
-    meta: {},
-  });
-}
-
-function migrateTransferCollections(value, message, path = "message") {
+function validateTransferCollections(value) {
   if (!value || typeof value !== "object") return false;
   if (Array.isArray(value)) {
-    return value.reduce(
-      (changed, item, index) =>
-        migrateTransferCollections(item, message, `${path}[${index}]`) || changed,
-      false,
-    );
+    for (const item of value) validateTransferCollections(item);
+    return false;
   }
-  let changed = false;
   for (const [key, child] of Object.entries(value)) {
     if (
       (key === "transferEnvelopes" || key === "nodeResultTransferEnvelopes") &&
       Array.isArray(child)
     ) {
-      value[key] = child.map((envelope, index) => {
-        const migrated = migrateTransferEnvelopeV1(envelope, message, `${path}.${key}[${index}]`);
-        if (migrated !== envelope) changed = true;
-        return migrated;
-      });
+      for (const envelope of child) assertTransferEnvelope(envelope);
       continue;
     }
-    if (migrateTransferCollections(child, message, `${path}.${key}`)) changed = true;
+    validateTransferCollections(child);
   }
-  return changed;
+  return false;
 }
 
 function migrateMessage(message = {}, sessionId = "", index = 0) {
@@ -460,7 +391,7 @@ function migrateMessage(message = {}, sessionId = "", index = 0) {
     delete next.turnCommit.idempotencyKey;
     changed = true;
   }
-  if (migrateTransferCollections(next, next)) changed = true;
+  validateTransferCollections(next);
   if (!hadSessionId) delete next.sessionId;
   return { message: next, changed };
 }

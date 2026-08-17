@@ -39,8 +39,10 @@ test("live business event broadcast should include channel sessionId without ove
   manager.broadcastChannelEvent(channel, deltaEnvelope);
 
   const businessEvents = client.sentEvents.filter((item) => item?.event !== "channel_state");
-  assert.equal(businessEvents[0]?.data?.sessionId, "session-1");
+  assert.equal(businessEvents[0]?.channelSessionId, "session-1");
+  assert.equal(businessEvents[0]?.data?.sessionId, undefined);
   assert.equal(businessEvents[1]?.data?.sessionId, "upstream-session");
+  assert.equal(businessEvents[1]?.channelSessionId, "session-1");
   assert.equal(businessEvents[0]?.data?.requestId, undefined);
   assert.equal(businessEvents[1]?.data?.requestId, undefined);
   assert.equal(thinkingEnvelope?.data?.sessionId, undefined);
@@ -60,7 +62,8 @@ test("event replay should include channel sessionId without mutating cached enve
 
   manager.replayChannelEvents(channel, client, 0);
 
-  assert.equal(client.sentEvents[0]?.data?.sessionId, "session-1");
+  assert.equal(client.sentEvents[0]?.channelSessionId, "session-1");
+  assert.equal(client.sentEvents[0]?.data?.sessionId, undefined);
   assert.equal(envelope?.data?.sessionId, undefined);
 });
 
