@@ -18,15 +18,15 @@ Only registered scenario/strategy pairs may create an envelope. Business points 
 registered under the scenario category and are validated when supplied in `intent`.
 
 Strategy definitions live in `src/strategies/`; tool input and output policies live
-in `src/policies/`. `src/registry.mjs` only owns registration and validation.
+in `src/policies/`. `src/registry.js` only owns registration and validation.
 
-| Scenario | Category | Strategy | Business points |
-| --- | --- | --- | --- |
-| `harness` | `summary` | `harness_summary` | `summary_detail` |
-| `harness` | `planning` | `harness_planning` | `planning`, `planning_followup`, `planning_revision`, `planning_revision_followup`, `planning_refinement`, `planning_refinement_followup`, `next_phase_plan`, `next_phase_plan_followup`, `next_phase_plan_refinement`, `next_phase_plan_refinement_followup` |
-| `harness` | `acceptance` | `harness_acceptance` | `acceptance_plan`, `acceptance_report`, `acceptance_checklist`, `phase_acceptance`, `phase_acceptance_before_final`, `acceptance_semantic_validation` |
-| `workflow` | `main_agent` | `workflow_final_plan` | `final_plan` |
-| `workflow` | `sub_agent` | `workflow_subagent` | `delegation`, `task_result` |
+| Scenario   | Category     | Strategy              | Business points                                                                                                                                                                                                                                               |
+| ---------- | ------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `harness`  | `summary`    | `harness_summary`     | `summary_detail`                                                                                                                                                                                                                                              |
+| `harness`  | `planning`   | `harness_planning`    | `planning`, `planning_followup`, `planning_revision`, `planning_revision_followup`, `planning_refinement`, `planning_refinement_followup`, `next_phase_plan`, `next_phase_plan_followup`, `next_phase_plan_refinement`, `next_phase_plan_refinement_followup` |
+| `harness`  | `acceptance` | `harness_acceptance`  | `acceptance_plan`, `acceptance_report`, `acceptance_checklist`, `phase_acceptance`, `phase_acceptance_before_final`, `acceptance_semantic_validation`                                                                                                         |
+| `workflow` | `main_agent` | `workflow_final_plan` | `final_plan`                                                                                                                                                                                                                                                  |
+| `workflow` | `sub_agent`  | `workflow_subagent`   | `delegation`, `task_result`                                                                                                                                                                                                                                   |
 
 `read_file` uses the registered `tool_output` source-reference policy for oversized
 results. It returns a sandbox-visible source address and line range; it does not write

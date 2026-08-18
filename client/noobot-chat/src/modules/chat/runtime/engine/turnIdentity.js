@@ -17,11 +17,17 @@ export function createTurnIdentity({ sessionId = "", turnScopeId = "", dialogPro
 }
 
 export function resolveTurnIdentity(value = {}, fallback = {}) {
-  const event = value?.messageEvent || value?.event || {};
+  if (value?.protocol?.name === "@noobot/event-protocol") {
+    return createTurnIdentity({
+      sessionId: value?.identity?.sessionId,
+      turnScopeId: value?.identity?.turnScopeId,
+      dialogProcessId: value?.payload?.dialogProcessId,
+    });
+  }
   return createTurnIdentity({
-    sessionId: value?.sessionId || event?.sessionId || fallback?.sessionId,
-    turnScopeId: value?.turnScopeId || value?.statusTurnScopeId || event?.turnScopeId || fallback?.turnScopeId,
-    dialogProcessId: value?.dialogProcessId || event?.dialogProcessId || fallback?.dialogProcessId,
+    sessionId: value?.sessionId || fallback?.sessionId,
+    turnScopeId: value?.turnScopeId || value?.statusTurnScopeId || fallback?.turnScopeId,
+    dialogProcessId: value?.dialogProcessId || fallback?.dialogProcessId,
   });
 }
 

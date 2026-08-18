@@ -9,6 +9,8 @@ import {
   createCanonicalAssistant,
   createFixture,
   createFakeProcessStore,
+  createInteractionEnvelope,
+  createWorkflowEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
 import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
@@ -16,6 +18,9 @@ import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
 import { createReplayBatch } from "@noobot/event-protocol";
+import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
 
 afterEach(() => {
@@ -137,46 +142,30 @@ describe("useReconnectReplay", () => {
       tool: "child-tool",
       toolCallId: "call-child-1",
       args: {},
-    }).data.event;
+      workflowRunId: "workflow-1",
+      nodeExecutionId: "node-1",
+      parentSessionId: "s-1",
+    }).data;
 
-    const result = await api.applyReconnectEvent("subagent_message_event", {
-      sessionId: "child-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "workflow-node:node-1",
-      seq: 42,
-      route: { scope: "sub_session", rootSessionId: "s-1" },
-      event: messageEvent,
-    });
+    const result = await api.applyReconnectEvent(MESSAGE_EVENT_WIRE_EVENT, messageEvent);
 
-    expect(result).toEqual({ applied: true });
-    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith(
-      {
-        event: "workflow_message_event",
-        data: messageEvent,
-        transportSequence: 42,
-      },
-      { source: "reconnect" },
-    );
+    expect(result).toEqual({ applied: true, appliedCount: 1 });
+    expect(mocks.reduceSubSessionMessageEvent).toHaveBeenCalledWith(messageEvent);
   });
 
   it("projects workflow planning events replayed after a page refresh", async () => {
     const { api, mocks } = createFixture();
-    const data = {
-      sessionId: "s-1",
+    const data = createWorkflowEnvelope(WORKFLOW_RUNTIME_EVENT.PLANNING, {
       dialogProcessId: "dp-workflow",
-      turnScopeId: "turn-workflow",
       workflowRunId: "workflow-1",
+      presentationMessageId: "workflow-message-1",
+      workflowPayload: { title: "workflow" },
       nodeSessions: [{ nodeExecutionId: "node-1" }],
-    };
+    });
 
-    await api.applyReconnectEvent("workflow_planning_message_prepared", data);
+    await api.applyReconnectEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, data);
 
-    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith({
-      event: "workflow_planning_message_prepared",
-      data,
-      transportSequence: 0,
-    }, { source: "reconnect" });
+    expect(mocks.applyWorkflowRuntimeEvent).toHaveBeenCalledWith(data, { source: "reconnect" });
     expect(mocks.applyTurnRuntimeEvents).not.toHaveBeenCalled();
   });
 
@@ -403,6 +392,8 @@ describe("useReconnectReplay", () => {
           sessionId: "s-1",
           streamId: "stream-s-1",
           requestId: "reconnect-s-1",
+          orderingDomain: "turn-lifecycle",
+          orderingScopeId: "s-1",
           snapshot,
           snapshotSequence: 1,
         }),
@@ -438,13 +429,12 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int", content: "", pending: true },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
-      sessionId: "s-1",
+    const interaction = createInteractionEnvelope({
       dialogProcessId: "dp-int",
-      seq: 1,
       requestId: "req-1",
       interactionType: "confirm",
     });
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
 
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledTimes(1);
     expect(mocks.clearPendingInteraction).not.toHaveBeenCalled();
@@ -459,13 +449,12 @@ describe("useReconnectReplay", () => {
       { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-int2", content: "", pending: true },
     ];
 
-    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
-      sessionId: "s-1",
+    const interaction = createInteractionEnvelope({
       dialogProcessId: "dp-int2",
-      seq: 1,
       requestId: "req-2",
       interactionType: "confirm",
     });
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
     await api.applyReconnectEvent(StreamEventEnum.DELTA, {
       sessionId: "s-1",
       dialogProcessId: "dp-int2",
@@ -479,15 +468,15 @@ describe("useReconnectReplay", () => {
   it("EV-03b2: auto-resolved interaction replay does not enter pending", async () => {
     const { api, mocks } = createFixture();
 
-    await api.applyReconnectEvent(StreamEventEnum.INTERACTION_REQUEST, {
-      sessionId: "s-1",
+    const interaction = createInteractionEnvelope({
       dialogProcessId: "dp-int2-auto",
-      seq: 1,
       requestId: "req-2-auto",
       interactionType: "post_action_notice",
       lifecycle: "resolved",
       ackMode: "auto",
+      resolvedBy: "auto",
     });
+    await api.applyReconnectEvent(INTERACTION_EVENT_TYPE.REQUEST, interaction);
 
     expect(mocks.setPendingInteractionRequest).not.toHaveBeenCalled();
     expect(mocks.clearPendingInteraction).toHaveBeenCalled();

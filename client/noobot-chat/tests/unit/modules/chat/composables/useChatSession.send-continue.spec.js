@@ -17,49 +17,65 @@ import {
 } from "./useChatSession.test-helpers.js";
 import { lifecycle } from "../runtime/run-state-machine/turnRuntimeRegistryTestFixtures.js";
 
-function turnMessages({ dialogProcessId = "dp-1", turnScopeId = "turn-1", content = "answer" } = {}) {
+function turnMessages({
+  dialogProcessId = "dp-1",
+  turnScopeId = "turn-1",
+  content = "answer",
+} = {}) {
   return [
     { role: "user", content: "question", turnScopeId },
     { role: "assistant", content, dialogProcessId, turnScopeId },
   ];
 }
 
-function sessionWithTurn(status, overrides = {}) {
+function sessionWithTurn(_status, overrides = {}) {
   const dialogProcessId = overrides.dialogProcessId || "dp-1";
   const turnScopeId = overrides.turnScopeId || "turn-1";
   return createSessionFixture({
     id: overrides.id || "s-1",
     sessionId: overrides.sessionId || overrides.id || "s-1",
     messages: overrides.messages || turnMessages({ dialogProcessId, turnScopeId }),
-    turnStatuses: status ? [{ status, dialogProcessId, turnScopeId }] : [],
     ...overrides,
   });
 }
 
 function settleStopped(store, session) {
   const sessionId = session.sessionId || session.id;
-  const status = session.turnStatuses.at(-1);
-  const turnScopeId = status.turnScopeId;
+  const assistant = session.messages.findLast((message) => message.role === "assistant");
+  const turnScopeId = assistant.turnScopeId;
   const revision = 100;
   const completionCommitId = `commit-${turnScopeId}`;
-  return applyTurnTerminalResolution(store.turnRuntimeRegistry, createTurnTerminalResolution({
-    commandId: `resolve-${turnScopeId}`,
-    sessionId,
-    turnScopeId,
-    resolved: true,
-    aggregateVersion: Number(session.aggregateVersion || 0),
-    turn: {
-      sessionId, turnScopeId, dialogProcessId: status.dialogProcessId,
-      state: "stop_completed", phase: "stop", revision, sequence: revision,
-      completionCommitId, summaryVersion: revision,
-      capabilities: { actionLocked: false, canStop: false },
-      updatedAt: "2026-01-01T00:00:00.000Z",
-    },
-    materialization: {
-      completionCommitId, summaryVersion: revision, revision, sequence: revision,
-      terminalStatus: { status: "stop_completed" }, messages: session.messages,
-    },
-  }));
+  return applyTurnTerminalResolution(
+    store.turnRuntimeRegistry,
+    createTurnTerminalResolution({
+      commandId: `resolve-${turnScopeId}`,
+      sessionId,
+      turnScopeId,
+      resolved: true,
+      aggregateVersion: Number(session.aggregateVersion || 0),
+      turn: {
+        sessionId,
+        turnScopeId,
+        dialogProcessId: assistant.dialogProcessId,
+        state: "stop_completed",
+        phase: "stop",
+        revision,
+        sequence: revision,
+        completionCommitId,
+        summaryVersion: revision,
+        capabilities: { actionLocked: false, canStop: false },
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      materialization: {
+        completionCommitId,
+        summaryVersion: revision,
+        revision,
+        sequence: revision,
+        terminalStatus: { status: "stop_completed" },
+        messages: session.messages,
+      },
+    }),
+  );
 }
 
 describe("useChatSession send/continue actions", () => {
@@ -86,12 +102,21 @@ describe("useChatSession send/continue actions", () => {
 
     const turnScopeId = store.turnRuntimeRegistry.sessions["s-send"].activeTurnScopeId;
     lifecycle(store.turnRuntimeRegistry, {
-      sessionId: "s-send", turnScopeId,
-      eventType: "turn.action_accepted", state: "action_requesting", phase: "action",
-      executionState: "accepted", revision: 1, sequence: 1, canStop: false,
+      sessionId: "s-send",
+      turnScopeId,
+      eventType: "turn.action_accepted",
+      state: "action_requesting",
+      phase: "action",
+      executionState: "accepted",
+      revision: 1,
+      sequence: 1,
+      canStop: false,
     });
     lifecycle(store.turnRuntimeRegistry, {
-      sessionId: "s-send", turnScopeId, revision: 2, sequence: 2,
+      sessionId: "s-send",
+      turnScopeId,
+      revision: 2,
+      sequence: 2,
     });
 
     expect(session.composerActionState.value.displayState).toBe("sending");
@@ -144,11 +169,13 @@ describe("useChatSession send/continue actions", () => {
 
   it("continues with the stopped identity as resume source and a fresh turnScopeId", async () => {
     const store = useChatStore();
-    store.sessions = [sessionWithTurn("user_stopped", {
-      sessionId: "backend-session",
-      dialogProcessId: "dp-stopped",
-      turnScopeId: "turn-stopped",
-    })];
+    store.sessions = [
+      sessionWithTurn("user_stopped", {
+        sessionId: "backend-session",
+        dialogProcessId: "dp-stopped",
+        turnScopeId: "turn-stopped",
+      }),
+    ];
     store.activeSessionId = "backend-session";
     store.input = "continue";
     wsClientMock.stream.mockImplementation(async (payload, _onEvent, options) => {
@@ -181,10 +208,6 @@ describe("useChatSession send/continue actions", () => {
       id: "s-latest-terminal",
       sessionId: "s-latest-terminal",
       messages: [...oldMessages, ...newMessages],
-      turnStatuses: [
-        { status: "user_stopped", dialogProcessId: "dp-old", turnScopeId: "turn-old" },
-        { status: "completed", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
-      ],
     });
     store.sessions = [current];
     store.activeSessionId = current.id;
@@ -203,12 +226,13 @@ describe("useChatSession send/continue actions", () => {
 
   it("does not continue when the stopped status lacks a complete matching identity", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({
-      id: "s-incomplete",
-      sessionId: "s-incomplete",
-      messages: [{ role: "assistant", content: "partial", turnScopeId: "turn-only" }],
-      turnStatuses: [{ status: "user_stopped", turnScopeId: "turn-only" }],
-    })];
+    store.sessions = [
+      createSessionFixture({
+        id: "s-incomplete",
+        sessionId: "s-incomplete",
+        messages: [{ role: "assistant", content: "partial", turnScopeId: "turn-only" }],
+      }),
+    ];
     store.activeSessionId = "s-incomplete";
     store.input = "continue";
     const session = createChatSession();

@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  TURN_LIFECYCLE_WIRE_EVENT,
-  validateTurnLifecycleEnvelope,
-} from "@noobot/session-protocol";
+import { validateProtocolEvent } from "@noobot/event-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 const clean = (value) => String(value || "").trim();
@@ -20,7 +17,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
     parentSessionId = "",
     persistenceScope = null,
     limit = 100,
-  } = {}) => {
+  } = {}, publishEvent = sendEvent) => {
     const identity = {
       userId: clean(userId),
       sessionId: clean(sessionId),
@@ -39,7 +36,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       throw new Error("authority event outbox API is required");
     }
     let delivered = 0;
-    let deliveredThroughSequence = 0;
+    const consumerId = "service.websocket";
+    const watermarks = new Map();
     while (true) {
       const pending = await bot.getPendingAuthorityEvents({ ...identity, limit });
       if (!pending?.found) {
@@ -49,8 +47,8 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       if (!events.length) break;
       for (const item of events) {
         const eventId = clean(item?.eventId);
-        const validation = validateTurnLifecycleEnvelope(item?.envelope);
-        if (!eventId || eventId !== clean(item?.envelope?.eventId) || !validation.valid) {
+        const validation = validateProtocolEvent(item?.envelope);
+        if (!eventId || eventId !== clean(item?.envelope?.identity?.eventId) || !validation.valid) {
           return {
             dispatched: false,
             reason: "invalid_authority_event_envelope",
@@ -62,39 +60,53 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
         if (!attempt?.recorded) {
           return { dispatched: false, reason: attempt?.reason || "authority_event_attempt_failed", delivered };
         }
-        const sent = await sendEvent?.(TURN_LIFECYCLE_WIRE_EVENT, item.envelope);
+        if (typeof publishEvent !== "function") {
+          return { dispatched: false, reason: "authority_event_transport_unavailable", delivered };
+        }
+        const sent = await publishEvent(item.envelope.identity.eventType, item.envelope);
         if (sent !== true) {
           return { dispatched: false, reason: "authority_event_send_failed", delivered };
         }
-        const acknowledged = await bot.acknowledgeAuthorityEvent({ ...identity, eventId });
+        const orderingDomain = clean(item.envelope.ordering.domain);
+        const orderingScopeId = clean(item.envelope.ordering.scopeId);
+        const sequence = Number(item.envelope.ordering.sequence);
+        const acknowledged = await bot.acknowledgeAuthorityEvent({
+          ...identity,
+          eventId,
+          consumerId,
+          orderingDomain,
+          orderingScopeId,
+          sequence,
+        });
         if (!acknowledged?.acknowledged) {
           return { dispatched: false, reason: acknowledged?.reason || "authority_event_ack_failed", delivered };
         }
         delivered += 1;
-        deliveredThroughSequence = Math.max(
-          deliveredThroughSequence,
-          Number(item.envelope.sequence || 0),
-        );
+        const streamKey = `${orderingDomain}\u0000${orderingScopeId}`;
+        watermarks.set(streamKey, {
+          orderingDomain,
+          orderingScopeId,
+          deliveredThroughSequence: Math.max(sequence, watermarks.get(streamKey)?.deliveredThroughSequence || 0),
+        });
       }
     }
-    if (deliveredThroughSequence > 0 && typeof bot.compactAuthorityEvents === "function") {
+    if (watermarks.size && typeof bot.compactAuthorityEvents === "function") {
       const retainDeliveredAfter = new Date(
         Date.now() - TIME_THRESHOLDS.agent.authorityOutboxDeliveredRetentionMs,
       ).toISOString();
-      try {
+      for (const watermark of watermarks.values()) {
         await bot.compactAuthorityEvents({
           ...identity,
-          deliveredThroughSequence,
+          consumerId,
+          ...watermark,
           retainDeliveredAfter,
         });
-      } catch {
-        // Delivery is already durable; compaction remains best-effort housekeeping.
       }
     }
     return { dispatched: true, delivered };
   };
 
-  return function dispatchAuthorityEvents(payload = {}) {
+  return function dispatchAuthorityEvents(payload = {}, publishEvent = sendEvent) {
     const key = [
       clean(payload.userId),
       clean(payload.sessionId),
@@ -112,7 +124,7 @@ export function createAuthorityEventDispatcher({ resolveBot, sendEvent } = {}) {
       try {
         while (true) {
           entry.dirty = false;
-          const result = await drainAuthorityEvents(payload);
+          const result = await drainAuthorityEvents(payload, publishEvent);
           delivered += Number(result?.delivered || 0);
           if (result?.dispatched !== true) {
             if (inFlightByScope.get(key) === entry) inFlightByScope.delete(key);

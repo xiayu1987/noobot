@@ -263,7 +263,7 @@ export function useChatSession({
       updatedAt,
     });
 
-    if (state.toLowerCase() === "user_stopped" && sessionId && (turnScopeId || dialogProcessId)) {
+    if (state.toLowerCase() === "user_stopped" && sessionId && turnScopeId) {
       const currentSessionId = resolveActiveSessionIdentity();
       const currentTurn = resolveSessionTurnRuntime(
         turnRuntimeRegistry.value,
@@ -275,7 +275,7 @@ export function useChatSession({
         Boolean(currentTurn) &&
         ((turnScopeId && currentTurn.turnScopeId === turnScopeId) ||
           (!turnScopeId && dialogProcessId && currentTurn.dialogProcessId === dialogProcessId));
-      const reconciliationKey = `${sessionId}::${turnScopeId || dialogProcessId}`;
+      const reconciliationKey = `${sessionId}::${turnScopeId}`;
       if (
         identityMatches &&
         !currentTurn.terminal &&
@@ -535,6 +535,7 @@ export function useChatSession({
     applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
     commitTurnTerminalResolution: chatStore.applyTurnTerminalResolution,
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent: chatStore.reduceSubSessionMessageEvent,
     removeWorkflowOwnersForReplacedTurns: chatStore.removeWorkflowOwnersForReplacedTurns,
     ensureConnected,
     notify,
@@ -579,11 +580,12 @@ export function useChatSession({
     notify,
     processStore,
     dispatchAuthoritativeRunStateEvent: chatEngine.dispatchAuthoritativeRunStateEvent,
-    applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
+    applyTurnLifecycleEnvelope: chatEngine.applyTurnLifecycleEnvelope,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),
     applyWorkflowRuntimeEvent: chatStore.applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent: chatStore.reduceSubSessionMessageEvent,
     applyTurnLifecycleSnapshot: (snapshot) => chatStore.applyTurnLifecycleSnapshot(snapshot),
   });
 

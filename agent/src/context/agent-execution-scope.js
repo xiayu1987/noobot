@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { assertValidAgentContextEnvelope } from "@noobot/context-protocol/agent-context-validation";
+import { assertValidAgentContextEnvelope } from "@noobot/context-protocol/agent-context/validation";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;

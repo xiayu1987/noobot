@@ -6,7 +6,10 @@
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { applyLatestSessionAggregateVersion } from "./sessionAggregateVersionManager.js";
-import { validateTurnCommittedEventData } from "@noobot/session-protocol/turn-commit";
+import {
+  TURN_COMMITTED_WIRE_EVENT,
+  validateTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
@@ -148,7 +151,7 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     }
     return true;
   }
-  if (event !== "turn_committed") return false;
+  if (event !== TURN_COMMITTED_WIRE_EVENT) return false;
   const eventSessionId = normalizeTrimmedString(data?.sessionId);
   const targetSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
   const committedUserMessage = data?.userMessage;

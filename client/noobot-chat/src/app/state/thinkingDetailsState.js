@@ -4,22 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { getMessageRole, isAssistantWithoutTurnScope } from "../../modules/chat/model/messageIdentity.js";
-import { hasToolTimeline, selectToolTimelineCount } from "../../modules/chat/runtime/engine/toolTimeline.js";
+import { hasToolTimeline } from "../../modules/chat/runtime/engine/toolTimeline.js";
+import { selectThinkingDetailCount } from "../../modules/chat/model/thinkingDetailCount.js";
 
 export function getThinkingDetailsCount(messageItem = {}) {
   if (isAssistantWithoutTurnScope(messageItem)) return 0;
-  const summaryThinkingDetailsCount = getSummaryThinkingDetailsCount(messageItem);
-  if (summaryThinkingDetailsCount > 0) return summaryThinkingDetailsCount;
-  if (hasToolTimeline(messageItem)) return selectToolTimelineCount(messageItem);
-  const toolCalls = Array.isArray(messageItem?.toolCalls)
-    ? messageItem.toolCalls
-    : Array.isArray(messageItem?.tool_calls)
-    ? messageItem.tool_calls
-    : [];
-  if (toolCalls.length > 0) {
-    return toolCalls.length;
-  }
-  return 0;
+  return selectThinkingDetailCount(messageItem);
 }
 
 function getSummaryThinkingDetailsCount(messageItem = {}) {

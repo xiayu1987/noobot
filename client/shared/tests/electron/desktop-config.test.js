@@ -365,6 +365,43 @@ test("packaged desktop setup selects library models and inserts missing provider
   }
 });
 
+test("packaged desktop model selection preserves explicit provider reasoning settings", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const state = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    for (const filePath of [state.globalConfigPath, state.templateConfigPath]) {
+      const config = JSON.parse(await readFile(filePath, "utf8"));
+      config.providers.selected.reasoning_effort = "medium";
+      config.providers.selected.tool_reasoning_effort = "medium";
+      await writeFile(filePath, JSON.stringify(config));
+    }
+
+    manager.saveSuperAdminConfig({
+      globalConfigPath: state.globalConfigPath,
+      userConfigPath: state.templateConfigPath,
+      userId: "owner",
+      connectCode: "secret",
+      language: "en-US",
+      model: "selected",
+    });
+
+    for (const filePath of [state.globalConfigPath, state.templateConfigPath]) {
+      const config = JSON.parse(await readFile(filePath, "utf8"));
+      assert.equal(config.providers.selected.reasoning_effort, "medium");
+      assert.equal(config.providers.selected.tool_reasoning_effort, "medium");
+    }
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("packaged desktop startup removes retired nodes from existing user configs", async () => {
   const fixture = await createFixture();
   try {

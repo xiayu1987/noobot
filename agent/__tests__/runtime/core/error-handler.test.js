@@ -32,3 +32,21 @@ test("error message resolution preserves messages and follows structured causes"
   assert.equal(resolveErrorMessage("plain failure"), "plain failure");
   assert.equal(resolveErrorMessage({}), "");
 });
+
+test("engine abort payload uses the structured signal reason", () => {
+  const controller = new AbortController();
+  controller.abort({
+    type: "run_timeout",
+    reason: "run timeout after 18000000ms",
+    timeoutMs: 18000000,
+  });
+  const error = new Error("Request was aborted.");
+  error.name = "AbortError";
+
+  const payload = buildEngineErrorPayload({ error, abortSignal: controller.signal });
+
+  assert.equal(payload.classification, "abort");
+  assert.equal(payload.message, "run timeout after 18000000ms");
+  assert.equal(payload.error.message, "run timeout after 18000000ms");
+  assert.equal(payload.error.type, "run_timeout");
+});

@@ -8,7 +8,7 @@
     "./electron-main": "./electron/main.js"
   },
   "scripts": {
-    "test": "node scripts/check-source.mjs && node --test tests/*.test.js tests/electron/*.test.js"
+    "test": "node scripts/check-source.js && node --test tests/*.test.js tests/electron/*.test.js"
   },
   "dependencies": {
     "@noobot/agent-config-protocol": "file:../../agent-config-protocol",

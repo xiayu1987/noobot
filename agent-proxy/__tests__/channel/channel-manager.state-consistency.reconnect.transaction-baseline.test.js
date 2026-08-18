@@ -11,11 +11,13 @@ import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/consta
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
+  canonicalMessageEvent,
   FakeUpstreamWebSocket,
   getEvent,
   listEvents,
   sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -154,16 +156,13 @@ test("reconnect buffers live events until after the authoritative baseline", asy
   });
   manager.broadcastChannelEvent(channel, {
     sequence: 4,
-    event: "delta",
-    data: {
-      sessionId,
-      dialogProcessId: "dp-reconnect-live-buffer",
-      turnScopeId: "turn-reconnect-live-buffer",
-      seq: 4,
+    event: MESSAGE_EVENT_WIRE_EVENT,
+    data: canonicalMessageEvent({
+      sessionId, turnScopeId: "turn-reconnect-live-buffer", sequence: 4,
       text: "buffered-live-event",
-    },
+    }),
   });
-  assert.equal(getEvent(client, "delta"), null);
+  assert.equal(getEvent(client, MESSAGE_EVENT_WIRE_EVENT), null);
 
   const commandId = forwarded[0]?.commandId;
   const requester = channel.pendingSnapshotRequests.get(commandId);
@@ -190,8 +189,8 @@ test("reconnect buffers live events until after the authoritative baseline", asy
   await reconnectPromise;
 
   const eventNames = client.sentEvents.map((item) => item.event);
-  assert.ok(eventNames.indexOf("delta") > eventNames.indexOf("reconnect_data"));
-  assert.ok(eventNames.indexOf("reconnect_complete") > eventNames.indexOf("delta"));
+  assert.ok(eventNames.indexOf(MESSAGE_EVENT_WIRE_EVENT) > eventNames.indexOf("reconnect_data"));
+  assert.ok(eventNames.indexOf("reconnect_complete") > eventNames.indexOf(MESSAGE_EVENT_WIRE_EVENT));
 });
 
 test("reconnect rejects the transaction when the authoritative snapshot is unavailable", async () => {
@@ -241,7 +240,8 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
   assert.deepEqual(client.sentEvents.filter((item) => item.event === "channel_state"), []);
 });
 
-test("a superseded reconnect transaction cannot publish its stale baseline", async () => {
+test("a superseded reconnect transaction cannot publish its stale baseline", async (t) => {
+  t.mock.method(Date, "now", () => 1787068800000);
   const manager = new ChannelManager({ OPEN: 1 });
   const sessionId = "session-reconnect-superseded";
   const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
@@ -270,13 +270,36 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     knownLifecycleSequenceMap: { [sessionId]: 1 },
   });
 
-  await manager.handleReconnect(client, {
+  const currentReconnect = manager.handleReconnect(client, {
     currentSessionId: sessionId,
     requestId: "reconnect-current",
     knownLifecycleSequenceMap: { [sessionId]: 3 },
   });
-  const staleRequest = channel.pendingSnapshotRequests.get(forwarded[0]?.commandId);
-  staleRequest.resolve({ ok: false, reason: "snapshot_unavailable" });
+  assert.notEqual(forwarded[0]?.commandId, forwarded[1]?.commandId);
+  assert.equal(channel.pendingSnapshotRequests.has(forwarded[0]?.commandId), false);
+  const currentCommandId = forwarded[1]?.commandId;
+  channel.pendingSnapshotRequests.get(currentCommandId).resolve({
+    ok: true,
+    snapshot: {
+      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
+      eventType: "turn.snapshot",
+      commandId: currentCommandId,
+      sessionId,
+      sequence: 3,
+      activeTurnScopeId: "turn-reconnect-superseded",
+      activeTurn: {
+        turnScopeId: "turn-reconnect-superseded",
+        messageId: "message-superseded-gap-3",
+        presentationMessageId: "presentation-superseded-gap-3",
+        revision: 3,
+        sequence: 3,
+        state: "processing",
+      },
+      recentTerminalTurns: [],
+      replacedTurns: [],
+    },
+  });
+  await currentReconnect;
   await staleReconnect;
 
   assert.deepEqual(
@@ -292,4 +315,3 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     ["reconnect-current"],
   );
 });
-

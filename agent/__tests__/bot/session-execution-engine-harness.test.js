@@ -16,6 +16,7 @@ import { createStateCommitter } from "../../src/runtime/tool-execution/state-com
 import { executeToolCall } from "../../src/runtime/tool-execution/tool-runner.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext, getMessageId } from "@noobot/context-protocol";
+import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 function createWorkspaceService(baseDir) {
   return {
@@ -146,7 +147,15 @@ test("RunConfigPluginPreparer.prepareRunConfig activates harness by Manifest id 
   assert.equal(resolvedBlocks.incremental[0], resolvedMessages[1]);
 
   const eventsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "events.jsonl");
-  const promptsPath = path.join(tempRoot, "u1", "runtime", "harness", "runs", "d1", "prompts.jsonl");
+  const promptsPath = path.join(
+    tempRoot,
+    "u1",
+    "runtime",
+    "harness",
+    "runs",
+    "d1",
+    "prompts.jsonl",
+  );
   assert.match(await fs.readFile(eventsPath, "utf8"), /before_llm_call/);
   assert.match(await fs.readFile(promptsPath, "utf8"), /noobot-harness-policy/);
 });
@@ -176,12 +185,32 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
     messageBlocks: {
       system: [{ role: "system", content: "system" }],
       history: [
-        { role: "user", content: "history-user", dialogProcessId: "d-history", turnScopeId: "t-history" },
-        { role: "assistant", content: "history-assistant", dialogProcessId: "d-history", turnScopeId: "t-history" },
+        {
+          role: "user",
+          content: "history-user",
+          dialogProcessId: "d-history",
+          turnScopeId: "t-history",
+        },
+        {
+          role: "assistant",
+          content: "history-assistant",
+          dialogProcessId: "d-history",
+          turnScopeId: "t-history",
+        },
       ],
       incremental: [
-        { role: "user", content: "current-user", dialogProcessId: "d-current", turnScopeId: "t-current" },
-        { role: "assistant", content: "current-assistant", dialogProcessId: "d-current", turnScopeId: "t-current" },
+        {
+          role: "user",
+          content: "current-user",
+          dialogProcessId: "d-current",
+          turnScopeId: "t-current",
+        },
+        {
+          role: "assistant",
+          content: "current-assistant",
+          dialogProcessId: "d-current",
+          turnScopeId: "t-current",
+        },
       ],
     },
   });
@@ -205,7 +234,10 @@ test("Harness before_llm_call preserves canonical ids and block ownership across
     ["current-user", "current-assistant"],
   );
   assert.equal(new Set(modelContext.messages.map(getMessageId)).size, modelContext.messages.length);
-  assert.equal(historyIds.some((id) => incrementalIds.includes(id)), false);
+  assert.equal(
+    historyIds.some((id) => incrementalIds.includes(id)),
+    false,
+  );
 });
 
 test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager instead of replacing it", () => {
@@ -227,7 +259,10 @@ test("RunConfigPluginPreparer.prepareRunConfig reuses existing hookManager inste
   assert.equal(prepared.hookManager, hookManager);
   assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 
-  const preparedAgain = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u1", runConfig: prepared });
+  const preparedAgain = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u1",
+    runConfig: prepared,
+  });
   assert.equal(preparedAgain.hookManager, hookManager);
   assert.equal(hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 2);
 });
@@ -239,7 +274,10 @@ test("global plugin defaults do not activate a plugin absent from selectedPlugin
     workspaceService: createWorkspaceService(tempRoot),
   });
 
-  const unselected = engine.runConfigPluginPreparer.prepareRunConfig({ userId: "u2", runConfig: {} });
+  const unselected = engine.runConfigPluginPreparer.prepareRunConfig({
+    userId: "u2",
+    runConfig: {},
+  });
   assert.equal(unselected.plugins.harness, undefined);
   assert.equal(unselected.hookManager.list(HOOK_POINT.AGENT.BEFORE_LLM_CALL).length, 0);
 
@@ -303,6 +341,9 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
       savedCurrentTurnTasksPayload = payload;
     },
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-execution-engine-harness",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -347,16 +388,33 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         output: "ok from fake agent",
         assistantMessageId: "harness-assistant-message",
         traces: [{ type: "fake" }],
-        turnMessages: [{
-          messageId: "harness-assistant-message",
-          role: "assistant",
-          type: "message",
-          content: "ok from fake agent",
-        }],
+        turnMessages: [
+          {
+            messageId: "harness-assistant-message",
+            role: "assistant",
+            type: "message",
+            content: "ok from fake agent",
+          },
+        ],
         turnTasks: [{ taskId: "t1", status: "done" }],
       };
     },
   });
+
+  const originalBuildContextBuilder = engine._buildContextBuilder.bind(engine);
+  engine._buildContextBuilder = (options = {}) => {
+    const builder = originalBuildContextBuilder(options);
+    const bindSessionManager = async (build) => {
+      const scope = await build();
+      scope.bindings.runtime.sessionManager = sessionManager;
+      return scope;
+    };
+    return {
+      ...builder,
+      buildInitialContext: (payload) => bindSessionManager(() => builder.buildInitialContext(payload)),
+      buildContinueContext: (payload) => bindSessionManager(() => builder.buildContinueContext(payload)),
+    };
+  };
 
   const result = await engine.runSession({
     userId: "u1",
@@ -381,28 +439,29 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   assert.equal(capturedAgentUserMessage, "hello plugin");
   assert.ok(capturedRuntime?.hookManager);
   assert.equal(savedCurrentTurnTasksPayload?.currentTurnTasks?.[0]?.taskId, "t1");
-  assert.ok(persistedTurns.some((turn) =>
-    turn.role === "user" &&
-    turn.content === "hello plugin" &&
-    turn.turnScopeId === "turn-scope-smoke",
-  ));
-  assert.ok(persistedTurns.some((turn) =>
-    turn.role === "assistant" &&
-    turn.content === "ok from fake agent" &&
-    turn.turnScopeId === "turn-scope-smoke",
-  ));
-
-  const runDir = path.join(
-    tempRoot,
-    "u1",
-    "runtime",
-    "harness",
-    "runs",
-    result.dialogProcessId,
+  assert.ok(
+    persistedTurns.some(
+      (turn) =>
+        turn.role === "user" &&
+        turn.content === "hello plugin" &&
+        turn.turnScopeId === "turn-scope-smoke",
+    ),
   );
+  assert.ok(
+    persistedTurns.some(
+      (turn) =>
+        turn.role === "assistant" &&
+        turn.content === "ok from fake agent" &&
+        turn.turnScopeId === "turn-scope-smoke",
+    ),
+  );
+
+  const runDir = path.join(tempRoot, "u1", "runtime", "harness", "runs", result.dialogProcessId);
   const manifest = JSON.parse(await fs.readFile(path.join(runDir, "harness-run.json"), "utf8"));
   const events = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
-  const snapshot = JSON.parse(await fs.readFile(path.join(runDir, "context-snapshot.json"), "utf8"));
+  const snapshot = JSON.parse(
+    await fs.readFile(path.join(runDir, "context-snapshot.json"), "utf8"),
+  );
   const prompts = await fs.readFile(path.join(runDir, "prompts.jsonl"), "utf8");
 
   assert.equal(manifest.dialogProcessId, result.dialogProcessId);
@@ -413,7 +472,6 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
   assert.equal(snapshot.userId, "u1");
   assert.match(prompts, /noobot-harness-policy/);
 });
-
 
 test("harness records tool call and state commit hook artifacts", async () => {
   const tempRoot = await createTempRoot();
@@ -449,7 +507,11 @@ test("harness records tool call and state commit hook artifacts", async () => {
   const successCall = { id: "call_ok", name: "demo_tool", args: { x: 1 } };
   const successResult = await executeToolCall({
     call: successCall,
-    tool: { async invoke(args) { return { ok: true, echoed: args.x }; } },
+    tool: {
+      async invoke(args) {
+        return { ok: true, echoed: args.x };
+      },
+    },
     runtime,
     agentContext,
     userId: "u1",
@@ -461,7 +523,11 @@ test("harness records tool call and state commit hook artifacts", async () => {
   const errorCall = { id: "call_fail", name: "failing_tool", args: { y: 2 } };
   const errorResult = await executeToolCall({
     call: errorCall,
-    tool: { async invoke() { throw new Error("boom from test tool"); } },
+    tool: {
+      async invoke() {
+        throw new Error("boom from test tool");
+      },
+    },
     runtime,
     agentContext,
     userId: "u1",
@@ -471,13 +537,21 @@ test("harness records tool call and state commit hook artifacts", async () => {
   assert.equal(errorResult.success, false);
   assert.equal(errorResult.failureReason, "invoke_error");
 
-  const turnMessageStore = { items: [], push(item = {}) { this.items.push(item); } };
+  const turnMessageStore = {
+    items: [],
+    push(item = {}) {
+      this.items.push(item);
+    },
+  };
   runtime.materializePendingCurrentTurnMessageEvents = () => ({
     activityTimeline: [],
     toolTimeline: [],
   });
   const committer = createStateCommitter({
-    messages: [],
+    modelContext: createModelContext({
+      activeTurnIdentity: { dialogProcessId, turnScopeId: "turn-tool-hook" },
+      messageBlocks: { system: [], history: [], incremental: [] },
+    }),
     traces: [],
     turnMessageStore,
     dialogProcessId,
@@ -485,11 +559,18 @@ test("harness records tool call and state commit hook artifacts", async () => {
     agentContext,
   });
   await committer.pushAssistantMessage({ content: "assistant committed" });
-  await committer.pushToolResult({ call: successCall, toolResultText: successResult.toolResultText });
+  await committer.pushToolResult({
+    call: successCall,
+    toolResultText: successResult.toolResultText,
+  });
 
   const runDir = path.join(tempRoot, "u1", "runtime", "harness", "runs", dialogProcessId);
   const events = await fs.readFile(path.join(runDir, "events.jsonl"), "utf8");
-  const eventRecords = events.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  const eventRecords = events
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 
   assert.match(events, /before_tool_call/);
   assert.match(events, /after_tool_call/);
@@ -498,10 +579,26 @@ test("harness records tool call and state commit hook artifacts", async () => {
   assert.match(events, /after_state_commit/);
   const hookPayloadOf = (event) => event.payload || event.data || event;
   const hookToolOf = (event) => hookPayloadOf(event).tool || hookPayloadOf(event).toolName;
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "demo_tool"));
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "failing_tool"));
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && event.point === HOOK_POINT.AGENT.TOOL_CALL_ERROR));
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "assistant_message"));
-  assert.ok(eventRecords.some((event) => event.kind === "hook" && hookPayloadOf(event).commitType === "tool_result"));
+  assert.ok(
+    eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "demo_tool"),
+  );
+  assert.ok(
+    eventRecords.some((event) => event.kind === "hook" && hookToolOf(event) === "failing_tool"),
+  );
+  assert.ok(
+    eventRecords.some(
+      (event) => event.kind === "hook" && event.point === HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+    ),
+  );
+  assert.ok(
+    eventRecords.some(
+      (event) => event.kind === "hook" && hookPayloadOf(event).commitType === "assistant_message",
+    ),
+  );
+  assert.ok(
+    eventRecords.some(
+      (event) => event.kind === "hook" && hookPayloadOf(event).commitType === "tool_result",
+    ),
+  );
   assert.equal(turnMessageStore.items.length, 2);
 });

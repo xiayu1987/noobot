@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../model/chatConstants.js";
 import {
   findReusableMessageObject,
   mergeCurrentUserMessagesIntoFoldedMessages,
@@ -23,7 +22,6 @@ export {
   applyReconnectEnvelopeBatchToTargetMessage,
   applyReconnectEnvelopeToTargetMessage,
   buildReconnectReplayEnvelopeCallbacks,
-  finalizeReconnectReplayBatch,
   prepareReconnectReplayBatchPlan,
   prepareReconnectReplayMessages,
   shouldSkipReconnectBatchAfterTerminal,

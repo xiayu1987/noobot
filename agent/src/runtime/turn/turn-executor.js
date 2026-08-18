@@ -3,16 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
-} from "@noobot/context-protocol/dual-lane-context";
+} from "@noobot/context-protocol/assembly/dual-lane";
 import {
-  resolveTurnMessagesStore,
-  resolveTurnTasksStore,
-} from "../../context/session/current-turn-store.js";
+  requireCurrentTurnMessagesStore,
+  requireCurrentTurnTasksStore,
+} from "./current-turn-ledger.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
@@ -20,7 +20,7 @@ import { resolveCurrentModelInfo } from "../../models/runtime/model-manager.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/hook-context";
+import { resolveAuthoritativeModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
 import {
@@ -38,14 +38,14 @@ import { handleRequiredToolChoiceNotFollowed } from "./tool-choice-required-stag
 import {
   appendContextMessage as appendMessage,
   replaceContextProjection as replaceMessageProjection,
-} from "@noobot/context-protocol/context-mutation";
-import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context-schema";
+} from "@noobot/context-protocol/mutation/context";
+import { MODEL_CONTEXT_PROTOCOL_VERSION } from "@noobot/context-protocol/agent-context/schema";
 import { emitModelContextTrace } from "../../observability/model-context-trace-emitter.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "@noobot/context-protocol/context-diagnostics";
+} from "@noobot/context-protocol/assembly/diagnostics";
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
@@ -480,13 +480,12 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     { block: "incremental" },
   );
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
-  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
+  const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
+  const turnTaskStore = requireCurrentTurnTasksStore(currentTurnTasks);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
 
   const stateCommitter = createStateCommitter({
-    messages,
-    messageHolder: modelContext,
+    modelContext,
     traces,
     turnMessageStore,
     dialogProcessId,
@@ -519,11 +518,9 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   const mainModelToolTurnContent = String(finalAiContentText || "").trim();
   if (eventListener?.onEvent && mainModelToolTurnContent && calls.length) {
-    emitMessageEvent(eventListener, runtime, "main_model_content", {
+    await emitMessageEvent(eventListener, runtime, "main_model_content", {
       turn,
       text: mainModelToolTurnContent,
-      output: mainModelToolTurnContent,
-      eventId: `model-content:${assistantMessageId || presentationMessageId || "turn"}`,
     });
   }
 

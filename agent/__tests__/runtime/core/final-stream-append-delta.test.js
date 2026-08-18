@@ -19,6 +19,11 @@ import {
   buildLoopResult,
   FINAL_STREAMING_RESULT_META_KEY,
 } from "../../../src/runtime/turn/turn-result-aggregator.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
+
+function createTurnMessageStore(messages = []) {
+  return createCurrentTurnMessagesStore(messages);
+}
 
 function bindTestTurn(runtime = {}, suffix = "1") {
   bindAssistantMessageEventStream(runtime, {
@@ -34,6 +39,7 @@ test("final streaming append delta: emits only hook-appended suffix after final 
     output: "模型最终回答",
     traces: [],
     loopState: { turnMessages: [], turnTasks: [] },
+    turnMessageStore: createTurnMessageStore(),
     modelMessages: [],
     finalStreaming: {
       streamed: true,
@@ -74,6 +80,7 @@ test("final streaming append delta: tolerates finalizer trim before appending", 
     output: "模型最终回答   ",
     traces: [],
     loopState: { turnMessages: [], turnTasks: [] },
+    turnMessageStore: createTurnMessageStore(),
     finalStreaming: {
       streamed: true,
       output: "模型最终回答   ",
@@ -95,10 +102,7 @@ test("final streaming append delta: tolerates finalizer trim before appending", 
   const emitted = emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
 
   assert.equal(emitted, true);
-  assert.equal(
-    events.find((item) => item?.event === "llm_delta")?.data?.text,
-    "\n\n---\n验收",
-  );
+  assert.equal(events.find((item) => item?.event === "llm_delta")?.data?.text, "\n\n---\n验收");
 });
 
 test("final content commit follows hook-appended streaming delta", () => {
@@ -109,29 +113,58 @@ test("final content commit follows hook-appended streaming delta", () => {
   };
   bindTestTurn(runtime);
   const messageId = beginAssistantMessageEventStream(runtime);
+  runtime.currentTurnMessages = createTurnMessageStore([
+    {
+      role: "assistant",
+      content: "draft",
+      id: messageId,
+      messageId,
+    },
+  ]);
   const result = buildLoopResult({
     output: "draft",
     assistantMessageId: messageId,
     traces: [],
     loopState: {
-      turnMessages: [{
+      turnMessages: [
+        {
+          role: "assistant",
+          content: "draft",
+          id: messageId,
+          messageId,
+        },
+      ],
+      turnTasks: [],
+    },
+    turnMessageStore: createTurnMessageStore([
+      {
         role: "assistant",
         content: "draft",
         id: messageId,
         messageId,
-      }],
-      turnTasks: [],
-    },
+      },
+    ]),
     finalStreaming: { streamed: true, output: "draft", mode: "final_stream_no_tools" },
   });
   result.output = "draft plus hook";
 
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
   assert.equal(emitFinalStreamingAppendDeltaAfterHooks({ result, runtime }), true);
-  assert.equal(emitAuthoritativeFinalMessageContent({ result, runtime }), true);
-  const messageEvents = events.filter((item) => ["llm_delta", "authoritative_final_content"].includes(item?.event));
-  assert.deepEqual(messageEvents.map((item) => item.event), ["llm_delta", "authoritative_final_content"]);
-  assert.deepEqual(messageEvents.map((item) => item.data.sequence), [1, 2]);
+  assert.equal(
+    emitAuthoritativeFinalMessageContent({ result, runtime })?.type,
+    "authoritative_final_content",
+  );
+  const messageEvents = events.filter((item) =>
+    ["llm_delta", "authoritative_final_content"].includes(item?.event),
+  );
+  assert.deepEqual(
+    messageEvents.map((item) => item.event),
+    ["llm_delta", "authoritative_final_content"],
+  );
+  assert.deepEqual(
+    messageEvents.map((item) => item.data.sequence),
+    [1, 2],
+  );
   assert.equal(messageEvents[1].data.text, "draft plus hook");
   assert.equal(messageEvents[1].data.messageId, "turn-message-1");
   assert.equal(result.turnMessages[0].messageId, messageId);
@@ -146,24 +179,43 @@ test("final content uses the result message identity after active stream changes
   };
   bindTestTurn(runtime);
   const finalMessageId = beginAssistantMessageEventStream(runtime);
+  runtime.currentTurnMessages = createTurnMessageStore([
+    {
+      role: "assistant",
+      content: "draft",
+      messageId: finalMessageId,
+    },
+  ]);
   const result = buildLoopResult({
     output: "authoritative final answer",
     assistantMessageId: finalMessageId,
     traces: [],
     loopState: {
-      turnMessages: [{
+      turnMessages: [
+        {
+          role: "assistant",
+          content: "draft",
+          messageId: finalMessageId,
+        },
+      ],
+      turnTasks: [],
+    },
+    turnMessageStore: createTurnMessageStore([
+      {
         role: "assistant",
         content: "draft",
         messageId: finalMessageId,
-      }],
-      turnTasks: [],
-    },
+      },
+    ]),
   });
   const laterActiveMessageId = beginAssistantMessageEventStream(runtime);
 
   assert.notEqual(laterActiveMessageId, finalMessageId);
   assert.equal(commitAuthoritativeFinalOutput({ result, runtime }), true);
-  assert.equal(emitAuthoritativeFinalMessageContent({ result, runtime }), true);
+  assert.equal(
+    emitAuthoritativeFinalMessageContent({ result, runtime })?.type,
+    "authoritative_final_content",
+  );
   assert.equal(events.at(-1)?.data?.messageId, "turn-message-1");
   assert.equal(events.at(-1)?.data?.text, "authoritative final answer");
   assert.equal(result.turnMessages[0].content, "authoritative final answer");
@@ -175,6 +227,7 @@ test("final streaming append delta: skips when hook rewrites instead of appends"
     output: "旧回答",
     traces: [],
     loopState: { turnMessages: [], turnTasks: [] },
+    turnMessageStore: createTurnMessageStore(),
     finalStreaming: {
       streamed: true,
       output: "旧回答",
@@ -195,7 +248,10 @@ test("final streaming append delta: skips when hook rewrites instead of appends"
   });
 
   assert.equal(emitted, false);
-  assert.equal(events.some((item) => item?.event === "llm_delta"), false);
+  assert.equal(
+    events.some((item) => item?.event === "llm_delta"),
+    false,
+  );
   assert.equal(
     events.some((item) => item?.event === "llm_final_stream_append_delta_skipped"),
     true,

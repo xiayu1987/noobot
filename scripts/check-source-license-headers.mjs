@@ -7,7 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoots = ["."];
 const ignoredDirectories = new Set([
   ".git",
@@ -33,6 +35,25 @@ const violations = [];
 let inspectedFileCount = 0;
 let repairedFileCount = 0;
 
+function sourceWithoutInterpreterDirective(source) {
+  const normalizedSource = source.startsWith("\uFEFF") ? source.slice(1) : source;
+  if (!normalizedSource.startsWith("#!")) return normalizedSource;
+  const lineEnd = normalizedSource.indexOf("\n");
+  return lineEnd === -1 ? "" : normalizedSource.slice(lineEnd + 1);
+}
+
+function leadingComment(source) {
+  if (source.startsWith("/*")) {
+    const commentEnd = source.indexOf("*/");
+    return commentEnd === -1 ? "" : source.slice(0, commentEnd + 2);
+  }
+  if (source.startsWith("<!--")) {
+    const commentEnd = source.indexOf("-->");
+    return commentEnd === -1 ? "" : source.slice(0, commentEnd + 3);
+  }
+  return "";
+}
+
 function inspect(relativePath) {
   if (!sourceExtension.test(relativePath)) return;
   inspectedFileCount += 1;
@@ -48,9 +69,13 @@ function inspect(relativePath) {
     fs.writeFileSync(absolutePath, source, "utf8");
     repairedFileCount += 1;
   }
-  const missingLines = requiredHeaderLines.filter((line) => !repairedPrefix.includes(line));
+  const header = leadingComment(sourceWithoutInterpreterDirective(source));
+  const missingLines = requiredHeaderLines.filter((line) => !header.includes(line));
   if (missingLines.length) {
-    violations.push(`${relativePath}: missing ${missingLines.join("; ")}`);
+    const detail = header
+      ? `header missing ${missingLines.join("; ")}`
+      : "license header must be the first syntax element (after an optional shebang)";
+    violations.push(`${relativePath}: ${detail}`);
   }
 }
 
@@ -77,5 +102,9 @@ if (violations.length) {
   process.exit(1);
 }
 
-const repairSummary = repairedFileCount ? `; repaired ${repairedFileCount} masked contact header(s)` : "";
-console.log(`Source license header guard passed (${inspectedFileCount} source files${repairSummary}).`);
+const repairSummary = repairedFileCount
+  ? `; repaired ${repairedFileCount} masked contact header(s)`
+  : "";
+console.log(
+  `Source license header guard passed (${inspectedFileCount} source files${repairSummary}).`,
+);

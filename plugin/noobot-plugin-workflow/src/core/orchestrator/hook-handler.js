@@ -11,10 +11,7 @@ import {
   throwIfWorkflowAborted,
 } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
-import {
-  emitWorkflowRuntimeEvent,
-  persistWorkflowPlanningDialog,
-} from "../hooks/persistence.js";
+import { persistWorkflowPlanningDialog } from "../hooks/persistence.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
 import {
   buildWorkflowPlanningNodeSessions,
@@ -98,15 +95,6 @@ export async function handleBeforeAgentDispatch({
       semantic,
       workflowRunId,
       planningNodeSessions,
-    });
-    await emitWorkflowRuntimeEvent({
-      options,
-      ctx,
-      event: planningPersistResult ? "workflow_planning_persist_succeeded" : "workflow_planning_persist_skipped",
-      data: {
-        outputDir: String(planningPersistResult?.outputDir || "").trim(),
-        outputFile: String(planningPersistResult?.outputFile || "").trim(),
-      },
     });
     throwIfWorkflowAborted(ctx);
     await prepareWorkflowPlanningMessage({

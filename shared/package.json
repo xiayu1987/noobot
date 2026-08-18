@@ -4,13 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./length-thresholds": "./length-thresholds.mjs",
-    "./message-diagnostics": "./message-diagnostics.mjs",
-    "./quantity-thresholds": "./quantity-thresholds.mjs",
-    "./runtime-events-config": "./runtime-events-config.mjs",
-    "./turn-replacement-protocol": "./turn-replacement-protocol.mjs",
-    "./time-thresholds": "./time-thresholds.mjs",
-    "./turn-thresholds": "./turn-thresholds.mjs",
+    "./length-thresholds": "./length-thresholds.js",
+    "./message-diagnostics": "./message-diagnostics.js",
+    "./quantity-thresholds": "./quantity-thresholds.js",
+    "./runtime-events-config": "./runtime-events-config.js",
+    "./time-thresholds": "./time-thresholds.js",
+    "./turn-thresholds": "./turn-thresholds.js",
     "./package.json": "./package.json"
   }
 }

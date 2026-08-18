@@ -5,10 +5,10 @@
  */
 import {
   compareWorkflowRuntimeFacts,
-  normalizeWorkflowRuntimeEvent,
   WORKFLOW_RUNTIME_EVENT,
   WORKFLOW_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol/workflow-runtime-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 
 const text = (value) => String(value || "").trim();
@@ -27,18 +27,17 @@ const WORKFLOW_NODE_TERMINAL_STATUSES = new Set([
 function isWorkflowNodeTerminalStatus(value) {
   return WORKFLOW_NODE_TERMINAL_STATUSES.has(text(value).toLowerCase());
 }
-function summarizeWorkflowRuntimeCanonical(canonical = {}) {
+function summarizeWorkflowRuntimeCanonical(canonical = {}, source = "unknown") {
   return {
-    sessionId: text(canonical?.data?.parentSessionId || canonical?.data?.sessionId),
-    dialogProcessId: text(canonical?.data?.dialogProcessId),
-    turnScopeId: text(canonical?.data?.turnScopeId),
-    workflowRunId: text(canonical?.data?.workflowRunId),
-    nodeExecutionId: text(canonical?.data?.nodeExecutionId),
-    source: canonical.source,
-    runtimeEvent: canonical.event,
-    sequenceDomain: canonical.sequenceDomain,
-    authoritativeSequence: canonical.sequence,
-    transportSequence: canonical.transportSequence,
+    sessionId: text(canonical?.identity?.sessionId),
+    dialogProcessId: text(canonical?.payload?.dialogProcessId),
+    turnScopeId: text(canonical?.identity?.turnScopeId),
+    workflowRunId: text(canonical?.payload?.workflowRunId),
+    nodeExecutionId: text(canonical?.payload?.nodeExecutionId),
+    source,
+    runtimeEvent: text(canonical?.identity?.eventType),
+    sequenceDomain: text(canonical?.ordering?.domain),
+    authoritativeSequence: Number(canonical?.ordering?.sequence || 0),
   };
 }
 function shouldApplyWorkflowNodeStateEvent(current, incoming) {
@@ -56,7 +55,6 @@ export function createWorkflowNodeStateRegistry() {
 export function createWorkflowStore({
   workflowNodeStateRegistry,
   ensureSubSessionMessageContainer,
-  reduceSubSessionMessageEvent,
   reduceSubSessionSnapshot,
   removeSubSessionsByWorkflowRunIds,
 }) {
@@ -68,7 +66,7 @@ export function createWorkflowStore({
     const candidates = Object.values(workflows)
       .flatMap((workflow = {}) => Object.values(workflow.nodes || {}))
       .filter((node = {}) => {
-        const nodeSessionId = text(node.sessionId);
+        const nodeSessionId = text(node.nodeSessionId);
         const nodeTurnScopeId = text(node.turnScopeId);
         return (
           (!requestedSessionId || nodeSessionId === requestedSessionId) &&
@@ -93,9 +91,8 @@ export function createWorkflowStore({
     if (!workflowRunId || !nodeExecutionId) {
       const result = { applied: false, reason: "missing_identity" };
       logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
-        sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
-        nodeSessionId: text(eventData?.sessionId),
-        parentSessionId: text(eventData?.parentSessionId),
+        sessionId: text(eventData?.authoritySessionId),
+        nodeSessionId: text(eventData?.nodeSessionId),
         dialogProcessId: text(eventData?.dialogProcessId),
         turnScopeId: text(eventData?.turnScopeId),
         workflowRunId,
@@ -125,9 +122,8 @@ export function createWorkflowStore({
     if (!shouldApplyWorkflowNodeStateEvent(current, eventData)) {
       const result = { applied: false, reason: "stale", current };
       logWorkflowDiagnostics("frontend.workflowStore.nodeStateRejected", () => ({
-        sessionId: text(eventData?.parentSessionId || eventData?.sessionId),
-        nodeSessionId: text(eventData?.sessionId || current?.sessionId),
-        parentSessionId: text(eventData?.parentSessionId || current?.parentSessionId),
+        sessionId: text(eventData?.authoritySessionId),
+        nodeSessionId: text(eventData?.nodeSessionId || current?.nodeSessionId),
         dialogProcessId: text(eventData?.dialogProcessId),
         turnScopeId: text(eventData?.turnScopeId),
         workflowRunId,
@@ -149,8 +145,8 @@ export function createWorkflowStore({
       workflowRunId,
       nodeExecutionId,
       commandId: text(eventData?.commandId || current?.commandId),
-      sessionId: text(eventData?.sessionId || current?.sessionId),
-      parentSessionId: text(eventData?.parentSessionId || current?.parentSessionId),
+      nodeSessionId: text(eventData?.nodeSessionId || current?.nodeSessionId),
+      authoritySessionId: text(eventData?.authoritySessionId || current?.authoritySessionId),
       dialogProcessId: text(eventData?.dialogProcessId || current?.dialogProcessId),
       turnScopeId: text(eventData?.turnScopeId || current?.turnScopeId),
       status: authoritativeStatus,
@@ -162,11 +158,11 @@ export function createWorkflowStore({
     workflow.nodes[nodeExecutionId] = next;
     workflow.sequence = Math.max(Number(workflow.sequence || 0), Number(next.sequence || 0));
     workflowNodeStateRegistry.value = { ...registry, workflows: { ...registry.workflows } };
-    const childSessionId = text(next.sessionId);
-    if (childSessionId && childSessionId !== text(next.parentSessionId)) {
+    const childSessionId = text(next.nodeSessionId);
+    if (childSessionId) {
       ensureSubSessionMessageContainer({
         sessionId: childSessionId,
-        parentSessionId: next.parentSessionId,
+        parentSessionId: next.authoritySessionId,
         dialogProcessId: next.dialogProcessId,
         turnScopeId: next.turnScopeId,
         workflowRunId,
@@ -174,9 +170,8 @@ export function createWorkflowStore({
       });
     }
     logWorkflowDiagnostics("frontend.workflowStore.nodeStateApplied", () => ({
-      sessionId: text(next.parentSessionId || next.sessionId),
-      nodeSessionId: next.sessionId,
-      parentSessionId: next.parentSessionId,
+      sessionId: next.authoritySessionId,
+      nodeSessionId: next.nodeSessionId,
       dialogProcessId: next.dialogProcessId,
       turnScopeId: next.turnScopeId,
       workflowRunId,
@@ -206,7 +201,7 @@ export function createWorkflowStore({
     if (!workflowRunId || !nodeSessions.length || !workflowPayload) {
       const result = { applied: false, reason: "missing_planning_payload" };
       logWorkflowDiagnostics("frontend.workflowStore.planningRejected", () => ({
-        sessionId: text(eventData?.sessionId),
+        sessionId: text(eventData?.authoritySessionId),
         dialogProcessId: text(eventData?.dialogProcessId),
         turnScopeId: text(eventData?.turnScopeId),
         workflowRunId,
@@ -227,7 +222,7 @@ export function createWorkflowStore({
     registry.workflows[workflowRunId] = {
       ...currentWorkflow,
       workflowRunId,
-      sessionId: text(currentWorkflow.sessionId || eventData?.sessionId),
+      sessionId: text(currentWorkflow.sessionId || eventData?.authoritySessionId),
       dialogProcessId: text(currentWorkflow.dialogProcessId || eventData?.dialogProcessId),
       turnScopeId: text(currentWorkflow.turnScopeId || eventData?.turnScopeId),
       presentationMessageId: text(
@@ -241,8 +236,8 @@ export function createWorkflowStore({
     const results = nodeSessions.map((nodeSession = {}, index) =>
       upsertWorkflowNodeStateEvent({
         ...(nodeSession || {}),
-        sessionId: text(nodeSession?.sessionId || nodeSession?.nodeSessionId),
-        parentSessionId: text(nodeSession?.parentSessionId || eventData?.sessionId),
+        nodeSessionId: text(nodeSession?.nodeSessionId),
+        authoritySessionId: text(eventData?.authoritySessionId),
         workflowRunId: text(nodeSession?.workflowRunId) || workflowRunId,
         nodeExecutionId: text(nodeSession?.nodeExecutionId),
         status: text(nodeSession?.status || nodeSession?.stepStatus),
@@ -258,7 +253,7 @@ export function createWorkflowStore({
       results,
     };
     logWorkflowDiagnostics("frontend.workflowStore.planningApplied", () => ({
-      sessionId: text(eventData?.sessionId),
+      sessionId: text(eventData?.authoritySessionId),
       dialogProcessId: text(eventData?.dialogProcessId),
       turnScopeId: text(eventData?.turnScopeId),
       workflowRunId,
@@ -277,39 +272,51 @@ export function createWorkflowStore({
   }
 
   function applyWorkflowRuntimeEvent(record = {}, { source = "unknown" } = {}) {
-    const canonical = normalizeWorkflowRuntimeEvent(record, { source });
-    if (!canonical.valid) {
+    const validation = validateProtocolEvent(record);
+    const canonical = record;
+    if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.WORKFLOW_RUNTIME) {
       const result = {
         applied: false,
-        reason: canonical.errors[0] || "invalid_runtime_event",
+        reason: validation.errors?.[0] || "invalid_runtime_event",
         canonical,
       };
       logWorkflowDiagnostics("frontend.workflowStore.runtimeEventRejected", () => ({
-        ...summarizeWorkflowRuntimeCanonical(canonical),
+        ...summarizeWorkflowRuntimeCanonical(canonical, source),
         reason: result.reason,
       }));
       return result;
     }
+    const eventType = canonical.identity.eventType;
+    const data = {
+      ...canonical.payload,
+      authoritySessionId: canonical.identity.sessionId,
+      eventId: canonical.identity.eventId,
+      sequenceDomain: canonical.ordering.domain,
+      sequence: canonical.ordering.sequence,
+      revision: canonical.ordering.revision,
+      aggregateVersion: canonical.ordering.aggregateVersion,
+    };
     let result;
-    if (canonical.event === WORKFLOW_RUNTIME_EVENT.PLANNING) {
-      result = upsertWorkflowPlanningEvent(canonical.data);
-    } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
-      result = upsertWorkflowNodeStateEvent(canonical.data);
-    } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.MESSAGE) {
-      result = reduceSubSessionMessageEvent(canonical.data.eventType, canonical.data);
-    } else if (canonical.event === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
-      result = reduceSubSessionSnapshot(canonical.data, {
-        source: canonical.source,
-        eventId: canonical.eventId,
-        sequenceDomain: canonical.sequenceDomain,
-        authoritativeSequence: canonical.sequence,
-        transportSequence: canonical.transportSequence,
+    if (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING) {
+      result = upsertWorkflowPlanningEvent(data);
+    } else if (eventType === WORKFLOW_RUNTIME_EVENT.NODE_STATE) {
+      result = upsertWorkflowNodeStateEvent(data);
+    } else if (eventType === WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT) {
+      result = reduceSubSessionSnapshot({
+        ...data,
+        sessionId: canonical.payload.nodeSessionId,
+        parentSessionId: canonical.identity.sessionId,
+      }, {
+        source,
+        eventId: canonical.identity.eventId,
+        sequenceDomain: canonical.ordering.domain,
+        authoritativeSequence: canonical.ordering.sequence,
       });
     } else {
       result = { applied: false, reason: "unsupported_event" };
     }
     logWorkflowDiagnostics("frontend.workflowStore.runtimeEventReduced", () => ({
-      ...summarizeWorkflowRuntimeCanonical(canonical),
+      ...summarizeWorkflowRuntimeCanonical(canonical, source),
       applied: result?.applied === true,
       reason: text(result?.reason),
     }));

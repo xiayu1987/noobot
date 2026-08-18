@@ -88,8 +88,14 @@ const MODEL_FAMILY_DEFAULT_FIELDS = Object.freeze({
 });
 
 const CONCRETE_MODEL_RULES = Object.freeze([
-  Object.freeze({ match: /^gpt[-_]?5\.6[-_.]?sol(?:[-_.]|$)/, defaults: Object.freeze({ temperature: 0.7 }) }),
-  Object.freeze({ match: /^nano[-_.]?banana(?:[-_.]|$)/, defaults: Object.freeze({ temperature: 0.5 }) }),
+  Object.freeze({
+    match: /^gpt[-_]?5\.6[-_.]?sol(?:[-_.]|$)/,
+    defaults: Object.freeze({ temperature: 0.7 }),
+  }),
+  Object.freeze({
+    match: /^nano[-_.]?banana(?:[-_.]|$)/,
+    defaults: Object.freeze({ temperature: 0.5 }),
+  }),
   Object.freeze({
     match: /^qwen3.*thinking(?:[-_.]|$)/,
     defaults: Object.freeze({ temperature: 0.6, top_p: 0.95, top_k: 20, min_p: 0 }),
@@ -119,7 +125,9 @@ function hasOwn(source, key) {
 function resolveModelProfiles(modelSpec = {}) {
   // An alias is a configuration label, not part of the provider's model
   // identity. Only the actual model name may select a family/profile.
-  const identity = String(modelSpec.model || "").trim().toLowerCase();
+  const identity = String(modelSpec.model || "")
+    .trim()
+    .toLowerCase();
   return MODEL_PROFILE_RULES.filter(({ match }) => match.test(identity)).map(
     ({ profile }) => profile,
   );
@@ -138,13 +146,17 @@ export function getRuntimeModelDefaultFields(modelSpec = {}) {
     Object.assign(defaults, formatDefaults[profile] || {});
   }
   if (
-    String(modelSpec.format || "").trim().toLowerCase() === "dashscope" &&
+    String(modelSpec.format || "")
+      .trim()
+      .toLowerCase() === "dashscope" &&
     normalizeBoolean(modelSpec.enable_thinking, false)
   ) {
     Object.assign(defaults, formatDefaults.qwen_thinking || {});
   }
   if (
-    String(modelSpec.format || "").trim().toLowerCase() === "openai_compatible" &&
+    String(modelSpec.format || "")
+      .trim()
+      .toLowerCase() === "openai_compatible" &&
     hasOwn(modelSpec, "top_p") &&
     !hasOwn(modelSpec, "temperature")
   ) {
@@ -176,12 +188,14 @@ function classifyModelFamily(modelSpec = {}) {
 }
 
 function resolveConcreteModelDefaults(model = "") {
-  const normalized = String(model || "").trim().toLowerCase();
+  const normalized = String(model || "")
+    .trim()
+    .toLowerCase();
   return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
 export function normalizeRuntimeModelSpec(input = {}) {
-  let out = { ...input };
+  const out = { ...input };
   delete out.providerId;
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();

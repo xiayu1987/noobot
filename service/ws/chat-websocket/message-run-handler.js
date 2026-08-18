@@ -27,7 +27,15 @@ import {
 } from "./run-config.js";
 import { isUserStopRunAbort } from "./stop-lifecycle.js";
 import { createRunEventListener } from "./run-event-listener.js";
-import { SESSION_ERROR_CODE, TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import {
+  createExecutionAbortReason,
+  EXECUTION_ABORT_TYPE,
+  resolveExecutionAbortMessage,
+  SESSION_ERROR_CODE,
+  TURN_EVENT,
+  TURN_PHASE,
+  createTurnLifecycleCommandId,
+} from "@noobot/session-protocol";
 import { recoverOrphanedTurn } from "@noobot/authoritative-state/application";
 import { createAgentApplication } from "#agent/application";
 import { AGENT_COMMAND } from "@noobot/agent-transport-protocol";
@@ -102,7 +110,11 @@ export function createMessageRunHandler({
       parentSessionId: state.currentRunMeta?.parentSessionId || "",
       turnScopeId: state.currentRunMeta?.turnScopeId || state.currentTurnScopeId || "",
       dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
-      commandId: `${commandBase}:failed:${phase}`,
+      commandId: createTurnLifecycleCommandId({
+        commandId: commandBase,
+        eventType: TURN_EVENT.FAILED,
+        phase,
+      }),
       eventType: TURN_EVENT.FAILED,
       phase,
       failure: {
@@ -232,7 +244,12 @@ export function createMessageRunHandler({
       parentSessionId,
       turnScopeId: state.currentTurnScopeId,
       dialogProcessId,
-      commandId,
+      commandId: createTurnLifecycleCommandId({
+        commandId,
+        eventType: TURN_EVENT.ACTION_ACCEPTED,
+        phase: TURN_PHASE.ACTION,
+      }),
+      causationId: commandId,
       eventType: TURN_EVENT.ACTION_ACCEPTED,
       phase: TURN_PHASE.ACTION,
       action,
@@ -328,14 +345,16 @@ export function createMessageRunHandler({
         data: { timeoutMs: runTimeoutMs },
       });
       if (state.currentAbortController) {
-        state.currentAbortController.abort({
-          type: "run_timeout",
+        state.currentAbortController.abort(createExecutionAbortReason({
+          type: EXECUTION_ABORT_TYPE.RUN_TIMEOUT,
           reason: `run timeout after ${runTimeoutMs}ms`,
           timeoutMs: runTimeoutMs,
-        });
+        }));
       }
     }, runTimeoutMs);
     state.currentRunMeta = {
+      commandId,
+      commandType: command.commandType,
       userId: String(userId || "").trim(),
       runOwnerId: canonicalRunOwnerId,
       sessionId: String(sessionId || "").trim(),
@@ -370,11 +389,11 @@ export function createMessageRunHandler({
         state.currentRunHandle.stopRequested = true;
         state.currentRunHandle.stopPayload = state.currentStopPayload;
       }
-      state.currentAbortController.abort({
-        type: "user_stop",
+      state.currentAbortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
     }
     const textStreamingEnabled = await resolveEffectiveStreamingEnabled({
       bot: activeBot,
@@ -385,7 +404,6 @@ export function createMessageRunHandler({
     const eventListener = createRunEventListener({
       sendEvent: (...args) => publishRunEvent(runHandle, ...args),
       sessionId,
-      textStreamingEnabled,
       registerActiveRun,
       getCurrentRunMeta: () => runMeta,
       getCurrentRunHandle: () => runHandle,
@@ -453,33 +471,9 @@ export function createMessageRunHandler({
           data: eventData,
         });
       },
-      onAuthoritativeMessageRouted: (routeData = {}) => {
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          category: "debug",
-          level: "debug",
-          debugType: "workflow-diagnostics",
-          event: "service.websocket.authoritativeMessage.routed",
-          userId,
-          sessionId,
-          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
-          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
-          data: routeData,
-        });
-        void recordServiceWebSocketLifecycle({
-          sessionLogConfig,
-          category: "debug",
-          level: "debug",
-          debugType: "timeline-pipeline",
-          event: "service.timelinePipeline.authoritativeRouted",
-          userId,
-          sessionId,
-          dialogProcessId: routeData.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
-          turnScopeId: routeData.turnScopeId || state.currentTurnScopeId || "",
-          data: routeData,
-        });
-      },
-      onCommittedTurnLifecycle: async (committed = {}, context = {}) => {
+      onCommittedTurnLifecycle: async (committedEnvelope = {}, context = {}) => {
+        const committedIdentity = committedEnvelope.identity || {};
+        const committedPayload = committedEnvelope.payload || {};
         const recordDispatchFailure = (reason = "", delivered = 0) => {
           void recordServiceWebSocketLifecycle({
             sessionLogConfig,
@@ -487,12 +481,12 @@ export function createMessageRunHandler({
             userId,
             sessionId,
             dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
-            turnScopeId: committed.turnScopeId || "",
+            turnScopeId: committedIdentity.turnScopeId || "",
             data: {
-              childSessionId: committed.sessionId || "",
-              parentSessionId: committed.parentSessionId || parentSessionId,
+              childSessionId: committedIdentity.sessionId || "",
+              parentSessionId: committedPayload.parentSessionId || "",
               persistenceScopeId: context.persistenceScope?.scopeId || "",
-              lifecycleEventType: committed.eventType || "",
+              lifecycleEventType: committedPayload.eventType || "",
               reason,
               delivered: Number(delivered || 0),
             },
@@ -500,9 +494,9 @@ export function createMessageRunHandler({
         };
         try {
           const dispatch = await dispatchAuthorityEvents?.({
-            userId: committed.userId || userId,
-            sessionId: committed.sessionId,
-            parentSessionId: committed.parentSessionId || parentSessionId,
+            userId: committedPayload.userId,
+            sessionId: committedIdentity.sessionId,
+            parentSessionId: committedPayload.parentSessionId,
             persistenceScope: context.persistenceScope,
           });
           if (dispatch?.dispatched !== true) {
@@ -518,6 +512,18 @@ export function createMessageRunHandler({
           return { dispatched: false, reason, delivered: 0 };
         }
       },
+      onAuthorityEventCommitted: async (envelope = {}, context = {}) => {
+        const dispatch = await dispatchAuthorityEvents?.({
+          userId,
+          sessionId: envelope.identity.sessionId,
+          parentSessionId: envelope.payload.parentSessionId,
+          persistenceScope: context.persistenceScope,
+        }, (...args) => publishRunEvent(runHandle, ...args));
+        if (dispatch?.dispatched !== true) {
+          throw new Error(dispatch?.reason || "authority_event_dispatch_failed");
+        }
+        return dispatch;
+      },
       onRootRunning: (lifecycleData) => {
         if (processingStartedPromise) return processingStartedPromise;
         processingStartedPromise = commitTurnLifecycle({
@@ -529,7 +535,12 @@ export function createMessageRunHandler({
             lifecycleData?.dialogProcessId ||
             state.currentRunMeta?.dialogProcessId ||
             dialogProcessId,
-          commandId: `${commandId}:processing-started`,
+          commandId: createTurnLifecycleCommandId({
+            commandId,
+            eventType: TURN_EVENT.PROCESSING_STARTED,
+            phase: TURN_PHASE.PROCESSING,
+          }),
+          causationId: commandId,
           eventType: TURN_EVENT.PROCESSING_STARTED,
           phase: TURN_PHASE.PROCESSING,
           executionState: "sending",
@@ -541,7 +552,8 @@ export function createMessageRunHandler({
           stage: lifecycleData?.stage,
         }).then((started) => {
           if (!started?.applied && !started?.deduplicated) {
-            throw new Error(started?.reason || "processing_start_failed");
+            const code = String(started?.reason || "processing_start_failed").trim();
+            throw Object.assign(new Error(code), { code });
           }
           latestAuthorityTurn = started.turn || latestAuthorityTurn;
           state.currentLifecyclePhase = TURN_PHASE.PROCESSING;
@@ -581,9 +593,13 @@ export function createMessageRunHandler({
     if (processingStartedPromise) await processingStartedPromise;
 
     if (state.currentRunTimedOut && state.currentAbortSignal?.aborted) {
+      const timeoutMessage = resolveExecutionAbortMessage({
+        abortSignal: state.currentAbortSignal,
+        fallback: `run timeout after ${runTimeoutMs}ms`,
+      });
       await finalizeTimeout(buildRunStateSnapshot(), {
-        description: `run timeout after ${runTimeoutMs}ms`,
-        errorObject: { message: `run timeout after ${runTimeoutMs}ms`, code: "run_timeout" },
+        description: timeoutMessage,
+        errorObject: { message: timeoutMessage, code: EXECUTION_ABORT_TYPE.RUN_TIMEOUT },
       });
       return;
     }
@@ -605,7 +621,12 @@ export function createMessageRunHandler({
       turnScopeId: state.currentTurnScopeId,
       dialogProcessId:
         result?.dialogProcessId || state.currentRunMeta?.dialogProcessId || dialogProcessId,
-      commandId: `${commandId}:processing-completed`,
+      commandId: createTurnLifecycleCommandId({
+        commandId,
+        eventType: TURN_EVENT.PROCESSING_COMPLETED,
+        phase: TURN_PHASE.COMPLETION,
+      }),
+      causationId: commandId,
       eventType: TURN_EVENT.PROCESSING_COMPLETED,
       phase: TURN_PHASE.COMPLETION,
     });

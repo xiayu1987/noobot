@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { createModelContext } from "@noobot/context-protocol";
 
 import {

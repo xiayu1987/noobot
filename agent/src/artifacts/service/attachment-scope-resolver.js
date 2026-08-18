@@ -7,11 +7,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { readdir } from "node:fs/promises";
 
-import {
-  VALID_ATTACHMENT_SOURCES,
-  DEFAULT_ATTACHMENT_SESSION_ID,
-  DEFAULT_ATTACHMENT_SOURCE,
-} from "../constants.js";
+import { VALID_ATTACHMENT_SOURCES } from "../constants.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 import { fatalSystemError, recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -31,19 +27,27 @@ export function resolveBasePath(globalConfig, userId) {
 
 export function normalizeSource(source) {
   const normalized = safeStr(source).toLowerCase();
-  return VALID_ATTACHMENT_SOURCES.has(normalized) ? normalized : DEFAULT_ATTACHMENT_SOURCE;
+  if (!VALID_ATTACHMENT_SOURCES.has(normalized)) {
+    throw new TypeError("attachmentSource must be an explicitly supported source");
+  }
+  return normalized;
 }
 
-export function resolveAttachmentScope({ sessionId = "", attachmentSource = "", requireSessionId = false } = {}) {
-  const normalizedSessionId = safeStr(sessionId) === DEFAULT_ATTACHMENT_SESSION_ID ? "" : safeStr(sessionId);
-  if (requireSessionId && !normalizedSessionId) {
+export function resolveAttachmentScope({
+  sessionId = "",
+  attachmentSource = "",
+  requireSessionId = false,
+} = {}) {
+  void requireSessionId;
+  const normalizedSessionId = safeStr(sessionId);
+  if (!normalizedSessionId) {
     throw recoverableToolError(tSystem("attach.sessionIdRequiredForPersistence"), {
       code: ERROR_CODE.RECOVERABLE_ATTACHMENT_SESSION_ID_REQUIRED,
       details: { hint: tSystem("attach.sessionIdPersistenceHint") },
     });
   }
   return {
-    sessionId: normalizedSessionId || DEFAULT_ATTACHMENT_SESSION_ID,
+    sessionId: normalizedSessionId,
     attachmentSource: normalizeSource(attachmentSource),
   };
 }

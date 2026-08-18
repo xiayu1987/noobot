@@ -27,23 +27,38 @@ export function installSessionLifecycleHydration({
       snapshotSessionId: String(snapshot?.sessionId || "").trim(),
       snapshotSequence: Number(snapshot?.sequence || 0),
       activeTurnScopeId: String(snapshot?.activeTurnScopeId || "").trim(),
-      recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns) ? snapshot.recentTerminalTurns.length : 0,
+      recentTerminalCount: Array.isArray(snapshot?.recentTerminalTurns)
+        ? snapshot.recentTerminalTurns.length
+        : 0,
       replacedTurnScopeIds: (Array.isArray(snapshot?.replacedTurns) ? snapshot.replacedTurns : [])
         .map((replacement) => String(replacement?.turnScopeId || "").trim())
         .filter(Boolean),
-      turnTimingsCount: Array.isArray(sessionItem?.turnTimings) ? sessionItem.turnTimings.length : 0,
+      turnTimingsCount: Array.isArray(sessionItem?.turnTimings)
+        ? sessionItem.turnTimings.length
+        : 0,
       timingSnapshotApplied: timingResult?.applied === true,
       timingSnapshotReason: timingResult?.reason || "",
     }));
     if (snapshot && typeof snapshot === "object") {
       const result = chatStore.applyTurnLifecycleSnapshot(snapshot);
       const activeTurn = snapshot.activeTurn;
-      const activeTurnState = String(activeTurn?.state || "").trim().toLowerCase();
-      const activeTurnScopeId = String(activeTurn?.turnScopeId || snapshot.activeTurnScopeId || "").trim();
-      const isTerminal = ["completed", "stop_completed", "failed", "processing_failed", "action_failed", "stopped"].includes(activeTurnState);
+      const activeTurnState = String(activeTurn?.state || "")
+        .trim()
+        .toLowerCase();
+      const activeTurnScopeId = String(
+        activeTurn?.turnScopeId || snapshot.activeTurnScopeId || "",
+      ).trim();
+      const isTerminal = [
+        "completed",
+        "stop_completed",
+        "failed",
+        "processing_failed",
+        "action_failed",
+        "stopped",
+      ].includes(activeTurnState);
       // A non-terminal authoritative activeTurn is the only legal source for
-      // terminal discovery after refresh. Never inspect turnStatuses or
-      // persisted message status here.
+      // terminal discovery after refresh. Persisted message status is not an
+      // authority source here.
       if (result?.applied === true && activeTurn && activeTurnScopeId && !isTerminal) {
         scheduleTerminalResolution?.(sessionId, activeTurnScopeId, {
           source: "authoritative_active_turn_hydration",
@@ -70,12 +85,13 @@ export function installSessionLifecycleHydration({
     return { applied: false, reason: "authoritative_snapshot_missing" };
   }
 
-
   for (const sessionItem of sessions.value) {
     hydrateSessionLifecycle(sessionItem);
     chatStore.pruneTerminalTurns({
       sessionId: sessionRuntimeId(sessionItem),
-      referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
+      referencedTurnScopeIds: (sessionItem?.messages || [])
+        .map(getMessageTurnScopeId)
+        .filter(Boolean),
     });
   }
 
@@ -86,11 +102,12 @@ export function installSessionLifecycleHydration({
         hydrateSessionLifecycle(sessionItem);
         chatStore.pruneTerminalTurns({
           sessionId: sessionRuntimeId(sessionItem),
-          referencedTurnScopeIds: (sessionItem?.messages || []).map(getMessageTurnScopeId).filter(Boolean),
+          referencedTurnScopeIds: (sessionItem?.messages || [])
+            .map(getMessageTurnScopeId)
+            .filter(Boolean),
         });
       }
     },
     { deep: true },
   );
-
 }

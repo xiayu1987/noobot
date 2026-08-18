@@ -39,8 +39,8 @@ AND 无禁止错误
 
 测试实现应直接以以下代码为协议事实源：
 
-- Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.mjs`
-- Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.mjs`
+- Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.js`
+- Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.js`
 - Turn Lifecycle 和 receipt：`event-protocol/src/turn-lifecycle-protocol.mjs`
 - 浏览器 WebSocket 分派：`client/noobot-chat/src/infrastructure/websocket/chatWebSocketClient.js`
 - reconnect 协调与投影：`client/noobot-chat/src/modules/chat/runtime/session/reconnectCoordinator.js`
@@ -53,14 +53,14 @@ AND 无禁止错误
 
 协议版本基线：
 
-| 协议 | 当前版本/事件 |
-| --- | --- |
-| Agent Transport | `protocolVersion: 2` |
-| Turn Lifecycle | `protocolVersion: 4` |
-| Lifecycle transport | `transportProtocolVersion: 3` |
-| Lifecycle wire event | `turn_lifecycle` |
-| Lifecycle receipt | `action: turn.lifecycle.received` |
-| Model Context Snapshot | `version: 2` |
+| 协议                   | 当前版本/事件                     |
+| ---------------------- | --------------------------------- |
+| Agent Transport        | `protocolVersion: 2`              |
+| Turn Lifecycle         | `protocolVersion: 4`              |
+| Lifecycle transport    | `transportProtocolVersion: 3`     |
+| Lifecycle wire event   | `turn_lifecycle`                  |
+| Lifecycle receipt      | `action: turn.lifecycle.received` |
+| Model Context Snapshot | `version: 2`                      |
 
 版本变化时应同步修改协议库、生产代码和本文断言，不得在测试中接受多个版本。
 
@@ -441,6 +441,18 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；`write_file` 的权威 `writtenFiles` 与 Turn journal、运行中/运行中刷新/完成前刷新/完成后刷新四个时点的前端生成文件卡数量和文件键集合一致；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
 
+### PBE-044：多次工具停止继续与快照恢复闭环
+
+步骤：先执行一个单工具命令并自然完成；随后在同一 Session 发起八步顺序工具链，观察到多个真实工具结果后停止，通过 Continue 恢复；再次观察到多个新工具结果后停止，再次 Continue 并自然完成剩余步骤。
+
+断言：两次 Stop 各自产生且只产生一份版本 2 模型快照；快照的 system/history/incremental 分块与扁平 messages 完全一致，序列化消息字段符合 `context-protocol`，assistant tool call 与 tool result 不拆对。测试使用正式 `hydrateModelContextSnapshot` 和 `projectSnapshotIncrementalToContinuation` 恢复每份快照；已完成 history 保留其原轮次身份，被停止的 incremental 统一重绑定到新 Turn identity；恢复后的完整 provider 消息指纹必须成为对应 Continue 第一次 `agent.main` 实际输入的精确前缀。三段工具执行合计恰好八次且每个调用结果成功配对，状态文件最终为 step=8，最后一轮产生自然完成终态。
+
+### PBE-045：并行工具停止与快照结果完整性
+
+步骤：要求主模型在同一个 assistant 响应中并行发起四次 `execute_script`，其中三项短时完成、一项保持运行；观察到至少两个真实成功结果后点击 Stop，再通过 Continue 恢复且不重新执行工具。
+
+断言：停止轮恰好存在四个调用和四个按 `toolCallId` 配对的结果；已完成调用保留真实成功结果，被停止调用形成 `status=aborted`、`stopType=user_stop` 的规范结果。版本 2 快照不得出现未配对 assistant tool call；正式恢复投影必须成为 Continue 首次 `agent.main` provider 输入的精确前缀，Continue 轮不得再次产生工具调用。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。
@@ -512,11 +524,11 @@ npm run test:e2e:protocol:full
 
 推荐分组：
 
-| 级别 | 用例 |
-| --- | --- |
-| Smoke | PBE-002、006 |
-| Core | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036 |
+| 级别      | 用例                                            |
+| --------- | ----------------------------------------------- |
+| Smoke     | PBE-002、006                                    |
+| Core      | PBE-007～014、016、017、021、022、027、029、030 |
+| Full-only | PBE-015、023～026、028、031～036、044、045      |
 
 ## 8. CI 失败产物要求
 

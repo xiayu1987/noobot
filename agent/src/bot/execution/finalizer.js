@@ -5,11 +5,8 @@
  */
 
 import { emitEvent } from "../../events/index.js";
-import {
-  CALLER_ROLE,
-  SESSION_ASYNC_STATUS,
-} from "../config/constants.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
 import {
   canonicalMessageId,
@@ -89,15 +86,19 @@ export class SessionExecutionFinalizer {
         .map((message = {}) => String(message.messageUid || "").trim())
         .filter(Boolean),
     );
-    const persistedUidSet = new Set([
-      ...(Array.isArray(persistedTurnMessageUids) ? persistedTurnMessageUids : []),
-      ...durableMessageUids,
-    ]
-      .map((uid) => String(uid || "").trim())
-      .filter(Boolean));
-    const activeMessageUids = new Set(activeTurnMessages
-      .map((message = {}) => String(message.messageUid || "").trim())
-      .filter(Boolean));
+    const persistedUidSet = new Set(
+      [
+        ...(Array.isArray(persistedTurnMessageUids) ? persistedTurnMessageUids : []),
+        ...durableMessageUids,
+      ]
+        .map((uid) => String(uid || "").trim())
+        .filter(Boolean),
+    );
+    const activeMessageUids = new Set(
+      activeTurnMessages
+        .map((message = {}) => String(message.messageUid || "").trim())
+        .filter(Boolean),
+    );
     const rawTurnMessages = hasRecoveredPersistedPrefix
       ? persistedUidSet.size > 0
         ? [
@@ -135,14 +136,15 @@ export class SessionExecutionFinalizer {
         );
       }
     }
-    const messagesToPersist = persistedUidSet.size > 0
-      ? promotedTurnMessages.filter((message = {}) => {
-          const messageUid = String(message.messageUid || "").trim();
-          if (!messageUid || !persistedUidSet.has(messageUid)) return true;
-          const persistedMessage = persistedMessagesByUid.get(messageUid);
-          return JSON.stringify(persistedMessage) !== JSON.stringify(message);
-        })
-      : promotedMessages.slice(promotionSourceCount + persistedResultPrefixCount);
+    const messagesToPersist =
+      persistedUidSet.size > 0
+        ? promotedTurnMessages.filter((message = {}) => {
+            const messageUid = String(message.messageUid || "").trim();
+            if (!messageUid || !persistedUidSet.has(messageUid)) return true;
+            const persistedMessage = persistedMessagesByUid.get(messageUid);
+            return JSON.stringify(persistedMessage) !== JSON.stringify(message);
+          })
+        : promotedMessages.slice(promotionSourceCount + persistedResultPrefixCount);
     emitContextIdentityDebug(
       runtimeEventListener,
       "completedTurnSummaryPersistencePlanned",
@@ -197,8 +199,7 @@ export class SessionExecutionFinalizer {
     });
 
     lifecycle?.enterMemory?.();
-    const memoryPostProcessAsyncEnabled =
-      this.resolveMemoryPostProcessAsyncEnabled(userConfig);
+    const memoryPostProcessAsyncEnabled = this.resolveMemoryPostProcessAsyncEnabled(userConfig);
     if (memoryPostProcessAsyncEnabled) {
       emitEvent(runtimeEventListener, "memory_postprocess_scheduled", {
         sessionId,
@@ -216,8 +217,7 @@ export class SessionExecutionFinalizer {
             persistenceContext,
           }),
         )
-        .catch(() => {
-        });
+        .catch(() => {});
     } else {
       await this.runMemoryPostProcessFlow({
         userId,
@@ -246,12 +246,7 @@ export class SessionExecutionFinalizer {
         }),
         new Promise((_, reject) =>
           setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `execution bundle timeout after ${executionBundleTimeoutMs}ms`,
-                ),
-              ),
+            () => reject(new Error(`execution bundle timeout after ${executionBundleTimeoutMs}ms`)),
             executionBundleTimeoutMs,
           ),
         ),

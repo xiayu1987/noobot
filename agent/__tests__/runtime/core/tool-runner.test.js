@@ -17,6 +17,7 @@ import { bindAssistantMessageEventStream } from "../../../src/events/message-eve
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
 import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function executeToolCall(options = {}) {
   const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
@@ -58,6 +59,9 @@ function executeToolCall(options = {}) {
       presentationMessageId: String(options.presentationMessageId || `presentation-${identity}`),
     });
   }
+  if (options.eventListener && !runtime.sessionManager) {
+    runtime.sessionManager = createCanonicalMessageEventSessionManager();
+  }
   return options.eventListener
     ? executeToolCallInTurn({ ...options, runtime })
     : executeToolCallWithoutTurn({ ...options, runtime });
@@ -71,6 +75,14 @@ function findTransferEnvelopeByReason(envelopes = [], reason = "") {
   return (Array.isArray(envelopes) ? envelopes : []).find(
     (item = {}) => item?.intent?.reason === reason,
   );
+}
+
+function findCommittedMessagePayload(events = [], eventType = "") {
+  return (Array.isArray(events) ? events : []).find(
+    (event = {}) =>
+      event?.event === "authority_event_committed" &&
+      event?.data?.envelope?.payload?.eventType === eventType,
+  )?.data?.envelope?.payload;
 }
 
 test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
@@ -365,7 +377,7 @@ test("executeToolCall does not publish writtenFiles outside semantic transfer", 
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  const completed = events.find((event = {}) => event.event === "tool_call_end")?.data;
+  const completed = findCommittedMessagePayload(events, "tool_call_end");
   assert.equal("writtenFiles" in completed, false);
   assert.equal(completed?.presentationMessageId, "child-assistant-1");
 });
@@ -413,11 +425,11 @@ test("canonical tool events publish the server-assessed maximum risk level", asy
     ["low", "low", "high"],
   );
   assert.equal(
-    events.find((event = {}) => event.event === "tool_call_start")?.data?.riskLevel,
+    findCommittedMessagePayload(events, "tool_call_start")?.riskLevel,
     "low",
   );
   assert.equal(
-    events.find((event = {}) => event.event === "tool_call_end")?.data?.riskLevel,
+    findCommittedMessagePayload(events, "tool_call_end")?.riskLevel,
     "high",
   );
 });
@@ -442,11 +454,11 @@ test("tool operation baseline risk is published even when invocation fails befor
   assert.equal(result.success, false);
   assert.equal(result.riskLevel, "medium");
   assert.equal(
-    events.find((event = {}) => event.event === "tool_call_start")?.data?.riskLevel,
+    findCommittedMessagePayload(events, "tool_call_start")?.riskLevel,
     "medium",
   );
   assert.equal(
-    events.find((event = {}) => event.event === "tool_call_end")?.data?.riskLevel,
+    findCommittedMessagePayload(events, "tool_call_end")?.riskLevel,
     "medium",
   );
 });
@@ -472,7 +484,7 @@ test("canonical tool_call_end preserves a complete JSON tool result beyond 200 c
     eventListener: { onEvent: (event) => events.push(event) },
   });
 
-  const completed = events.find((event = {}) => event.event === "tool_call_end")?.data;
+  const completed = findCommittedMessagePayload(events, "tool_call_end");
   assert.equal(completed?.result, resultPayload);
   assert.deepEqual(JSON.parse(completed.result), JSON.parse(resultPayload));
 });

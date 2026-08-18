@@ -56,7 +56,7 @@ and failure boundaries. Records from each layer can be correlated by
 
 Diagnostics are enabled by default through
 `RUNTIME_EVENTS_CONFIG_DEFAULTS.sessionLogControls.debug.agentTransport` in
-`shared/runtime-events-config.mjs`. Set
+`shared/runtime-events-config.js`. Set
 `NOOBOT_RUNTIME_EVENT_AGENT_TRANSPORT_DEBUG=off` to disable them. They are
 stored separately as `debug-agent-transport.jsonl`.
 

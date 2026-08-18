@@ -54,14 +54,21 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: { attachmentId: "att_1", sessionId: "test-session", attachmentSource: "model" },
-        role: "primary",
-        name: "a.md",
-        mimeType: "text/markdown",
-      }],
+      attachments: [
+        {
+          identity: { attachmentId: "att_1", sessionId: "test-session", attachmentSource: "model" },
+          role: "primary",
+          name: "a.md",
+          mimeType: "text/markdown",
+        },
+      ],
     },
-    intent: { source: "plugin", reason: "semantic_transfer_tool_result", scenario: "tool", strategy: "tool_result_text" },
+    intent: {
+      source: "plugin",
+      reason: "semantic_transfer_tool_result",
+      scenario: "tool",
+      strategy: "tool_result_text",
+    },
     meta: { persisted: true },
   };
   const normalized = normalizeMessageEntity({
@@ -71,17 +78,22 @@ test("normalizeMessageEntity persists compact transferEnvelopes", () => {
   });
   assert.equal("transferEnvelopes" in normalized, true);
   assert.deepEqual(normalized.transferEnvelopes, [envelope]);
-  assert.equal(normalized.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "att_1");
+  assert.equal(
+    normalized.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "att_1",
+  );
 });
 
-test("normalizeMessageEntity ignores non-array transferEnvelopes", () => {
-  const normalized = normalizeMessageEntity({
-    role: "assistant",
-    content: "done",
-    transferEnvelopes: { protocol: "noobot.semantic-transfer" },
-  });
-
-  assert.equal("transferEnvelopes" in normalized, false);
+test("normalizeMessageEntity rejects invalid transferEnvelopes", () => {
+  assert.throws(
+    () =>
+      normalizeMessageEntity({
+        role: "assistant",
+        content: "done",
+        transferEnvelopes: { protocol: "noobot.semantic-transfer" },
+      }),
+    /invalid_transfer_envelope:invalid_version/,
+  );
 });
 
 test("normalizeMessageEntity omits empty attachments", () => {
@@ -100,13 +112,17 @@ test("normalizeMessageEntity omits empty attachments", () => {
 });
 
 test("normalizeMessageEntity preserves compact non-empty attachments", () => {
-  const attachments = [{
-    attachmentId: "att_1",
-    filename: "a.txt",
-    mimeType: "text/plain",
-    raw: "drop",
-    owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
-  }];
+  const attachments = [
+    {
+      attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      name: "a.txt",
+      mimeType: "text/plain",
+      raw: "drop",
+      owner: { type: "plugin", id: "harness-plugin", extra: "drop" },
+    },
+  ];
   const normalized = normalizeMessageEntity({
     role: "user",
     content: "see attachment",
@@ -116,6 +132,8 @@ test("normalizeMessageEntity preserves compact non-empty attachments", () => {
   assert.deepEqual(normalized.attachments, [
     {
       attachmentId: "att_1",
+      sessionId: "s1",
+      attachmentSource: "user",
       name: "a.txt",
       mimeType: "text/plain",
       owner: { type: "plugin", id: "harness-plugin" },
@@ -193,15 +211,20 @@ test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {
   const snakeAttachments = [{ attachmentId: "att_snake", filename: "snake.txt" }];
 
   assert.equal(
-    "attachments" in normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
+    "attachments" in
+      normalizeMessageEntity({ role: "user", content: "camel", attachmentMetas: camelAttachments }),
     false,
   );
   assert.equal(
-    "attachments" in normalizeMessageEntity({ role: "user", content: "snake", attachment_metas: snakeAttachments }),
+    "attachments" in
+      normalizeMessageEntity({
+        role: "user",
+        content: "snake",
+        attachment_metas: snakeAttachments,
+      }),
     false,
   );
 });
-
 
 test("normalizeMessageEntity preserves thinking timing fields", () => {
   const normalized = normalizeMessageEntity({

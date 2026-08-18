@@ -11,34 +11,36 @@ import {
   buildContextMessageBlocks,
 } from "../../../src/context/assembly/message-builder.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
+function createMessageBlockScope(runtime, messageBlocks) {
+  return createTestAgentExecutionScope(runtime, {
+    identity: {
+      userId: runtime.userId,
+      sessionId: runtime.systemRuntime.sessionId,
+      parentSessionId: runtime.systemRuntime.parentSessionId,
+      dialogProcessId: runtime.systemRuntime.dialogProcessId,
+      turnScopeId: runtime.systemRuntime.turnScopeId,
+    },
+    messageBlocks,
+  });
+}
+
 test("buildContextMessageBlocks splits system/history/incremental and preserves concat order", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "u1",
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dlg1",
-            },
-          },
-        },
+    createMessageBlockScope(
+      { userId: "u1", systemRuntime: { sessionId: "s1", dialogProcessId: "dlg1" } },
+      {
+        system: ["sys-1"],
+        history: [
+          { role: "user", content: "h-u", dialogProcessId: "dlg-history" },
+          { role: "assistant", content: "h-1", dialogProcessId: "dlg-history" },
+        ],
       },
-      payload: {
-        messages: {
-          system: ["sys-1"],
-          history: [
-            { role: "user", content: "h-u", dialogProcessId: "dlg-history" },
-            { role: "assistant", content: "h-1", dialogProcessId: "dlg-history" },
-          ],
-        },
-      },
-    },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("u-1") },
   );
 
@@ -53,14 +55,8 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
   assert.equal(blocks.messages[1]?.content, "h-u");
   assert.equal(blocks.messages[2]?.content, "h-1");
   assert.equal(blocks.messages[3]?.content, "u-1");
-  assert.equal(
-    blocks.messages[3]?.additional_kwargs?.noobotMessageId,
-    "sm_current_user_fixture",
-  );
-  assert.equal(
-    blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType,
-    "user_meta",
-  );
+  assert.equal(blocks.messages[3]?.additional_kwargs?.noobotMessageId, "sm_current_user_fixture");
+  assert.equal(blocks.messages[4]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
   assert.equal(
     blocks.messages[4]?.additional_kwargs?.noobotMessageId,
     "sm_current_user_fixture::user_meta",
@@ -69,57 +65,65 @@ test("buildContextMessageBlocks splits system/history/incremental and preserves 
 
 test("buildContextMessageBlocks appends resume user message meta with attachments", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            userMessageAttachments: [
-              {
-                attachmentId: "att-1",
-                name: "resume.txt",
-                mimeType: "text/plain",
-                attachmentSource: "user",
-                sessionId: "s1",
-                parsedResult: { text: "parsed attachment" },
-              },
-            ],
-            systemRuntime: {
-              sessionId: "s1",
-              parentSessionId: "parent-s1",
-              dialogProcessId: "dlg-resume-new",
-              parentDialogProcessId: "dlg-stopped",
-              turnScopeId: "turn-resume-new",
-            },
+    createMessageBlockScope(
+      {
+        userId: "admin",
+        userMessageAttachments: [
+          {
+            attachmentId: "att-1",
+            name: "resume.txt",
+            mimeType: "text/plain",
+            attachmentSource: "user",
+            sessionId: "s1",
           },
+        ],
+        systemRuntime: {
+          sessionId: "s1",
+          parentSessionId: "parent-s1",
+          dialogProcessId: "dlg-resume-new",
+          parentDialogProcessId: "dlg-stopped",
+          turnScopeId: "turn-resume-new",
         },
       },
-      payload: {
-        messages: {
-          system: ["snapshot system"],
-          history: [
-            {
-              role: "user",
-              content: "snapshot user",
-              frontendUserMessage: true,
-              dialogProcessId: "dlg-stopped",
-              turnScopeId: "turn-stopped",
-              attachments: [],
-            },
-            { role: "assistant", content: "snapshot assistant", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
-          ],
-        },
+      {
+        system: ["snapshot system"],
+        history: [
+          {
+            role: "user",
+            content: "snapshot user",
+            frontendUserMessage: true,
+            dialogProcessId: "dlg-stopped",
+            turnScopeId: "turn-stopped",
+            attachments: [],
+          },
+          {
+            role: "assistant",
+            content: "snapshot assistant",
+            dialogProcessId: "dlg-stopped",
+            turnScopeId: "turn-stopped",
+          },
+        ],
       },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("resume question", {
+        userName: "admin",
+        sessionId: "s1",
+        parentSessionId: "parent-s1",
+        dialogProcessId: "dlg-resume-new",
+        parentDialogProcessId: "dlg-stopped",
+        turnScopeId: "turn-resume-new",
+        attachments: [
+          {
+            attachmentId: "att-1",
+            name: "resume.txt",
+            mimeType: "text/plain",
+            attachmentSource: "user",
+            sessionId: "s1",
+          },
+        ],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("resume question", {
-      userName: "admin",
-      sessionId: "s1",
-      parentSessionId: "parent-s1",
-      dialogProcessId: "dlg-resume-new",
-      parentDialogProcessId: "dlg-stopped",
-      turnScopeId: "turn-resume-new",
-      attachments: [{ attachmentId: "att-1", name: "resume.txt", mimeType: "text/plain", attachmentSource: "user", sessionId: "s1", parsedResult: { text: "parsed attachment" } }],
-    }) },
   );
 
   assert.equal(blocks.system[0]?.content, "snapshot system");
@@ -130,7 +134,8 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
   );
   assert.equal(
     blocks.history.some(
-      (message) => message?.additional_kwargs?.noobotInternalMessageType === "user_meta" &&
+      (message) =>
+        message?.additional_kwargs?.noobotInternalMessageType === "user_meta" &&
         String(message?.content || "").includes('"dialogProcessId": "dlg-stopped"'),
     ),
     true,
@@ -146,95 +151,102 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
 
 test("buildContextMessageBlocks reads restored stopped snapshot messages from unified history", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            resumeFromStoppedSnapshot: true,
-            userMessageAttachments: [
-              { attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" },
-            ],
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dlg-current",
-              parentDialogProcessId: "dlg-stopped",
-              turnScopeId: "turn-current",
-            },
+    createMessageBlockScope(
+      {
+        userId: "admin",
+        resumeFromStoppedSnapshot: true,
+        userMessageAttachments: [
+          { attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" },
+        ],
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dlg-current",
+          parentDialogProcessId: "dlg-stopped",
+          turnScopeId: "turn-current",
+        },
+      },
+      {
+        system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
+        history: [
+          {
+            role: "user",
+            content: "snapshot history user",
+            dialogProcessId: "dlg-stopped",
+            turnScopeId: "turn-stopped",
           },
-        },
+          {
+            role: "assistant",
+            content: "snapshot partial assistant",
+            dialogProcessId: "dlg-stopped",
+            turnScopeId: "turn-stopped",
+          },
+        ],
       },
-      payload: {
-        messages: {
-          system: ["[HARNESS_POLICY_SELECTION]\nsnapshot policy"],
-          history: [
-            { role: "user", content: "snapshot history user", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
-            { role: "assistant", content: "snapshot partial assistant", dialogProcessId: "dlg-stopped", turnScopeId: "turn-stopped" },
-          ],
-        },
-      },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("resume user input", {
+        userName: "admin",
+        dialogProcessId: "dlg-current",
+        turnScopeId: "turn-current",
+        parentDialogProcessId: "dlg-stopped",
+        attachments: [{ attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" }],
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("resume user input", {
-      userName: "admin",
-      dialogProcessId: "dlg-current",
-      turnScopeId: "turn-current",
-      parentDialogProcessId: "dlg-stopped",
-      attachments: [{ attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" }],
-    }) },
   );
 
   assert.equal(blocks.system.length, 1);
   assert.equal(blocks.system[0]?.content, "[HARNESS_POLICY_SELECTION]\nsnapshot policy");
   assert.equal(blocks.history[0]?.content, "snapshot history user");
-  assert.equal(blocks.history.some((message) => message?.content === "snapshot partial assistant"), true);
+  assert.equal(
+    blocks.history.some((message) => message?.content === "snapshot partial assistant"),
+    true,
+  );
   assert.equal(blocks.incremental[0]?.content, "resume user input");
   assert.match(String(blocks.incremental[1]?.content || ""), /\[用户元信息\]/);
   assert.match(String(blocks.incremental[1]?.content || ""), /"attachmentId": "att-resume"/);
   const contents = blocks.messages.map((message) => message?.content);
   assert.equal(contents[0], "[HARNESS_POLICY_SELECTION]\nsnapshot policy");
   assert.equal(contents[1], "snapshot history user");
-  assert.equal(contents.indexOf("snapshot partial assistant") < contents.indexOf("resume user input"), true);
+  assert.equal(
+    contents.indexOf("snapshot partial assistant") < contents.indexOf("resume user input"),
+    true,
+  );
   assert.equal(contents.indexOf("resume user input") < contents.length - 1, true);
   assert.match(String(contents[contents.length - 1] || ""), /"dialogProcessId": "dlg-current"/);
 });
 
-test("buildContextMessageBlocks preserves restored LangChain tool messages in unified history", async () => {
-  const { AIMessage, ToolMessage } = await import("@langchain/core/messages");
+test("buildContextMessageBlocks adapts restored protocol tool messages into LangChain history", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "admin",
-            resumeFromStoppedSnapshot: true,
-            userMessageAttachments: [],
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dlg-current",
-              parentDialogProcessId: "dlg-stopped",
-              turnScopeId: "turn-current",
-            },
+    createMessageBlockScope(
+      {
+        userId: "admin",
+        resumeFromStoppedSnapshot: true,
+        userMessageAttachments: [],
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dlg-current",
+          parentDialogProcessId: "dlg-stopped",
+          turnScopeId: "turn-current",
+        },
+      },
+      {
+        system: ["snapshot system"],
+        history: [
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "call_resume_1", name: "read_file", args: { filePath: "a.txt" } }],
+            dialogProcessId: "dlg-stopped",
           },
-        },
+          {
+            role: "tool",
+            toolCallId: "call_resume_1",
+            content: "tool result text",
+            dialogProcessId: "dlg-stopped",
+          },
+        ],
       },
-      payload: {
-        messages: {
-          system: ["snapshot system"],
-          history: [
-            new AIMessage({
-              content: "",
-              tool_calls: [{ id: "call_resume_1", name: "read_file", args: { filePath: "a.txt" } }],
-              additional_kwargs: { dialogProcessId: "dlg-stopped" },
-            }),
-            new ToolMessage({
-              tool_call_id: "call_resume_1",
-              content: "tool result text",
-              additional_kwargs: { dialogProcessId: "dlg-stopped" },
-            }),
-          ],
-        },
-      },
-    },
+    ),
     { currentUserMessage: createPersistedCurrentUserMessage("resume user input") },
   );
 
@@ -246,66 +258,61 @@ test("buildContextMessageBlocks preserves restored LangChain tool messages in un
   assert.equal(blocks.incremental[0]?._getType?.(), "human");
   assert.equal(blocks.incremental[0]?.content, "resume user input");
   assert.equal(
-    blocks.messages.some((message) => message?._getType?.() === "human" && String(message?.content || "") === ""),
+    blocks.messages.some(
+      (message) => message?._getType?.() === "human" && String(message?.content || "") === "",
+    ),
     false,
   );
 });
 
 test("buildContextMessageBlocks removes current turn user residue from history", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "u1",
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dlg-current",
-              turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
-            },
+    createMessageBlockScope(
+      {
+        userId: "u1",
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dlg-current",
+          turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+        },
+      },
+      {
+        system: [],
+        history: [
+          {
+            role: "user",
+            content: "上一轮问题",
+            dialogProcessId: "dlg-old",
+            turnScopeId: "client-turn:old",
           },
-        },
+          {
+            role: "assistant",
+            content: "上一轮回答",
+            dialogProcessId: "dlg-old",
+            turnScopeId: "client-turn:old",
+          },
+          {
+            role: "user",
+            content: "全仓回归测试",
+            dialogProcessId: "dlg-resend-stale",
+            turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+          },
+        ],
       },
-      payload: {
-        messages: {
-          system: [],
-          history: [
-            {
-              role: "user",
-              content: "上一轮问题",
-              dialogProcessId: "dlg-old",
-              turnScopeId: "client-turn:old",
-            },
-            {
-              role: "assistant",
-              content: "上一轮回答",
-              dialogProcessId: "dlg-old",
-              turnScopeId: "client-turn:old",
-            },
-            {
-              role: "user",
-              content: "全仓回归测试",
-              dialogProcessId: "dlg-resend-stale",
-              turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
-            },
-          ],
-        },
-      },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
+        dialogProcessId: "dlg-current",
+        turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
-      dialogProcessId: "dlg-current",
-      turnScopeId: "client-turn:mqrt1icf:lxcfigpr",
-    }) },
   );
 
   const visibleContents = blocks.messages
     .map((message) => message?.content)
     .filter((content) => typeof content === "string");
 
-  assert.equal(
-    visibleContents.filter((content) => content === "全仓回归测试").length,
-    1,
-  );
+  assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
   assert.equal(blocks.history.length, 3);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
@@ -314,10 +321,7 @@ test("buildContextMessageBlocks removes current turn user residue from history",
     "client-turn:mqrt1icf:lxcfigpr",
   );
   assert.equal(blocks.incremental[0]?.additional_kwargs?.dialogProcessId, "dlg-current");
-  assert.equal(
-    blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType,
-    "user_meta",
-  );
+  assert.equal(blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
   assert.equal(
     blocks.incremental[1]?.additional_kwargs?.turnScopeId,
     "client-turn:mqrt1icf:lxcfigpr",
@@ -326,68 +330,58 @@ test("buildContextMessageBlocks removes current turn user residue from history",
 
 test("buildContextMessageBlocks does not duplicate frontend current user already in incremental payload", () => {
   const blocks = buildContextMessageBlocks(
-    {
-      execution: {
-        controllers: {
-          runtime: {
-            userId: "u1",
-            systemRuntime: {
-              sessionId: "s1",
-              dialogProcessId: "dlg-current",
-              turnScopeId: "client-turn:current",
-            },
+    createMessageBlockScope(
+      {
+        userId: "u1",
+        systemRuntime: {
+          sessionId: "s1",
+          dialogProcessId: "dlg-current",
+          turnScopeId: "client-turn:current",
+        },
+      },
+      {
+        system: [],
+        history: [
+          {
+            role: "user",
+            content: "上一轮",
+            dialogProcessId: "dlg-old",
+            turnScopeId: "client-turn:old",
           },
-        },
+          {
+            role: "assistant",
+            content: "上一轮回答",
+            dialogProcessId: "dlg-old",
+            turnScopeId: "client-turn:old",
+          },
+        ],
+        incremental: [
+          {
+            messageUid: "sm_current_user_fixture",
+            role: "user",
+            content: "全仓回归测试",
+            frontendUserMessage: true,
+            dialogProcessId: "dlg-current",
+            turnScopeId: "client-turn:current",
+          },
+        ],
       },
-      payload: {
-        messages: {
-          system: [],
-          history: [
-            {
-              role: "user",
-              content: "上一轮",
-              dialogProcessId: "dlg-old",
-              turnScopeId: "client-turn:old",
-            },
-            {
-              role: "assistant",
-              content: "上一轮回答",
-              dialogProcessId: "dlg-old",
-              turnScopeId: "client-turn:old",
-            },
-          ],
-          incremental: [
-            {
-              messageUid: "sm_current_user_fixture",
-              role: "user",
-              content: "全仓回归测试",
-              frontendUserMessage: true,
-              dialogProcessId: "dlg-current",
-              turnScopeId: "client-turn:current",
-            },
-          ],
-        },
-      },
+    ),
+    {
+      currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
+        dialogProcessId: "dlg-current",
+        turnScopeId: "client-turn:current",
+      }),
     },
-    { currentUserMessage: createPersistedCurrentUserMessage("全仓回归测试", {
-      dialogProcessId: "dlg-current",
-      turnScopeId: "client-turn:current",
-    }) },
   );
 
   const visibleContents = blocks.messages
     .map((message) => message?.content)
     .filter((content) => typeof content === "string");
 
-  assert.equal(
-    visibleContents.filter((content) => content === "全仓回归测试").length,
-    1,
-  );
+  assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
   assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
   assert.equal(blocks.incremental[0]?.additional_kwargs?.turnScopeId, "client-turn:current");
-  assert.equal(
-    blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType,
-    "user_meta",
-  );
+  assert.equal(blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
 });

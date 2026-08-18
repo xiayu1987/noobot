@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
   pickLightAttachments,
   pickLightPluginMeta,
@@ -118,35 +119,36 @@ export function buildThinkingDetailCountByMessage(messages = []) {
         ? `dialog:${dialogProcessId}`
         : `message:${index}`;
     routeByMessage.set(message, route);
-    const facts = factsByRoute.get(route) || {
-      activityKeys: new Set(),
-      toolKeys: new Set(),
-      unkeyedActivityCount: 0,
-      unkeyedToolCount: 0,
-    };
+    const facts = factsByRoute.get(route) || { activityTimeline: [], toolTimeline: [] };
     for (const item of Array.isArray(message?.activityTimeline) ? message.activityTimeline : []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const key = String(item?.eventId || item?.id || "").trim();
-      if (key) facts.activityKeys.add(key);
-      else facts.unkeyedActivityCount += 1;
+      const existingIndex = key
+        ? facts.activityTimeline.findIndex((entry) =>
+            String(entry?.eventId || entry?.id || "").trim() === key)
+        : -1;
+      if (existingIndex >= 0) facts.activityTimeline[existingIndex] = item;
+      else facts.activityTimeline.push(item);
     }
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const key = String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim();
-      if (key) facts.toolKeys.add(key);
-      else facts.unkeyedToolCount += 1;
+      const existingIndex = key
+        ? facts.toolTimeline.findIndex((entry) =>
+            String(entry?.key || entry?.toolCallId || entry?.tool_call_id || "").trim() === key)
+        : -1;
+      if (existingIndex >= 0) {
+        facts.toolTimeline[existingIndex] = { ...facts.toolTimeline[existingIndex], ...item };
+      } else {
+        facts.toolTimeline.push(item);
+      }
     }
     factsByRoute.set(route, facts);
   });
   return (message = {}) => {
     const facts = factsByRoute.get(routeByMessage.get(message));
     if (!facts) return 0;
-    return (
-      facts.activityKeys.size +
-      facts.toolKeys.size +
-      facts.unkeyedActivityCount +
-      facts.unkeyedToolCount
-    );
+    return countCanonicalThinkingDetailEvents(facts);
   };
 }
 

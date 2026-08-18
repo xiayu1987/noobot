@@ -328,14 +328,6 @@ describe("useChatEngine.session-detail", () => {
       sessions: [
         {
           sessionId: "s-apply-same-scope-stopped",
-          turnStatuses: [
-            {
-              status: "user_stopped",
-              reason: "user_stop",
-              turnScopeId: freshTurnScopeId,
-              dialogProcessId: "dp-stale-stopped",
-            },
-          ],
           messages: [
             {
               id: "msg-user-same-scope-stopped",
@@ -372,11 +364,7 @@ describe("useChatEngine.session-detail", () => {
       }),
     );
     expect(assistant.content).toContain("已停止");
-    expect(assistant.content).toContain("本轮已由用户停止");
     expect(assistant.channelState).toBeUndefined();
-    expect(activeSession.turnStatuses).toEqual([
-      expect.objectContaining({ status: "user_stopped", turnScopeId: freshTurnScopeId }),
-    ]);
   });
 
   it("applySessionDetail still merges completed detail into an in-flight assistant with the same turnScopeId", () => {
@@ -668,7 +656,6 @@ describe("useChatEngine.session-detail", () => {
       { role: RoleEnum.USER, content: "same question", turnScopeId: previousTurnScopeId },
       { role: RoleEnum.ASSISTANT, content: "first stopped", turnScopeId: previousTurnScopeId },
     ];
-    activeSession.turnStatuses = [{ turnScopeId: previousTurnScopeId, status: "user_stopped" }];
     activeSession.turnTimings = [
       { turnScopeId: previousTurnScopeId, thinkingStartedAt: "2026-07-24T13:55:13.000Z" },
     ];
@@ -680,7 +667,6 @@ describe("useChatEngine.session-detail", () => {
           {
             sessionId: "s-delete-after-second-stop",
             messages: [],
-            turnStatuses: [],
             turnTimings: [],
           },
         ],
@@ -693,7 +679,6 @@ describe("useChatEngine.session-detail", () => {
 
     expect(activeSession.messages).toEqual([]);
     expect(activeSession.detailMessages).toEqual([]);
-    expect(activeSession.turnStatuses).toEqual([]);
     expect(activeSession.turnTimings).toEqual([]);
   });
 });

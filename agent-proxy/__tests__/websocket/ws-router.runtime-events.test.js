@@ -11,13 +11,16 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { WsRouter } from '../../src/websocket/ws-router.js';
 import { AGENT_PROXY_ERROR } from '../../src/shared/constants.js';
-import { EVENT_TYPE } from '@noobot/event-protocol';
 import {
   AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
   createExecutionQueryCommand,
   createTurnRunCommand,
   createTurnStopCommand,
 } from '@noobot/agent-transport-protocol';
+
+const WEBSOCKET_MESSAGE_EVENT = 'message';
 
 function runCommand({
   commandType = AGENT_COMMAND.CONTINUE,
@@ -127,7 +130,7 @@ test('ws router settles lifecycle receipts at the downstream transport boundary'
   };
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.deepEqual(channelManager.calls.lifecycleReceipts, [{ socket, payload }]);
   assert.equal(channelManager.calls.resolve.length, 0);
@@ -146,7 +149,7 @@ test('ws router forwards execution queries by authoritative commandType', () => 
   });
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.forward.length, 1);
@@ -160,7 +163,7 @@ test('ws router forwards continue command to upstream', () => {
     const payload = runCommand();
 
     new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-    socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+    socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
     assert.equal(channelManager.calls.errors.length, 0);
     assert.equal(channelManager.calls.resolve.length, 1);
@@ -184,7 +187,7 @@ test('ws router contains channel-start failures and closes only the failed conne
   const socket = createMockSocket();
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
 
-  assert.doesNotThrow(() => socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(runCommand({
+  assert.doesNotThrow(() => socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand({
     commandType: AGENT_COMMAND.SEND,
     sessionId: 's-1',
     turnScopeId: 'turn-1',
@@ -207,7 +210,7 @@ test('ws router contains action-handler failures and does not rethrow through Ev
   const socket = createMockSocket();
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
 
-  assert.doesNotThrow(() => socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(runCommand())));
+  assert.doesNotThrow(() => socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand())));
   assert.equal(errors.length, 1);
   assert.equal(errors[0].message, AGENT_PROXY_ERROR.ROUTE_FAILED);
   assert.deepEqual(socket.closeCalls, [{ code: 1011, reason: 'route_failed' }]);
@@ -258,7 +261,7 @@ test('ws router stop forwards request without synthesizing user_stopped', () => 
   const payload = stopCommand();
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(calls.errors.length, 0);
   assert.equal(calls.forward.length, 1);
@@ -304,7 +307,7 @@ test('ws router stop reports transport failure without creating a Turn error', (
   const socket = createMockSocket();
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(stopCommand()));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(stopCommand()));
 
   assert.equal(calls.errors.length, 1);
   assert.equal(calls.errors[0].message, AGENT_PROXY_ERROR.UPSTREAM_UNAVAILABLE);
@@ -318,7 +321,7 @@ test('ws router reports upstream unavailable when continue action has no target 
   const socket = createMockSocket();
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(runCommand()));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand()));
 
   assert.equal(channelManager.calls.forward.length, 0);
   assert.equal(channelManager.calls.errors.length, 1);
@@ -334,7 +337,7 @@ test('ws router recreates a missing continue channel after proxy restart', () =>
   const payload = runCommand();
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.start.length, 1);
@@ -378,7 +381,7 @@ test('ws router does not reuse previous session active channel for another sessi
   socket.__agentProxyActiveChannelKey = previousSessionChannel.key;
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(runCommand({ sessionId: 'session-new' })));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand({ sessionId: 'session-new' })));
 
   assert.equal(channelManager.calls.permission.length, 0);
   assert.equal(channelManager.calls.forward.length, 0);
@@ -411,7 +414,7 @@ test('ws router restarts upstream on existing channel when continue action has c
   const payload = runCommand({ turnScopeId: 'turn-resume' });
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(payload));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(payload));
 
   assert.equal(channelManager.calls.errors.length, 0);
   assert.equal(channelManager.calls.forward.length, 0);
@@ -430,7 +433,7 @@ test('ws router denies continue action without channel permission', () => {
   const socket = createMockSocket();
 
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(runCommand()));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(runCommand()));
 
   assert.equal(channelManager.calls.forward.length, 0);
   assert.equal(channelManager.calls.errors.length, 1);
@@ -445,7 +448,7 @@ test('ws router rejects legacy agent actions instead of using a compatibility ro
   const socket = createMockSocket();
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
 
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify({ action: 'continue', sessionId: 'session-1' }));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify({ action: 'continue', sessionId: 'session-1' }));
 
   assert.equal(channelManager.calls.forward.length, 0);
   assert.equal(channelManager.calls.errors[0].message, AGENT_PROXY_ERROR.UNSUPPORTED_ACTION('continue'));
@@ -460,22 +463,22 @@ test('ws router reports strict protocol validation errors without a generic rout
   };
   new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
 
-  socket.emit(EVENT_TYPE.MESSAGE, JSON.stringify(command));
+  socket.emit(WEBSOCKET_MESSAGE_EVENT, JSON.stringify(command));
 
   assert.equal(channelManager.calls.forward.length, 0);
-  assert.deepEqual(channelManager.calls.events, [{
-    socket,
-    envelope: {
-      event: EVENT_TYPE.ERROR,
-      data: {
-        error: 'invalid_agent_command: unknown_top_level_field:requestId',
-        errorCode: 'INVALID_AGENT_COMMAND',
-        commandId: command.commandId,
-        sessionId: command.identity.sessionId,
-        turnScopeId: command.identity.turnScopeId,
-      },
-    },
-  }]);
+  assert.equal(channelManager.calls.events.length, 1);
+  const failure = channelManager.calls.events[0];
+  assert.equal(failure.socket, socket);
+  assert.equal(failure.envelope.event, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT);
+  assert.equal(failure.envelope.data.commandId, command.commandId);
+  assert.equal(failure.envelope.data.commandType, command.commandType);
+  assert.equal(failure.envelope.data.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+  assert.equal(failure.envelope.data.identity.sessionId, command.identity.sessionId);
+  assert.equal(failure.envelope.data.identity.turnScopeId, command.identity.turnScopeId);
+  assert.deepEqual(failure.envelope.data.error, {
+    code: 'INVALID_AGENT_COMMAND',
+    message: 'invalid_agent_command: unknown_top_level_field:requestId',
+  });
   assert.deepEqual(socket.closeCalls, [{ code: 1008, reason: 'invalid_agent_command' }]);
 });
 
@@ -506,7 +509,7 @@ test('ws router writes sanitized system event for invalid JSON payload', async (
 
   try {
     new WsRouter(channelManager).handle(socket, 'connection-api-key', 'en');
-    socket.emit(EVENT_TYPE.MESSAGE, rawData);
+    socket.emit(WEBSOCKET_MESSAGE_EVENT, rawData);
 
     assert.equal(sendSocketErrors.length, 1);
     assert.equal(sendSocketErrors[0].socket, socket);

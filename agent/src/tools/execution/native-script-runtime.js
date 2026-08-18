@@ -318,8 +318,8 @@ export async function createNativeScriptRuntime({
   inputMap = {},
   args,
   timeoutMs,
-  browserExecutablePath,
   libreOfficeExecutable,
+  browserExecutablePath,
 }) {
   const pathRoots = { inputRoot, outputRoot, tempRoot };
   const taskRoots = { input: inputRoot, output: outputRoot, temp: tempRoot };
@@ -592,10 +592,17 @@ export async function createNativeScriptRuntime({
   const browserContexts = [];
   const getBrowser = async () => {
     if (browser) return browser;
+    if (!browserExecutablePath) {
+      throw new Error("Playwright Chromium executable is not configured");
+    }
     const playwright = await import("playwright");
+    const browserExecutableStat = await stat(browserExecutablePath);
+    if (!browserExecutableStat.isFile()) {
+      throw new Error("configured Playwright Chromium executable is not a file");
+    }
     const instance = await playwright.chromium.launch({
       headless: true,
-      executablePath: String(browserExecutablePath || "").trim(),
+      executablePath: browserExecutablePath,
       proxy: resolveBrowserProxyFromEnv(),
     });
     browser = instance;

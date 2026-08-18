@@ -3,15 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { randomUUID } from "node:crypto";
-import {
-  buildTurnTerminalCommand,
-  upsertTurnStatusEntity,
-} from "../../entities/turn-status-entity.js";
-import {
-  resolveDialogProcessIdFromContext,
-  resolveMessageDialogProcessId,
-} from "../../../context/session/dialog-process-id-resolver.js";
 import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
@@ -26,7 +19,13 @@ import {
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
-import { SESSION_ERROR_CODE, validateSessionProvisionIntent } from "@noobot/session-protocol";
+import {
+  SESSION_ERROR_CODE,
+  decideAggregateConcurrency,
+  materializeTurnTerminalMessages,
+  normalizeDialogProcessId,
+  validateSessionProvisionIntent,
+} from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../entities/session-entity.js";
 
 export async function getTurnLifecycleSnapshot({
@@ -156,8 +155,14 @@ export async function acknowledgeAuthorityEvent({
   parentSessionId = "",
   persistenceContext = null,
   eventId = "",
+  consumerId = "",
+  orderingDomain = "",
+  orderingScopeId = "",
+  sequence,
 } = {}) {
-  if (!userId || !sessionId || !eventId) return { acknowledged: false, reason: "missing_identity" };
+  if (!userId || !sessionId || !eventId || !consumerId || !orderingDomain || !orderingScopeId) {
+    return { acknowledged: false, reason: "missing_identity" };
+  }
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -178,8 +183,13 @@ export async function acknowledgeAuthorityEvent({
       const actualVersion = resolveAggregateVersion(session);
       const result = acknowledgeAuthorityEventDelivery(session.authorityEventOutbox, {
         eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
         deliveredAt: this.now(),
       });
+      if (result.reason) return { acknowledged: false, reason: result.reason };
       if (!result.found) return { acknowledged: false, reason: "event_not_found" };
       if (!result.changed)
         return { acknowledged: true, deduplicated: true, aggregateVersion: actualVersion };
@@ -202,9 +212,14 @@ export async function compactAuthorityEvents({
   parentSessionId = "",
   persistenceContext = null,
   deliveredThroughSequence,
+  consumerId = "",
+  orderingDomain = "",
+  orderingScopeId = "",
   retainDeliveredAfter = "",
 } = {}) {
-  if (!userId || !sessionId) return { compacted: false, reason: "missing_session" };
+  if (!userId || !sessionId || !consumerId || !orderingDomain || !orderingScopeId) {
+    return { compacted: false, reason: "missing_compaction_identity" };
+  }
   return this._withSessionMutation(
     userId,
     sessionId,
@@ -225,8 +240,10 @@ export async function compactAuthorityEvents({
       const actualVersion = resolveAggregateVersion(session);
       const result = compactAuthorityEventOutbox(session.authorityEventOutbox, {
         deliveredThroughSequence,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
         retainDeliveredAfter,
-        commandReceipts: session.turnLifecycle?.commandReceipts,
       });
       if (result.reason || !result.compacted) return { ...result, aggregateVersion: actualVersion };
       session.authorityEventOutbox = result.outbox;
@@ -281,10 +298,12 @@ export async function applyTurnLifecycleEvent({
       );
       if (!session) return { applied: false, reason: "session_not_found" };
       const actualVersion = resolveAggregateVersion(session);
-      if (
-        expectedAggregateVersion !== undefined &&
-        Number(expectedAggregateVersion) !== actualVersion
-      ) {
+      const concurrency = decideAggregateConcurrency({
+        expectedAggregateVersion:
+          expectedAggregateVersion === undefined ? null : Number(expectedAggregateVersion),
+        aggregateVersion: actualVersion,
+      });
+      if (!concurrency.allowed) {
         return {
           applied: false,
           reason: SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT,
@@ -295,44 +314,20 @@ export async function applyTurnLifecycleEvent({
         lifecycle: session.turnLifecycle,
         event: { ...event, userId, sessionId, parentSessionId: resolvedParentSessionId },
         eventOutbox: session.authorityEventOutbox,
+        materializeTerminal: ({ terminalStatus, previousSummaryVersion }) =>
+          materializeTurnTerminalMessages({
+            messages: session.messages,
+            terminalStatus,
+            assistantMessage: event.terminalStatus?.assistantMessage,
+            previousSummaryVersion,
+          }),
         createEventId: randomUUID,
         now: this.now,
-        materializeTerminal: ({ terminalStatus }) => {
-          const currentTurnRevision = Number(
-            session.turnLifecycle?.turns?.[event.turnScopeId]?.revision || 0,
-          );
-          const incoming = buildTurnTerminalCommand(terminalStatus.command, {
-            turnScopeId: event.turnScopeId,
-            dialogProcessId: event.dialogProcessId,
-            parentDialogProcessId: terminalStatus.parentDialogProcessId,
-            description: terminalStatus.description,
-            error: terminalStatus.error,
-            assistantMessage: terminalStatus.assistantMessage,
-            updatedAt: this.now(),
-          });
-          if (!incoming) return { reason: "invalid_turn_status_command" };
-          const statusResult = upsertTurnStatusEntity({
-            statuses: session.turnStatuses,
-            messages: session.messages,
-            incoming,
-            now: this.now,
-          });
-          return statusResult.turnStatus
-            ? {
-                turnStatus: statusResult.turnStatus,
-                statuses: statusResult.statuses,
-                messages: statusResult.messages,
-                summaryVersion: currentTurnRevision + 1,
-              }
-            : { reason: "invalid_turn_status" };
-        },
       });
       if (!result.applied) return { ...result, session, aggregateVersion: actualVersion };
       session.turnLifecycle = result.lifecycle;
-      if (result.terminalMaterialization?.statuses)
-        session.turnStatuses = result.terminalMaterialization.statuses;
-      if (result.terminalMaterialization?.messages)
-        session.messages = result.terminalMaterialization.messages;
+      if (result.terminalMaterialization)
+        session.messages = [...result.terminalMaterialization.messages];
       session.authorityEventOutbox = result.eventOutbox;
       session.updatedAt = this.now();
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
@@ -347,7 +342,7 @@ export async function applyTurnLifecycleEvent({
       return {
         ...result,
         session,
-        turnStatus: result.terminalMaterialization?.turnStatus || null,
+        turnStatus: result.turn?.terminalStatus || null,
         aggregateVersion: resolveAggregateVersion(session),
       };
     },
@@ -503,7 +498,7 @@ export async function assertReusedUserTurnIdentity({
   if (!userId || !sessionId) throw new TypeError("reused Turn session identity is required");
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   if (!normalizedTurnScopeId) throw new TypeError("reused Turn turnScopeId is required");
-  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   if (!normalizedDialogProcessId) throw new TypeError("reused Turn dialogProcessId is required");
   const resolvedParentSessionId = await this._resolveParentSessionId(
     userId,
@@ -532,7 +527,7 @@ export async function assertReusedUserTurnIdentity({
   if (targetIndex < 0) throw new TypeError("reused Turn user message was not found");
 
   const targetMessage = messages[targetIndex];
-  if (resolveMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
+  if (resolveContextMessageDialogProcessId(targetMessage) !== normalizedDialogProcessId) {
     throw new TypeError("reused Turn dialogProcessId does not match Session authority");
   }
   if (Array.isArray(attachments)) {

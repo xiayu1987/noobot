@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { HOOK_POINT, HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
 import { buildHookContext } from "../../../src/runtime/hooks/hook-context-builder.js";
 
@@ -18,10 +18,14 @@ test("before_final_output retains the supplied authoritative modelContext entity
       incremental: [{ role: "assistant", content: "final" }],
     },
   });
-  const context = buildHookContext(HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT, {}, {
-    modelContext,
-    result: { output: "final" },
-  });
+  const context = buildHookContext(
+    HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT,
+    {},
+    {
+      modelContext,
+      result: { output: "final" },
+    },
+  );
 
   assert.equal(context.contextProtocolVersion, HOOK_PROTOCOL_VERSION);
   assert.equal(context.modelContext, modelContext);

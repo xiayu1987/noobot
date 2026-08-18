@@ -7,37 +7,27 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyReconnectMessagesToActiveSessionReplay,
   consumeReconnectReplayCacheForSession,
-  markReconnectSequenceApplied,
 } from "../../../../../../src/modules/chat/runtime/reconnect/replayCacheConsumer.js";
 import { StreamEventEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { createTurnKey } from "../../../../../../src/modules/chat/runtime/engine/turnIdentity.js";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 function authoritative(eventType, sequence, extra = {}) {
   const messageId = extra.messageId || "message-1";
-  return {
-    event: "message_event",
-    sequence,
-    data: {
-      event: {
-        envelopeKind: "noobot.message_event",
-        envelopeVersion: 2,
+  return canonicalMessageEvent({
         eventId: extra.eventId || `${messageId}-event-${sequence}`,
         eventType,
         sessionId: "s-1",
         messageId,
         presentationMessageId: extra.presentationMessageId || messageId,
-        sequenceDomain: "message-event",
-        sequenceScopeId: messageId,
         dialogProcessId: extra.dialogProcessId || "dp-1",
         turnScopeId: extra.turnScopeId || "turn-1",
         sequence,
-        timestamp: `2026-07-22T05:00:${String(sequence).padStart(2, "0")}.000Z`,
+        occurredAt: `2026-07-22T05:00:${String(sequence).padStart(2, "0")}.000Z`,
         ...extra,
-      },
-    },
-  };
+      });
 }
 
 function createActiveReplayFixture(overrides = {}) {
@@ -103,10 +93,18 @@ function createFakeProcessStore() {
 
 describe("replayCacheConsumer", () => {
   it("keeps cached workflow-node replay out of the root message consumer", async () => {
-    const childMessages = [{
-      event: "subagent_message_event",
-      data: { turnScopeId: "workflow-node:node-1", route: { scope: "sub_session" } },
-    }];
+    const childMessages = [canonicalMessageEvent({
+      eventId: "workflow-child-1",
+      eventType: "thinking",
+      sessionId: "child-session-1",
+      turnScopeId: "workflow-node:node-1",
+      messageId: "child-message-1",
+      presentationMessageId: "child-message-1",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-1",
+      parentSessionId: "s-1",
+      text: "working",
+    })];
     const replayCache = {
       "s-1": { "__turn__s-1::workflow-node:node-1": childMessages },
     };
@@ -129,19 +127,25 @@ describe("replayCacheConsumer", () => {
   });
 
   it("consumes cached replay groups for a session and removes the session cache", async () => {
+    const turnOne = authoritative("llm_delta", 1, {
+      eventId: "turn-1-event-1", messageId: "turn-1-message", text: "a",
+      dialogProcessId: "dp-1", turnScopeId: "turn-1",
+    });
+    const turnTwo = authoritative("llm_delta", 1, {
+      eventId: "turn-2-event-1", messageId: "turn-2-message", text: "b",
+      dialogProcessId: "dp-2", turnScopeId: "turn-2",
+    });
+    const otherSession = authoritative("llm_delta", 1, {
+      eventId: "turn-3-event-1", sessionId: "s-2", messageId: "turn-3-message",
+      text: "c", dialogProcessId: "dp-3", turnScopeId: "turn-3",
+    });
     const replayCache = {
       "s-1": {
-        [createTurnKey({ sessionId: "s-1", turnScopeId: "turn-1" })]: [{
-          event: StreamEventEnum.DELTA,
-          data: { text: "a", dialogProcessId: "dp-1", turnScopeId: "turn-1" },
-        }],
-        [createTurnKey({ sessionId: "s-1", turnScopeId: "turn-2" })]: [{
-          event: StreamEventEnum.DELTA,
-          data: { text: "b", dialogProcessId: "dp-2", turnScopeId: "turn-2" },
-        }],
+        [createTurnKey({ sessionId: "s-1", turnScopeId: "turn-1" })]: [turnOne],
+        [createTurnKey({ sessionId: "s-1", turnScopeId: "turn-2" })]: [turnTwo],
       },
       "s-2": {
-        [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-3" })]: [{ event: StreamEventEnum.DELTA, data: { text: "c" } }],
+        [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-3" })]: [otherSession],
       },
     };
     const applyReconnectMessagesToActiveSession = vi.fn(async () => {});
@@ -155,61 +159,24 @@ describe("replayCacheConsumer", () => {
     expect(applyReconnectMessagesToActiveSession).toHaveBeenCalledTimes(2);
     expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
       1,
-      [{ event: StreamEventEnum.DELTA, data: { text: "a", dialogProcessId: "dp-1", turnScopeId: "turn-1" } }],
+      [turnOne],
       "dp-1",
       { turnScopeId: "turn-1" },
     );
     expect(applyReconnectMessagesToActiveSession).toHaveBeenNthCalledWith(
       2,
-      [{ event: StreamEventEnum.DELTA, data: { text: "b", dialogProcessId: "dp-2", turnScopeId: "turn-2" } }],
+      [turnTwo],
       "dp-2",
       { turnScopeId: "turn-2" },
     );
     expect(replayCache).toEqual({
       "s-2": {
-        [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-3" })]: [{ event: StreamEventEnum.DELTA, data: { text: "c" } }],
+        [createTurnKey({ sessionId: "s-2", turnScopeId: "turn-3" })]: [otherSession],
       },
     });
   });
 
-  it("marks reconnect sequence only when the incoming sequence is newer", () => {
-    const turnKey = createTurnKey({ sessionId: "s-1", turnScopeId: "turn-1" });
-    const appliedReconnectSequenceByTurnKey = { [turnKey]: 5 };
-
-    markReconnectSequenceApplied(appliedReconnectSequenceByTurnKey, 3, { sessionId: "s-1", turnScopeId: "turn-1" });
-    markReconnectSequenceApplied(appliedReconnectSequenceByTurnKey, 8, { sessionId: "s-1", turnScopeId: "turn-1" });
-    markReconnectSequenceApplied(appliedReconnectSequenceByTurnKey, 10, { sessionId: "", turnScopeId: "" });
-
-    expect(appliedReconnectSequenceByTurnKey).toEqual({ [turnKey]: 8 });
-  });
-
-  it("skips already applied reconnect envelopes by last applied sequence", async () => {
-    const fixture = createActiveReplayFixture({
-      appliedReconnectSequenceByTurnKey: {
-        [createTurnKey({ sessionId: "s-1", turnScopeId: "turn-1" })]: 2,
-      },
-    });
-
-    await applyReconnectMessagesToActiveSessionReplay({
-      ...fixture,
-      dialogProcessId: " dp-1 ",
-      turnScopeId: "turn-1",
-      messages: [
-        authoritative("llm_delta", 1, { text: "old" }),
-        authoritative("llm_delta", 3, { text: "new" }),
-      ],
-    });
-
-    expect(fixture.activeSession.value.messages[0].content).toBe("new");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenCalledWith(3, expect.objectContaining({
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      eventKindsAtSequence: ["message_event"],
-    }));
-    expect(fixture.scrollBottom).not.toHaveBeenCalled();
-  });
-
-  it("keeps replay ordering authoritative without a local terminal state set", async () => {
+  it("keeps message replay independent from transport terminal frames", async () => {
     const fixture = createActiveReplayFixture();
 
     await applyReconnectMessagesToActiveSessionReplay({
@@ -218,32 +185,9 @@ describe("replayCacheConsumer", () => {
       turnScopeId: "turn-1",
       messages: [
         authoritative("llm_delta", 1, { text: "final" }),
-        { event: StreamEventEnum.DONE, data: { seq: 2 } },
       ],
     });
-
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith(2, expect.objectContaining({
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      eventKindsAtSequence: [StreamEventEnum.DONE],
-    }));
     expect(fixture.activeSession.value.messages[0].content).toBe("final");
-
-    await applyReconnectMessagesToActiveSessionReplay({
-      ...fixture,
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
-      messages: [
-        authoritative("llm_delta", 3, { text: "ignored" }),
-      ],
-    });
-
-    expect(fixture.activeSession.value.messages[0].content).toBe("final");
-    expect(fixture.markReconnectSequenceApplied).toHaveBeenLastCalledWith(3, expect.objectContaining({
-      sessionId: "s-1",
-      turnScopeId: "turn-1",
-      eventKindsAtSequence: ["message_event"],
-    }));
   });
 
   it("projects authoritative reconnect thinking without mutating process display mirrors", async () => {

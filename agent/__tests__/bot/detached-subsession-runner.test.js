@@ -94,7 +94,7 @@ function createDeps(overrides = {}) {
         });
       },
     },
-    mergeRunConfigWithPluginStrategy(payload = {}) {
+    mergeRunConfigPluginPolicy(payload = {}) {
       calls.mergePayload = payload;
       return {
         ...payload.baseRunConfig,
@@ -168,7 +168,7 @@ test("detached sub-session delegates execution and persistence to the main runne
     parentContext: createParentContext(),
     message: "hello",
     attachments: [{ name: "a.txt" }],
-    systemMessages: ["system"],
+    systemMessageFactory: () => ["system"],
     runConfigPatch: { turnScopeId: "turn-1", extra: true },
     eventListener: {
       onEvent: (event) => events.push(event),
@@ -392,10 +392,20 @@ test("detached sub-session transfers canonical parent attachments into child own
         mimeType: "text/plain",
       },
     ],
+    systemMessageFactory: ({ attachments }) => [
+      JSON.stringify(attachments.map(({ attachmentId, sessionId, attachmentSource }) => ({
+        attachmentId,
+        sessionId,
+        attachmentSource,
+      }))),
+    ],
     strategy: createCompleteStrategy(),
   });
 
   assert.deepEqual(calls.runSessionPayloads[0].attachments, [transferred]);
+  assert.deepEqual(calls.runSessionPayloads[0].systemMessages, [
+    '[{"attachmentId":"child-attachment","sessionId":"sub1","attachmentSource":"user"}]',
+  ]);
 });
 
 test("detached sub-session rejects an incomplete persistence and identity strategy", async () => {
@@ -515,7 +525,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
   });
 
   assert.deepEqual(
-    persisted.authorityEventOutbox.map((entry) => entry.envelope.eventType),
+    persisted.authorityEventOutbox.map((entry) => entry.envelope.payload.eventType),
     [
       "turn.action_accepted",
       "turn.processing_started",
@@ -524,9 +534,12 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     ],
   );
   assert.equal(persisted.turnLifecycle.turns["turn-persisted"].state, "completed");
-  assert.equal(persisted.authorityEventOutbox[3].envelope.summaryVersion >= 1, true);
   assert.equal(
-    persisted.authorityEventOutbox[3].envelope.completionCommitId,
+    persisted.authorityEventOutbox[3].envelope.payload.summaryVersion,
+    persisted.turnLifecycle.turns["turn-persisted"].summaryVersion,
+  );
+  assert.equal(
+    persisted.authorityEventOutbox[3].envelope.payload.completionCommitId,
     "turn-persisted:completed",
   );
 });

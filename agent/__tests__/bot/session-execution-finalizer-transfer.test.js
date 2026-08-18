@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionExecutionFinalizer } from "../../src/bot/execution/finalizer.js";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { buildLoopResult } from "../../src/runtime/turn/turn-result-aggregator.js";
 
 function semanticTransferEnvelope() {
@@ -25,16 +25,18 @@ function semanticTransferEnvelope() {
     direction: "output",
     payload: {
       mode: "attachment",
-      attachments: [{
-        identity: {
-          attachmentId: "att-generated",
-          sessionId: "s1",
-          attachmentSource: "model",
+      attachments: [
+        {
+          identity: {
+            attachmentId: "att-generated",
+            sessionId: "s1",
+            attachmentSource: "model",
+          },
+          role: "primary",
+          name: "image.png",
+          mimeType: "image/png",
         },
-        role: "primary",
-        name: "image.png",
-        mimeType: "image/png",
-      }],
+      ],
     },
     intent: {
       source: "tool",
@@ -143,8 +145,14 @@ test("SessionExecutionFinalizer promotes semantic-transfer attachments as transf
     "att-generated",
   );
   assert.equal(finalAssistant.transferEnvelopes[0]?.identity?.producer?.type, "tool");
-  assert.equal("attachmentMeta" in finalAssistant.transferEnvelopes[0].payload.attachments[0], false);
-  assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.attachmentMetas, undefined);
+  assert.equal(
+    "attachmentMeta" in finalAssistant.transferEnvelopes[0].payload.attachments[0],
+    false,
+  );
+  assert.equal(
+    appendedMessages.find((item = {}) => item.role === "assistant")?.attachmentMetas,
+    undefined,
+  );
 });
 
 test("SessionExecutionFinalizer promotes ordinary generated attachments to final assistant attachments", async () => {
@@ -185,6 +193,7 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
           attachments: [
             {
               attachmentId: "att-ordinary",
+              sessionId: "s1",
               attachmentSource: "model",
               generatedByModel: true,
               name: "image.png",
@@ -208,7 +217,10 @@ test("SessionExecutionFinalizer promotes ordinary generated attachments to final
   assert.equal(finalAssistant.attachments?.[0]?.attachmentId, "att-ordinary");
   assert.equal(finalAssistant.attachments?.[0]?.owner?.type, "plugin");
   assert.equal("raw" in finalAssistant.attachments[0], false);
-  assert.equal(appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelopes, undefined);
+  assert.equal(
+    appendedMessages.find((item = {}) => item.role === "assistant")?.transferEnvelopes,
+    undefined,
+  );
   assert.equal(
     appendedMessages.find((item = {}) => item.role === "assistant")?.attachments?.[0]?.attachmentId,
     "att-ordinary",
@@ -222,11 +234,15 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => ({}),
-      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] }) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -237,19 +253,23 @@ test("SessionExecutionFinalizer promotes checkpoint attachment sources without r
     userId: "u1",
     sessionId: "s1",
     alreadyPersistedTurnMessageCount: 1,
-    summaryCheckpointPromotionSources: [{
-      role: "tool",
-      type: "tool_result",
-      attachments: [{
-        attachmentId: "att-checkpoint",
-        attachmentSource: "model",
-        sessionId: "s1",
-        name: "checkpoint.png",
-        mimeType: "image/png",
-        generatedByModel: true,
-        generationSource: "multimodal_generate_tool",
-      }],
-    }],
+    summaryCheckpointPromotionSources: [
+      {
+        role: "tool",
+        type: "tool_result",
+        attachments: [
+          {
+            attachmentId: "att-checkpoint",
+            attachmentSource: "model",
+            sessionId: "s1",
+            name: "checkpoint.png",
+            mimeType: "image/png",
+            generatedByModel: true,
+            generationSource: "multimodal_generate_tool",
+          },
+        ],
+      },
+    ],
     agentResult: {
       turnMessages: [
         { role: "assistant", content: "already persisted", summarized: false },
@@ -276,11 +296,15 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
       async upsertTurnTiming() {},
       async flushSessionMessagesToArchive() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => ({}),
-      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] }) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -300,8 +324,14 @@ test("SessionExecutionFinalizer restores the pre-refactor full result from persi
     },
   });
 
-  assert.deepEqual(appendedMessages.map((item) => item.content), ["tail"]);
-  assert.deepEqual(result.messages.map((item) => item.content), ["persisted-1", "persisted-2", "tail"]);
+  assert.deepEqual(
+    appendedMessages.map((item) => item.content),
+    ["tail"],
+  );
+  assert.deepEqual(
+    result.messages.map((item) => item.content),
+    ["persisted-1", "persisted-2", "tail"],
+  );
 });
 
 test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without duplicating the result", async () => {
@@ -310,11 +340,15 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
     session: {
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => ({}),
-      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] }) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -338,8 +372,14 @@ test("SessionExecutionFinalizer skips non-contiguous persisted UIDs without dupl
     },
   });
 
-  assert.deepEqual(appendedMessages.map((message) => message.messageUid), ["sm_tail"]);
-  assert.deepEqual(result.messages.map((message) => message.messageUid), ["sm_old", "sm_retained", "sm_tail"]);
+  assert.deepEqual(
+    appendedMessages.map((message) => message.messageUid),
+    ["sm_tail"],
+  );
+  assert.deepEqual(
+    result.messages.map((message) => message.messageUid),
+    ["sm_old", "sm_retained", "sm_tail"],
+  );
 });
 
 test("SessionExecutionFinalizer persists canonical summary-state changes for an existing durable UID", async () => {
@@ -349,11 +389,15 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
     session: {
       async upsertTurnTiming() {},
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => ({}),
-      async appendAgentMessages({ messages = [] }) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] }) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -364,23 +408,29 @@ test("SessionExecutionFinalizer persists canonical summary-state changes for an 
     userId: "u1",
     sessionId: "s1",
     persistedTurnMessageUids: ["sm_guidance"],
-    persistedTurnMessages: [{
-      messageUid: "sm_guidance",
-      role: "user",
-      content: "guidance",
-      summarized: false,
-    }],
-    agentResult: {
-      turnMessages: [{
+    persistedTurnMessages: [
+      {
         messageUid: "sm_guidance",
         role: "user",
         content: "guidance",
-        summarized: true,
-      }],
+        summarized: false,
+      },
+    ],
+    agentResult: {
+      turnMessages: [
+        {
+          messageUid: "sm_guidance",
+          role: "user",
+          content: "guidance",
+          summarized: true,
+        },
+      ],
       turnTasks: [],
     },
     runtimeEventListener: {
-      onEvent(event) { events.push(event); },
+      onEvent(event) {
+        events.push(event);
+      },
     },
   });
 
@@ -411,11 +461,15 @@ test("SessionExecutionFinalizer upserts summary marks for an already durable tur
   const finalizer = new SessionExecutionFinalizer({
     session: {
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => durableMessage,
-      async appendAgentMessages({ messages = [] } = {}) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] } = {}) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -485,11 +539,15 @@ test("completed turn summary policy marks are durably upserted before the next d
   const finalizer = new SessionExecutionFinalizer({
     session: {
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => agentResult.turnMessages.at(-1),
-      async appendAgentMessages({ messages = [] } = {}) { appendedMessages.push(...messages); },
+      async appendAgentMessages({ messages = [] } = {}) {
+        appendedMessages.push(...messages);
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -521,11 +579,15 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
   const finalizer = new SessionExecutionFinalizer({
     session: {
       async saveCurrentTurnTasks() {},
-      async getExecutionBundle() { return { logs: [] }; },
+      async getExecutionBundle() {
+        return { logs: [] };
+      },
     },
     turnPersister: {
       buildDefaultAssistantTurn: () => ({}),
-      async appendAgentMessages() { appendCalled = true; },
+      async appendAgentMessages() {
+        appendCalled = true;
+      },
     },
     resolveMemoryPostProcessAsyncEnabled: () => true,
     runMemoryPostProcessFlow: async () => {},
@@ -539,11 +601,13 @@ test("SessionExecutionFinalizer rejects a persisted UID without a durable journa
       persistedTurnMessageUids: ["sm_missing"],
       persistedTurnMessages: [],
       agentResult: {
-        turnMessages: [{
-          messageUid: "sm_missing",
-          role: "assistant",
-          content: "canonical",
-        }],
+        turnMessages: [
+          {
+            messageUid: "sm_missing",
+            role: "assistant",
+            content: "canonical",
+          },
+        ],
         turnTasks: [],
       },
     }),

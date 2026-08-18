@@ -15,6 +15,16 @@ import {
   waitForCondition,
 } from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import { EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_TYPE,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
 
 test("chat-websocket-server: stop closes run and next websocket run can start", async () => {
   let runCount = 0;
@@ -65,12 +75,13 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
       },
     });
     const stoppedEvent = stoppedEvents.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
-    assert.equal(stoppedEvent?.data?.sessionId, "s1");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-stop-before-next");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-stop-before-next");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
+      item?.event === "turn_lifecycle" &&
+      item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED);
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-stop-before-next");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-stop-before-next");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
 
     const nextEvents = await callChatWs({
       port,
@@ -82,9 +93,13 @@ test("chat-websocket-server: stop closes run and next websocket run can start", 
         config: { locale: "zh-CN" },
       },
     });
-    const doneEvent = nextEvents.find((item) => item?.event === "done");
-    assert.equal(doneEvent?.data?.answer, "next ok");
-    assert.equal(doneEvent?.data?.dialogProcessId, "dp-next-run");
+    const completedEvent = nextEvents.find(
+      (item) =>
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
+    );
+    assert.equal(completedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(completedEvent?.data?.payload?.dialogProcessId, "dp-next-run");
   } finally {
     await closeServer(server);
   }
@@ -94,24 +109,41 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
   let emitAfterRefresh;
   let finishRun;
   let runCalls = 0;
-  const server = await startServerWithWs({
+  let server;
+  server = await startServerWithWs({
     resolveAuthByApiKey: () => ({ userId: "u1" }),
     bot: {
       runSession: async ({ eventListener }) => {
         runCalls += 1;
         await new Promise((resolve) => { emitAfterRefresh = resolve; });
         await new Promise((resolve) => setTimeout(resolve, 25));
-        eventListener.onEvent({
-          event: "tool_call_start",
-          data: {
-            envelopeKind: "noobot.message_event", envelopeVersion: 2,
-            eventId: "evt-refresh-tool", eventType: "tool_call_start",
-            sessionId: "s-refresh", dialogProcessId: "dp-refresh",
-            turnScopeId: "turn-refresh", sequence: 1,
-            timestamp: new Date().toISOString(), messageId: "msg-refresh",
-            presentationMessageId: "msg-refresh-presentation",
-            toolCallId: "call-refresh", tool: "read_file", args: {},
+        const envelope = await server.bot.commitTestAuthorityEvent({
+          family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          identity: {
+            eventId: "evt-refresh-tool",
+            eventType: MESSAGE_EVENT_WIRE_EVENT,
+            sessionId: "s-refresh",
+            turnScopeId: "turn-refresh",
+            messageId: "msg-refresh",
           },
+          causality: { correlationId: "turn-refresh" },
+          ordering: {
+            domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+            scopeId: "msg-refresh",
+            sequence: 1,
+          },
+          producer: { type: "agent", id: "test-agent" },
+          payload: {
+            eventType: MESSAGE_EVENT_TYPE.TOOL_CALL_START,
+            presentationMessageId: "msg-refresh-presentation",
+            toolCallId: "call-refresh",
+            tool: "read_file",
+            args: {},
+          },
+        });
+        await eventListener.onEvent({
+          event: "authority_event_committed",
+          data: { envelope },
         });
         await new Promise((resolve) => { finishRun = resolve; });
         return { sessionId: "s-refresh", dialogProcessId: "dp-refresh", answer: "ok", messages: [] };
@@ -141,12 +173,23 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
     const newWs = new WebSocket(url, { headers: { authorization: "Bearer test-key" } });
     sockets.push(newWs);
     const receivedFrames = [];
+    let resolveRebound;
+    const reboundReceipt = new Promise((resolve) => { resolveRebound = resolve; });
     const toolFrame = new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error(`rebound tool increment timeout: runCalls=${runCalls} ${JSON.stringify(receivedFrames)}`)), 1000);
       newWs.on("message", (raw) => {
         const parsed = JSON.parse(String(raw || "{}"));
         receivedFrames.push(parsed);
-        if (parsed?.data?.event?.eventType === "tool_call_start") { clearTimeout(timer); resolve(parsed); }
+        if (
+          parsed?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          parsed?.data?.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.REBOUND
+        ) {
+          resolveRebound(parsed);
+        }
+        if (parsed?.data?.payload?.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {
+          clearTimeout(timer);
+          resolve(parsed);
+        }
       });
       newWs.on("error", reject);
     });
@@ -154,10 +197,11 @@ test("chat-websocket-server: refreshed websocket rebinds active run tool increme
       newWs.on("open", () => { newWs.send(JSON.stringify(createProtocolTestCommand(payload))); resolve(); });
       newWs.on("error", reject);
     });
+    await reboundReceipt;
     emitAfterRefresh();
     const received = await toolFrame;
-    assert.equal(received.event, "message_event");
-    assert.equal(received.data.event.eventType, "tool_call_start");
+    assert.equal(received.event, MESSAGE_EVENT_WIRE_EVENT);
+    assert.equal(received.data.payload.eventType, MESSAGE_EVENT_TYPE.TOOL_CALL_START);
     assert.equal(runCalls, 1);
     oldWs.close(1000, "refreshed");
     finishRun();

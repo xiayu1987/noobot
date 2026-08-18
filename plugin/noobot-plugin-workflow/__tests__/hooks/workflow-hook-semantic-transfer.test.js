@@ -18,6 +18,7 @@ import {
   createSemanticTransferTool,
   createV2AttachmentTransferEnvelope,
   createBaseContext,
+  installTurnMessageEventRuntimeFixture,
   createContextWithSharedTools,
   getBeforeDispatch,
   runWorkflowHook,
@@ -36,7 +37,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
   const subSessionCalls = [];
   const semanticTransferCalls = [];
   const planningPersistCalls = [];
-  const eventLogCalls = [];
 
   const disposers = registerWorkflowHooks({
     hookManager,
@@ -83,13 +83,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
         return {
           outputDir: "/tmp/noobot/workflow/s1/d1",
           outputFile: "/tmp/noobot/workflow/s1/d1/planning.json",
-        };
-      },
-      workflowEventLogger: async (payload = {}) => {
-        eventLogCalls.push(payload);
-        return {
-          outputDir: String(payload?.relativeDir || ""),
-          outputFile: "events.jsonl",
         };
       },
     },
@@ -169,18 +162,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     true,
   );
   assert.equal(planningPersistCalls.length, 1);
-  assert.equal(eventLogCalls.length > 0, true);
-  const planningRuntimeEvent = eventLogCalls.find(
-    (call = {}) => call?.event?.event === "workflow_planning_message_prepared",
-  )?.event;
-  assert.equal(planningRuntimeEvent?.turnScopeId, "root-turn-1");
-  assert.equal(planningRuntimeEvent?.presentationMessageId, "assistant-presentation-1");
-  assert.equal(
-    planningRuntimeEvent?.workflowPayload?.workflowRunId,
-    planningRuntimeEvent?.workflowRunId,
-  );
-  assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.nodes), true);
-  assert.equal(Array.isArray(planningRuntimeEvent?.workflowPayload?.semantic?.flowtos), true);
   assert.equal(planningPersistCalls[0]?.relativeDir, "runtime/workflow/planning/s1/d1");
   assert.equal(planningPersistCalls[0]?.fileName, "planning.json");
 
@@ -267,10 +248,6 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     undefined,
   );
   assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.status, undefined);
-  const hasPayloadBuiltEvent = eventLogCalls.some(
-    (item) => String(item?.event?.event || "").trim() === "workflow_payload_build_succeeded",
-  );
-  assert.equal(hasPayloadBuiltEvent, true);
 });
 
 test("workflow hook propagates semantic transfer envelopes for node result artifacts", async () => {
@@ -430,7 +407,7 @@ test("workflow hook routes final attachment summary composition through semantic
   });
 
   const beforeDispatch = getBeforeDispatch(hookManager);
-  const ctx = {
+  const ctx = installTurnMessageEventRuntimeFixture({
     userId: "u1",
     sessionId: "s1",
     dialogProcessId: "d1",
@@ -469,7 +446,8 @@ test("workflow hook routes final attachment summary composition through semantic
         },
       },
     },
-  };
+
+  });
   const dispatchOutcome = await beforeDispatch.handler(ctx);
 
   const hasFinalSummaryCall = semanticTransferCalls.some(

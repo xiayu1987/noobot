@@ -10,7 +10,6 @@ import {
   WORKFLOW_TRACE,
 } from "../constants.js";
 import { appendWorkflowTrace } from "../hooks/phase.js";
-import { emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { createBotDispatchHandled } from "@noobot/agent-transport-protocol/bot-dispatch";
 
@@ -42,13 +41,6 @@ export async function handleWorkflowFailure({
   phaseTracker.end(WORKFLOW_PHASES.WORKFLOW_EXECUTION, WORKFLOW_PHASE_STATUS.FAILED, {
     message,
   });
-  await emitWorkflowRuntimeEvent({
-    options,
-    ctx,
-    event: "workflow_execution_failed",
-    level: "error",
-    data: { message },
-  });
   const workflowPayload = buildWorkflowOrchestrationPayload({
     workflowRunId,
     ctx,
@@ -71,16 +63,6 @@ export async function handleWorkflowFailure({
   });
   if (!beforeDispatchMode) return null;
 
-  await emitWorkflowRuntimeEvent({
-    options,
-    ctx,
-    event: "workflow_dispatch_failed",
-    level: "error",
-    data: {
-      reason: "workflow_execution_failed",
-      message,
-    },
-  });
   return createBotDispatchHandled({
     owner: "workflow",
     failure: {

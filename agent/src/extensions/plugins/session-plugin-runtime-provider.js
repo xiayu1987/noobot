@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { PLUGIN_SURFACE } from "@noobot/plugin-protocol";
+import { PLUGIN_LIFECYCLE_EVENT, PLUGIN_SURFACE } from "@noobot/plugin-protocol";
 import { buildNoobotPluginDiagnostics, getNoobotPluginRuntime } from "@noobot/plugin-runtime";
 import { createRunConfigPluginPreparer } from "../../bot/session/session-plugin-runtime-adapter.js";
 import {
@@ -23,7 +23,7 @@ function reportRuntimeLifecycle(runtime) {
       source: "agent",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.STATE,
-      level: record.event === "plugin.failed" ? "error" : "info",
+      level: record.event === PLUGIN_LIFECYCLE_EVENT.FAILED ? "error" : "info",
       event: record.event,
       data: record,
     });

@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 import { RunConfigPluginPreparer } from "../../src/bot/session/run-config-plugin-preparer.js";
 
 function entry({ id, hooks = [], emits = [], executionIntent, activate } = {}) {
+  const ports = ["hooks.register"];
+  if (emits.length) ports.push("hooks.emit");
+  if (id === "demo") ports.push("policy.patch");
   return {
     pluginId: id,
     surface: "agent",
@@ -18,10 +21,10 @@ function entry({ id, hooks = [], emits = [], executionIntent, activate } = {}) {
       version: "1.0.0",
       entries: { agent: "agent.js" },
       contributes: { agent: {
-        hooks: { registers: hooks, emits },
+        hooks: { registers: hooks.map((point) => ({ id: point === "agent.before_turn" ? "before" : "dispatch", point })), emits },
         ...(executionIntent ? { executionIntent } : {}),
       } },
-      requires: { ports: ["hooks.register"], permissions: [], authenticatedRoutes: [] },
+      requires: { ports, permissions: [], authenticatedRoutes: [] },
       enabledByDefault: true,
     },
     activate,

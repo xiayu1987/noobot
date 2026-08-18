@@ -16,6 +16,7 @@ import {
   listPendingAuthorityEvents,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
+import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -94,15 +95,19 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     ]);
     const wireEvents = events
       .filter((item) => item?.event === "turn_lifecycle")
-      .map((item) => item.data.eventType);
+      .map((item) => item.data.payload.eventType);
     assert.deepEqual(wireEvents, authoritative.committed());
     assert.equal(
-      events.some((item) => item?.event === "done"),
+      events.some(
+        (item) =>
+          item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          item?.data?.outcome === "completed",
+      ),
       true,
     );
     const turn = authoritative.lifecycle().turns[payload.turnScopeId];
     assert.equal(turn.state, "completed");
-    assert.equal(turn.summaryVersion, 7);
+    assert.equal(turn.summaryVersion, 1);
     const inputs = authoritative.commitInputs();
     assert.equal(inputs[0].createSessionIfAbsent, true);
     assert.equal(inputs[0].action, "send");
@@ -114,12 +119,13 @@ test("authoritative lifecycle follows accepted -> running -> processed -> summar
     assert.equal(turn.messageId, authoritative.lastRunConfig().messageId);
     assert.equal(turn.presentationMessageId, authoritative.lastRunConfig().presentationMessageId);
     const completedEnvelope = events.find(
-      (item) => item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.COMPLETED,
+      (item) =>
+        item?.event === "turn_lifecycle" && item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
     );
-    assert.equal(completedEnvelope.data.startedAt, authoritativeStartedAt);
-    assert.equal(completedEnvelope.data.messageId, turn.messageId);
-    assert.equal(completedEnvelope.data.presentationMessageId, turn.presentationMessageId);
-    assert.equal(Boolean(completedEnvelope.data.finishedAt), true);
+    assert.equal(completedEnvelope.data.payload.startedAt, authoritativeStartedAt);
+    assert.equal(completedEnvelope.data.identity.messageId, turn.messageId);
+    assert.equal(completedEnvelope.data.payload.presentationMessageId, turn.presentationMessageId);
+    assert.equal(Boolean(completedEnvelope.data.payload.finishedAt), true);
     assert.equal(
       inputs.slice(1).some((input) => "createSessionIfAbsent" in input),
       false,
@@ -157,8 +163,8 @@ test("declared workflow execution identity is stable from acceptance through com
     const envelopes = authoritative.eventOutbox().map((item) => item.envelope);
     assert.equal(envelopes.length, 4);
     for (const envelope of envelopes) {
-      assert.equal(envelope.executionId, "workflow:turn-workflow-identity");
-      assert.equal(envelope.executionKind, "workflow");
+      assert.equal(envelope.identity.executionId, "workflow:turn-workflow-identity");
+      assert.equal(envelope.payload.executionKind, "workflow");
     }
     const turn = authoritative.lifecycle().turns["turn-workflow-identity"];
     assert.equal(turn.executionId, "workflow:turn-workflow-identity");
@@ -190,13 +196,15 @@ test("rejected initial provision does not start Agent execution", async () => {
     });
     assert.equal(authoritative.runCount(), 0);
     assert.equal(
-      events.some((item) => item?.event === "done"),
+      events.some(
+        (item) =>
+          item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT &&
+          item?.data?.outcome === "completed",
+      ),
       false,
     );
-    assert.equal(
-      events.some((item) => item?.event === "error"),
-      true,
-    );
+    assert.equal(events.at(-1)?.event, AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT);
+    assert.equal(events.at(-1)?.data?.error?.code, "session_identity_conflict");
   } finally {
     await closeServer(server);
   }
@@ -234,12 +242,11 @@ test("stale aggregate version is rejected before lifecycle state and Agent execu
       events.some((item) => item?.event === "turn_lifecycle"),
       false,
     );
-    const errorData = events.find((item) => item?.event === "error")?.data;
-    assert.equal(errorData?.error, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
-    assert.equal(errorData?.status, 409);
-    assert.equal(errorData?.errorCode, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
-    assert.equal(errorData?.currentVersion, 3);
-    assert.equal(errorData?.turnScopeId, "turn-stale-aggregate");
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.error?.code, SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT);
+    assert.equal(receipt?.identity?.turnScopeId, "turn-stale-aggregate");
   } finally {
     await closeServer(server);
   }
@@ -272,9 +279,19 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
       if (result.found) eventOutbox = result.outbox;
       return { recorded: result.found, reason: result.reason };
     },
-    async acknowledgeAuthorityEvent({ eventId } = {}) {
+    async acknowledgeAuthorityEvent({
+      eventId,
+      consumerId,
+      orderingDomain,
+      orderingScopeId,
+      sequence,
+    } = {}) {
       const result = acknowledgeAuthorityEventDelivery(eventOutbox, {
         eventId,
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
         deliveredAt: new Date().toISOString(),
       });
       if (result.found) eventOutbox = result.outbox;
@@ -315,8 +332,7 @@ test("deduplicated lifecycle commands do not bypass the acknowledged authority o
   assert.equal(replay.deduplicated, true);
   assert.equal(sent.length, 1);
   assert.equal(sent[0]?.event, TURN_LIFECYCLE_WIRE_EVENT);
-  assert.equal(sent[0]?.data?.commandId, event.commandId);
-  assert.equal(sent[0]?.data?.eventId, first.envelope.eventId);
+  assert.equal(sent[0]?.data?.causality?.commandId, event.commandId);
+  assert.equal(sent[0]?.data?.identity?.eventId, first.envelope.identity.eventId);
   assert.equal(listPendingAuthorityEvents(eventOutbox).length, 0);
 });
-

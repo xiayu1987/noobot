@@ -5,10 +5,23 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { startServerWithWs, closeServer, callChatWs, stopChatWs } from "./chat-websocket-server.test-helpers.js";
+import {
+  startServerWithWs,
+  closeServer,
+  callChatWs,
+  stopChatWs,
+} from "./chat-websocket-server.test-helpers.js";
 import { TURN_EVENT } from "@noobot/session-protocol";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+} from "@noobot/agent-transport-protocol";
 
-function stoppedLifecycle({ sessionId = "s1", turnScopeId = "turn-stopped", dialogProcessId = "dp-stopped" } = {}) {
+function stoppedLifecycle({
+  sessionId = "s1",
+  turnScopeId = "turn-stopped",
+  dialogProcessId = "dp-stopped",
+} = {}) {
   return {
     sequence: 5,
     activeTurnScopeId: "",
@@ -106,16 +119,22 @@ test("chat-websocket-server: continue action passes stopped snapshot identity th
     assert.equal(capturedPayload?.runConfig?.resumeDialogProcessId, "dp-stopped");
     assert.equal(capturedPayload?.runConfig?.resumeTurnScopeId, "turn-stopped");
     assert.equal(capturedPayload?.runConfig?.turnScopeId, "turn-new");
-    const acceptedEvent = events.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED);
-    assert.equal(acceptedEvent?.data?.sessionId, "s1");
-    assert.equal(acceptedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(acceptedEvent?.data?.action, "continue");
-    assert.deepEqual(acceptedEvent?.data?.continuationSource, {
+    const acceptedEvent = events.find(
+      (item) =>
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.ACTION_ACCEPTED,
+    );
+    assert.equal(acceptedEvent?.data?.identity?.sessionId, "s1");
+    assert.equal(acceptedEvent?.data?.identity?.turnScopeId, "turn-new");
+    assert.equal(acceptedEvent?.data?.payload?.action, "continue");
+    assert.deepEqual(acceptedEvent?.data?.payload?.continuationSource, {
       dialogProcessId: "dp-stopped",
       turnScopeId: "turn-stopped",
     });
-    assert.equal(events.some((item) => item?.event === "channel_state"), false);
+    assert.equal(
+      events.some((item) => item?.event === "channel_state"),
+      false,
+    );
   } finally {
     await closeServer(server);
   }
@@ -156,13 +175,18 @@ test("chat-websocket-server: a consumed stopped source is rejected before a seco
     });
 
     assert.equal(runSessionCalls, 1);
-    const errorEvent = rejectedEvents.find((item) => item?.event === "error");
-    assert.equal(errorEvent?.data?.error, "continue_source_consumed");
+    const receipt = rejectedEvents.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "continue_source_consumed");
     assert.equal(
-      rejectedEvents.some((item) =>
-        item?.event === "turn_lifecycle" &&
-        item?.data?.turnScopeId === "turn-new-2" &&
-        item?.data?.eventType === "turn.action_accepted"),
+      rejectedEvents.some(
+        (item) =>
+          item?.event === "turn_lifecycle" &&
+          item?.data?.identity?.turnScopeId === "turn-new-2" &&
+          item?.data?.payload?.eventType === TURN_EVENT.ACTION_ACCEPTED,
+      ),
       false,
     );
   } finally {
@@ -194,8 +218,11 @@ test("chat-websocket-server: continue action requires stopped dialogProcessId an
         config: { locale: "zh-CN" },
       },
     });
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
     assert.equal(turnStatusWrites, 0);
   } finally {
     await closeServer(server);
@@ -231,8 +258,11 @@ test("chat-websocket-server: continue action does not fallback to current dialog
         config: { locale: "zh-CN", resumeTurnScopeId: "turn-stopped" },
       },
     });
-    const errorEvent = events.find((item) => item?.event === "error");
-    assert.match(String(errorEvent?.data?.error || ""), /missing_continuation_dialog_process_id/);
+    const receipt = events.find(
+      (item) => item?.event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+    )?.data;
+    assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
+    assert.equal(receipt?.error?.code, "missing_continuation_dialog_process_id");
     assert.equal(runSessionCalled, false);
     assert.equal(turnStatusWrites, 0);
   } finally {
@@ -245,12 +275,14 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
   const server = await startServerWithWs({
     initialTurnLifecycle: stoppedLifecycle({ sessionId: "s-continue-stop" }),
     bot: {
-      materializeTerminal: async ({ event, terminalStatus }) => {
+      materializeTerminalMessages: ({ event, terminalStatus, previousSummaryVersion }) => {
         capturedStopPayload = { event, terminalStatus };
-        return { summaryVersion: 1, turnStatus: {
-          version: 1, turnScopeId: event.turnScopeId, dialogProcessId: event.dialogProcessId,
-          status: "user_stopped", reason: "user_stop",
-        } };
+        return {
+          materialized: true,
+          terminalStatus,
+          messages: [],
+          summaryVersion: previousSummaryVersion + 1,
+        };
       },
       runSession: async ({ abortSignal }) => {
         await new Promise((resolve) => {
@@ -274,31 +306,56 @@ test("chat-websocket-server: stop during continue request ends with authoritativ
         dialogProcessId: "dp-stopped",
         message: "continue",
         turnScopeId: "turn-new",
-        config: { locale: "zh-CN", resumeDialogProcessId: "dp-stopped", resumeTurnScopeId: "turn-stopped" },
+        config: {
+          locale: "zh-CN",
+          resumeDialogProcessId: "dp-stopped",
+          resumeTurnScopeId: "turn-stopped",
+        },
       },
       stopPayload: {
         sessionId: "s-continue-stop",
         turnScopeId: "turn-new",
         dialogProcessId: "dp-stopped",
-        partialAssistant: { content: "partial", dialogProcessId: "dp-new", turnScopeId: "turn-new" },
+        partialAssistant: {
+          content: "partial",
+          dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
+        },
       },
     });
 
-    assert.equal(events.some((item) =>
-      item?.event === "turn_lifecycle" &&
-      item?.data?.eventType === TURN_EVENT.STOP_ACCEPTED &&
-      item?.data?.turnScopeId === "turn-new"), true);
-    assert.equal(events.some((item) => item?.event === "channel_state"), false);
-    const stoppedEvent = events.find((item) =>
-      item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED);
-    assert.equal(stoppedEvent?.data?.sessionId, "s-continue-stop");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-new");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-new");
-    assert.equal(stoppedEvent?.data?.phase, "stop");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
-    assert.equal(capturedStopPayload?.terminalStatus?.assistantMessage?.turnScopeId, "turn-new");
-    assert.equal(capturedStopPayload?.terminalStatus?.assistantMessage?.dialogProcessId, "dp-new");
+    assert.equal(
+      events.some(
+        (item) =>
+          item?.event === "turn_lifecycle" &&
+          item?.data?.payload?.eventType === TURN_EVENT.STOP_ACCEPTED &&
+          item?.data?.identity?.turnScopeId === "turn-new",
+      ),
+      true,
+    );
+    assert.equal(
+      events.some((item) => item?.event === "channel_state"),
+      false,
+    );
+    const stoppedEvent = events.find(
+      (item) =>
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
+    );
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-continue-stop");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-new");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-new");
+    assert.equal(stoppedEvent?.data?.payload?.phase, "stop");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
+    assert.equal(
+      capturedStopPayload?.event?.terminalStatus?.assistantMessage?.turnScopeId,
+      "turn-new",
+    );
+    assert.equal(
+      capturedStopPayload?.event?.terminalStatus?.assistantMessage?.dialogProcessId,
+      "dp-new",
+    );
   } finally {
     await closeServer(server);
   }

@@ -12,8 +12,11 @@ import { registerChatWebSocketServer } from "../../ws/chat-websocket-server.js";
 import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  createEventEnvelope,
   listPendingAuthorityEvents,
+  normalizeAuthorityEventOutbox,
   recordAuthorityEventDeliveryAttempt,
+  validateProtocolEvent,
 } from "@noobot/event-protocol";
 import {
   AGENT_COMMAND,
@@ -25,18 +28,28 @@ import {
   createTurnSnapshotCommand,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
+import {
+  createTurnTerminalStatus,
+  materializeTurnTerminalMessages,
+} from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
 
 export function createProtocolTestCommand(payload = {}) {
   if (Number(payload?.protocolVersion) === 1) return payload;
-  const action = String(payload?.action || "").trim().toLowerCase();
-  const commandType = String(payload?.commandType || "").trim().toLowerCase();
+  const action = String(payload?.action || "")
+    .trim()
+    .toLowerCase();
+  const commandType = String(payload?.commandType || "")
+    .trim()
+    .toLowerCase();
   const config = payload?.config && typeof payload.config === "object" ? payload.config : {};
   const turnScopeId = String(payload?.turnScopeId || config?.turnScopeId || "test-turn").trim();
   const identity = {
     sessionId: String(payload?.sessionId || "s1").trim(),
     parentSessionId: String(payload?.parentSessionId || "").trim(),
-    dialogProcessId: String(payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "").trim(),
+    dialogProcessId: String(
+      payload?.dialogProcessId || payload?.partialAssistant?.dialogProcessId || "",
+    ).trim(),
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(turnScopeId || payload?.partialAssistant?.turnScopeId || "").trim(),
   };
@@ -78,8 +91,11 @@ export function createProtocolTestCommand(payload = {}) {
       options: { terminalLimit: payload?.terminalLimit },
     });
   }
-  const resolvedRunCommandType = [AGENT_COMMAND.SEND, AGENT_COMMAND.CONTINUE, AGENT_COMMAND.RESEND]
-    .includes(commandType)
+  const resolvedRunCommandType = [
+    AGENT_COMMAND.SEND,
+    AGENT_COMMAND.CONTINUE,
+    AGENT_COMMAND.RESEND,
+  ].includes(commandType)
     ? commandType
     : action === "continue" || action === "resume"
       ? AGENT_COMMAND.CONTINUE
@@ -111,7 +127,8 @@ export function createProtocolTestCommand(payload = {}) {
     },
     concurrency: {
       expectedTurnRevision: payload?.expectedTurnRevision ?? 0,
-      expectedAggregateVersion: payload?.expectedAggregateVersion ?? config.expectedAggregateVersion ?? 0,
+      expectedAggregateVersion:
+        payload?.expectedAggregateVersion ?? config.expectedAggregateVersion ?? 0,
     },
     continuation: {
       dialogProcessId: config.resumeDialogProcessId,
@@ -137,80 +154,127 @@ export async function startServerWithWs({
   let turnLifecycle = structuredClone(initialTurnLifecycle);
   let authorityEventOutbox = [];
   let authorityEventSequence = 0;
-  const persistedTurnStatuses = new Map();
-  const materializeTerminal = async (event = {}) => {
-    const terminalStatus = event.terminalStatus || {};
-    if (typeof suppliedBot.materializeTerminal === "function") {
-      return suppliedBot.materializeTerminal({ event, terminalStatus });
-    }
-    const contract = {
-      completed: ["completed", "run_completed"],
-      user_stopped: ["user_stopped", "user_stop"],
-      error: ["error", "run_error"],
-      aborted: ["error", "run_aborted"],
-      timeout: ["timeout", "run_timeout"],
-    }[terminalStatus.command];
-    assert.ok(contract, `unexpected terminal command: ${terminalStatus.command}`);
-    const previous = persistedTurnStatuses.get(event.turnScopeId) || null;
-    const turnStatus = {
-      version: Number(previous?.version || 0) + 1,
-      turnScopeId: event.turnScopeId || "",
-      dialogProcessId: event.dialogProcessId || "",
-      parentDialogProcessId: event.parentDialogProcessId || "",
-      status: contract[0],
-      reason: contract[1],
-      description: terminalStatus.description || "",
-    };
-    persistedTurnStatuses.set(turnStatus.turnScopeId, turnStatus);
-    return { turnStatus, summaryVersion: turnStatus.version };
-  };
+  const terminalSummaryVersions = new Map();
   const testBot = {
     ...suppliedBot,
-    resolveExecutionIntent: suppliedBot.resolveExecutionIntent || (async ({ turnScopeId = "", runConfig = {} } = {}) => {
-      const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
-      return {
-        executionId,
-        executionKind: String(runConfig?.executionKind || "agent").trim(),
-        parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
-        rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
-        origin: {},
-        stage: "",
-      };
-    }),
-    applyTurnLifecycleEvent: suppliedBot.applyTurnLifecycleEvent || (async (event = {}) => {
-      const terminalMaterialization = event.terminalStatus ? await materializeTerminal(event) : null;
-      const result = commitTurnLifecycle({
-        lifecycle: turnLifecycle,
-        event,
-        eventOutbox: authorityEventOutbox,
-        createEventId: () => `test-authority-event-${++authorityEventSequence}`,
-        materializeTerminal: event.terminalStatus
-          ? () => terminalMaterialization || { reason: "terminal_materialization_failed" }
-          : undefined,
-      });
-      if (result.applied) {
-        turnLifecycle = result.lifecycle;
-        authorityEventOutbox = result.eventOutbox;
-      }
-      return result;
-    }),
-    getPendingAuthorityEvents: suppliedBot.getPendingAuthorityEvents || (async () => ({
-      found: true,
-      events: listPendingAuthorityEvents(authorityEventOutbox),
-    })),
-    recordAuthorityEventAttempt: suppliedBot.recordAuthorityEventAttempt || (async ({ eventId } = {}) => {
-      const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
-      if (result.found) authorityEventOutbox = result.outbox;
-      return { recorded: result.found };
-    }),
-    acknowledgeAuthorityEvent: suppliedBot.acknowledgeAuthorityEvent || (async ({ eventId } = {}) => {
-      const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+    resolveExecutionIntent:
+      suppliedBot.resolveExecutionIntent ||
+      (async ({ turnScopeId = "", runConfig = {} } = {}) => {
+        const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
+        return {
+          executionId,
+          executionKind: String(runConfig?.executionKind || "agent").trim(),
+          parentExecutionId: String(runConfig?.parentExecutionId || "").trim(),
+          rootExecutionId: String(runConfig?.rootExecutionId || executionId).trim(),
+          origin: {},
+          stage: "",
+        };
+      }),
+    applyTurnLifecycleEvent:
+      suppliedBot.applyTurnLifecycleEvent ||
+      (async (event = {}) => {
+        const result = commitTurnLifecycle({
+          lifecycle: turnLifecycle,
+          event,
+          eventOutbox: authorityEventOutbox,
+          createEventId: () => `test-authority-event-${++authorityEventSequence}`,
+          materializeTerminal: event.terminalStatus
+            ? ({ terminalStatus, previousSummaryVersion }) => {
+                if (typeof suppliedBot.materializeTerminalMessages === "function") {
+                  return suppliedBot.materializeTerminalMessages({
+                    event,
+                    terminalStatus,
+                    previousSummaryVersion,
+                  });
+                }
+                assert.ok(
+                  terminalStatus,
+                  `unexpected terminal command: ${event.terminalStatus?.command}`,
+                );
+                const materialization = materializeTurnTerminalMessages({
+                  messages: [],
+                  terminalStatus,
+                  previousSummaryVersion:
+                    terminalSummaryVersions.get(event.turnScopeId) || previousSummaryVersion,
+                });
+                if (materialization.materialized) {
+                  terminalSummaryVersions.set(event.turnScopeId, materialization.summaryVersion);
+                }
+                return materialization;
+              }
+            : undefined,
+        });
+        if (result.applied) {
+          turnLifecycle = result.lifecycle;
+          authorityEventOutbox = result.eventOutbox;
+        }
+        return result;
+      }),
+    getPendingAuthorityEvents:
+      suppliedBot.getPendingAuthorityEvents ||
+      (async () => ({
+        found: true,
+        events: listPendingAuthorityEvents(authorityEventOutbox),
+      })),
+    recordAuthorityEventAttempt:
+      suppliedBot.recordAuthorityEventAttempt ||
+      (async ({ eventId } = {}) => {
+        const result = recordAuthorityEventDeliveryAttempt(authorityEventOutbox, { eventId });
+        if (result.found) authorityEventOutbox = result.outbox;
+        return { recorded: result.found };
+      }),
+    acknowledgeAuthorityEvent:
+      suppliedBot.acknowledgeAuthorityEvent ||
+      (async ({
         eventId,
-        deliveredAt: new Date().toISOString(),
+        consumerId,
+        orderingDomain,
+        orderingScopeId,
+        sequence,
+      } = {}) => {
+        const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
+          eventId,
+          consumerId,
+          orderingDomain,
+          orderingScopeId,
+          sequence,
+          deliveredAt: new Date().toISOString(),
+        });
+        if (result.found) authorityEventOutbox = result.outbox;
+        return { acknowledged: result.found };
+      }),
+    commitTestAuthorityEvent: async ({
+      family,
+      identity,
+      causality,
+      ordering,
+      producer,
+      payload,
+    } = {}) => {
+      const sequence = Math.max(1, Number(ordering?.sequence) || ++authorityEventSequence);
+      const envelope = createEventEnvelope({
+        family,
+        schemaVersion: 1,
+        identity: {
+          ...identity,
+          eventId: String(identity?.eventId || `test-authority-event-${authorityEventSequence}`),
+        },
+        causality,
+        ordering: { ...ordering, sequence },
+        producer,
+        occurredAt: new Date().toISOString(),
+        payload,
       });
-      if (result.found) authorityEventOutbox = result.outbox;
-      return { acknowledged: result.found };
-    }),
+      const validation = validateProtocolEvent(envelope);
+      if (!validation.valid) {
+        throw new TypeError(`invalid test authority event: ${validation.errors.join(",")}`);
+      }
+      authorityEventOutbox = normalizeAuthorityEventOutbox([
+        ...authorityEventOutbox,
+        { eventId: envelope.identity.eventId, envelope, committedAt: envelope.occurredAt },
+      ]);
+      return envelope;
+    },
   };
   const { mapAgentRunCommand } = createChatRunService({
     getBot: () => testBot,
@@ -245,6 +309,7 @@ export async function startServerWithWs({
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
     server,
+    bot: testBot,
     registered,
     address: (...args) => server.address(...args),
   };
@@ -252,7 +317,11 @@ export async function startServerWithWs({
 
 export async function readJsonl(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 export async function waitForFile(filePath, { timeoutMs = 1000 } = {}) {
@@ -355,15 +424,23 @@ export async function stopChatWs({ port, payload = {}, stopPayload = {}, timeout
       try {
         const parsed = JSON.parse(String(raw || "{}"));
         messages.push(parsed);
-        if (!stopSent && parsed?.event === "turn_lifecycle" && parsed?.data?.capabilities?.canStop === true) {
+        if (
+          !stopSent &&
+          parsed?.event === "turn_lifecycle" &&
+          parsed?.data?.payload?.capabilities?.canStop === true
+        ) {
           stopSent = true;
-          ws.send(JSON.stringify(createProtocolTestCommand({
-            action: "stop",
-            sessionId: stopPayload.sessionId || payload.sessionId,
-            turnScopeId: stopPayload.turnScopeId || payload.turnScopeId,
-            expectedRevision: stopPayload.expectedRevision ?? parsed.data.revision,
-            ...stopPayload,
-          })));
+          ws.send(
+            JSON.stringify(
+              createProtocolTestCommand({
+                action: "stop",
+                sessionId: stopPayload.sessionId || payload.sessionId,
+                turnScopeId: stopPayload.turnScopeId || payload.turnScopeId,
+                expectedRevision: stopPayload.expectedRevision ?? parsed.data.ordering.revision,
+                ...stopPayload,
+              }),
+            ),
+          );
         }
       } catch (error) {
         ws.terminate();
@@ -379,17 +456,19 @@ export async function requestRawUpgrade({ port, pathName = "/chat/ws" } = {}) {
   return new Promise((resolve, reject) => {
     let response = "";
     const socket = net.createConnection({ host: "127.0.0.1", port }, () => {
-      socket.write([
-        `GET ${pathName} HTTP/1.1`,
-        "Host: 127.0.0.1",
-        "Connection: Upgrade",
-        "Upgrade: websocket",
-        "Sec-WebSocket-Version: 13",
-        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
-        "Authorization: Bearer test-key",
-        "",
-        "",
-      ].join("\r\n"));
+      socket.write(
+        [
+          `GET ${pathName} HTTP/1.1`,
+          "Host: 127.0.0.1",
+          "Connection: Upgrade",
+          "Upgrade: websocket",
+          "Sec-WebSocket-Version: 13",
+          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+          "Authorization: Bearer test-key",
+          "",
+          "",
+        ].join("\r\n"),
+      );
     });
     socket.setTimeout(1000, () => {
       socket.destroy(new Error("raw upgrade response timeout"));

@@ -5,8 +5,11 @@
  */
 
 import { WORKFLOW_HOOKS, WORKFLOW_PLUGIN_DEFAULTS } from "../constants.js";
-import { cleanupWorkflowBySessionIds } from "../../utils/cleanup.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
+import {
+  cleanupWorkflowBySessionIds,
+  collectWorkflowRelatedSessionIds,
+} from "../../utils/cleanup.js";
+import { createSessionDeletionHookResult, HOOK_POINT } from "@noobot/hook-protocol";
 
 export function registerWorkflowSessionCleanupHook({ hookManager, options = {} } = {}) {
   return hookManager.on(
@@ -21,10 +24,18 @@ export function registerWorkflowSessionCleanupHook({ hookManager, options = {} }
         : fallbackSessionId
           ? [fallbackSessionId]
           : [];
-      if (!sessionIds.length) return;
+      if (!sessionIds.length) return createSessionDeletionHookResult();
       const basePath = String(ctx?.basePath || "").trim();
-      if (!basePath) return;
-      await cleanupWorkflowBySessionIds(basePath, sessionIds);
+      if (!basePath) return createSessionDeletionHookResult();
+      const cleanup = await cleanupWorkflowBySessionIds(basePath, sessionIds);
+      const retainedRelatedSessionIds = await collectWorkflowRelatedSessionIds(
+        basePath,
+        ctx?.remainingSessionIds,
+      );
+      return createSessionDeletionHookResult({
+        deletedRelatedSessionIds: cleanup.relatedSessionIds,
+        retainedRelatedSessionIds,
+      });
     },
     {
       id: WORKFLOW_HOOKS.AFTER_SESSION_DELETE_LISTENER_ID,

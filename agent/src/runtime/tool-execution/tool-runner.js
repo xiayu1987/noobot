@@ -13,14 +13,16 @@ import {
   stripInternalResourceFields,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
-import { isAbortError } from "../utils/error-utils.js";
+import { assertNotAborted, isAbortError, resolveAbortStopType } from "../utils/error-utils.js";
+import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { parseJsonObjectSafely } from "../utils/json-utils.js";
 import { handleEngineError } from "../errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
+import { resolveExecutionAbortMessage } from "@noobot/session-protocol/execution-abort";
 import {
   resolveRuntimeTransferIdentity,
   persistTransferArtifacts,
@@ -426,6 +428,7 @@ export async function executeToolCall({
     const isFatal = isFatalError(error);
     handleEngineError({
       error,
+      abortSignal: runtime?.abortSignal || null,
       eventListener,
       event: "tool_call_error",
       metadata: {
@@ -578,7 +581,7 @@ export async function executeToolCallInTurn(options = {}) {
   const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
   const initialRiskAssessment = createToolRiskAssessment(call);
   const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
-  emitMessageEvent(eventListener, runtime, "tool_call_start", {
+  await emitMessageEvent(eventListener, runtime, "tool_call_start", {
     turn,
     tool: call?.name,
     args: call?.args || {},
@@ -586,8 +589,9 @@ export async function executeToolCallInTurn(options = {}) {
     riskLevel: initialRiskLevel,
     securityAssessment: initialRiskAssessment.current,
   });
+  assertNotAborted(options?.abortSignal || null, runtime);
   const result = await executeToolCall(options);
-  emitMessageEvent(eventListener, runtime, "tool_call_end", {
+  await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
     tool: call?.name,
     result: String(result?.toolResultText || ""),
@@ -600,4 +604,66 @@ export async function executeToolCallInTurn(options = {}) {
       : {}),
   });
   return result;
+}
+
+function rejectedToolCallResult({ call = {}, error = null, abortSignal = null } = {}) {
+  const riskAssessment = createToolRiskAssessment(call);
+  const aborted = isAbortError(error, abortSignal);
+  const stopType = aborted ? resolveAbortStopType(error, abortSignal) : "";
+  const errorMessage =
+    (aborted ? resolveExecutionAbortMessage({ error, abortSignal }) : resolveErrorMessage(error)) ||
+    (aborted ? "tool execution aborted" : "tool execution failed");
+  return {
+    call,
+    toolResultText: toToolJsonResult(call?.name, {
+      ok: false,
+      status: aborted ? "aborted" : "failed",
+      code: aborted
+        ? ERROR_CODE.RECOVERABLE_USER_CANCELLED
+        : String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
+      error: errorMessage,
+      ...(stopType ? { stopType } : {}),
+    }),
+    internalResources: [],
+    transferEnvelopes: [],
+    success: false,
+    failureReason: aborted ? "aborted" : "invoke_error",
+    riskLevel: getToolRiskLevel(riskAssessment),
+    securityAssessment: riskAssessment.current,
+  };
+}
+
+export async function settleToolCallInTurn(options = {}) {
+  const call = options?.call && typeof options.call === "object" ? options.call : {};
+  const runtime = options?.runtime && typeof options.runtime === "object" ? options.runtime : {};
+  const eventListener = options?.eventListener || null;
+  const turn = Number(options?.turn || 1);
+  const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
+  try {
+    return {
+      status: "fulfilled",
+      result: await executeToolCallInTurn(options),
+      error: null,
+    };
+  } catch (error) {
+    const result = rejectedToolCallResult({
+      call,
+      error,
+      abortSignal: options?.abortSignal || null,
+    });
+    await emitMessageEvent(eventListener, runtime, "tool_call_end", {
+      turn,
+      tool: call?.name,
+      result: result.toolResultText,
+      success: false,
+      toolCallId,
+      riskLevel: result.riskLevel,
+      securityAssessment: result.securityAssessment,
+    });
+    return {
+      status: "rejected",
+      result,
+      error,
+    };
+  }
 }

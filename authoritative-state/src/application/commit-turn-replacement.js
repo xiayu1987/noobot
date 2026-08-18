@@ -10,15 +10,22 @@ import { normalizeTurnLifecycleEntity } from "../domain/turn-lifecycle-entity.js
 const clean = (value) => String(value || "").trim();
 
 function sameReplacement(left = {}, right = {}) {
-  const leftScopes = [...new Set((left.replacedTurnScopeIds || []).map(clean).filter(Boolean))].sort();
-  const rightScopes = [...new Set((right.replacedTurnScopeIds || []).map(clean).filter(Boolean))].sort();
-  return clean(left.commandId) === clean(right.commandId) &&
+  const leftScopes = [
+    ...new Set((left.replacedTurnScopeIds || []).map(clean).filter(Boolean)),
+  ].sort();
+  const rightScopes = [
+    ...new Set((right.replacedTurnScopeIds || []).map(clean).filter(Boolean)),
+  ].sort();
+  return (
+    clean(left.commandId) === clean(right.commandId) &&
     clean(left.replacementDialogProcessId) === clean(right.replacementDialogProcessId) &&
     clean(left.replacementTurnScopeId) === clean(right.replacementTurnScopeId) &&
     clean(left.replacementUserMessageId) === clean(right.replacementUserMessageId) &&
+    clean(left.requestHash) === clean(right.requestHash) &&
     Number(left.committedAggregateVersion || 0) === Number(right.committedAggregateVersion || 0) &&
     clean(left.committedAt) === clean(right.committedAt) &&
-    JSON.stringify(leftScopes) === JSON.stringify(rightScopes);
+    JSON.stringify(leftScopes) === JSON.stringify(rightScopes)
+  );
 }
 
 /**
@@ -80,7 +87,8 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
 
   const replacedScopes = new Set(replacedTurnScopeIds);
   const survivingContinuationWithReplacedSource = Object.values(normalizedLifecycle.turns).find(
-    (turn) => !replacedScopes.has(clean(turn.turnScopeId)) &&
+    (turn) =>
+      !replacedScopes.has(clean(turn.turnScopeId)) &&
       replacedScopes.has(clean(turn.continuationSource?.turnScopeId)),
   );
   if (survivingContinuationWithReplacedSource) {
@@ -99,6 +107,7 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
       replacementDialogProcessId: clean(replacement.replacementDialogProcessId),
       replacementTurnScopeId: clean(replacement.replacementTurnScopeId),
       replacementUserMessageId: clean(replacement.replacementUserMessageId),
+      requestHash: clean(replacement.requestHash),
       commandId: clean(replacement.commandId),
       committedAggregateVersion: Number(replacement.committedAggregateVersion),
       replacedTurnScopeIds: [...replacedTurnScopeIds],
@@ -119,7 +128,7 @@ export function commitTurnReplacement({ lifecycle = {}, eventOutbox = [], replac
     (receipt) => !replacedScopes.has(clean(receipt.turnScopeId)),
   );
   const nextOutbox = normalizedOutbox.filter(
-    (item) => !replacedScopes.has(clean(item?.envelope?.turnScopeId)),
+    (item) => !replacedScopes.has(clean(item?.envelope?.identity?.turnScopeId)),
   );
   return {
     applied: true,

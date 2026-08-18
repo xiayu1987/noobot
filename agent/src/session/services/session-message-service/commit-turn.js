@@ -4,16 +4,20 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
-import {
-  createRequestHash,
-  assertCommandRequestMatches,
-  normalizeExpectedAggregateVersion,
-} from "./idempotency-guards.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
-import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
+import {
+  appendCommandReceipt,
+  createTurnCommitFingerprint,
+  decideAggregateConcurrency,
+  decideCommandIdempotency,
+  decideMaterializedTurnContinuation,
+  normalizeExpectedAggregateVersion,
+  SESSION_COMMAND,
+  SESSION_ERROR_CODE,
+} from "@noobot/session-protocol";
 
 export async function commitTurn({
   userId,
@@ -48,15 +52,13 @@ export async function commitTurn({
       : "send";
   const normalizedCommandId = String(commandId || normalizedTurnScopeId).trim();
   const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  const requestHash = createRequestHash({
-    operation: normalizedAction,
+  const requestHash = createTurnCommitFingerprint({
+    action: normalizedAction,
     content: normalizedContent,
     turnScopeId: normalizedTurnScopeId,
     resumeDialogProcessId: String(resumeDialogProcessId || "").trim(),
     resumeTurnScopeId: String(resumeTurnScopeId || "").trim(),
-    attachmentIds: (Array.isArray(attachments) ? attachments : []).map((item) =>
-      String(item?.attachmentId || "").trim(),
-    ),
+    attachments,
   });
   if (!normalizedContent || !normalizedTurnScopeId || !normalizedCommandId) {
     const error = new Error("content, turnScopeId and commandId are required");
@@ -85,14 +87,26 @@ export async function commitTurn({
         throw error;
       }
       const messages = Array.isArray(session.messages) ? session.messages : [];
-      const existing = messages.find(
-        (item) =>
-          item?.role === "user" &&
-          (String(item?.turnScopeId || "") === normalizedTurnScopeId ||
-            String(item?.turnCommit?.commandId || "") === normalizedCommandId),
-      );
-      if (existing) {
-        assertCommandRequestMatches(existing?.turnCommit?.requestHash, requestHash);
+      const lifecycle = session.turnLifecycle;
+      const idempotency = decideCommandIdempotency({
+        commandId: normalizedCommandId,
+        type: SESSION_COMMAND.TURN_COMMIT,
+        requestHash,
+        receipts: lifecycle.commandReceipts,
+      });
+      if (!idempotency.allowed) {
+        const error = new Error("commandId was reused with a different request");
+        error.statusCode = 409;
+        error.errorCode = SESSION_ERROR_CODE.IDEMPOTENCY_KEY_REUSED;
+        throw error;
+      }
+      if (idempotency.deduplicated) {
+        const existing = messages.find(
+          (item) =>
+            String(item?.messageUid || "").trim() ===
+            String(idempotency.receipt?.result?.messageUid || "").trim(),
+        );
+        if (!existing) throw new TypeError("turn commit receipt materialization is missing");
         return {
           session,
           userMessage: existing,
@@ -100,12 +114,16 @@ export async function commitTurn({
           aggregateVersion: resolveAggregateVersion(session),
           deduplicated: true,
           turnScopeId: normalizedTurnScopeId,
-          dialogProcessId: resolveMessageDialogProcessId(existing),
-          runState: existing?.turnCommit?.runState || "pending_start",
+          dialogProcessId: resolveContextMessageDialogProcessId(existing),
+          runState: String(idempotency.receipt?.result?.runState || "pending_start"),
         };
       }
       const currentVersion = resolveAggregateVersion(session);
-      if (normalizedExpectedVersion !== null && normalizedExpectedVersion !== currentVersion) {
+      const concurrency = decideAggregateConcurrency({
+        expectedAggregateVersion: normalizedExpectedVersion,
+        aggregateVersion: currentVersion,
+      });
+      if (!concurrency.allowed) {
         const error = new Error("session aggregate version conflict");
         error.statusCode = 409;
         error.errorCode = SESSION_ERROR_CODE.AGGREGATE_VERSION_CONFLICT;
@@ -115,28 +133,16 @@ export async function commitTurn({
       const resumeDialog = String(resumeDialogProcessId || "").trim();
       const resumeScope = String(resumeTurnScopeId || "").trim();
       if (normalizedAction === "continue") {
-        const lifecycle =
-          session.turnLifecycle && typeof session.turnLifecycle === "object"
-            ? session.turnLifecycle
-            : {};
-        const sourceTurn = lifecycle.turns?.[resumeScope];
-        const continuingTurn = lifecycle.turns?.[normalizedTurnScopeId];
-        const continuationSource = continuingTurn?.continuationSource;
-        const authorityMatches = Boolean(
-          resumeDialog &&
-          resumeScope &&
-          sourceTurn?.state === "stop_completed" &&
-          sourceTurn?.executionState === "user_stopped" &&
-          sourceTurn?.dialogProcessId === resumeDialog &&
-          sourceTurn?.continuedByTurnScopeId === normalizedTurnScopeId &&
-          continuingTurn?.action === "continue" &&
-          continuationSource?.turnScopeId === resumeScope &&
-          continuationSource?.dialogProcessId === resumeDialog,
-        );
-        if (!authorityMatches) {
+        const continuation = decideMaterializedTurnContinuation({
+          lifecycle,
+          turnScopeId: normalizedTurnScopeId,
+          source: { turnScopeId: resumeScope, dialogProcessId: resumeDialog },
+        });
+        if (!continuation.allowed) {
           const error = new Error("continue command does not match authoritative Turn relation");
           error.statusCode = 409;
-          error.errorCode = "CONTINUE_AUTHORITY_MISMATCH";
+          error.errorCode = SESSION_ERROR_CODE.CONTINUE_AUTHORITY_MISMATCH;
+          error.reason = continuation.reason;
           throw error;
         }
       }
@@ -177,7 +183,19 @@ export async function commitTurn({
       );
       session.messages = [...messages, userMessage];
       session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
-      session.aggregateVersion = currentVersion + 1;
+      session.aggregateVersion = concurrency.nextAggregateVersion;
+      session.turnLifecycle.commandReceipts = appendCommandReceipt(
+        session.turnLifecycle.commandReceipts,
+        {
+          commandId: normalizedCommandId,
+          type: SESSION_COMMAND.TURN_COMMIT,
+          turnScopeId: normalizedTurnScopeId,
+          requestHash,
+          aggregateVersion: session.aggregateVersion,
+          result: { messageUid: userMessage.messageUid, runState: "pending_start" },
+          committedAt: nowValue,
+        },
+      );
       session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
@@ -203,7 +221,7 @@ export async function commitTurn({
         aggregateVersion: resolveAggregateVersion(savedSession),
         deduplicated: false,
         turnScopeId: normalizedTurnScopeId,
-        dialogProcessId: resolveMessageDialogProcessId(savedMessage),
+        dialogProcessId: resolveContextMessageDialogProcessId(savedMessage),
         runState: savedMessage?.turnCommit?.runState || "pending_start",
       };
     },

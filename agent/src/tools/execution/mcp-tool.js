@@ -17,13 +17,13 @@ import {
   getRuntimeFromAgentContext,
   getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../observability/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
-import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
@@ -157,7 +157,7 @@ export function createMcpTool({ agentContext }) {
               trace_count: subTraces.length,
               message_count: subMessages.length,
               used_tools: traceToolNames,
-              dialog_process_id: resolveMessageDialogProcessId(subResult),
+              dialog_process_id: resolveContextMessageDialogProcessId(subResult),
             },
             error: "",
           },

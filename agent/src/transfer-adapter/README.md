@@ -33,9 +33,6 @@
 
 ## 语义优先原则
 
-跨模块传递优先使用：
-
-- `transferResult`
-- `transferEnvelopes`
-
-传输 envelope 字段统一使用 `transferEnvelopes` 数组；普通附件场景不适用本段，不允许为了统一输出而越权生成 `noobot.semantic-transfer` envelope。
+跨模块语义传递只使用 `transferEnvelopes` 数组。`transferResult` 已从协议中删除，
+不得作为并行事实重新引入。普通附件场景不适用本段，不允许为了统一输出而越权生成
+`noobot.semantic-transfer` envelope。

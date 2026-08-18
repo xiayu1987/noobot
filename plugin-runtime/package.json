@@ -6,6 +6,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
+    "./core": "./src/core.js",
+    "./contributions": "./src/contributions.js",
     "./package.json": "./package.json"
   },
   "dependencies": {

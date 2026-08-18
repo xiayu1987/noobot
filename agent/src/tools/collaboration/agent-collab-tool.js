@@ -14,7 +14,7 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { tTool } from "../core/tool-i18n.js";
-import { normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 import { createCollabContainerStore } from "./agent-collab/collab-container-store.js";
 import { createCollabArtifactPersistor } from "./agent-collab/collab-artifact-persist.js";
 import { createDelegateTaskTool } from "./agent-collab/tool-delegate-task.js";

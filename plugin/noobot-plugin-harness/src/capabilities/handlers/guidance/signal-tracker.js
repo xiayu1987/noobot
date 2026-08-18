@@ -8,7 +8,7 @@ import {
   collectClosedToolCallBatchMessages,
   collectDialogScopedMessagesToSummarize,
   collectLatestTaskCheckMessageIndexes,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {

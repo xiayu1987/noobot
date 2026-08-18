@@ -50,6 +50,7 @@ export function createChatEngineSender({
   chatWebSocketClient,
   sessionLogWebSocketClient,
   applyWorkflowRuntimeEvent,
+  reduceSubSessionMessageEvent,
   classifyRealtimeLog,
   clearMissingInteractionPayloadTimer,
   clearPendingInteraction,
@@ -300,8 +301,7 @@ export function createChatEngineSender({
       // Registry can project the final message runtime. Keep that promise in
       // the send transaction so send() cannot finish with a stale assistant.
       const pendingAuthorityResolutions = [];
-      const applyTrackedRunStateEvent = (event) => {
-        const result = applyRunStateEvent?.(event);
+      const trackAuthorityResolution = (result) => {
         if (result && typeof result.then === "function") {
           const pending = Promise.resolve(result);
           pendingAuthorityResolutions.push(pending);
@@ -312,6 +312,10 @@ export function createChatEngineSender({
         }
         return result;
       };
+      const applyTrackedRunStateEvent = (event) =>
+        trackAuthorityResolution(applyRunStateEvent?.(event));
+      const applyTrackedTurnLifecycleEnvelope = (envelope) =>
+        trackAuthorityResolution(applyTurnLifecycleEnvelope?.(envelope));
       const locateSendingStartedMessageOnce = () => {
         if (locatedSendingStartedMessage) return;
         locatedSendingStartedMessage = true;
@@ -331,8 +335,9 @@ export function createChatEngineSender({
         applyConversationState,
         applyConversationStateFromEvent,
         applyRunStateEvent: applyTrackedRunStateEvent,
-        applyTurnLifecycleEnvelope,
+        applyTurnLifecycleEnvelope: applyTrackedTurnLifecycleEnvelope,
         applyWorkflowRuntimeEvent,
+        reduceSubSessionMessageEvent,
         botMessage: botMsg,
         classifyRealtimeLog,
         clearMissingInteractionPayloadTimer,

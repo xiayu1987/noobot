@@ -5,10 +5,8 @@
  */
 
 export {
-  mergeAttachmentMetas,
   normalizeAttachmentMetas,
   mapAttachmentRecordsToMetas,
   normalizeAttachmentOwnerMeta,
-  normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
 } from "./meta-ops.js";

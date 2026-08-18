@@ -6,10 +6,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { mergeRunConfigWithPluginStrategy } from "../../src/bot/session/run-config-plugin-strategy.js";
+import { mergeRunConfigPluginPolicy } from "@noobot/agent-config-protocol";
 
-test("mergeRunConfigWithPluginStrategy filters selection without rewriting plugin configuration", () => {
-  const merged = mergeRunConfigWithPluginStrategy({
+test("mergeRunConfigPluginPolicy filters selection without rewriting plugin configuration", () => {
+  const merged = mergeRunConfigPluginPolicy({
     baseRunConfig: {
       disabledPlugins: ["existing-plugin"],
       selectedPlugins: ["workflow", "harness"],

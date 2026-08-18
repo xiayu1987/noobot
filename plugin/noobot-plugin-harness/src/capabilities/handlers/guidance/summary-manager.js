@@ -6,7 +6,7 @@
 import { ensureHarnessBucket } from "./deps.js";
 import { mergeSummaryText } from "../shared/plan/summary-text-protocol.js";
 import { resolveLatestCompleteSummaryText } from "../shared/plan/latest-summary-context.js";
-import { attachmentIdentityKey } from "@noobot/semantic-transfer-protocol";
+import { mergeTransferEnvelopes, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 export function applySummaryText(ctx = {}, incomingSummaryText = "") {
   const holder = ensureHarnessBucket(ctx);
@@ -82,23 +82,11 @@ export function recordSummaryTransferEnvelopes(ctx = {}, transferPayload = {}) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return [];
   const { bucket } = holder;
-  const envelopes = Array.isArray(transferPayload?.transferEnvelopes)
-    ? transferPayload.transferEnvelopes
-    : [];
-  if (!Array.isArray(bucket.summaryTransferEnvelopes)) {
-    bucket.summaryTransferEnvelopes = [];
-  }
-  const envelopeKey = (envelope = {}) => `${envelope.transferId}:${envelope.messageId}`;
-  const seen = new Set(bucket.summaryTransferEnvelopes.map(envelopeKey));
-  for (const envelope of envelopes) {
-    if (envelope?.payload?.mode !== "attachment") continue;
-    for (const reference of envelope.payload.attachments || []) {
-      attachmentIdentityKey(reference.identity);
-    }
-    const key = envelopeKey(envelope);
-    if (key && seen.has(key)) continue;
-    bucket.summaryTransferEnvelopes.push(envelope);
-    if (key) seen.add(key);
-  }
+  const envelopes = normalizeTransferEnvelopes(transferPayload?.transferEnvelopes || [])
+    .filter((envelope) => envelope.payload.mode === "attachment");
+  bucket.summaryTransferEnvelopes = mergeTransferEnvelopes(
+    bucket.summaryTransferEnvelopes || [],
+    envelopes,
+  );
   return bucket.summaryTransferEnvelopes;
 }

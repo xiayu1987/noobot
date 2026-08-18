@@ -10,6 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { createMultimodalParseTool } from "../../src/tools/ai-models/multimodal-parse-tool.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createEventEnvelope } from "@noobot/event-protocol";
 
 const TRANSFER_IDENTITY = Object.freeze({
   transferId: "transfer:test:multimodal-parse:output",
@@ -138,14 +139,35 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       async linkParsedResultToAttachment(request) {
         linkRequests.push(request);
         const source = runtime.userMessageAttachments.find(
-          (attachment) => attachment.attachmentId === request.sourceAttachmentId,
+          (attachment) => attachment.attachmentId === request.sourceIdentity.attachmentId,
         );
         return {
           ...source,
-          parsedResult: {
-            attachmentId: request.parsedAttachmentMeta.attachmentId,
-            tool: request.toolName,
-          },
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: request.sourceIdentity,
+              targetIdentity: request.targetAttachment.identity,
+              producer: { type: "tool", id: request.producerId },
+              createdAt: "2026-08-16T00:00:00.000Z",
+            },
+          ],
+        };
+      },
+    },
+    sessionManager: {
+      async commitAuthorityEvent({ family, identity, causality, ordering, producer, payload }) {
+        return {
+          committed: true,
+          envelope: createEventEnvelope({
+            family,
+            identity: { ...identity, eventId: `attachment-authority:${identity.messageId}`, sessionId: "session-1" },
+            causality,
+            ordering: { ...ordering, sequence: 1 },
+            producer,
+            occurredAt: payload.occurredAt,
+            payload,
+          }),
         };
       },
     },
@@ -189,17 +211,27 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   assert.equal(ingestRequest.generationSource, "multimodal_parse_tool");
   assert.equal(ingestRequest.artifacts[0].name, "scan.multimodal-parse.multimodal_model.md");
   assert.deepEqual(
-    linkRequests.map((request) => request.sourceAttachmentId),
+    linkRequests.map((request) => request.sourceIdentity.attachmentId),
     ["source-1", "source-2"],
   );
-  assert.ok(linkRequests.every((request) => request.toolName === "multimodal_parse"));
-  assert.equal(runtime.userMessageAttachments[0].parsedResult.attachmentId, "parsed-1");
-  assert.equal(runtime.userMessageAttachments[1].parsedResult.attachmentId, "parsed-1");
+  assert.ok(linkRequests.every((request) => request.producerId === "multimodal_parse"));
+  assert.equal(
+    runtime.userMessageAttachments[0].relations[0].targetIdentity.attachmentId,
+    "parsed-1",
+  );
+  assert.equal(
+    runtime.userMessageAttachments[1].relations[0].targetIdentity.attachmentId,
+    "parsed-1",
+  );
   assert.equal(result.ok, true);
   assert.equal(result.summary.source_attachment_backwritten_count, 2);
   assert.equal(result.summary.input_file_count, 3);
   assert.deepEqual(result.summary.input_modalities, ["image", "document"]);
-  assert.deepEqual(result.summary.parsed_from_attachment_ids, ["source-1", "source-2", "source-3"]);
+  assert.deepEqual(result.summary.source_attachment_identities, [
+    { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "user" },
+    { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
+    { attachmentId: "source-3", sessionId: "session-1", attachmentSource: "model" },
+  ]);
   assert.equal(result.summary.saved_attachment_count, 1);
 });
 
@@ -266,7 +298,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
   assert.equal(modelCalled, true);
   assert.equal(linkCalled, false);
   assert.equal(result.ok, true);
-  assert.deepEqual(result.summary.parsed_from_attachment_ids, []);
+  assert.deepEqual(result.summary.source_attachment_identities, []);
   assert.equal(result.summary.source_attachment_backwritten_count, 0);
 });
 

@@ -10,34 +10,13 @@ import {
   RUNTIME_EVENT_CHANNELS,
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
+import {
+  buildConfigParamCatalog as buildProtocolConfigParamCatalog,
+  collectConfigTemplateKeys as scanConfigTemplateKeys,
+  normalizeConfigParamsDocument,
+} from "@noobot/agent-config-protocol";
 
 const CONFIG_PARAMS_FILE_NAME = "config-params.json";
-
-function collectTemplateKeysFromObject(input, collector = new Set()) {
-  if (typeof input === "string") {
-    const templatePattern = /\$\{([A-Z0-9_]+)\}/g;
-    let matchedItem = templatePattern.exec(input);
-    while (matchedItem) {
-      collector.add(String(matchedItem[1] || "").trim());
-      matchedItem = templatePattern.exec(input);
-    }
-    return collector;
-  }
-  if (Array.isArray(input)) {
-    for (const item of input) collectTemplateKeysFromObject(item, collector);
-    return collector;
-  }
-  if (input && typeof input === "object") {
-    for (const value of Object.values(input)) {
-      collectTemplateKeysFromObject(value, collector);
-    }
-  }
-  return collector;
-}
-
-function normalizeConfigParamKey(input = "") {
-  return String(input || "").trim().toUpperCase();
-}
 
 export function createConfigParamsService({
   workspaceRootPath,
@@ -55,38 +34,26 @@ export function createConfigParamsService({
   }
 
   function normalizeConfigParams(input = {}) {
-    const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
-    const rawDescriptions =
-      input?.descriptions && typeof input.descriptions === "object"
-        ? input.descriptions
-        : {};
-    const values = Object.fromEntries(
-      Object.entries(rawValues)
-        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
-        .filter(([key]) => Boolean(key)),
-    );
-    const descriptions = Object.fromEntries(
-      Object.entries(rawDescriptions)
-        .map(([key, value]) => [normalizeConfigParamKey(key), String(value ?? "").trim()])
-        .filter(([key]) => Boolean(key)),
-    );
-    return { values, descriptions };
+    return normalizeConfigParamsDocument(input);
   }
 
   function writeConfigReadFailedEvent({ event, filePath, error, data = {} } = {}) {
-    void writeRoutedRuntimeEvent({
-      source: "service",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.CONFIG,
-      level: "warn",
-      event,
-      data: {
-        fileName: path.basename(String(filePath || "")),
-        filePathLength: String(filePath || "").length,
-        ...data,
+    void writeRoutedRuntimeEvent(
+      {
+        source: "service",
+        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+        category: RUNTIME_EVENT_CATEGORIES.CONFIG,
+        level: "warn",
+        event,
+        data: {
+          fileName: path.basename(String(filePath || "")),
+          filePathLength: String(filePath || "").length,
+          ...data,
+        },
+        error,
       },
-      error,
-    }, runtimeEventsConfig);
+      runtimeEventsConfig,
+    );
   }
 
   async function readWorkspaceConfigParams({ createIfMissing = false } = {}) {
@@ -101,6 +68,7 @@ export function createConfigParamsService({
         error,
         data: { createIfMissing: createIfMissing === true },
       });
+      if (error?.code !== "ENOENT") throw error;
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeWorkspaceConfigParams(payload);
@@ -131,6 +99,7 @@ export function createConfigParamsService({
           userIdLength: String(userId || "").trim().length,
         },
       });
+      if (error?.code !== "ENOENT") throw error;
       if (!createIfMissing) return normalizeConfigParams({});
       const payload = normalizeConfigParams({});
       await writeUserConfigParams({ userId, input: payload });
@@ -155,13 +124,13 @@ export function createConfigParamsService({
         filePath,
         error,
       });
-      return {};
+      if (error?.code === "ENOENT") return {};
+      throw error;
     }
   }
 
   async function collectConfigTemplateKeys() {
-    const globalConfigJson =
-      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     const templateBasePath =
       typeof templateRootPath === "function"
         ? templateRootPath()
@@ -169,39 +138,21 @@ export function createConfigParamsService({
     const templateConfigJson = await readConfigJsonIfExists(
       path.join(templateBasePath, "config.json"),
     );
-    const keys = new Set();
-    collectTemplateKeysFromObject(globalConfigJson, keys);
-    collectTemplateKeysFromObject(templateConfigJson, keys);
-    return Array.from(keys).filter(Boolean).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
+    return scanConfigTemplateKeys(globalConfigJson, templateConfigJson);
   }
 
   async function collectUserConfigTemplateKeys(userId = "") {
     const normalizedUserId = String(userId || "").trim();
     if (!normalizedUserId) return [];
     const userConfigFilePath = path.join(workspaceRootPath(), normalizedUserId, "config.json");
-    const globalConfigJson =
-      typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
+    const globalConfigJson = typeof getGlobalConfigRaw === "function" ? getGlobalConfigRaw() : {};
     const userConfigJson = await readConfigJsonIfExists(userConfigFilePath);
-    const keys = new Set();
-    collectTemplateKeysFromObject(globalConfigJson, keys);
-    collectTemplateKeysFromObject(userConfigJson, keys);
-    return Array.from(keys).filter(Boolean).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
+    return scanConfigTemplateKeys(globalConfigJson, userConfigJson);
   }
 
   async function collectConfigTemplateParamCatalog() {
     const payload = await readWorkspaceConfigParams({ createIfMissing: true });
-    const allKeys = Object.keys(payload?.values || {})
-      .concat(Object.keys(payload?.descriptions || {}))
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-    const dedupedKeys = Array.from(new Set(allKeys)).sort((leftKey, rightKey) =>
-      leftKey.localeCompare(rightKey),
-    );
-    const descriptionMap = payload?.descriptions || {};
-    return dedupedKeys.map((key) => ({
-      key,
-      description: String(descriptionMap?.[key] || "").trim(),
-    }));
+    return buildProtocolConfigParamCatalog(payload);
   }
 
   function buildConfigParamCatalog({
@@ -210,22 +161,7 @@ export function createConfigParamsService({
     values = {},
     extraKeys = [],
   } = {}) {
-    const mergedKeys = Array.from(
-      new Set(
-        [
-          ...(Array.isArray(keys) ? keys : []),
-          ...Object.keys(descriptions || {}),
-          ...Object.keys(values || {}),
-          ...(Array.isArray(extraKeys) ? extraKeys : []),
-        ]
-          .map((item) => String(item || "").trim())
-          .filter(Boolean),
-      ),
-    ).sort((leftKey, rightKey) => leftKey.localeCompare(rightKey));
-    return mergedKeys.map((key) => ({
-      key,
-      description: String(descriptions?.[key] || "").trim(),
-    }));
+    return buildProtocolConfigParamCatalog({ keys, descriptions, values, extraKeys });
   }
 
   return {

@@ -25,6 +25,35 @@ import {
   SESSION_RUN_EVENT,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  EXECUTION_SNAPSHOT_WIRE_EVENT,
+  EXECUTION_TREE_WIRE_EVENT,
+} from "@noobot/session-protocol";
+
+function canonicalExecutionQueryEvent({ family, eventType, commandId, sequence, payload }) {
+  return createEventEnvelope({
+    family,
+    identity: {
+      eventId: `${commandId}:${eventType}`,
+      eventType,
+      sessionId: payload.sessionId,
+      turnScopeId: payload.turnScopeId,
+      executionId: payload.executionId,
+    },
+    causality: { commandId },
+    ordering: {
+      domain: "execution",
+      scopeId: payload.rootExecutionId,
+      sequence,
+      revision: payload.revision,
+    },
+    producer: { type: "test", id: "execution-query-fixture" },
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    payload,
+  });
+}
 describe("useChatSession reconnect replay", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -124,32 +153,19 @@ describe("useChatSession reconnect replay", () => {
       lastMessage: assistant,
     }];
     store.activeSessionId = "s-live";
-    const envelope = (eventType, sequence, extra = {}) => ({
-      event: "message_event",
-      data: {
-        channelKind: "message_event",
-        channelVersion: 1,
-        route: { scope: "main_session", sessionId: "s-live" },
-        event: {
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
-          eventId: `evt-${sequence}`,
-          eventType,
-          sessionId: "s-live",
-          messageId: "msg-live",
-          presentationMessageId: "msg-live",
-          sequenceDomain: "message-event",
-          sequenceScopeId: "msg-live",
-          dialogProcessId: "dp-live",
-          turnScopeId: "turn-live",
-          sequence,
-          timestamp: `2026-07-22T04:16:${String(sequence).padStart(2, "0")}.000Z`,
-          tool: "read_file",
-          toolCallId: "call-live",
-          ...extra,
-        },
-      },
-    });
+    const envelope = (eventType, sequence, extra = {}) =>
+      createAuthoritativeMessageEnvelope(eventType, {
+        eventId: `evt-${sequence}`,
+        sessionId: "s-live",
+        messageId: "msg-live",
+        presentationMessageId: "msg-live",
+        dialogProcessId: "dp-live",
+        turnScopeId: "turn-live",
+        seq: sequence,
+        tool: "read_file",
+        toolCallId: "call-live",
+        ...extra,
+      });
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData(envelope("tool_call_start", 1, { args: { filePath: "notes.txt" } }));
       onReconnectData(envelope("tool_call_end", 2, { result: { ok: true }, success: true }));
@@ -197,30 +213,16 @@ describe("useChatSession reconnect replay", () => {
     const session = createChatSession({ classifyRealtimeLog });
 
     await session.handleReconnect();
-    deliverLiveEvent({
-      event: "message_event",
-      data: {
-        channelKind: "message_event",
-        channelVersion: 1,
-        route: { scope: "main_session", sessionId: "s-after-reconnect" },
-        event: {
-          envelopeKind: "noobot.message_event",
-          envelopeVersion: 2,
-          eventId: "evt-after-reconnect-delta",
-          eventType: "llm_delta",
-          sessionId: "s-after-reconnect",
-          messageId: "msg-after-reconnect",
-          presentationMessageId: "msg-after-reconnect",
-          sequenceDomain: "message-event",
-          sequenceScopeId: "msg-after-reconnect",
-          dialogProcessId: "dp-after-reconnect",
-          turnScopeId: "turn-after-reconnect",
-          sequence: 1,
-          timestamp: "2026-07-25T02:30:00.000Z",
-          text: "message continued after replay",
-        },
-      },
-    });
+    deliverLiveEvent(createAuthoritativeMessageEnvelope("llm_delta", {
+      eventId: "evt-after-reconnect-delta",
+      sessionId: "s-after-reconnect",
+      messageId: "msg-after-reconnect",
+      presentationMessageId: "msg-after-reconnect",
+      dialogProcessId: "dp-after-reconnect",
+      turnScopeId: "turn-after-reconnect",
+      seq: 1,
+      text: "message continued after replay",
+    }));
 
     await vi.waitFor(() => {
       expect(assistant.content).toContain("message continued after replay");
@@ -272,30 +274,16 @@ describe("useChatSession reconnect replay", () => {
     }];
     store.activeSessionId = "s-continue";
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
-      onReconnectData({
-        event: "message_event",
-        data: {
-          channelKind: "message_event",
-          channelVersion: 1,
-          route: { scope: "main_session", sessionId: "s-continue" },
-          event: {
-            envelopeKind: "noobot.message_event",
-            envelopeVersion: 2,
-            eventId: "evt-continued-thinking",
-            eventType: "thinking",
-            sessionId: "s-continue",
-            messageId: "msg-continued",
-            presentationMessageId: "msg-continued",
-            sequenceDomain: "message-event",
-            sequenceScopeId: "msg-continued",
-            dialogProcessId: "dp-continued",
-            turnScopeId: "turn-continued",
-            sequence: 1,
-            timestamp: "2026-07-22T04:17:00.000Z",
-            text: "new thinking",
-          },
-        },
-      });
+      onReconnectData(createAuthoritativeMessageEnvelope("thinking", {
+        eventId: "evt-continued-thinking",
+        sessionId: "s-continue",
+        messageId: "msg-continued",
+        presentationMessageId: "msg-continued",
+        dialogProcessId: "dp-continued",
+        turnScopeId: "turn-continued",
+        seq: 1,
+        text: "new thinking",
+      }));
     });
 
     const session = createChatSession({ classifyRealtimeLog });
@@ -353,32 +341,17 @@ describe("useChatSession reconnect replay", () => {
     store.interactionSubmitting = true;
 
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
-      onReconnectData({
-        event: "message_event",
-        data: {
-          channelKind: "message_event",
-          channelVersion: 1,
-          route: { scope: "main_session", sessionId: "s-1" },
-          event: {
-            envelopeKind: "noobot.message_event",
-            envelopeVersion: 2,
-            eventId: "evt-new-final",
-            eventType: "authoritative_final_content",
-            sessionId: "s-1",
-            messageId: "msg-new",
-            presentationMessageId: "msg-new",
-            sequenceDomain: "message-event",
-            sequenceScopeId: "msg-new",
-            dialogProcessId: "dp-new",
-            turnScopeId: "turn-new",
-            sequence: 1,
-            timestamp: "2026-07-22T05:00:01.000Z",
-            text: "new final answer",
-            output: "new final answer",
-            modelAlias: "alias-1",
-          },
-        },
-      });
+      onReconnectData(createAuthoritativeMessageEnvelope("authoritative_final_content", {
+        eventId: "evt-new-final",
+        sessionId: "s-1",
+        messageId: "msg-new",
+        presentationMessageId: "msg-new",
+        dialogProcessId: "dp-new",
+        turnScopeId: "turn-new",
+        seq: 1,
+        text: "new final answer",
+        modelAlias: "alias-1",
+      }));
       onReconnectData({
         event: StreamEventEnum.DONE,
         data: {
@@ -593,19 +566,26 @@ describe("useChatSession reconnect replay", () => {
     wsClientMock.requestJson.mockImplementation(async (payload) => {
       requestOrder.push(payload.commandType);
       if (payload.commandType === "execution.tree.get") {
-        return {
-          event: StreamEventEnum.EXECUTION_TREE,
-          data: {
+        return canonicalExecutionQueryEvent({
+          family: EVENT_FAMILY.EXECUTION_TREE,
+          eventType: EXECUTION_TREE_WIRE_EVENT,
+          commandId: payload.commandId,
+          sequence: 2,
+          payload: {
+            ...store.turnRuntimeRegistry.executions["workflow-root"],
             commandId: payload.commandId,
-            rootExecutionId: "workflow-root",
             tree: { executions: { "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"], "child-agent": child } },
           },
-        };
+        });
       }
-      return {
-        event: StreamEventEnum.EXECUTION_SNAPSHOT,
-        data: { commandId: payload.commandId, execution: { ...store.turnRuntimeRegistry.executions["workflow-root"], revision: 2, sequence: 3 } },
-      };
+      const execution = { ...store.turnRuntimeRegistry.executions["workflow-root"], revision: 2, sequence: 3 };
+      return canonicalExecutionQueryEvent({
+        family: EVENT_FAMILY.EXECUTION_SNAPSHOT,
+        eventType: EXECUTION_SNAPSHOT_WIRE_EVENT,
+        commandId: payload.commandId,
+        sequence: 3,
+        payload: { ...execution, commandId: payload.commandId, execution },
+      });
     });
     const authFetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, exists: true, messages: [] }) }));
     const session = createChatSession({ authFetch });

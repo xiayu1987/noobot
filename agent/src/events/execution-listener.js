@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
-import { resolveDialogProcessIdFromContext } from "../context/session/dialog-process-id-resolver.js";
-import { resolveParentSessionId } from "../context/parent-session-id-resolver.js";
-
-const INTERNAL_TRANSPORT_EVENTS = new Set([
-  "turn_lifecycle_committed",
-]);
+import { projectExecutionTransportPayload } from "./transport-payload.js";
+import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
@@ -19,10 +17,34 @@ function enrichEventData(rawData = {}, defaults = {}) {
     dialogProcessId: String(eventData?.dialogProcessId || defaults.dialogProcessId || "").trim(),
     sessionId: String(eventData?.sessionId || defaults.sessionId || ""),
     turnScopeId: String(eventData?.turnScopeId || defaults.turnScopeId || ""),
-    parentSessionId: resolveParentSessionId({
-      context: { parentSessionId: eventData?.parentSessionId },
-      parentSessionId: defaults.parentSessionId,
-    }),
+    parentSessionId: normalizeParentSessionId(
+      eventData?.parentSessionId || defaults.parentSessionId,
+    ),
+  };
+}
+
+function projectExecutionLogRecord(event = "", data = {}) {
+  if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
+  const envelope = data?.envelope;
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
+    return { event, data };
+  }
+  return {
+    event: envelope.payload.eventType,
+    data: {
+      ...envelope.payload,
+      eventId: envelope.identity.eventId,
+      sessionId: envelope.identity.sessionId,
+      turnScopeId: envelope.identity.turnScopeId,
+      messageId: envelope.identity.messageId,
+      executionId: envelope.identity.executionId,
+      sequence: envelope.ordering.sequence,
+      sequenceDomain: envelope.ordering.domain,
+      sequenceScopeId: envelope.ordering.scopeId,
+      timestamp: envelope.occurredAt,
+      authority: "authoritative",
+    },
   };
 }
 
@@ -34,7 +56,7 @@ export function createExecutionEventListener({
   turnScopeId = "",
   upstream = null,
 }) {
-  const dialogProcessId = resolveDialogProcessIdFromContext(upstream);
+  const dialogProcessId = normalizeDialogProcessId(upstream?.dialogProcessId);
   const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
@@ -60,35 +82,42 @@ export function createExecutionEventListener({
 
   const summarizeDelivery = (event, data = {}) => ({
     sourceEvent: event,
-    eventId: String(data?.eventId || "").trim(),
-    eventType: String(data?.eventType || event || "").trim(),
-    sessionId: String(data?.sessionId || sessionId || "").trim(),
+    eventId: String(data?.envelope?.identity?.eventId || "").trim(),
+    eventType: String(data?.envelope?.identity?.eventType || event || "").trim(),
+    sessionId: String(data?.envelope?.identity?.sessionId || data?.sessionId || sessionId || "").trim(),
     parentSessionId: String(data?.parentSessionId || parentSessionId || "").trim(),
     dialogProcessId: String(data?.dialogProcessId || dialogProcessId || "").trim(),
-    turnScopeId: String(data?.turnScopeId || turnScopeId || "").trim(),
-    messageId: String(data?.messageId || "").trim(),
+    turnScopeId: String(data?.envelope?.identity?.turnScopeId || data?.turnScopeId || turnScopeId || "").trim(),
+    messageId: String(data?.envelope?.identity?.messageId || "").trim(),
     presentationMessageId: String(data?.presentationMessageId || "").trim(),
-    sequence: Number(data?.sequence || 0),
+    sequence: Number(data?.envelope?.ordering?.sequence || 0),
     contentLength: String(data?.text || data?.content || "").length,
     attachmentCount: Array.isArray(data?.attachments) ? data.attachments.length : 0,
-    transferEnvelopeCount: Array.isArray(data?.transferEnvelopes) ? data.transferEnvelopes.length : 0,
+    transferEnvelopeCount: Array.isArray(data?.transferEnvelopes)
+      ? data.transferEnvelopes.length
+      : 0,
   });
 
   const forwardUpstream = ({ event, data, ts }) => {
-    const enrichedData = enrichEventData(data, defaults);
-    const diagnostic = summarizeDelivery(event, enrichedData);
+    const transportData = projectExecutionTransportPayload({ event, data, route: defaults });
+    const diagnostic = summarizeDelivery(event, transportData);
     const shouldDiagnose = Boolean(diagnostic.eventId || diagnostic.messageId);
     const task = deliveryTail.then(async () => {
       if (shouldDiagnose) {
         appendExecutionLog({
-          userId, sessionId, parentSessionId, dialogProcessId,
+          userId,
+          sessionId,
+          parentSessionId,
+          dialogProcessId,
           event: "execution_upstream_forward_started",
-          category: "debug", type: "execution_upstream_forward_started",
-          data: diagnostic, ts: new Date().toISOString(),
+          category: "debug",
+          type: "execution_upstream_forward_started",
+          data: diagnostic,
+          ts: new Date().toISOString(),
         });
       }
       try {
-        const result = await upstream?.onEvent?.({ event, data: enrichedData, ts });
+        const result = await upstream?.onEvent?.({ event, data: transportData, ts });
         if (result === false) {
           const error = new Error("upstream rejected event delivery");
           error.code = "EVENT_UPSTREAM_DELIVERY_REJECTED";
@@ -96,10 +125,17 @@ export function createExecutionEventListener({
         }
         if (shouldDiagnose) {
           appendExecutionLog({
-            userId, sessionId, parentSessionId, dialogProcessId,
+            userId,
+            sessionId,
+            parentSessionId,
+            dialogProcessId,
             event: "execution_upstream_forward_completed",
-            category: "debug", type: "execution_upstream_forward_completed",
-            data: { ...diagnostic, result: result === true ? true : result === false ? false : "completed" },
+            category: "debug",
+            type: "execution_upstream_forward_completed",
+            data: {
+              ...diagnostic,
+              result: result === true ? true : result === false ? false : "completed",
+            },
             ts: new Date().toISOString(),
           });
         }
@@ -109,10 +145,15 @@ export function createExecutionEventListener({
         deliveryFailures.push(failure);
         if (shouldDiagnose) {
           appendExecutionLog({
-            userId, sessionId, parentSessionId, dialogProcessId,
+            userId,
+            sessionId,
+            parentSessionId,
+            dialogProcessId,
             event: "execution_upstream_forward_failed",
-            category: "system", type: "execution_upstream_forward_failed",
-            data: failure, ts: new Date().toISOString(),
+            category: "system",
+            type: "execution_upstream_forward_failed",
+            data: failure,
+            ts: new Date().toISOString(),
           });
         }
         return false;
@@ -122,11 +163,12 @@ export function createExecutionEventListener({
     return task;
   };
 
-  const forwardEvent = (evt = {}) => forwardUpstream({
-    event: evt?.event || "",
-    data: evt?.data || {},
-    ts: evt?.ts || new Date().toISOString(),
-  });
+  const forwardEvent = (evt = {}) =>
+    forwardUpstream({
+      event: evt?.event || "",
+      data: evt?.data || {},
+      ts: evt?.ts || new Date().toISOString(),
+    });
 
   return {
     flushPersistence: () => persistenceTail,
@@ -145,26 +187,25 @@ export function createExecutionEventListener({
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      if (event === "llm_delta" || INTERNAL_TRANSPORT_EVENTS.has(event)) {
-        return forwardEvent({ event, data, ts });
-      }
-
-      const { category, type } = classifyExecutionEvent(event);
+      const executionRecord = projectExecutionLogRecord(event, data);
+      const { category, type } = classifyExecutionEvent(executionRecord.event);
       try {
         appendExecutionLog({
           userId,
           sessionId,
           parentSessionId,
           dialogProcessId,
-          event,
+          event: executionRecord.event,
           category,
           type,
-          data,
+          data: executionRecord.data,
           ts,
         });
-      } catch {
-      }
+      } catch {}
 
+      // Execution diagnostics are persisted locally and never become client
+      // facts. Only the explicit private run contract may cross this boundary.
+      if (!AGENT_RUN_EVENTS.has(event)) return persistenceTail;
       return forwardEvent({ event, data, ts });
     },
   };

@@ -5,7 +5,6 @@
  */
 import { config } from "../../shared/config.js";
 import {
-  EVENT_TYPE,
   CHANNEL_RETENTION_PHASE,
   CHANNEL_STATUS,
   CLIENT_ROLE,
@@ -19,14 +18,25 @@ import {
 } from "../../shared/utils.js";
 import {
   TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
   TURN_STATE,
   isAuthoritativeTurnLifecycleEnvelope,
-  validateTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
 import {
-  validateInteractionRequestPayload,
+  TURN_COMMITTED_WIRE_EVENT,
+  assertTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
+import {
+  EVENT_FAMILY,
+  INTERACTION_EVENT_TYPE,
   isTerminalInteractionLifecycle,
+  validateProtocolEvent,
 } from "@noobot/event-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  validateAgentCommandReceipt,
+  validateAgentTransportError,
+} from "@noobot/agent-transport-protocol";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -42,20 +52,43 @@ const TERMINAL_TURN_STATES = new Set([
   TURN_STATE.STOP_FAILED,
 ]);
 
+function validateChannelDataPlaneEvent(eventName, data) {
+  if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
+    return validateAgentTransportError(data);
+  }
+  if (eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
+    return validateAgentCommandReceipt(data);
+  }
+  if (eventName === TURN_COMMITTED_WIRE_EVENT) {
+    try {
+      assertTurnCommittedEventData(data);
+      return { valid: true, errors: [] };
+    } catch (error) {
+      return { valid: false, errors: error?.validationErrors || [error?.message || "invalid_turn_commit"] };
+    }
+  }
+  const validation = validateProtocolEvent(data);
+  if (!validation.valid) return validation;
+  if (String(data?.identity?.eventType || "").trim() !== eventName) {
+    return { valid: false, errors: ["wire_event_identity_mismatch"] };
+  }
+  return validation;
+}
+
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
   const sequence = Number(knownSequence || 0);
   if (!window.length) return { events: [], hasReplayGap: sequence > 0 };
-  const first = Number(window[0]?.sequence || 0);
+  const first = Number(window[0]?.ordering?.sequence || 0);
   let previous = first - 1;
   const hasGap = window.some((item) => {
-    const current = Number(item?.sequence || 0);
+    const current = Number(item?.ordering?.sequence || 0);
     const gap = current !== previous + 1;
     previous = current;
     return gap;
   });
   if (hasGap || sequence < first - 1) return { events: [], hasReplayGap: true };
   return {
-    events: window.filter((item) => Number(item.sequence) > sequence),
+    events: window.filter((item) => Number(item?.ordering?.sequence) > sequence),
     hasReplayGap: false,
   };
 }
@@ -70,8 +103,8 @@ function latestLifecycleEntry(channels = [], sessionId = "") {
       })),
     )
     .sort((left, right) =>
-      Number(left.envelope?.sequence || 0) - Number(right.envelope?.sequence || 0) ||
-      Number(left.envelope?.revision || 0) - Number(right.envelope?.revision || 0),
+      Number(left.envelope?.ordering?.sequence || 0) - Number(right.envelope?.ordering?.sequence || 0) ||
+      Number(left.envelope?.ordering?.revision || 0) - Number(right.envelope?.ordering?.revision || 0),
     )
     .at(-1) || null;
 }
@@ -196,41 +229,61 @@ get channelCount() {
 
 pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
-  const normalizedEventName = String(eventName || EVENT_TYPE.MESSAGE).trim() || EVENT_TYPE.MESSAGE;
-  if (normalizedEventName === EVENT_TYPE.INTERACTION_REQUEST) {
-    const validation = validateInteractionRequestPayload(data);
-    const requestId = String(data?.requestId || "").trim();
-    const lifecycle = String(data?.lifecycle || data?.interactionData?.lifecycle || "pending").trim().toLowerCase();
+  const normalizedEventName = String(eventName || "").trim();
+  if (!normalizedEventName) return null;
+  const dataPlaneValidation = validateChannelDataPlaneEvent(normalizedEventName, data);
+  if (!dataPlaneValidation.valid) {
+    this.logSessionEvent(channel, {
+      category: "protocol",
+      level: "warn",
+      event: "agentProxy.channelEvent.rejected",
+      sessionId: data?.identity?.sessionId,
+      turnScopeId: data?.identity?.turnScopeId,
+      data: {
+        wireEvent: normalizedEventName,
+        errors: dataPlaneValidation.errors,
+      },
+    });
+    return null;
+  }
+  if (normalizedEventName === INTERACTION_EVENT_TYPE.REQUEST) {
+    const validation = validateProtocolEvent(data);
+    const requestId = String(data?.payload?.requestId || "").trim();
+    const lifecycle = String(data?.payload?.lifecycle || "pending").trim().toLowerCase();
     const isTerminal = validation.valid && isTerminalInteractionLifecycle(lifecycle);
-    if (!validation.valid || (!isTerminal && (channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)))) {
+    if (
+      !validation.valid ||
+      validation.descriptor?.family !== EVENT_FAMILY.INTERACTION_REQUEST ||
+      (!isTerminal && (channel.pendingInteractionRequests.has(requestId) || this.requestChannelMap.has(requestId)))
+    ) {
       this.logSessionEvent(channel, {
         category: "interaction",
         level: "warn",
         event: "agentProxy.interaction.rejected",
-        sessionId: data?.sessionId,
-        dialogProcessId: data?.dialogProcessId,
-        turnScopeId: data?.turnScopeId,
+        sessionId: data?.identity?.sessionId,
+        dialogProcessId: data?.payload?.dialogProcessId,
+        turnScopeId: data?.identity?.turnScopeId,
         data: {
           requestId,
-          reason: validation.valid ? (isTerminal ? "terminal_without_pending_request" : "duplicate_request_id") : validation.reason,
-          missing: validation.missing,
+          reason: validation.valid ? (isTerminal ? "terminal_without_pending_request" : "duplicate_request_id") : "invalid_protocol_event",
+          errors: validation.errors,
         },
       });
       return null;
     }
   }
-  if (normalizedEventName === EVENT_TYPE.TURN_LIFECYCLE) {
-    const validation = validateTurnLifecycleEnvelope(data);
-    if (!validation.valid) {
+  if (normalizedEventName === TURN_LIFECYCLE_WIRE_EVENT) {
+    const validation = validateProtocolEvent(data);
+    if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) {
       this.logSessionEvent(channel, {
         category: "protocol",
         level: "warn",
         event: "agentProxy.turnLifecycle.rejected",
-        sessionId: data?.sessionId,
-        dialogProcessId: data?.dialogProcessId,
-        turnScopeId: data?.turnScopeId,
+        sessionId: data?.identity?.sessionId,
+        dialogProcessId: data?.payload?.dialogProcessId,
+        turnScopeId: data?.identity?.turnScopeId,
         data: {
-          eventId: String(data?.eventId || "").trim(),
+          eventId: String(data?.identity?.eventId || "").trim(),
           errors: validation.errors,
         },
       });
@@ -242,40 +295,42 @@ pushChannelEvent(channel, eventName = "", data = {}) {
     normalizedEventName,
     data,
   );
-  if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
+  if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) {
     this.recordTurnLifecycleEnvelope(channel, envelope.data);
   }
   this.recordSuccessfulDataPlaneOperation("channelEvents");
-  if (String(envelope.event || "") === EVENT_TYPE.INTERACTION_REQUEST) {
-    const requestId = String(envelope?.data?.requestId || "").trim();
-    const lifecycle = String(envelope?.data?.lifecycle || envelope?.data?.interactionData?.lifecycle || "pending").trim().toLowerCase();
+  if (String(envelope.event || "") === INTERACTION_EVENT_TYPE.REQUEST) {
+    const protocolEnvelope = envelope.data;
+    const interaction = protocolEnvelope.payload;
+    const requestId = String(interaction.requestId || "").trim();
+    const lifecycle = String(interaction.lifecycle || "pending").trim().toLowerCase();
     if (isTerminalInteractionLifecycle(lifecycle)) {
       channel.pendingInteractionRequests.delete(requestId);
       this.requestChannelMap.delete(requestId);
       this.updateConversationState(channel, {
-        dialogProcessId: envelope.data.dialogProcessId,
-        turnScopeId: envelope.data.turnScopeId,
+        dialogProcessId: interaction.dialogProcessId,
+        turnScopeId: protocolEnvelope.identity.turnScopeId,
         state: CONVERSATION_STATE.SENDING,
-        sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
-        seq: Number(envelope.data.seq || envelope.sequence || 0),
-        sessionId: envelope.data.sessionId,
+        sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
+        seq: Number(protocolEnvelope.ordering.sequence),
+        sessionId: protocolEnvelope.identity.sessionId,
         requestId,
       });
     } else {
       this.commandRegistry.registerRoute(requestId, { channelKey: channel.key, createdAtMs: nowMs() });
-      channel.pendingInteractionRequests.set(requestId, envelope);
+      channel.pendingInteractionRequests.set(requestId, protocolEnvelope);
       this.updateConversationState(channel, {
-        dialogProcessId: envelope.data.dialogProcessId,
-        turnScopeId: envelope.data.turnScopeId,
+        dialogProcessId: interaction.dialogProcessId,
+        turnScopeId: protocolEnvelope.identity.turnScopeId,
         state: CONVERSATION_STATE.INTERACTION_PENDING,
-        sourceEvent: EVENT_TYPE.INTERACTION_REQUEST,
-        seq: Number(envelope.data.seq || envelope.sequence || 0),
-        sessionId: envelope.data.sessionId,
+        sourceEvent: INTERACTION_EVENT_TYPE.REQUEST,
+        seq: Number(protocolEnvelope.ordering.sequence),
+        sessionId: protocolEnvelope.identity.sessionId,
         requestId,
       });
     }
   }
-  if (envelope.event === EVENT_TYPE.TURN_LIFECYCLE) {
+  if (envelope.event === TURN_LIFECYCLE_WIRE_EVENT) {
     this._applyAuthoritativeConversationState(channel, envelope.data);
   }
   return envelope;
@@ -283,16 +338,15 @@ pushChannelEvent(channel, eventName = "", data = {}) {
 
 recordTurnLifecycleEnvelope(channel, lifecycleEnvelope = {}) {
   if (!channel || !lifecycleEnvelope || typeof lifecycleEnvelope !== "object") return null;
-  const sessionId = String(lifecycleEnvelope.sessionId || "").trim();
-  const sequence = Number(lifecycleEnvelope.sequence || 0);
-  const revision = Number(lifecycleEnvelope.revision || 0);
-  const eventId = String(lifecycleEnvelope.eventId || "").trim();
+  const sessionId = String(lifecycleEnvelope?.identity?.sessionId || "").trim();
+  const sequence = Number(lifecycleEnvelope?.ordering?.sequence || 0);
+  const eventId = String(lifecycleEnvelope?.identity?.eventId || "").trim();
   if (!sessionId || !Number.isInteger(sequence) || sequence < 1 || !eventId) return null;
   channel.lifecycleWindowsBySessionId ||= new Map();
   const current = channel.lifecycleWindowsBySessionId.get(sessionId) || [];
-  if (current.some((item) => item.eventId === eventId || item.sequence === sequence)) return null;
-  const next = [...current, { ...lifecycleEnvelope, sequence, revision, eventId }]
-    .sort((left, right) => left.sequence - right.sequence)
+  if (current.some((item) => item?.identity?.eventId === eventId || Number(item?.ordering?.sequence) === sequence)) return null;
+  const next = [...current, lifecycleEnvelope]
+    .sort((left, right) => Number(left?.ordering?.sequence || 0) - Number(right?.ordering?.sequence || 0))
     .slice(-config.maxChannelEvents);
   channel.lifecycleWindowsBySessionId.set(sessionId, next);
   return next;
@@ -309,16 +363,16 @@ getTurnLifecycleReplayForChannels(channels = [], sessionId = "", knownSequence =
   const mergedBySequence = new Map();
   for (const channel of channels) {
     for (const envelope of channel?.lifecycleWindowsBySessionId?.get(normalizedSessionId) || []) {
-      const sequence = Number(envelope?.sequence || 0);
+      const sequence = Number(envelope?.ordering?.sequence || 0);
       if (sequence < 1) continue;
       const existing = mergedBySequence.get(sequence);
-      if (!existing || Number(envelope?.revision || 0) >= Number(existing?.revision || 0)) {
+      if (!existing || Number(envelope?.ordering?.revision || 0) >= Number(existing?.ordering?.revision || 0)) {
         mergedBySequence.set(sequence, envelope);
       }
     }
   }
   const window = Array.from(mergedBySequence.values()).sort(
-    (left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0),
+    (left, right) => Number(left?.ordering?.sequence || 0) - Number(right?.ordering?.sequence || 0),
   );
   return buildTurnLifecycleReplay(window, knownSequence);
 }
@@ -331,15 +385,17 @@ getActiveTurnLifecycleProjectionForChannels(channels = [], sessionId = "") {
   const normalizedSessionId = String(sessionId || "").trim();
   const latestEntry = latestLifecycleEntry(channels, normalizedSessionId);
   const latest = latestEntry?.envelope || null;
-  if (!latest || !isAuthoritativeTurnLifecycleEnvelope(latest)) return null;
-  const eventType = String(latest?.eventType || "").trim();
-  const lifecycleState = String(latest?.state || "").trim();
+  const validation = validateProtocolEvent(latest);
+  if (!latest || !validation.valid || validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) return null;
+  const lifecycle = latest.payload;
+  const eventType = String(lifecycle?.eventType || "").trim();
+  const lifecycleState = String(lifecycle?.state || "").trim();
   if (TERMINAL_TURN_EVENTS.has(eventType) || TERMINAL_TURN_STATES.has(lifecycleState)) {
     return null;
   }
-  const turnScopeId = String(latest?.turnScopeId || "").trim();
+  const turnScopeId = String(latest?.identity?.turnScopeId || "").trim();
   if (!turnScopeId) return null;
-  const dialogProcessId = String(latest?.dialogProcessId || "").trim();
+  const dialogProcessId = String(lifecycle?.dialogProcessId || "").trim();
   const conversationState = channels
     .flatMap((channel) => [...(channel?.conversationStateByDialogProcessId?.values?.() || [])])
     .filter((item) => String(item?.turnScopeId || "").trim() === turnScopeId)
@@ -348,7 +404,7 @@ getActiveTurnLifecycleProjectionForChannels(channels = [], sessionId = "") {
   const projectedState = String(conversationState?.state || "").trim() ||
     (eventType === TURN_EVENT.STOP_ACCEPTED ? CONVERSATION_STATE.STOPPING : CONVERSATION_STATE.SENDING);
   return {
-    ...latest,
+    ...lifecycle,
     sessionId: normalizedSessionId,
     dialogProcessId,
     turnScopeId,
@@ -427,20 +483,21 @@ updateConversationState(
 }
 
 _applyAuthoritativeConversationState(channel, eventData = {}) {
-  if (!channel || !isAuthoritativeTurnLifecycleEnvelope(eventData)) return;
-  const eventName = String(eventData?.eventType || "").trim();
-  const dialogProcessId = String(eventData?.dialogProcessId || "").trim();
-  const turnScopeId = String(eventData?.turnScopeId || "").trim();
-  const sessionId = String(eventData?.sessionId || "").trim();
-  const seq = Number(eventData?.sequence || 0);
+  const validation = validateProtocolEvent(eventData);
+  if (!channel || !validation.valid || validation.descriptor?.family !== EVENT_FAMILY.TURN_LIFECYCLE) return;
+  const lifecycle = eventData.payload;
+  if (!isAuthoritativeTurnLifecycleEnvelope(lifecycle)) return;
+  const eventName = String(lifecycle?.eventType || "").trim();
+  const dialogProcessId = String(lifecycle?.dialogProcessId || "").trim();
+  const turnScopeId = String(eventData?.identity?.turnScopeId || "").trim();
+  const sessionId = String(eventData?.identity?.sessionId || "").trim();
+  const seq = Number(eventData?.ordering?.sequence || 0);
   const createdAtMs = Number(
-    eventData?.createdAtMs ||
-      eventData?.timestamp ||
-      (eventData?.createdAt ? Date.parse(eventData.createdAt) : 0) ||
+    (eventData?.occurredAt ? Date.parse(eventData.occurredAt) : 0) ||
       0,
   );
   let nextState = "";
-  const lifecycleState = String(eventData?.state || "").trim();
+  const lifecycleState = String(lifecycle?.state || "").trim();
   if ([TURN_STATE.PROCESSING, TURN_STATE.COMPLETION_REQUESTING].includes(lifecycleState)) {
     nextState = CONVERSATION_STATE.SENDING;
   } else if (lifecycleState === TURN_STATE.STOPPING) {
@@ -469,10 +526,10 @@ _applyAuthoritativeConversationState(channel, eventData = {}) {
     if (eventOwnsChannel) {
       let clearedPendingInteractionCount = 0;
       for (const [requestId, envelope] of channel.pendingInteractionRequests.entries()) {
-        const interaction = envelope?.data || {};
-        const sameSession = !sessionId || String(interaction.sessionId || '').trim() === sessionId;
+        const interaction = envelope?.payload || {};
+        const sameSession = !sessionId || String(envelope?.identity?.sessionId || '').trim() === sessionId;
         const sameDialog = !dialogProcessId || String(interaction.dialogProcessId || '').trim() === dialogProcessId;
-        const sameTurn = !turnScopeId || String(interaction.turnScopeId || '').trim() === turnScopeId;
+        const sameTurn = !turnScopeId || String(envelope?.identity?.turnScopeId || '').trim() === turnScopeId;
         if (sameSession && sameDialog && sameTurn) {
           channel.pendingInteractionRequests.delete(requestId);
           this.requestChannelMap.delete(requestId);
@@ -506,7 +563,7 @@ _applyAuthoritativeConversationState(channel, eventData = {}) {
     seq,
     createdAtMs,
     sessionId,
-    requestId: String(eventData?.requestId || "").trim(),
+    requestId: String(lifecycle?.requestId || "").trim(),
     broadcast: false,
   });
 }

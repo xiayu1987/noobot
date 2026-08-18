@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import { mergeConfig, normalizeMcpServerType } from "@noobot/agent-config-protocol";
-import { resolveConfigSecrets } from "../../config/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { StreamableHttpMcpClient } from "./clients/streamable-http.js";
@@ -20,20 +19,15 @@ export function getMcpServerByName({ globalConfig = {}, userConfig = {}, mcpName
   const serverType = normalizeMcpServerType(server?.type);
   if (!serverType) return null;
   if (!String(server?.baseUrl || "").trim()) return null;
-  const resolvedHeaders = resolveHeaders(
-    server?.headers || {},
-    effectiveConfig?.configParams || {},
-  );
+  const resolvedHeaders =
+    server?.headers && typeof server.headers === "object" && !Array.isArray(server.headers)
+      ? { ...server.headers }
+      : {};
   const authHeader = String(resolvedHeaders?.Authorization || "").trim();
   if (/^Bearer\s*$/i.test(authHeader)) {
     throw recoverableToolError(`${tSystem("mcp.authHeaderEmptyAfterResolve")}: ${name}`);
   }
   return { name, ...server, type: serverType, headers: resolvedHeaders };
-}
-
-function resolveHeaders(rawHeaders = {}, configParams = {}) {
-  const resolved = resolveConfigSecrets(rawHeaders, { configParams });
-  return resolved && typeof resolved === "object" && !Array.isArray(resolved) ? resolved : {};
 }
 
 export function createMcpClient({ server = {}, signal = null, fetchImpl = null }) {

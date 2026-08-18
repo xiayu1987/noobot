@@ -12,7 +12,7 @@ import {
   isBotDispatchOutcome,
   resolveBotDispatchOutcome,
 } from "@noobot/agent-transport-protocol/bot-dispatch";
-import { createModelContext } from "@noobot/context-protocol/hook-context";
+import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import {
   canonicalMessageId,
   canonicalMessageIdentityDebugData,

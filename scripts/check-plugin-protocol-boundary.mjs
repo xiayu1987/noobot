@@ -25,6 +25,14 @@ const forbidden = [
   ["legacy fixed plugin slot", /["'](?:agentPlugin|botPlugin)["']/],
   ["plugin identity alias", /(?:\.|["'])pluginKey\b/],
 ];
+const hostRuntimeForbidden = [
+  ["direct plugin activation", /\bentry\.activate\s*\(/],
+  ["direct activation result validation", /\bvalidatePluginActivationResult\s*\(/],
+  ["host-owned lifecycle record construction", /\bcreatePluginLifecycleRecord\s*\(/],
+  ["raw lifecycle event literal", /["']plugin\.(?:activating|activated|contribution_committed|deactivating|deactivated|failed|rolled_back)["']/],
+  ["unscoped service port facade", /\bcontext\??\.ports\s*\|\|/],
+];
+const hostRuntimeRoots = ["agent/src", "service/services", "client/noobot-chat/src"];
 
 async function filesUnder(relativeRoot) {
   const output = [];
@@ -43,10 +51,16 @@ async function filesUnder(relativeRoot) {
 await init;
 const violations = [];
 const files = (await Promise.all(productionRoots.map(filesUnder))).flat();
+const hostRuntimeFiles = new Set((await Promise.all(hostRuntimeRoots.map(filesUnder))).flat());
 for (const file of files) {
   const source = await fs.readFile(file, "utf8");
   for (const [label, pattern] of forbidden) {
     if (pattern.test(source)) violations.push(`${path.relative(root, file)}: ${label}`);
+  }
+  if (hostRuntimeFiles.has(file)) {
+    for (const [label, pattern] of hostRuntimeForbidden) {
+      if (pattern.test(source)) violations.push(`${path.relative(root, file)}: ${label}`);
+    }
   }
 }
 

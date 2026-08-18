@@ -6,11 +6,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createModelContext } from "../src/hook-context.js";
-import {
-  buildDualLaneModelContext,
-  MODEL_CONTEXT_LANE,
-} from "../src/dual-lane-context.js";
+import { createModelContext } from "../src/assembly/hook-context.js";
+import { buildDualLaneModelContext, MODEL_CONTEXT_LANE } from "../src/assembly/dual-lane.js";
 
 test("primary lane materializes the authoritative model context blocks", () => {
   const modelContext = createModelContext({
@@ -21,7 +18,10 @@ test("primary lane materializes the authoritative model context blocks", () => {
     },
   });
   const result = buildDualLaneModelContext({ lane: MODEL_CONTEXT_LANE.PRIMARY, modelContext });
-  assert.deepEqual(result.messages.map((message) => message.content), ["base system", "current task"]);
+  assert.deepEqual(
+    result.messages.map((message) => message.content),
+    ["base system", "current task"],
+  );
 });
 
 test("primary lane applies its declared runtime projection and history limit", () => {
@@ -47,7 +47,10 @@ test("primary lane applies its declared runtime projection and history limit", (
     result.messageBlocks.history.map((message) => message.content),
     ["latest", "latest answer"],
   );
-  assert.equal(result.messages.every((message) => message.projected === true), true);
+  assert.equal(
+    result.messages.every((message) => message.projected === true),
+    true,
+  );
 });
 
 test("auxiliary lane keeps all system messages before history and task", () => {
@@ -81,17 +84,19 @@ test("auxiliary lane keeps all system messages before history and task", () => {
 
 test("auxiliary lane rejects role crossover between protocol blocks", () => {
   assert.throws(
-    () => buildDualLaneModelContext({
-      lane: MODEL_CONTEXT_LANE.AUXILIARY,
-      protocolSystemMessages: [{ role: "user", content: "wrong block" }],
-    }),
+    () =>
+      buildDualLaneModelContext({
+        lane: MODEL_CONTEXT_LANE.AUXILIARY,
+        protocolSystemMessages: [{ role: "user", content: "wrong block" }],
+      }),
     /accepts only system messages/,
   );
   assert.throws(
-    () => buildDualLaneModelContext({
-      lane: MODEL_CONTEXT_LANE.AUXILIARY,
-      taskMessages: [{ role: "system", content: "wrong block" }],
-    }),
+    () =>
+      buildDualLaneModelContext({
+        lane: MODEL_CONTEXT_LANE.AUXILIARY,
+        taskMessages: [{ role: "system", content: "wrong block" }],
+      }),
     /cannot contain system messages/,
   );
 });

@@ -8,21 +8,14 @@ import {
   dedupeAttachmentRefs,
 } from "../transfer-attachment-refs.js";
 
-export function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
-  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
-  if (!activeTurnScopeId) return null;
-  const activeTurn = lifecycle?.turns?.[activeTurnScopeId];
-  if (!activeTurn || typeof activeTurn !== "object" || Array.isArray(activeTurn)) {
-    throw new TypeError("active Turn presentation invariant failed: turn_missing");
-  }
-  if (String(activeTurn.turnScopeId || "").trim() !== activeTurnScopeId) {
-    throw new TypeError("active Turn presentation invariant failed: turn_scope_mismatch");
-  }
-  const presentationMessageId = String(activeTurn.presentationMessageId || "").trim();
+const TERMINAL_PRESENTATION_STATES = new Set(["user_stopped", "error", "timeout"]);
+
+function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
+  const turnScopeId = String(turn?.turnScopeId || "").trim();
+  if (!turnScopeId) throw new TypeError("Turn presentation invariant failed: turn_scope_missing");
+  const presentationMessageId = String(turn?.presentationMessageId || "").trim();
   if (!presentationMessageId) {
-    throw new TypeError(
-      "active Turn presentation invariant failed: presentation_message_id_missing",
-    );
+    throw new TypeError("Turn presentation invariant failed: presentation_message_id_missing");
   }
   return {
     id: presentationMessageId,
@@ -32,12 +25,39 @@ export function buildActiveTurnPresentation(lifecycle = null, sessionId = "") {
     type: "message",
     content: "",
     sessionId,
-    turnScopeId: activeTurnScopeId,
-    dialogProcessId: String(activeTurn.dialogProcessId || "").trim(),
+    turnScopeId,
+    dialogProcessId: String(turn.dialogProcessId || "").trim(),
     chatPresentation: true,
     turnPlaceholder: true,
-    ts: String(activeTurn.updatedAt || activeTurn.startedAt || activeTurn.createdAt || "").trim(),
+    ts: String(turn.updatedAt || turn.startedAt || turn.createdAt || "").trim(),
   };
+}
+
+export function buildLifecycleTurnPresentations(lifecycle = null, sessionId = "") {
+  const turns = lifecycle?.turns && typeof lifecycle.turns === "object"
+    ? lifecycle.turns
+    : {};
+  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
+  if (activeTurnScopeId && !turns[activeTurnScopeId]) {
+    throw new TypeError("active Turn presentation invariant failed: turn_missing");
+  }
+  const entries = Object.entries(turns);
+  for (const [turnScopeId, turn] of entries) {
+    if (String(turn?.turnScopeId || "").trim() !== turnScopeId) {
+      throw new TypeError("Turn presentation invariant failed: turn_scope_mismatch");
+    }
+  }
+  return entries
+    .map(([, turn]) => turn)
+    .filter((turn = {}) => {
+      const turnScopeId = String(turn?.turnScopeId || "").trim();
+      const terminal = String(
+        turn?.terminalStatus?.status || turn?.executionState || "",
+      ).trim().toLowerCase();
+      return turnScopeId === activeTurnScopeId || TERMINAL_PRESENTATION_STATES.has(terminal);
+    })
+    .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0))
+    .map((turn) => buildLifecycleTurnPresentation(turn, sessionId));
 }
 
 export function buildToolArtifactTimelineProjection(session = {}) {

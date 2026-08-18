@@ -10,8 +10,8 @@ import {
   createTaskSummaryReceipt,
   parseTaskSummaryContent,
   parseTaskSummaryReceipt,
-} from "../src/task-summary-protocol.js";
-import { recoverContextTaskSummaryToolResult } from "../src/message-codec.js";
+} from "../src/task/summary.js";
+import { recoverContextTaskSummaryToolResult } from "../src/message/codec.js";
 
 const valid = [
   "NOOBOT_TASK_SUMMARY/1",
@@ -68,18 +68,30 @@ test("task summary context recovery accepts only the canonical v1 receipt", () =
   assert.equal(recovered.tool_call_id, undefined);
   assert.equal(recovered.original_tool_call_id, "summary-call-1");
 
-  assert.equal(recoverContextTaskSummaryToolResult({
-    role: "tool",
-    content: JSON.stringify({ toolName: "task_summary", summaryContent: valid }),
-  }), null);
+  assert.equal(
+    recoverContextTaskSummaryToolResult({
+      role: "tool",
+      content: JSON.stringify({ toolName: "task_summary", summaryContent: valid }),
+    }),
+    null,
+  );
 });
 
 for (const [name, content] of [
   ["missing header", valid.replace("NOOBOT_TASK_SUMMARY/1\n", "")],
   ["missing section", valid.replace("[ABSTRACT]\n完成协议实现。\n", "")],
-  ["wrong order", valid.replace("[ABSTRACT]\n完成协议实现。\n[DETAILS]\n修改唯一解析器并完成测试。", "[DETAILS]\n修改唯一解析器并完成测试。\n[ABSTRACT]\n完成协议实现。")],
+  [
+    "wrong order",
+    valid.replace(
+      "[ABSTRACT]\n完成协议实现。\n[DETAILS]\n修改唯一解析器并完成测试。",
+      "[DETAILS]\n修改唯一解析器并完成测试。\n[ABSTRACT]\n完成协议实现。",
+    ),
+  ],
   ["duplicate section", `${valid}\n[STATE]\nCONTINUE`],
-  ["unknown section", valid.replace("修改唯一解析器并完成测试。", "修改唯一解析器并完成测试。\n[OTHER]\n非法内容")],
+  [
+    "unknown section",
+    valid.replace("修改唯一解析器并完成测试。", "修改唯一解析器并完成测试。\n[OTHER]\n非法内容"),
+  ],
   ["invalid state", valid.replace("CONTINUE", "RUNNING")],
   ["empty section", valid.replace("完成协议实现。", "")],
 ]) {

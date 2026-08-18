@@ -3,21 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON, TRANSFER_SOURCE } from "../core/constants.js";
+import { DEFAULT_TRANSFER_MIME_TYPE, TRANSFER_REASON } from "../core/constants.js";
 import { createDirectTransferEnvelope, persistTransferFile } from "./attachment-adapter.js";
 import { resolveTransferIntent } from "../core/intent.js";
 import { createTransferResult, TRANSFER_RESULT_STATUS } from "../core/result.js";
-import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-
-const SEMANTIC_TRANSFER_POLICY_DIRECT_CHARS = LENGTH_THRESHOLDS.semanticTransfer.directChars;
+import {
+  decideTransfer,
+  normalizeTransferEnvelopes,
+  TRANSFER_MODE,
+  TRANSFER_SOURCE,
+} from "@noobot/semantic-transfer-protocol";
 
 export async function materializeOutputResult({
   runtime = {},
   agentContext = null,
   content = "",
-  prefer = "auto",
-  maxDirectChars = SEMANTIC_TRANSFER_POLICY_DIRECT_CHARS,
-  policy = null,
+  maxDirectChars,
+  policy = {},
   name = "output.txt",
   mimeType = DEFAULT_TRANSFER_MIME_TYPE,
   source = "",
@@ -39,23 +41,18 @@ export async function materializeOutputResult({
     defaultGenerationSource: TRANSFER_REASON.SEMANTIC_TRANSFER_OUTPUT,
     allowCustom: true,
   });
-  const transferPolicy = policy && typeof policy === "object" ? policy : {};
-  const selectedPrefer = String(transferPolicy.prefer ?? prefer ?? "auto")
-    .trim()
-    .toLowerCase();
-  const selectedMaxDirectChars = Number.isSafeInteger(transferPolicy.maxDirectChars)
-    ? transferPolicy.maxDirectChars
-    : maxDirectChars;
+  const decision = decideTransfer({
+    content: text,
+    policy,
+    ...(maxDirectChars === undefined ? {} : { maxDirectChars }),
+  });
   const outputMeta = {
     mimeType,
     originalLength: text.length,
     ...(Object.keys(meta || {}).length ? { attributes: meta } : {}),
   };
 
-  if (
-    selectedPrefer === "direct" ||
-    (selectedPrefer === "auto" && text.length <= selectedMaxDirectChars)
-  ) {
+  if (decision.mode === TRANSFER_MODE.DIRECT) {
     const envelope = createDirectTransferEnvelope({
       identity,
       content: text,
@@ -92,11 +89,13 @@ export async function materializeOutputResult({
     meta: outputMeta,
   });
 
-  const persistedEnvelope = Array.isArray(persisted?.transferEnvelopes)
-    ? persisted.transferEnvelopes.find(
-        (item) => item && typeof item === "object" && !Array.isArray(item),
-      )
-    : null;
+  const persistedTransferEnvelopes = normalizeTransferEnvelopes(
+    persisted?.transferEnvelopes,
+  );
+  if (persistedTransferEnvelopes.length !== 1) {
+    throw new Error("semantic_transfer_materializer_expected_single_envelope");
+  }
+  const [persistedEnvelope] = persistedTransferEnvelopes;
   if (persistedEnvelope) {
     return createTransferResult({
       ok: true,
@@ -104,12 +103,6 @@ export async function materializeOutputResult({
       envelope: persistedEnvelope,
     });
   }
-
-  return createTransferResult({
-    ok: false,
-    status: TRANSFER_RESULT_STATUS.FAILED,
-    error: { code: "TRANSFER_PERSIST_FAILED", message: "failed to persist transfer output" },
-  });
 }
 
 export async function materializeOutput(options = {}) {

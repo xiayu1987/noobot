@@ -13,7 +13,7 @@ import { isPlainObject } from "../../../shared/utils/shared-utils.js";
 import { SESSION_ASYNC_STATUS } from "../../../bot/config/constants.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
 import { TOOL_NAME } from "../../constants/index.js";
-import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   buildWaitAsyncTaskResultPayload,
   buildWaitTaskFailedResult,
@@ -39,7 +39,10 @@ export function createWaitAsyncTaskResultTool({
     name: TOOL_NAME.WAIT_ASYNC_TASK_RESULT,
     description: tTool(runtime, "tools.agent_collab.waitDescription"),
     schema: z.object({
-      timeoutMs: z.number().optional().describe(tTool(runtime, "tools.agent_collab.fieldTimeoutMs")),
+      timeoutMs: z
+        .number()
+        .optional()
+        .describe(tTool(runtime, "tools.agent_collab.fieldTimeoutMs")),
       pollIntervalMs: z
         .number()
         .optional()
@@ -47,31 +50,23 @@ export function createWaitAsyncTaskResultTool({
     }),
     func: async ({ timeoutMs, pollIntervalMs }) => {
       if (!botManager || !userId) {
-        throw recoverableToolError(
-          tAgentCollab(runtime, "runtimeMissingBotManagerUserId"),
-          {
-            code: ERROR_CODE.RECOVERABLE_RUNTIME_MISSING,
-            details: {
-              botManagerReady: Boolean(botManager),
-              userIdReady: Boolean(userId),
-            },
+        throw recoverableToolError(tAgentCollab(runtime, "runtimeMissingBotManagerUserId"), {
+          code: ERROR_CODE.RECOVERABLE_RUNTIME_MISSING,
+          details: {
+            botManagerReady: Boolean(botManager),
+            userIdReady: Boolean(userId),
           },
-        );
+        });
       }
 
       const containers = (
-        Array.isArray(runtime.childAsyncResultContainers)
-          ? runtime.childAsyncResultContainers
-          : []
+        Array.isArray(runtime.childAsyncResultContainers) ? runtime.childAsyncResultContainers : []
       ).filter((item) => isPlainObject(item) && Array.isArray(item?.tasks));
       if (!containers.length) {
-        throw recoverableToolError(
-          tAgentCollab(runtime, "childAsyncResultContainersRequired"),
-          {
-            code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
-            details: { field: "childAsyncResultContainers" },
-          },
-        );
+        throw recoverableToolError(tAgentCollab(runtime, "childAsyncResultContainersRequired"), {
+          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+          details: { field: "childAsyncResultContainers" },
+        });
       }
 
       const resolvedTimeoutMs = normalizeTimeMs(timeoutMs, {
@@ -87,9 +82,7 @@ export function createWaitAsyncTaskResultTool({
       const containerResults = await Promise.all(
         containers.map(async (containerItem = {}) => {
           const containerId = String(containerItem?.id || "").trim();
-          const resolvedParentSessionId = normalizeParentSessionId(
-            containerItem?.parentSessionId,
-          );
+          const resolvedParentSessionId = normalizeParentSessionId(containerItem?.parentSessionId);
           if (!resolvedParentSessionId) {
             return {
               id: containerId,
@@ -223,8 +216,7 @@ export function createWaitAsyncTaskResultTool({
           (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.USER_STOPPED,
         ).length,
         invalid_request: allTaskResults.filter(
-          (item) =>
-            String(item?.status || "") === SESSION_ASYNC_STATUS.INVALID_REQUEST,
+          (item) => String(item?.status || "") === SESSION_ASYNC_STATUS.INVALID_REQUEST,
         ).length,
       };
       const attachments = containerResults.flatMap((item) =>

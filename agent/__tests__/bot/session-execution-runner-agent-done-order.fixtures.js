@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { SessionExecutionRunner } from "../../src/bot/execution/runner.js";
 import { finalizeAgentTurn } from "../../src/bot/execution/runner/result-finalizer.js";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import {
   AGENT_LIFECYCLE_BRANCH_STATE,
   AGENT_LIFECYCLE_EVENT,
@@ -19,6 +19,14 @@ import {
 } from "../../src/runtime/lifecycle/state-machine.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+} from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
 
 export function createRunner({
   callOrder,
@@ -32,25 +40,58 @@ export function createRunner({
   getTurnSummaryCheckpointState,
 }) {
   const defaultRuntime = runtime || { attachmentMetas: [] };
+  let authorityEventSequence = 0;
+  const sessionManager = {
+    async commitMessageEvent({ sessionId, turnScopeId, messageId, commandId, correlationId, payload }) {
+      authorityEventSequence += 1;
+      return {
+        committed: true,
+        envelope: createEventEnvelope({
+          family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          identity: {
+            eventId: `test-authority-event-${authorityEventSequence}`,
+            eventType: MESSAGE_EVENT_WIRE_EVENT,
+            sessionId,
+            turnScopeId,
+            messageId,
+          },
+          causality: { commandId, correlationId },
+          ordering: {
+            domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+            scopeId: messageId,
+            sequence: authorityEventSequence,
+          },
+          producer: { type: "test", id: "session-execution-runner-fixture" },
+          occurredAt: "2026-05-21T00:00:00.000Z",
+          payload,
+        }),
+      };
+    },
+  };
+  defaultRuntime.sessionManager = defaultRuntime.sessionManager || sessionManager;
   if (!defaultRuntime.currentTurnMessages) {
     defaultRuntime.currentTurnMessages = createCurrentTurnMessagesStore([]);
   }
   return new SessionExecutionRunner({
-    agentRunner: agentRunner || (async () => {
-      callOrder.push("agentRunner");
-      return {
-        output: "ok",
-        assistantMessageId: "message-test-assistant",
-        traces: [{ id: "trace-1" }],
-        turnMessages: [{
-          messageId: "message-test-assistant",
-          role: "assistant",
-          type: "message",
-          content: "ok",
-        }],
-        turnTasks: [],
-      };
-    }),
+    agentRunner:
+      agentRunner ||
+      (async () => {
+        callOrder.push("agentRunner");
+        return {
+          output: "ok",
+          assistantMessageId: "message-test-assistant",
+          traces: [{ id: "trace-1" }],
+          turnMessages: [
+            {
+              messageId: "message-test-assistant",
+              role: "assistant",
+              type: "message",
+              content: "ok",
+            },
+          ],
+          turnTasks: [],
+        };
+      }),
     errorLogger: {
       async log() {
         callOrder.push("errorLogger.log");
@@ -74,12 +115,21 @@ export function createRunner({
       ...inputRunConfig,
       ...runConfig,
     }),
-    prepareAgentTurnExecution: prepareAgentTurnExecution || (async () => {
-      const agentContext = createTestAgentExecutionScope(defaultRuntime, {
-        identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
-      });
-      return { agentContext, runtimeAgentContext: agentContext };
-    }),
+    prepareAgentTurnExecution: async (payload) => {
+      const prepared = prepareAgentTurnExecution
+        ? await prepareAgentTurnExecution(payload)
+        : await (async () => {
+        const agentContext = createTestAgentExecutionScope(defaultRuntime, {
+          identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
+        });
+        return { agentContext, runtimeAgentContext: agentContext };
+      })();
+      const preparedRuntime = prepared?.runtimeAgentContext?.bindings?.runtime;
+      if (preparedRuntime && typeof preparedRuntime === "object") {
+        preparedRuntime.sessionManager = preparedRuntime.sessionManager || sessionManager;
+      }
+      return prepared;
+    },
     commitSessionTurn: async (payload = {}) => {
       callOrder.push("appendSessionTurn");
       const messageUid = `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -123,15 +173,21 @@ export function collectLifecycleStates(events) {
 
 export function findStoppedLifecycleEvent(events) {
   return events.find(
-    (item) => item.event === AGENT_LIFECYCLE_EVENT
-      && item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
+    (item) =>
+      item.event === AGENT_LIFECYCLE_EVENT &&
+      item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
   );
 }
 
-
 export {
-  assert, fs, os, path, finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_STATE,
+  assert,
+  fs,
+  os,
+  path,
+  finalizeAgentTurn,
+  AGENT_LIFECYCLE_BRANCH_STATE,
+  AGENT_LIFECYCLE_EVENT,
+  AGENT_LIFECYCLE_STATE,
   loadStoppedModelMessageSnapshot,
   createCurrentTurnMessagesStore,
   createTestAgentExecutionScope,

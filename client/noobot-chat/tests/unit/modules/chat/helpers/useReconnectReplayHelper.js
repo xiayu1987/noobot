@@ -19,6 +19,23 @@ import { projectTurnRuntimeToMessages } from "../../../../../src/modules/chat/ru
 import { replacePluginExtensions } from "../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { activate as activateWorkflowFrontend } from "../../../../../../../plugin/noobot-plugin-workflow/frontend/index.js";
+import {
+  createEventEnvelope,
+  EVENT_FAMILY,
+} from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
+import {
+  INTERACTION_EVENT_TYPE,
+  INTERACTION_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  workflowSequenceDomainForEvent,
+} from "@noobot/event-protocol/workflow-runtime-event";
+import { classifyRealtimeLog } from "../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 
 function createSession(id) {
   return {
@@ -78,34 +95,86 @@ export function createAuthoritativeMessageEnvelope(eventType, {
   const normalizedMessageId = normalizeIdentityPart(messageId, `message-${normalizedDialogProcessId}`);
   const normalizedTurnScopeId = normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`);
   const sequence = Number(seq || 0);
-  return {
-    event: "message_event",
-    data: {
-      channelKind: "message_event",
-      channelVersion: 1,
-      route: { scope: "main_session", sessionId },
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: normalizeIdentityPart(eventId, `${normalizedMessageId}-${eventType}-${sequence}`),
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId,
-      dialogProcessId: normalizedDialogProcessId,
       turnScopeId: normalizedTurnScopeId,
-      seq: sequence,
-      event: {
-        envelopeKind: "noobot.message_event",
-        envelopeVersion: 2,
-        eventId: normalizeIdentityPart(eventId, `${normalizedMessageId}-${eventType}-${sequence}`),
-        eventType,
-        sessionId,
-        messageId: normalizedMessageId,
-        presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
-        sequenceDomain: "message-event",
-        sequenceScopeId: normalizedMessageId,
-        dialogProcessId: normalizedDialogProcessId,
-        turnScopeId: normalizedTurnScopeId,
-        sequence,
-        timestamp: `2026-01-01T00:00:${String(sequence % 60).padStart(2, "0")}.000Z`,
-        ...eventData,
-      },
+      messageId: normalizedMessageId,
     },
+    causality: {},
+    ordering: {
+      domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      scopeId: normalizedMessageId,
+      sequence,
+    },
+    producer: { type: "test", id: "client-reconnect-fixture" },
+    occurredAt: `2026-01-01T00:00:${String(sequence % 60).padStart(2, "0")}.000Z`,
+    payload: {
+      eventType,
+      presentationMessageId: normalizeIdentityPart(presentationMessageId, normalizedMessageId),
+      dialogProcessId: normalizedDialogProcessId,
+      ...eventData,
+    },
+  });
+  return {
+    event: MESSAGE_EVENT_WIRE_EVENT,
+    data: envelope,
   };
+}
+
+export function createInteractionEnvelope(payload = {}, {
+  sessionId = "s-1",
+  turnScopeId = "turn-interaction",
+  sequence = 1,
+  eventId,
+} = {}) {
+  const requestId = normalizeIdentityPart(payload.requestId, "request-1");
+  return createEventEnvelope({
+    family: EVENT_FAMILY.INTERACTION_REQUEST,
+    identity: {
+      eventId: normalizeIdentityPart(eventId, `${requestId}-event-${sequence}`),
+      eventType: INTERACTION_EVENT_TYPE.REQUEST,
+      sessionId,
+      turnScopeId,
+    },
+    causality: {},
+    ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId, sequence },
+    producer: { type: "test", id: "client-reconnect-fixture" },
+    occurredAt: `2026-01-01T00:01:${String(sequence % 60).padStart(2, "0")}.000Z`,
+    payload: { ...payload, requestId },
+  });
+}
+
+export function createWorkflowEnvelope(eventType, payload = {}, {
+  sessionId = "s-1",
+  turnScopeId = "turn-workflow",
+  messageId = "workflow-message-1",
+  sequence = 1,
+  eventId,
+} = {}) {
+  const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
+  return createEventEnvelope({
+    family: EVENT_FAMILY.WORKFLOW_RUNTIME,
+    identity: {
+      eventId: normalizeIdentityPart(eventId, `${workflowRunId}-${eventType}-${sequence}`),
+      eventType,
+      sessionId,
+      turnScopeId,
+      messageId,
+    },
+    causality: {},
+    ordering: {
+      domain: workflowSequenceDomainForEvent(eventType),
+      scopeId: workflowRunId,
+      sequence,
+    },
+    producer: { type: "test", id: "client-reconnect-fixture" },
+    occurredAt: `2026-01-01T00:02:${String(sequence % 60).padStart(2, "0")}.000Z`,
+    payload: { ...payload, workflowRunId, turnScopeId },
+  });
 }
 
 export function createFakeProcessStore() {
@@ -194,6 +263,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     return applyTurnRuntimeEvents([event])[0];
   });
   const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
+  const reduceSubSessionMessageEvent = vi.fn(() => ({ applied: true }));
   const applyTerminalResolution = (response) => {
     const result = applyTurnTerminalResolution(turnRuntimeRegistry.value, response);
     if (result?.applied) {
@@ -301,7 +371,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     connectorTypeSet: new Set(["email"]),
     upsertConnectedConnectorInPanelState,
     refreshSessionConnectorsAsync,
-    classifyRealtimeLog: (item) => item,
+    classifyRealtimeLog,
     scrollBottom,
     translate: (key) => key,
     notify,
@@ -309,6 +379,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     turnRuntimeRegistry,
     dispatchAuthoritativeRunStateEvent,
     applyWorkflowRuntimeEvent,
+    reduceSubSessionMessageEvent,
     applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
     resolveTurnTerminalState,
   });
@@ -350,6 +421,7 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       dispatchAuthoritativeRunStateEvent,
       applyTurnLifecycleSnapshot: applyAuthoritativeTurnSnapshot,
       applyWorkflowRuntimeEvent,
+      reduceSubSessionMessageEvent,
       resolveTurnTerminalState,
       applyTerminalResolution,
     },

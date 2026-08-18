@@ -16,7 +16,7 @@ import {
   getSystemRuntimeFromRuntime,
   getChildRunParentSessionIdFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
@@ -87,7 +87,7 @@ export function createConnectorAccessTool({ agentContext }) {
         const detachedRun = await botManager.runDetachedSubSession({
           parentExecutionScope: agentContext,
           message: normalizedTask,
-          systemMessages: [connectorSubSessionSystemPrompt].filter(Boolean),
+          systemMessageFactory: () => [connectorSubSessionSystemPrompt].filter(Boolean),
           eventListener,
           abortSignal: signal,
           strategy: createAgentDetachedSubSessionStrategy({
@@ -151,7 +151,7 @@ export function createConnectorAccessTool({ agentContext }) {
               answer_length: answer.length,
               trace_count: traces.length,
               used_tools: usedTools,
-              dialog_process_id: resolveMessageDialogProcessId(subResult),
+              dialog_process_id: resolveContextMessageDialogProcessId(subResult),
             },
           },
           true,

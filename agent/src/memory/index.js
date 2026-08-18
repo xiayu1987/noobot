@@ -83,6 +83,11 @@ export class MemoryManager {
     });
   }
 
+  async deleteSessionMemoryBySessionIds({ userId, sessionIds = [] } = {}) {
+    const basePath = this.storage.resolveBasePath(userId);
+    return this.shortMemory.removeBySessionIds(basePath, sessionIds);
+  }
+
   async maybeSummarize({
     userId,
     sessionId = "",

@@ -10,7 +10,7 @@ import path from "node:path";
 const root = process.cwd();
 const rules = Object.freeze([
   {
-    file: "path-resolver/src/platform.mjs",
+    file: "path-resolver/src/platform.js",
     patterns: [/\["win",\s*"win32",\s*"windows"\]/, /\["mac",\s*"macos",\s*"darwin",\s*"osx"\]/],
   },
   {

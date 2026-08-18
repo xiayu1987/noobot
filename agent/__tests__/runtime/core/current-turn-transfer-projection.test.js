@@ -6,15 +6,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createCurrentTurnMessagesStore } from "../../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../../src/runtime/turn/current-turn-ledger.js";
 import { initializeCurrentTurnMessageEventProjection } from "../../../src/events/current-turn-message-event-projection.js";
 
 test("tool result transfer envelopes project onto the canonical assistant turn", () => {
-  const store = createCurrentTurnMessagesStore([{
-    role: "assistant",
-    messageUid: "assistant-1",
-    toolTimeline: [],
-  }]);
+  const store = createCurrentTurnMessagesStore([
+    {
+      role: "assistant",
+      messageUid: "assistant-1",
+      toolTimeline: [],
+    },
+  ]);
   const runtime = { currentTurnMessages: store, systemRuntime: {} };
   initializeCurrentTurnMessageEventProjection(runtime);
   const transferEnvelope = {

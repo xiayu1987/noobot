@@ -3,23 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { createHash } from "node:crypto";
-import { resolveDialogProcessIdFromContext, resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 
 function normalizeMessageUids(values = []) {
-  return [...new Set((Array.isArray(values) ? values : [])
-    .map((value) => String(value || "").trim())
-    .filter(Boolean))];
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
-function checkpointRequestHash({ dialogProcessId = "", turnScopeId = "", persistedMessageUids = [], summarizedMessageUids = [] } = {}) {
-  return `sha256:${createHash("sha256").update(JSON.stringify({
-    dialogProcessId,
-    turnScopeId,
-    persistedMessageUids,
-    summarizedMessageUids,
-  })).digest("hex")}`;
+function checkpointRequestHash({
+  dialogProcessId = "",
+  turnScopeId = "",
+  persistedMessageUids = [],
+  summarizedMessageUids = [],
+  retainedMessageUids = [],
+} = {}) {
+  return `sha256:${createHash("sha256")
+    .update(
+      JSON.stringify({
+        dialogProcessId,
+        turnScopeId,
+        persistedMessageUids,
+        summarizedMessageUids,
+        retainedMessageUids,
+      }),
+    )
+    .digest("hex")}`;
 }
 
 function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLICT") {
@@ -37,16 +53,13 @@ function resolveToolCalls(message = {}) {
 
 function resolveToolCallId(message = {}) {
   return String(
-    message?.tool_call_id ||
-      message?.toolCallId ||
-      message?.lc_kwargs?.tool_call_id ||
-      "",
+    message?.tool_call_id || message?.toolCallId || message?.lc_kwargs?.tool_call_id || "",
   ).trim();
 }
 
 function toolPairKey(message = {}, callId = "") {
   return [
-    resolveMessageDialogProcessId(message),
+    resolveContextMessageDialogProcessId(message),
     String(message?.turnScopeId || "").trim(),
     String(callId || "").trim(),
   ].join("\u0000");
@@ -93,140 +106,217 @@ export async function commitTurnSummaryCheckpoint({
   expectedCheckpointRevision,
   persistedMessageUids = [],
   summarizedMessageUids = [],
+  retainedMessageUids = [],
 } = {}) {
-  const normalizedDialogProcessId = resolveDialogProcessIdFromContext({ dialogProcessId });
+  const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const normalizedCheckpointId = String(checkpointId || "").trim();
   const normalizedPersistedUids = normalizeMessageUids(persistedMessageUids);
   const normalizedSummarizedUids = normalizeMessageUids(summarizedMessageUids);
-  if (!userId || !sessionId || !normalizedDialogProcessId || !normalizedTurnScopeId || !normalizedCheckpointId) {
+  const normalizedRetainedUids = normalizeMessageUids(retainedMessageUids);
+  if (
+    !userId ||
+    !sessionId ||
+    !normalizedDialogProcessId ||
+    !normalizedTurnScopeId ||
+    !normalizedCheckpointId
+  ) {
     return { committed: false, reason: "missing_checkpoint_identity", markedCount: 0 };
   }
 
-  return this._withSessionMutation(userId, sessionId, async () => {
-    const resolvedParentSessionId = await this._resolveParentSessionId(
-      userId,
-      sessionId,
-      parentSessionId,
-      persistenceContext,
-    );
-    const session = await this.sessionRepo.findById(
-      userId,
-      sessionId,
-      resolvedParentSessionId,
-      persistenceContext,
-    );
-    if (!session) return { committed: false, reason: "session_not_found", markedCount: 0 };
-
-    const lifecycleTurn = session?.turnLifecycle?.turns?.[normalizedTurnScopeId] || null;
-    if (lifecycleTurn && resolveMessageDialogProcessId(lifecycleTurn) !== normalizedDialogProcessId) {
-      throw checkpointConflict("checkpoint does not own the lifecycle turn", "TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT");
-    }
-    if (
-      lifecycleTurn &&
-      isTerminalTurnLifecycleState(lifecycleTurn.state) &&
-      normalizedPersistedUids.length
-    ) {
-      throw checkpointConflict(
-        "terminal checkpoint cannot persist additional messages",
-        "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE",
+  return this._withSessionMutation(
+    userId,
+    sessionId,
+    async () => {
+      const resolvedParentSessionId = await this._resolveParentSessionId(
+        userId,
+        sessionId,
+        parentSessionId,
+        persistenceContext,
       );
-    }
-    const activeTurnScopeId = String(session?.turnLifecycle?.activeTurnScopeId || "").trim();
-    if (activeTurnScopeId && activeTurnScopeId !== normalizedTurnScopeId) {
-      throw checkpointConflict("checkpoint does not target the active turn", "TURN_SUMMARY_CHECKPOINT_NOT_ACTIVE");
-    }
-
-    const checkpointStates = session?.turnSummaryCheckpoints && typeof session.turnSummaryCheckpoints === "object"
-      && !Array.isArray(session.turnSummaryCheckpoints)
-      ? { ...session.turnSummaryCheckpoints }
-      : {};
-    const currentState = checkpointStates[normalizedTurnScopeId] || {};
-    const currentRevision = Math.max(0, Number(currentState.checkpointRevision) || 0);
-    const requestHash = checkpointRequestHash({
-      dialogProcessId: normalizedDialogProcessId,
-      turnScopeId: normalizedTurnScopeId,
-      persistedMessageUids: normalizedPersistedUids,
-      summarizedMessageUids: normalizedSummarizedUids,
-    });
-    const existingReceipt = (Array.isArray(currentState.receipts) ? currentState.receipts : [])
-      .find((receipt) => String(receipt?.checkpointId || "").trim() === normalizedCheckpointId);
-    if (existingReceipt) {
-      if (existingReceipt.requestHash !== requestHash) {
-        throw checkpointConflict("checkpointId was reused with a different payload", "TURN_SUMMARY_CHECKPOINT_ID_REUSED");
-      }
-      return {
-        committed: false,
-        deduplicated: true,
-        reason: "duplicate_checkpoint",
-        markedCount: Number(existingReceipt.markedCount) || 0,
-        checkpointRevision: Number(existingReceipt.checkpointRevision) || currentRevision,
-        receipt: existingReceipt,
-      };
-    }
-    if (expectedCheckpointRevision !== undefined && Number(expectedCheckpointRevision) !== currentRevision) {
-      const error = checkpointConflict("turn summary checkpoint revision conflict", "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT");
-      error.currentCheckpointRevision = currentRevision;
-      throw error;
-    }
-
-    const requestedUids = new Set([...normalizedPersistedUids, ...normalizedSummarizedUids]);
-    const messagesByUid = new Map();
-    for (const message of Array.isArray(session.messages) ? session.messages : []) {
-      const messageUid = String(message?.messageUid || "").trim();
-      if (messageUid && requestedUids.has(messageUid)) messagesByUid.set(messageUid, message);
-    }
-    const resolvedMessageUids = [...messagesByUid.keys()];
-    const unresolvedMessageUids = [...requestedUids].filter((messageUid) => !messagesByUid.has(messageUid));
-    if (unresolvedMessageUids.length) {
-      const error = checkpointConflict(
-        `checkpoint contains ${unresolvedMessageUids.length} missing message UIDs`,
-        "TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING",
+      const session = await this.sessionRepo.findById(
+        userId,
+        sessionId,
+        resolvedParentSessionId,
+        persistenceContext,
       );
-      error.requestedMessageIds = [...requestedUids];
-      error.resolvedMessageIds = resolvedMessageUids;
-      error.unresolvedMessageIds = unresolvedMessageUids;
-      throw error;
-    }
-    for (const messageUid of normalizedPersistedUids) {
-      const message = messagesByUid.get(messageUid);
+      if (!session) return { committed: false, reason: "session_not_found", markedCount: 0 };
+
+      const lifecycleTurn = session?.turnLifecycle?.turns?.[normalizedTurnScopeId] || null;
       if (
-        resolveMessageDialogProcessId(message) !== normalizedDialogProcessId ||
-        String(message?.turnScopeId || "").trim() !== normalizedTurnScopeId
+        lifecycleTurn &&
+        resolveContextMessageDialogProcessId(lifecycleTurn) !== normalizedDialogProcessId
       ) {
-        throw checkpointConflict(`persisted checkpoint message is outside the current turn: ${messageUid}`, "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT");
+        throw checkpointConflict(
+          "checkpoint does not own the lifecycle turn",
+          "TURN_SUMMARY_CHECKPOINT_OWNERSHIP_CONFLICT",
+        );
       }
-    }
+      if (
+        lifecycleTurn &&
+        isTerminalTurnLifecycleState(lifecycleTurn.state) &&
+        normalizedPersistedUids.length
+      ) {
+        throw checkpointConflict(
+          "terminal checkpoint cannot persist additional messages",
+          "TURN_SUMMARY_CHECKPOINT_TERMINAL_PERSISTENCE",
+        );
+      }
+      const activeTurnScopeId = String(session?.turnLifecycle?.activeTurnScopeId || "").trim();
+      if (activeTurnScopeId && activeTurnScopeId !== normalizedTurnScopeId) {
+        throw checkpointConflict(
+          "checkpoint does not target the active turn",
+          "TURN_SUMMARY_CHECKPOINT_NOT_ACTIVE",
+        );
+      }
 
-    assertSummarizedToolPairClosure(session.messages, normalizedSummarizedUids);
+      const checkpointStates =
+        session?.turnSummaryCheckpoints &&
+        typeof session.turnSummaryCheckpoints === "object" &&
+        !Array.isArray(session.turnSummaryCheckpoints)
+          ? { ...session.turnSummaryCheckpoints }
+          : {};
+      const currentState = checkpointStates[normalizedTurnScopeId] || {};
+      const currentRevision = Math.max(0, Number(currentState.checkpointRevision) || 0);
+      const requestHash = checkpointRequestHash({
+        dialogProcessId: normalizedDialogProcessId,
+        turnScopeId: normalizedTurnScopeId,
+        persistedMessageUids: normalizedPersistedUids,
+        summarizedMessageUids: normalizedSummarizedUids,
+        retainedMessageUids: normalizedRetainedUids,
+      });
+      const existingReceipt = (
+        Array.isArray(currentState.receipts) ? currentState.receipts : []
+      ).find((receipt) => String(receipt?.checkpointId || "").trim() === normalizedCheckpointId);
+      if (existingReceipt) {
+        if (existingReceipt.requestHash !== requestHash) {
+          throw checkpointConflict(
+            "checkpointId was reused with a different payload",
+            "TURN_SUMMARY_CHECKPOINT_ID_REUSED",
+          );
+        }
+        return {
+          committed: false,
+          deduplicated: true,
+          reason: "duplicate_checkpoint",
+          markedCount: Number(existingReceipt.markedCount) || 0,
+          checkpointRevision: Number(existingReceipt.checkpointRevision) || currentRevision,
+          receipt: existingReceipt,
+        };
+      }
+      if (
+        expectedCheckpointRevision !== undefined &&
+        Number(expectedCheckpointRevision) !== currentRevision
+      ) {
+        const error = checkpointConflict(
+          "turn summary checkpoint revision conflict",
+          "TURN_SUMMARY_CHECKPOINT_REVISION_CONFLICT",
+        );
+        error.currentCheckpointRevision = currentRevision;
+        throw error;
+      }
 
-    const summarizedSet = new Set(normalizedSummarizedUids);
-    let markedCount = 0;
-    session.messages = (Array.isArray(session.messages) ? session.messages : []).map((message) => {
-      const messageUid = String(message?.messageUid || "").trim();
-      if (!summarizedSet.has(messageUid) || message?.summarized === true) return message;
-      markedCount += 1;
-      return { ...message, summarized: true };
-    });
-    const checkpointRevision = currentRevision + 1;
-    const receipt = {
-      checkpointId: normalizedCheckpointId,
-      checkpointRevision,
-      requestHash,
-      persistedMessageUids: normalizedPersistedUids,
-      summarizedMessageUids: normalizedSummarizedUids,
-      markedCount,
-      committedAt: this.now(),
-    };
-    checkpointStates[normalizedTurnScopeId] = {
-      dialogProcessId: normalizedDialogProcessId,
-      turnScopeId: normalizedTurnScopeId,
-      checkpointRevision,
-      receipts: [...(Array.isArray(currentState.receipts) ? currentState.receipts : []), receipt].slice(-50),
-    };
-    session.turnSummaryCheckpoints = checkpointStates;
-    session.updatedAt = receipt.committedAt;
-    await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
-    return { committed: true, markedCount, checkpointRevision, receipt };
-  }, parentSessionId, persistenceContext);
+      const overlappingUids = normalizedRetainedUids.filter((messageUid) =>
+        normalizedSummarizedUids.includes(messageUid),
+      );
+      if (overlappingUids.length) {
+        throw checkpointConflict(
+          "checkpoint cannot summarize and retain the same message",
+          "TURN_SUMMARY_CHECKPOINT_DISPOSITION_CONFLICT",
+        );
+      }
+      const persistedUidSet = new Set(normalizedPersistedUids);
+      const unpersistedRetainedUids = normalizedRetainedUids.filter(
+        (messageUid) => !persistedUidSet.has(messageUid),
+      );
+      if (unpersistedRetainedUids.length) {
+        throw checkpointConflict(
+          "checkpoint retained messages must belong to its persisted message set",
+          "TURN_SUMMARY_CHECKPOINT_RETAINED_MESSAGE_MISSING",
+        );
+      }
+      const requestedUids = new Set([
+        ...normalizedPersistedUids,
+        ...normalizedSummarizedUids,
+        ...normalizedRetainedUids,
+      ]);
+      const messagesByUid = new Map();
+      for (const message of Array.isArray(session.messages) ? session.messages : []) {
+        const messageUid = String(message?.messageUid || "").trim();
+        if (messageUid && requestedUids.has(messageUid)) messagesByUid.set(messageUid, message);
+      }
+      const resolvedMessageUids = [...messagesByUid.keys()];
+      const unresolvedMessageUids = [...requestedUids].filter(
+        (messageUid) => !messagesByUid.has(messageUid),
+      );
+      if (unresolvedMessageUids.length) {
+        const error = checkpointConflict(
+          `checkpoint contains ${unresolvedMessageUids.length} missing message UIDs`,
+          "TURN_SUMMARY_CHECKPOINT_MESSAGE_MISSING",
+        );
+        error.requestedMessageIds = [...requestedUids];
+        error.resolvedMessageIds = resolvedMessageUids;
+        error.unresolvedMessageIds = unresolvedMessageUids;
+        throw error;
+      }
+      for (const messageUid of normalizedPersistedUids) {
+        const message = messagesByUid.get(messageUid);
+        if (
+          resolveContextMessageDialogProcessId(message) !== normalizedDialogProcessId ||
+          String(message?.turnScopeId || "").trim() !== normalizedTurnScopeId
+        ) {
+          throw checkpointConflict(
+            `persisted checkpoint message is outside the current turn: ${messageUid}`,
+            "TURN_SUMMARY_CHECKPOINT_MESSAGE_SCOPE_CONFLICT",
+          );
+        }
+      }
+
+      assertSummarizedToolPairClosure(session.messages, normalizedSummarizedUids);
+
+      const summarizedSet = new Set(normalizedSummarizedUids);
+      const retainedSet = new Set(normalizedRetainedUids);
+      let markedCount = 0;
+      session.messages = (Array.isArray(session.messages) ? session.messages : []).map(
+        (message) => {
+          const messageUid = String(message?.messageUid || "").trim();
+          if (summarizedSet.has(messageUid)) {
+            if (message?.summarized === true) return message;
+            markedCount += 1;
+            return { ...message, summarized: true };
+          }
+          if (retainedSet.has(messageUid) && message?.summarized === true) {
+            return { ...message, summarized: false };
+          }
+          return message;
+        },
+      );
+      const checkpointRevision = currentRevision + 1;
+      const receipt = {
+        checkpointId: normalizedCheckpointId,
+        checkpointRevision,
+        requestHash,
+        persistedMessageUids: normalizedPersistedUids,
+        summarizedMessageUids: normalizedSummarizedUids,
+        retainedMessageUids: normalizedRetainedUids,
+        markedCount,
+        committedAt: this.now(),
+      };
+      checkpointStates[normalizedTurnScopeId] = {
+        dialogProcessId: normalizedDialogProcessId,
+        turnScopeId: normalizedTurnScopeId,
+        checkpointRevision,
+        receipts: [
+          ...(Array.isArray(currentState.receipts) ? currentState.receipts : []),
+          receipt,
+        ].slice(-50),
+      };
+      session.turnSummaryCheckpoints = checkpointStates;
+      session.updatedAt = receipt.committedAt;
+      await this.sessionRepo.save(userId, session, resolvedParentSessionId, { persistenceContext });
+      return { committed: true, markedCount, checkpointRevision, receipt };
+    },
+    parentSessionId,
+    persistenceContext,
+  );
 }

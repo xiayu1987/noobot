@@ -5,11 +5,24 @@
  */
 import { findActiveRun } from "./run-registry.js";
 import { recordServiceWebSocketLifecycle } from "./runtime-events.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import {
+  EXECUTION_ABORT_TYPE,
+  TURN_EVENT,
+  TURN_PHASE,
+  createExecutionAbortReason,
+  createTurnLifecycleCommandId,
+} from "@noobot/session-protocol";
+import { sendFailedCommandReceipt } from "./command-receipt.js";
 
 export function createMessageStopHandler({
-  state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,
-  rejectAllPendingInteractions, commitTurnLifecycle,
+  state,
+  canonicalRunOwnerId,
+  sendEvent,
+  translateText,
+  resolveBot,
+  sessionLogConfig,
+  rejectAllPendingInteractions,
+  commitTurnLifecycle,
 }) {
   const handleStop = async (command) => {
     const identity = command.identity;
@@ -24,31 +37,35 @@ export function createMessageStopHandler({
       parentSessionId: String(identity.parentSessionId || "").trim(),
       turnScopeId: targetTurnScopeId,
       dialogProcessId: String(identity.dialogProcessId || "").trim(),
-      commandId: stopCommandId,
+      commandId: createTurnLifecycleCommandId({
+        commandId: stopCommandId,
+        eventType: TURN_EVENT.STOP_ACCEPTED,
+        phase: TURN_PHASE.STOP,
+      }),
+      causationId: stopCommandId,
       eventType: TURN_EVENT.STOP_ACCEPTED,
       phase: TURN_PHASE.STOP,
       expectedRevision: command.concurrency.expectedTurnRevision,
     });
     if (!accepted?.applied && !accepted?.deduplicated) {
-      sendEvent("error", {
-        error: accepted?.reason || "stop_not_allowed",
-        errorCode: accepted?.reason || "stop_not_allowed",
-        failurePhase: TURN_PHASE.STOP,
-        sessionId: targetSessionId,
-        turnScopeId: targetTurnScopeId,
-        currentRevision: accepted?.currentRevision,
+      sendFailedCommandReceipt(sendEvent, command, {
+        code: accepted?.reason || "stop_not_allowed",
+        message: accepted?.reason || "stop_not_allowed",
       });
       return;
     }
     state.stopRequested = true;
     state.currentTurnScopeId = targetTurnScopeId;
-    rejectAllPendingInteractions(new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)));
+    rejectAllPendingInteractions(
+      new Error(translateText("ws.dialogStoppedByUser", state.currentLocale)),
+    );
     state.currentStopPayload = {
       userId: targetUserId,
       message: translateText("ws.dialogStoppedByUser", state.currentLocale),
-      sessionId:
-        targetSessionId,
-      dialogProcessId: String(identity.dialogProcessId || state.currentRunMeta?.dialogProcessId || "").trim(),
+      sessionId: targetSessionId,
+      dialogProcessId: String(
+        identity.dialogProcessId || state.currentRunMeta?.dialogProcessId || "",
+      ).trim(),
       turnScopeId: targetTurnScopeId,
       partialAssistant,
       commandId: stopCommandId,
@@ -66,11 +83,11 @@ export function createMessageStopHandler({
     if (activeRun && activeRun.abortController && !activeRun.abortController.signal?.aborted) {
       activeRun.stopRequested = true;
       activeRun.stopPayload = state.currentStopPayload;
-      activeRun.abortController.abort({
-        type: "user_stop",
+      activeRun.abortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
       return;
     }
     if (!state.isRunning || !state.currentAbortController) {
@@ -93,26 +110,36 @@ export function createMessageStopHandler({
         };
         const processed = await commitTurnLifecycle({
           ...lifecycleContext,
-          commandId: `${stopCommandId}:processing-completed`,
+          commandId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
+          causationId: stopCommandId,
           eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
           finalizePayload: { assistantMessage: stoppedPartialAssistant },
         });
         if (!processed?.applied && !processed?.deduplicated) {
-          sendEvent("error", {
-            error: processed?.reason || "stop_processing_completed_failed",
-            errorCode: processed?.reason || "stop_processing_completed_failed",
-            failurePhase: TURN_PHASE.STOP,
-            sessionId: stopPayload.sessionId,
-            dialogProcessId: stopPayload.dialogProcessId,
-            turnScopeId: stopPayload.turnScopeId,
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: processed?.reason || "stop_processing_completed_failed",
+            message: processed?.reason || "stop_processing_completed_failed",
           });
           return;
         }
         const completed = await commitTurnLifecycle({
           ...lifecycleContext,
-          commandId: `${stopCommandId}:completed`,
+          commandId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
+          causationId: stopCommandId,
           eventType: TURN_EVENT.STOP_COMPLETED,
-          completionCommitId: `${stopCommandId}:completed`,
+          completionCommitId: createTurnLifecycleCommandId({
+            commandId: stopCommandId,
+            eventType: TURN_EVENT.STOP_COMPLETED,
+            phase: TURN_PHASE.STOP,
+          }),
           terminalStatus: {
             command: "user_stopped",
             description: stopPayload.message,
@@ -137,13 +164,9 @@ export function createMessageStopHandler({
           },
         });
         if (!completed?.applied && !completed?.deduplicated) {
-          sendEvent("error", {
-            error: completed?.reason || "stop_completed_failed",
-            errorCode: completed?.reason || "stop_completed_failed",
-            failurePhase: TURN_PHASE.STOP,
-            sessionId: stopPayload.sessionId,
-            dialogProcessId: stopPayload.dialogProcessId,
-            turnScopeId: stopPayload.turnScopeId,
+          sendFailedCommandReceipt(sendEvent, command, {
+            code: completed?.reason || "stop_completed_failed",
+            message: completed?.reason || "stop_completed_failed",
           });
           return;
         }
@@ -151,11 +174,11 @@ export function createMessageStopHandler({
       }
     }
     if (state.isRunning && state.currentAbortController) {
-      state.currentAbortController.abort({
-        type: "user_stop",
+      state.currentAbortController.abort(createExecutionAbortReason({
+        type: EXECUTION_ABORT_TYPE.USER_STOP,
         reason: "user stop action",
         stopPayload: state.currentStopPayload,
-      });
+      }));
     }
   };
 

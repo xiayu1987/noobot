@@ -6,6 +6,10 @@
 import { emitEvent } from "../../events/index.js";
 import { resolveErrorMessage } from "../../shared/utils/error-utils.js";
 import { classifyEngineError } from "./error-classifier.js";
+import {
+  resolveExecutionAbortMessage,
+  resolveExecutionAbortReason,
+} from "@noobot/session-protocol/execution-abort";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -53,6 +57,7 @@ function resolveRequestId(error = {}) {
 
 export function buildEngineErrorPayload({
   error,
+  abortSignal = null,
   classification,
   metadata = {},
 } = {}) {
@@ -65,14 +70,23 @@ export function buildEngineErrorPayload({
     error?.cause?.code ??
     error?.cause?.error?.code ??
     undefined;
+  const abortReason = resolveExecutionAbortReason({ error, abortSignal });
   const type =
+    abortReason?.type ??
     error?.type ??
     error?.error?.type ??
     error?.cause?.type ??
     error?.cause?.error?.type ??
     undefined;
   const name = String(error?.name || error?.cause?.name || "").trim();
-  const message = resolveErrorMessage(error);
+  const message =
+    normalizedClassification === "abort"
+      ? resolveExecutionAbortMessage({
+          error,
+          abortSignal,
+          fallback: resolveErrorMessage(error),
+        })
+      : resolveErrorMessage(error);
   const requestId = resolveRequestId(error);
 
   return {
@@ -97,6 +111,7 @@ export function buildEngineErrorPayload({
 
 export function handleEngineError({
   error,
+  abortSignal = null,
   eventListener = null,
   event = "agent_error",
   metadata = {},
@@ -104,6 +119,7 @@ export function handleEngineError({
   const classification = classifyEngineError(error);
   const payload = buildEngineErrorPayload({
     error,
+    abortSignal,
     classification,
     metadata,
   });

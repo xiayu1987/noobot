@@ -104,9 +104,11 @@ export function useMessagePreview({
   }
 
   function resolveParsedResultUrl(attachmentItem = {}) {
-    return resolveParsedResultAccessMeta(attachmentItem, {
-      userId: String(userId || "").trim(),
-    }).url;
+    return (
+      resolveParsedResultAccessMeta(attachmentItem, {
+        userId: String(userId || "").trim(),
+      })?.url || ""
+    );
   }
 
   function resolveHostAccessChannel({ useHostChannel = false, desktopHostApi = null } = {}) {
@@ -332,10 +334,7 @@ export function useMessagePreview({
     const parsedItem = buildParsedResultPreviewItem(attachmentItem);
     await runDownloadFromUrl({
       url: resolveParsedResultUrl(attachmentItem),
-      fileName:
-        parsedItem?.name ||
-        attachmentItem?.parsedResultName ||
-        translate("message.parsedResultDefaultName"),
+      fileName: parsedItem?.name || translate("message.parsedResultDefaultName"),
       errorI18nKey: "message.downloadFailed",
     });
   }
@@ -579,9 +578,11 @@ export function useMessagePreview({
     }
     const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
     if (officeLike) {
-      return resolveParsedResultAccessMeta(attachmentItem, {
-        userId: String(userId || "").trim(),
-      }).hasIdentity;
+      return Boolean(
+        resolveParsedResultAccessMeta(attachmentItem, {
+          userId: String(userId || "").trim(),
+        }),
+      );
     }
     return (
       isImagePreviewType(mimeType, name, isImageMime) ||
@@ -597,7 +598,7 @@ export function useMessagePreview({
     const parsedMeta = resolveParsedResultAccessMeta(attachmentItem, {
       userId: String(userId || "").trim(),
     });
-    if (!parsedMeta.hasIdentity) return false;
+    if (!parsedMeta) return false;
     const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
       userId: String(userId || "").trim(),
     });
@@ -679,9 +680,7 @@ export function useMessagePreview({
     attachmentPreview.error.value = "";
     attachmentPreview.textContent.value = "";
     attachmentPreview.url.value = "";
-    attachmentPreview.name.value = officeLike
-      ? String(attachmentItem?.parsedResultName || name || "").trim()
-      : name;
+    attachmentPreview.name.value = name;
     attachmentPreview.type.value = markdownMode ? "markdown" : "text";
     try {
       const response = await attachmentService.fetchUrl(targetUrl);
@@ -703,6 +702,7 @@ export function useMessagePreview({
     const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
       userId: String(userId || "").trim(),
     });
+    if (!parsedItem) return;
     const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
     await openResolvedAttachmentPreview({
       ...parsedItem,
@@ -710,22 +710,16 @@ export function useMessagePreview({
     });
   }
 
-  async function openAttachmentPreview(attachmentItem = {}, options = {}) {
-    if (options?.parsedResult === true) {
-      if (hasParsedResult(attachmentItem)) {
-        await openParsedResultPreview(attachmentItem);
-      } else {
-        await openResolvedAttachmentPreview(attachmentItem);
-      }
-      return;
-    }
+  async function openAttachmentPreview(attachmentItem = {}) {
     const mimeType = String(attachmentItem?.mimeType || "").trim();
     const name = String(attachmentItem?.name || "").trim();
     if (
       (isOfficeMime(mimeType) || isOfficeFile(name)) &&
-      resolveParsedResultAccessMeta(attachmentItem, {
-        userId: String(userId || "").trim(),
-      }).hasIdentity
+      Boolean(
+        resolveParsedResultAccessMeta(attachmentItem, {
+          userId: String(userId || "").trim(),
+        }),
+      )
     ) {
       await openParsedResultPreview(attachmentItem);
       return;

@@ -12,7 +12,7 @@
     "agent": {
       "hooks": {
         "registers": [
-          "bot.before_agent_dispatch"
+          { "id": "workflow_after_agent_dispatch", "point": "bot.before_agent_dispatch" }
         ],
         "emits": [
           "workflow.node_agent_execute"
@@ -29,7 +29,7 @@
     "service": {
       "hooks": {
         "registers": [
-          "service.after_session_delete"
+          { "id": "workflow_after_session_delete", "point": "service.after_session_delete" }
         ],
         "emits": []
       },
@@ -65,10 +65,6 @@
           "point": "message.card.pre"
         },
         {
-          "id": "workflow-session-detail-hydrator",
-          "point": "session.detail.hydrator"
-        },
-        {
           "id": "workflow-runtime-projector",
           "point": "runtime.stream.route"
         }
@@ -80,10 +76,9 @@
       "hooks.register",
       "hooks.emit",
       "policy.patch",
-      "model.invoke",
-      "artifacts.write",
-      "events.emit",
       "routes.bind",
+      "service.sessions.read",
+      "service.http.status",
       "authenticated_request",
       "frontend.contribute"
     ],
@@ -91,8 +86,6 @@
       "session.read",
       "session.child.create",
       "session.delete.observe",
-      "model.invoke",
-      "artifact.write",
       "http.authenticated"
     ],
     "authenticatedRoutes": [

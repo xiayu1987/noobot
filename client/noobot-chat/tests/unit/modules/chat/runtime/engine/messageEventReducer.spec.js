@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { classifyRealtimeLog } from "../../../../../../src/app/state/sessionMessageState.js";
+import { classifyRealtimeLog } from "../../../../../../src/modules/chat/runtime/engine/realtimeLogClassifier.js";
 import {
   MESSAGE_EVENT_REDUCE_RESULT,
   reduceMessageEvent,
@@ -20,24 +20,10 @@ import {
   createSecurityAssessment,
   raiseSecurityAssessment,
 } from "@noobot/security-assessment-protocol";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 function event(overrides = {}) {
-  return {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    eventId: "evt-1",
-    eventType: "tool_call_start",
-    sessionId: "session-1",
-    messageId: "message-1",
-    presentationMessageId: "message-1",
-    sequence: 1,
-    timestamp: "2026-01-01T00:00:00.000Z",
-    turnScopeId: "turn-1",
-    tool: "read_file",
-    toolCallId: "call-1",
-    args: {},
-    ...overrides,
-  };
+  return canonicalMessageEvent(overrides);
 }
 
 function message(overrides = {}) {
@@ -287,7 +273,6 @@ describe("reduceMessageEvent", () => {
           eventType: "authoritative_final_content",
           sequence: 2,
           text: "search complete",
-          output: "search complete",
           transferEnvelopes: [transferEnvelope],
         }),
       ).result,
@@ -374,7 +359,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 3,
         text: "authoritative final",
-        output: "authoritative final",
       }),
     );
 
@@ -386,7 +370,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 1,
         text: "authoritative final",
-        output: "authoritative final",
       }),
     );
 
@@ -404,7 +387,7 @@ describe("reduceMessageEvent", () => {
     const target = message({
       content: "draft",
       attachments: [{ attachmentId: "stale" }],
-      transferEnvelopes: [{ protocol: "stale" }],
+      transferEnvelopes: [],
     });
     const attachments = [
       {
@@ -429,7 +412,7 @@ describe("reduceMessageEvent", () => {
           sessionId: "session-1",
           turnScopeId: "turn-1",
           runId: "run-1",
-          producer: { type: "agent", id: "agent-1" },
+          producer: { type: "tool", id: "call-final" },
         },
         direction: "output",
         payload: {
@@ -446,7 +429,12 @@ describe("reduceMessageEvent", () => {
             },
           ],
         },
-        intent: { source: "agent", reason: "test", scenario: "agent", strategy: "test" },
+        intent: {
+          source: "tool",
+          reason: "semantic_transfer_tool_result",
+          scenario: "tool",
+          strategy: "tool_result_text",
+        },
         meta: {},
       },
     ];
@@ -458,7 +446,6 @@ describe("reduceMessageEvent", () => {
           eventId: "evt-final-payload",
           eventType: "authoritative_final_content",
           text: "complete final",
-          output: "complete final",
           attachments,
           transferEnvelopes,
         }),
@@ -496,7 +483,6 @@ describe("reduceMessageEvent", () => {
         eventType: "authoritative_final_content",
         sequence: 3,
         text: "done",
-        output: "done",
       }),
     );
 
@@ -545,7 +531,6 @@ describe("reduceMessageEvent", () => {
           eventType: "authoritative_final_content",
           sequence: 1,
           text: "authoritative final",
-          output: "authoritative final",
         }),
       ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
@@ -579,20 +564,23 @@ describe("reduceMessageEvent", () => {
   it("validates the explicit presentation identity independently from the source message", () => {
     const target = message({ id: "presentation-1", messageId: "presentation-1" });
     const projected = event({
-      envelopeVersion: 2,
       messageId: "model-message-1",
       presentationMessageId: "presentation-1",
     });
     expect(reduce(target, projected).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
     expect(
-      reduce(message(), {
-        ...projected,
-        eventId: "evt-conflict",
-      }).result,
+      reduce(
+        message(),
+        event({
+          eventId: "evt-conflict",
+          messageId: "model-message-1",
+          presentationMessageId: "presentation-1",
+        }),
+      ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT);
   });
 
-  it("keeps guidance and v2 model analysis on the same presentation activity timeline", () => {
+  it("keeps guidance and model analysis on the same presentation activity timeline", () => {
     const target = message({ id: "presentation-1", messageId: "presentation-1" });
     expect(
       reduce(
@@ -612,12 +600,10 @@ describe("reduceMessageEvent", () => {
           toolCallId: "",
           args: undefined,
           text: "guidance analysis",
-          output: "guidance analysis",
         }),
       ).result,
     ).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);
     const projected = event({
-      envelopeVersion: 2,
       eventId: "evt-model-analysis",
       sequence: 2,
       eventType: "main_model_content",
@@ -627,7 +613,6 @@ describe("reduceMessageEvent", () => {
       toolCallId: "",
       args: undefined,
       text: "intermediate model analysis",
-      output: "intermediate model analysis",
     });
 
     expect(reduce(target, projected).result).toBe(MESSAGE_EVENT_REDUCE_RESULT.APPLIED);

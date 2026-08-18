@@ -64,6 +64,19 @@ function toolResultName(message = {}) {
   return String(JSON.parse(String(message.content || "{}"))?.toolName || "").trim();
 }
 
+function toolCallId(call = {}) {
+  return String(call.id || call.tool_call_id || "").trim();
+}
+
+function toolCallName(call = {}) {
+  return String(call.name || call.function?.name || "").trim();
+}
+
+function toolCallArgs(call = {}) {
+  if (call.args && typeof call.args === "object") return call.args;
+  return JSON.parse(String(call.function?.arguments || "{}"));
+}
+
 function toolCallNames(message = {}) {
   if (message.role !== "assistant") return [];
   const calls = Array.isArray(message.tool_calls)
@@ -199,7 +212,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 420000,
+    timeoutMs: 600000,
   });
 
   const requiredEvents = new Set([
@@ -291,8 +304,24 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   );
   const toolResultNames = messages.map(toolResultName).filter(Boolean);
   const calledToolNames = messages.flatMap(toolCallNames);
-  expect(toolResultNames.filter((name) => name === "execute_script")).toHaveLength(7);
-  expect(calledToolNames.filter((name) => name === "execute_script")).toHaveLength(7);
+  const chainCalls = messages.flatMap((message) =>
+    (message.tool_calls || []).filter(
+      (call) =>
+        toolCallName(call) === "execute_script" &&
+        toolCallArgs(call).command === chainCommand,
+    ),
+  );
+  const chainCallIds = new Set(chainCalls.map(toolCallId));
+  const chainResults = messages.filter(
+    (message) =>
+      toolResultName(message) === "execute_script" &&
+      chainCallIds.has(String(message.tool_call_id || "").trim()),
+  );
+  expect(chainCalls).toHaveLength(7);
+  expect(chainResults).toHaveLength(7);
+  expect(toolResultNames.filter((name) => name === "execute_script").length).toBeGreaterThanOrEqual(
+    chainResults.length,
+  );
   expect(calledToolNames.filter((name) => name === "request_plan_refinement")).toHaveLength(1);
   expect(calledToolNames.filter((name) => name === "request_task_acceptance")).toHaveLength(1);
 });

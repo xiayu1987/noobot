@@ -39,13 +39,15 @@ const envelope = {
 };
 
 describe("messageModel attachments and semantic transfer", () => {
-  it("projects attachment identity from its owning message before live updates", () => {
+  it("preserves the attachment protocol identity independently from its owning message", () => {
     const message = buildViewMessage({
       role: "user",
       sessionId: "session-1",
       attachments: [
         {
           attachmentId: "source-att",
+          sessionId: "session-1",
+          attachmentSource: "user",
           name: "source.docx",
           mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         },
@@ -99,16 +101,14 @@ describe("messageModel attachments and semantic transfer", () => {
   });
 
   it("rejects path-based transfer payloads without rebuilding an attachment", () => {
-    const message = buildViewMessage({
+    expect(() => buildViewMessage({
       role: "assistant",
       content: "done",
       transferEnvelopes: [{ ...envelope, filePath: "/legacy/result.md" }],
-    });
-    expect(message.transferEnvelopes).toEqual([]);
-    expect(message.attachments).toEqual([]);
+    })).toThrow("invalid_transfer_envelope:forbidden_path_field:envelope.filePath");
   });
 
-  it("normalizes parsed result metadata from attachments", () => {
+  it("preserves canonical parsed-result relations without creating derived fields", () => {
     const message = buildViewMessage(
       {
         role: "user",
@@ -120,12 +120,24 @@ describe("messageModel attachments and semantic transfer", () => {
             attachmentSource: "test",
             name: "source.pdf",
             mimeType: "application/pdf",
-            parsedResult: {
-              attachmentId: "parsed-1",
-              sessionId: "s1",
-              attachmentSource: "test",
-              relativePath: "runtime/attach/parsed/source.md",
-            },
+            relations: [
+              {
+                relationType: "parsed_result",
+                sourceIdentity: {
+                  attachmentId: "src-1",
+                  sessionId: "s1",
+                  attachmentSource: "test",
+                },
+                targetIdentity: {
+                  attachmentId: "parsed-1",
+                  sessionId: "s1",
+                  attachmentSource: "test",
+                },
+                name: "source.md",
+                mimeType: "text/markdown",
+                createdAt: "2026-08-16T00:00:00.000Z",
+              },
+            ],
           },
         ],
       },
@@ -135,26 +147,26 @@ describe("messageModel attachments and semantic transfer", () => {
     expect(message.attachments).toHaveLength(1);
     expect(message.attachments[0]).toMatchObject({
       attachmentId: "src-1",
-      parsedResult: {
-        attachmentId: "parsed-1",
-        relativePath: "runtime/attach/parsed/source.md",
-      },
-      parsedResultName: "source.md",
+      relations: [
+        expect.objectContaining({
+          relationType: "parsed_result",
+          targetIdentity: { attachmentId: "parsed-1", sessionId: "s1", attachmentSource: "test" },
+        }),
+      ],
     });
-    expect(message.attachments[0].parsedResultUrl).toContain("parsed-1");
   });
 
-  it("normalizes attachment url from compatible id/session/source fields", () => {
+  it("builds attachment access from the canonical stable identity", () => {
     const message = buildViewMessage(
       {
         role: "assistant",
         content: "generated file",
         attachments: [
           {
-            id: "att-alias-1",
+            attachmentId: "att-1",
             name: "result.md",
-            session_id: "session-1",
-            source: "model",
+            sessionId: "session-1",
+            attachmentSource: "model",
           },
         ],
       },
@@ -162,12 +174,12 @@ describe("messageModel attachments and semantic transfer", () => {
     );
 
     expect(message.attachments[0]).toMatchObject({
-      attachmentId: "att-alias-1",
+      attachmentId: "att-1",
       sessionId: "session-1",
       attachmentSource: "model",
     });
     expect(message.attachments[0].url).toBe(
-      "/api/internal/attachment/admin/att-alias-1?sessionId=session-1&attachmentSource=model",
+      "/api/internal/attachment/admin/att-1?sessionId=session-1&attachmentSource=model",
     );
   });
 
@@ -177,18 +189,18 @@ describe("messageModel attachments and semantic transfer", () => {
       content: "source",
       attachments: [
         {
-          attachmentId: "legacy-1",
+          attachmentId: "attachment-1",
           sessionId: "s1",
           attachmentSource: "test",
-          name: "legacy.pdf",
+          name: "source.pdf",
         },
       ],
     });
 
     expect(message.attachments).toHaveLength(1);
     expect(message.attachments[0]).toMatchObject({
-      attachmentId: "legacy-1",
-      name: "legacy.pdf",
+      attachmentId: "attachment-1",
+      name: "source.pdf",
     });
   });
 
@@ -208,5 +220,4 @@ describe("messageModel attachments and semantic transfer", () => {
 
     expect(message.attachments).toEqual([]);
   });
-
 });

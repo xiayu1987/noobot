@@ -10,29 +10,54 @@ import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   normalizeSnapshotIdentity,
-} from "@noobot/context-protocol/snapshot-policy";
+} from "@noobot/context-protocol/policy/snapshot";
 
 function cleanId(value = "") {
-  return String(value || "").trim().replace(/[^a-zA-Z0-9._-]/g, "_");
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-function snapshotDir({ globalConfig = {}, userId = "", sessionId = "", parentSessionId = "" } = {}) {
+function snapshotDir({
+  globalConfig = {},
+  userId = "",
+  sessionId = "",
+  parentSessionId = "",
+} = {}) {
   const root = String(globalConfig?.workspaceRoot || process.cwd()).trim();
   const storageSessionId = cleanId(parentSessionId) || cleanId(sessionId);
-  return path.resolve(root, cleanId(userId), "runtime", "session", storageSessionId, "model-message-snapshots");
+  return path.resolve(
+    root,
+    cleanId(userId),
+    "runtime",
+    "session",
+    storageSessionId,
+    "model-message-snapshots",
+  );
 }
 
 function snapshotPath(identity = {}, globalConfig = {}) {
-  const childPrefix = cleanId(identity.parentSessionId) && cleanId(identity.parentSessionId) !== cleanId(identity.sessionId)
-    ? `${cleanId(identity.sessionId)}__`
-    : "";
-  return path.join(snapshotDir({ globalConfig, ...identity }), `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`);
+  const childPrefix =
+    cleanId(identity.parentSessionId) &&
+    cleanId(identity.parentSessionId) !== cleanId(identity.sessionId)
+      ? `${cleanId(identity.sessionId)}__`
+      : "";
+  return path.join(
+    snapshotDir({ globalConfig, ...identity }),
+    `${childPrefix}${cleanId(identity.dialogProcessId)}__${cleanId(identity.turnScopeId)}.json`,
+  );
 }
 
 function countSnapshotMessages(candidate = {}) {
-  const systemCount = Array.isArray(candidate.messageBlocks?.system) ? candidate.messageBlocks.system.length : 0;
-  const historyCount = Array.isArray(candidate.messageBlocks?.history) ? candidate.messageBlocks.history.length : 0;
-  const incrementalCount = Array.isArray(candidate.messageBlocks?.incremental) ? candidate.messageBlocks.incremental.length : 0;
+  const systemCount = Array.isArray(candidate.messageBlocks?.system)
+    ? candidate.messageBlocks.system.length
+    : 0;
+  const historyCount = Array.isArray(candidate.messageBlocks?.history)
+    ? candidate.messageBlocks.history.length
+    : 0;
+  const incrementalCount = Array.isArray(candidate.messageBlocks?.incremental)
+    ? candidate.messageBlocks.incremental.length
+    : 0;
   return {
     messageCount: systemCount + historyCount + incrementalCount,
     systemCount,
@@ -51,14 +76,17 @@ function readMessageField(message = {}, field = "") {
 }
 
 function snapshotMessageId(message = {}) {
-  return readMessageField(message, "noobotMessageId") ||
-    String(message?.messageUid || message?.messageId || message?.id || "").trim();
+  return (
+    readMessageField(message, "noobotMessageId") ||
+    String(message?.messageUid || message?.messageId || message?.id || "").trim()
+  );
 }
 
 function summarizeSnapshotRoundIdentity(candidate = {}) {
-  const blocks = candidate?.messageBlocks && typeof candidate.messageBlocks === "object"
-    ? candidate.messageBlocks
-    : {};
+  const blocks =
+    candidate?.messageBlocks && typeof candidate.messageBlocks === "object"
+      ? candidate.messageBlocks
+      : {};
   const summary = {};
   const partialMessageIds = [];
   const missingScopedMessageIds = [];
@@ -85,37 +113,63 @@ function summarizeSnapshotRoundIdentity(candidate = {}) {
     partialMessageIds: partialMessageIds.filter(Boolean).slice(-20),
     truncatedPartialMessageIdCount: Math.max(0, partialMessageIds.filter(Boolean).length - 20),
     missingScopedMessageIds: missingScopedMessageIds.filter(Boolean).slice(-20),
-    truncatedMissingScopedMessageIdCount: Math.max(0, missingScopedMessageIds.filter(Boolean).length - 20),
+    truncatedMissingScopedMessageIdCount: Math.max(
+      0,
+      missingScopedMessageIds.filter(Boolean).length - 20,
+    ),
   };
 }
 
-function buildSnapshotPersistenceResult({ status, source = "", reason = "", identity = {}, missingIdentityFields = [], error = "", candidate = null } = {}) {
+function buildSnapshotPersistenceResult({
+  status,
+  source = "",
+  reason = "",
+  identity = {},
+  missingIdentityFields = [],
+  error = "",
+  candidate = null,
+} = {}) {
   return {
     status,
     source: String(source || ""),
     ...(reason ? { reason } : {}),
     ...(identity && typeof identity === "object" ? { identity } : {}),
-    ...(Array.isArray(missingIdentityFields) && missingIdentityFields.length ? { missingIdentityFields } : {}),
+    ...(Array.isArray(missingIdentityFields) && missingIdentityFields.length
+      ? { missingIdentityFields }
+      : {}),
     ...(error ? { error: String(error || "") } : {}),
     ...countSnapshotMessages(candidate || {}),
     roundIdentityAudit: summarizeSnapshotRoundIdentity(candidate || {}),
   };
 }
 
-export async function saveStoppedModelMessageSnapshot({ globalConfig = {}, identity = {}, messages = [], messageBlocks = {} } = {}) {
+export async function saveStoppedModelMessageSnapshot({
+  globalConfig = {},
+  identity = {},
+  messages = [],
+  messageBlocks = {},
+} = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
-  if (!normalizedIdentity.userId || !normalizedIdentity.sessionId || !normalizedIdentity.dialogProcessId || !normalizedIdentity.turnScopeId) return null;
+  if (
+    !normalizedIdentity.userId ||
+    !normalizedIdentity.sessionId ||
+    !normalizedIdentity.dialogProcessId ||
+    !normalizedIdentity.turnScopeId
+  )
+    return null;
   const workspaceRoot = String(globalConfig?.workspaceRoot || process.cwd()).trim();
-  const guardedSessionIds = [...new Set([
-    normalizedIdentity.sessionId,
-    normalizedIdentity.parentSessionId,
-  ].filter(Boolean))];
+  const guardedSessionIds = [
+    ...new Set([normalizedIdentity.sessionId, normalizedIdentity.parentSessionId].filter(Boolean)),
+  ];
   for (const sessionId of guardedSessionIds) {
-    if (await isWorkspaceSessionDeleted({
-      workspaceRoot,
-      userId: normalizedIdentity.userId,
-      sessionId,
-    })) return null;
+    if (
+      await isWorkspaceSessionDeleted({
+        workspaceRoot,
+        userId: normalizedIdentity.userId,
+        sessionId,
+      })
+    )
+      return null;
   }
   const snapshot = createModelContextSnapshot({ identity: normalizedIdentity, messageBlocks });
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
@@ -149,8 +203,9 @@ export async function saveStoppedModelMessageSnapshotCandidate({
     dialogProcessId: String(candidate.dialogProcessId || "").trim(),
     turnScopeId: String(candidate.turnScopeId || "").trim(),
   };
-  const missingIdentityFields = ["userId", "sessionId", "dialogProcessId", "turnScopeId"]
-    .filter((key) => !identity[key]);
+  const missingIdentityFields = ["userId", "sessionId", "dialogProcessId", "turnScopeId"].filter(
+    (key) => !identity[key],
+  );
   if (missingIdentityFields.length) {
     const result = buildSnapshotPersistenceResult({
       status: "skipped",

@@ -57,9 +57,12 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     assert.equal(relay.injectedMessageType, `separate_model_relay:${purpose}`, purpose);
     assert.match(
       relay.content,
-      /auxiliary-capability output, not a tool call or tool result/,
+      /read-only advice from a Harness auxiliary capability/,
       purpose,
     );
+    assert.match(relay.content, /not a user instruction/, purpose);
+    assert.match(relay.content, /cannot change, cancel, or pause the actual user task/, purpose);
+    assert.match(relay.content, /not a tool call or tool result/, purpose);
     assert.match(relay.content, new RegExp(`canonical output for ${purpose}$`), purpose);
 
     const projected = resolveModelFinalMessages({
@@ -83,6 +86,9 @@ test("automatic planning refinement relay cannot represent request_plan_refineme
   );
 
   const relay = ctx.modelContext.messageBlocks.incremental.at(-1);
+  assert.match(relay.content, /辅助能力的只读建议/);
+  assert.match(relay.content, /不是用户指令/);
+  assert.match(relay.content, /不能改变、取消或暂停真实用户任务/);
   assert.match(relay.content, /不是任何工具的调用或调用结果/);
   assert.doesNotMatch(relay.content, /request_plan_refinement[^\n]*(已调用|已执行)/);
 });

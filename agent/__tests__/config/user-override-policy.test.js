@@ -103,7 +103,7 @@ test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () =
   assert.equal(out.providers.openai.model, "gpt-4o");
   assert.equal(out.providers.openai.temperature, 0.6);
   assert.equal(out.providers.anthropic.model, "claude-3-7-sonnet");
-  assert.deepEqual(out.configParams, { A: "1", B: "20", C: "30" });
+  assert.equal(out.configParams, undefined);
 });
 
 test("mergeConfig: providers 应深度合并并保留 tool_reasoning_effort", () => {
@@ -286,11 +286,7 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
   assert.equal(out.preferences.theme.density, "compact");
   assert.equal(out.scenarios.default, "programming");
   assert.equal(out.scenarios.definitions.programming.model, "admin-programming-model");
-  assert.deepEqual(out.configParams, {
-    GLOBAL_ONLY: "global-value",
-    SHARED: "admin-shared",
-    ADMIN_ONLY: "admin-value",
-  });
+  assert.equal(out.configParams, undefined);
   assert.deepEqual(globalConfig, globalBefore, "全局配置对象不得被合并过程修改");
   assert.deepEqual(adminConfig, adminBefore, "admin 配置对象不得被合并过程修改");
 });

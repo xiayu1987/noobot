@@ -7,11 +7,11 @@ import { HumanMessage } from "@langchain/core/messages";
 import {
   extractTaskSummaryText,
   normalizeUnpairedTaskSummaryToolResults,
-} from "@noobot/context-protocol/block-strategy";
+} from "@noobot/context-protocol/policy/block";
 import {
   hasTaskSummaryToolCall,
   isTaskSummaryToolMessage,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 
 export function isTaskSummaryToolResultMessage(msg = {}) {
   return isTaskSummaryToolMessage(msg);

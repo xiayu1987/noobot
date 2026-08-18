@@ -9,13 +9,13 @@ import { PHASE_SUMMARY_OVERFLOW_POLICY } from "./constants/index.js";
 import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
-} from "@noobot/context-protocol/injected-message-policy";
+} from "@noobot/context-protocol/policy/injected-message";
 import {
   DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
+import { resolveContextMessageContent } from "@noobot/context-protocol/message/codec";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
-import { extractMessageTextContent } from "../context/session/message-content-utils.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
 
@@ -49,7 +49,7 @@ function resolveUnsummarizedMessageChars(messages = []) {
     if (!message || typeof message !== "object") return total;
     if (isMessageSummarized(message)) return total;
     if (hasInternalMessageMarker(message)) return total;
-    const text = extractMessageTextContent(message?.content ?? message);
+    const text = resolveContextMessageContent(message);
     return total + String(text || "").length;
   }, 0);
 }

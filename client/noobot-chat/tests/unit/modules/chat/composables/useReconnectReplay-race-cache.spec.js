@@ -10,7 +10,7 @@ import {
   createFixture,
   createFakeProcessStore,
 } from "../helpers/useReconnectReplayHelper.js";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { createReplayBatch } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 
@@ -32,13 +32,19 @@ describe("useReconnectReplay", () => {
   it("RC-05: missing Turn identity does not create a Session-only cache entry", async () => {
     const { api } = createFixture();
 
-    await expect(
-      api.applyReconnectEvent(StreamEventEnum.DELTA, {
-        sessionId: "s-2",
-        seq: 1,
-        text: "no-dp",
-      }),
-    ).resolves.toBeUndefined();
+    const record = createAuthoritativeMessageEnvelope("llm_delta", {
+      sessionId: "s-2",
+      turnScopeId: "turn-missing",
+      messageId: "message-missing-turn",
+      seq: 1,
+      text: "no-turn",
+    });
+    const invalidEnvelope = structuredClone(record.data);
+    delete invalidEnvelope.identity.turnScopeId;
+    await expect(api.applyReconnectEvent(record.event, invalidEnvelope)).resolves.toMatchObject({
+      applied: false,
+      reason: "message_event_missing_turn_identity",
+    });
 
     expect(api.__test.replayCache["s-2"]).toBeUndefined();
   });

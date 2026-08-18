@@ -114,7 +114,7 @@ describe("workflow runtime architecture guard", () => {
     expect(reconnectComposable).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).toMatch(/protocolViolation[\s\S]*presentation_missing/);
     expect(batchReplay).toMatch(/findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/);
-    expect(batchReplay).toMatch(/reason:\s*"target_missing"/);
+    expect(batchReplay).toMatch(/if\s*\(!canonicalTarget[\s\S]*return false/);
     expect(batchReplay).not.toMatch(/find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/);
   });
 

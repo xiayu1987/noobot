@@ -6,7 +6,7 @@
 import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reader.js";
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { filePath as path } from "@noobot/path-resolver";
 import { readSessionArtifact } from "../../session/session-artifact-store.js";
 
@@ -58,11 +58,29 @@ export class ShortMemoryManager {
     await this.write(basePath, { items: [] });
   }
 
-  async captureSessionToShortMemory({
-    basePath = "",
-    sessionId = "",
-    parentSessionId = "",
-  } = {}) {
+  async removeBySessionIds(basePath, sessionIds = []) {
+    const deletedSessionIds = new Set(
+      (Array.isArray(sessionIds) ? sessionIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    );
+    if (!deletedSessionIds.size) return { deletedCount: 0 };
+    const short = await this.read(basePath);
+    const items = this.flatten(short);
+    const retainedItems = items.filter((item) => {
+      const sessionId = String(item?.sessionId || "").trim();
+      const parentSessionId = String(item?.parentSessionId || "").trim();
+      return !deletedSessionIds.has(sessionId) && !deletedSessionIds.has(parentSessionId);
+    });
+    const deletedCount = items.length - retainedItems.length;
+    if (deletedCount > 0) {
+      this.assign(short, retainedItems);
+      await this.write(basePath, short);
+    }
+    return { deletedCount };
+  }
+
+  async captureSessionToShortMemory({ basePath = "", sessionId = "", parentSessionId = "" } = {}) {
     const sessionFile = this.storage.sessionFile(basePath, sessionId, parentSessionId);
     const sessionData = await readSessionArtifact({
       storageService: this.storage,
@@ -76,13 +94,12 @@ export class ShortMemoryManager {
     const latestDialogProcessId =
       [...messages]
         .reverse()
-        .map((messageItem) => resolveMessageDialogProcessId(messageItem))
+        .map((messageItem) => resolveContextMessageDialogProcessId(messageItem))
         .find(Boolean) || "";
     if (!latestDialogProcessId) return false;
 
     const dialogRecords = messages.filter(
-      (messageItem) =>
-        resolveMessageDialogProcessId(messageItem) === latestDialogProcessId,
+      (messageItem) => resolveContextMessageDialogProcessId(messageItem) === latestDialogProcessId,
     );
     const records = sanitizeDialogRecordsForMemory(dialogRecords);
     if (!records.length) return false;
@@ -90,6 +107,8 @@ export class ShortMemoryManager {
     const short = await this.read(basePath);
     const items = this.flatten(short);
     items.push({
+      sessionId: String(sessionId || "").trim(),
+      parentSessionId: String(parentSessionId || "").trim(),
       records,
       createdAt: new Date().toISOString(),
     });

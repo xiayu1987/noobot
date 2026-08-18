@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
-import {
-  parseTaskCheckContent,
-} from "@noobot/context-protocol/task-check-protocol";
-import { resolveContextInternalMessageType } from "@noobot/context-protocol/injected-message-policy";
+import { parseTaskCheckContent } from "@noobot/context-protocol/task/check";
+import { resolveContextInternalMessageType } from "@noobot/context-protocol/policy/injected-message";
 import {
   selectPlugins,
   sendMessage,
@@ -21,17 +19,15 @@ import {
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
-import {
-  commandsForSession,
-  waitForCommand,
-} from "../helpers/scenario-assertions.js";
+import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 const toolCallName = (call = {}) => String(call.name || call.function?.name || "").trim();
 const toolCallId = (call = {}) => String(call.id || call.tool_call_id || "").trim();
-const toolCallArgs = (call = {}) => call.args && typeof call.args === "object"
-  ? call.args
-  : JSON.parse(String(call.function?.arguments || "{}"));
+const toolCallArgs = (call = {}) =>
+  call.args && typeof call.args === "object"
+    ? call.args
+    : JSON.parse(String(call.function?.arguments || "{}"));
 
 function toolResultPayload(message = {}) {
   if (message.role !== "tool") return null;
@@ -69,19 +65,28 @@ function assertCompactExecutionContext(invocations = []) {
   }
 }
 
-test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模型输入闭环", async ({ noobot, protocolCapture }, testInfo) => {
+test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模型输入闭环", async ({
+  noobot,
+  protocolCapture,
+}, testInfo) => {
   test.setTimeout(900000);
   await selectPlugins(noobot.page, []);
   await setRunSummaryPolicy(noobot.page, {
     phaseSummaryLoopTurns: 3,
     taskCheckLoopTurns: 2,
   });
-  await sendMessage(noobot.page, uniquePrompt(testInfo, [
-    "完成一个三步顺序只读计算链，每一步都必须等待上一步的实际输出。",
-    "依次调用 execute_script：生成随机十六进制 token、计算其 SHA-256、计算该 SHA-256 的字符数。",
-    "第二次 execute_script 成功后，下一次只能调用 task_check，按协议记录当时的真实任务状态；task_check 成功前不得执行第三次 execute_script。",
-    "不得并行调用，最后汇总每一步实际结果。",
-  ].join(" ")));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(
+      testInfo,
+      [
+        "完成一个三步顺序只读计算链，每一步都必须等待上一步的实际输出。",
+        "依次调用 execute_script：生成随机十六进制 token、计算其 SHA-256、计算该 SHA-256 的字符数。",
+        "第二次 execute_script 成功后，下一次只能调用 task_check，按协议记录当时的真实任务状态；task_check 成功前不得执行第三次 execute_script。",
+        "不得并行调用，最后汇总每一步实际结果。",
+      ].join(" "),
+    ),
+  );
 
   const firstSend = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(firstSend.preferences.summaryPolicy).toEqual({
@@ -96,16 +101,24 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     turnScopeId: firstSend.identity.turnScopeId,
     timeoutMs: 260000,
   });
-  await expect(noobot.page.locator(".chat-message-anchor").filter({
-    hasText: "已达到周期任务检查阈值",
-  })).toHaveCount(0);
+  await expect(
+    noobot.page.locator(".chat-message-anchor").filter({
+      hasText: "已达到周期任务检查阈值",
+    }),
+  ).toHaveCount(0);
 
-  const records = await waitForSessionExecutionEventTree(noobot.userId, noobot.sessionId, (items) => {
-    const scoped = items.filter((item) => item.turnScopeId === firstSend.identity.turnScopeId);
-    return scoped.some((item) => item.event === "task_check_required")
-      && scoped.some((item) => item.event === "summary_checkpoint_committed")
-      && modelInvocationTraces(scoped).filter(isMainAgentModelInvocation).length >= 4;
-  });
+  const records = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (items) => {
+      const scoped = items.filter((item) => item.turnScopeId === firstSend.identity.turnScopeId);
+      return (
+        scoped.some((item) => item.event === "task_check_required") &&
+        scoped.some((item) => item.event === "summary_checkpoint_committed") &&
+        modelInvocationTraces(scoped).filter(isMainAgentModelInvocation).length >= 4
+      );
+    },
+  );
   const firstScoped = records.filter((item) => item.turnScopeId === firstSend.identity.turnScopeId);
   const taskCheckRequired = firstScoped.filter((item) => item.event === "task_check_required");
   expect(taskCheckRequired.length).toBeGreaterThan(0);
@@ -117,21 +130,24 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
 
   const firstInvocations = modelInvocationTraces(firstScoped).filter(isMainAgentModelInvocation);
   assertCompactExecutionContext(firstInvocations);
-  const markerCounts = firstInvocations.map((invocation) =>
-    invocation.data.messages.preview.filter(
-      (message) => message.internalType === "noobot.task_check_prompt",
-    ).length,
+  const markerCounts = firstInvocations.map(
+    (invocation) =>
+      invocation.data.messages.preview.filter(
+        (message) => message.internalType === "noobot.task_check_prompt",
+      ).length,
   );
   expect(markerCounts.some((count) => count > 0)).toBe(true);
 
   const firstMessages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
-  const taskCheckPrompts = firstMessages.filter((message) =>
-    resolveContextInternalMessageType(message) === "noobot.task_check_prompt",
+  const taskCheckPrompts = firstMessages.filter(
+    (message) => resolveContextInternalMessageType(message) === "noobot.task_check_prompt",
   );
   expect(taskCheckPrompts).toHaveLength(taskCheckRequired.length);
-  expect(taskCheckPrompts.every((message) =>
-    message.role === "user" && message.type === "context_control"
-  )).toBe(true);
+  expect(
+    taskCheckPrompts.every(
+      (message) => message.role === "user" && message.type === "context_control",
+    ),
+  ).toBe(true);
   const checks = taskCheckCalls(firstMessages);
   expect(checks.length).toBeGreaterThan(0);
   expect(checks.length).toBeLessThanOrEqual(taskCheckRequired.length);
@@ -144,7 +160,9 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   expect(checkResults).toHaveLength(checks.length);
   for (const resultMessage of checkResults) {
     const payload = toolResultPayload(resultMessage);
-    const call = checks.find(({ call: candidate }) => toolCallId(candidate) === resultMessage.tool_call_id)?.call;
+    const call = checks.find(
+      ({ call: candidate }) => toolCallId(candidate) === resultMessage.tool_call_id,
+    )?.call;
     const parsed = parseTaskCheckContent(toolCallArgs(call).checkContent);
     expect(payload.protocolVersion).toBe(1);
     expect(payload.summary).toMatchObject({
@@ -153,7 +171,12 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       nextAction: parsed.nextAction,
     });
     expect(payload.summary.contentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
-    expect(Object.keys(payload.summary).sort()).toEqual(["abstract", "contentHash", "nextAction", "state"]);
+    expect(Object.keys(payload.summary).sort()).toEqual([
+      "abstract",
+      "contentHash",
+      "nextAction",
+      "state",
+    ]);
     expect(payload.summary.details).toBeUndefined();
     expect(resultMessage.transferEnvelopes || []).toEqual([]);
   }
@@ -167,47 +190,59 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     .find(({ messageIndex }) => messageIndex < summaryCallIndex);
   expect(latestCheckBeforeSummary).toBeTruthy();
   const latestCheckBeforeSummaryCallId = toolCallId(latestCheckBeforeSummary.call);
-  const latestCheckBeforeSummaryResult = firstMessages.find((message) =>
-    message.role === "tool"
-      && String(message.tool_call_id || "").trim() === latestCheckBeforeSummaryCallId,
+  const latestCheckBeforeSummaryResult = firstMessages.find(
+    (message) =>
+      message.role === "tool" &&
+      String(message.tool_call_id || "").trim() === latestCheckBeforeSummaryCallId,
   );
   expect(latestCheckBeforeSummaryResult).toBeTruthy();
-  const checkpointEvents = firstScoped.filter((item) => item.event === "summary_checkpoint_committed");
+  const checkpointEvents = firstScoped.filter(
+    (item) => item.event === "summary_checkpoint_committed",
+  );
   const checkpointEvent = checkpointEvents.at(-1);
   expect(checkpointEvent).toBeTruthy();
   const preservedTaskCheckMessageUids = checkpointEvent.data?.preservedTaskCheckMessageUids || [];
   expect(preservedTaskCheckMessageUids).toHaveLength(2);
   const preservedCheck = checks.find(({ message, call }) => {
-    const result = firstMessages.find((candidate) =>
-      candidate.role === "tool"
-        && String(candidate.tool_call_id || "").trim() === toolCallId(call),
+    const result = firstMessages.find(
+      (candidate) =>
+        candidate.role === "tool" &&
+        String(candidate.tool_call_id || "").trim() === toolCallId(call),
     );
-    return preservedTaskCheckMessageUids.includes(message.messageUid)
-      && preservedTaskCheckMessageUids.includes(result?.messageUid);
+    return (
+      preservedTaskCheckMessageUids.includes(message.messageUid) &&
+      preservedTaskCheckMessageUids.includes(result?.messageUid)
+    );
   });
   expect(preservedCheck).toBeTruthy();
-  const preservedCheckResult = firstMessages.find((message) =>
-    message.role === "tool"
-      && String(message.tool_call_id || "").trim() === toolCallId(preservedCheck.call),
+  const preservedCheckResult = firstMessages.find(
+    (message) =>
+      message.role === "tool" &&
+      String(message.tool_call_id || "").trim() === toolCallId(preservedCheck.call),
   );
   expect(preservedCheck.message.summarized).toBe(false);
   expect(preservedCheckResult?.summarized).toBe(false);
-  const summarizedTaskCheckPrompts = taskCheckPrompts.filter((message) => message.summarized === true);
+  const summarizedTaskCheckPrompts = taskCheckPrompts.filter(
+    (message) => message.summarized === true,
+  );
   expect(summarizedTaskCheckPrompts.length).toBeGreaterThan(0);
 
   const latestCheck = checks.at(-1);
   const latestCheckCallId = toolCallId(latestCheck.call);
-  const latestCheckResult = firstMessages.find((message) =>
-    message.role === "tool" && String(message.tool_call_id || "").trim() === latestCheckCallId,
+  const latestCheckResult = firstMessages.find(
+    (message) =>
+      message.role === "tool" && String(message.tool_call_id || "").trim() === latestCheckCallId,
   );
   expect(latestCheckResult).toBeTruthy();
   const latestCheckAbstract = toolResultPayload(latestCheckResult).summary.abstract;
   const thinkingShell = noobot.page.locator(".base-thinking-collapse").last();
   await expect(thinkingShell).toBeVisible();
   await thinkingShell.locator(".el-collapse-item__header").click();
-  await expect(noobot.page.locator('[data-thinking-block="task-check"]').filter({
-    hasText: latestCheckAbstract,
-  })).toHaveCount(1);
+  await expect(
+    noobot.page.locator('[data-thinking-block="task-check"]').filter({
+      hasText: latestCheckAbstract,
+    }),
+  ).toHaveCount(1);
 
   const thinkingDetailsAction = thinkingShell.locator(".thinking-detail-action-button");
   await thinkingDetailsAction.click();
@@ -232,7 +267,10 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   await expect(thinkingDetailsPanel).toBeHidden();
 
   const commandCountBeforeSecondSend = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(noobot.page, uniquePrompt(testInfo, "根据上一轮结果，只回答最终字符数及其来源步骤。"));
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "根据上一轮结果，只回答最终字符数及其来源步骤。"),
+  );
   const secondSend = await waitForCommand(
     protocolCapture,
     noobot.sessionId,
@@ -251,12 +289,18 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     allRecords.filter((item) => item.turnScopeId === secondSend.identity.turnScopeId),
   ).filter(isMainAgentModelInvocation);
   assertCompactExecutionContext(secondInvocations);
-  expect(secondInvocations.every((invocation) =>
-    invocation.data.messages.preview.every(
-      (message) => message.internalType !== "noobot.task_check_prompt",
+  expect(
+    secondInvocations.every((invocation) =>
+      invocation.data.messages.preview.every(
+        (message) => message.internalType !== "noobot.task_check_prompt",
+      ),
     ),
-  )).toBe(true);
-  expect(secondInvocations.some((invocation) =>
-    invocation.data.messages.preview.some((message) => message.messageId === latestCheckResult.messageUid),
-  )).toBe(true);
+  ).toBe(true);
+  expect(
+    secondInvocations.some((invocation) =>
+      invocation.data.messages.preview.some(
+        (message) => message.messageId === latestCheckResult.messageUid,
+      ),
+    ),
+  ).toBe(true);
 });

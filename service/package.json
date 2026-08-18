@@ -35,13 +35,14 @@
     "lint:service-constants": "eslint .",
     "check:i18n-imports": "node ../scripts/check-i18n-imports.mjs --project=service",
     "pretest": "npm run -s check:i18n-imports",
-    "install:openvscode-server": "node scripts/install-openvscode-server.mjs",
-    "ensure:openvscode-server": "node scripts/install-openvscode-server.mjs"
+    "install:openvscode-server": "node scripts/install-openvscode-server.js",
+    "ensure:openvscode-server": "node scripts/install-openvscode-server.js"
   },
   "dependencies": {
     "@noobot/agent-config-protocol": "file:../agent-config-protocol",
     "@noobot/attachment-protocol": "file:../attachment-protocol",
     "@noobot/hook-protocol": "file:../hook-protocol",
+    "@noobot/model-protocol": "file:../model-protocol",
     "@langchain/core": "^1.2.6",
     "@langchain/openai": "^1.5.7",
     "@noobot/agent-transport-protocol": "file:../agent-transport-protocol",

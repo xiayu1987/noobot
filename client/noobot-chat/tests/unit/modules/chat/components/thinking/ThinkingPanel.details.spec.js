@@ -63,15 +63,16 @@ describe("ThinkingPanel canonical details", () => {
     expect(wrapper.vm.getThinkingDetailCount(messageItem)).toBe(20);
   });
 
-  it("keeps the execution record count separate from the protocol detail count", () => {
+  it("uses the same rendered event cardinality for the detail button and drawer", () => {
     const messageItem = {
       role: "assistant",
       turnScopeId: "turn-execution-count",
-      thinkingDetailCount: 20,
+      thinkingDetailCount: 2,
       toolTimeline: toolTimeline(),
     };
     const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
 
+    expect(wrapper.vm.getThinkingDetailCount(messageItem)).toBe(2);
     expect(wrapper.find(".tab-pane").attributes("data-label")).toContain("2");
   });
 

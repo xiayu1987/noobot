@@ -5,7 +5,7 @@
  */
 
 import { HumanMessage } from "@langchain/core/messages";
-import { appendContextMessage } from "@noobot/context-protocol/context-mutation";
+import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 
 export function appendTurnContextControlMessage({

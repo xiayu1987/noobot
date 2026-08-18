@@ -4,20 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { createReplayBatch } from "@noobot/event-protocol";
+import { createReplayBatch as createProtocolReplayBatch } from "@noobot/event-protocol";
 import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import {
   findLatestPendingAssistantAfterLastUser,
   findRecoverableReconnectSessionId,
-  findReconnectDoneEnvelopeWithMessages,
   findReusableMessageObject,
   isDialogProcessRecoverable,
-  isReconnectTerminalBatch,
   mergeCurrentUserMessagesIntoFoldedMessages,
   patchMessageObjectPreservingUiState,
-  splitReconnectMessagesByDialogProcessId,
 } from "../../../../../src/modules/chat/model/reconnectReplayModel.js";
+
+const createReplayBatch = (options = {}) => createProtocolReplayBatch({
+  ...options,
+  orderingDomain: "session",
+  orderingScopeId: String(options.sessionId || "").trim(),
+});
 
 describe("reconnectReplayModel", () => {
   it("isDialogProcessRecoverable respects running/pending interaction only", () => {
@@ -167,26 +170,6 @@ describe("reconnectReplayModel", () => {
     );
   });
 
-  it("splitReconnectMessagesByDialogProcessId splits mixed batches", () => {
-    const groups = splitReconnectMessagesByDialogProcessId([
-      {
-        event: StreamEventEnum.DELTA,
-        data: { dialogProcessId: "dp-1", turnScopeId: "turn-1", text: "a" },
-      },
-      { event: StreamEventEnum.DELTA, data: { dialogProcessId: "dp-2", text: "b" } },
-      { event: "message", data: { dialogProcessId: "dp-1", turnScopeId: "turn-1" } },
-      {
-        event: StreamEventEnum.DELTA,
-        data: { dialogProcessId: "dp-1", turnScopeId: "turn-2", text: "c" },
-      },
-    ]);
-
-    expect(groups).toHaveLength(3);
-    expect(groups.find((item) => item.turnScopeId === "turn-1")?.messages).toHaveLength(2);
-    expect(groups.find((item) => item.turnScopeId === "turn-2")?.messages).toHaveLength(1);
-    expect(groups.find((item) => item.dialogProcessId === "dp-2")?.messages).toHaveLength(1);
-  });
-
   it("findLatestPendingAssistantAfterLastUser only searches after latest user", () => {
     const messages = [
       { role: RoleEnum.USER, content: "q1" },
@@ -196,15 +179,6 @@ describe("reconnectReplayModel", () => {
       { role: RoleEnum.ASSISTANT, pending: true, content: "new pending" },
     ];
     expect(findLatestPendingAssistantAfterLastUser(messages)?.content).toBe("new pending");
-  });
-
-  it("detects terminal batch and finds DONE with messages", () => {
-    const envelopes = [
-      { event: StreamEventEnum.DELTA, data: { seq: 1 } },
-      { event: StreamEventEnum.DONE, data: { messages: [{ role: RoleEnum.USER }] } },
-    ];
-    expect(isReconnectTerminalBatch(envelopes)).toBe(true);
-    expect(findReconnectDoneEnvelopeWithMessages(envelopes)?.event).toBe(StreamEventEnum.DONE);
   });
 
   it("patchMessageObjectPreservingUiState does not overwrite runtime state from an unscoped detail patch", () => {
@@ -233,10 +207,24 @@ describe("reconnectReplayModel", () => {
   it("patchMessageObjectPreservingUiState keeps non-degrading content and transfer fields", () => {
     const envelope = {
       protocol: "noobot.semantic-transfer",
-      version: 1,
+      version: 2,
+      transferId: "transfer-existing",
+      messageId: "message-existing",
+      identity: {
+        sessionId: "session-transfer",
+        turnScopeId: "turn-existing",
+        runId: "run-existing",
+        producer: { type: "tool", id: "call-existing" },
+      },
       direction: "output",
-      transport: "file",
-      filePath: "/workspace/a.txt",
+      payload: { mode: "direct", content: "existing transfer" },
+      intent: {
+        source: "tool",
+        reason: "semantic_transfer_tool_result",
+        scenario: "tool",
+        strategy: "tool_result_text",
+      },
+      meta: {},
     };
     const target = {
       content: "existing content",
@@ -282,7 +270,12 @@ describe("reconnectReplayModel", () => {
       },
       direction: "output",
       payload: { mode: "direct", content: id },
-      intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+      intent: {
+        source: "tool",
+        reason: "semantic_transfer_tool_result",
+        scenario: "tool",
+        strategy: "tool_result_text",
+      },
       meta: {},
     });
     const existingTransferEnvelope = makeEnvelope("old");

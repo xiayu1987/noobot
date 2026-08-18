@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { resolveSessionTreeWithRootSessionId } from "../../src/context/providers/session-tree-resolver.js";
 import { resolveAttachments } from "../../src/context/providers/attachment-resolver.js";
 import { resolveLongMemory } from "../../src/context/providers/memory-resolver.js";
-import { toConversationMessages } from "../../src/context/session/message-converter.js";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildDynamicInfo } from "../../src/context/providers/environment-provider.js";
 
 test("resolveSessionTreeWithRootSessionId falls back when runtime/sessionManager missing", async () => {
@@ -82,6 +82,7 @@ test("resolveAttachments should bypass ingest when attachment already ingested",
     userMessageAttachments: [
       {
         attachmentId: "att1",
+        attachmentSource: "user",
         path: "/workspace/u1/runtime/attach/scoped/s1/user/att1.png",
         sessionId: "s1",
         name: "a.png",
@@ -127,11 +128,18 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
   const attachmentService = {
     async ingest(payload) {
       ingestPayload = payload;
-      return [{ attachmentId: "canonicalized", sessionId: payload.sessionId, path: "/tmp/new.txt" }];
+      return [
+        { attachmentId: "canonicalized", sessionId: payload.sessionId, path: "/tmp/new.txt" },
+      ];
     },
   };
   const source = [
-    { attachmentId: "existing", sessionId: "s1", path: "/tmp/existing.txt" },
+    {
+      attachmentId: "existing",
+      sessionId: "s1",
+      attachmentSource: "user",
+      path: "/tmp/existing.txt",
+    },
     { name: "new.txt", type: "text/plain" },
   ];
 
@@ -144,10 +152,13 @@ test("resolveAttachments preserves canonical attachments and ingests only raw it
   });
 
   assert.deepEqual(ingestPayload.attachments, [source[1]]);
-  assert.deepEqual(result.map((attachment) => attachment.attachmentId), ["existing", "canonicalized"]);
+  assert.deepEqual(
+    result.map((attachment) => attachment.attachmentId),
+    ["existing", "canonicalized"],
+  );
 });
 
-test("resolveAttachments canonicalizes existing attachment aliases through attach mapper", async () => {
+test("resolveAttachments does not infer a canonical identity from an incomplete attachment", async () => {
   let ingestCalled = false;
   const result = await resolveAttachments({
     attachmentService: {
@@ -160,32 +171,17 @@ test("resolveAttachments canonicalizes existing attachment aliases through attac
     userMessageAttachments: [
       {
         attachmentId: "existing",
+        name: "existing.txt",
+        mimeType: "text/plain",
         path: "/tmp/existing.txt",
-        session_id: "session_alias",
-        attachment_source: "user",
-        type: "text/plain",
-        sandboxViewPath: "/workspace/existing.txt",
-        sandboxEnabled: true,
-        parsedResult: {
-          id: "parsed_alias",
-          updated_at: "2026-07-11T00:00:00.000Z",
-        },
       },
     ],
     userId: "u1",
     sessionId: "fallback_session",
   });
 
-  assert.equal(ingestCalled, false);
-  assert.equal(result[0]?.sessionId, "session_alias");
-  assert.equal(result[0]?.attachmentSource, "user");
-  assert.equal(result[0]?.mimeType, "text/plain");
-  assert.equal(result[0]?.sandboxPath, "/workspace/existing.txt");
-  assert.equal(result[0]?.isSandbox, true);
-  assert.equal(result[0]?.parsedResult?.attachmentId, "parsed_alias");
-  assert.equal(result[0]?.parsedResult?.updatedAt, "2026-07-11T00:00:00.000Z");
-  assert.equal(JSON.stringify(result[0]).includes("sandboxViewPath"), false);
-  assert.equal(JSON.stringify(result[0]).includes("updated_at"), false);
+  assert.equal(ingestCalled, true);
+  assert.deepEqual(result, []);
 });
 
 test("resolveAttachments reads only userMessageAttachments", async () => {

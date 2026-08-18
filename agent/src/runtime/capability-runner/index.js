@@ -10,18 +10,17 @@ import {
   normalizeToolCalls,
 } from "../../models/index.js";
 import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { filterForModelContext } from "@noobot/context-protocol/message-policy";
+import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import {
   getRuntimeFromAgentContext,
+  getSessionIdsFromAgentContext,
   getSystemRuntimeFromRuntime,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
 import { PLUGIN_MODEL_HEADER_KEY } from "../../models/headers/plugin-headers.js";
 import { resolveHookClientEmitter } from "../../extensions/hooks/index.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { createHash } from "node:crypto";
 import { emitMessageEvent } from "../../events/message-event-stream.js";
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
@@ -68,17 +67,11 @@ function resolveRuntime(ctx = {}) {
 }
 
 function resolveSessionMeta(ctx = {}, runtime = {}) {
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
+  const identity = getSessionIdsFromAgentContext(ctx.agentContext);
   return {
-    userId: String(ctx?.userId || runtime?.userId || systemRuntime?.userId || "").trim(),
-    sessionId: String(
-      ctx?.sessionId || runtime?.sessionId || systemRuntime?.sessionId || "",
-    ).trim(),
-    parentSessionId: resolveParentSessionId({
-      context: ctx,
-      runtime,
-      parentSessionId: ctx?.parentSessionId,
-    }),
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
   };
 }
 
@@ -135,7 +128,7 @@ function buildPluginCapabilityLogBase({
   };
 }
 
-function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
+async function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
   const normalizedText = String(text || "").trim();
   if (!event) return;
   const isWorkflowSemanticResponse =
@@ -157,31 +150,15 @@ function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data
     }
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
-    const suppliedIdentity = String(
-      data?.eventId || data?.pluginEventId || data?.requestId || "",
-    ).trim();
-    const stableIdentity =
-      suppliedIdentity ||
-      [
-        sessionMeta.sessionId,
-        String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
-        String(runtime?.systemRuntime?.turnScopeId || "").trim(),
-        String(data?.turn || "").trim(),
-        canonicalOutput,
-      ].join("|");
     const activityKind = isGuidanceAnalysisResponse ? "guidance_analysis" : "workflow_semantic";
     const activityEvent = isGuidanceAnalysisResponse
       ? GUIDANCE_ANALYSIS_RESPONSE_EVENT
       : "workflow_semantic_response";
-    const eventIdPrefix = isGuidanceAnalysisResponse ? "guidance-analysis" : "workflow_semantic";
-    const eventId = `${eventIdPrefix}:${createHash("sha256").update(stableIdentity).digest("hex").slice(0, 24)}`;
-    emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
-      eventId,
+    await emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
       event: activityEvent,
       type: activityKind,
       category: "system",
       text: canonicalOutput,
-      output: canonicalOutput,
       purpose: String(data?.purpose || "").trim(),
       pluginFlow: String(data?.pluginFlow || "").trim(),
       chain: String(data?.chain || "").trim(),
@@ -328,7 +305,7 @@ export function createAgentCapabilityModelInvoker({
         }),
       );
       const text = String(ai?.output?.text || "");
-      emitPluginCapabilityRealtimeLog({
+      await emitPluginCapabilityRealtimeLog({
         ctx,
         event: "plugin_capability_response",
         text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
@@ -389,7 +366,7 @@ export function createAgentCapabilityModelInvoker({
         });
       }
       if (!calls.length) {
-        emitPluginCapabilityRealtimeLog({
+        await emitPluginCapabilityRealtimeLog({
           ctx,
           event: "plugin_capability_response",
           text: `Plugin 模型返回 / ${purpose || "unknown"}${text ? `\n${text}` : ""}`,
@@ -470,7 +447,7 @@ export function createAgentCapabilityModelInvoker({
     );
     const finalizedText = String(finalAi.output.text || "");
 
-    emitPluginCapabilityRealtimeLog({
+    await emitPluginCapabilityRealtimeLog({
       ctx,
       event: "plugin_capability_response",
       text: `Plugin 模型返回 / ${purpose || "unknown"}${finalizedText ? `\n${finalizedText}` : ""}`,

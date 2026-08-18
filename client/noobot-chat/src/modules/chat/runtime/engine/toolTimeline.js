@@ -14,7 +14,7 @@ import {
   SEQUENCE_DOMAIN,
   TIMELINE_AUTHORITY,
 } from "./timelineFact.js";
-import { parseTaskCheckReceipt } from "@noobot/context-protocol/task-check-receipt";
+import { parseTaskCheckReceipt } from "@noobot/context-protocol/task/check-receipt";
 import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { isToolResultFailure } from "../../model/toolLogFormatting.js";

@@ -53,6 +53,71 @@ test("SessionExecutionEngine forwards the authoritative dialog identity to runti
   assert.equal(captured.dialogProcessId, "authoritative-dialog");
 });
 
+test("SessionExecutionEngine preserves persistence context and cross-layer scope", async () => {
+  const engine = new SessionExecutionEngine({});
+  const persistenceContext = { kind: "trusted-context" };
+  const persistenceScope = { scopeId: "agent:child" };
+  let captured = null;
+  engine.runner = {
+    async runSession(payload) {
+      captured = payload;
+      return { ok: true };
+    },
+  };
+
+  await engine.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    persistenceContext,
+    persistenceScope,
+  });
+
+  assert.equal(captured.persistenceContext, persistenceContext);
+  assert.equal(captured.persistenceScope, persistenceScope);
+});
+
+test("SessionExecutionEngine exposes the complete authority event repository port", async () => {
+  const calls = [];
+  const session = {
+    async commitAuthorityEvent(payload) {
+      calls.push(["commit", payload]);
+      return { committed: true };
+    },
+    async getPendingAuthorityEvents(payload) {
+      calls.push(["pending", payload]);
+      return { found: true, events: [] };
+    },
+    async recordAuthorityEventAttempt(payload) {
+      calls.push(["attempt", payload]);
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvent(payload) {
+      calls.push(["acknowledge", payload]);
+      return { acknowledged: true };
+    },
+    async compactAuthorityEvents(payload) {
+      calls.push(["compact", payload]);
+      return { compacted: true };
+    },
+  };
+  const engine = new SessionExecutionEngine({ session });
+  const payload = { sessionId: "session-1" };
+
+  assert.deepEqual(await engine.commitAuthorityEvent(payload), { committed: true });
+  assert.deepEqual(await engine.getPendingAuthorityEvents(payload), { found: true, events: [] });
+  assert.deepEqual(await engine.recordAuthorityEventAttempt(payload), { recorded: true });
+  assert.deepEqual(await engine.acknowledgeAuthorityEvent(payload), { acknowledged: true });
+  assert.deepEqual(await engine.compactAuthorityEvents(payload), { compacted: true });
+  assert.deepEqual(calls.map(([operation]) => operation), [
+    "commit",
+    "pending",
+    "attempt",
+    "acknowledge",
+    "compact",
+  ]);
+});
+
 test("detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
   const bridge = {
     async requestUserInteraction() {

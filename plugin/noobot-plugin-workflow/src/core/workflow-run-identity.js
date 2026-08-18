@@ -62,7 +62,7 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
       sequence: index + 1,
       eventId: `workflow-plan:${identity.nodeExecutionId}`,
       updatedAt: now,
-      sessionId: "",
+      nodeSessionId: "",
     };
   });
 }

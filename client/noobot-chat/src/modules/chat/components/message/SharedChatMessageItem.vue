@@ -8,6 +8,10 @@ import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
+import {
+  resolveAttachmentDisplayKey,
+  resolveParsedResultAccessMeta,
+} from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import {
   getMessageDialogProcessId,
@@ -37,7 +41,6 @@ import {
   BasePreviewContent,
 } from "../../../../shared/public-api/ui.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
-import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import ExtensionOutlet from "../../../../extensions/components/ExtensionOutlet.vue";
 import { resolveExtensionPoint } from "../../../../extensions/extension-registry.js";
 import {
@@ -49,14 +52,7 @@ import { chatMessageItemProps } from "../../model/messageItemProps.js";
 const emit = defineEmits(["open-thinking-details"]);
 
 function getAttachmentRenderKey(attachmentItem = {}) {
-  const attachmentId = String(attachmentItem?.attachmentId || "").trim();
-  const clientAttachmentId = String(
-    attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId || "",
-  ).trim();
-  // A newly selected file is rendered before the turn commit returns its
-  // canonical identity. Persisted attachments always use the protocol key.
-  if (!attachmentId && clientAttachmentId) return `draft:${clientAttachmentId}`;
-  return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
+  return resolveAttachmentDisplayKey(attachmentItem);
 }
 
 const props = defineProps(chatMessageItemProps);
@@ -117,10 +113,8 @@ watch(
   () =>
     displayedAttachments.value.map((attachment) => ({
       attachmentId: String(attachment?.attachmentId || "").trim(),
-      hasParsedResult: Boolean(attachment?.parsedResult),
-      parsedResultAttachmentId: String(
-        attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "",
-      ).trim(),
+      parsedResultTargetIdentity:
+        resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
     })),
   (attachments) => {
     logWorkflowDiagnostics("frontend.workflowRender.attachmentCardsProjected", {

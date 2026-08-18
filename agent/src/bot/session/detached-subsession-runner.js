@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
+import { projectExecutionTransportPayload } from "../../events/transport-payload.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
 import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
@@ -121,7 +122,7 @@ export function createDetachedSubSessionRunner({
   session = null,
   attachmentService = null,
   pluginRuntime = {},
-  mergeRunConfigWithPluginStrategy = null,
+  mergeRunConfigPluginPolicy = null,
   prepareRunConfig = null,
   now = () => new Date().toISOString(),
 } = {}) {
@@ -131,7 +132,7 @@ export function createDetachedSubSessionRunner({
     message = "",
     attachments = [],
     runConfigPatch = {},
-    systemMessages = [],
+    systemMessageFactory = null,
     strategy = {},
     metadata = {},
     eventListener = null,
@@ -197,7 +198,10 @@ export function createDetachedSubSessionRunner({
           ? inheritedRuntime.runConfig
           : {}),
     });
-    const mergedRunConfig = mergeRunConfigWithPluginStrategy({
+    if (typeof mergeRunConfigPluginPolicy !== "function") {
+      throw new TypeError("detached sub-session runner requires mergeRunConfigPluginPolicy");
+    }
+    const mergedRunConfig = mergeRunConfigPluginPolicy({
       baseRunConfig: inheritedRunConfig,
       runConfigPatch,
       disabledPlugins: strategy?.disabledPlugins || [],
@@ -262,6 +266,13 @@ export function createDetachedSubSessionRunner({
       attachments,
       attachmentPolicy: effectiveRunConfig?.attachments,
     });
+    const resolvedSystemMessages =
+      typeof systemMessageFactory === "function"
+        ? await systemMessageFactory({ attachments: subSessionAttachments })
+        : [];
+    if (!Array.isArray(resolvedSystemMessages)) {
+      throw new TypeError("detached sub-session systemMessageFactory must return an array");
+    }
     emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
       userId,
       sessionId: subSessionId,
@@ -386,7 +397,7 @@ export function createDetachedSubSessionRunner({
         caller: CALLER_ROLE.BOT,
         message,
         attachments: subSessionAttachments,
-        systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
+        systemMessages: resolvedSystemMessages,
         eventListener: scopedEventListener,
         abortSignal: inheritedAbortSignal,
         userInteractionBridge: inheritedUserInteractionBridge,
@@ -394,6 +405,7 @@ export function createDetachedSubSessionRunner({
         turnScopeId,
         parentAsyncResultContainer: null,
         persistenceContext,
+        persistenceScope,
       });
       const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
       if (returnedDialogProcessId && returnedDialogProcessId !== subDialogProcessId) {
@@ -606,14 +618,11 @@ export function createScopedSubSessionEventListener(eventListener = null, identi
       const data = source.data && typeof source.data === "object" ? source.data : {};
       return target.forwardEvent({
         ...source,
-        data: {
-          ...data,
-          userId: String(data.userId || identity.userId || "").trim(),
-          sessionId: String(data.sessionId || identity.sessionId || "").trim(),
-          parentSessionId: String(data.parentSessionId || identity.parentSessionId || "").trim(),
-          dialogProcessId: String(data.dialogProcessId || identity.dialogProcessId || "").trim(),
-          turnScopeId: String(data.turnScopeId || identity.turnScopeId || "").trim(),
-        },
+        data: projectExecutionTransportPayload({
+          event: source.event,
+          data,
+          route: identity,
+        }),
       });
     },
   };

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import { buildAgentState } from "./state-builder.js";
 import { runFunctionCallLoop } from "./turn/orchestrator.js";
 import { readFinalStreamingResultMeta } from "./turn/turn-result-aggregator.js";
@@ -14,18 +13,13 @@ import { isAbortError } from "./utils/error-utils.js";
 import { buildHookContext } from "./hooks/hook-context-builder.js";
 import { emitEvent } from "../events/index.js";
 import { getSystemRuntimeFromRuntime } from "../context/agent-context-accessor.js";
-import {
-  emitMessageEvent,
-} from "../events/message-event-stream.js";
+import { emitMessageEvent } from "../events/message-event-stream.js";
 import { projectGeneratedArtifactsToFinalAssistant } from "./turn/final-assistant-artifact-projection.js";
-import { applyTurnCompletionPolicy } from "@noobot/context-protocol/turn-completion-policy";
+import { applyTurnCompletionPolicy } from "@noobot/context-protocol/policy/turn-completion";
 
 function messageIdentity(message = {}) {
   return String(
-    message?.messageId ||
-    message?.id ||
-    message?.additional_kwargs?.noobotMessageId ||
-    "",
+    message?.messageId || message?.id || message?.additional_kwargs?.noobotMessageId || "",
   ).trim();
 }
 
@@ -49,7 +43,8 @@ function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
   const messages = canonicalTurnMessages(runtime);
   const assistantMessageId = String(result?.assistantMessageId || "").trim();
   const matches = messages.filter(
-    (message) => message && typeof message === "object" && messageIdentity(message) === assistantMessageId,
+    (message) =>
+      message && typeof message === "object" && messageIdentity(message) === assistantMessageId,
   );
   return {
     assistantMessageId,
@@ -57,13 +52,17 @@ function authoritativeFinalDiagnostics(result = {}, runtime = {}) {
     storeMessageCount: messages.length,
     storeMessageIds: messages.map((message) => messageIdentity(message)),
     matchCount: matches.length,
-    matchedPresentationMessageIds: matches.map((message) => String(message?.presentationMessageId || "").trim()),
-    attachmentCount: matches.length === 1 && Array.isArray(matches[0]?.attachments)
-      ? matches[0].attachments.length
-      : 0,
-    transferEnvelopeCount: matches.length === 1 && Array.isArray(matches[0]?.transferEnvelopes)
-      ? matches[0].transferEnvelopes.length
-      : 0,
+    matchedPresentationMessageIds: matches.map((message) =>
+      String(message?.presentationMessageId || "").trim(),
+    ),
+    attachmentCount:
+      matches.length === 1 && Array.isArray(matches[0]?.attachments)
+        ? matches[0].attachments.length
+        : 0,
+    transferEnvelopeCount:
+      matches.length === 1 && Array.isArray(matches[0]?.transferEnvelopes)
+        ? matches[0].transferEnvelopes.length
+        : 0,
   };
 }
 
@@ -75,19 +74,24 @@ export function commitAuthoritativeFinalOutput({ result = {}, runtime = {} } = {
   const matches = authoritativeFinalMessages(result, runtime);
   if (matches.length !== 1) return false;
   const finalMessage = matches[0];
-  const updatedCount = store.updateWhere({
-    content: finalOutput,
-    ...(Array.isArray(finalMessage?.attachments) ? { attachments: finalMessage.attachments } : {}),
-    ...(Array.isArray(finalMessage?.transferEnvelopes)
-      ? { transferEnvelopes: finalMessage.transferEnvelopes }
-      : {}),
-  }, (message) => messageIdentity(message) === messageId);
+  const updatedCount = store.updateWhere(
+    {
+      content: finalOutput,
+      ...(Array.isArray(finalMessage?.attachments)
+        ? { attachments: finalMessage.attachments }
+        : {}),
+      ...(Array.isArray(finalMessage?.transferEnvelopes)
+        ? { transferEnvelopes: finalMessage.transferEnvelopes }
+        : {}),
+    },
+    (message) => messageIdentity(message) === messageId,
+  );
   if (updatedCount !== 1) return false;
   result.turnMessages = store.toArray();
   return true;
 }
 
-export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
+export async function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {} } = {}) {
   const eventListener = runtime?.eventListener || null;
   const finalOutput = String(result?.output || "");
   const messageId = String(result?.assistantMessageId || "").trim();
@@ -97,13 +101,16 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
   const finalMessage = messages[0];
   const transferEnvelopes = Array.isArray(finalMessage?.transferEnvelopes)
     ? finalMessage.transferEnvelopes
-    : (Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : []);
+    : Array.isArray(result?.transferEnvelopes)
+      ? result.transferEnvelopes
+      : [];
   const attachments = Array.isArray(finalMessage?.attachments)
     ? finalMessage.attachments
-    : (Array.isArray(result?.attachments) ? result.attachments : []);
-  const event = emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
+    : Array.isArray(result?.attachments)
+      ? result.attachments
+      : [];
+  const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
-    output: finalOutput,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     category: "model",
     type: "authoritative_final_content",
@@ -115,7 +122,7 @@ export function emitAuthoritativeFinalMessageContent({ result = {}, runtime = {}
 }
 
 /** The sole authoritative final-result boundary for every dispatch disposition. */
-export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
+export async function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {}) {
   const store = runtime?.currentTurnMessages;
   const promotionSources = Array.isArray(runtime?.summaryCheckpointPromotionSources)
     ? runtime.summaryCheckpointPromotionSources
@@ -154,19 +161,19 @@ export function commitAuthoritativeFinalResult({ result = {}, runtime = {} } = {
   if (!commitAuthoritativeFinalOutput({ result, runtime })) {
     throw new Error("authoritative final result failed to update the canonical message");
   }
-  emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
-  const event = emitAuthoritativeFinalMessageContent({ result, runtime });
+  await emitFinalStreamingAppendDeltaAfterHooks({ result, runtime });
+  const event = await emitAuthoritativeFinalMessageContent({ result, runtime });
   if (!event) throw new Error("authoritative final result failed to emit its message event");
   emitEvent(runtime?.eventListener || null, "authoritative_final_commit_completed", {
     ...authoritativeFinalDiagnostics(result, runtime),
-    eventId: String(event?.eventId || "").trim(),
-    messageId: String(event?.messageId || "").trim(),
-    presentationMessageId: String(event?.presentationMessageId || "").trim(),
+    eventId: String(event?.identity?.eventId || "").trim(),
+    messageId: String(event?.identity?.messageId || "").trim(),
+    presentationMessageId: String(event?.payload?.presentationMessageId || "").trim(),
   });
   return true;
 }
 
-export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
+export async function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime = {} } = {}) {
   const meta = readFinalStreamingResultMeta(result);
   if (meta?.streamed !== true) return false;
 
@@ -195,7 +202,7 @@ export function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, runtime =
   if (!appendedText) return false;
 
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  emitMessageEvent(eventListener, runtime, "llm_delta", {
+  await emitMessageEvent(eventListener, runtime, "llm_delta", {
     text: appendedText,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
@@ -227,7 +234,11 @@ export async function runAgentTurn({ agentContext, currentUserMessage, errorLogg
       userMessage,
     }),
   });
-  const { modelState, loopState } = buildAgentState({ agentContext, currentUserMessage, errorLogger });
+  const { modelState, loopState } = buildAgentState({
+    agentContext,
+    currentUserMessage,
+    errorLogger,
+  });
   const modelContext = loopState.modelContext;
   try {
     const result = await runFunctionCallLoop({ modelState, loopState, turn: 1 });

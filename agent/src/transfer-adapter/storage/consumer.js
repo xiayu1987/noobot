@@ -4,33 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  assertTransferEnvelope,
   attachmentIdentityKey,
-  transferIdentityKey,
+  normalizeTransferEnvelopes,
 } from "@noobot/semantic-transfer-protocol";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function collect(value) {
-  if (!value) return [];
-  if (Array.isArray(value)) return value;
-  if (isPlainObject(value) && Array.isArray(value.transferEnvelopes)) return value.transferEnvelopes;
-  return [value];
-}
-
 function validated(value) {
-  const seen = new Set();
-  const result = [];
-  for (const item of collect(value)) {
-    const envelope = assertTransferEnvelope(item);
-    const key = transferIdentityKey(envelope);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(envelope);
-  }
-  return result;
+  const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)
+    ? value.transferEnvelopes
+    : value;
+  return normalizeTransferEnvelopes(source);
 }
 
 export function getTransferEnvelopes(value = null) {

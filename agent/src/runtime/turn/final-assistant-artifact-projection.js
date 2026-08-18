@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { getTransferAttachments } from "../../transfer-adapter/storage/consumer.js";
-import { transferIdentityKey } from "@noobot/semantic-transfer-protocol";
+import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import {
   compactSessionAttachmentRef,
   compactTransferEnvelopes,
@@ -41,14 +41,7 @@ function resolveAttachmentsFromMessage(messageItem = {}) {
 }
 
 function dedupeTransferEnvelopes(envelopes = []) {
-  const seen = new Set();
-  return compactTransferEnvelopes(envelopes).filter((envelope) => {
-    if (!isPlainObject(envelope)) return false;
-    const key = transferIdentityKey(envelope);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return normalizeTransferEnvelopes(compactTransferEnvelopes(envelopes));
 }
 
 function dedupeAttachments(attachments = []) {

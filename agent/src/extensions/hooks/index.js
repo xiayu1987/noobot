@@ -5,7 +5,7 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { resolveHookClientEmitter } from "./client-channel.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
@@ -16,7 +16,14 @@ import {
 } from "@noobot/hook-protocol";
 
 const HOOK_PROGRESS_TEXT_LIMIT = LENGTH_THRESHOLDS.display.hookProgressTextChars;
-const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set(["1", "true", "on", "yes", "enable", "enabled"]);
+const HOOK_PROGRESS_VERBOSE_ENABLED_VALUES = new Set([
+  "1",
+  "true",
+  "on",
+  "yes",
+  "enable",
+  "enabled",
+]);
 const HOOK_PROGRESS_IMPORTANT_STATUSES = new Set([
   "abort",
   "aborted",
@@ -32,7 +39,8 @@ const HOOK_PROGRESS_IMPORTANT_STATUSES = new Set([
   "warn",
   "warning",
 ]);
-const HOOK_PROGRESS_IMPORTANT_EVENT_RE = /\b(error|fail|failed|failure|reject|rejected|blocked?|abort|aborted|timeout|warn(?:ing)?)\b/i;
+const HOOK_PROGRESS_IMPORTANT_EVENT_RE =
+  /\b(error|fail|failed|failure|reject|rejected|blocked?|abort|aborted|timeout|warn(?:ing)?)\b/i;
 const HOOK_CLIENT_BLOCKED_KEYS = new Set([
   "agent",
   "agentContext",
@@ -90,10 +98,13 @@ export function resolveHookRuntimeMeta(runtime = {}) {
   return {
     userId: String(systemRuntime?.userId || runtime?.userId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-    parentSessionId: resolveParentSessionId({ runtime }),
+    parentSessionId: normalizeParentSessionId(systemRuntime?.parentSessionId),
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     turnScopeId: String(
-      systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || runtime?.turnScopeId || "",
+      systemRuntime?.turnScopeId ||
+        systemRuntime?.config?.turnScopeId ||
+        runtime?.turnScopeId ||
+        "",
     ).trim(),
     caller: String(systemRuntime?.caller || "").trim(),
   };
@@ -140,7 +151,11 @@ function truncateHookProgressText(value) {
 function isHookPluginProgressTraceEnabled(runtime = {}) {
   const raw = runtime?.systemRuntime?.hookPluginProgressTrace ?? runtime?.hookPluginProgressTrace;
   if (raw === true) return true;
-  return HOOK_PROGRESS_VERBOSE_ENABLED_VALUES.has(String(raw ?? "").trim().toLowerCase());
+  return HOOK_PROGRESS_VERBOSE_ENABLED_VALUES.has(
+    String(raw ?? "")
+      .trim()
+      .toLowerCase(),
+  );
 }
 
 function isImportantHookPluginProgress(event = "", data = {}) {
@@ -148,7 +163,9 @@ function isImportantHookPluginProgress(event = "", data = {}) {
   if (HOOK_PROGRESS_IMPORTANT_EVENT_RE.test(name)) return true;
   if (data?.error) return true;
   if (data?.fsmRejected === true) return true;
-  const status = String(data?.status || data?.fsmState || "").trim().toLowerCase();
+  const status = String(data?.status || data?.fsmState || "")
+    .trim()
+    .toLowerCase();
   return HOOK_PROGRESS_IMPORTANT_STATUSES.has(status);
 }
 
@@ -239,9 +256,10 @@ export async function runAgentRuntimeHook({
   });
   const hookedContext = withHookClientEmitter(context, emitHookClientEvent);
   const verboseHookRuntimeEvents = isHookRuntimeEventVerboseEnabled({ runtime });
-  const invocationSignal = descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
-    ? null
-    : runtime?.abortSignal || null;
+  const invocationSignal =
+    descriptor.cancellationMode === HOOK_CANCELLATION_MODE.DETACHED
+      ? null
+      : runtime?.abortSignal || null;
   const startedAt = Date.now();
 
   if (verboseHookRuntimeEvents) {

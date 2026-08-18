@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed } from "vue";
-import {
-  mergeAttachments,
-} from "../../model/dialogProcessChain.js";
+import { mergeAttachments } from "../../model/dialogProcessChain.js";
 import {
   getMessageRole,
   getMessageSessionId,
@@ -16,11 +14,10 @@ import {
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
 import { getMessageAttachments as resolveRenderableMessageAttachments } from "../../model/messageModel.js";
-import {
-  SESSION_RUN_MESSAGE_RUNTIME_MARK,
-} from "../../runtime/sessionRunStateMachine.js";
+import { SESSION_RUN_MESSAGE_RUNTIME_MARK } from "../../runtime/sessionRunStateMachine.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { resolveParsedResultAccessMeta } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 
 function getMessageAttachments(messageItem = {}) {
   return resolveRenderableMessageAttachments(messageItem);
@@ -73,7 +70,7 @@ function isAttachmentOwnedByMessage(attachmentItem = {}, messageItem = {}) {
   if (attachmentOwnership.turnScopeId) {
     const sameTurnScope = Boolean(
       messageIdentity.turnScopeId &&
-        attachmentOwnership.turnScopeId === messageIdentity.turnScopeId,
+      attachmentOwnership.turnScopeId === messageIdentity.turnScopeId,
     );
     if (!sameTurnScope) return false;
     if (attachmentOwnership.sessionId && messageIdentity.sessionId) {
@@ -100,8 +97,7 @@ function isFreshPendingAssistant(messageItem = {}) {
 
 function isPluginInjectedMessage(messageItem = {}) {
   return (
-    messageItem?.injectedMessage === true &&
-    Boolean(String(messageItem?.injectedBy || "").trim())
+    messageItem?.injectedMessage === true && Boolean(String(messageItem?.injectedBy || "").trim())
   );
 }
 
@@ -120,7 +116,9 @@ function logDisplayedAttachmentsSummary({
     turnScopeId: getMessageTurnScopeId(messageItem),
     pending: messageItem?.pending === true,
     channelState: messageItem?.channelState?.state || "",
-    hasRuntimeMark: Boolean(messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || messageItem?.runtimeMark),
+    hasRuntimeMark: Boolean(
+      messageItem?.[SESSION_RUN_MESSAGE_RUNTIME_MARK] || messageItem?.runtimeMark,
+    ),
     baseAttachmentsCount,
     toolLogAttachmentsCount,
     displayedAttachmentsCount,
@@ -138,15 +136,16 @@ export function useMessageFiles({
     const messageItem = getMessageItem() || {};
     const sessionId = getMessageSessionId(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
-    const sameTurnMessages = getMessageRole(messageItem) === "assistant" && sessionId && turnScopeId
-      ? (Array.isArray(getAllMessages?.()) ? getAllMessages() : [])
-      .filter((candidate) =>
-        candidate !== messageItem &&
-        getMessageRole(candidate) === "assistant" &&
-        getMessageSessionId(candidate) === sessionId &&
-        getMessageTurnScopeId(candidate) === turnScopeId,
-      )
-      : [];
+    const sameTurnMessages =
+      getMessageRole(messageItem) === "assistant" && sessionId && turnScopeId
+        ? (Array.isArray(getAllMessages?.()) ? getAllMessages() : []).filter(
+            (candidate) =>
+              candidate !== messageItem &&
+              getMessageRole(candidate) === "assistant" &&
+              getMessageSessionId(candidate) === sessionId &&
+              getMessageTurnScopeId(candidate) === turnScopeId,
+          )
+        : [];
     const turnAttachments = sameTurnMessages.reduce(
       (result, candidate) => mergeAttachments(result, getMessageAttachments(candidate)),
       [],
@@ -165,11 +164,13 @@ export function useMessageFiles({
       role: getMessageRole(messageItem),
       attachments: result.map((attachment) => ({
         attachmentId: String(attachment?.attachmentId || "").trim(),
-        clientAttachmentId: String(attachment?.clientAttachmentId || attachment?.draftAttachmentId || "").trim(),
+        clientAttachmentId: String(
+          attachment?.clientAttachmentId || attachment?.draftAttachmentId || "",
+        ).trim(),
         sessionId: String(attachment?.sessionId || "").trim(),
         attachmentSource: String(attachment?.attachmentSource || "").trim(),
-        hasParsedResult: Boolean(attachment?.parsedResult),
-        parsedResultAttachmentId: String(attachment?.parsedResult?.attachmentId || attachment?.parsedResultAttachmentId || "").trim(),
+        parsedResultTargetIdentity:
+          resolveParsedResultAccessMeta(attachment)?.relation?.targetIdentity || null,
       })),
     }));
     logDisplayedAttachmentsSummary({

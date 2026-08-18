@@ -22,20 +22,32 @@ vi.mock("noobot-chat/plugin-api/ui", () => ({
       showParsedResult: { type: Boolean, default: false },
     },
     emits: ["preview", "download", "preview-parsed-result", "download-parsed-result"],
+    computed: {
+      parsedRelation() {
+        return (
+          this.attachmentItem.relations?.find(
+            (relation) => relation.relationType === "parsed_result",
+          ) || null
+        );
+      },
+      parsedResultName() {
+        return this.parsedRelation?.name || this.translate("message.parsedResultDefaultName");
+      },
+    },
     template: `
       <div class='base-attachment-file-card-stub'>
         <span>{{ attachmentItem.name }}</span>
         <span v-if='showParsedResult'>{{ translate("message.parsedResultLabel") }}</span>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && parsedRelation'
           type='button'
-          :title='translate("message.previewParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
+          :title='translate("message.previewParsedResult", { name: parsedResultName })'
           @click='$emit("preview-parsed-result", attachmentItem)'
         >{{ translate("message.previewParsedResultShort") }}</button>
         <button
-          v-if='showParsedResult && attachmentItem.parsedResultUrl'
+          v-if='showParsedResult && parsedRelation'
           type='button'
-          :title='translate("message.downloadParsedResult", { name: attachmentItem.parsedResultName || translate("message.parsedResultDefaultName") })'
+          :title='translate("message.downloadParsedResult", { name: parsedResultName })'
           @click='$emit("download-parsed-result", attachmentItem)'
         >{{ translate("message.downloadParsedResultShort") }}</button>
       </div>
@@ -71,13 +83,24 @@ function mountMessageAttachments(overrides = {}) {
           attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          parsedResult: {
-            attachmentId: "parsed-1",
-            sessionId: "session-1",
-            attachmentSource: "model",
-            name: "source.md",
-            mimeType: "text/markdown",
-          },
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "src-1",
+                sessionId: "session-1",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "parsed-1",
+                sessionId: "session-1",
+                attachmentSource: "model",
+              },
+              name: "source.md",
+              mimeType: "text/markdown",
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
         },
       ],
       isImageMime: () => false,
@@ -95,6 +118,23 @@ function mountMessageAttachments(overrides = {}) {
 }
 
 describe("MessageAttachments parsed result", () => {
+  it("renders explicit draft attachments without treating them as canonical identities", () => {
+    const wrapper = mountMessageAttachments({
+      attachments: [
+        {
+          clientAttachmentId: "draft-1",
+          name: "pending.png",
+          mimeType: "image/png",
+          size: 10,
+        },
+      ],
+    });
+
+    expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(1);
+    expect(wrapper.text()).toContain("pending.png");
+    expect(wrapper.text()).not.toContain("解析结果");
+  });
+
   it("shows parsed result actions for normal attachments", () => {
     const wrapper = mountMessageAttachments();
 
@@ -154,12 +194,7 @@ describe("MessageAttachments parsed result", () => {
           name: "source.pdf",
           size: 10,
           mimeType: "application/pdf",
-          parsedResult: {
-            attachmentId: "parsed-1",
-            sessionId: "session-1",
-            attachmentSource: "model",
-          },
-          parsedResultName: "source.md",
+          relations: [],
         },
       ],
     });
@@ -167,7 +202,7 @@ describe("MessageAttachments parsed result", () => {
     expect(wrapper.findAll(".base-attachment-file-card-stub")).toHaveLength(2);
   });
 
-  it("rejects parsed result access when the nested result has no canonical id", () => {
+  it("does not show parsed result actions without a canonical relation", () => {
     const wrapper = mountMessageAttachments({
       attachments: [
         {
@@ -176,8 +211,7 @@ describe("MessageAttachments parsed result", () => {
           attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          parsedResult: { url: "/api/attachments/parsed-1" },
-          parsedResultName: "source.md",
+          relations: [],
         },
       ],
     });
@@ -187,7 +221,7 @@ describe("MessageAttachments parsed result", () => {
     expect(wrapper.text()).not.toContain("下载");
   });
 
-  it("derives parsed result actions from session summary parsedResult metadata", async () => {
+  it("derives parsed result actions from the canonical attachment relation", async () => {
     const wrapper = mountMessageAttachments({
       attachments: [
         {
@@ -196,13 +230,25 @@ describe("MessageAttachments parsed result", () => {
           attachmentSource: "user",
           name: "source.pdf",
           mimeType: "application/pdf",
-          parsedResult: {
-            attachmentId: "parsed-1",
-            sessionId: "session-1",
-            attachmentSource: "model",
-            relativePath: "runtime/attach/model/source.multimodal-parse.md",
-            tool: "multimodal_parse",
-          },
+          relations: [
+            {
+              relationType: "parsed_result",
+              sourceIdentity: {
+                attachmentId: "src-1",
+                sessionId: "session-1",
+                attachmentSource: "user",
+              },
+              targetIdentity: {
+                attachmentId: "parsed-1",
+                sessionId: "session-1",
+                attachmentSource: "model",
+              },
+              name: "source.multimodal-parse.md",
+              mimeType: "text/markdown",
+              producer: { type: "tool", id: "multimodal_parse" },
+              createdAt: "2026-01-01T00:00:00.000Z",
+            },
+          ],
         },
       ],
     });
