@@ -580,7 +580,7 @@ export function useChatSession({
     notify,
     processStore,
     dispatchAuthoritativeRunStateEvent: chatEngine.dispatchAuthoritativeRunStateEvent,
-    applyTurnLifecycleEnvelope: chatStore.applyTurnLifecycleEnvelope,
+    applyTurnLifecycleEnvelope: chatEngine.applyTurnLifecycleEnvelope,
     applyExecutionSnapshot: (payload) => chatStore.applyExecutionSnapshot(payload),
     applyExecutionChildren: (payload) => chatStore.applyExecutionChildren(payload),
     applyExecutionTree: (payload) => chatStore.applyExecutionTree(payload),

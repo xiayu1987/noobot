@@ -21,6 +21,7 @@ import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
 } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
+import { SESSION_RUN_EVENT } from "../runtime/run-state-machine/constants.js";
 import { createTerminalResolutionCoordinator } from "../runtime/terminalResolutionCoordinator.js";
 import { logTerminalResolutionDebug } from "../../debug/loggers/terminalResolutionDebugLogger.js";
 import { applyLatestSessionAggregateVersion } from "../runtime/engine/sessionAggregateVersionManager.js";
@@ -54,7 +55,7 @@ export function useChatEngine({
   sessions,
   turnRuntimeRegistry,
   applyTurnRuntimeEvent,
-  applyTurnLifecycleEnvelope,
+  applyTurnLifecycleEnvelope: commitTurnLifecycleEnvelope,
   commitTurnTerminalResolution,
   input,
   uploadFiles,
@@ -186,6 +187,15 @@ export function useChatEngine({
       })),
     onTrace: (event, details = {}) => logStateMachineDebug(event, details),
   });
+  const applyAuthoritativeTurnLifecycle = (envelope = {}) => {
+    const event = {
+      ...envelope,
+      type: SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE,
+      raw: envelope,
+    };
+    const terminalResolution = terminalResolutionCoordinator.observe(event);
+    return terminalResolution || commitTurnLifecycleEnvelope?.(envelope);
+  };
   const applyRunStateEvent = (event) => {
     const eventSummary = summarizeStateMachineEvent(event);
     const before = selectSessionTurnRuntime(
@@ -203,18 +213,14 @@ export function useChatEngine({
       before: summarizeStateMachineTurn(beforeTurn, before),
       activeSessionId: activeSessionId?.value || "",
     }));
-    const terminalResolution = terminalResolutionCoordinator.observe(event);
-    if (terminalResolution) {
+    if (event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE) {
+      const lifecycleResult = applyAuthoritativeTurnLifecycle(event?.raw || event);
       logStateMachineDebug("stateMachine.reducer.skipped", () => ({
         ...eventSummary,
-        reason: "terminal_resolution_owned",
+        reason: "authoritative_lifecycle_owned",
         before: summarizeStateMachineTurn(beforeTurn, before),
       }));
-      logStateMachineDebug("stateMachine.terminal.scheduled", () => ({
-        ...eventSummary,
-        before: summarizeStateMachineTurn(beforeTurn, before),
-      }));
-      return terminalResolution;
+      return lifecycleResult;
     }
     const turnResult = applyTurnRuntimeEvent?.(event);
     const runtime = selectSessionTurnRuntime(
@@ -374,7 +380,7 @@ export function useChatEngine({
     applyWorkflowRuntimeEvent,
     reduceSubSessionMessageEvent,
     applyRunStateEvent,
-    applyTurnLifecycleEnvelope,
+    applyTurnLifecycleEnvelope: applyAuthoritativeTurnLifecycle,
     classifyRealtimeLog,
   };
   const senderUiDeps = {
@@ -453,7 +459,7 @@ export function useChatEngine({
     deleteMonotonicMessage,
     resendMonotonicMessage,
     dispatchAuthoritativeRunStateEvent: applyRunStateEvent,
-    applyTurnLifecycleEnvelope,
+    applyTurnLifecycleEnvelope: applyAuthoritativeTurnLifecycle,
     resolveTurnTerminalState: terminalResolutionCoordinator.resolve,
   };
 }

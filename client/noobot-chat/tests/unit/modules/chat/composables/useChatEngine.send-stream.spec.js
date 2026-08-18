@@ -142,6 +142,50 @@ describe("useChatEngine.send-stream", () => {
     expect(capturedPayload.preferences).not.toHaveProperty("thinkingStartedAt");
   });
 
+  it("projects completed thinking duration from one authoritative server timing pair", async () => {
+    const thinkingStartedAt = "2026-08-18T13:56:25.940Z";
+    const thinkingFinishedAt = "2026-08-18T13:56:29.540Z";
+    const stream = vi.fn(async (payload, onEvent) => {
+      emitAuthorityProcessing(onEvent, payload);
+      emitAuthorityTerminal(onEvent, {
+        ...payload,
+        sequence: 3,
+        revision: 3,
+      });
+    });
+    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
+      sessionId: "s-authoritative-thinking-timing",
+      stream,
+      terminalResolutionRevision: 3,
+      terminalResolutionSequence: 3,
+      terminalResolutionTurnTiming: {
+        thinkingStartedAt,
+        thinkingFinishedAt,
+      },
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-18T13:54:25.940Z"));
+    try {
+      await engine.send();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const assistant = assistantMessage(activeSession);
+    const runtime = selectTurnMessageRuntime(turnRuntimeRegistry.value, {
+      sessionId: "s-authoritative-thinking-timing",
+      turnScopeId: assistant.turnScopeId,
+    });
+    expect(runtime).toMatchObject({
+      terminal: "completed",
+      running: false,
+      startedAt: thinkingStartedAt,
+      finishedAt: thinkingFinishedAt,
+    });
+    expect(Date.parse(runtime.finishedAt) - Date.parse(runtime.startedAt)).toBe(3600);
+  });
+
   it("does not derive authoritative finished timing from transport completion", async () => {
     const stream = vi.fn(async (payload, onEvent) => {
       emitChannelState(onEvent, "s-late-completed", "dp-late-completed", "sending", {

@@ -14,12 +14,23 @@ import {
   createTurnLifecycleReceipt,
   createTurnTerminalResolution,
   deriveAuthoritativeTurnCapabilities,
+  deriveTurnEventType,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
   validateTurnLifecycleReceipt,
   validateTurnTerminalResolution,
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
+
+test("turn lifecycle event type is derived from authoritative state", () => {
+  assert.equal(deriveTurnEventType(TURN_STATE.COMPLETED), TURN_EVENT.COMPLETED);
+  assert.equal(deriveTurnEventType(TURN_STATE.STOP_COMPLETED), TURN_EVENT.STOP_COMPLETED);
+  assert.equal(
+    deriveTurnEventType(TURN_STATE.ACTION_REQUESTING, { action: "stop" }),
+    TURN_EVENT.STOP_ACCEPTED,
+  );
+  assert.equal(deriveTurnEventType(TURN_STATE.PROCESSING_FAILED), TURN_EVENT.FAILED);
+});
 
 test("terminal resolution binds terminal state to the committed Session aggregate version", () => {
   const resolution = createTurnTerminalResolution({

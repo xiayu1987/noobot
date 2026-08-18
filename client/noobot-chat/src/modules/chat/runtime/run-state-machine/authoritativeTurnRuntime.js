@@ -10,6 +10,7 @@ import {
   projectAuthoritativeTurnTerminal,
 } from "./authoritativeTurnProjection.js";
 import {
+  deriveTurnEventType,
   validateTurnLifecycleEnvelope,
   validateTurnLifecycleSnapshot,
   validateTurnTerminalResolution,
@@ -138,19 +139,6 @@ export function applyTurnTerminalResolution(registry, response = {}) {
   });
 }
 
-const SNAPSHOT_STATE_EVENT = Object.freeze({
-  action_requesting: "turn.action_accepted",
-  processing: "turn.processing_started",
-  completion_requesting: "turn.processing_completed",
-  completed: "turn.completed",
-  stopping: "turn.stop_processing_completed",
-  stop_completed: "turn.stop_completed",
-  action_failed: "turn.failed",
-  processing_failed: "turn.failed",
-  completion_failed: "turn.failed",
-  stop_failed: "turn.failed",
-});
-
 export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
   const validation = validateTurnLifecycleSnapshot(snapshot);
   if (!validation.valid)
@@ -196,7 +184,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
     ) {
       return { applied: false, reason: "dialog_process_identity_conflict" };
     }
-    const eventType = SNAPSHOT_STATE_EVENT[text(source.state)];
+    const eventType = deriveTurnEventType(source.state, { action: source.action });
     if (!eventType) return { applied: false, reason: "invalid_snapshot_state" };
     const sourceIsTerminal = isAuthoritativeTerminalState(source.state);
     const phase = text(source.phase || source.failure?.phase);
@@ -232,8 +220,7 @@ export function applyTurnLifecycleSnapshot(registry, snapshot = {}) {
       messageId: text(source.messageId),
       presentationMessageId: text(source.presentationMessageId),
       failure: source.failure || null,
-      lifecycleEventType:
-        SNAPSHOT_STATE_EVENT[text(source.state)] || text(current?.lifecycleEventType),
+      lifecycleEventType: eventType || text(current?.lifecycleEventType),
       authoritativeCompletionCommit: sourceIsTerminal
         ? {
             completionCommitId: text(source.completionCommitId),
