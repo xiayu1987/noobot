@@ -240,7 +240,8 @@ test("reconnect rejects the transaction when the authoritative snapshot is unava
   assert.deepEqual(client.sentEvents.filter((item) => item.event === "channel_state"), []);
 });
 
-test("a superseded reconnect transaction cannot publish its stale baseline", async () => {
+test("a superseded reconnect transaction cannot publish its stale baseline", async (t) => {
+  t.mock.method(Date, "now", () => 1787068800000);
   const manager = new ChannelManager({ OPEN: 1 });
   const sessionId = "session-reconnect-superseded";
   const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
@@ -274,6 +275,7 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     requestId: "reconnect-current",
     knownLifecycleSequenceMap: { [sessionId]: 3 },
   });
+  assert.notEqual(forwarded[0]?.commandId, forwarded[1]?.commandId);
   assert.equal(channel.pendingSnapshotRequests.has(forwarded[0]?.commandId), false);
   const currentCommandId = forwarded[1]?.commandId;
   channel.pendingSnapshotRequests.get(currentCommandId).resolve({
@@ -313,4 +315,3 @@ test("a superseded reconnect transaction cannot publish its stale baseline", asy
     ["reconnect-current"],
   );
 });
-

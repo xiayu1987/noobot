@@ -27,7 +27,7 @@ const terminalResolutionFromUrl = (
   url,
   state = "completed",
   messages = [],
-  { revision = 2, sequence = revision } = {},
+  { revision = 2, sequence = revision, turnTiming = {} } = {},
 ) => {
   const match = String(url).match(/\/session\/[^/]+\/([^/]+)\/turns\/([^/]+)\/terminal/);
   const sessionId = decodeURIComponent(match?.[1] || "");
@@ -58,6 +58,7 @@ const terminalResolutionFromUrl = (
       summaryVersion: 1,
       finalizeIntent: state === "stop_completed" ? "stop" : "complete",
       failure,
+      ...turnTiming,
     },
     materialization: {
       aggregateVersion: 1,
@@ -154,6 +155,7 @@ export const createHarness = ({
   terminalResolutionState = "completed",
   terminalResolutionRevision = 2,
   terminalResolutionSequence = terminalResolutionRevision,
+  terminalResolutionTurnTiming = {},
   deps = {},
 } = {}) => {
   const activeSessionId = ref(sessionId);
@@ -347,6 +349,7 @@ export const createHarness = ({
           {
             revision: terminalResolutionRevision,
             sequence: terminalResolutionSequence,
+            turnTiming: terminalResolutionTurnTiming,
           },
         ),
     })),

@@ -30,6 +30,24 @@ export function deriveTurnState(eventType = "", phase = "") {
     : EVENT_STATE[eventType] || "";
 }
 
+export function deriveTurnEventType(state = "", { action = "" } = {}) {
+  const normalizedState = String(state || "").trim();
+  if (normalizedState === TURN_STATE.ACTION_REQUESTING) {
+    return String(action || "").trim() === "stop"
+      ? TURN_EVENT.STOP_ACCEPTED
+      : TURN_EVENT.ACTION_ACCEPTED;
+  }
+  if (normalizedState === TURN_STATE.PROCESSING) return TURN_EVENT.PROCESSING_STARTED;
+  if (normalizedState === TURN_STATE.COMPLETION_REQUESTING) {
+    return TURN_EVENT.PROCESSING_COMPLETED;
+  }
+  if (normalizedState === TURN_STATE.STOPPING) return TURN_EVENT.STOP_PROCESSING_COMPLETED;
+  if (normalizedState === TURN_STATE.COMPLETED) return TURN_EVENT.COMPLETED;
+  if (normalizedState === TURN_STATE.STOP_COMPLETED) return TURN_EVENT.STOP_COMPLETED;
+  if (Object.values(FAILED_PHASE_STATE).includes(normalizedState)) return TURN_EVENT.FAILED;
+  return "";
+}
+
 export function deriveTurnExecutionState(eventType = "", current = "") {
   if (eventType === TURN_EVENT.COMPLETED) return "completed";
   if (eventType === TURN_EVENT.STOP_COMPLETED) return "user_stopped";

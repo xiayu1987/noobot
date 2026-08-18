@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../../shared/config.js";
+import { randomUUID } from "node:crypto";
 import { CHANNEL_STATUS } from "../../shared/constants.js";
 import { createChannelKey, nowMs } from "../../shared/utils.js";
 import { writeAgentProxyRouteLifecycleEvent } from "../../runtime-events/ws-runtime-events.js";
@@ -170,7 +171,7 @@ class ReconnectMethods {
           .filter(Boolean)
           .sort((left, right) => Number(right?.updatedAtMs || 0) - Number(left?.updatedAtMs || 0))
           .at(0);
-        const commandId = `proxy-snapshot:${channelSessionId}:${nowMs()}`;
+        const commandId = `proxy-snapshot:${channelSessionId}:${randomUUID()}`;
         snapshotChannel.pendingSnapshotRequests ||= new Map();
         const snapshotPromise = new Promise((resolve) => {
           const timeout = setTimeout(() => {

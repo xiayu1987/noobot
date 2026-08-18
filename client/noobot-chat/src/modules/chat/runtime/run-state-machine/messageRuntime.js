@@ -9,11 +9,6 @@ import {
   getMessageTurnScopeId,
 } from "../../model/messageIdentity.js";
 import {
-  normalizeTimePair,
-  nowMs,
-  toIsoTime,
-} from "../../model/timeFields.js";
-import {
   BackendChannelState,
   BackendTerminalStates,
   FrontendRunState,
@@ -185,7 +180,6 @@ export function isMessageInFlightAssistant(messageItem = {}) {
 }
 
 export function buildInFlightMessageRuntimePatch(stateItem = {}) {
-  const timing = normalizeTimePair(stateItem);
   const channelState = {
     state: normalizeState(stateItem?.backendState) || normalizeState(stateItem?.state),
     sessionId: trim(stateItem?.sessionId),
@@ -199,8 +193,6 @@ export function buildInFlightMessageRuntimePatch(stateItem = {}) {
     runtimeMark: buildSessionRunMessageRuntimeKey(stateItem),
     pending: true,
     channelState,
-    thinkingStartedAt: timing.createdAt || timing.createdAtMs || "",
-    thinkingStartedAtPolicy: "if_missing",
   };
 }
 
@@ -208,17 +200,12 @@ export function buildClearMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
-  const stateTiming = normalizeTimePair(stateSnapshot);
-  const channelState = getMessageChannelState(messageItem);
-  const finishedAt = trim(stateSnapshot?.startedAt) || stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
       state: FrontendRunState.FRONTEND_COMPLETED,
     },
-    thinkingFinishedAt: finishedAt,
-    thinkingFinishedAtPolicy: "if_missing",
     statusLabelKey: "chat.generated",
     statusLabelPolicy: "if_empty",
   };
@@ -228,17 +215,12 @@ export function buildFailedMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
-  const stateTiming = normalizeTimePair(stateSnapshot);
-  const channelState = getMessageChannelState(messageItem);
-  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
     channelState: {
       state: normalizeState(stateSnapshot?.state) || BackendChannelState.ERROR,
     },
-    thinkingFinishedAt: finishedAt,
-    thinkingFinishedAtPolicy: "if_missing",
     statusLabelKey: "chat.failed",
   };
 }
@@ -247,9 +229,7 @@ export function buildStoppedMessageRuntimePatch({
   messageItem = {},
   stateSnapshot = createInitialSessionRunState(),
 } = {}) {
-  const stateTiming = normalizeTimePair(stateSnapshot);
   const channelState = getMessageChannelState(messageItem);
-  const finishedAt = stateTiming.updatedAt || toIsoTime(nowMs());
   return {
     clearRuntimeMark: true,
     pending: false,
@@ -261,8 +241,6 @@ export function buildStoppedMessageRuntimePatch({
       sourceEvent: trim(stateSnapshot?.sourceEvent) || trim(channelState?.sourceEvent) || "user_stopped",
       seq: Number(stateSnapshot?.seq || channelState?.seq || 0),
     },
-    thinkingFinishedAt: finishedAt,
-    thinkingFinishedAtPolicy: "if_missing",
     statusLabelKey: "chat.stopped",
   };
 }

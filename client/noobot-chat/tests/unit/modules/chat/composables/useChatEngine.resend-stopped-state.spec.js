@@ -389,11 +389,54 @@ describe("useChatEngine.resend stopped state", () => {
       const session = detail.sessions?.[0];
       if (session) activeSession.value = { ...activeSession.value, ...session };
     });
+    let terminalResolutionCount = 0;
+    const terminalResolutionFetcher = vi.fn(async (url) => {
+      terminalResolutionCount += 1;
+      const turnScopeId = decodeURIComponent(
+        String(url).match(/\/turns\/([^/]+)\/terminal/)?.[1] || "",
+      );
+      const revision = terminalResolutionCount + 2;
+      const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
+      return {
+        ok: true,
+        json: async () =>
+          createTurnTerminalResolution({
+            commandId: `resolve:${turnScopeId}:${revision}`,
+            sessionId,
+            turnScopeId,
+            resolved: true,
+            aggregateVersion: terminalResolutionCount,
+            turn: {
+              sessionId,
+              turnScopeId,
+              state: "stop_completed",
+              phase: "stop",
+              revision,
+              sequence: revision,
+              completionCommitId,
+              summaryVersion: revision,
+              terminalStatus: { status: "user_stopped" },
+            },
+            materialization: {
+              completionCommitId,
+              summaryVersion: revision,
+              revision,
+              sequence: revision,
+              terminalStatus: { status: "user_stopped" },
+              messages: [],
+            },
+          }),
+      };
+    });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
       stream,
-      terminalResolutionState: "stop_completed",
-      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+      deps: {
+        replaceSessionTurnApi,
+        fetchSessionDetail,
+        applySessionDetail,
+        terminalResolutionFetcher,
+      },
     });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "original", turnScopeId: "client-turn:original" },

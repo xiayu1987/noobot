@@ -5,7 +5,12 @@
  */
 import { BackendChannelState, FrontendRunState, SESSION_RUN_EVENT } from "./constants.js";
 import { normalizeSessionRunEvent } from "./eventNormalization.js";
-import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
+import {
+  deriveTurnEventType,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
 import { projectAuthoritativeTurnState } from "./authoritativeTurnProjection.js";
 
 export const TURN_TRANSITION_REASON = Object.freeze({
@@ -268,7 +273,9 @@ export function reduceTurnRuntimeEvent(current = null, rawEvent = {}) {
     : String(event.action || current?.action || "send").trim();
   const lifecycleEventType = event.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE
     ? String(event.eventType || "").trim()
-    : String(current?.lifecycleEventType || "").trim();
+    : event.type === SESSION_RUN_EVENT.TERMINAL_RESOLVED
+      ? deriveTurnEventType(event.authoritativeTurnState, { action })
+      : String(current?.lifecycleEventType || "").trim();
   const commandId = event.type === SESSION_RUN_EVENT.LOCAL_RESET
     ? ""
     : String(event.commandId || current?.commandId || "").trim();
