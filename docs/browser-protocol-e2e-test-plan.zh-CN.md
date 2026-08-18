@@ -441,6 +441,12 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；`write_file` 的权威 `writtenFiles` 与 Turn journal、运行中/运行中刷新/完成前刷新/完成后刷新四个时点的前端生成文件卡数量和文件键集合一致；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
 
+### PBE-044：多次工具停止继续与快照恢复闭环
+
+步骤：先执行一个单工具命令并自然完成；随后在同一 Session 发起八步顺序工具链，观察到多个真实工具结果后停止，通过 Continue 恢复；再次观察到多个新工具结果后停止，再次 Continue 并自然完成剩余步骤。
+
+断言：两次 Stop 各自产生且只产生一份版本 2 模型快照；快照的 system/history/incremental 分块与扁平 messages 完全一致，序列化消息字段符合 `context-protocol`，assistant tool call 与 tool result 不拆对。测试使用正式 `hydrateModelContextSnapshot` 和 `projectRecoveredMessagesToIdentity` 恢复每份快照；已完成 history 保留其原轮次身份，被停止的 incremental 统一重绑定到新 Turn identity；恢复后的完整 provider 消息指纹必须成为对应 Continue 第一次 `agent.main` 实际输入的精确前缀。三段工具执行合计恰好八次且每个调用结果成功配对，状态文件最终为 step=8，最后一轮产生自然完成终态。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。
@@ -516,7 +522,7 @@ npm run test:e2e:protocol:full
 | --------- | ----------------------------------------------- |
 | Smoke     | PBE-002、006                                    |
 | Core      | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036                |
+| Full-only | PBE-015、023～026、028、031～036、044          |
 
 ## 8. CI 失败产物要求
 

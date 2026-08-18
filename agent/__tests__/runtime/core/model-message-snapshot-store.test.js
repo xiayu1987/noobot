@@ -16,7 +16,6 @@ import {
   loadStoppedModelMessageSnapshot,
   clearStoppedModelMessageSnapshot,
 } from "../../../src/runtime/resume/model-message-snapshot-store.js";
-import { projectRecoveredMessagesToIdentity } from "../../../src/bot/session/turn-execution-preparer.js";
 
 async function createWorkspace() {
   return fs.mkdtemp(path.join(os.tmpdir(), "noobot-stopped-snapshot-"));
@@ -195,20 +194,19 @@ test("stopped snapshot round trip preserves injected messages by block, order, s
     { injectedMessage: true, injectedBy: "harness-plugin", injectedMessageType: "planning", dialogProcessId: "dialog-incremental", turnScopeId: "turn-incremental", additionalType: "planning" },
   ]);
 
-  const projectedHistory = projectRecoveredMessagesToIdentity(
-    [...loaded.messageBlocks.history, ...loaded.messageBlocks.incremental],
-    { userName: "admin", sessionId: "session-a", dialogProcessId: "dialog-current", turnScopeId: "turn-current" },
-  );
-  const projectedInjections = projectedHistory.filter((message) => message.injectedMessage === true);
-  assert.deepEqual(projectedInjections.map((message) => [
+  const recoveredInjections = [
+    ...loaded.messageBlocks.history,
+    ...loaded.messageBlocks.incremental,
+  ].filter((message) => message.injectedMessage === true);
+  assert.deepEqual(recoveredInjections.map((message) => [
     message.content,
     message.injectedBy,
     message.injectedMessageType,
     message.dialogProcessId,
     message.turnScopeId,
   ]), [
-    ["history injection", "harness-plugin", "guidance", "dialog-current", "turn-current"],
-    ["incremental injection", "harness-plugin", "planning", "dialog-current", "turn-current"],
+    ["history injection", "harness-plugin", "guidance", "dialog-history", "turn-history"],
+    ["incremental injection", "harness-plugin", "planning", "dialog-incremental", "turn-incremental"],
   ]);
 });
 

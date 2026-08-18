@@ -621,9 +621,20 @@ assertFileContains("context-protocol/src/policy/snapshot.js", [
     pattern: /export\s+function\s+createModelContextSnapshot\b/,
   },
   { name: "owns snapshot hydration", pattern: /export\s+function\s+hydrateModelContextSnapshot\b/ },
+]);
+const snapshotPolicyText = readRel("context-protocol/src/policy/snapshot.js");
+if (/projectRecoveredMessagesToIdentity/.test(snapshotPolicyText)) {
+  fail(
+    "snapshot protocol retains an unscoped recovered-message identity projection",
+    "Only the stopped incremental block may be projected to a continuation identity.",
+  );
+} else {
+  pass("snapshot protocol has no unscoped recovered-message identity projection");
+}
+assertFileContains("context-protocol/src/policy/snapshot.js", [
   {
-    name: "owns recovered identity projection",
-    pattern: /export\s+function\s+projectRecoveredMessagesToIdentity\b/,
+    name: "owns stopped incremental continuation projection",
+    pattern: /export\s+function\s+projectSnapshotIncrementalToContinuation\b/,
   },
 ]);
 const stoppedResumePreparerText = assertFileContains(

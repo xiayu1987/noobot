@@ -8,7 +8,7 @@ import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
-import { projectRecoveredMessagesToIdentity } from "@noobot/context-protocol/policy/snapshot";
+import { projectSnapshotIncrementalToContinuation } from "@noobot/context-protocol/policy/snapshot";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
@@ -146,7 +146,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   const incrementalMessages = Array.isArray(snapshot?.messageBlocks?.incremental)
     ? snapshot.messageBlocks.incremental
     : [];
-  const currentMessageIdentity = {
+  const continuationIdentity = {
     userName: String(payload?.userName || payload?.userId || "").trim(),
     sessionId: String(payload?.sessionId || "").trim(),
     parentSessionId: String(payload?.parentSessionId || "").trim(),
@@ -154,21 +154,17 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     parentDialogProcessId: String(payload?.parentDialogProcessId || "").trim(),
     turnScopeId: String(payload?.turnScopeId || runConfig?.turnScopeId || "").trim(),
   };
-  const resumedHistoryMessages = projectRecoveredMessagesToIdentity(
-    historyMessages,
-    currentMessageIdentity,
-  );
-  const resumedIncrementalMessages = projectRecoveredMessagesToIdentity(
+  const continuedIncrementalMessages = projectSnapshotIncrementalToContinuation(
     incrementalMessages,
-    currentMessageIdentity,
+    continuationIdentity,
   );
   const agentContext = await contextBuilder.buildAgentContext(
     systemMessages,
-    resumedHistoryMessages,
+    historyMessages,
     {
       dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
       attachments: userMessageAttachments,
-      incrementalMessages: resumedIncrementalMessages,
+      incrementalMessages: continuedIncrementalMessages,
     },
   );
   const scopedAgentContext = {
@@ -194,8 +190,6 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     userMessageAttachments,
   };
 }
-
-export { projectRecoveredMessagesToIdentity };
 
 export async function resolveStoppedResumeAttachments(
   engine,
