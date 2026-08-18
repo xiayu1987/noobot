@@ -5,9 +5,8 @@
  */
 import { emitEvent } from "../../events/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
-import { executeToolCallInTurn } from "../tool-execution/tool-runner.js";
+import { settleToolCallInTurn } from "../tool-execution/tool-runner.js";
 import { DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME } from "@noobot/context-protocol/policy/summary";
-import { assertNotAborted } from "../utils/error-utils.js";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
@@ -55,11 +54,10 @@ export async function processToolResults({
     }),
   });
 
-  const toolCallResults = await Promise.all(
+  const toolCallSettlements = await Promise.all(
     calls.map(async (call) => {
-      assertNotAborted(abortSignal, runtime);
       const tool = toolMap.get(call.name);
-      const toolCallResult = await executeToolCallInTurn({
+      return settleToolCallInTurn({
         call,
         tool,
         abortSignal,
@@ -72,9 +70,9 @@ export async function processToolResults({
         runtime,
         agentContext: modelState?.agentContext || null,
       });
-      return toolCallResult;
     }),
   );
+  const toolCallResults = toolCallSettlements.map((settlement) => settlement.result);
 
   const hasTaskSummaryCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
@@ -107,6 +105,11 @@ export async function processToolResults({
   } else {
     await commitToolResults();
   }
+
+  const rejectedSettlement = toolCallSettlements.find(
+    (settlement) => settlement.status === "rejected",
+  );
+  if (rejectedSettlement) throw rejectedSettlement.error;
 
   if (hasRequestHelpCall) {
     loopState.toolConsecutiveFailureCount = 0;

@@ -445,7 +445,13 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 步骤：先执行一个单工具命令并自然完成；随后在同一 Session 发起八步顺序工具链，观察到多个真实工具结果后停止，通过 Continue 恢复；再次观察到多个新工具结果后停止，再次 Continue 并自然完成剩余步骤。
 
-断言：两次 Stop 各自产生且只产生一份版本 2 模型快照；快照的 system/history/incremental 分块与扁平 messages 完全一致，序列化消息字段符合 `context-protocol`，assistant tool call 与 tool result 不拆对。测试使用正式 `hydrateModelContextSnapshot` 和 `projectRecoveredMessagesToIdentity` 恢复每份快照；已完成 history 保留其原轮次身份，被停止的 incremental 统一重绑定到新 Turn identity；恢复后的完整 provider 消息指纹必须成为对应 Continue 第一次 `agent.main` 实际输入的精确前缀。三段工具执行合计恰好八次且每个调用结果成功配对，状态文件最终为 step=8，最后一轮产生自然完成终态。
+断言：两次 Stop 各自产生且只产生一份版本 2 模型快照；快照的 system/history/incremental 分块与扁平 messages 完全一致，序列化消息字段符合 `context-protocol`，assistant tool call 与 tool result 不拆对。测试使用正式 `hydrateModelContextSnapshot` 和 `projectSnapshotIncrementalToContinuation` 恢复每份快照；已完成 history 保留其原轮次身份，被停止的 incremental 统一重绑定到新 Turn identity；恢复后的完整 provider 消息指纹必须成为对应 Continue 第一次 `agent.main` 实际输入的精确前缀。三段工具执行合计恰好八次且每个调用结果成功配对，状态文件最终为 step=8，最后一轮产生自然完成终态。
+
+### PBE-045：并行工具停止与快照结果完整性
+
+步骤：要求主模型在同一个 assistant 响应中并行发起四次 `execute_script`，其中三项短时完成、一项保持运行；观察到至少两个真实成功结果后点击 Stop，再通过 Continue 恢复且不重新执行工具。
+
+断言：停止轮恰好存在四个调用和四个按 `toolCallId` 配对的结果；已完成调用保留真实成功结果，被停止调用形成 `status=aborted`、`stopType=user_stop` 的规范结果。版本 2 快照不得出现未配对 assistant tool call；正式恢复投影必须成为 Continue 首次 `agent.main` provider 输入的精确前缀，Continue 轮不得再次产生工具调用。
 
 ### 模型调用唯一观测边界
 
@@ -522,7 +528,7 @@ npm run test:e2e:protocol:full
 | --------- | ----------------------------------------------- |
 | Smoke     | PBE-002、006                                    |
 | Core      | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036、044          |
+| Full-only | PBE-015、023～026、028、031～036、044、045      |
 
 ## 8. CI 失败产物要求
 
