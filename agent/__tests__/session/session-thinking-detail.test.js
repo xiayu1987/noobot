@@ -79,7 +79,40 @@ test("thinking detail projects the complete turn timeline onto the final assista
   assert.equal(payload.messageItem.toolTimeline[0].resultEvent.eventId, "call-end");
   assert.equal(payload.messageItem.activityTimeline.length, 1);
   assert.equal(payload.messageItem.hasThinkingDetails, true);
-  assert.equal(payload.counts.executionLogCount, 1);
+  assert.equal(payload.counts.executionLogCount, 2);
+});
+
+test("stopped turn detail uses the persisted presentation identity without a final answer", () => {
+  const payload = buildThinkingDetailPayload({
+    sessionId: "stopped-session",
+    sessions: [{
+      sessionId: "stopped-session",
+      rawMessages: [{
+        id: "tool-call-message",
+        role: "assistant",
+        type: "tool_call",
+        chatPresentation: false,
+        sessionId: "stopped-session",
+        dialogProcessId: "stopped-dialog",
+        turnScopeId: "stopped-turn",
+        presentationMessageId: "stopped-presentation",
+        toolTimeline: [{
+          key: "call:one",
+          toolCallId: "one",
+          call: { eventId: "call-one" },
+          resultEvent: { eventId: "result-one" },
+        }],
+      }],
+    }],
+  }, { turnScopeId: "stopped-turn" });
+
+  assert.equal(payload.exists, true);
+  assert.equal(payload.messageItem.role, "assistant");
+  assert.equal(payload.messageItem.type, "message");
+  assert.equal(payload.messageItem.presentationMessageId, "stopped-presentation");
+  assert.equal(payload.messageItem.turnScopeId, "stopped-turn");
+  assert.equal(payload.messageItem.thinkingDetailCount, 2);
+  assert.equal(payload.counts.executionLogCount, 2);
 });
 
 test("session summary references canonical thinking detail without copying its timeline", () => {
@@ -89,14 +122,26 @@ test("session summary references canonical thinking detail without copying its t
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
-      toolTimeline: [{ key: "call:one", toolCallId: "one", status: "completed" }],
+      toolTimeline: [{
+        key: "call:one",
+        toolCallId: "one",
+        status: "completed",
+        call: { eventId: "call-one" },
+        resultEvent: { eventId: "result-one" },
+      }],
     },
     {
       id: "tool-call-two",
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
-      toolTimeline: [{ key: "call:two", toolCallId: "two", status: "completed" }],
+      toolTimeline: [{
+        key: "call:two",
+        toolCallId: "two",
+        status: "completed",
+        call: { eventId: "call-two" },
+        resultEvent: { eventId: "result-two" },
+      }],
     },
     {
       id: "final-assistant",
@@ -114,7 +159,7 @@ test("session summary references canonical thinking detail without copying its t
     sessions: [{ sessionId: "child-session", rawMessages: messages }],
   }, { turnScopeId: "workflow-node:turn-2" });
 
-  assert.equal(summaryMessage.thinkingDetailCount, 2);
+  assert.equal(summaryMessage.thinkingDetailCount, 4);
   assert.equal(summaryMessage.hasThinkingDetails, true);
   assert.equal(summaryMessage.toolTimeline.length, 2);
   assert.equal(summaryMessage.activityTimeline, undefined);
@@ -146,7 +191,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   }, { turnScopeId: "turn-large-detail" });
 
   assert.equal(JSON.stringify(summary).includes(largePayload), false);
-  assert.equal(summary.messages[0].thinkingDetailCount, 1);
+  assert.equal(summary.messages[0].thinkingDetailCount, 2);
   assert.equal(detail.messageItem.toolTimeline[0].call.arguments, largePayload);
   assert.equal(detail.messageItem.toolTimeline[0].resultEvent.output, largePayload);
 });

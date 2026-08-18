@@ -7,6 +7,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  countCanonicalThinkingDetailEvents,
+  countCanonicalToolTimelineEvents,
   reduceCanonicalToolTimeline,
   resolveCanonicalToolTimelineStatus,
 } from "../src/tool-timeline.js";
@@ -98,4 +100,16 @@ test("canonical tool timeline marks successful results completed", () => {
   );
   assert.equal(timeline[0].status, "completed");
   assert.equal(timeline[0].success, true);
+});
+
+test("canonical detail counts match the event records exposed to renderers", () => {
+  const toolTimeline = [
+    { call: { eventId: "call-1" }, resultEvent: { eventId: "result-1" } },
+    { call: { eventId: "call-2" } },
+  ];
+  assert.equal(countCanonicalToolTimelineEvents(toolTimeline), 3);
+  assert.equal(countCanonicalThinkingDetailEvents({
+    toolTimeline,
+    activityTimeline: [{ eventId: "activity-1" }],
+  }), 4);
 });

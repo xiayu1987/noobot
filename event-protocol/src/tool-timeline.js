@@ -9,6 +9,21 @@ import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol
 
 const text = (value) => String(value || "").trim();
 
+export function countCanonicalToolTimelineEvents(timeline = []) {
+  return (Array.isArray(timeline) ? timeline : []).reduce(
+    (count, entry = {}) => count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
+    0,
+  );
+}
+
+export function countCanonicalThinkingDetailEvents({
+  toolTimeline = [],
+  activityTimeline = [],
+} = {}) {
+  return countCanonicalToolTimelineEvents(toolTimeline) +
+    (Array.isArray(activityTimeline) ? activityTimeline.length : 0);
+}
+
 export function isCanonicalToolMessageEvent(envelope = {}) {
   return [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
     envelope?.payload?.eventType,

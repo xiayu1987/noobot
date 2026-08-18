@@ -39,7 +39,33 @@ export function selectThinkingRootMessage(messages = [], filters = {}) {
     if (isInjectedThinkingMessage(item)) continue;
     if (!hasRouteFilter || isMessageInThinkingRound(filters, item, filters)) return item;
   }
-  return {};
+  const roundMessages = messages.filter((item) => isMessageInThinkingRound(filters, item, filters));
+  const presentationMessageIds = [
+    ...new Set(
+      roundMessages
+        .map((item = {}) => normalizeThinkingRoute(item?.presentationMessageId))
+        .filter(Boolean),
+    ),
+  ];
+  if (presentationMessageIds.length > 1) {
+    throw new TypeError("thinking detail invariant failed: presentation_message_identity_conflict");
+  }
+  if (presentationMessageIds.length !== 1) return {};
+  const source = roundMessages.find(
+    (item = {}) => normalizeThinkingRoute(item?.presentationMessageId) === presentationMessageIds[0],
+  ) || {};
+  return {
+    id: presentationMessageIds[0],
+    messageId: presentationMessageIds[0],
+    presentationMessageId: presentationMessageIds[0],
+    role: "assistant",
+    type: "message",
+    content: "",
+    chatPresentation: true,
+    sessionId: normalizeThinkingRoute(source?.sessionId),
+    dialogProcessId: normalizeThinkingRoute(source?.dialogProcessId),
+    turnScopeId: normalizeThinkingRoute(source?.turnScopeId),
+  };
 }
 
 function mergeTimeline(messages = [], field, resolveKey) {

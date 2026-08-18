@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
   collectAttachmentRefsFromTransferEnvelopes,
   dedupeAttachmentRefs,
@@ -16,11 +17,11 @@ import {
   compactThinkingTimeline,
 } from "./message-summary-projection.js";
 import {
-  buildActiveTurnPresentation,
+  buildLifecycleTurnPresentations,
   buildToolArtifactTimelineProjection,
 } from "./turn-artifact-projection.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 22;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 23;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
@@ -72,9 +73,9 @@ export function buildSessionDisplaySummary(session = {}) {
       return summary;
     })
     .filter(Boolean);
-  const activeTurnPresentation = buildActiveTurnPresentation(lifecycle, sessionId);
-  if (activeTurnPresentation) {
-    const presentationMessageId = activeTurnPresentation.presentationMessageId;
+  const lifecycleTurnPresentations = buildLifecycleTurnPresentations(lifecycle, sessionId);
+  for (const lifecycleTurnPresentation of lifecycleTurnPresentations) {
+    const presentationMessageId = lifecycleTurnPresentation.presentationMessageId;
     const existingPresentation = projectedDisplayMessages.find(
       (message) =>
         String(message?.presentationMessageId || message?.messageId || message?.id || "").trim() ===
@@ -85,7 +86,7 @@ export function buildSessionDisplaySummary(session = {}) {
     }
     if (
       existingPresentation &&
-      String(existingPresentation?.turnScopeId || "").trim() !== activeTurnPresentation.turnScopeId
+      String(existingPresentation?.turnScopeId || "").trim() !== lifecycleTurnPresentation.turnScopeId
     ) {
       throw new TypeError(
         "active Turn presentation invariant failed: presentation_turn_scope_conflict",
@@ -95,12 +96,12 @@ export function buildSessionDisplaySummary(session = {}) {
       const owningUserIndex = projectedDisplayMessages.findLastIndex(
         (message) =>
           String(message?.role || "").trim() === "user" &&
-          String(message?.turnScopeId || "").trim() === activeTurnPresentation.turnScopeId,
+          String(message?.turnScopeId || "").trim() === lifecycleTurnPresentation.turnScopeId,
       );
       projectedDisplayMessages.splice(
         owningUserIndex >= 0 ? owningUserIndex + 1 : projectedDisplayMessages.length,
         0,
-        activeTurnPresentation,
+        lifecycleTurnPresentation,
       );
     }
   }
@@ -143,8 +144,7 @@ export function buildSessionDisplaySummary(session = {}) {
       delete displayMessage.activityTimeline;
     }
     displayMessage.hasThinkingDetails = true;
-    displayMessage.thinkingDetailCount =
-      thinkingTimeline.toolTimeline.length + thinkingTimeline.activityTimeline.length;
+    displayMessage.thinkingDetailCount = countCanonicalThinkingDetailEvents(thinkingTimeline);
   }
   const injectedCount = messages.filter((message) => message?.injectedMessage === true).length;
   const thinkingCount = displayMessages.filter(

@@ -10,6 +10,7 @@ import {
   normalizeThinkingRoute,
   projectThinkingDetailRound,
 } from "./thinking-timeline-projection.js";
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 
 export {
   normalizeThinkingRoute as normalizeRouteText,
@@ -41,7 +42,10 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     )
     .map((item) => item === rootMessage ? projectedRootMessage : item);
   const injectedMessages = scopedMessages.filter((item = {}) => isInjectedThinkingMessage(item));
-  const thinkingDetailCount = toolTimeline.length + activityTimeline.length;
+  const thinkingDetailCount = countCanonicalThinkingDetailEvents({
+    toolTimeline,
+    activityTimeline,
+  });
   const sessionId = fullResult?.sessionId || sessionItem?.sessionId || "";
   const messageItem = {
     ...projectedRootMessage,
@@ -57,7 +61,7 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     messageItem,
     allMessages: scopedMessages,
     counts: {
-      executionLogCount: toolTimeline.length,
+      executionLogCount: countCanonicalThinkingDetailEvents({ toolTimeline }),
       injectedMessageCount: injectedMessages.length,
       messageCount: scopedMessages.length,
     },

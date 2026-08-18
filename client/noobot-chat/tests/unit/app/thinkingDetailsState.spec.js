@@ -27,8 +27,11 @@ describe("thinking details state", () => {
 
   it("counts the canonical tool timeline when the protocol count is unavailable", () => {
     expect(getThinkingDetailsCount({
-      toolTimeline: [{ key: "call:1" }, { key: "call:2" }],
-    })).toBe(2);
+      toolTimeline: [
+        { key: "call:1", call: { eventId: "call-1" }, resultEvent: { eventId: "result-1" } },
+        { key: "call:2", call: { eventId: "call-2" } },
+      ],
+    })).toBe(3);
   });
 
   it("counts tool calls when completed logs are absent", () => {

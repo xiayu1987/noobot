@@ -10,8 +10,8 @@ import {
   setTurnThinkingOpenNames,
   toggleTurnDetailKey,
 } from "../runtime/engine/turnUiStore.js";
-import { selectToolTimelineCount } from "../runtime/engine/toolTimeline.js";
 import { toolLogDetailKey } from "../model/toolLogIdentity.js";
+import { selectThinkingDetailCount } from "../model/thinkingDetailCount.js";
 
 export function createThinkingPanelPresentation({
   props,
@@ -19,8 +19,6 @@ export function createThinkingPanelPresentation({
   translate,
   getThinkingDetailForMessage,
   getCanonicalExecutionLogs,
-  getCompletedToolLogsForMessage,
-  getSummaryThinkingDetailCount,
 }) {
   const timelineMessage = (messageItem = {}) => messageItem;
   const detailExpansionTick = ref(0);
@@ -67,19 +65,7 @@ export function createThinkingPanelPresentation({
   }
 
   function getThinkingDetailCount(messageItem = {}) {
-    const summaryThinkingDetailCount =
-      getSummaryThinkingDetailCount(messageItem);
-    if (summaryThinkingDetailCount > 0) return summaryThinkingDetailCount;
-    const completedToolLogCount =
-      getCompletedToolLogsForMessage(messageItem).length;
-    if (completedToolLogCount > 0) return completedToolLogCount;
-    const toolCalls = Array.isArray(messageItem?.toolCalls)
-      ? messageItem.toolCalls
-      : Array.isArray(messageItem?.tool_calls)
-        ? messageItem.tool_calls
-        : [];
-    if (toolCalls.length > 0) return toolCalls.length;
-    return selectToolTimelineCount(timelineMessage(messageItem));
+    return selectThinkingDetailCount(timelineMessage(messageItem));
   }
 
   function getThinkingDetailLabel(messageItem = {}) {
