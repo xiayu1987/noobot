@@ -409,7 +409,7 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
     assert.equal(detailCalled, true);
     assert.equal(payload.messageItem.dialogProcessId, "dp-1");
     assert.equal(payload.messageItem.hasThinkingDetails, true);
-    assert.equal(payload.counts.executionLogCount, 2);
+    assert.equal(payload.counts.executionLogCount, 3);
     assert.equal(payload.counts.injectedMessageCount, 1);
     assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1"]);
   });

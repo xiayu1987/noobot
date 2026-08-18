@@ -367,7 +367,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     assert.equal(assistantMessage.content.endsWith(assistantContentTail), true);
     assert.equal(assistantMessage.content.includes(`${assistantContentTail}…`), false);
     assert.equal(assistantMessage.hasThinkingDetails, true);
-    assert.equal(assistantMessage.thinkingDetailCount, 2);
+    assert.equal(assistantMessage.thinkingDetailCount, 3);
     assert.equal("realtimeLogs" in assistantMessage, false);
     assert.equal("completedToolLogs" in assistantMessage, false);
     assert.equal("rawMessages" in assistantMessage, false);
@@ -394,7 +394,7 @@ test("session display summary should keep chat view lightweight and rebuild stal
     );
     assert.equal(toolOnlyAssistantMessage.content, "tool only final answer");
     assert.equal(toolOnlyAssistantMessage.hasThinkingDetails, true);
-    assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 2);
+    assert.equal(toolOnlyAssistantMessage.thinkingDetailCount, 3);
     assert.equal("realtimeLogs" in toolOnlyAssistantMessage, false);
     assert.equal("completedToolLogs" in toolOnlyAssistantMessage, false);
     assert.equal(JSON.stringify(summary.messages).includes("tool only result detail"), false);

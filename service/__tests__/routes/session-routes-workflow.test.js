@@ -128,8 +128,19 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
           turnScopeId,
           content: "answer",
           toolTimeline: [
-            { key: "call:call-1", toolCallId: "call-1", status: "running" },
-            { key: "call:call-2", toolCallId: "call-2", status: "completed" },
+            {
+              key: "call:call-1",
+              toolCallId: "call-1",
+              status: "running",
+              call: { eventId: "call-1-start" },
+            },
+            {
+              key: "call:call-2",
+              toolCallId: "call-2",
+              status: "completed",
+              call: { eventId: "call-2-start" },
+              resultEvent: { eventId: "call-2-end" },
+            },
           ],
         },
         { messageUid: "i1", id: "i1", role: "system", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, injectedMessage: true, injectedBy: "harness-plugin", content: "injected" },
@@ -173,7 +184,7 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     assert.equal(payload.exists, true);
     assert.equal(payload.sessionId, "node-s");
     assert.equal(payload.messageItem.turnScopeId, turnScopeId);
-    assert.equal(payload.counts.executionLogCount, 2);
+    assert.equal(payload.counts.executionLogCount, 3);
     assert.equal(payload.counts.injectedMessageCount, 1);
     assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1"]);
   });

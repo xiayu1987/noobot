@@ -68,6 +68,53 @@ test("session display summary materializes the active Turn presentation in the z
   assert.equal(summary.messages[1].chatPresentation, true);
 });
 
+test("session display summary materializes stopped Turn details on its stable presentation", () => {
+  const summary = buildSessionDisplaySummary({
+    sessionId: "stopped-turn-session",
+    messages: [{
+      role: "user",
+      type: "message",
+      content: "run tools",
+      messageId: "stopped-user",
+      turnScopeId: "turn-stopped",
+    }, {
+      role: "assistant",
+      type: "tool_call",
+      chatPresentation: false,
+      presentationMessageId: "presentation-stopped",
+      turnScopeId: "turn-stopped",
+      dialogProcessId: "dialog-stopped",
+      toolTimeline: [{
+        key: "call:stopped",
+        toolCallId: "stopped",
+        call: { eventId: "call-stopped", sequence: 1 },
+        resultEvent: { eventId: "result-stopped", sequence: 2 },
+      }],
+    }],
+    turnLifecycle: {
+      activeTurnScopeId: "",
+      turns: {
+        "turn-stopped": {
+          turnScopeId: "turn-stopped",
+          dialogProcessId: "dialog-stopped",
+          presentationMessageId: "presentation-stopped",
+          executionState: "user_stopped",
+          terminalStatus: { status: "user_stopped" },
+          sequence: 2,
+        },
+      },
+    },
+  });
+
+  const stoppedPresentation = summary.messages.find(
+    (message) => message.presentationMessageId === "presentation-stopped",
+  );
+  assert.equal(stoppedPresentation.role, "assistant");
+  assert.equal(stoppedPresentation.turnPlaceholder, true);
+  assert.equal(stoppedPresentation.thinkingDetailCount, 2);
+  assert.equal(stoppedPresentation.toolTimeline.length, 1);
+});
+
 test("full and summary Session Detail expose the same canonical active Turn messages", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u1";
@@ -196,4 +243,3 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
   assert.equal(activePresentation.hasThinkingDetails, true);
   assert.equal(activePresentation.thinkingDetailCount, 4);
 });
-

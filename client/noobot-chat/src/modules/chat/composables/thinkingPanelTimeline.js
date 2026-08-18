@@ -43,6 +43,7 @@ import {
   isPluginAnalysisResponseLog,
   sourceToProjectionLatencyMs,
 } from "./thinkingPanelAnalysis.js";
+import { selectThinkingDetailCount } from "../model/thinkingDetailCount.js";
 
 export function useThinkingTimeline(
   props,
@@ -314,10 +315,7 @@ export function useThinkingTimeline(
   }
 
   function getSummaryThinkingDetailCount(messageItem = {}) {
-    const count = Number(
-      messageItem?.thinkingDetailCount ?? messageItem?.thinking_detail_count,
-    );
-    return Number.isFinite(count) && count > 0 ? count : 0;
+    return selectThinkingDetailCount(messageItem);
   }
 
   function hasSummaryThinkingDetails(messageItem = {}) {

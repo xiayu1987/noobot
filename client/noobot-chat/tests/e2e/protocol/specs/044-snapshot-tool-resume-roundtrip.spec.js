@@ -59,7 +59,7 @@ async function stopAfterTools({ noobot, protocolCapture, command, minimumToolRes
     0,
     command.identity.turnScopeId,
   );
-  const records = await waitForExecuteScriptResults(
+  await waitForExecuteScriptResults(
     noobot.userId,
     noobot.sessionId,
     command.identity.turnScopeId,
@@ -73,6 +73,7 @@ async function stopAfterTools({ noobot, protocolCapture, command, minimumToolRes
     0,
     command.identity.turnScopeId,
   );
+  const records = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   return {
     command: {
       ...command,
@@ -80,6 +81,28 @@ async function stopAfterTools({ noobot, protocolCapture, command, minimumToolRes
     },
     records,
   };
+}
+
+async function assertStoppedThinkingDetails(page, records, turnScopeId) {
+  const expectedRecordCount = executeScriptEvents(records, turnScopeId).length;
+  expect(expectedRecordCount).toBeGreaterThan(0);
+  const shell = page.locator(".thinking-realtime-shell").last();
+  await expect(shell).toBeVisible({ timeout: 60000 });
+  const header = shell.locator(".el-collapse-item__header");
+  if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+  const action = shell.locator(".thinking-detail-action-button");
+  await expect(action).toContainText(`(${expectedRecordCount})`);
+  await action.click();
+  const panel = page.locator(".thinking-details-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.locator(".el-tabs__item").first()).toContainText(
+    `(${expectedRecordCount})`,
+  );
+  await expect(
+    panel.locator(".thinking-details-log-body .base-thinking-log-line.is-tool"),
+  ).toHaveCount(expectedRecordCount);
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
 }
 
 function firstMainTraceForTurn(records = [], turnScopeId = "") {
@@ -155,6 +178,11 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     beforeChain,
   );
   const firstStopped = await stopAfterTools({ noobot, protocolCapture, command: chainSend });
+  await assertStoppedThinkingDetails(
+    noobot.page,
+    firstStopped.records,
+    firstStopped.command.identity.turnScopeId,
+  );
 
   const beforeFirstContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(noobot.page, "继续上一条八步串行工具链，从快照中的下一步开始执行。");
@@ -170,6 +198,11 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     protocolCapture,
     command: firstContinue,
   });
+  await assertStoppedThinkingDetails(
+    noobot.page,
+    secondStopped.records,
+    secondStopped.command.identity.turnScopeId,
+  );
 
   const beforeSecondContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(noobot.page, "再次继续同一八步串行工具链，完成剩余步骤并正常结束。");

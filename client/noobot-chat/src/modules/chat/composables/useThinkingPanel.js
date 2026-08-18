@@ -21,8 +21,6 @@ export function useThinkingPanel(props, emit, { shouldLoadThinkingDetail = () =>
     translate,
     getThinkingDetailForMessage: timeline.getThinkingDetailForMessage,
     getCanonicalExecutionLogs: timeline.getCanonicalExecutionLogs,
-    getCompletedToolLogsForMessage: timeline.getCompletedToolLogsForMessage,
-    getSummaryThinkingDetailCount: timeline.getSummaryThinkingDetailCount,
   });
 
   return {

@@ -135,7 +135,11 @@ export async function auditSessionSummaryArtifacts(userId, sessionId, { expectat
       }
       const toolTimeline = Array.isArray(detail?.toolTimeline) ? detail.toolTimeline : [];
       const activityTimeline = Array.isArray(detail?.activityTimeline) ? detail.activityTimeline : [];
-      if (toolTimeline.length + activityTimeline.length !== Number(message?.thinkingDetailCount || 0)) {
+      const detailEventCount = toolTimeline.reduce(
+        (count, entry = {}) => count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
+        0,
+      ) + activityTimeline.length;
+      if (detailEventCount !== Number(message?.thinkingDetailCount || 0)) {
         failSummaryAudit(`session summary detail count mismatch: ${reference}`, report);
       }
       detailBytes += (await fs.stat(detailFile)).size;
