@@ -63,6 +63,14 @@ test("hook point descriptors own cancellation policy", () => {
     requireHookPointDescriptor(HOOK_POINT.BOT.SESSION_RUN_ERROR).cancellationMode,
     HOOK_CANCELLATION_MODE.DETACHED,
   );
+  assert.equal(
+    requireHookPointDescriptor(HOOK_POINT.AGENT.BEFORE_STATE_COMMIT).cancellationMode,
+    HOOK_CANCELLATION_MODE.DETACHED,
+  );
+  assert.equal(
+    requireHookPointDescriptor(HOOK_POINT.AGENT.AFTER_STATE_COMMIT).cancellationMode,
+    HOOK_CANCELLATION_MODE.DETACHED,
+  );
 });
 
 test("protocol rejects unknown hook points and anonymous handlers", () => {

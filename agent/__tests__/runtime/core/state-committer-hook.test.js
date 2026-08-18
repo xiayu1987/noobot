@@ -141,6 +141,48 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
 });
 
+test("state-committer completes tool result hooks and commit after the parent Turn is stopped", async () => {
+  const hookCalls = [];
+  const hookManager = createHookManager();
+  const abortController = new AbortController();
+  abortController.abort({ type: "user_stop", reason: "user stop action" });
+  const runtime = { hookManager, abortSignal: abortController.signal };
+  const turnMessageStore = createInMemoryTurnStore();
+  const modelContext = createTestModelContext("dp_stopped", "turn-stopped");
+
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_STATE_COMMIT,
+    (_context, invocation) => {
+      hookCalls.push(`before:${invocation.signal.aborted}`);
+    },
+    { id: "test.stopped-tool-commit.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.AFTER_STATE_COMMIT,
+    (_context, invocation) => {
+      hookCalls.push(`after:${invocation.signal.aborted}`);
+    },
+    { id: "test.stopped-tool-commit.after" },
+  );
+
+  const committer = createStateCommitter({
+    modelContext,
+    traces: [],
+    turnMessageStore,
+    dialogProcessId: "dp_stopped",
+    runtime,
+  });
+  await committer.pushToolResult({
+    call: { id: "call_stopped", name: "execute_script", args: {} },
+    toolResultText: JSON.stringify({ ok: false, status: "aborted" }),
+  });
+
+  assert.deepEqual(hookCalls, ["before:false", "after:false"]);
+  assert.equal(modelContext.messageBlocks.incremental.length, 1);
+  assert.equal(modelContext.messages[0].tool_call_id, "call_stopped");
+  assert.equal(turnMessageStore.items[0].tool_call_id, "call_stopped");
+});
+
 test("state-committer checkpoints assistant and tool records with presentation identity", async () => {
   const turnMessageStore = createInMemoryTurnStore();
   let checkpointCount = 0;
