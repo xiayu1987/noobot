@@ -29,6 +29,12 @@ const SERIALIZATION_KEYS = new Set([
   "lc_aliases",
   "lc_attributes",
   "lc_secrets",
+  "tool_calls",
+  "invalid_tool_calls",
+  "tool_call_id",
+  "name",
+  "status",
+  "artifact",
 ]);
 
 function cloneJson(value) {
@@ -87,10 +93,12 @@ export function serializeContextMessage(message = {}) {
     if (value !== undefined) serialized.raw[key] = value;
   }
   if (normalizedType === "ai") {
-    if (Array.isArray(message?.tool_calls))
-      serialized.tool_calls = cloneJson(message.tool_calls) || [];
-    if (Array.isArray(message?.invalid_tool_calls))
-      serialized.invalid_tool_calls = cloneJson(message.invalid_tool_calls) || [];
+    serialized.tool_calls = Array.isArray(message?.tool_calls)
+      ? cloneJson(message.tool_calls) || []
+      : [];
+    serialized.invalid_tool_calls = Array.isArray(message?.invalid_tool_calls)
+      ? cloneJson(message.invalid_tool_calls) || []
+      : [];
   }
   if (normalizedType === "tool") {
     serialized.tool_call_id =
@@ -215,21 +223,21 @@ function rebindUserMetaContent(message = {}, identity = {}) {
   ).trim();
   if (internalType !== "user_meta") return;
   if (typeof message?.content !== "string") {
-    throw new Error("Recovered user_meta message requires structured JSON content");
+    throw new Error("Continued user_meta message requires structured JSON content");
   }
   const start = message.content.indexOf("{");
   const end = message.content.lastIndexOf("}");
   if (start < 0 || end < start) {
-    throw new Error("Recovered user_meta message requires structured JSON content");
+    throw new Error("Continued user_meta message requires structured JSON content");
   }
   let parsed;
   try {
     parsed = JSON.parse(message.content.slice(start, end + 1));
   } catch {
-    throw new Error("Recovered user_meta message requires structured JSON content");
+    throw new Error("Continued user_meta message requires structured JSON content");
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Recovered user_meta message requires structured JSON content");
+    throw new Error("Continued user_meta message requires structured JSON content");
   }
   for (const field of [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]) {
     parsed[field] = identity[field];
@@ -237,7 +245,7 @@ function rebindUserMetaContent(message = {}, identity = {}) {
   message.content = `${message.content.slice(0, start)}${JSON.stringify(parsed, null, 2)}${message.content.slice(end + 1)}`;
 }
 
-export function projectRecoveredMessagesToIdentity(messages = [], identity = {}) {
+export function projectSnapshotIncrementalToContinuation(messages = [], identity = {}) {
   const current = Object.fromEntries(
     [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS].map((field) => [
       field,
@@ -245,10 +253,11 @@ export function projectRecoveredMessagesToIdentity(messages = [], identity = {})
     ]),
   );
   if (!current.dialogProcessId || !current.turnScopeId) {
-    throw new Error("Recovery target requires dialogProcessId and turnScopeId as one identity");
+    throw new Error("Continuation projection requires dialogProcessId and turnScopeId");
   }
-  return (Array.isArray(messages) ? messages : []).map((message) => {
-    if (!message || typeof message !== "object") return message;
+  return (Array.isArray(messages) ? messages : []).map((source) => {
+    if (!source || typeof source !== "object") return source;
+    const message = cloneJson(source);
     clearNestedIdentity(message, [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]);
     for (const field of SESSION_IDENTITY_FIELDS) message[field] = current[field];
     for (const field of ROUND_IDENTITY_FIELDS) message[field] = current[field];

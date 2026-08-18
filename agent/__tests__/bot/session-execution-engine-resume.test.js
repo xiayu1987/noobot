@@ -10,122 +10,8 @@ import path from "node:path";
 import fs from "node:fs/promises";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
-import { projectRecoveredMessagesToIdentity } from "../../src/bot/session/turn-execution-preparer.js";
 import { saveStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-
-test("projectRecoveredMessagesToIdentity atomically replaces every recovered round identity", () => {
-  const messages = [
-    {
-      type: "human",
-      dialogProcessId: "dialog-stopped",
-      turnScopeId: "turn-stopped",
-      content: "question",
-    },
-    { type: "ai", content: "answer", tool_calls: [{ id: "call-1" }] },
-    {
-      type: "tool",
-      dialogProcessId: "dialog-older",
-      turnScopeId: "turn-older",
-      tool_call_id: "call-1",
-      content: "result",
-    },
-    {
-      type: "system",
-      dialogProcessId: "dialog-current",
-      turnScopeId: "turn-current",
-      content: "system",
-    },
-  ];
-
-  const projected = projectRecoveredMessagesToIdentity(messages, {
-    dialogProcessId: "dialog-current",
-    turnScopeId: "turn-current",
-  });
-
-  assert.deepEqual(
-    projected.map((message) => message.dialogProcessId),
-    ["dialog-current", "dialog-current", "dialog-current", "dialog-current"],
-  );
-  assert.deepEqual(
-    projected.map((message) => message.turnScopeId),
-    ["turn-current", "turn-current", "turn-current", "turn-current"],
-  );
-  assert.ok(projected.every((message) => message.sourceDialogProcessId === undefined));
-  assert.equal(projected[1].tool_calls[0].id, "call-1");
-  assert.equal(projected[2].tool_call_id, "call-1");
-
-  projectRecoveredMessagesToIdentity(projected, {
-    dialogProcessId: "dialog-next",
-    turnScopeId: "turn-next",
-  });
-  assert.deepEqual(
-    projected.map((message) => message.dialogProcessId),
-    ["dialog-next", "dialog-next", "dialog-next", "dialog-next"],
-  );
-});
-
-test("projectRecoveredMessagesToIdentity rebinds session and round identity", () => {
-  const message = {
-    type: "ai",
-    sessionId: "old-session",
-    dialogProcessId: "old-dialog",
-    turnScopeId: "old-turn",
-  };
-  const identity = {
-    userName: "admin",
-    sessionId: "current-session",
-    parentSessionId: "parent-session",
-    dialogProcessId: "current-dialog",
-    parentDialogProcessId: "parent-dialog",
-    turnScopeId: "current-turn",
-  };
-
-  const [projected] = projectRecoveredMessagesToIdentity([message], identity);
-
-  for (const field of ["userName", "sessionId", "parentSessionId", "parentDialogProcessId"]) {
-    assert.equal(projected[field], identity[field]);
-  }
-  assert.equal(projected.dialogProcessId, "current-dialog");
-  assert.equal(projected.turnScopeId, "current-turn");
-});
-
-test("projectRecoveredMessagesToIdentity assigns current identity when historical identity is missing", () => {
-  const [projected] = projectRecoveredMessagesToIdentity([{ type: "tool", content: "result" }], {
-    sessionId: "current-session",
-    dialogProcessId: "current-dialog",
-    turnScopeId: "current-turn",
-  });
-  assert.equal(projected.sessionId, "current-session");
-  assert.equal(projected.dialogProcessId, "current-dialog");
-  assert.equal(projected.turnScopeId, "current-turn");
-});
-
-test("stopped snapshot v2 history without round identity is rebound to current turn", () => {
-  const snapshotHistory = [
-    { type: "human", content: "测试所有工具" },
-    { type: "ai", content: "", tool_calls: [{ id: "call-1", name: "write_file", args: {} }] },
-    { type: "tool", content: "ok", tool_call_id: "call-1" },
-    { type: "human", content: "[来自harness外部模型输出/guidance]\n已确认" },
-  ];
-  const identity = {
-    userName: "admin",
-    sessionId: "6d3eec60-6cae-4c9d-9a07-8d391d5cd3c7",
-    parentSessionId: "",
-    dialogProcessId: "current-dialog",
-    parentDialogProcessId: "",
-    turnScopeId: "current-turn",
-  };
-
-  const projected = projectRecoveredMessagesToIdentity(snapshotHistory, identity);
-
-  assert.equal(projected.length, snapshotHistory.length);
-  assert.ok(projected.every((message) => message.sessionId === identity.sessionId));
-  assert.ok(projected.every((message) => message.dialogProcessId === identity.dialogProcessId));
-  assert.ok(projected.every((message) => message.turnScopeId === identity.turnScopeId));
-  assert.equal(projected[1].tool_calls[0].id, "call-1");
-  assert.equal(projected[2].tool_call_id, "call-1");
-});
 
 test("_prepareStoppedSnapshotResumeTurnExecution requires explicit stopped snapshot identity", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
@@ -233,8 +119,22 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     identity: stoppedIdentity,
     messageBlocks: {
       system: [{ type: "system", content: "snapshot task-state system" }],
-      history: [{ type: "human", content: "history" }],
-      incremental: [{ type: "human", content: "incremental" }],
+      history: [
+        {
+          type: "human",
+          content: "history",
+          dialogProcessId: "dialog-history",
+          turnScopeId: "turn-history",
+        },
+      ],
+      incremental: [
+        {
+          type: "human",
+          content: "incremental",
+          dialogProcessId: "dialog-stopped",
+          turnScopeId: "turn-stopped",
+        },
+      ],
     },
   });
 
@@ -292,8 +192,10 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
       captured[0].options.incrementalMessages.map((message) => message.content),
       ["incremental"],
     );
-    assert.equal(captured[0].history[0].dialogProcessId, "dialog-current");
-    assert.equal(captured[0].history[0].turnScopeId, "turn-current");
+    assert.equal(captured[0].history[0].dialogProcessId, "dialog-history");
+    assert.equal(captured[0].history[0].turnScopeId, "turn-history");
+    assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-current");
+    assert.equal(captured[0].options.incrementalMessages[0].turnScopeId, "turn-current");
   } finally {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }
