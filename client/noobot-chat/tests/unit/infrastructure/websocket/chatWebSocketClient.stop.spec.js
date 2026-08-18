@@ -5,7 +5,13 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
-import { MockWebSocket, emitCommandReceipt, setupWebSocketTestHooks, streamCommand } from "./chatWebSocketClientTestFixtures.js";
+import {
+  MockWebSocket,
+  emitCommandReceipt,
+  setupWebSocketTestHooks,
+  streamCommand,
+  turnLifecycleProtocolEvent,
+} from "./chatWebSocketClientTestFixtures.js";
 import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
 import {
   createTurnLifecycleEnvelope,
@@ -54,7 +60,7 @@ describe("chatWebSocketClient stop transport", () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
-    socket.emit("turn_lifecycle", createTurnLifecycleEnvelope({
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
       eventType: TURN_EVENT.STOP_ACCEPTED,
       eventId: "stop-accepted:main-turn",
       commandId: "stop:main-turn",
@@ -67,7 +73,7 @@ describe("chatWebSocketClient stop transport", () => {
       sequence: 3,
       phase: TURN_PHASE.STOP,
       state: TURN_STATE.ACTION_REQUESTING,
-    }));
+    })));
     await expect(stopPromise).resolves.toBe(true);
 
     emitCommandReceipt(socket, runCommand, { outcome: "stopped" });
@@ -110,7 +116,7 @@ describe("chatWebSocketClient stop transport", () => {
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
     expect(stopMessages[0]).toEqual(firstCommand);
-    socket.emit("turn_lifecycle", createTurnLifecycleEnvelope({
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
       eventType: TURN_EVENT.STOP_ACCEPTED,
       eventId: "stop-accepted:turn-1",
       commandId: "stop:turn-1",
@@ -123,7 +129,7 @@ describe("chatWebSocketClient stop transport", () => {
       sequence: 3,
       phase: TURN_PHASE.STOP,
       state: TURN_STATE.ACTION_REQUESTING,
-    }));
+    })));
     await expect(first).resolves.toBe(true);
   });
 });

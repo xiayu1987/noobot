@@ -7,7 +7,8 @@
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
 import { classifyExecutionEvent } from "../observability/event-log/log-normalizer.js";
 import { projectExecutionTransportPayload } from "./transport-payload.js";
-import { AGENT_RUN_EVENTS } from "./run-event.js";
+import { AGENT_RUN_EVENT, AGENT_RUN_EVENTS } from "./run-event.js";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 function enrichEventData(rawData = {}, defaults = {}) {
   const eventData = rawData && typeof rawData === "object" ? rawData : {};
@@ -19,6 +20,31 @@ function enrichEventData(rawData = {}, defaults = {}) {
     parentSessionId: normalizeParentSessionId(
       eventData?.parentSessionId || defaults.parentSessionId,
     ),
+  };
+}
+
+function projectExecutionLogRecord(event = "", data = {}) {
+  if (event !== AGENT_RUN_EVENT.AUTHORITY_EVENT_COMMITTED) return { event, data };
+  const envelope = data?.envelope;
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
+    return { event, data };
+  }
+  return {
+    event: envelope.payload.eventType,
+    data: {
+      ...envelope.payload,
+      eventId: envelope.identity.eventId,
+      sessionId: envelope.identity.sessionId,
+      turnScopeId: envelope.identity.turnScopeId,
+      messageId: envelope.identity.messageId,
+      executionId: envelope.identity.executionId,
+      sequence: envelope.ordering.sequence,
+      sequenceDomain: envelope.ordering.domain,
+      sequenceScopeId: envelope.ordering.scopeId,
+      timestamp: envelope.occurredAt,
+      authority: "authoritative",
+    },
   };
 }
 
@@ -161,17 +187,18 @@ export function createExecutionEventListener({
       const data = evt?.data || {};
       const ts = evt?.ts || new Date().toISOString();
 
-      const { category, type } = classifyExecutionEvent(event);
+      const executionRecord = projectExecutionLogRecord(event, data);
+      const { category, type } = classifyExecutionEvent(executionRecord.event);
       try {
         appendExecutionLog({
           userId,
           sessionId,
           parentSessionId,
           dialogProcessId,
-          event,
+          event: executionRecord.event,
           category,
           type,
-          data,
+          data: executionRecord.data,
           ts,
         });
       } catch {}

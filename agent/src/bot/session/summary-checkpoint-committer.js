@@ -60,6 +60,7 @@ function buildCheckpointId({
   turnScopeId = "",
   persistedMessageUids = [],
   summarizedMessageUids = [],
+  retainedMessageUids = [],
 } = {}) {
   const digest = createHash("sha256")
     .update(
@@ -68,6 +69,7 @@ function buildCheckpointId({
         turnScopeId,
         persistedMessageUids,
         summarizedMessageUids,
+        retainedMessageUids,
       }),
     )
     .digest("hex")
@@ -198,10 +200,12 @@ export async function commitSummaryCheckpoint({
       turnScopeId,
       persistedMessageUids,
       summarizedMessageUids,
+      retainedMessageUids: [...latestTaskCheckIds],
     }),
     expectedCheckpointRevision: runtime?.summaryCheckpointRevision,
     persistedMessageUids,
     summarizedMessageUids,
+    retainedMessageUids: [...latestTaskCheckIds],
   });
   if (checkpointResult && Number.isFinite(Number(checkpointResult.checkpointRevision))) {
     runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);

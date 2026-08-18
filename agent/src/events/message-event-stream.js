@@ -190,7 +190,7 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
     commandId: text(runtime?.runConfig?.commandId),
     correlationId: text(runtime?.runConfig?.turnScopeId),
     payload,
-    persistenceContext: runtime?.runConfig?.persistenceContext || null,
+    persistenceContext: state?.persistenceContext || null,
   });
   if (!committed?.committed || !committed?.envelope) {
     throw new Error(`authoritative message event commit failed: ${committed?.reason || "unknown"}`);
@@ -201,7 +201,7 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
   }
   await emitEvent(eventListener, "authority_event_committed", {
     envelope: committed.envelope,
-    persistenceScope: runtime?.runConfig?.persistenceContext || null,
+    persistenceScope: state?.persistenceScope || null,
   });
   return committed.envelope;
 }

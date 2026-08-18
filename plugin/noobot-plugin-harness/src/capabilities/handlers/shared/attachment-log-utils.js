@@ -171,6 +171,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
   if (!text) return [];
   const producerId = String(purpose || "").trim();
   if (!producerId) throw new Error("harness_semantic_transfer_producer_required");
+  const transferOperationId = randomUUID();
   try {
     const strategy =
       domain === CAPABILITY_DOMAIN.ACCEPTANCE
@@ -202,6 +203,7 @@ export async function saveCapabilityOutputAsTransferArtifacts(
         source: "plugin",
         reason: String(purpose || "harness_capability_output").trim(),
         producer: { type: "plugin", id: `harness:${producerId}` },
+        transferKey: transferOperationId,
         direction: "output",
         meta: {
           purpose: String(purpose || "").trim(),

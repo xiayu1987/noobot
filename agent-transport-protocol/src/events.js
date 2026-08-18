@@ -17,6 +17,15 @@ export const AGENT_TRANSPORT_EVENT = Object.freeze({
   RECONNECT_COMPLETE: "reconnect_complete",
 });
 
+const EXACT_PAYLOAD_EVENTS = new Set([
+  AGENT_TRANSPORT_EVENT.ERROR,
+  AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+]);
+
+export function usesExactAgentTransportPayload(eventName) {
+  return EXACT_PAYLOAD_EVENTS.has(clean(eventName));
+}
+
 export const AGENT_COMMAND_RECEIPT_OUTCOME = Object.freeze({
   REBOUND: "rebound",
   COMPLETED: "completed",

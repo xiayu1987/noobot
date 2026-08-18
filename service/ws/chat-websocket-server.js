@@ -25,6 +25,7 @@ import {
   TURN_LIFECYCLE_WIRE_EVENT,
   createExecutionAbortReason,
 } from "@noobot/session-protocol";
+import { usesExactAgentTransportPayload } from "@noobot/agent-transport-protocol";
 import {
   detachRunTransport,
   findActiveRun,
@@ -175,7 +176,9 @@ export function registerChatWebSocketServer(
       }
       eventSequence += 1;
       const enrichedData =
-        protocolEnvelope || eventName === "attachment_lifecycle"
+        protocolEnvelope ||
+        eventName === "attachment_lifecycle" ||
+        usesExactAgentTransportPayload(eventName)
           ? data
           : {
               ...(data && typeof data === "object" ? data : {}),
@@ -323,6 +326,7 @@ export function registerChatWebSocketServer(
 
     const { userInteractionBridge, rejectAllPendingInteractions } = createUserInteractionBridge({
       sendEvent,
+      commitInteractionRequest,
       translateText,
       getCurrentLocale: () => state.currentLocale,
       getCurrentRunMeta: () => state.currentRunMeta,

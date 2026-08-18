@@ -41,6 +41,11 @@ export const EVENT_REDUCER_TARGET = Object.freeze({
   MESSAGE: "message",
   WORKFLOW: "workflow",
 });
+export const EVENT_REDUCER_INPUT = Object.freeze({
+  ENVELOPE: "envelope",
+  IDENTITY_PAYLOAD: "identity_payload",
+  PAYLOAD: "payload",
+});
 export const EVENT_FAMILY = Object.freeze({
   TURN_LIFECYCLE: "turn.lifecycle",
   TURN_SNAPSHOT: "turn.snapshot",
@@ -136,6 +141,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.INTERACTION_REQUEST,
       wireEvents: [INTERACTION_EVENT_TYPE.REQUEST],
       reducerTarget: EVENT_REDUCER_TARGET.INTERACTION,
+      reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionRequestPayload(payload)),
     },
@@ -143,6 +149,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.INTERACTION_RESPONSE,
       wireEvents: [INTERACTION_EVENT_TYPE.RESPONSE],
       reducerTarget: EVENT_REDUCER_TARGET.INTERACTION,
+      reducerInput: EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD,
       validateEnvelope: validateInteractionEnvelope,
       validatePayload: (payload) => domainResult(validateInteractionResponsePayload(payload)),
     },
@@ -150,6 +157,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.MESSAGE_TIMELINE,
       wireEvents: [MESSAGE_EVENT_WIRE_EVENT],
       reducerTarget: EVENT_REDUCER_TARGET.MESSAGE,
+      reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       validateEnvelope: validateMessageEnvelope,
       validatePayload: (payload) => domainResult(validateMessageEventPayload(payload)),
     },
@@ -157,6 +165,7 @@ const descriptors = Object.freeze(
       family: EVENT_FAMILY.WORKFLOW_RUNTIME,
       wireEvents: Object.values(WORKFLOW_RUNTIME_EVENT),
       reducerTarget: EVENT_REDUCER_TARGET.WORKFLOW,
+      reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       validateEnvelope: validateWorkflowRuntimeEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
     },
@@ -164,6 +173,7 @@ const descriptors = Object.freeze(
     Object.freeze({
       ...descriptor,
       authority: EVENT_AUTHORITY.AUTHORITATIVE,
+      reducerInput: descriptor.reducerInput || EVENT_REDUCER_INPUT.PAYLOAD,
       minimumSequence: descriptor.minimumSequence ?? 1,
       wireEvents: Object.freeze(descriptor.wireEvents),
       replayable: true,
@@ -178,6 +188,56 @@ const byWireEvent = new Map(
 
 export function getEventFamily(family = "") {
   return byFamily.get(String(family || "").trim()) || null;
+}
+
+export function readProtocolEventPayload(envelope = {}, { wireEvent = "", family = "" } = {}) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) return { ...validation, payload: null };
+  const expectedWireEvent = String(wireEvent || "").trim();
+  if (expectedWireEvent && String(envelope.identity.eventType || "").trim() !== expectedWireEvent) {
+    return {
+      valid: false,
+      errors: ["transport_event_identity_mismatch"],
+      descriptor: validation.descriptor,
+      payload: null,
+    };
+  }
+  const expectedFamily = String(family || "").trim();
+  if (expectedFamily && validation.descriptor.family !== expectedFamily) {
+    return {
+      valid: false,
+      errors: ["event_family_mismatch"],
+      descriptor: validation.descriptor,
+      payload: null,
+    };
+  }
+  return {
+    valid: true,
+    errors: [],
+    descriptor: validation.descriptor,
+    payload: envelope.payload,
+  };
+}
+
+export function readProtocolEventReducerInput(envelope = {}) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) return { ...validation, input: null };
+  let input = envelope.payload;
+  if (validation.descriptor.reducerInput === EVENT_REDUCER_INPUT.ENVELOPE) {
+    input = envelope;
+  } else if (validation.descriptor.reducerInput === EVENT_REDUCER_INPUT.IDENTITY_PAYLOAD) {
+    input = {
+      ...envelope.payload,
+      sessionId: envelope.identity.sessionId,
+      turnScopeId: envelope.identity.turnScopeId,
+    };
+  }
+  return {
+    valid: true,
+    errors: [],
+    descriptor: validation.descriptor,
+    input,
+  };
 }
 export function getEventFamilyByWireEvent(wireEvent = "") {
   return byWireEvent.get(String(wireEvent || "").trim()) || null;

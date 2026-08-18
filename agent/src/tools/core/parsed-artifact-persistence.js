@@ -133,7 +133,7 @@ export async function backwriteParsedAttachment({
   }
   await emitEvent(runtime?.eventListener || null, "authority_event_committed", {
     envelope: committed.envelope,
-    persistenceScope: runtime?.runConfig?.persistenceContext || null,
+    persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
   });
   return updated;
 }

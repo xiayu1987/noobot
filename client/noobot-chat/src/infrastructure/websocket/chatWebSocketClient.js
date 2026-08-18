@@ -20,6 +20,7 @@ import {
   getAgentCommandIdentity,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
+import { EVENT_FAMILY, readProtocolEventPayload } from "@noobot/event-protocol";
 
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
 import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
@@ -216,23 +217,32 @@ export function createChatWebSocketClient({
         let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const transportEvent = createAgentTransportEvent(parsed);
+          const receivedTransportEvent = createAgentTransportEvent(parsed);
+          const lifecyclePayload = receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
+            ? readProtocolEventPayload(receivedTransportEvent.data, {
+                wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
+                family: EVENT_FAMILY.TURN_LIFECYCLE,
+              })
+            : null;
+          const transportEvent = receivedTransportEvent;
           const { event, data } = transportEvent;
+          const lifecycleData = lifecyclePayload?.valid ? lifecyclePayload.payload : data;
           const channelSessionId = getAgentTransportEventSessionId(transportEvent);
           parsedEvent = event;
           parsedData = data;
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
-          logTransportEventReceived(event, data, { hasLiveSubscriber });
+          const observedData = receivedTransportEvent.data;
+          logTransportEventReceived(event, observedData, { hasLiveSubscriber });
           logWorkflowDiagnostics("frontend.websocket.transportEventReceived", () => ({
-            sessionId: normalizeTrimmedString(data?.identity?.sessionId),
-            dialogProcessId: normalizeTrimmedString(data?.payload?.dialogProcessId),
-            turnScopeId: normalizeTrimmedString(data?.identity?.turnScopeId),
+            sessionId: normalizeTrimmedString(observedData?.identity?.sessionId),
+            dialogProcessId: normalizeTrimmedString(observedData?.payload?.dialogProcessId),
+            turnScopeId: normalizeTrimmedString(observedData?.identity?.turnScopeId),
             protocolEvent: event,
-            eventId: normalizeTrimmedString(data?.identity?.eventId),
-            eventType: normalizeTrimmedString(data?.payload?.eventType),
-            parentSessionId: normalizeTrimmedString(data?.payload?.parentSessionId),
+            eventId: normalizeTrimmedString(observedData?.identity?.eventId),
+            eventType: normalizeTrimmedString(observedData?.payload?.eventType),
+            parentSessionId: normalizeTrimmedString(observedData?.payload?.parentSessionId),
             transportSequence: null,
-            authoritativeSequence: resolveAuthoritativeSequence(event, data),
+            authoritativeSequence: resolveAuthoritativeSequence(event, observedData),
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -241,7 +251,7 @@ export function createChatWebSocketClient({
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
           }
-          commandRequests.settle(event, data);
+          commandRequests.settle(event, lifecycleData);
           const reconnectControlEvent =
             event === StreamEventEnum.RECONNECT_DATA ||
             event === StreamEventEnum.RECONNECT_COMPLETE;
@@ -261,7 +271,7 @@ export function createChatWebSocketClient({
           }
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
             if (
-              data?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+              lifecycleData?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
               activeStreamContext?.payload &&
               activeStreamContext.agentTransportAcceptedLogged !== true
             ) {
@@ -274,20 +284,20 @@ export function createChatWebSocketClient({
                   acknowledgedByBackend: true,
                   transport: "websocket",
                   lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-                  lifecycleEventId: normalizeTrimmedString(data?.eventId),
-                  lifecycleRevision: Number(data?.revision || 0),
+                  lifecycleEventId: normalizeTrimmedString(lifecycleData?.eventId),
+                  lifecycleRevision: Number(lifecycleData?.revision || 0),
                 },
               );
             }
             logWorkflowDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
-              sessionId: normalizeTrimmedString(data?.sessionId),
-              parentSessionId: normalizeTrimmedString(data?.parentSessionId),
-              dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-              turnScopeId: normalizeTrimmedString(data?.turnScopeId),
-              eventId: normalizeTrimmedString(data?.eventId),
-              eventType: normalizeTrimmedString(data?.eventType),
+              sessionId: normalizeTrimmedString(lifecycleData?.sessionId),
+              parentSessionId: normalizeTrimmedString(lifecycleData?.parentSessionId),
+              dialogProcessId: normalizeTrimmedString(lifecycleData?.dialogProcessId),
+              turnScopeId: normalizeTrimmedString(lifecycleData?.turnScopeId),
+              eventId: normalizeTrimmedString(lifecycleData?.eventId),
+              eventType: normalizeTrimmedString(lifecycleData?.eventType),
               transportSequence: Number(data?.seq || 0) || null,
-              authoritativeSequence: Number(data?.sequence || 0) || null,
+              authoritativeSequence: Number(lifecycleData?.sequence || 0) || null,
               reconnecting,
               activeStream: Boolean(activeStreamContext),
               hasLiveSubscriber,
@@ -297,7 +307,7 @@ export function createChatWebSocketClient({
             // Receipt is a transport acknowledgement. Send it immediately after
             // validating the envelope so a business reducer failure cannot stall
             // the authoritative lifecycle delivery queue.
-            acknowledgeTurnLifecycleReceipt(ws, event, data);
+            acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
           }
           if (owner === "reconnect_handler") {
             activeReconnectContext.handleProtocolEvent(transportEvent);

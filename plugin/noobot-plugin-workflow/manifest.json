@@ -65,10 +65,6 @@
           "point": "message.card.pre"
         },
         {
-          "id": "workflow-session-detail-hydrator",
-          "point": "session.detail.hydrator"
-        },
-        {
           "id": "workflow-runtime-projector",
           "point": "runtime.stream.route"
         }

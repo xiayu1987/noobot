@@ -96,6 +96,15 @@ test("processing-start persistence rejection is observed while Agent execution i
     )?.data;
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
     assert.equal(receipt?.error?.code, "session_not_found");
+    assert.deepEqual(Object.keys(receipt).sort(), [
+      "commandId",
+      "commandType",
+      "error",
+      "identity",
+      "occurredAt",
+      "outcome",
+      "protocolVersion",
+    ]);
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);
@@ -204,4 +213,3 @@ for (const [failureAt, expectedPhase] of [
     }
   });
 }
-

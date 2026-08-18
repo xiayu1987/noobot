@@ -87,7 +87,7 @@ export function createConnectorAccessTool({ agentContext }) {
         const detachedRun = await botManager.runDetachedSubSession({
           parentExecutionScope: agentContext,
           message: normalizedTask,
-          systemMessages: [connectorSubSessionSystemPrompt].filter(Boolean),
+          systemMessageFactory: () => [connectorSubSessionSystemPrompt].filter(Boolean),
           eventListener,
           abortSignal: signal,
           strategy: createAgentDetachedSubSessionStrategy({

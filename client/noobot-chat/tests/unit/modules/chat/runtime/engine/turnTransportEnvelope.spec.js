@@ -10,6 +10,14 @@ import {
 } from "../../../../../../src/modules/chat/runtime/engine/turnTransportEnvelope.js";
 import { MESSAGE_EVENT_SEQUENCE_DOMAIN } from "@noobot/event-protocol/message-event";
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_LIFECYCLE_WIRE_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
 
 describe("turnTransportEnvelope", () => {
   it("keeps transport and message-event sequence domains isolated", () => {
@@ -72,5 +80,78 @@ describe("turnTransportEnvelope", () => {
     expect(channelState.transportCursor.sequence).toBe(done.transportCursor.sequence);
     expect(channelState.transportCursor.event).toBe("channel_state");
     expect(done.transportCursor.event).toBe("done");
+  });
+
+  it("projects one canonical lifecycle payload while retaining its protocol envelope for audit", () => {
+    const lifecycle = createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.PROCESSING_STARTED,
+      eventId: "turn-event-1",
+      commandId: "turn-command-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      messageId: "message-1",
+      presentationMessageId: "presentation-1",
+      revision: 2,
+      sequence: 2,
+      phase: TURN_PHASE.PROCESSING,
+      state: TURN_STATE.PROCESSING,
+    });
+    const protocolEnvelope = createEventEnvelope({
+      family: EVENT_FAMILY.TURN_LIFECYCLE,
+      identity: {
+        eventId: lifecycle.eventId,
+        eventType: TURN_LIFECYCLE_WIRE_EVENT,
+        sessionId: lifecycle.sessionId,
+        turnScopeId: lifecycle.turnScopeId,
+        messageId: lifecycle.messageId,
+      },
+      causality: { commandId: lifecycle.commandId },
+      ordering: { domain: "session", scopeId: lifecycle.sessionId, sequence: 2, revision: 2 },
+      producer: { type: "test", id: "turn-transport-envelope" },
+      occurredAt: lifecycle.occurredAt,
+      payload: lifecycle,
+    });
+
+    const normalized = normalizeTurnTransportEnvelope({
+      event: TURN_LIFECYCLE_WIRE_EVENT,
+      data: protocolEnvelope,
+    });
+
+    expect(normalized.data).toBe(lifecycle);
+    expect(normalized.protocolEnvelope).toBe(protocolEnvelope);
+  });
+
+  it("projects interaction identity and payload through the protocol-declared reducer input", () => {
+    const protocolEnvelope = createEventEnvelope({
+      family: EVENT_FAMILY.INTERACTION_REQUEST,
+      identity: {
+        eventId: "interaction-event-1",
+        eventType: "interaction_request",
+        sessionId: "session-1",
+        turnScopeId: "turn-1",
+      },
+      causality: {},
+      ordering: { domain: "interaction", scopeId: "request-1", sequence: 1 },
+      producer: { type: "test", id: "turn-transport-envelope" },
+      occurredAt: "2026-08-18T00:00:00.000Z",
+      payload: {
+        requestId: "request-1",
+        dialogProcessId: "dialog-1",
+        content: "confirm",
+        lifecycle: "pending",
+      },
+    });
+
+    const normalized = normalizeTurnTransportEnvelope({
+      event: "interaction_request",
+      data: protocolEnvelope,
+    });
+
+    expect(normalized.data).toMatchObject({
+      requestId: "request-1",
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+    });
+    expect(normalized.protocolEnvelope).toBe(protocolEnvelope);
   });
 });

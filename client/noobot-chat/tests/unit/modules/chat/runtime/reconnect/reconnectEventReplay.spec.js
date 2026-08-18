@@ -117,7 +117,7 @@ describe("applyReconnectEventReplay", () => {
 
     expect(result).toEqual({ applied: true });
     expect(applyTurnLifecycleEnvelope).toHaveBeenCalledOnce();
-    expect(applyTurnLifecycleEnvelope).toHaveBeenCalledWith(envelope);
+    expect(applyTurnLifecycleEnvelope).toHaveBeenCalledWith(lifecycle);
     expect(replayCache).toEqual({});
   });
 

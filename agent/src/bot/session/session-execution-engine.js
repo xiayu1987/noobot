@@ -607,6 +607,10 @@ export class SessionExecutionEngine {
     return this.session?.getTurnLifecycleSnapshot?.(payload);
   }
 
+  async commitAuthorityEvent(payload = {}) {
+    return this.session?.commitAuthorityEvent?.(payload);
+  }
+
   async getPendingAuthorityEvents(payload = {}) {
     return this.session?.getPendingAuthorityEvents?.(payload);
   }
@@ -617,6 +621,10 @@ export class SessionExecutionEngine {
 
   async acknowledgeAuthorityEvent(payload = {}) {
     return this.session?.acknowledgeAuthorityEvent?.(payload);
+  }
+
+  async compactAuthorityEvents(payload = {}) {
+    return this.session?.compactAuthorityEvents?.(payload);
   }
 
   async getExecution(payload = {}) {
@@ -721,6 +729,8 @@ export class SessionExecutionEngine {
     runConfig = {},
     turnScopeId = "",
     parentAsyncResultContainer = null,
+    persistenceContext = null,
+    persistenceScope = null,
   }) {
     return this.runner.runSession({
       userId,
@@ -738,6 +748,8 @@ export class SessionExecutionEngine {
       runConfig,
       turnScopeId,
       parentAsyncResultContainer,
+      persistenceContext,
+      persistenceScope,
     });
   }
 

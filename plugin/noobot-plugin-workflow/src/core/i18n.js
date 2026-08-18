@@ -80,9 +80,6 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
     NO_DESCRIPTION: "workflowNoDescription",
     AVAILABLE_TOOLS_HEADER: "workflowAvailableToolsHeader",
     AVAILABLE_TOOLS_TASK_HINT: "workflowAvailableToolsTaskHint",
-    TOOL_CALL_UNKNOWN_SCRIPT: "workflowToolCallUnknownScript",
-    TOOL_CALL_NO_ARGUMENTS: "workflowToolCallNoArguments",
-    TOOL_CALL_SEMANTIC_LINE: "workflowToolCallSemanticLine",
   }),
 });
 
@@ -93,9 +90,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       "当前可用工具（name/description），规划工作流 action 节点时必须参考：",
     workflowAvailableToolsTaskHint:
       "如果某个 action 节点应使用工具，请把合适的工具名写进该 NODE 的 task。不要臆造工具名；如果没有相关工具，就按普通任务描述。",
-    workflowToolCallUnknownScript: "未知脚本",
-    workflowToolCallNoArguments: "无参数",
-    workflowToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
     workflowSemanticPlanByContext: "请基于以上会话上下文和以下当前用户消息规划工作流。",
     workflowSemanticCurrentUserMessage: "当前用户消息:\n{message}",
     workflowSemanticSourceInput: "主模型回复/工作流源输入:\n{source}",
@@ -115,14 +109,14 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUserRawAttachmentsTitle: "# 用户原始附件",
     workflowCurrentNodeLine: "当前节点：{name}",
     workflowInputAttachmentsSystemHint:
-      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。执行任务时请按需读取/参考这些附件。",
+      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。每项都提供可直接用于文件工具参数的完整附件身份对象；必须原样使用，不得根据名称或 ID 构造。",
     workflowUpstreamNodeFallback: "上游节点",
     workflowSubAgentFailureFallback: "子 agent 执行失败",
     workflowFailureLineWithTask: "- {nodeLabel}（任务：{task}）: {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# 上游工作流节点结果附件",
     workflowUpstreamHint:
-      "以下信息来自直接上游动作节点。请在执行当前任务前先读取/参考可用附件；如果上游节点失败且无附件，请基于失败信息继续完成当前节点可完成的部分，并明确说明受影响范围。",
+      "以下信息来自直接上游动作节点。每个附件提供可直接用于文件工具参数的完整附件身份对象；必须原样使用。若上游失败且无附件，请继续可完成部分并说明影响。",
     workflowUpstreamFailureTitle: "## 上游失败节点",
     workflowUpstreamResultTitle: "## 上游结果附件",
     workflowNodeResultTitle: "# 工作流节点执行结果",
@@ -159,10 +153,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       "Available tools (name/description), must be considered when planning workflow action nodes:",
     workflowAvailableToolsTaskHint:
       "When a workflow action should use tools, write the suitable tool name(s) into that NODE task. Do not invent tool names; if no listed tool is relevant, describe the task normally.",
-    workflowToolCallUnknownScript: "unknown_script",
-    workflowToolCallNoArguments: "none",
-    workflowToolCallSemanticLine:
-      "Observed tool call: {name} script was called with arguments {args}",
     workflowSemanticPlanByContext:
       "Please plan the workflow based on the above conversation context and the following current user message.",
     workflowSemanticCurrentUserMessage: "Current user message:\n{message}",
@@ -183,14 +173,14 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUserRawAttachmentsTitle: "# Original user attachments",
     workflowCurrentNodeLine: "Current node: {name}",
     workflowInputAttachmentsSystemHint:
-      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Read/reference them as needed before execution.",
+      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Each item contains the complete attachment identity object accepted directly by file tools. Use it verbatim; never construct one from a name or ID.",
     workflowUpstreamNodeFallback: "Upstream node",
     workflowSubAgentFailureFallback: "Sub-agent execution failed",
     workflowFailureLineWithTask: "- {nodeLabel} (task: {task}): {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# Upstream workflow node result attachments",
     workflowUpstreamHint:
-      "The following information comes from direct upstream action nodes. Read/reference available attachments before executing the current task; if upstream failed and no attachments are available, continue the completable part and clearly state impact scope.",
+      "The following information comes from direct upstream action nodes. Each attachment contains the complete identity object accepted directly by file tools; use it verbatim. If upstream failed without an attachment, continue the completable part and state the impact.",
     workflowUpstreamFailureTitle: "## Upstream failed nodes",
     workflowUpstreamResultTitle: "## Upstream result attachments",
     workflowNodeResultTitle: "# Workflow node execution result",

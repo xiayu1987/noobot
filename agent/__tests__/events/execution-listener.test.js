@@ -189,6 +189,45 @@ test("execution listener keeps strict attachment lifecycle payloads unchanged up
   assert.deepEqual(forwarded.data.envelope.payload, lifecycle);
 });
 
+test("execution listener persists the canonical message fact instead of the private commit callback", async () => {
+  const persisted = [];
+  const listener = createExecutionEventListener({
+    sessionManager: { appendExecutionLog: async (record) => persisted.push(record) },
+    userId: "user-a",
+    sessionId: "session-a",
+    turnScopeId: "turn-a",
+    upstream: { dialogProcessId: "dialog-a", onEvent: async () => true },
+  });
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: "tool-event-a",
+      eventType: "message_event",
+      sessionId: "session-a",
+      turnScopeId: "turn-a",
+      messageId: "message-a",
+    },
+    causality: {},
+    ordering: { domain: "message-event", scopeId: "message-a", sequence: 1 },
+    producer: { type: "agent", id: "message-runtime" },
+    occurredAt: "2026-08-16T00:00:00.000Z",
+    payload: {
+      eventType: "tool_call_start",
+      presentationMessageId: "presentation-a",
+      tool: "read_file",
+      toolCallId: "call-a",
+    },
+  });
+
+  await listener.onEvent({ event: "authority_event_committed", data: { envelope } });
+  await listener.flushPersistence();
+
+  assert.equal(persisted[0].event, "tool_call_start");
+  assert.equal(persisted[0].data.tool, "read_file");
+  assert.equal(persisted[0].data.eventId, "tool-event-a");
+  assert.equal(persisted[0].data.sequence, 1);
+});
+
 test("execution listener classifies context identity diagnostics under one protocol category", async () => {
   const persisted = [];
   const listener = createExecutionEventListener({

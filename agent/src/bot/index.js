@@ -198,6 +198,10 @@ export class BotManager {
     return this.sessionRunner.getTurnLifecycleSnapshot(payload);
   }
 
+  async commitAuthorityEvent(payload = {}) {
+    return this.sessionRunner.commitAuthorityEvent(payload);
+  }
+
   async getPendingAuthorityEvents(payload = {}) {
     return this.sessionRunner.getPendingAuthorityEvents(payload);
   }
@@ -208,6 +212,10 @@ export class BotManager {
 
   async acknowledgeAuthorityEvent(payload = {}) {
     return this.sessionRunner.acknowledgeAuthorityEvent(payload);
+  }
+
+  async compactAuthorityEvents(payload = {}) {
+    return this.sessionRunner.compactAuthorityEvents(payload);
   }
 
   async getExecution(payload = {}) {

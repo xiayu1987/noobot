@@ -38,39 +38,41 @@ export async function applyReconnectEventReplay({
   });
   const replayEvent = normalizedTransportEnvelope.event;
   const data = normalizedTransportEnvelope.data;
+  const protocolEnvelope = normalizedTransportEnvelope.protocolEnvelope;
   if (replayEvent === StreamEventEnum.CHANNEL_STATE) {
     return { applied: false, reason: "transport_channel_state_ignored" };
   }
-  const protocolResult = validateProtocolEvent(data);
-  if (!protocolResult.valid || data?.identity?.eventType !== replayEvent) {
+  const protocolResult = validateProtocolEvent(protocolEnvelope);
+  if (!protocolResult.valid || protocolEnvelope?.identity?.eventType !== replayEvent) {
     return {
       applied: false,
       reason: "unsupported_replay_event",
       errors: protocolResult.valid ? ["transport_event_identity_mismatch"] : protocolResult.errors,
     };
   }
-  const replaySessionId = _trimStr(data.identity.sessionId);
-  const replayTurnScopeId = _trimStr(data.identity.turnScopeId);
+  const replaySessionId = _trimStr(protocolEnvelope.identity.sessionId);
+  const replayTurnScopeId = _trimStr(protocolEnvelope.identity.turnScopeId);
   logStateMachineDebug("stateMachine.reconnect.event.received", () => ({
     sessionId: replaySessionId,
     turnScopeId: replayTurnScopeId,
     protocolEvent: replayEvent,
-    dialogProcessId: _trimStr(data.payload?.dialogProcessId),
-    commandId: _trimStr(data.causality?.commandId),
-    lifecycleSequence: Number(data.ordering.sequence),
+    dialogProcessId: _trimStr(protocolEnvelope.payload?.dialogProcessId),
+    commandId: _trimStr(protocolEnvelope.causality?.commandId),
+    lifecycleSequence: Number(protocolEnvelope.ordering.sequence),
   }));
   if (isDeletedTurn?.({ sessionId: replaySessionId, turnScopeId: replayTurnScopeId }) === true) {
     return { applied: false, reason: "deleted_turn_tombstoned" };
   }
   if (protocolResult.descriptor.family === EVENT_FAMILY.MESSAGE_TIMELINE) {
-    if (data.payload.workflowRunId && data.payload.nodeExecutionId) {
-      return applySubSessionReplayMessages?.([data], {
-        rootSessionId: data.payload.parentSessionId,
-        dialogProcessId: data.payload.dialogProcessId,
+    const envelope = protocolEnvelope;
+    if (envelope.payload.workflowRunId && envelope.payload.nodeExecutionId) {
+      return applySubSessionReplayMessages?.([envelope], {
+        rootSessionId: envelope.payload.parentSessionId,
+        dialogProcessId: envelope.payload.dialogProcessId,
         turnScopeId: replayTurnScopeId,
       }) || { applied: false, reason: "sub_session_message_projection_unavailable" };
     }
-    const dialogProcessId = _trimStr(data.payload.dialogProcessId);
+    const dialogProcessId = _trimStr(envelope.payload.dialogProcessId);
     const sessionId = replaySessionId;
     const turnScopeId = replayTurnScopeId;
     if (!sessionId || !turnScopeId) {
@@ -78,7 +80,7 @@ export async function applyReconnectEventReplay({
     }
     if (isCurrentActiveSession(sessionId)) {
       await consumeReplayCacheForSession(sessionId);
-      await applyReconnectMessagesToActiveSession([data], dialogProcessId, {
+      await applyReconnectMessagesToActiveSession([envelope], dialogProcessId, {
         turnScopeId,
       });
       return { applied: true, reason: "message_event_replayed" };
@@ -86,26 +88,26 @@ export async function applyReconnectEventReplay({
     const replayKey = normalizeReplayCacheKey(sessionId, turnScopeId);
     if (!replayCache[sessionId]) replayCache[sessionId] = {};
     if (!replayCache[sessionId][replayKey]) replayCache[sessionId][replayKey] = [];
-    replayCache[sessionId][replayKey].push(data);
+    replayCache[sessionId][replayKey].push(envelope);
     return { applied: false, reason: "message_event_cached" };
   }
   if (protocolResult.descriptor.family === EVENT_FAMILY.WORKFLOW_RUNTIME) {
-    return applyWorkflowRuntimeEvent?.(data, { source: "reconnect" })
+    return applyWorkflowRuntimeEvent?.(protocolEnvelope, { source: "reconnect" })
       || { applied: false, reason: "workflow_runtime_projection_unavailable" };
   }
   if (protocolResult.descriptor.family === EVENT_FAMILY.INTERACTION_REQUEST) {
-    return applyPendingInteraction?.(data.payload)
+    return applyPendingInteraction?.(data)
       || { applied: false, reason: "interaction_projection_unavailable" };
   }
   if (protocolResult.descriptor.family === EVENT_FAMILY.ATTACHMENT_LIFECYCLE) {
-    onAttachmentLifecycle?.(data.payload);
+    onAttachmentLifecycle?.(protocolEnvelope.payload);
     return { applied: true, reason: "attachment_lifecycle_projected" };
   }
   if (replayEvent === StreamEventEnum.EXECUTION_SNAPSHOT)
-    return applyExecutionSnapshot?.(data.payload);
+    return applyExecutionSnapshot?.(protocolEnvelope.payload);
   if (replayEvent === StreamEventEnum.EXECUTION_CHILDREN)
-    return applyExecutionChildren?.(data.payload);
-  if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(data.payload);
+    return applyExecutionChildren?.(protocolEnvelope.payload);
+  if (replayEvent === StreamEventEnum.EXECUTION_TREE) return applyExecutionTree?.(protocolEnvelope.payload);
   if (replayEvent === StreamEventEnum.TURN_LIFECYCLE) {
     return applyTurnLifecycleEnvelope?.(data);
   }

@@ -482,6 +482,50 @@ test("turn summary checkpoints mark exact UIDs and persist an idempotent scoped 
   assert.equal("sequence" in h.get().turnSummaryCheckpoints.t, false);
 });
 
+test("turn summary checkpoint restores explicitly retained messages to active context", async () => {
+  const h = harness({
+    messages: [
+      {
+        messageUid: "sm_summary",
+        role: "assistant",
+        content: "old context",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+      },
+      {
+        messageUid: "sm_retained",
+        role: "assistant",
+        content: "latest check",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+        summarized: true,
+      },
+    ],
+    turnLifecycle: {
+      activeTurnScopeId: "t",
+      turns: { t: { turnScopeId: "t", dialogProcessId: "dp", state: "processing" } },
+    },
+  });
+
+  await h.service.commitTurnSummaryCheckpoint({
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "t",
+    checkpointId: "cp-retained",
+    persistedMessageUids: ["sm_summary", "sm_retained"],
+    summarizedMessageUids: ["sm_summary"],
+    retainedMessageUids: ["sm_retained"],
+  });
+
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_summary").summarized, true);
+  assert.equal(h.get().messages.find((m) => m.messageUid === "sm_retained").summarized, false);
+  assert.deepEqual(
+    h.get().turnSummaryCheckpoints.t.receipts[0].retainedMessageUids,
+    ["sm_retained"],
+  );
+});
+
 test("turn summary checkpoints reject a split assistant tool-call and result pair", async () => {
   const h = harness({
     messages: [

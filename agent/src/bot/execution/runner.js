@@ -88,6 +88,7 @@ export class SessionExecutionRunner {
     turnScopeId = "",
     parentAsyncResultContainer = null,
     persistenceContext = null,
+    persistenceScope = null,
   }) {
     this.assertPersistenceContextIdentity?.(persistenceContext, {
       userId,
@@ -224,6 +225,7 @@ export class SessionExecutionRunner {
         turnScopeId: resolvedTurnScopeId,
         eventListener: runtimeEventListener,
         persistenceContext,
+        persistenceScope,
         normalizedMessage,
         requestedAttachments: attachments,
         canonicalAttachments,

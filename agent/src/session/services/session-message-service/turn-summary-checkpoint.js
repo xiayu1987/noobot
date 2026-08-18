@@ -23,6 +23,7 @@ function checkpointRequestHash({
   turnScopeId = "",
   persistedMessageUids = [],
   summarizedMessageUids = [],
+  retainedMessageUids = [],
 } = {}) {
   return `sha256:${createHash("sha256")
     .update(
@@ -31,6 +32,7 @@ function checkpointRequestHash({
         turnScopeId,
         persistedMessageUids,
         summarizedMessageUids,
+        retainedMessageUids,
       }),
     )
     .digest("hex")}`;
@@ -104,12 +106,14 @@ export async function commitTurnSummaryCheckpoint({
   expectedCheckpointRevision,
   persistedMessageUids = [],
   summarizedMessageUids = [],
+  retainedMessageUids = [],
 } = {}) {
   const normalizedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const normalizedTurnScopeId = String(turnScopeId || "").trim();
   const normalizedCheckpointId = String(checkpointId || "").trim();
   const normalizedPersistedUids = normalizeMessageUids(persistedMessageUids);
   const normalizedSummarizedUids = normalizeMessageUids(summarizedMessageUids);
+  const normalizedRetainedUids = normalizeMessageUids(retainedMessageUids);
   if (
     !userId ||
     !sessionId ||
@@ -179,6 +183,7 @@ export async function commitTurnSummaryCheckpoint({
         turnScopeId: normalizedTurnScopeId,
         persistedMessageUids: normalizedPersistedUids,
         summarizedMessageUids: normalizedSummarizedUids,
+        retainedMessageUids: normalizedRetainedUids,
       });
       const existingReceipt = (
         Array.isArray(currentState.receipts) ? currentState.receipts : []
@@ -211,7 +216,30 @@ export async function commitTurnSummaryCheckpoint({
         throw error;
       }
 
-      const requestedUids = new Set([...normalizedPersistedUids, ...normalizedSummarizedUids]);
+      const overlappingUids = normalizedRetainedUids.filter((messageUid) =>
+        normalizedSummarizedUids.includes(messageUid),
+      );
+      if (overlappingUids.length) {
+        throw checkpointConflict(
+          "checkpoint cannot summarize and retain the same message",
+          "TURN_SUMMARY_CHECKPOINT_DISPOSITION_CONFLICT",
+        );
+      }
+      const persistedUidSet = new Set(normalizedPersistedUids);
+      const unpersistedRetainedUids = normalizedRetainedUids.filter(
+        (messageUid) => !persistedUidSet.has(messageUid),
+      );
+      if (unpersistedRetainedUids.length) {
+        throw checkpointConflict(
+          "checkpoint retained messages must belong to its persisted message set",
+          "TURN_SUMMARY_CHECKPOINT_RETAINED_MESSAGE_MISSING",
+        );
+      }
+      const requestedUids = new Set([
+        ...normalizedPersistedUids,
+        ...normalizedSummarizedUids,
+        ...normalizedRetainedUids,
+      ]);
       const messagesByUid = new Map();
       for (const message of Array.isArray(session.messages) ? session.messages : []) {
         const messageUid = String(message?.messageUid || "").trim();
@@ -247,13 +275,20 @@ export async function commitTurnSummaryCheckpoint({
       assertSummarizedToolPairClosure(session.messages, normalizedSummarizedUids);
 
       const summarizedSet = new Set(normalizedSummarizedUids);
+      const retainedSet = new Set(normalizedRetainedUids);
       let markedCount = 0;
       session.messages = (Array.isArray(session.messages) ? session.messages : []).map(
         (message) => {
           const messageUid = String(message?.messageUid || "").trim();
-          if (!summarizedSet.has(messageUid) || message?.summarized === true) return message;
-          markedCount += 1;
-          return { ...message, summarized: true };
+          if (summarizedSet.has(messageUid)) {
+            if (message?.summarized === true) return message;
+            markedCount += 1;
+            return { ...message, summarized: true };
+          }
+          if (retainedSet.has(messageUid) && message?.summarized === true) {
+            return { ...message, summarized: false };
+          }
+          return message;
         },
       );
       const checkpointRevision = currentRevision + 1;
@@ -263,6 +298,7 @@ export async function commitTurnSummaryCheckpoint({
         requestHash,
         persistedMessageUids: normalizedPersistedUids,
         summarizedMessageUids: normalizedSummarizedUids,
+        retainedMessageUids: normalizedRetainedUids,
         markedCount,
         committedAt: this.now(),
       };
