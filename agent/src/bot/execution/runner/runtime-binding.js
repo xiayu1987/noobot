@@ -31,6 +31,7 @@ export function bindAgentDispatchRuntime({
   turnScopeId,
   eventListener,
   persistenceContext,
+  persistenceScope,
   normalizedMessage,
   requestedAttachments,
   canonicalAttachments,
@@ -55,6 +56,8 @@ export function bindAgentDispatchRuntime({
       ? systemRuntime.config
       : {};
   systemRuntime.config.turnScopeId = turnScopeId;
+  systemRuntime.persistenceContext = persistenceContext || null;
+  systemRuntime.persistenceScope = persistenceScope || null;
 
   const modelHost = initializeAgentModelHost({
     runtime: dispatchRuntime,

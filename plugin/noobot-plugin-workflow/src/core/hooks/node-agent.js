@@ -30,6 +30,10 @@ import {
   withTimeout,
 } from "./runtime.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
+import {
+  formatAttachmentIdentityJson,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 export function buildWorkflowInputAttachmentSystemMessage({
   ctx = {},
@@ -45,9 +49,7 @@ export function buildWorkflowInputAttachmentSystemMessage({
           item?.fileName ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      const attachmentId = String(item?.attachmentId || item?.id || "").trim();
-      if (!attachmentId) return "";
-      return `- ${label} (${attachmentId})`;
+      return `- ${label}: ${formatAttachmentIdentityJson(projectAttachmentIdentity(item))}`;
     })
     .filter(Boolean);
   if (!lines.length) return "";
@@ -189,9 +191,8 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
         file?.name ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      const attachmentId = String(file?.identity?.attachmentId || "").trim();
-      if (!attachmentId) continue;
-      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${attachmentId}`);
+      const identityJson = formatAttachmentIdentityJson(file?.identity);
+      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${identityJson}`);
     }
   }
   if (!lines.length && !failureLines.length) return "";
@@ -374,21 +375,12 @@ export async function runNodeAgent({
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };
-  const inputAttachmentSystemMessage = buildWorkflowInputAttachmentSystemMessage({
-    ctx,
-    attachments: nodeInputAttachments,
-    semanticNode,
-  });
   const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
     options,
     ctx,
     pendingStep,
     upstreamNodeResults,
   });
-  const subSessionSystemMessages = [
-    inputAttachmentSystemMessage,
-    upstreamAttachmentSystemMessage,
-  ].filter(Boolean);
   hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
   hookPayload.workflow.upstreamAttachments = upstreamNodeResults.reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
@@ -398,7 +390,6 @@ export async function runNodeAgent({
     return mergeAttachmentReferences(acc, attachments);
   }, []);
   hookPayload.workflow.inputAttachments = nodeInputAttachments;
-  hookPayload.workflow.inputAttachmentSystemMessage = inputAttachmentSystemMessage;
   hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
   let subSession = null;
   let subSessionFailure = null;
@@ -461,7 +452,14 @@ export async function runNodeAgent({
           message: hookPayload.agentInstruction,
           attachments: nodeInputAttachments,
           runConfigPatch: subSessionRunConfigPatch,
-          systemMessages: subSessionSystemMessages,
+          systemMessageFactory: ({ attachments: childAttachments = [] } = {}) => {
+            const inputAttachmentSystemMessage = buildWorkflowInputAttachmentSystemMessage({
+              ctx,
+              attachments: childAttachments,
+              semanticNode,
+            });
+            return [inputAttachmentSystemMessage, upstreamAttachmentSystemMessage].filter(Boolean);
+          },
           eventListener:
             ctx?.eventListener && typeof ctx.eventListener?.onEvent === "function"
               ? ctx.eventListener

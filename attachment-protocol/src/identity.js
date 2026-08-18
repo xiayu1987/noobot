@@ -46,6 +46,10 @@ export function formatAttachmentIdentityRef(value) {
   return `${ATTACHMENT_IDENTITY_REF_PREFIX}${components.join("/")}`;
 }
 
+export function formatAttachmentIdentityJson(value) {
+  return JSON.stringify(parseAttachmentIdentity(value));
+}
+
 export function parseAttachmentIdentityRef(value) {
   const ref = requireNonEmptyString(value, "invalid_attachment_identity_ref");
   if (!ref.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) {

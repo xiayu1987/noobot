@@ -10,6 +10,7 @@ import {
   ATTACHMENT_LIFECYCLE,
   attachmentIdentityKey,
   formatAttachmentIdentityRef,
+  formatAttachmentIdentityJson,
   createAttachmentLifecycleEvent,
   createAttachmentSetUpdate,
   parseAttachmentAccessRef,
@@ -72,6 +73,10 @@ test("canonical identity refs preserve the complete identity without inference",
   assert.throws(
     () => parseAttachmentIdentityRef("attachment:v1:session%3a1/user/att-1"),
     /non_canonical_attachment_identity_ref/,
+  );
+  assert.equal(
+    formatAttachmentIdentityJson(identityWithReservedCharacters),
+    '{"attachmentId":"att/1","sessionId":"session:1","attachmentSource":"user upload"}',
   );
 });
 

@@ -12,6 +12,7 @@ import {
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,
+  turnLifecycleProtocolEvent,
 } from "./chatWebSocketClientTestFixtures.js";
 import {
   AGENT_COMMAND_RECEIPT_OUTCOME,
@@ -190,9 +191,12 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
-    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_lifecycle",
+      data: turnLifecycleProtocolEvent(lifecycle),
+    });
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
       {
         action: "turn.lifecycle.received",
@@ -235,7 +239,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
       expect.objectContaining({
@@ -282,9 +286,12 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
-    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_lifecycle",
+      data: turnLifecycleProtocolEvent(lifecycle),
+    });
     emitCommandReceipt(socket, payload);
     await streamPromise;
   });

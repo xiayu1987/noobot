@@ -73,7 +73,10 @@ test("workflow hook injects upstream node result attachments into downstream sub
         ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
-        subSessionCalls.push(payload);
+        const systemMessages = await payload.systemMessageFactory?.({
+          attachments: payload.attachments,
+        });
+        subSessionCalls.push({ ...payload, systemMessages });
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
           lifecycle: {
@@ -127,7 +130,10 @@ test("workflow hook injects upstream node result attachments into downstream sub
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /上游工作流节点结果附件/);
   assert.match(nodeBSystem, /节点A/);
-  assert.match(nodeBSystem, /att-1|workflow-node-1-节点A-result\.md/);
+  assert.match(
+    nodeBSystem,
+    /\{"attachmentId":"att-1","sessionId":"s-upstream","attachmentSource":"model"\}/,
+  );
   assert.match(nodeCSystem, /节点A/);
 
   const nodeDSystem = String(callByNodeName.get("节点D")?.systemMessages?.[0] || "");
@@ -176,7 +182,10 @@ test("workflow hook injects one upstream action attachments into multiple direct
         ].join("\n") },
       }),
       subSessionRunner: async (payload = {}) => {
-        subSessionCalls.push(payload);
+        const systemMessages = await payload.systemMessageFactory?.({
+          attachments: payload.attachments,
+        });
+        subSessionCalls.push({ ...payload, systemMessages });
         const nodeName = String(payload?.metadata?.nodeName || payload?.message || "").trim();
         return {
           lifecycle: {
@@ -228,7 +237,13 @@ test("workflow hook injects one upstream action attachments into multiple direct
   const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /节点A/);
-  assert.match(nodeBSystem, /fanout-att-1|workflow-node-1-节点A-result\.md/);
+  assert.match(
+    nodeBSystem,
+    /\{"attachmentId":"fanout-att-1","sessionId":"s-fanout","attachmentSource":"model"\}/,
+  );
   assert.match(nodeCSystem, /节点A/);
-  assert.match(nodeCSystem, /fanout-att-1|workflow-node-1-节点A-result\.md/);
+  assert.match(
+    nodeCSystem,
+    /\{"attachmentId":"fanout-att-1","sessionId":"s-fanout","attachmentSource":"model"\}/,
+  );
 });

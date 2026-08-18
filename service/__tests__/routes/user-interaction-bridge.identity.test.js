@@ -8,6 +8,13 @@ import assert from "node:assert/strict";
 
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 
+test("requires the interaction authority commit port at composition time", () => {
+  assert.throws(
+    () => createUserInteractionBridge({ pendingInteractionRequests: new Map() }),
+    /commitInteractionRequest is required/,
+  );
+});
+
 test("same canonical interaction identity reuses one authority commit before and after resolution", async () => {
   const committedRequests = [];
   const pendingInteractionRequests = new Map();

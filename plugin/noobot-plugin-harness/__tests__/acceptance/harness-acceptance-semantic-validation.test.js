@@ -137,6 +137,12 @@ test("harness acceptance semantic validation uses separate model when enabled", 
   assert.equal(invocations[1].promptVersion, "v1");
   assert.equal(invocations[1].envelopeType, "structured_v1");
   assertFlatCapabilityMessages(invocations[1].messages);
+  const semanticValidationPrompt = invocations[1].messages
+    .map((item = {}) => String(item.content || ""))
+    .join("\n");
+  assert.match(semanticValidationPrompt, /"acceptanceState"/);
+  assert.doesNotMatch(semanticValidationPrompt, /"acceptanceReport"/);
+  assert.doesNotMatch(semanticValidationPrompt, /"finalPlanChecklist"/);
   assert.equal(Array.isArray(agentContext.payload.harness.phaseAcceptanceReports), true);
   assert.equal(agentContext.payload.harness.phaseAcceptanceReports.length, 1);
   assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");

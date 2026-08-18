@@ -132,7 +132,7 @@ export function createDetachedSubSessionRunner({
     message = "",
     attachments = [],
     runConfigPatch = {},
-    systemMessages = [],
+    systemMessageFactory = null,
     strategy = {},
     metadata = {},
     eventListener = null,
@@ -266,6 +266,13 @@ export function createDetachedSubSessionRunner({
       attachments,
       attachmentPolicy: effectiveRunConfig?.attachments,
     });
+    const resolvedSystemMessages =
+      typeof systemMessageFactory === "function"
+        ? await systemMessageFactory({ attachments: subSessionAttachments })
+        : [];
+    if (!Array.isArray(resolvedSystemMessages)) {
+      throw new TypeError("detached sub-session systemMessageFactory must return an array");
+    }
     emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
       userId,
       sessionId: subSessionId,
@@ -390,7 +397,7 @@ export function createDetachedSubSessionRunner({
         caller: CALLER_ROLE.BOT,
         message,
         attachments: subSessionAttachments,
-        systemMessages: Array.isArray(systemMessages) ? systemMessages : [],
+        systemMessages: resolvedSystemMessages,
         eventListener: scopedEventListener,
         abortSignal: inheritedAbortSignal,
         userInteractionBridge: inheritedUserInteractionBridge,
@@ -398,6 +405,7 @@ export function createDetachedSubSessionRunner({
         turnScopeId,
         parentAsyncResultContainer: null,
         persistenceContext,
+        persistenceScope,
       });
       const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
       if (returnedDialogProcessId && returnedDialogProcessId !== subDialogProcessId) {

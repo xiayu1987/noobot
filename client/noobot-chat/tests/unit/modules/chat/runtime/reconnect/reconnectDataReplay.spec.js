@@ -204,7 +204,11 @@ describe("applyReconnectDataReplay", () => {
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
       ...f,
     });
-    expect(f.applyPendingInteraction).toHaveBeenCalledWith(interaction.payload);
+    expect(f.applyPendingInteraction).toHaveBeenCalledWith({
+      ...interaction.payload,
+      sessionId: interaction.identity.sessionId,
+      turnScopeId: interaction.identity.turnScopeId,
+    });
   });
 
   it("materializes pending interactions after session activation and hydration", async () => {

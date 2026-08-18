@@ -9,6 +9,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assembly/auxiliary-history";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -104,93 +105,6 @@ export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-
   ].join("\n");
 }
 
-export function resolveWorkflowCompatibleRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role === "human") return "user";
-  if (role === "ai") return "assistant";
-  if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
-  if (type === "human") return "user";
-  if (type === "ai") return "assistant";
-  if (type === "system") return "system";
-  if (type === "tool") return "tool";
-  if (type) return type;
-  return "";
-}
-
-export function resolveWorkflowToolCallName(toolCall = {}) {
-  if (!toolCall || typeof toolCall !== "object") return "";
-  const fnName = String(toolCall?.function?.name || "").trim();
-  if (fnName) return fnName;
-  return String(toolCall?.name || "").trim();
-}
-
-export function resolveWorkflowToolCallArguments(toolCall = {}) {
-  if (!toolCall || typeof toolCall !== "object") return "";
-  const fnArgs = toolCall?.function?.arguments;
-  if (typeof fnArgs === "string") return fnArgs.trim();
-  if (fnArgs && typeof fnArgs === "object") {
-    try {
-      return JSON.stringify(fnArgs);
-    } catch {
-      return String(fnArgs);
-    }
-  }
-  const args = toolCall?.args;
-  if (typeof args === "string") return args.trim();
-  if (args && typeof args === "object") {
-    try {
-      return JSON.stringify(args);
-    } catch {
-      return String(args);
-    }
-  }
-  return "";
-}
-
-export function buildWorkflowToolCallSemanticText(toolCalls = [], locale = "zh-CN") {
-  const calls = Array.isArray(toolCalls) ? toolCalls : [];
-  if (!calls.length) return "";
-  return calls
-    .map((toolCall = {}) => {
-      const name =
-        resolveWorkflowToolCallName(toolCall) ||
-        tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_UNKNOWN_SCRIPT);
-      const args =
-        resolveWorkflowToolCallArguments(toolCall) ||
-        tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_NO_ARGUMENTS);
-      return tWorkflow(locale, WORKFLOW_I18N_KEYSET.MESSAGES.TOOL_CALL_SEMANTIC_LINE, { name, args });
-    })
-    .join("\n");
-}
-
-export function normalizeWorkflowSemanticContextMessage(message = {}, locale = "zh-CN") {
-  const role = resolveWorkflowCompatibleRole(message);
-  if (!role) return null;
-  const content = extractWorkflowMessageTextContent(
-    message?.content ?? message?.lc_kwargs?.content ?? message,
-  );
-  const toolCalls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message?.toolCalls)
-      ? message.toolCalls
-      : Array.isArray(message?.additional_kwargs?.tool_calls)
-        ? message.additional_kwargs.tool_calls
-        : Array.isArray(message?.lc_kwargs?.tool_calls)
-          ? message.lc_kwargs.tool_calls
-          : [];
-  if (role === "tool") {
-    return content ? { role: "assistant", content } : null;
-  }
-  if ((role === "assistant" || role === "ai") && toolCalls.length) {
-    const semanticContent = buildWorkflowToolCallSemanticText(toolCalls, locale);
-    return semanticContent ? { role: "user", content: semanticContent } : null;
-  }
-  if (!content) return null;
-  if (!["system", "user", "assistant"].includes(role)) return null;
-  return { role, content };
-}
-
 export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
   if (typeof options?.resolveModelMessages !== "function") {
     throw new TypeError("workflow semantic context requires the authoritative modelContext resolver");
@@ -202,7 +116,5 @@ export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {},
   if (!Array.isArray(resolved)) {
     throw new TypeError("workflow semantic modelContext resolver must return a message array");
   }
-  return resolved
-    .map((item = {}) => normalizeWorkflowSemanticContextMessage(item, locale))
-    .filter((item) => item && String(item.content || "").trim());
+  return projectAuxiliaryHistoryMessages(resolved);
 }

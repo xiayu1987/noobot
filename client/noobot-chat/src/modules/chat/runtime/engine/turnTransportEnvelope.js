@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  EVENT_FAMILY,
+  readProtocolEventReducerInput,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
 
@@ -16,12 +20,15 @@ export function normalizeTurnTransportEnvelope({
 } = {}) {
   const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
   const validation = validateProtocolEvent(payload);
+  const protocolEnvelope = validation.valid ? payload : null;
+  const reducerInput = validation.valid ? readProtocolEventReducerInput(payload).input : null;
   const messageEvent = validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
     ? payload
     : null;
   return {
     event: text(event),
-    data: payload,
+    data: reducerInput || payload,
+    protocolEnvelope,
     source: text(source) || "unknown",
     identity: {
       sessionId: text(messageEvent?.identity?.sessionId),

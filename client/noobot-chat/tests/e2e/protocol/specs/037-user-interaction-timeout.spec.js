@@ -37,13 +37,13 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
       findProtocolObjects(protocolCapture.websocketReceived).find(
         (event) =>
           event.event === "interaction_request" &&
-          event.data?.sessionId === noobot.sessionId &&
-          event.data?.turnScopeId === command.identity.turnScopeId &&
-          event.data?.lifecycle === "pending",
+          event.data?.identity?.sessionId === noobot.sessionId &&
+          event.data?.identity?.turnScopeId === command.identity.turnScopeId &&
+          event.data?.payload?.lifecycle === "pending",
       ),
     { timeoutMs: 60000 },
   );
-  expect(interactionRequest.data?.timeoutMs).toBe(INTERACTION_TIMEOUT_MS);
+  expect(interactionRequest.data?.payload?.timeoutMs).toBe(INTERACTION_TIMEOUT_MS);
   const interaction = noobot.page.locator(".interaction-card");
   await expect(interaction).toBeVisible({ timeout: 60000 });
   await expect(interaction.locator(".interaction-title")).toContainText("CASE037-TIMEOUT");

@@ -7,9 +7,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  AGENT_TRANSPORT_EVENT,
   createAgentTransportEvent,
   getAgentTransportEventSessionId,
+  usesExactAgentTransportPayload,
 } from "../src/events.js";
+
+test("transport protocol declares events whose payload cannot be enriched", () => {
+  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.ERROR), true);
+  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT), true);
+  assert.equal(usesExactAgentTransportPayload(AGENT_TRANSPORT_EVENT.CHANNEL_STATE), false);
+  assert.equal(usesExactAgentTransportPayload("message_event"), false);
+});
 
 test("transport event keeps routing identity separate from authoritative data", () => {
   const data = Object.freeze({ eventType: "attachment.parsed" });

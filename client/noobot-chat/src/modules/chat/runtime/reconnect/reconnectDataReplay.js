@@ -10,6 +10,7 @@ import { _trimStr } from "./utils.js";
 import { normalizeTurnMeta } from "../../model/messageIdentity.js";
 import {
   isPendingInteractionReplay,
+  readProtocolEventReducerInput,
   replayEventTail,
   validateReplayBatch,
 } from "@noobot/event-protocol";
@@ -196,7 +197,8 @@ export async function applyReconnectDataReplay({
   for (const sessionEntry of reconnectSessions) {
     for (const interaction of sessionEntry?.replayBatch?.pendingInteractions || []) {
       if (isPendingInteractionReplay(interaction)) {
-        await applyPendingInteraction?.(interaction.payload);
+        const reducerInput = readProtocolEventReducerInput(interaction);
+        if (reducerInput.valid) await applyPendingInteraction?.(reducerInput.input);
       }
     }
   }

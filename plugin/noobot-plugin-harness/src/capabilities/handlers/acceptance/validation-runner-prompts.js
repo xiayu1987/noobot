@@ -131,7 +131,7 @@ export function resolveAcceptanceValidationRequestPayload(promptPayload = {}) {
   const source = promptPayload && typeof promptPayload === "object" ? promptPayload : {};
   return {
     expectedSchema: source.expectedSchema || {},
-    acceptanceReport: source.acceptanceReport || null,
+    acceptanceState: source.acceptanceState || null,
     toolSignals: source.toolSignals || {},
     finalOutput: String(source.finalOutput || "").trim(),
   };

@@ -471,7 +471,9 @@ export function createMessageRunHandler({
           data: eventData,
         });
       },
-      onCommittedTurnLifecycle: async (committed = {}, context = {}) => {
+      onCommittedTurnLifecycle: async (committedEnvelope = {}, context = {}) => {
+        const committedIdentity = committedEnvelope.identity || {};
+        const committedPayload = committedEnvelope.payload || {};
         const recordDispatchFailure = (reason = "", delivered = 0) => {
           void recordServiceWebSocketLifecycle({
             sessionLogConfig,
@@ -479,12 +481,12 @@ export function createMessageRunHandler({
             userId,
             sessionId,
             dialogProcessId: state.currentRunMeta?.dialogProcessId || "",
-            turnScopeId: committed.turnScopeId || "",
+            turnScopeId: committedIdentity.turnScopeId || "",
             data: {
-              childSessionId: committed.sessionId || "",
-              parentSessionId: committed.parentSessionId || parentSessionId,
+              childSessionId: committedIdentity.sessionId || "",
+              parentSessionId: committedPayload.parentSessionId || "",
               persistenceScopeId: context.persistenceScope?.scopeId || "",
-              lifecycleEventType: committed.eventType || "",
+              lifecycleEventType: committedPayload.eventType || "",
               reason,
               delivered: Number(delivered || 0),
             },
@@ -492,9 +494,9 @@ export function createMessageRunHandler({
         };
         try {
           const dispatch = await dispatchAuthorityEvents?.({
-            userId: committed.userId || userId,
-            sessionId: committed.sessionId,
-            parentSessionId: committed.parentSessionId || parentSessionId,
+            userId: committedPayload.userId,
+            sessionId: committedIdentity.sessionId,
+            parentSessionId: committedPayload.parentSessionId,
             persistenceScope: context.persistenceScope,
           });
           if (dispatch?.dispatched !== true) {
@@ -514,7 +516,7 @@ export function createMessageRunHandler({
         const dispatch = await dispatchAuthorityEvents?.({
           userId,
           sessionId: envelope.identity.sessionId,
-          parentSessionId,
+          parentSessionId: envelope.payload.parentSessionId,
           persistenceScope: context.persistenceScope,
         }, (...args) => publishRunEvent(runHandle, ...args));
         if (dispatch?.dispatched !== true) {

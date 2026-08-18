@@ -38,6 +38,9 @@ export function createUserInteractionBridge({
   sessionLogConfig,
   interactionTimeoutMs = USER_INTERACTION_TIMEOUT_MS,
 } = {}) {
+  if (typeof commitInteractionRequest !== "function") {
+    throw new TypeError("commitInteractionRequest is required");
+  }
   const interactionRequestsByIdentity = new Map();
   const writeInteractionLifecycle = (event, data = {}) => {
     const currentRunMeta = getCurrentRunMeta();

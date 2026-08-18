@@ -58,7 +58,10 @@ test("workflow hook passes planned user attachments to node sub-session", async 
         };
       },
       subSessionRunner: async (payload = {}) => {
-        subSessionCalls.push(payload);
+        const systemMessages = await payload.systemMessageFactory?.({
+          attachments: payload.attachments,
+        });
+        subSessionCalls.push({ ...payload, systemMessages });
         return {
           lifecycle: {
             executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
@@ -115,6 +118,10 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   const nodeSystemMessages = String((subSessionCalls[0]?.systemMessages || []).join("\n\n"));
   assert.match(nodeSystemMessages, /用户原始附件/);
   assert.match(nodeSystemMessages, /合同\.pdf/);
+  assert.match(
+    nodeSystemMessages,
+    /\{"attachmentId":"att-user-1","sessionId":"s-input-att","attachmentSource":"user"\}/,
+  );
   assert.doesNotMatch(nodeSystemMessages, /workspace|attachments\/s-input-att/);
 
   const semanticPrompt = String(semanticRequestMessages[0]?.content || "");

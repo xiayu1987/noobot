@@ -141,11 +141,11 @@ export function createSendStreamEventHandler(context) {
   } = context;
 
   return (incomingEnvelope) => {
-    const { event, data } = normalizeTurnTransportEnvelope({
+    const { event, data, protocolEnvelope } = normalizeTurnTransportEnvelope({
       ...(incomingEnvelope || {}),
       source: "realtime",
     });
-    const authoritativeEvent = data?.protocol?.name === "@noobot/event-protocol" ? data : null;
+    const authoritativeEvent = protocolEnvelope;
     const authoritativeIdentity = authoritativeEvent?.identity || {};
     const authoritativeOrdering = authoritativeEvent?.ordering || {};
     const authoritativePayload = authoritativeEvent?.payload || {};
