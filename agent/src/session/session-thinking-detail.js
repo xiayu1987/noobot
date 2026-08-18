@@ -58,8 +58,8 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
   return {
     exists: Boolean(rootMessage?.role || scopedMessages.length),
     sessionId,
+    revision: normalizeThinkingRoute(fullResult?.revision),
     messageItem,
-    allMessages: scopedMessages,
     counts: {
       executionLogCount: countCanonicalThinkingDetailEvents({ toolTimeline }),
       injectedMessageCount: injectedMessages.length,

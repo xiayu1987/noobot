@@ -13,20 +13,19 @@ import {
 import {
   getMessageDialogProcessId,
   getMessageRole,
+  getMessageSessionId,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
 } from "../../modules/chat/model/messageIdentity.js";
-import { loadThinkingDetail } from "../../modules/chat/model/thinkingDetailCache.js";
+import {
+  getCachedThinkingDetail,
+  loadThinkingDetail,
+  resolveThinkingDetailIdentity,
+} from "../../modules/chat/model/thinkingDetailCache.js";
 import { selectToolTimelineCount } from "../../modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/activityTimeline.js";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
-
-function getSessionDocsFromDetail(detail = {}) {
-  if (Array.isArray(detail?.sessionDocs)) return detail.sessionDocs;
-  if (Array.isArray(detail?.sessions)) return detail.sessions;
-  return [];
-}
 
 function hasCanonicalTimeline(messageItem = {}) {
   return selectToolTimelineCount(messageItem) > 0 ||
@@ -66,37 +65,17 @@ function logThinkingPanelState(event, payload = {}) {
 }
 
 function timelineRevision(messageItem = {}) {
-  const activityRevision = selectActivityTimelineLogs(messageItem)
-    .map((item = {}) => `${item.eventId || item.activityId || ""}:${item.sequence || 0}`);
-  const toolRevision = (Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline : [])
-    .map((item = {}) => [
-      item.key || item.toolCallId || "",
-      item.call?.eventId || "",
-      item.call?.sequence || 0,
-      item.resultEvent?.eventId || "",
-      item.resultEvent?.sequence || 0,
-      item.status || "",
-    ].join(":"));
-  return [...activityRevision, ...toolRevision].join("|");
-}
-
-function mergeSessionMessagesForThinkingDetail(messageItem = {}, allMessages = [], sessionDocs = []) {
-  const responseMessages = Array.isArray(allMessages) ? allMessages : [];
-  const turnScopeId = String(messageItem?.turnScopeId || messageItem?.turn_scope_id || "").trim();
-  const dialogProcessId = getMessageDialogProcessId(messageItem);
-  const hasScopedResponseMessages = responseMessages.some((item = {}) => {
-    const itemTurnScopeId = String(item?.turnScopeId || item?.turn_scope_id || "").trim();
-    if (turnScopeId && itemTurnScopeId === turnScopeId) return true;
-    return Boolean(dialogProcessId && (
-      getMessageDialogProcessId(item) === dialogProcessId ||
-      String(item?.parentDialogProcessId || item?.parent_dialog_process_id || "").trim() === dialogProcessId
-    ));
-  });
-  if (hasScopedResponseMessages) return responseMessages;
-  const sessionMessages = (Array.isArray(sessionDocs) ? sessionDocs : []).flatMap((doc = {}) =>
-    Array.isArray(doc.messages) ? doc.messages : (Array.isArray(doc.messageList) ? doc.messageList : []),
-  );
-  return sessionMessages.length > 0 ? [...responseMessages, ...sessionMessages] : responseMessages;
+  const tools = Array.isArray(messageItem?.toolTimeline) ? messageItem.toolTimeline : [];
+  const activities = selectActivityTimelineLogs(messageItem);
+  const lastTool = tools.at(-1) || {};
+  const lastActivity = activities.at(-1) || {};
+  return [
+    Number(messageItem?.messageEventState?.lastSequence || 0),
+    tools.length,
+    lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || "",
+    activities.length,
+    lastActivity?.eventId || lastActivity?.activityId || "",
+  ].join(":");
 }
 
 export function useThinkingDetailsPanel({
@@ -124,6 +103,8 @@ export function useThinkingDetailsPanel({
 
   function closeThinkingDetailsPanel() {
     thinkingDetailsVisible.value = false;
+    thinkingDetailsMessageItem.value = null;
+    thinkingDetailsAllMessages.value = [];
     currentFetchDetail = null;
     detailRequestVersion += 1;
     detailWatchSkipKey = "";
@@ -135,6 +116,16 @@ export function useThinkingDetailsPanel({
 
   function normalizeDialogProcessId(messageItem = {}) {
     return getMessageDialogProcessId(messageItem);
+  }
+
+  function expectedThinkingDetailRevision(messageItem = {}) {
+    const messageSessionId = getMessageSessionId(messageItem);
+    const sessionId = String(activeSessionId?.value || "").trim();
+    if (!messageSessionId || messageSessionId !== sessionId) return "";
+    const aggregateVersion = Number(activeSession?.value?.aggregateVersion);
+    return Number.isFinite(aggregateVersion) && aggregateVersion >= 0
+      ? `session-aggregate:${aggregateVersion}`
+      : "";
   }
 
   async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
@@ -153,7 +144,7 @@ export function useThinkingDetailsPanel({
       dialogProcessId,
       turnScopeId,
       fetchThinkingDetail: runFetchDetail,
-      refresh: true,
+      expectedRevision: expectedThinkingDetailRevision(messageItem),
     });
   }
 
@@ -203,9 +194,23 @@ export function useThinkingDetailsPanel({
       hasLocalThinkingDetails,
     }));
     const usesLiveSession = initialMessageItem?.pending === true;
-    const needsFullDetail = Boolean(
-      initialMessageItem && !usesLiveSession && payload?.skipFetch !== true,
+    const needsFullDetail = Boolean(initialMessageItem && !usesLiveSession);
+    const cachedIdentity = resolveThinkingDetailIdentity(
+      initialMessageItem,
+      activeSessionId?.value,
     );
+    const cachedThinkingDetail = getCachedThinkingDetail(cachedIdentity);
+    const initialDetailMessage = cachedThinkingDetail?.messageItem || initialMessageItem;
+    closeAllDrawers?.();
+    closeMobileSidebar?.();
+    closeComposerMorePanel?.();
+    thinkingDetailsMessageItem.value = initialDetailMessage;
+    thinkingDetailsAllMessages.value = usesLiveSession ? getLiveSessionMessages() : [];
+    thinkingDetailsVisible.value = true;
+    detailWatchSkipKey = buildDetailWatchKey();
+    if (payload?.pushRoute !== false) {
+      pushPseudoRoute?.(buildThinkingDetailsRoute(activeSessionId?.value, thinkingDetailsPanel));
+    }
     let loadedThinkingDetail = null;
     if (needsFullDetail) {
       try {
@@ -215,9 +220,6 @@ export function useThinkingDetailsPanel({
           sessionId: activeSessionId?.value,
           requested: summarizeThinkingTimeline(initialMessageItem),
           detail: summarizeThinkingTimeline(loadedThinkingDetail?.messageItem || {}),
-          allMessageCount: Array.isArray(loadedThinkingDetail?.allMessages)
-            ? loadedThinkingDetail.allMessages.length
-            : 0,
           injectedMessageCount: Number(loadedThinkingDetail?.counts?.injectedMessageCount || 0),
         }));
       } catch (error) {
@@ -227,31 +229,9 @@ export function useThinkingDetailsPanel({
       }
       if (!loadedThinkingDetail?.messageItem) return;
     }
-    const detailPayload = usesLiveSession
-      ? { messageItem: initialMessageItem, allMessages: getLiveSessionMessages() }
-      : loadedThinkingDetail
-        ? {
-          messageItem: loadedThinkingDetail.messageItem,
-          allMessages: loadedThinkingDetail.allMessages,
-          sessionDocs: getSessionDocsFromDetail(loadedThinkingDetail),
-        }
-        : { ...payload, ...initialPayload, messageItem: initialMessageItem };
-    const { messageItem, allMessages } = resolveThinkingDetailsPanelPayload(detailPayload, fallbackPayload);
-    const sessionDocs = getSessionDocsFromDetail(detailPayload);
-    if (!messageItem) return;
-    closeAllDrawers?.();
-    closeMobileSidebar?.();
-    closeComposerMorePanel?.();
-    thinkingDetailsMessageItem.value = messageItem;
-    thinkingDetailsAllMessages.value = mergeSessionMessagesForThinkingDetail(
-      messageItem,
-      allMessages,
-      sessionDocs,
-    );
-    thinkingDetailsVisible.value = true;
-    detailWatchSkipKey = buildDetailWatchKey();
-    if (payload?.pushRoute !== false) {
-      pushPseudoRoute?.(buildThinkingDetailsRoute(activeSessionId?.value, thinkingDetailsPanel));
+    if (loadedThinkingDetail?.messageItem) {
+      thinkingDetailsMessageItem.value = loadedThinkingDetail.messageItem;
+      thinkingDetailsAllMessages.value = [];
     }
   }
 
@@ -289,12 +269,7 @@ export function useThinkingDetailsPanel({
             normalizeDialogProcessId(latestMessage) !== dialogProcessId ||
             String(latestMessage?.turnScopeId || latestMessage?.turn_scope_id || "").trim() !== turnScopeId) return;
         thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
-        const detailSessionDocs = getSessionDocsFromDetail(detail);
-        thinkingDetailsAllMessages.value = mergeSessionMessagesForThinkingDetail(
-          detail.messageItem || currentMessage,
-          detail.allMessages,
-          detailSessionDocs,
-        );
+        thinkingDetailsAllMessages.value = [];
       } catch {
       }
     },

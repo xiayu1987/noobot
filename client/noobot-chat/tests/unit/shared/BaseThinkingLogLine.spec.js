@@ -33,7 +33,8 @@ describe("BaseThinkingLogLine", () => {
     });
 
     expect(wrapper.text()).toContain("执行命令：npm test");
-    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("Call");
+    expect(wrapper.find(".base-thinking-log-line__event").attributes("title")).toBe("Call");
+    expect(wrapper.find(".base-thinking-log-line__event svg").exists()).toBe(true);
   });
 
   it("does not render internal event names without readable content", () => {
@@ -62,7 +63,7 @@ describe("BaseThinkingLogLine", () => {
     expect(wrapper.find(".base-thinking-log-line__detail").text()).toContain(
       '"content":"full result"',
     );
-    expect(wrapper.find(".base-thinking-log-line__event").text()).toBe("Return");
+    expect(wrapper.find(".base-thinking-log-line__event").attributes("title")).toBe("Return");
   });
 
   it("uses an error state class for failed tool results", () => {
@@ -80,6 +81,33 @@ describe("BaseThinkingLogLine", () => {
     expect(wrapper.find(".base-thinking-log-line__event").classes()).toContain(
       "is-tool-result-failed",
     );
+  });
+
+  it("uses tool-specific call icons and result-state icons", () => {
+    const readCall = mount(BaseThinkingLogLine, {
+      props: { eventText: "tool_call", toolName: "read_file", tool: true },
+    });
+    const searchCall = mount(BaseThinkingLogLine, {
+      props: { eventText: "tool_call", toolName: "web_search", tool: true },
+    });
+    const failedResult = mount(BaseThinkingLogLine, {
+      props: {
+        eventText: "tool_result",
+        toolName: "read_file",
+        tool: true,
+        tone: "error",
+      },
+    });
+
+    expect(readCall.find(".base-thinking-log-line__event").attributes("data-icon-kind")).toBe(
+      "read_file",
+    );
+    expect(searchCall.find(".base-thinking-log-line__event").attributes("data-icon-kind")).toBe(
+      "web_search",
+    );
+    expect(
+      failedResult.find(".base-thinking-log-line__event").attributes("data-icon-kind"),
+    ).toBe("result-error");
   });
 
   it("renders the localized risk level immediately after the tool name", () => {

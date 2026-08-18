@@ -5,8 +5,10 @@
 -->
 <script setup>
 import { computed } from "vue";
+import { ElIcon } from "element-plus";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 import { useLocale } from "../i18n/useLocale.js";
+import { resolveToolEventVisual } from "../utils/toolEventIcon.js";
 
 const props = defineProps({
   eventText: { type: String, default: "" },
@@ -19,6 +21,7 @@ const props = defineProps({
   expanded: { type: Boolean, default: false },
   titleText: { type: String, default: "" },
   detailText: { type: [String, Object, Array], default: "" },
+  detailValue: { type: null, default: undefined },
   toolName: { type: String, default: "" },
   riskLevel: { type: String, default: "" },
 });
@@ -42,6 +45,13 @@ const eventClass = computed(() => {
   if (eventName === "tool_result") return "is-tool-result";
   return "is-tool-event";
 });
+const eventVisual = computed(() =>
+  resolveToolEventVisual({
+    event: props.eventText,
+    toolName: props.toolName,
+    tone: props.tone,
+  }),
+);
 const contentWithoutEventPrefix = computed(() => {
   const content = String(props.contentText || "");
   if (!props.tool) return content;
@@ -70,15 +80,27 @@ const contentWithoutToolName = computed(() => {
 });
 const resolvedTitle = computed(() => props.titleText || contentWithoutEventPrefix.value || "");
 const resolvedDetail = computed(() => {
-  if (typeof props.detailText === "string") {
-    return props.detailText || contentWithoutEventPrefix.value;
+  if (props.detailText !== "" && props.detailText !== undefined && props.detailText !== null) {
+    if (typeof props.detailText === "string") return props.detailText;
+    try {
+      return JSON.stringify(props.detailText, null, 2);
+    } catch {
+      return String(props.detailText || "");
+    }
   }
+  const source = props.detailValue === undefined ? contentWithoutEventPrefix.value : props.detailValue;
   try {
-    return JSON.stringify(props.detailText, null, 2);
+    return typeof source === "string" ? source : JSON.stringify(source, null, 2);
   } catch {
-    return String(props.detailText || contentWithoutEventPrefix.value || "");
+    return String(source || "");
   }
 });
+const hasDetail = computed(
+  () =>
+    (props.detailText !== "" && props.detailText !== undefined && props.detailText !== null) ||
+    props.detailValue !== undefined ||
+    props.expandable,
+);
 
 function handleToggle() {
   if (!props.expandable) return;
@@ -97,7 +119,11 @@ function handleToggle() {
       v-if="eventLabel"
       class="base-thinking-log-line__event"
       :class="[eventClass, { 'is-tool-result-failed': eventClass === 'is-tool-result' && tone === 'error' }]"
-      >{{ eventLabel }}</span
+      :title="eventLabel"
+      :aria-label="eventLabel"
+      :data-icon-kind="eventVisual.key"
+      ><ElIcon aria-hidden="true"><component :is="eventVisual.icon" /></ElIcon
+      ><span class="base-thinking-log-line__event-label">{{ eventLabel }}</span></span
     >
     <span
       class="base-thinking-log-line__text"
@@ -116,7 +142,7 @@ function handleToggle() {
         contentWithoutToolName
       }}</span>
     </span>
-    <pre v-if="expanded && resolvedDetail" class="base-thinking-log-line__detail">{{
+    <pre v-if="expanded && hasDetail && resolvedDetail" class="base-thinking-log-line__detail">{{
       resolvedDetail
     }}</pre>
   </div>
@@ -163,12 +189,14 @@ function handleToggle() {
     monospace;
 }
 .base-thinking-log-line__event {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-  padding: 1px 5px;
-  border-radius: var(--noobot-thinking-log-event-radius);
+  width: 22px;
+  height: 22px;
   color: var(--noobot-thinking-muted);
-  background: var(--noobot-thinking-detail-background, rgba(127, 127, 127, 0.08));
-  font-weight: 600;
+  font-size: 15px;
 }
 .base-thinking-log-line__event.is-tool-call {
   color: var(--el-color-primary);
@@ -179,6 +207,17 @@ function handleToggle() {
 .base-thinking-log-line__event.is-tool-result-failed {
   color: var(--noobot-status-error);
   background: color-mix(in srgb, var(--noobot-status-error) 12%, transparent);
+}
+.base-thinking-log-line__event-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .base-thinking-log-line__text {
   min-width: 0;

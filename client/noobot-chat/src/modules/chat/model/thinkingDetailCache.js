@@ -45,14 +45,16 @@ export async function loadThinkingDetail({
   turnScopeId = "",
   fetchThinkingDetail = null,
   thinkingDetailService = defaultThinkingDetailService,
-  refresh = false,
+  expectedRevision = "",
 } = {}) {
   const detailService = thinkingDetailService || defaultThinkingDetailService;
   const identity = resolveThinkingDetailIdentity({ ...messageItem, dialogProcessId: dialogProcessId || messageItem?.dialogProcessId, turnScopeId: turnScopeId || messageItem?.turnScopeId }, sessionId);
   if (!identity.key) return null;
   const cached = cache.entries[identity.key];
-  if (cached?.data && refresh !== true) return cached.data;
-  if (inflight.has(identity.key)) return inflight.get(identity.key);
+  const revision = text(expectedRevision);
+  if (cached?.data && revision && text(cached.data.revision) === revision) return cached.data;
+  const requestKey = `${identity.key}::${revision || "latest"}`;
+  if (inflight.has(requestKey)) return inflight.get(requestKey);
   const request = (async () => {
     const runFetch = typeof fetchThinkingDetail === "function"
       ? fetchThinkingDetail
@@ -68,8 +70,8 @@ export async function loadThinkingDetail({
     });
     cache.entries[identity.key] = { data, updatedAt: Date.now(), identity };
     return data;
-  })().finally(() => inflight.delete(identity.key));
-  inflight.set(identity.key, request);
+  })().finally(() => inflight.delete(requestKey));
+  inflight.set(requestKey, request);
   return request;
 }
 

@@ -28,7 +28,7 @@ const workflowMessage = { role: "assistant", presentationMessageId: "workflow-pr
 const normalMessage = { role: "assistant", presentationMessageId: "normal-presentation", dialogProcessId: "normal-message", turnScopeId: "normal-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
 
 function detailFor(message) {
-  return { messageItem: { ...message, loaded: true }, allMessages: [message], sessionDocs: [] };
+  return { messageItem: { ...message, loaded: true } };
 }
 
 describe("useThinkingDetailsPanel request isolation", () => {
@@ -43,20 +43,19 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     const openingWorkflow = panel.openThinkingDetailsPanel({
       messageItem: workflowMessage,
-      allMessages: [workflowMessage],
       fetchThinkingDetail: workflowFetcher,
-      forceFetch: true,
     });
     const openingNormal = panel.openThinkingDetailsPanel({
       messageItem: normalMessage,
-      allMessages: [normalMessage],
       fetchThinkingDetail: normalFetcher,
-      forceFetch: true,
     });
+
+    expect(panel.thinkingDetailsVisible.value).toBe(true);
+    expect(panel.thinkingDetailsMessageItem.value.dialogProcessId).toBe("normal-message");
 
     workflowRequest.resolve(detailFor(workflowMessage));
     await openingWorkflow;
-    expect(panel.thinkingDetailsMessageItem.value).toBe(null);
+    expect(panel.thinkingDetailsMessageItem.value.dialogProcessId).toBe("normal-message");
 
     normalRequest.resolve(detailFor(normalMessage));
     await openingNormal;
@@ -77,9 +76,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const panel = createPanel();
     const opening = panel.openThinkingDetailsPanel({
       messageItem: workflowMessage,
-      allMessages: [workflowMessage],
       fetchThinkingDetail: fetcher,
-      forceFetch: true,
     });
 
     panel.closeThinkingDetailsPanel();
@@ -89,6 +86,31 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsVisible.value).toBe(false);
     expect(panel.thinkingDetailsMessageItem.value).toBe(null);
+  });
+
+  it("reuses a cached completed detail when the authoritative revision is unchanged", async () => {
+    const message = {
+      ...normalMessage,
+      sessionId: "session-1",
+    };
+    const activeSession = ref({
+      sessionId: "session-1",
+      aggregateVersion: 7,
+      messages: [message],
+    });
+    const fetcher = vi.fn(async () => ({
+      revision: "session-aggregate:7",
+      messageItem: { ...message, loaded: true },
+    }));
+    const panel = createPanel(fetcher, activeSession);
+
+    await panel.openThinkingDetailsPanel({ messageItem: message });
+    panel.closeThinkingDetailsPanel();
+    await panel.openThinkingDetailsPanel({ messageItem: message });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(panel.thinkingDetailsVisible.value).toBe(true);
+    expect(panel.thinkingDetailsMessageItem.value.loaded).toBe(true);
   });
 
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {
@@ -114,7 +136,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const fetcher = vi.fn();
     const panel = createPanel(fetcher, activeSession);
 
-    await panel.openThinkingDetailsPanel({ messageItem: staleSummary, allMessages: [staleSummary] });
+    await panel.openThinkingDetailsPanel({ messageItem: staleSummary });
 
     expect(panel.thinkingDetailsMessageItem.value).toEqual(canonicalMessage);
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(1);
@@ -182,15 +204,8 @@ describe("useThinkingDetailsPanel request isolation", () => {
         sequence: index + 1,
       })),
     };
-    const allMessages = Array.from({ length: 15 }, (_, index) => ({
-      role: index % 2 === 0 ? "assistant" : "user",
-      content: `message-${index + 1}`,
-      turnScopeId: "turn-complete",
-    }));
     const fetcher = vi.fn(async () => ({
       messageItem: completeMessage,
-      allMessages,
-      sessionDocs: [],
     }));
     const activeSession = ref({ messages: [summaryMessage] });
     const panel = createPanel(fetcher, activeSession);
@@ -200,7 +215,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
     expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
     expect(panel.thinkingDetailsMessageItem.value.thinkingDetailCount).toBe(20);
-    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(15);
+    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
 
     activeSession.value = {
       messages: [{ ...summaryMessage, toolTimeline: [{
@@ -214,8 +229,8 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline).toHaveLength(13);
     expect(panel.thinkingDetailsMessageItem.value.activityTimeline).toHaveLength(7);
-    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(15);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
   it("does not bind the drawer to a different presentation in the same turn", async () => {

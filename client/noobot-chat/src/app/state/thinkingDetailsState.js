@@ -32,15 +32,12 @@ export function resolveFallbackThinkingDetailsPayload(activeSession = {}) {
     !isAssistantWithoutTurnScope(item) &&
     (item?.pending || hasToolTimeline(item) || hasThinkingDetails(item))
   );
-  return { messageItem: messageItem || null, allMessages: messages };
+  return { messageItem: messageItem || null };
 }
 
 export function resolveThinkingDetailsPanelPayload(payload = {}, fallbackPayload = {}) {
   return {
     messageItem: payload?.messageItem || fallbackPayload.messageItem || null,
-    allMessages: Array.isArray(payload?.allMessages)
-      ? payload.allMessages
-      : fallbackPayload.allMessages || [],
   };
 }
 

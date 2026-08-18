@@ -37,12 +37,6 @@ export function createThinkingPanelPresentation({
     const detail = getThinkingDetailForMessage(props.messageItem) || {};
     emit("open-thinking-details", {
       messageItem: detail.messageItem || props.messageItem,
-      allMessages: Array.isArray(detail.allMessages) ? detail.allMessages : props.allMessages,
-      sessionDocs: Array.isArray(detail.sessionDocs)
-        ? detail.sessionDocs
-        : Array.isArray(detail.sessions)
-          ? detail.sessions
-          : props.sessionDocs,
     });
   }
 

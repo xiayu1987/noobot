@@ -7,6 +7,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyCanonicalToolTimelineEvent,
   countCanonicalThinkingDetailEvents,
   countCanonicalToolTimelineEvents,
   reduceCanonicalToolTimeline,
@@ -112,4 +113,58 @@ test("canonical detail counts match the event records exposed to renderers", () 
     toolTimeline,
     activityTimeline: [{ eventId: "activity-1" }],
   }), 4);
+});
+
+test("canonical realtime application mutates one indexed timeline without changing its wire shape", () => {
+  const timeline = [];
+  const indexByKey = new Map();
+  const startResult = applyCanonicalToolTimelineEvent(
+    timeline,
+    event("tool_call_start", 1, { args: { filePath: "notes.txt" } }),
+    { indexByKey },
+  );
+  const endResult = applyCanonicalToolTimelineEvent(
+    timeline,
+    event("tool_call_end", 2, { result: '{"ok":true}', success: true }),
+    { indexByKey },
+  );
+
+  assert.equal(startResult, timeline);
+  assert.equal(endResult, timeline);
+  assert.equal(timeline.length, 1);
+  assert.equal(timeline[0].status, "completed");
+  assert.equal(indexByKey.get("call:call-1"), 0);
+  assert.deepEqual(Object.keys(timeline[0]).sort(), [
+    "args",
+    "call",
+    "key",
+    "result",
+    "resultEvent",
+    "riskLevel",
+    "status",
+    "success",
+    "tool",
+    "toolCallId",
+  ]);
+});
+
+test("canonical realtime application remains linear for long tool runs", () => {
+  const timeline = [];
+  const indexByKey = new Map();
+  const startedAt = performance.now();
+  for (let sequence = 1; sequence <= 5000; sequence += 1) {
+    applyCanonicalToolTimelineEvent(
+      timeline,
+      event("tool_call_start", sequence, {
+        toolCallId: `call-${sequence}`,
+        args: { filePath: `file-${sequence}.txt` },
+      }),
+      { indexByKey },
+    );
+  }
+  const elapsedMs = performance.now() - startedAt;
+
+  assert.equal(timeline.length, 5000);
+  assert.equal(indexByKey.size, 5000);
+  assert.ok(elapsedMs < 1000, `5000 incremental events took ${elapsedMs.toFixed(1)}ms`);
 });

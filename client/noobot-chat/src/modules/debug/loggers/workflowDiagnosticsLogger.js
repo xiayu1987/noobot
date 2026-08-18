@@ -10,6 +10,10 @@ export function setWorkflowDiagnosticsLogSink(sink = null) {
   sessionLogSink = sink && typeof sink.log === "function" ? sink : null;
 }
 
+export function isWorkflowDiagnosticsEnabled() {
+  return sessionLogSink?.isEnabled?.("workflow-diagnostics") === true;
+}
+
 export function logWorkflowDiagnostics(event, payload = {}) {
   try {
     if (!sessionLogSink?.isEnabled?.("workflow-diagnostics")) return false;

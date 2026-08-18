@@ -27,6 +27,7 @@ import {
 } from "../model/thinkingDetailCache.js";
 import {
   selectToolTimelineCount,
+  selectToolTimelineLogWindow,
   selectToolTimelineLogs,
   selectLatestTaskCheckReceipt,
   selectTaskCheckReceipts,
@@ -51,19 +52,54 @@ export function useThinkingTimeline(
   getRuntimeView,
   { shouldLoadThinkingDetail = () => true } = {},
 ) {
+  let canonicalRoundCache = null;
+
+  function roundMessageVersion(message = {}) {
+    const toolTimeline = Array.isArray(message?.toolTimeline) ? message.toolTimeline : [];
+    const activityTimeline = Array.isArray(message?.activityTimeline)
+      ? message.activityTimeline
+      : [];
+    const lastTool = toolTimeline.at(-1) || {};
+    const lastActivity = activityTimeline.at(-1) || {};
+    return [
+      Number(message?.messageEventState?.lastSequence || 0),
+      toolTimeline.length,
+      String(lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || lastTool?.eventId || ""),
+      activityTimeline.length,
+      String(lastActivity?.eventId || lastActivity?.id || ""),
+    ].join(":");
+  }
+
   function projectCanonicalRound(messageItem = {}) {
     if (messageItem !== props.messageItem) return messageItem;
     const sessionId = getMessageSessionId(messageItem);
     const turnScopeId = getMessageTurnScopeId(messageItem);
     if (!turnScopeId || !Array.isArray(props.allMessages)) return messageItem;
-    const roundMessages = props.allMessages.filter((candidate) =>
-      getMessageSessionId(candidate) === sessionId &&
-      getMessageTurnScopeId(candidate) === turnScopeId,
+    const roundMessages = props.allMessages.filter(
+      (candidate) =>
+        getMessageSessionId(candidate) === sessionId &&
+        getMessageTurnScopeId(candidate) === turnScopeId,
     );
     if (roundMessages.length <= 1) return messageItem;
-    const canonicalDialogProcessId = roundMessages
-      .map((candidate) => getMessageDialogProcessId(candidate))
-      .find((candidate) => String(candidate || "").trim()) || "";
+    const cacheKey = roundMessages
+      .map(
+        (candidate) => `${getMessageDialogProcessId(candidate)}:${roundMessageVersion(candidate)}`,
+      )
+      .join("|");
+    if (canonicalRoundCache?.key === cacheKey) {
+      return {
+        ...messageItem,
+        ...(canonicalRoundCache.dialogProcessId
+          ? { dialogProcessId: canonicalRoundCache.dialogProcessId }
+          : {}),
+        toolTimeline: canonicalRoundCache.toolTimeline,
+        activityTimeline: canonicalRoundCache.activityTimeline,
+      };
+    }
+    const canonicalDialogProcessId =
+      roundMessages
+        .map((candidate) => getMessageDialogProcessId(candidate))
+        .find((candidate) => String(candidate || "").trim()) || "";
     const merge = (field, identity) => {
       const byIdentity = new Map();
       for (const candidate of roundMessages) {
@@ -76,12 +112,22 @@ export function useThinkingTimeline(
       }
       return [...byIdentity.values()];
     };
-    return {
+    const projection = {
       ...messageItem,
       ...(canonicalDialogProcessId ? { dialogProcessId: canonicalDialogProcessId } : {}),
-      toolTimeline: merge("toolTimeline", (item) => item?.key || item?.toolCallId || item?.tool_call_id),
+      toolTimeline: merge(
+        "toolTimeline",
+        (item) => item?.key || item?.toolCallId || item?.tool_call_id,
+      ),
       activityTimeline: merge("activityTimeline", (item) => item?.eventId || item?.id),
     };
+    canonicalRoundCache = {
+      key: cacheKey,
+      dialogProcessId: canonicalDialogProcessId,
+      toolTimeline: projection.toolTimeline,
+      activityTimeline: projection.activityTimeline,
+    };
+    return projection;
   }
 
   const timelineMessage = (messageItem = {}) => projectCanonicalRound(messageItem);
@@ -95,14 +141,11 @@ export function useThinkingTimeline(
       }))
       .filter((item = {}) => item.content),
   );
-  const hasThinking = computed(
-    () => {
-      const detailMessageItem = loadedThinkingDetail.value?.messageItem;
-      return hasThinkingLogs(detailMessageItem || props.messageItem);
-    },
-  );
-  const EXECUTION_LOG_DISPLAY_LIMIT =
-    QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
+  const hasThinking = computed(() => {
+    const detailMessageItem = loadedThinkingDetail.value?.messageItem;
+    return hasThinkingLogs(detailMessageItem || props.messageItem);
+  });
+  const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
 
   function thinkingReplayScope(messageItem = props.messageItem || {}) {
     return {
@@ -139,12 +182,12 @@ export function useThinkingTimeline(
       textLength: text.length,
       textPreview: text.slice(0, 240),
       filteredBy: isGuidanceAnalysisResponseLog(logItem)
-          ? "guidance-analysis"
-          : isMainModelContentLog(logItem)
-            ? "main-model-content"
-            : sanitizeExecutionLogForDisplay(logItem)
-              ? ""
-              : "sanitize-empty",
+        ? "guidance-analysis"
+        : isMainModelContentLog(logItem)
+          ? "main-model-content"
+          : sanitizeExecutionLogForDisplay(logItem)
+            ? ""
+            : "sanitize-empty",
     };
   }
 
@@ -214,19 +257,23 @@ export function useThinkingTimeline(
     selectActivityTimelineLogs(timelineMessage(props.messageItem)),
   );
   const currentToolTimelineLogs = computed(() =>
-    selectToolTimelineLogs(timelineMessage(props.messageItem)),
+    String(props.variant || "panel") === "details"
+      ? selectToolTimelineLogs(timelineMessage(props.messageItem), { includeDetail: false })
+      : selectToolTimelineLogWindow(timelineMessage(props.messageItem), {
+          limit: EXECUTION_LOG_DISPLAY_LIMIT,
+        }),
   );
   const currentExecutionTimelineProjection = computed(() =>
-    projectExecutionTimeline(
-      currentActivityTimelineLogs.value,
-      currentToolTimelineLogs.value,
-    ),
+    projectExecutionTimeline(currentActivityTimelineLogs.value, currentToolTimelineLogs.value),
   );
 
   // Both the realtime panel and the detail drawer consume this one projection.
   // Container-specific grouping must never rebuild or normalize log content.
   function getCanonicalExecutionLogs(messageItem = {}) {
-    const projection = buildExecutionTimelineProjection(messageItem);
+    const projection =
+      messageItem === props.messageItem
+        ? currentExecutionTimelineProjection.value
+        : buildExecutionTimelineProjection(messageItem);
     if (projection.visibleLogs.length > 0) return projection.visibleLogs;
     if (messageItem === props.messageItem) {
       const detailMessage = loadedThinkingDetail.value?.messageItem;
@@ -245,24 +292,13 @@ export function useThinkingTimeline(
   function getAllCompletedLogs(messageItem = {}) {
     const loadedDetail = getThinkingDetailForMessage(messageItem);
     const detailMessageItem = loadedDetail?.messageItem || messageItem;
-    const detailAllMessages = Array.isArray(loadedDetail?.allMessages)
-      ? loadedDetail.allMessages
-      : props.allMessages;
-    const detailSessionDocs = Array.isArray(loadedDetail?.sessionDocs)
-      ? loadedDetail.sessionDocs
-      : Array.isArray(loadedDetail?.sessions)
-        ? loadedDetail.sessions
-        : props.sessionDocs;
     if (
       isAssistantWithoutTurnScope(detailMessageItem) &&
       String(props.variant || "panel") !== "details"
-    ) return [];
+    )
+      return [];
     const normalized = normalizeThinkingToolLogs({
       messageItem: detailMessageItem,
-      allMessages: detailAllMessages,
-      sessionDocs: detailSessionDocs,
-      variant: props.variant,
-      toolResultFallback: translate("message.toolResultFallback"),
     });
     return normalized;
   }
@@ -271,19 +307,18 @@ export function useThinkingTimeline(
     const visibleRealtimeLogCount = getRealtimeLogs(messageItem).length;
     const completedToolLogCount = getCompletedToolLogsForMessage(messageItem).length;
     const timelineTotal = selectToolTimelineCount(timelineMessage(messageItem));
-    const explicitTotal = timelineTotal > 0
-      ? timelineTotal
-      : toValidExecutionLogTotal(
-          messageItem.executionLogTotal ?? messageItem.execution_log_total,
-        );
+    const explicitTotal =
+      timelineTotal > 0
+        ? timelineTotal
+        : toValidExecutionLogTotal(
+            messageItem.executionLogTotal ?? messageItem.execution_log_total,
+          );
     if (explicitTotal !== null) {
       const hiddenAnalysisLogCount = [
         ...getAllRealtimeLogs(messageItem),
         ...getAllCompletedLogs(messageItem),
       ].filter(
-        (logItem) =>
-          isGuidanceAnalysisResponseLog(logItem) ||
-          isMainModelContentLog(logItem),
+        (logItem) => isGuidanceAnalysisResponseLog(logItem) || isMainModelContentLog(logItem),
       ).length;
       return Math.max(
         0,
@@ -294,16 +329,13 @@ export function useThinkingTimeline(
     }
 
     const realtimeLogs = getAllRealtimeLogs(messageItem).filter(
-      (logItem) =>
-        !isGuidanceAnalysisResponseLog(logItem) &&
-        !isMainModelContentLog(logItem),
+      (logItem) => !isGuidanceAnalysisResponseLog(logItem) && !isMainModelContentLog(logItem),
     );
     if (realtimeLogs.length > 0) return realtimeLogs.length;
 
     if (completedToolLogCount > 0) return completedToolLogCount;
 
-    const summaryThinkingDetailCount =
-      getSummaryThinkingDetailCount(messageItem);
+    const summaryThinkingDetailCount = getSummaryThinkingDetailCount(messageItem);
     if (summaryThinkingDetailCount > 0) return summaryThinkingDetailCount;
 
     return getExecutionLogs(messageItem).length;
@@ -320,27 +352,23 @@ export function useThinkingTimeline(
 
   function hasSummaryThinkingDetails(messageItem = {}) {
     return (
-      messageItem?.hasThinkingDetails === true ||
-      getSummaryThinkingDetailCount(messageItem) > 0
+      messageItem?.hasThinkingDetails === true || getSummaryThinkingDetailCount(messageItem) > 0
     );
   }
 
   function hasLocalThinkingDetails(messageItem = {}) {
-    const completedLogs = selectToolTimelineLogs(
-      timelineMessage(messageItem),
-      { completedOnly: true },
-    );
-    return (
-      getAllRealtimeLogs(messageItem).length > 0 ||
-      completedLogs.length > 0
-    );
+    const completedLogs = selectToolTimelineLogs(timelineMessage(messageItem), {
+      completedOnly: true,
+    });
+    return getAllRealtimeLogs(messageItem).length > 0 || completedLogs.length > 0;
   }
 
   function getThinkingDetailForMessage(messageItem = {}) {
     if (
       selectToolTimelineCount(timelineMessage(messageItem)) > 0 ||
       selectActivityTimelineLogs(timelineMessage(messageItem)).length > 0
-    ) return null;
+    )
+      return null;
     const loaded = loadedThinkingDetail.value;
     const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
     if (!identity.key) return loaded;
@@ -364,17 +392,14 @@ export function useThinkingTimeline(
     return selectTaskCheckReceipts(timelineMessage(loadedThinkingDetail.value?.messageItem || {}));
   });
 
-  const {
-    getLatestMainModelContentLog,
-    getLatestPluginAnalysisLog,
-    summarizeAnalysisProjection,
-  } = createThinkingAnalysisProjection({
-    props,
-    currentAnalysisProjection,
-    getAllRealtimeLogs,
-    getAllCompletedLogs,
-    timelineMessage,
-  });
+  const { getLatestMainModelContentLog, getLatestPluginAnalysisLog, summarizeAnalysisProjection } =
+    createThinkingAnalysisProjection({
+      props,
+      currentAnalysisProjection,
+      getAllRealtimeLogs,
+      getAllCompletedLogs,
+      timelineMessage,
+    });
 
   watch(
     () => {
@@ -470,11 +495,13 @@ export function useThinkingTimeline(
     async (key) => {
       if (!key) return;
       const messageItem = props.messageItem || {};
-      const identity = resolveThinkingDetailIdentity(messageItem, props.messageItem?.sessionId || "");
+      const identity = resolveThinkingDetailIdentity(
+        messageItem,
+        props.messageItem?.sessionId || "",
+      );
       if (!identity.key) return;
-      const refreshDetail = String(props.variant || "panel") === "details";
       const cached = getCachedThinkingDetail(identity);
-      if (cached && !refreshDetail) {
+      if (cached && hasLocalThinkingDetails(cached.messageItem || {})) {
         loadedThinkingDetail.value = { ...cached, __thinkingDetailIdentity: identity };
         logThinkingReplayDebug("frontend.thinkingReplay.detailCacheCommitted", () => ({
           ...thinkingReplayScope(messageItem),
@@ -500,11 +527,13 @@ export function useThinkingTimeline(
           dialogProcessId: identity.dialogProcessId,
           turnScopeId: identity.turnScopeId,
           thinkingDetailService: props.thinkingDetailService,
-          refresh: refreshDetail,
+          expectedRevision: String(cached?.revision || "").trim(),
         });
         if (!detail) {
           logThinkingReplayDebug("frontend.thinkingReplay.detailRequestEmpty", () => ({
-            ...thinkingReplayScope(messageItem), key, identity,
+            ...thinkingReplayScope(messageItem),
+            key,
+            identity,
           }));
           return;
         }
@@ -520,7 +549,6 @@ export function useThinkingTimeline(
           activityTimelineCount: Array.isArray(detail?.messageItem?.activityTimeline)
             ? detail.messageItem.activityTimeline.length
             : 0,
-          allMessagesCount: Array.isArray(detail?.allMessages) ? detail.allMessages.length : 0,
           counts: detail?.counts || {},
         }));
         loadedThinkingDetail.value = { ...detail, __thinkingDetailIdentity: identity };
@@ -566,7 +594,8 @@ export function useThinkingTimeline(
     const thinkingDetail = result ? null : getThinkingDetailForMessage(messageItem);
     if (!result && thinkingDetail) {
       const detailMessage = thinkingDetail.messageItem || messageItem;
-      result = getAllRealtimeLogs(detailMessage).length > 0 ||
+      result =
+        getAllRealtimeLogs(detailMessage).length > 0 ||
         getCompletedToolLogsForMessage(detailMessage).length > 0;
       reason = result ? "loaded-detail" : "loaded-detail-empty";
     }
@@ -622,7 +651,8 @@ export function useThinkingTimeline(
       })
       .map((logItem) => {
         const normalizedText = String(logItem?.text || "").trim();
-        return normalizedText ? { ...logItem, text: normalizedText }
+        return normalizedText
+          ? { ...logItem, text: normalizedText }
           : sanitizeExecutionLogForDisplay(logItem);
       })
       .filter(Boolean);

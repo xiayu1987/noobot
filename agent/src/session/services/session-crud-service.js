@@ -201,6 +201,7 @@ export class SessionCrudService {
     return buildThinkingDetailPayload(
       {
         sessionId: normalizedSessionId,
+        revision: `session-aggregate:${turn?.aggregateVersion || 0}`,
         sessions: turn ? [{ sessionId: normalizedSessionId, rawMessages: turn.messages }] : [],
       },
       { turnScopeId, dialogProcessId },

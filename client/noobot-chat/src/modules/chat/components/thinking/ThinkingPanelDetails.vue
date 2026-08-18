@@ -4,7 +4,13 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import {
+  observeElementOffset,
+  observeElementRect,
+  useVirtualizer,
+} from "@tanstack/vue-virtual";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import {
   BaseEmptyHint,
   BaseMetaLabel,
@@ -12,8 +18,14 @@ import {
   BaseTabPanelBody,
   BaseThinkingLogLine,
 } from "../../../../shared/public-api/ui.js";
-import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
-import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import {
+  isThinkingReplayDebugEnabled,
+  logThinkingReplayDebug,
+} from "../../../debug/loggers/thinkingReplayDebugLogger.js";
+import {
+  isStateMachineDebugEnabled,
+  logStateMachineDebug,
+} from "../../../debug/loggers/stateMachineLogger.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
   translate: { type: Function, required: true },
@@ -27,24 +39,133 @@ const props = defineProps({
   isExpanded: { type: Function, required: true },
   toggleExpanded: { type: Function, required: true },
 });
+const DETAIL_TAB = Object.freeze({
+  EXECUTION: "execution",
+  THINKING: "thinking",
+});
+const activeDetailTab = ref(DETAIL_TAB.EXECUTION);
 const rendererProjection = computed(() =>
   (Array.isArray(props.groupedToolLogs) ? props.groupedToolLogs : []).flatMap((group = {}) =>
-    Array.isArray(group.items) ? group.items : [],
+    (Array.isArray(group.items) ? group.items : []).map((item, itemIndex) => ({
+      detailKey: props.getDetailKey(group, item, itemIndex),
+      group,
+      item,
+      itemIndex,
+    })),
   ),
 );
-const rendererProjectionSignature = computed(() =>
+const toolScrollElement = ref(null);
+let pendingInitialScrollAlignment = true;
+let publishToolScrollRect = null;
+let publishToolScrollOffset = null;
+function observeToolScrollRect(instance, callback) {
+  const publish = (rect) => {
+    if (rect.height <= 0) return;
+    if (pendingInitialScrollAlignment && instance.scrollElement) {
+      instance.scrollElement.scrollTop = 0;
+    }
+    callback(rect);
+    pendingInitialScrollAlignment = false;
+  };
+  publishToolScrollRect = publish;
+  const cleanup = observeElementRect(instance, publish);
+  return () => {
+    if (publishToolScrollRect === publish) publishToolScrollRect = null;
+    cleanup?.();
+  };
+}
+function observeToolScrollOffset(instance, callback) {
+  const publish = (offset, isScrolling = false) => callback(offset, isScrolling);
+  publishToolScrollOffset = publish;
+  const cleanup = observeElementOffset(instance, publish);
+  return () => {
+    if (publishToolScrollOffset === publish) publishToolScrollOffset = null;
+    cleanup?.();
+  };
+}
+const toolVirtualizer = useVirtualizer(
+  computed(() => ({
+    count: rendererProjection.value.length,
+    estimateSize: () => QUANTITY_THRESHOLDS.client.thinkingDetailEstimatedRowHeightPx,
+    getItemKey: (index) => rendererProjection.value[index].detailKey,
+    getScrollElement: () => toolScrollElement.value,
+    initialRect: {
+      height: QUANTITY_THRESHOLDS.client.thinkingDetailInitialViewportHeightPx,
+      width: 0,
+    },
+    observeElementRect: observeToolScrollRect,
+    observeElementOffset: observeToolScrollOffset,
+    overscan: QUANTITY_THRESHOLDS.client.thinkingDetailVirtualOverscan,
+  })),
+);
+const virtualToolRows = computed(() => toolVirtualizer.value.getVirtualItems());
+const virtualToolHeight = computed(() => toolVirtualizer.value.getTotalSize());
+function measureToolRow(element) {
+  if (element) toolVirtualizer.value.measureElement(element);
+}
+const detailTimelineIdentity = computed(() =>
   [
-    rendererProjection.value
-      .map((item = {}) =>
-        [item.eventId || "", item.toolCallId || "", item.detailText?.length || 0].join(":"),
-      )
-      .join("|"),
-    props.thinkingContentItems
-      .map((item = {}) =>
-        [item.eventId || "", item.sequence || 0, String(item.content || "").length].join(":"),
-      )
-      .join("|"),
-  ].join("::"),
+    props.messageItem?.sessionId,
+    props.messageItem?.turnScopeId,
+    props.messageItem?.dialogProcessId,
+    props.messageItem?.presentationMessageId,
+  ]
+    .map((value) => String(value || "").trim())
+    .join("::"),
+);
+async function synchronizeToolViewport({ alignStart = false } = {}) {
+  if (alignStart) pendingInitialScrollAlignment = true;
+  await nextTick();
+  const scrollElement = toolScrollElement.value;
+  if (!scrollElement) return;
+  const scrollOffset = alignStart ? 0 : Math.max(0, scrollElement.scrollTop);
+  if (alignStart) scrollElement.scrollTop = 0;
+  publishToolScrollOffset?.(scrollOffset, false);
+  if (scrollElement.clientHeight <= 0) return;
+  publishToolScrollRect?.({
+    width: scrollElement.clientWidth,
+    height: scrollElement.clientHeight,
+  });
+  toolVirtualizer.value.measure();
+  toolVirtualizer.value.scrollToOffset(scrollOffset, { align: "start" });
+  pendingInitialScrollAlignment = false;
+}
+watch(
+  activeDetailTab,
+  (tab) => {
+    if (tab === DETAIL_TAB.EXECUTION) void synchronizeToolViewport();
+  },
+  { flush: "post" },
+);
+watch(
+  detailTimelineIdentity,
+  () => void synchronizeToolViewport({ alignStart: true }),
+  { immediate: true, flush: "post" },
+);
+watch(
+  () => rendererProjection.value.length,
+  (count, previousCount) => {
+    if (count > 0 && previousCount === 0) {
+      void synchronizeToolViewport({ alignStart: true });
+    }
+  },
+  { flush: "post" },
+);
+const rendererProjectionSignature = computed(() =>
+  !isThinkingReplayDebugEnabled() && !isStateMachineDebugEnabled()
+    ? "disabled"
+    : [
+        rendererProjection.value
+          .map(({ item = {} }) =>
+            [item.eventId || "", item.toolCallId || "", item.detailText?.length || 0].join(":"),
+          )
+          .join("|"),
+        props.thinkingContentItems
+          .map((item = {}) =>
+            [item.eventId || "", item.sequence || 0, String(item.content || "").length].join(":"),
+          )
+          .join("|"),
+      ].join("::"),
 );
 const taskCheckItems = computed(() =>
   props.taskCheckReceipts
@@ -87,8 +208,7 @@ watch(
         sequence: Number(item.sequence || 0),
         contentLength: String(item.content || "").length,
       })),
-      items: rendererProjection.value.slice(-32).map((item = {}, index) => {
-        const detailKey = props.getDetailKey({ key: "tool-timeline" }, item, index);
+      items: rendererProjection.value.slice(-32).map(({ detailKey, item = {} }) => {
         return {
           eventId: String(item.eventId || ""),
           toolCallId: String(item.toolCallId || ""),
@@ -109,37 +229,53 @@ watch(
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
-    ><el-tabs class="thinking-details-tabs"
-      ><el-tab-pane :label="translate('message.executionRecords', { count: detailCount })"
-        ><BaseTabPanelBody class="thinking-details-scroll-body thinking-details-log-body"
-          ><div
-            v-for="(group, gi) in groupedToolLogs"
-            :key="`tool-group-${gi}`"
-            class="thinking-group"
-          >
-            <BaseMetaLabel v-if="group.label" class="thinking-group-title" :text="group.label" />
-            <div v-for="(item, ii) in group.items" :key="getDetailKey(group, item, ii)">
+    ><el-tabs v-model="activeDetailTab" class="thinking-details-tabs"
+      ><el-tab-pane
+        :label="translate('message.executionRecords', { count: detailCount })"
+        :name="DETAIL_TAB.EXECUTION"
+        ><div
+          ref="toolScrollElement"
+          class="thinking-details-scroll-body thinking-details-log-body"
+        >
+          <div class="thinking-tool-virtual-space" :style="{ height: `${virtualToolHeight}px` }">
+            <div
+              v-for="virtualRow in virtualToolRows"
+              :key="virtualRow.key"
+              :ref="measureToolRow"
+              :data-index="virtualRow.index"
+              class="thinking-tool-row"
+              :style="{ transform: `translateY(${virtualRow.start}px)` }"
+            >
               <BaseThinkingLogLine
-                :indent="Number(item.indent || 0)"
-                :prefix-text="getTreePrefix(item)"
-                :event-text="item.event"
-                :content-text="item.text"
-                :detail-text="item.detailText"
+                :indent="Number(rendererProjection[virtualRow.index].item.indent || 0)"
+                :prefix-text="getTreePrefix(rendererProjection[virtualRow.index].item)"
+                :event-text="rendererProjection[virtualRow.index].item.event"
+                :content-text="rendererProjection[virtualRow.index].item.text"
+                :detail-text="rendererProjection[virtualRow.index].item.detailText"
+                :detail-value="rendererProjection[virtualRow.index].item.detailValue"
                 :tool="true"
-                :tone="item.presentation?.tone"
-                :tool-name="item.tool"
-                :risk-level="item.riskLevel"
-                :expandable="Boolean(getDetailKey(group, item, ii) && item.detailText)"
-                :expanded="isDetailExpanded(getDetailKey(group, item, ii))"
-                :title-text="item.text || ''"
-                @toggle="toggleDetail(getDetailKey(group, item, ii))"
+                :tone="rendererProjection[virtualRow.index].item.presentation?.tone"
+                :tool-name="rendererProjection[virtualRow.index].item.tool"
+                :risk-level="rendererProjection[virtualRow.index].item.riskLevel"
+                :expandable="
+                  Boolean(
+                    rendererProjection[virtualRow.index].detailKey &&
+                    (rendererProjection[virtualRow.index].item.detailText ||
+                      rendererProjection[virtualRow.index].item.detailValue !== undefined),
+                  )
+                "
+                :expanded="isDetailExpanded(rendererProjection[virtualRow.index].detailKey)"
+                :title-text="rendererProjection[virtualRow.index].item.text || ''"
+                @toggle="toggleDetail(rendererProjection[virtualRow.index].detailKey)"
               />
             </div>
           </div>
           <BaseEmptyHint
             v-if="!detailCount"
-            :text="translate('message.noToolCalls')" /></BaseTabPanelBody></el-tab-pane
+            :text="translate('message.noToolCalls')"
+          /></div></el-tab-pane
       ><el-tab-pane
+        :name="DETAIL_TAB.THINKING"
         :label="
           translate('message.thinkingContent', {
             count: thinkingContentItems.length,
@@ -176,11 +312,15 @@ watch(
 </template>
 
 <style scoped>
-.thinking-group {
-  margin-bottom: 10px;
+.thinking-tool-virtual-space {
+  position: relative;
+  width: 100%;
 }
-.thinking-group-title {
-  margin: 8px 0 6px;
+.thinking-tool-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
 }
 .thinking-task-check-block {
   flex: 0 0 auto;
@@ -228,6 +368,8 @@ watch(
   min-height: 0;
   overflow: auto;
   overflow-x: hidden;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .thinking-details-content-body :deep(.base-note-block__content) {

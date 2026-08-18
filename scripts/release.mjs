@@ -123,6 +123,10 @@ async function main() {
   await assertTagDoesNotExist(tagName, args.remote);
 
   console.log(`[release] preparing ${tagName} on ${branch}`);
+  console.log("[release] running full repository regression");
+  await runOrPrint("npm", ["test"], args);
+  if (!args.dryRun) await assertCleanWorkingTree();
+
   if (args.dryRun) {
     console.log(`[release][dry-run] npm run release:version -- ${args.version}`);
   } else {

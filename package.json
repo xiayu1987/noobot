@@ -11,6 +11,7 @@
     "hook-protocol",
     "agent-transport-protocol",
     "event-protocol",
+    "timeline-runtime",
     "attachment-protocol",
     "semantic-transfer-protocol",
     "session-protocol",

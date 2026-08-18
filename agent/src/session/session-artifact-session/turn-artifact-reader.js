@@ -87,6 +87,7 @@ export async function readSessionTurn({
   if (!matches[0]) return null;
   return {
     sessionId: String(session.sessionId || "").trim(),
+    aggregateVersion: Math.max(0, Number(session.aggregateVersion) || 0),
     ...(await materializeTurn(sessionDir, matches[0])),
     turnId: String(matches[0].turnId || "").trim(),
     artifactOrdinal: Number(matches[0].artifactOrdinal || 0),

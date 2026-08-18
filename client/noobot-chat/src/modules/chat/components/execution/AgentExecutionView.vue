@@ -26,9 +26,6 @@ function openThinkingDetails(payload = {}, messageItem = {}) {
     executionId: props.executionId,
     channelContext: props.channelContext,
     messageItem: payload?.messageItem || messageItem,
-    allMessages: Array.isArray(payload?.allMessages) ? payload.allMessages : props.allMessages,
-    sessionDocs: props.sessionDocs,
-    skipFetch: payload?.skipFetch === true,
   });
 }
 
