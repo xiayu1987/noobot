@@ -1,0 +1,16 @@
+{
+  "name": "@noobot/timeline-runtime",
+  "version": "4.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Indexed incremental timeline runtime and bounded projections",
+  "exports": {
+    ".": "./src/index.js",
+    "./array-index": "./src/array-index.js",
+    "./ordered-facts": "./src/ordered-facts.js",
+    "./serialized-window-index": "./src/serialized-window-index.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  }
+}

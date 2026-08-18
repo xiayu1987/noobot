@@ -4,12 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
 export function setThinkingReplayDebugLogSink(sink = null) {
   sessionLogSink = acceptsDebugSink(sink) ? sink : null;
+}
+
+export function isThinkingReplayDebugEnabled() {
+  return isDebugTypeEnabled(sessionLogSink, "thinking-replay");
 }
 
 export function logThinkingReplayDebug(event, payload = {}) {

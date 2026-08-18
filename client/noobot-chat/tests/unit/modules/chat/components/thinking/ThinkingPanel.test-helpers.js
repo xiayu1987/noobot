@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { mount } from "@vue/test-utils";
+import { computed, defineComponent, h, inject, provide } from "vue";
 import { vi } from "vitest";
 import ThinkingPanel from "../../../../../../src/modules/chat/components/thinking/ThinkingPanel.vue";
 import { contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
@@ -40,7 +41,7 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
     }),
     BaseThinkingLogLine: defineComponent({
       name: "BaseThinkingLogLine",
-      props: ["eventText", "contentText", "detailText", "tool", "tone", "expandable", "expanded"],
+      props: ["eventText", "contentText", "detailText", "detailValue", "tool", "tone", "expandable", "expanded"],
       emits: ["toggle"],
       setup(props, { emit }) {
         return () => h("div", {
@@ -48,8 +49,12 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
           "data-tool": String(props.tool === true),
           "data-expandable": String(props.expandable === true),
           onClick: () => emit("toggle"),
-        }, [props.contentText, props.expanded && props.detailText
-          ? h("pre", { class: "execution-log-detail" }, props.detailText)
+        }, [props.contentText, props.expanded && (props.detailText || props.detailValue !== undefined)
+          ? h("pre", { class: "execution-log-detail" }, props.detailText || (
+              typeof props.detailValue === "string"
+                ? props.detailValue
+                : JSON.stringify(props.detailValue, null, 2)
+            ))
           : null]);
       },
     }),
@@ -92,6 +97,43 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   };
 });
 
+const TEST_TAB_CONTEXT = Symbol("test-tab-context");
+const ElTabsStub = defineComponent({
+  name: "ElTabs",
+  props: { modelValue: { type: String, default: "" } },
+  emits: ["update:modelValue"],
+  setup(props, { emit, slots }) {
+    provide(TEST_TAB_CONTEXT, {
+      activeName: computed(() => props.modelValue),
+      activate: (name) => emit("update:modelValue", name),
+    });
+    return () => h("div", { class: "tabs" }, slots.default?.());
+  },
+});
+const ElTabPaneStub = defineComponent({
+  name: "ElTabPane",
+  props: {
+    label: { type: String, default: "" },
+    name: { type: String, required: true },
+  },
+  setup(props, { slots }) {
+    const tabs = inject(TEST_TAB_CONTEXT);
+    return () => h("section", [
+      h("button", {
+        class: "tab-button",
+        "data-name": props.name,
+        onClick: () => tabs.activate(props.name),
+      }, props.label),
+      h("div", {
+        class: "tab-pane",
+        "data-label": props.label,
+        "data-name": props.name,
+        style: { display: tabs.activeName.value === props.name ? "" : "none" },
+      }, slots.default?.()),
+    ]);
+  },
+});
+
 export function mountThinkingPanel(messageItem, props = {}) {
   void activateHarnessFrontend({
     contributeExtension: (point, contribution) => contributeExtension(point, {
@@ -106,19 +148,19 @@ export function mountThinkingPanel(messageItem, props = {}) {
     global: {
       stubs: {
         BaseThinkingPanelShell: { template: '<section><slot name="title" /><slot /><slot name="footer" /></section>' },
-        "el-tabs": { template: '<div class="tabs"><slot /></div>' },
-        ElTabs: { template: '<div class="tabs"><slot /></div>' },
-        ElTabPane: { props: ["label"], template: '<div class="tab-pane" :data-label="label"><slot /></div>' },
-        "el-tab-pane": { props: ["label"], template: '<div class="tab-pane" :data-label="label"><slot /></div>' },
+        "el-tabs": ElTabsStub,
+        ElTabs: ElTabsStub,
+        ElTabPane: ElTabPaneStub,
+        "el-tab-pane": ElTabPaneStub,
         "el-drawer": {
           props: ["modelValue", "title", "size"],
           template: '<aside v-if="modelValue" class="thinking-detail-drawer" :data-title="title" :data-size="size"><slot /></aside>',
         },
         BaseTabPanelBody: { template: '<div class="tab-body"><slot /></div>' },
         BaseThinkingLogLine: {
-          props: ["eventText", "contentText", "detailText", "tool", "tone", "expandable", "expanded"],
+          props: ["eventText", "contentText", "detailText", "detailValue", "tool", "tone", "expandable", "expanded"],
           emits: ["toggle"],
-          template: '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && detailText" class="execution-log-detail">{{ detailText }}</pre></div>',
+          template: '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && (detailText || detailValue !== undefined)" class="execution-log-detail">{{ detailText || (typeof detailValue === "string" ? detailValue : JSON.stringify(detailValue, null, 2)) }}</pre></div>',
         },
         BaseSectionHeader: { props: ["title"], template: '<header><span>{{ title }}</span><slot name="extra" /></header>' },
         BaseEmptyHint: { props: ["text"], template: '<p class="empty-hint">{{ text }}</p>' },

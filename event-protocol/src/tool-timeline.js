@@ -52,7 +52,11 @@ function createToolEventFact(envelope = {}) {
   };
 }
 
-export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
+export function applyCanonicalToolTimelineEvent(
+  timeline = [],
+  envelope = {},
+  { indexByKey = null } = {},
+) {
   if (!isCanonicalToolMessageEvent(envelope)) {
     return Array.isArray(timeline) ? timeline : [];
   }
@@ -61,8 +65,12 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
   if (!toolCallId) return Array.isArray(timeline) ? timeline : [];
 
   const key = `call:${toolCallId}`;
-  const next = Array.isArray(timeline) ? timeline.map((item) => ({ ...item })) : [];
-  const index = next.findIndex((item) => item.key === key);
+  const next = Array.isArray(timeline) ? timeline : [];
+  const indexedPosition = indexByKey instanceof Map ? indexByKey.get(key) : undefined;
+  const index = Number.isInteger(indexedPosition) && next[indexedPosition]?.key === key
+    ? indexedPosition
+    : next.findIndex((item) => item.key === key);
+  if (index >= 0 && indexByKey instanceof Map) indexByKey.set(key, index);
   const current = index >= 0 ? next[index] : { key, toolCallId };
   const eventFact = createToolEventFact(envelope);
 
@@ -89,6 +97,14 @@ export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
         })();
 
   if (index >= 0) next[index] = updated;
-  else next.push(updated);
+  else {
+    next.push(updated);
+    if (indexByKey instanceof Map) indexByKey.set(key, next.length - 1);
+  }
   return next;
+}
+
+export function reduceCanonicalToolTimeline(timeline = [], envelope = {}) {
+  const next = Array.isArray(timeline) ? timeline.map((item) => ({ ...item })) : [];
+  return applyCanonicalToolTimelineEvent(next, envelope);
 }

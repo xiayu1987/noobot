@@ -12,7 +12,7 @@ import { buildThinkingDetailPayload } from "../../src/session/session-thinking-d
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { readSessionTurn, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 
-test("thinking detail message carries its session envelope identity and scoped injections", () => {
+test("thinking detail message carries its session identity without duplicating scoped messages", () => {
   const payload = buildThinkingDetailPayload({
     sessionId: "session-detail",
     sessions: [{
@@ -36,7 +36,7 @@ test("thinking detail message carries its session envelope identity and scoped i
   }, { turnScopeId: "turn-detail" });
 
   assert.equal(payload.messageItem.sessionId, "session-detail");
-  assert.equal(payload.allMessages.filter((item) => item.injectedMessage === true).length, 1);
+  assert.equal(Object.hasOwn(payload, "allMessages"), false);
   assert.equal(payload.counts.injectedMessageCount, 1);
 });
 
@@ -80,6 +80,23 @@ test("thinking detail projects the complete turn timeline onto the final assista
   assert.equal(payload.messageItem.activityTimeline.length, 1);
   assert.equal(payload.messageItem.hasThinkingDetails, true);
   assert.equal(payload.counts.executionLogCount, 2);
+});
+
+test("thinking detail publishes its authoritative source revision", () => {
+  const payload = buildThinkingDetailPayload({
+    sessionId: "revision-session",
+    revision: "session-aggregate:9",
+    sessions: [{
+      sessionId: "revision-session",
+      rawMessages: [{
+        role: "assistant",
+        type: "message",
+        turnScopeId: "revision-turn",
+      }],
+    }],
+  }, { turnScopeId: "revision-turn" });
+
+  assert.equal(payload.revision, "session-aggregate:9");
 });
 
 test("stopped turn detail uses the persisted presentation identity without a final answer", () => {
@@ -194,6 +211,7 @@ test("session summary does not copy large tool payloads retained by thinking det
   assert.equal(summary.messages[0].thinkingDetailCount, 2);
   assert.equal(detail.messageItem.toolTimeline[0].call.arguments, largePayload);
   assert.equal(detail.messageItem.toolTimeline[0].resultEvent.output, largePayload);
+  assert.equal(Object.hasOwn(detail, "allMessages"), false);
 });
 
 test("thinking detail storage lookup reads exactly one canonical Turn journal", async () => {
@@ -233,6 +251,7 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
 
     const turn = await readSessionTurn({ sessionDir, turnScopeId: "turn-two" });
     assert.equal(turn.turnScopeId, "turn-two");
+    assert.equal(turn.aggregateVersion, 0);
     assert.deepEqual(turn.messages.map((message) => message.messageUid), ["sm-two"]);
   } finally {
     await rm(sessionDir, { recursive: true, force: true });

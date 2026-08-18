@@ -28,8 +28,6 @@ function thinkingDetailPayload(messageItem) {
     ok: true,
     exists: true,
     messageItem,
-    allMessages: [messageItem],
-    sessionDocs: [],
   };
 }
 
@@ -92,8 +90,6 @@ describe("ThinkingPanel thinking-detail recovery", () => {
     expect(cached?.messageItem?.toolTimeline).toHaveLength(1);
     expect(normalizeThinkingToolLogs({
       messageItem: cached.messageItem,
-      allMessages: cached.allMessages,
-      sessionDocs: cached.sessionDocs,
       variant: "panel",
       toolResultFallback: "tool_result",
     }).map((item) => item.text || item.detailText)).toContain("persisted-tool");

@@ -186,6 +186,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
     assert.equal(payload.messageItem.turnScopeId, turnScopeId);
     assert.equal(payload.counts.executionLogCount, 3);
     assert.equal(payload.counts.injectedMessageCount, 1);
-    assert.deepEqual(payload.allMessages.map((item) => item.id).sort(), ["a1", "i1"]);
+    assert.equal(Object.hasOwn(payload, "allMessages"), false);
   });
 });

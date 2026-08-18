@@ -15,10 +15,15 @@ import {
   BaseThinkingPanelShell,
 } from "../../../../shared/public-api/ui.js";
 import {
+  isToolLogWindowDebugEnabled,
   logToolLogWindowDebug,
   summarizeToolLogWindow,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
-import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
+import {
+  isStateMachineDebugEnabled,
+  logStateMachineDebug,
+} from "../../../debug/loggers/stateMachineLogger.js";
+import { isThinkingReplayDebugEnabled } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { toolLogDetailKey } from "../../model/toolLogIdentity.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
@@ -43,6 +48,11 @@ const runningEmptyHintKey = computed(() =>
     : "message.waitingRealtimeLog",
 );
 const executionLogSignature = computed(() => {
+  if (
+    !isToolLogWindowDebugEnabled() &&
+    !isStateMachineDebugEnabled() &&
+    !isThinkingReplayDebugEnabled()
+  ) return "disabled";
   const logs = Array.isArray(props.executionLogs) ? props.executionLogs : [];
   const last = logs.at(-1) || {};
   return [
@@ -67,7 +77,10 @@ function detailKey(logItem = {}) {
   return isToolLog(logItem) ? props.getDetailKey({ key: "tool-timeline" }, logItem) : "";
 }
 function isExpandable(logItem = {}) {
-  return Boolean(detailKey(logItem) && String(logItem.detailText || ""));
+  return Boolean(
+    detailKey(logItem) &&
+      (String(logItem.detailText || "") || logItem.detailValue !== undefined),
+  );
 }
 watch(
   executionLogSignature,
@@ -159,6 +172,7 @@ watch(
             :event-text="logItem.event"
             :content-text="logItem.text"
             :detail-text="logItem.detailText"
+            :detail-value="logItem.detailValue"
             :tool="isToolLog(logItem)"
             :tone="logItem.presentation?.tone"
             :tool-name="logItem.tool"

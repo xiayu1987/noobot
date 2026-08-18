@@ -15,7 +15,6 @@ import ThinkingPanelDetails from "./ThinkingPanelDetails.vue";
 const props = defineProps({
   messageItem: { type: Object, default: () => ({}) },
   allMessages: { type: Array, default: () => [] },
-  sessionDocs: { type: Array, default: () => [] },
   runtime: { type: Object, default: null },
   variant: { type: String, default: "panel" },
   userId: { type: String, default: "" },
@@ -27,17 +26,29 @@ const props = defineProps({
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
-const thinkingOpenNames = computed(() => getTurnUiState(props.messageItem)?.thinkingOpenNames || []);
+const thinkingOpenNames = computed(
+  () => getTurnUiState(props.messageItem)?.thinkingOpenNames || [],
+);
 const shouldLoadThinkingDetail = () =>
   String(props.variant || "panel") === "details" ||
   thinkingOpenNames.value.includes("thinking-panel");
 const panel = useThinkingPanel(props, emit, { shouldLoadThinkingDetail });
-const thinkingIdentity = computed(() => [
-  String(props.messageItem?.sessionId || "").trim(),
-  normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
-  String(props.messageItem?.dialogProcessId || props.messageItem?.id || props.messageItem?.messageId || "").trim(),
-].join("::"));
-const panelVisible = computed(() => Boolean(panel.hasThinking.value || panel.loadedThinkingDetail.value));
+const thinkingIdentity = computed(() =>
+  [
+    String(props.messageItem?.sessionId || "").trim(),
+    normalizeTurnScopeIdKey(props.messageItem?.turnScopeId),
+    String(
+      props.messageItem?.dialogProcessId ||
+        props.messageItem?.id ||
+        props.messageItem?.messageId ||
+        "",
+    ).trim(),
+  ].join("::"),
+);
+const panelVisible = computed(() =>
+  Boolean(panel.hasThinking.value || panel.loadedThinkingDetail.value),
+);
+const groupedToolLogs = computed(() => panel.groupExecutionLogs(props.messageItem));
 watch(panelVisible, (visible) => emit("panel-visibility-change", visible), { immediate: true });
 watch(thinkingIdentity, () => {
   if (props.messageItem?.role !== "assistant") return;
@@ -98,7 +109,7 @@ const {
     :message-item="messageItem"
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"
-    :grouped-tool-logs="groupExecutionLogs(messageItem)"
+    :grouped-tool-logs="groupedToolLogs"
     :thinking-content-items="thinkingContentItems"
     :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"

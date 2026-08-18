@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
 */
 
+import { createSerializedWindowIndex } from "@noobot/timeline-runtime";
+import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
+
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
   if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
@@ -21,6 +24,22 @@ export function initializeMessageEventState(message = {}) {
 }
 
 const text = (value) => String(value || "").trim();
+const CONSUMED_EVENT_LIMIT = QUANTITY_THRESHOLDS.client.consumedEventIdsLimit;
+const consumedMessageEvents = createSerializedWindowIndex({
+  field: "consumedEventIds",
+  limit: CONSUMED_EVENT_LIMIT,
+});
+
+export function hasConsumedMessageEvent(state = {}, eventId = "") {
+  const normalizedEventId = text(eventId);
+  return Boolean(normalizedEventId && consumedMessageEvents.has(state, normalizedEventId));
+}
+
+export function appendConsumedMessageEvent(state = {}, eventId = "") {
+  const normalizedEventId = text(eventId);
+  if (!normalizedEventId) return false;
+  return consumedMessageEvents.append(state, normalizedEventId);
+}
 
 function createLaneState() {
   return { lastSequence: 0, consumedEventIds: [] };
@@ -47,7 +66,7 @@ export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   return lane;
 }
 
-export function syncMessageEventAggregateState(message = {}) {
+export function syncMessageEventAggregateState(message = {}, eventId = "") {
   const root = initializeMessageEventState(message).messageEventState;
   const lanes = Object.values(root.sequenceLanesByScopeId || {});
   if (!lanes.length) return root;
@@ -55,8 +74,11 @@ export function syncMessageEventAggregateState(message = {}) {
     (maximum, lane) => Math.max(maximum, Number(lane?.lastSequence || 0)),
     0,
   );
-  root.consumedEventIds = [...new Set(lanes.flatMap(
-    (lane) => Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
-  ))].slice(-1000);
+  if (eventId) appendConsumedMessageEvent(root, eventId);
+  else {
+    root.consumedEventIds = [...new Set(lanes.flatMap(
+      (lane) => Array.isArray(lane?.consumedEventIds) ? lane.consumedEventIds : [],
+    ))].slice(-CONSUMED_EVENT_LIMIT);
+  }
   return root;
 }

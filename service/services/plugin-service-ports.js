@@ -71,6 +71,7 @@ export function createPluginServicePorts({ bot = null, translateText = null } = 
         return buildThinkingDetailPayload({
           exists: Boolean(session?.sessionId),
           sessionId: String(session?.sessionId || "").trim(),
+          revision: `session-aggregate:${Math.max(0, Number(session?.aggregateVersion) || 0)}`,
           sessions: [{ sessionId: String(session?.sessionId || "").trim(), rawMessages: Array.isArray(session?.messages) ? session.messages : [] }],
         }, { dialogProcessId, turnScopeId });
       },

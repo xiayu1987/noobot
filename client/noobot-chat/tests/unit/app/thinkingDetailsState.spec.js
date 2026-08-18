@@ -89,7 +89,6 @@ describe("thinking details state", () => {
 
     expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: thinkingAssistant,
-      allMessages: messages,
     });
   });
 
@@ -108,7 +107,6 @@ describe("thinking details state", () => {
 
     expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: summaryThinkingAssistant,
-      allMessages: messages,
     });
   });
 
@@ -117,7 +115,6 @@ describe("thinking details state", () => {
 
     expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: null,
-      allMessages: messages,
     });
   });
 
@@ -134,21 +131,18 @@ describe("thinking details state", () => {
     expect(getThinkingDetailsCount(staleAssistant)).toBe(0);
     expect(resolveFallbackThinkingDetailsPayload({ messages })).toEqual({
       messageItem: null,
-      allMessages: messages,
     });
   });
 
   it("prefers explicit payload values over fallback values", () => {
     const explicitMessage = { role: "assistant", completedToolLogs: [] };
-    const explicitMessages = [explicitMessage];
     const fallbackMessage = { role: "assistant", pending: true };
 
     expect(resolveThinkingDetailsPanelPayload(
-      { messageItem: explicitMessage, allMessages: explicitMessages },
-      { messageItem: fallbackMessage, allMessages: [fallbackMessage] },
+      { messageItem: explicitMessage },
+      { messageItem: fallbackMessage },
     )).toEqual({
       messageItem: explicitMessage,
-      allMessages: explicitMessages,
     });
   });
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -46,6 +46,10 @@ export function summarizeToolLogWindow(items = [], limit = 20) {
 
 export function setToolLogWindowDebugLogSink(sink = null) {
   sessionLogSink = acceptsDebugSink(sink) ? sink : null;
+}
+
+export function isToolLogWindowDebugEnabled() {
+  return isDebugTypeEnabled(sessionLogSink, "tool-log-window");
 }
 
 export function logToolLogWindowDebug(event, payload = {}) {

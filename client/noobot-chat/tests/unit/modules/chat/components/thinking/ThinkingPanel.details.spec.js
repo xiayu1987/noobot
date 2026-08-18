@@ -8,21 +8,38 @@ import { clearExtensionRegistry } from "../../../../../../src/extensions/extensi
 import { mountThinkingPanel } from "./ThinkingPanel.test-helpers.js";
 
 function toolTimeline() {
-  return [{
-    key: "call:call-1", toolCallId: "call-1", status: "completed",
-    args: { path: "README.md" },
-    result: { ok: true },
-    call: {
-      eventId: "call-1", sequence: 1, sequenceScopeId: "message-1",
-      sequenceDomain: "message-event", authority: "authoritative", timestamp: "2026-07-29T01:00:00.000Z",
-      log: { event: "tool_call", type: "tool_call", toolCallId: "call-1", text: "read_file" },
+  return [
+    {
+      key: "call:call-1",
+      toolCallId: "call-1",
+      status: "completed",
+      args: { path: "README.md" },
+      result: { ok: true },
+      call: {
+        eventId: "call-1",
+        sequence: 1,
+        sequenceScopeId: "message-1",
+        sequenceDomain: "message-event",
+        authority: "authoritative",
+        timestamp: "2026-07-29T01:00:00.000Z",
+        log: { event: "tool_call", type: "tool_call", toolCallId: "call-1", text: "read_file" },
+      },
+      resultEvent: {
+        eventId: "result-1",
+        sequence: 2,
+        sequenceScopeId: "message-1",
+        sequenceDomain: "message-event",
+        authority: "authoritative",
+        timestamp: "2026-07-29T01:00:01.000Z",
+        log: {
+          event: "tool_result",
+          type: "tool_result",
+          toolCallId: "call-1",
+          text: "read_file done",
+        },
+      },
     },
-    resultEvent: {
-      eventId: "result-1", sequence: 2, sequenceScopeId: "message-1",
-      sequenceDomain: "message-event", authority: "authoritative", timestamp: "2026-07-29T01:00:01.000Z",
-      log: { event: "tool_result", type: "tool_result", toolCallId: "call-1", text: "read_file done" },
-    },
-  }];
+  ];
 }
 
 function thinkingActivity(eventId, sequence, output) {
@@ -77,14 +94,17 @@ describe("ThinkingPanel canonical details", () => {
   });
 
   it("renders canonical call and result in details mode", () => {
-    const wrapper = mountThinkingPanel({ role: "assistant", toolTimeline: toolTimeline() }, { variant: "details" });
+    const wrapper = mountThinkingPanel(
+      { role: "assistant", toolTimeline: toolTimeline() },
+      { variant: "details" },
+    );
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
     expect(wrapper.findAll(".execution-log-detail")).toHaveLength(0);
-    expect(wrapper.vm.groupExecutionLogs(wrapper.props("messageItem"))[0].items
-      .map((item) => item.detailText)).toEqual([
-      '{\n  "path": "README.md"\n}',
-      '{\n  "ok": true\n}',
-    ]);
+    expect(
+      wrapper.vm
+        .groupExecutionLogs(wrapper.props("messageItem"))[0]
+        .items.map((item) => item.detailValue),
+    ).toEqual([{ path: "README.md" }, { ok: true }]);
     expect(wrapper.find(".thinking-detail-drawer").exists()).toBe(false);
   });
 
@@ -95,25 +115,148 @@ describe("ThinkingPanel canonical details", () => {
       status: "failed",
       result: { ok: false, error: "access denied" },
     };
-    const wrapper = mountThinkingPanel({
-      role: "assistant",
-      toolTimeline: failedTimeline,
-    }, { variant: "details" });
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        toolTimeline: failedTimeline,
+      },
+      { variant: "details" },
+    );
 
     expect(wrapper.findAll(".execution-log-line.is-tool-result-failed")).toHaveLength(1);
   });
 
   it("renders available canonical details while the turn is running", () => {
-    const wrapper = mountThinkingPanel({
-      role: "assistant",
-      sessionId: "session-running-details",
-      turnScopeId: "turn-running-details",
-      toolTimeline: toolTimeline(),
-    }, {
-      variant: "details",
-      runtime: { running: true, terminal: false },
-    });
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        sessionId: "session-running-details",
+        turnScopeId: "turn-running-details",
+        toolTimeline: toolTimeline(),
+      },
+      {
+        variant: "details",
+        runtime: { running: true, terminal: false },
+      },
+    );
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
+  });
+
+  it("keeps the mounted detail rows bounded for a long tool timeline", () => {
+    const entries = Array.from({ length: 1000 }, (_, index) => {
+      const sequence = index * 2 + 1;
+      const toolCallId = `long-call-${index}`;
+      return {
+        key: `call:${toolCallId}`,
+        toolCallId,
+        tool: "read_file",
+        args: { path: `file-${index}.txt` },
+        result: { ok: true, index },
+        call: {
+          eventId: `long-call-event-${index}`,
+          sequence,
+          sequenceScopeId: "message-long",
+          sequenceDomain: "message-event",
+          authority: "authoritative",
+        },
+        resultEvent: {
+          eventId: `long-result-event-${index}`,
+          sequence: sequence + 1,
+          sequenceScopeId: "message-long",
+          sequenceDomain: "message-event",
+          authority: "authoritative",
+        },
+      };
+    });
+    const messageItem = {
+      role: "assistant",
+      sessionId: "session-long-details",
+      turnScopeId: "turn-long-details",
+      toolTimeline: entries,
+    };
+
+    const wrapper = mountThinkingPanel(messageItem, { variant: "details" });
+    const projectedCount = wrapper.vm.groupExecutionLogs(messageItem)[0].items.length;
+    const mountedCount = wrapper.findAll(".execution-log-line").length;
+
+    expect(projectedCount).toBe(2000);
+    expect(mountedCount).toBeGreaterThan(0);
+    expect(mountedCount).toBeLessThan(projectedCount);
+  });
+
+  it("resets the virtual scroll coordinate when the drawer switches turns", async () => {
+    const firstMessage = {
+      role: "assistant",
+      sessionId: "session-scroll-reset",
+      turnScopeId: "turn-scroll-first",
+      toolTimeline: toolTimeline(),
+    };
+    const wrapper = mountThinkingPanel(firstMessage, { variant: "details" });
+    const scrollBody = wrapper.find(".thinking-details-log-body").element;
+    scrollBody.scrollTop = 320;
+
+    await wrapper.setProps({
+      messageItem: {
+        ...firstMessage,
+        turnScopeId: "turn-scroll-second",
+      },
+    });
+    await wrapper.vm.$nextTick();
+
+    expect(scrollBody.scrollTop).toBe(0);
+    expect(wrapper.findAll(".execution-log-line")).toHaveLength(2);
+  });
+
+  it("synchronizes the virtual viewport when execution records become visible again", async () => {
+    const entries = Array.from({ length: 100 }, (_, index) => {
+      const timeline = toolTimeline()[0];
+      return {
+        ...timeline,
+        key: `call:tab-call-${index}`,
+        toolCallId: `tab-call-${index}`,
+        call: {
+          ...timeline.call,
+          eventId: `tab-call-event-${index}`,
+          sequence: index * 2 + 1,
+          toolCallId: `tab-call-${index}`,
+          log: { ...timeline.call.log, toolCallId: `tab-call-${index}` },
+        },
+        resultEvent: {
+          ...timeline.resultEvent,
+          eventId: `tab-result-event-${index}`,
+          sequence: index * 2 + 2,
+          toolCallId: `tab-call-${index}`,
+          log: { ...timeline.resultEvent.log, toolCallId: `tab-call-${index}` },
+        },
+      };
+    });
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        sessionId: "session-tab-viewport",
+        turnScopeId: "turn-tab-viewport",
+        toolTimeline: entries,
+        activityTimeline: [thinkingActivity("tab-thinking", 201, "thinking")],
+      },
+      { variant: "details" },
+    );
+    const scrollBody = wrapper.find(".thinking-details-log-body").element;
+    Object.defineProperties(scrollBody, {
+      clientHeight: { configurable: true, value: 360 },
+      clientWidth: { configurable: true, value: 720 },
+    });
+    scrollBody.scrollTop = 640;
+    await wrapper.find('.tab-button[data-name="thinking"]').trigger("click");
+    scrollBody.scrollTop = 0;
+    await wrapper.find('.tab-button[data-name="execution"]').trigger("click");
+    await wrapper.vm.$nextTick();
+    await wrapper.vm.$nextTick();
+
+    const details = wrapper.findComponent({ name: "ThinkingPanelDetails" });
+    expect(scrollBody.scrollTop).toBe(0);
+    expect(details.vm.$.setupState.toolVirtualizer.getScrollOffset()).toBe(0);
+    expect(wrapper.find('.tab-pane[data-name="execution"]').isVisible()).toBe(true);
+    expect(wrapper.findAll(".execution-log-line").length).toBeGreaterThan(0);
   });
 
   it("toggles detail expansion using the stable session and turn identity", async () => {
@@ -178,18 +321,23 @@ describe("ThinkingPanel canonical details", () => {
   });
 
   it("uses the protocol tool identity when eventId is missing", () => {
-    const wrapper = mountThinkingPanel({
-      role: "assistant",
-      sessionId: "session-missing-event",
-      turnScopeId: "turn-missing-event",
-      toolTimeline: toolTimeline(),
-    }, { variant: "details" });
+    const wrapper = mountThinkingPanel(
+      {
+        role: "assistant",
+        sessionId: "session-missing-event",
+        turnScopeId: "turn-missing-event",
+        toolTimeline: toolTimeline(),
+      },
+      { variant: "details" },
+    );
 
-    expect(wrapper.vm.getThinkingDetailItemKey(
-      { key: "tool-timeline" },
-      { toolCallId: "call-without-event", event: "tool_call", ts: "now" },
-      0,
-    )).toBe("tool:call-without-event:call");
+    expect(
+      wrapper.vm.getThinkingDetailItemKey(
+        { key: "tool-timeline" },
+        { toolCallId: "call-without-event", event: "tool_call", ts: "now" },
+        0,
+      ),
+    ).toBe("tool:call-without-event:call");
   });
 
   it("renders canonical thinking activities alongside canonical tool details", () => {
@@ -240,10 +388,13 @@ describe("ThinkingPanel canonical details", () => {
   });
 
   it("does not derive details from historical tool messages", () => {
-    const wrapper = mountThinkingPanel({ role: "assistant" }, {
-      variant: "details",
-      allMessages: [{ role: "tool", content: "legacy tool result" }],
-    });
+    const wrapper = mountThinkingPanel(
+      { role: "assistant" },
+      {
+        variant: "details",
+        allMessages: [{ role: "tool", content: "legacy tool result" }],
+      },
+    );
     expect(wrapper.findAll(".execution-log-line")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("legacy tool result");
   });

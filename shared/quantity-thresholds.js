@@ -81,7 +81,15 @@ export const QUANTITY_THRESHOLDS = deepFreeze({
   },
 
   client: {
+    consumedEventIdsLimit: 1000,
+
     executionLogDisplayLimit: QUANTITY_TIERS.smallDisplay,
+
+    thinkingDetailEstimatedRowHeightPx: 32,
+
+    thinkingDetailInitialViewportHeightPx: 600,
+
+    thinkingDetailVirtualOverscan: QUANTITY_TIERS.smallFiles,
 
     processCompatLogLimit: QUANTITY_TIERS.smallDisplay,
   },

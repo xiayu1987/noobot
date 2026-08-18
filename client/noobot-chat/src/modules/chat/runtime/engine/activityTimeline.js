@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { createWeakArrayIndex, upsertOrderedFact } from "@noobot/timeline-runtime";
 import {
   compareTimelineFacts,
   preferTimelineFact,
@@ -13,6 +14,7 @@ import {
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence ?? value?.seq ?? 0);
+const activityTimelineIndex = createWeakArrayIndex({ keyOf: (activity) => activity?.activityId });
 
 export function isToolActivityLog(value = {}) {
   const eventTokens = [value.event, value.type, value.rawEvent, value.eventType]
@@ -76,7 +78,16 @@ export function normalizeRunActivity(value = {}, index = 0) {
 export function reduceActivityTimeline(timeline = [], value = {}) {
   const activity = normalizeRunActivity(value, Array.isArray(timeline) ? timeline.length : 0);
   if (!activity) return Array.isArray(timeline) ? timeline : [];
-  return mergeActivityTimelines(timeline, [activity]);
+  const target = Array.isArray(timeline) ? timeline : [];
+  return upsertOrderedFact({
+    values: target,
+    fact: activity,
+    key: activity.activityId,
+    index: activityTimelineIndex.indexFor(target),
+    compare: compareTimelineFacts,
+    merge: preferTimelineFact,
+    recordInsertion: activityTimelineIndex.recordInsertion,
+  });
 }
 
 export function mergeActivityTimelines(...timelines) {

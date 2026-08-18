@@ -8,10 +8,13 @@ import { readFileSync, readdirSync } from "node:fs";
 import { clientFilePath } from "@noobot/client-shared/path-resolver";
 
 const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../");
-const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
+const source = (relativePath) =>
+  readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
 
 function productionFiles(relativeDir = "src") {
-  return readdirSync(clientFilePath.resolve(projectRoot, relativeDir), { withFileTypes: true }).flatMap((entry) => {
+  return readdirSync(clientFilePath.resolve(projectRoot, relativeDir), {
+    withFileTypes: true,
+  }).flatMap((entry) => {
     const relativePath = `${relativeDir}/${entry.name}`;
     if (entry.isDirectory()) return productionFiles(relativePath);
     return /\.(?:js|vue)$/.test(entry.name) ? [relativePath] : [];
@@ -23,7 +26,9 @@ describe("workflow runtime architecture guard", () => {
     const workflowStore = source("src/modules/chat/stores/chatStoreWorkflows.js");
     const chatStore = source("src/modules/chat/stores/useChatStore.js");
 
-    expect(workflowStore).toMatch(/return\s*\{\s*applyWorkflowRuntimeEvent[\s\S]*removeWorkflowOwnersForReplacedTurns/);
+    expect(workflowStore).toMatch(
+      /return\s*\{\s*applyWorkflowRuntimeEvent[\s\S]*removeWorkflowOwnersForReplacedTurns/,
+    );
     expect(chatStore).not.toMatch(/\.\.\.subSessions/);
     expect(chatStore).not.toMatch(/upsertWorkflow(?:Planning|NodeState)Event/);
     expect(chatStore).not.toMatch(/mergeSubSessionSnapshot/);
@@ -31,7 +36,8 @@ describe("workflow runtime architecture guard", () => {
 
   it("keeps running placeholders out of production message models", () => {
     const violations = productionFiles().filter((relativePath) =>
-      source(relativePath).includes("workflowNodeRunningPlaceholder"));
+      source(relativePath).includes("workflowNodeRunningPlaceholder"),
+    );
     expect(violations).toEqual([]);
   });
 
@@ -41,13 +47,21 @@ describe("workflow runtime architecture guard", () => {
     const reconnectModel = source("src/modules/chat/model/reconnectReplayModel.js");
     const reconnectReplay = source("src/modules/chat/runtime/reconnect/messageReplay.js");
     const thinkingDetailsPanel = source("src/app/composables/useThinkingDetailsPanel.js");
-    const thinkingPresentation = source("src/modules/chat/composables/thinkingPanelPresentation.js");
-    const thinkingDetailsRenderer = source("src/modules/chat/components/thinking/ThinkingPanelDetails.vue");
-    const thinkingRealtimeRenderer = source("src/modules/chat/components/thinking/ThinkingPanelRealtime.vue");
+    const thinkingPresentation = source(
+      "src/modules/chat/composables/thinkingPanelPresentation.js",
+    );
+    const thinkingDetailsRenderer = source(
+      "src/modules/chat/components/thinking/ThinkingPanelDetails.vue",
+    );
+    const thinkingRealtimeRenderer = source(
+      "src/modules/chat/components/thinking/ThinkingPanelRealtime.vue",
+    );
     const toolLogIdentity = source("src/modules/chat/model/toolLogIdentity.js");
     const turnUiStore = source("src/modules/chat/runtime/engine/turnUiStore.js");
 
-    expect(merge).not.toMatch(/(?:turnScopeId|dialogProcessId|role)\s*[+:].*(?:turnScopeId|dialogProcessId|role)/);
+    expect(merge).not.toMatch(
+      /(?:turnScopeId|dialogProcessId|role)\s*[+:].*(?:turnScopeId|dialogProcessId|role)/,
+    );
     expect(subSessions).not.toMatch(/findIndex\([^)]*(?:turnScopeId|dialogProcessId|role)/s);
     expect(subSessions).toMatch(/message\?\.(?:messageId|id)/);
     expect(reconnectModel).not.toMatch(/byTurnScopeId/);
@@ -58,11 +72,18 @@ describe("workflow runtime architecture guard", () => {
     expect(thinkingDetailsPanel).toMatch(/leftPresentationMessageId/);
     expect(thinkingPresentation).not.toMatch(/toolLogIndex.*toolLogItem\?\.ts/s);
     expect(thinkingPresentation).toMatch(/toolLogDetailKey\(toolLogItem\)/);
-    expect(thinkingDetailsRenderer).toMatch(/:detail-text="item\.detailText"/);
+    expect(thinkingDetailsRenderer).toMatch(
+      /:detail-text="rendererProjection\[virtualRow\.index\]\.item\.detailText"/,
+    );
+    expect(thinkingDetailsRenderer).toMatch(
+      /:detail-value="rendererProjection\[virtualRow\.index\]\.item\.detailValue"/,
+    );
     expect(thinkingDetailsRenderer).not.toMatch(/item\.detail\s*\|\||item\.data\?\.result/);
     expect(thinkingDetailsRenderer).not.toMatch(/item\.tool_call_id/);
     expect(thinkingRealtimeRenderer).toMatch(/:detail-text="logItem\.detailText"/);
-    expect(thinkingRealtimeRenderer).not.toMatch(/logItem\.(?:id|seq|tool_call_id|timestamp|ts)|logIndex}`/);
+    expect(thinkingRealtimeRenderer).not.toMatch(
+      /logItem\.(?:id|seq|tool_call_id|timestamp|ts)|logIndex}`/,
+    );
     expect(toolLogIdentity).toMatch(/detail\(item\.detailText\)/);
     expect(toolLogIdentity).not.toMatch(/item\.content/);
     expect(toolLogIdentity).not.toMatch(/toolLogContentKey|findMatchIndex/);
@@ -73,12 +94,22 @@ describe("workflow runtime architecture guard", () => {
 
   it("keeps runtime breathing on the shared status and thinking container", () => {
     const sharedMessage = source("src/modules/chat/components/message/SharedChatMessageItem.vue");
-    const thinkingRealtime = source("src/modules/chat/components/thinking/ThinkingPanelRealtime.vue");
+    const thinkingRealtime = source(
+      "src/modules/chat/components/thinking/ThinkingPanelRealtime.vue",
+    );
 
-    expect(sharedMessage).toMatch(/class="message-runtime-panels"[\s\S]*'is-running': unifiedRuntimePanelsRunning/);
-    expect(sharedMessage).toMatch(/\.message-runtime-panels\.is-running\s*\{[\s\S]*animation:\s*message-runtime-panels-glow/);
-    expect(sharedMessage).not.toMatch(/prefers-reduced-motion[\s\S]*message-runtime-panels\.is-running/);
-    expect(thinkingRealtime).not.toMatch(/thinking-realtime-shell\.is-running\s*\{[\s\S]*animation:/);
+    expect(sharedMessage).toMatch(
+      /class="message-runtime-panels"[\s\S]*'is-running': unifiedRuntimePanelsRunning/,
+    );
+    expect(sharedMessage).toMatch(
+      /\.message-runtime-panels\.is-running\s*\{[\s\S]*animation:\s*message-runtime-panels-glow/,
+    );
+    expect(sharedMessage).not.toMatch(
+      /prefers-reduced-motion[\s\S]*message-runtime-panels\.is-running/,
+    );
+    expect(thinkingRealtime).not.toMatch(
+      /thinking-realtime-shell\.is-running\s*\{[\s\S]*animation:/,
+    );
   });
 
   it("keeps canonical workflow nodes on status without persisting stepStatus", () => {
@@ -90,17 +121,25 @@ describe("workflow runtime architecture guard", () => {
 
   it("keeps legacy reconnect metadata out of canonical assistant ownership", () => {
     const reconnectFiles = productionFiles("src/modules/chat/runtime/reconnect");
-    const forbidden = /allowCreate|authoritativeCurrentRun|legacyDialogFallback|resolveReconnectTargetAssistantMessage|createFinalAssistantFromReconnectReplay/;
-    const violations = reconnectFiles.filter((relativePath) => forbidden.test(source(relativePath)));
+    const forbidden =
+      /allowCreate|authoritativeCurrentRun|legacyDialogFallback|resolveReconnectTargetAssistantMessage|createFinalAssistantFromReconnectReplay/;
+    const violations = reconnectFiles.filter((relativePath) =>
+      forbidden.test(source(relativePath)),
+    );
     expect(violations).toEqual([]);
 
     const hydration = source("src/modules/chat/runtime/reconnect/hydrationReplay.js");
-    expect(hydration).not.toMatch(/findAssistantMessageByDialogProcessId|findLatestPendingAssistantAfterLastUser|getMessageRole/);
+    expect(hydration).not.toMatch(
+      /findAssistantMessageByDialogProcessId|findLatestPendingAssistantAfterLastUser|getMessageRole/,
+    );
   });
 
   it("forbids DONE snapshots from becoming a canonical message projection entry", () => {
-    const forbidden = /applyDoneMessages(?:Patch|FromReconnect)|reconcileDoneTurnSnapshot|onDoneMessages/;
-    const violations = productionFiles().filter((relativePath) => forbidden.test(source(relativePath)));
+    const forbidden =
+      /applyDoneMessages(?:Patch|FromReconnect)|reconcileDoneTurnSnapshot|onDoneMessages/;
+    const violations = productionFiles().filter((relativePath) =>
+      forbidden.test(source(relativePath)),
+    );
     expect(violations).toEqual([]);
   });
 
@@ -113,9 +152,13 @@ describe("workflow runtime architecture guard", () => {
     expect(replayConsumer).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).not.toMatch(/upsertCanonicalAssistantMessage/);
     expect(reconnectComposable).toMatch(/protocolViolation[\s\S]*presentation_missing/);
-    expect(batchReplay).toMatch(/findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/);
+    expect(batchReplay).toMatch(
+      /findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/,
+    );
     expect(batchReplay).toMatch(/if\s*\(!canonicalTarget[\s\S]*return false/);
-    expect(batchReplay).not.toMatch(/find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/);
+    expect(batchReplay).not.toMatch(
+      /find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/,
+    );
   });
 
   it("keeps Session detail and reconnect presentation ownership single-sourced", () => {
@@ -124,18 +167,27 @@ describe("workflow runtime architecture guard", () => {
     const reconnectComposable = source("src/modules/chat/composables/useReconnectReplay.js");
     const detailProjection = source("src/modules/session/model/list/detailMessages.js");
     const detailMerge = source("src/modules/chat/model/sessionDetailMerge.js");
-    const forbiddenDetailBranch = /preserveCurrentMessages|mergePreservedDetailMessages|merge-preserve-inflight/;
+    const forbiddenDetailBranch =
+      /preserveCurrentMessages|mergePreservedDetailMessages|merge-preserve-inflight/;
 
-    expect(detailFiles.filter((relativePath) => forbiddenDetailBranch.test(source(relativePath)))).toEqual([]);
+    expect(
+      detailFiles.filter((relativePath) => forbiddenDetailBranch.test(source(relativePath))),
+    ).toEqual([]);
     expect(detailProjection).not.toMatch(/isSummaryDetail|foldMessagesForView/);
     expect(detailMerge).not.toMatch(/rawMessages[\s\S]*\?[^:]*:[^;]*messages/);
-    expect(reconnectFiles.filter((relativePath) => /upsertCanonicalAssistantMessage/.test(source(relativePath)))).toEqual([]);
+    expect(
+      reconnectFiles.filter((relativePath) =>
+        /upsertCanonicalAssistantMessage/.test(source(relativePath)),
+      ),
+    ).toEqual([]);
     expect(reconnectComposable).not.toMatch(/upsertCanonicalAssistantMessage/);
   });
 
   it("keeps live message events read-only after send preparation", () => {
     const projectionRouter = source("src/modules/chat/runtime/engine/messageProjectionRouter.js");
-    expect(projectionRouter).toMatch(/findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/);
+    expect(projectionRouter).toMatch(
+      /findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/,
+    );
     expect(projectionRouter).not.toMatch(/upsertCanonicalAssistantMessage/);
   });
 
@@ -152,13 +204,15 @@ describe("workflow runtime architecture guard", () => {
     const session = source("src/modules/chat/composables/useChatSession.js");
     const runtimeProjector = source("src/modules/chat/runtime/session/runtimeEventProjector.js");
     const store = source("src/modules/chat/stores/useChatStore.js");
-    const registryImports = engine.match(
-      /import\s*\{([^}]*)\}\s*from\s*["'][^"']*turnRuntimeRegistry\.js["']/,
-    )?.[1] || "";
+    const registryImports =
+      engine.match(/import\s*\{([^}]*)\}\s*from\s*["'][^"']*turnRuntimeRegistry\.js["']/)?.[1] ||
+      "";
 
     expect(registryImports).not.toMatch(/\bapplyTurnTerminalResolution\b/);
     expect(engine).not.toMatch(/cloneTerminalDraft|projectAppliedTurnRuntime/);
-    expect(session).toMatch(/commitTurnTerminalResolution:\s*chatStore\.applyTurnTerminalResolution/);
+    expect(session).toMatch(
+      /commitTurnTerminalResolution:\s*chatStore\.applyTurnTerminalResolution/,
+    );
     expect(runtimeProjector).not.toMatch(/applyRunStateMessageRuntimePatch/);
     expect(store).not.toMatch(/onTurnCommitted[\s\S]*applyRunStateMessageRuntimePatch/);
   });
@@ -169,8 +223,12 @@ describe("workflow runtime architecture guard", () => {
     const workflowPlugin = source("../../plugin/noobot-plugin-workflow/frontend/index.js");
     const manifest = JSON.parse(source("../../plugin/noobot-plugin-workflow/manifest.json"));
 
-    expect(sendRouter).not.toMatch(/workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/);
-    expect(reconnectRouter).not.toMatch(/workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/);
+    expect(sendRouter).not.toMatch(
+      /workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/,
+    );
+    expect(reconnectRouter).not.toMatch(
+      /workflow_(?:planning_message_prepared|node_state_committed)|workflow_message_event/,
+    );
     expect(workflowPlugin).toMatch(/RUNTIME_STREAM_ROUTE|workflow-runtime-projector/);
     expect(manifest.contributes.frontend.extensions).toContainEqual({
       id: "workflow-runtime-projector",

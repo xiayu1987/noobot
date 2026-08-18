@@ -246,7 +246,6 @@ export function useWorkflowNodeSessionViewer({
   function handleOpenThinkingDetails(payload = {}) {
     emit("open-thinking-details", {
       ...(payload && typeof payload === "object" ? payload : {}),
-      forceFetch: true,
       fetchThinkingDetail: fetchSelectedNodeThinkingDetail,
     });
   }

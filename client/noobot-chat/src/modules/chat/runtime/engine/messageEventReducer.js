@@ -15,6 +15,8 @@ import {
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   initializeMessageEventState,
+  appendConsumedMessageEvent,
+  hasConsumedMessageEvent,
   resolveMessageEventLaneState,
   syncMessageEventAggregateState,
 } from "../../model/messageEventState.js";
@@ -71,11 +73,11 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   if (conflicts(targetMessage, event)) return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
   const aggregateState = initializeMessageEventState(targetMessage).messageEventState;
-  if (aggregateState.consumedEventIds.includes(event.identity.eventId)) {
+  if (hasConsumedMessageEvent(aggregateState, event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
   const state = stateFor(targetMessage, event);
-  if (state.consumedEventIds.includes(event.identity.eventId)) {
+  if (hasConsumedMessageEvent(state, event.identity.eventId)) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
   const sequence = Number(event.ordering.sequence);
@@ -192,7 +194,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
   state.lastSequence = sequence;
-  state.consumedEventIds = [...state.consumedEventIds, event.identity.eventId].slice(-1000);
-  syncMessageEventAggregateState(targetMessage);
+  appendConsumedMessageEvent(state, event.identity.eventId);
+  syncMessageEventAggregateState(targetMessage, event.identity.eventId);
   return { result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
 }

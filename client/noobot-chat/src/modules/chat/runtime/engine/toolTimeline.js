@@ -5,7 +5,7 @@
  */
 import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import {
-  reduceCanonicalToolTimeline,
+  applyCanonicalToolTimelineEvent,
   resolveCanonicalToolTimelineStatus,
 } from "@noobot/event-protocol/tool-timeline";
 import {
@@ -19,6 +19,7 @@ import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { isToolResultFailure } from "../../model/toolLogFormatting.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
+import { createWeakArrayIndex, upsertOrderedFact } from "@noobot/timeline-runtime";
 
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
@@ -59,6 +60,14 @@ function timelineKey(value = {}) {
   return eventId ? `event:${eventId}` : "";
 }
 
+const toolTimelineIndex = createWeakArrayIndex({
+  keyOf: (entry) => text(entry?.key) || timelineKey(entry),
+});
+const toolLogProjectionIndex = createWeakArrayIndex({
+  keyOf: (log) => `${text(log?.toolCallId)}:${text(log?.event)}`,
+});
+const toolLogProjectionStates = new WeakMap();
+
 function isAuthoritativeToolFacet(value = {}) {
   if (text(value?.authority) === TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE) return true;
   const eventType = text(value?.log?.eventType || value?.eventType).toLowerCase();
@@ -94,7 +103,7 @@ function stringifyToolDetail(value) {
   }
 }
 
-function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
+function projectToolTimelineLog({ entry = {}, facet = {}, kind = "", includeDetail = true } = {}) {
   if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
@@ -132,7 +141,8 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
     ...(Array.isArray(facet.attachments) && facet.attachments.length
       ? { attachments: facet.attachments }
       : {}),
-    detailText: stringifyToolDetail(canonicalDetail),
+    detailValue: canonicalDetail,
+    ...(includeDetail ? { detailText: stringifyToolDetail(canonicalDetail) } : {}),
     sequence: sequenceOf(facet),
     sequenceScopeId: text(facet.sequenceScopeId),
     authority: facetAuthority(facet),
@@ -141,24 +151,98 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "" } = {}) {
   };
 }
 
-export function reduceToolTimeline(timeline = [], envelope = {}) {
-  return reduceCanonicalToolTimeline(timeline, envelope).sort((left, right) =>
-    compareTimelineFacts(left.call || left.resultEvent, right.call || right.resultEvent),
-  );
-}
-
-export function selectToolTimelineLogs(message = {}, { completedOnly = false } = {}) {
-  const timeline = selectToolTimeline(message);
+function buildToolLogProjectionState(timeline = []) {
   const logs = [];
-  for (const item of timeline) {
-    if (!completedOnly && item.call) {
-      logs.push(projectToolTimelineLog({ entry: item, facet: item.call, kind: "call" }));
+  for (const entry of timeline) {
+    if (entry?.call) {
+      logs.push(
+        projectToolTimelineLog({ entry, facet: entry.call, kind: "call", includeDetail: false }),
+      );
     }
-    if (item.resultEvent) {
-      logs.push(projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }));
+    if (entry?.resultEvent) {
+      logs.push(
+        projectToolTimelineLog({
+          entry,
+          facet: entry.resultEvent,
+          kind: "result",
+          includeDetail: false,
+        }),
+      );
     }
   }
-  return logs.sort(compareTimelineFacts);
+  logs.sort(compareTimelineFacts);
+  toolLogProjectionIndex.indexFor(logs);
+  const state = { logs };
+  toolLogProjectionStates.set(timeline, state);
+  return state;
+}
+
+function toolLogProjectionState(timeline = []) {
+  return toolLogProjectionStates.get(timeline) || buildToolLogProjectionState(timeline);
+}
+
+function updateToolLogProjection(timeline = [], envelope = {}) {
+  const state = toolLogProjectionStates.get(timeline);
+  if (!state) return;
+  const toolCallId = text(envelope?.payload?.toolCallId);
+  const position = toolTimelineIndex.indexFor(timeline).get(`call:${toolCallId}`);
+  const entry = Number.isInteger(position) ? timeline[position] : null;
+  if (!entry) return;
+  const isCall = envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START;
+  const facet = isCall ? entry.call : entry.resultEvent;
+  if (!facet) return;
+  const fact = projectToolTimelineLog({
+    entry,
+    facet,
+    kind: isCall ? "call" : "result",
+    includeDetail: false,
+  });
+  const key = `${toolCallId}:${fact.event}`;
+  upsertOrderedFact({
+    values: state.logs,
+    fact,
+    key,
+    index: toolLogProjectionIndex.indexFor(state.logs),
+    compare: compareTimelineFacts,
+    recordInsertion: toolLogProjectionIndex.recordInsertion,
+  });
+}
+
+function selectProjectedToolLogs(message = {}, { completedOnly = false } = {}) {
+  const state = toolLogProjectionState(selectToolTimeline(message));
+  state.messageSequence = Number(message?.messageEventState?.lastSequence || 0);
+  const logs = state.logs;
+  return completedOnly ? logs.filter((log) => log.event === "tool_result") : logs;
+}
+
+export function selectToolTimelineLogWindow(
+  message = {},
+  { completedOnly = false, limit = 10 } = {},
+) {
+  const maximum = Math.max(0, Number(limit) || 0);
+  if (!maximum) return [];
+  return selectProjectedToolLogs(message, { completedOnly }).slice(-maximum);
+}
+
+export function reduceToolTimeline(timeline = [], envelope = {}) {
+  const target = Array.isArray(timeline) ? timeline : [];
+  const reduced = applyCanonicalToolTimelineEvent(target, envelope, {
+    indexByKey: toolTimelineIndex.indexFor(target),
+  });
+  updateToolLogProjection(target, envelope);
+  return reduced;
+}
+
+export function selectToolTimelineLogs(
+  message = {},
+  { completedOnly = false, includeDetail = true } = {},
+) {
+  const logs = selectProjectedToolLogs(message, { completedOnly });
+  if (!includeDetail) return logs;
+  return logs.map((log) => ({
+    ...log,
+    detailText: stringifyToolDetail(log.detailValue),
+  }));
 }
 
 export function selectCompletedToolArtifacts(message = {}) {

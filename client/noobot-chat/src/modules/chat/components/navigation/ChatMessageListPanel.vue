@@ -9,10 +9,12 @@ import ChatMessageItem from "../message/ChatMessageItem.vue";
 import { useChatStore } from "../../stores/useChatStore.js";
 import { selectTurnPresentations } from "../../runtime/engine/turnPresentation.js";
 import {
+  isWorkflowDiagnosticsEnabled,
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
+  isStateMachineDebugEnabled,
   logStateMachineDebug,
   summarizeStateMachineMessage,
 } from "../../../debug/loggers/stateMachineLogger.js";
@@ -47,13 +49,15 @@ const presentedMessages = computed(() => {
   });
 });
 const presentationDiagnosticsSignature = computed(() =>
-  [
-    String(props.activeSession?.sessionId || ""),
-    Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
-    presentedMessages.value.length,
-    Number(chatStore.workflowNodeStateRegistry?.version || 0),
-    Number(chatStore.subSessionMessageRegistryVersion || 0),
-  ].join("|"),
+  !isWorkflowDiagnosticsEnabled()
+    ? "disabled"
+    : [
+        String(props.activeSession?.sessionId || ""),
+        Array.isArray(props.activeSession?.messages) ? props.activeSession.messages.length : 0,
+        presentedMessages.value.length,
+        Number(chatStore.workflowNodeStateRegistry?.version || 0),
+        Number(chatStore.subSessionMessageRegistryVersion || 0),
+      ].join("|"),
 );
 watch(
   presentationDiagnosticsSignature,
@@ -128,13 +132,15 @@ const renderedMessages = computed(() =>
     .filter(({ messageItem }) => props.shouldRenderMessageInChat(messageItem)),
 );
 const renderDiagnosticsSignature = computed(() =>
-  JSON.stringify(
-    renderedMessages.value.map((entry) => ({
-      ...summarizeStateMachineMessage(entry.messageItem),
-      sourceIndex: entry.sourceIndex,
-      renderKey: entry.renderKey,
-    })),
-  ),
+  !isStateMachineDebugEnabled()
+    ? "disabled"
+    : JSON.stringify(
+        renderedMessages.value.map((entry) => ({
+          ...summarizeStateMachineMessage(entry.messageItem),
+          sourceIndex: entry.sourceIndex,
+          renderKey: entry.renderKey,
+        })),
+      ),
 );
 watch(
   renderDiagnosticsSignature,
@@ -234,6 +240,11 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.chat-message-anchor {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
 }
 
 .skeleton-loading {
