@@ -9,6 +9,7 @@ import {
   applyTransferPayloadToMessage,
   consumeDeferredCapabilityLogs,
   deferCapabilityLogs,
+  saveCapabilityOutputAsTransferArtifacts,
 } from "../../src/capabilities/handlers/shared/attachment-log-utils.js";
 import { attachmentTransfer } from "@noobot/semantic-transfer-protocol";
 import { containsExecutableScriptText } from "../../src/capabilities/handlers/shared/script-content-risk.js";
@@ -57,4 +58,39 @@ test("deferred capability log outbox is consumed exactly once by the next hook c
   assert.equal(consumeDeferredCapabilityLogs(afterToolHookContext), 1);
   assert.deepEqual(afterToolHookContext.harnessCapabilityLogs, [acceptanceLog]);
   assert.equal(consumeDeferredCapabilityLogs({ agentContext }), 0);
+});
+
+test("each capability artifact operation owns a distinct semantic transfer identity", async () => {
+  const transferKeys = [];
+  const ctx = {
+    agentContext: {
+      bindings: {
+        runtime: {
+          sharedTools: {
+            semanticTransfer: {
+              async transferSemanticContent(payload) {
+                transferKeys.push(payload.transferKey);
+                return { transferEnvelopes: [] };
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+
+  await saveCapabilityOutputAsTransferArtifacts(ctx, {
+    purpose: "planning_refinement",
+    content: "first",
+    domain: "planning",
+  });
+  await saveCapabilityOutputAsTransferArtifacts(ctx, {
+    purpose: "planning_refinement",
+    content: "second",
+    domain: "planning",
+  });
+
+  assert.equal(transferKeys.length, 2);
+  assert.ok(transferKeys.every(Boolean));
+  assert.notEqual(transferKeys[0], transferKeys[1]);
 });

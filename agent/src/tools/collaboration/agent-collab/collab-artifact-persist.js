@@ -13,7 +13,7 @@ import { mapAttachmentRecordsToMetas } from "../../../artifacts/meta-ops.js";
 import { TASK_STATUS } from "../../../bot/async/constants.js";
 import { MIME_TYPE } from "../../../shared/constants/index.js";
 import { normalizeString } from "./collab-task-utils.js";
-import { normalizeParentSessionId } from "../../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 
 const ASYNC_SUBTASK_RESULT_GENERATION_SOURCE = "async_subtask_result";
 
@@ -25,7 +25,8 @@ async function recordCollabArtifactPersistFailure({
   containerId,
   error,
 } = {}) {
-  await writeRoutedRuntimeEvent({
+  await writeRoutedRuntimeEvent(
+    {
       source: "agent",
       channel: RUNTIME_EVENT_CHANNELS.DIRECT,
       category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
@@ -37,9 +38,11 @@ async function recordCollabArtifactPersistFailure({
         containerId: String(containerId || ""),
         error: error?.message || String(error || ""),
       },
-    }, {
-    workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-  }).catch(() => {});
+    },
+    {
+      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+    },
+  ).catch(() => {});
 }
 
 function toSafeArtifactName(value = "") {
@@ -58,15 +61,18 @@ function toFinalResultMarkdownText({ taskResultItem = {}, tAgentCollab, runtime 
     try {
       return JSON.stringify(rawResult, null, 2);
     } catch (error) {
-      void writeRoutedRuntimeEvent({
-        source: "agent",
-        channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-        category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-        level: "warn",
-        event: "agent.collab.taskResult.stringify.failed",
-        data: { hasRawResult: true },
-        error,
-      }, { workspaceRoot: runtime?.globalConfig?.workspaceRoot || "" });
+      void writeRoutedRuntimeEvent(
+        {
+          source: "agent",
+          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+          category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+          level: "warn",
+          event: "agent.collab.taskResult.stringify.failed",
+          data: { hasRawResult: true },
+          error,
+        },
+        { workspaceRoot: runtime?.globalConfig?.workspaceRoot || "" },
+      );
     }
   }
   const fallbackError = String(taskResultItem?.error || "").trim();
@@ -108,21 +114,15 @@ export function createCollabArtifactPersistor({
         .map((taskItem) => normalizeString(taskItem?.sessionId))
         .filter(Boolean),
     );
-    const pendingItems = (Array.isArray(taskResults) ? taskResults : []).filter(
-      (item = {}) => {
-        const status = normalizeString(item?.status);
-        const sessionId = normalizeString(item?.request?.sessionId);
-        if (!sessionId) return false;
-        if (
-          ![TASK_STATUS.COMPLETED, TASK_STATUS.FAILED, TASK_STATUS.USER_STOPPED].includes(
-            status,
-          )
-        ) {
-          return false;
-        }
-        return !attachedSessionIdSet.has(sessionId);
-      },
-    );
+    const pendingItems = (Array.isArray(taskResults) ? taskResults : []).filter((item = {}) => {
+      const status = normalizeString(item?.status);
+      const sessionId = normalizeString(item?.request?.sessionId);
+      if (!sessionId) return false;
+      if (![TASK_STATUS.COMPLETED, TASK_STATUS.FAILED, TASK_STATUS.USER_STOPPED].includes(status)) {
+        return false;
+      }
+      return !attachedSessionIdSet.has(sessionId);
+    });
     if (!pendingItems.length) return emptyPersistOutput;
 
     const generatedAttachments = pendingItems.map((item = {}, index) => {
@@ -131,12 +131,19 @@ export function createCollabArtifactPersistor({
       const sessionId = normalizeString(item?.request?.sessionId);
       const fileLabel =
         toSafeArtifactName(taskName) || toSafeArtifactName(sessionId) || `task_${index + 1}`;
-      const markdownText = toFinalResultMarkdownText({ taskResultItem: item, tAgentCollab, runtime });
+      const markdownText = toFinalResultMarkdownText({
+        taskResultItem: item,
+        tAgentCollab,
+        runtime,
+      });
       return {
         __sessionId: sessionId,
         name: `subtask-${fileLabel}-${status}.md`,
         mimeType: MIME_TYPE.TEXT_MARKDOWN,
-        contentBase64: Buffer.from(markdownText || tAgentCollab(runtime, "noResult"), "utf8").toString("base64"),
+        contentBase64: Buffer.from(
+          markdownText || tAgentCollab(runtime, "noResult"),
+          "utf8",
+        ).toString("base64"),
       };
     });
 

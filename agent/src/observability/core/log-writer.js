@@ -8,7 +8,7 @@ import { filePath as path } from "@noobot/path-resolver";
 import { fatalSystemError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { normalizeParentSessionId } from "../../context/parent-session-id-resolver.js";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 
 function nowIso() {
   return new Date().toISOString();
@@ -27,19 +27,12 @@ export function resolveLogFilePath({ basePath, fileName = "" } = {}) {
   return path.join(basePath, fileName);
 }
 
-function resolveWorkspaceRootLogFilePath({
-  workspaceRoot = "",
-  fileName = "",
-} = {}) {
+function resolveWorkspaceRootLogFilePath({ workspaceRoot = "", fileName = "" } = {}) {
   const root = path.resolve(String(workspaceRoot || "").trim());
   return path.join(root, fileName);
 }
 
-export function resolveTargetLogFiles({
-  basePath,
-  workspaceRoot = "",
-  fileName = "",
-} = {}) {
+export function resolveTargetLogFiles({ basePath, workspaceRoot = "", fileName = "" } = {}) {
   const logFile = resolveLogFilePath({ basePath, fileName });
   const targetFiles = new Set([logFile]);
   if (String(workspaceRoot || "").trim()) {
@@ -53,10 +46,7 @@ export function resolveTargetLogFiles({
   return targetFiles;
 }
 
-export async function appendRecordToFiles({
-  targetFiles = new Set(),
-  record = {},
-} = {}) {
+export async function appendRecordToFiles({ targetFiles = new Set(), record = {} } = {}) {
   for (const targetFile of targetFiles) {
     await mkdir(path.dirname(targetFile), { recursive: true });
     await appendFile(targetFile, `${JSON.stringify(record)}\n`, "utf8");

@@ -8,7 +8,7 @@
       "model": "gpt-5.6-sol",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "OpenAI flagship model for complex reasoning, coding, and agent workflows",
       "capabilities": {
         "web_search": true
@@ -33,7 +33,7 @@
       "model": "gpt-5.6-terra",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "OpenAI balanced model for coding and general-purpose agent workloads",
       "multimodal_parsing": {
         "enabled": true,
@@ -54,7 +54,7 @@
       "model": "gpt-5.6-luna",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "OpenAI fast and cost-efficient model for high-volume agent workloads",
       "multimodal_parsing": {
         "enabled": true,
@@ -75,7 +75,7 @@
       "model": "gpt-5.4",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "OpenAI general-purpose model for reasoning, coding, and agent workflows",
       "multimodal_parsing": {
         "enabled": true,
@@ -96,7 +96,7 @@
       "model": "claude-fable-5",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "Anthropic's most capable broadly released model, accessed through an OpenAI-compatible gateway",
       "multimodal_parsing": {
         "enabled": true,
@@ -117,7 +117,7 @@
       "model": "claude-opus-5",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "Anthropic model for complex agentic coding and enterprise work, accessed through an OpenAI-compatible gateway",
       "multimodal_parsing": {
         "enabled": true,
@@ -138,7 +138,7 @@
       "model": "claude-sonnet-5",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "Anthropic speed and intelligence balanced model, accessed through an OpenAI-compatible gateway",
       "multimodal_parsing": {
         "enabled": true,
@@ -159,7 +159,7 @@
       "model": "claude-haiku-4-5",
       "format": "openai_compatible",
       "reasoning_effort": "medium",
-      "tool_reasoning_effort": "low",
+      "tool_reasoning_effort": "medium",
       "description": "Anthropic fast near-frontier model, accessed through an OpenAI-compatible gateway",
       "multimodal_parsing": {
         "enabled": true,

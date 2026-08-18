@@ -192,9 +192,9 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
         {
           attachmentId: "rich-att",
           sessionId: "s1",
+          attachmentSource: "user",
           name: "doc.docx",
           path: "/workspace/doc.docx",
-          parsedResult: { attachmentId: "parsed-md" },
         },
       ],
     }),
@@ -208,9 +208,10 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
         userMessageAttachments: [
           {
             attachmentId: "rich-att",
+            sessionId: "s1",
+            attachmentSource: "user",
             name: "doc.docx",
             path: "/workspace/doc.docx",
-            parsedResult: { attachmentId: "parsed-md" },
           },
         ],
       };
@@ -243,9 +244,9 @@ test("SessionExecutionRunner asserts reused user with prepared attachments after
       {
         attachmentId: "rich-att",
         sessionId: "s1",
+        attachmentSource: "user",
         name: "doc.docx",
         path: "/workspace/doc.docx",
-        parsedResult: { attachmentId: "parsed-md" },
       },
     ],
   });
@@ -305,4 +306,3 @@ test("SessionExecutionRunner rejects reused Turn execution without a precommitte
     (error) => error?.errorCode === "MISSING_REUSED_TURN_DIALOG_PROCESS_ID",
   );
 });
-

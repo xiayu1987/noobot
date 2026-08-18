@@ -3,16 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
-import { getAgentCommandIdentity } from "@noobot/agent-transport-protocol";
-
-const TERMINAL_CHANNEL_STATES = Object.freeze([
-  "user_stopped",
-  "error",
-  "no_conversation",
-  "expired",
-  "cancelled",
-]);
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  getAgentCommandIdentity,
+  validateAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
 
 export function normalizeTrimmedString(value = "") {
   return String(value || "").trim();
@@ -28,17 +24,11 @@ export function normalizeErrorMessage(value, fallback = "") {
   return fallback;
 }
 
-export function isTerminalChannelStateEvent(event = "", data = {}) {
-  return (
-    normalizeTrimmedString(event) === StreamEventEnum.CHANNEL_STATE &&
-    TERMINAL_CHANNEL_STATES.includes(normalizeTrimmedString(data?.state))
-  );
-}
-
-export function isEventForStreamScope(data = {}, payload = {}) {
+export function isEventForStreamScope(data = {}, payload = {}, channelSessionId = "") {
   const identity = getAgentCommandIdentity(payload);
   const payloadSessionId = normalizeTrimmedString(identity.sessionId);
-  const eventSessionId = normalizeTrimmedString(data?.sessionId);
+  const eventSessionId =
+    normalizeTrimmedString(data?.sessionId) || normalizeTrimmedString(channelSessionId);
   if (payloadSessionId && eventSessionId && payloadSessionId !== eventSessionId) return false;
   const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const eventTurnScopeId = normalizeTrimmedString(data?.turnScopeId);
@@ -52,8 +42,8 @@ export function isEventForStreamScope(data = {}, payload = {}) {
   );
 }
 
-export function canSettleStreamForEvent(data = {}, payload = {}) {
-  if (!isEventForStreamScope(data, payload)) return false;
+export function canSettleStreamForEvent(data = {}, payload = {}, channelSessionId = "") {
+  if (!isEventForStreamScope(data, payload, channelSessionId)) return false;
   const identity = getAgentCommandIdentity(payload);
   const payloadTurnScopeId = normalizeTrimmedString(identity.turnScopeId);
   const payloadDialogProcessId = normalizeTrimmedString(identity.dialogProcessId);
@@ -64,11 +54,22 @@ export function canSettleStreamForEvent(data = {}, payload = {}) {
   );
 }
 
-export function createStreamEventError(data = {}, translateText = (key = "") => key) {
-  const fallback = normalizeTrimmedString(data?.message || data?.errorCode) ||
+export function isCommandReceiptForPayload(event = "", data = {}, payload = {}) {
+  if (normalizeTrimmedString(event) !== AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) return false;
+  const validation = validateAgentCommandReceipt(data);
+  if (!validation.valid) throw new TypeError(validation.errors.join(","));
+  return normalizeTrimmedString(data.commandId) === normalizeTrimmedString(payload?.commandId);
+}
+
+export function createCommandReceiptError(data = {}, translateText = (key = "") => key) {
+  const fallback = normalizeTrimmedString(data?.error?.code) ||
     translateText("infra.websocketStreamError");
-  const error = new Error(normalizeErrorMessage(data?.error, fallback));
-  error.event = StreamEventEnum.ERROR;
+  const error = new Error(normalizeErrorMessage(data?.error?.message, fallback));
+  error.event = AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
   error.data = data || {};
   return error;
+}
+
+export function isFailedCommandReceipt(data = {}) {
+  return normalizeTrimmedString(data?.outcome) === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED;
 }

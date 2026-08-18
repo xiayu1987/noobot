@@ -20,7 +20,8 @@ function resolveRepoRoot() {
   const cwd = process.cwd();
   if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "scripts"))) return cwd;
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts"))) return parent;
+  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "scripts")))
+    return parent;
   return cwd;
 }
 
@@ -28,6 +29,11 @@ const ROOT = resolveRepoRoot();
 const TARGET_DIRS = [
   "agent/src",
   "client/noobot-chat/src",
+  "semantic-transfer-protocol/src",
+  "service",
+  "shared",
+  "plugin-protocol/src",
+  "plugin-runtime/src",
   "plugin/noobot-plugin-harness/src",
   "plugin/noobot-plugin-workflow/src",
   "plugin/noobot-plugin-workflow/frontend",
@@ -56,34 +62,8 @@ const LEGACY_ATTACHMENT_FIELD_PATTERNS = [
   { field: "sandbox_path", regex: /\bsandbox_path\b/ },
   { field: "sandbox_view_path", regex: /\bsandbox_view_path\b/ },
   { field: "sandboxViewPath", regex: /\bsandboxViewPath\b/ },
+  { field: "parsed_from_attachment_ids", regex: /\bparsed_from_attachment_ids\b/ },
 ];
-
-const LEGACY_ATTACHMENT_FIELD_ALLOWED_FILES = new Map(Object.entries({
-  "agent/src/artifacts/meta-ops.js":
-    "central attachment metadata normalizer accepts legacy aliases and emits canonical fields",
-  "agent/src/context/providers/attachment-resolver.js":
-    "context user attachment resolver accepts legacy aliases before delegating to attachment mapper",
-  "agent/src/session/transfer-attachment-refs.js":
-    "session summary/detail compact bridge accepts legacy refs from historical messages",
-  "agent/src/session/services/session-message-service.js":
-    "session message compatibility strips/reads legacy snake_case fields from stored messages",
-  "agent/src/session/session-summary-builders.js":
-    "session summary compatibility reads historical parsed attachment refs",
-  "agent/src/transfer-adapter/core/compact.js":
-    "semantic-transfer model compact view accepts legacy attachment refs from envelope files",
-  "agent/src/transfer-adapter/storage/attachment-adapter.js":
-    "semantic-transfer attachment persistence bridge consumes legacy sandbox flag aliases",
-  "client/noobot-chat/src/infrastructure/api/chat/chatApi.js":
-    "frontend upload API accepts backend/client legacy attachment field aliases",
-  "client/noobot-chat/src/infrastructure/api/attachments/attachmentAccess.js":
-    "frontend attachment access normalizer accepts legacy aliases and emits canonical access metadata",
-  "client/noobot-chat/src/modules/chat/model/transferEnvelopes.js":
-    "frontend semantic-transfer adapter consumes legacy envelope attachment meta aliases",
-  "client/noobot-chat/src/modules/chat/composables/message/useMessageFiles.js":
-    "frontend message file list keeps legacy attachment fallback for historical sessions",
-  "plugin/noobot-plugin-workflow/src/core/hooks/attachments.js":
-    "workflow central attachment/transfer bridge consumes legacy attachment aliases",
-}));
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join("/");
@@ -106,16 +86,22 @@ function walk(dir, out = []) {
   return out;
 }
 
-function isAllowed(relPath = "") {
-  return LEGACY_ATTACHMENT_FIELD_ALLOWED_FILES.has(relPath);
-}
-
 const violations = [];
+const FORBIDDEN_PROTOCOL_FILES = ["attachment-protocol/src/attachment-model.js"];
+for (const relativePath of FORBIDDEN_PROTOCOL_FILES) {
+  if (existsSync(path.join(ROOT, relativePath))) {
+    violations.push({
+      field: "duplicate_attachment_model_entry",
+      file: relativePath,
+      line: 1,
+      text: "attachment model must be owned by attachment-protocol/src/model.js",
+    });
+  }
+}
 for (const relDir of TARGET_DIRS) {
   const dir = path.join(ROOT, relDir);
   for (const file of walk(dir)) {
     const rel = toPosix(path.relative(ROOT, file));
-    if (isAllowed(rel)) continue;
     const lines = readFileSync(file, "utf8").split(/\r?\n/);
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
@@ -134,8 +120,10 @@ for (const relDir of TARGET_DIRS) {
 
 if (violations.length) {
   console.error("[check-attachment-protocol-fields] failed");
-  console.error("Attachment metadata aliases must stay inside explicit compatibility/normalizer boundaries.");
-  console.error("Emit canonical attachment fields outside those boundaries.");
+  console.error(
+    "Attachment metadata aliases are forbidden outside the versioned attachment protocol.",
+  );
+  console.error("All producers and consumers must use canonical attachment fields.");
   for (const violation of violations.slice(0, 80)) {
     console.error(`- ${violation.file}:${violation.line} ${violation.field}: ${violation.text}`);
   }

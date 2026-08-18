@@ -110,13 +110,15 @@ test("ScopedArtifactPersistenceHelpers persists existing sub-session snapshot fr
         return {
           session: {
             sessionId: "s1",
-            messages: [{
-              messageUid: "sm_scoped_snapshot",
-              role: "assistant",
-              content: "ok",
-              dialogProcessId: "dialog-scoped-snapshot",
-              turnScopeId: "turn-scoped-snapshot",
-            }],
+            messages: [
+              {
+                messageUid: "sm_scoped_snapshot",
+                role: "assistant",
+                content: "ok",
+                dialogProcessId: "dialog-scoped-snapshot",
+                turnScopeId: "turn-scoped-snapshot",
+              },
+            ],
           },
           turnTasks: [{ taskId: "t1" }],
         };
@@ -152,9 +154,10 @@ test("ScopedArtifactPersistenceHelpers generated artifact persister maps records
         return [
           {
             attachmentId: "att1",
-            fileName: "demo.bin",
-            mimeType: MIME_TYPE.TEXT_PLAIN,
+            sessionId: "s1",
             attachmentSource: "model",
+            name: "demo.bin",
+            mimeType: MIME_TYPE.TEXT_PLAIN,
             generationSource: "node",
           },
         ];

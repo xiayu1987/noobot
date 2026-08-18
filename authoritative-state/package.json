@@ -7,12 +7,12 @@
   "exports": {
     ".": "./src/index.js",
     "./application": "./src/application/index.js",
-    "./contracts": "./src/contracts/index.mjs",
+    "./contracts": "./src/contracts/index.js",
     "./domain": "./src/domain/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/shared": "file:../shared",

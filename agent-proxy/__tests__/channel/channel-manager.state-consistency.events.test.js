@@ -9,6 +9,46 @@ import assert from "node:assert/strict";
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey, ensureConnectionId, resolveMessageEventTrace } from "../../src/shared/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_TYPE,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
+
+function messageEnvelope({
+  sequence = 1,
+  sessionId = "session-1",
+  turnScopeId = "turn-1",
+  messageId = "message-1",
+  eventType = MESSAGE_EVENT_TYPE.LLM_DELTA,
+  text = "content",
+} = {}) {
+  return createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: `event-${sequence}`,
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId,
+      turnScopeId,
+      messageId,
+    },
+    causality: { commandId: "command-1" },
+    ordering: {
+      domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      scopeId: messageId,
+      sequence,
+      aggregateVersion: sequence,
+    },
+    producer: { type: "agent", id: "agent-1" },
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    payload: {
+      eventType,
+      presentationMessageId: messageId,
+      text,
+    },
+  });
+}
 
 test("live business event broadcast should include channel sessionId without overriding upstream sessionId", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -25,25 +65,28 @@ test("live business event broadcast should include channel sessionId without ove
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
-  const thinkingEnvelope = manager.pushChannelEvent(channel, "thinking", {
-    dialogProcessId: "dp-1",
-    seq: 1,
-  });
+  const thinkingEnvelope = manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    messageEnvelope({ sequence: 1 }),
+  );
   manager.broadcastChannelEvent(channel, thinkingEnvelope);
 
-  const deltaEnvelope = manager.pushChannelEvent(channel, "delta", {
-    sessionId: "upstream-session",
-    dialogProcessId: "dp-1",
-    seq: 2,
-  });
+  const deltaEnvelope = manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    messageEnvelope({ sequence: 2, sessionId: "upstream-session" }),
+  );
   manager.broadcastChannelEvent(channel, deltaEnvelope);
 
   const businessEvents = client.sentEvents.filter((item) => item?.event !== "channel_state");
-  assert.equal(businessEvents[0]?.data?.sessionId, "session-1");
-  assert.equal(businessEvents[1]?.data?.sessionId, "upstream-session");
+  assert.equal(businessEvents[0]?.channelSessionId, "session-1");
+  assert.equal(businessEvents[0]?.data?.identity?.sessionId, "session-1");
+  assert.equal(businessEvents[1]?.data?.identity?.sessionId, "upstream-session");
+  assert.equal(businessEvents[1]?.channelSessionId, "session-1");
   assert.equal(businessEvents[0]?.data?.requestId, undefined);
   assert.equal(businessEvents[1]?.data?.requestId, undefined);
-  assert.equal(thinkingEnvelope?.data?.sessionId, undefined);
+  assert.equal(thinkingEnvelope?.data?.identity?.sessionId, "session-1");
 });
 
 test("event replay should include channel sessionId without mutating cached envelope", () => {
@@ -52,16 +95,18 @@ test("event replay should include channel sessionId without mutating cached enve
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
   channel.status = "running";
 
-  const envelope = manager.pushChannelEvent(channel, "thinking", {
-    dialogProcessId: "dp-1",
-    seq: 1,
-  });
+  const envelope = manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    messageEnvelope({ sequence: 1 }),
+  );
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
 
   manager.replayChannelEvents(channel, client, 0);
 
-  assert.equal(client.sentEvents[0]?.data?.sessionId, "session-1");
-  assert.equal(envelope?.data?.sessionId, undefined);
+  assert.equal(client.sentEvents[0]?.channelSessionId, "session-1");
+  assert.equal(client.sentEvents[0]?.data?.identity?.sessionId, "session-1");
+  assert.equal(envelope?.data?.identity?.sessionId, "session-1");
 });
 
 test("broadcast event order should be identical across same-channel clients", () => {
@@ -77,23 +122,14 @@ test("broadcast event order should be identical across same-channel clients", ()
   manager.attachSubscriber(channel, clientA);
   manager.attachSubscriber(channel, clientB);
 
-  const eventSpecs = [
-    { event: "thinking", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 1 } },
-    { event: "delta", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 2, text: "A" } },
-    {
-      event: "interaction_request",
-      data: {
-        sessionId: "session-1",
-        dialogProcessId: "dp-1",
-        turnScopeId: "turn-1",
-        seq: 3,
-        requestId: "req-1",
-        content: "confirm",
-      },
-    },
-    { event: "delta", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 4, text: "B" } },
-    { event: "done", data: { sessionId: "session-1", dialogProcessId: "dp-1", seq: 5 } },
-  ];
+  const eventSpecs = Array.from({ length: 5 }, (_, index) => ({
+    event: MESSAGE_EVENT_WIRE_EVENT,
+    data: messageEnvelope({
+      sequence: index + 1,
+      eventType: index % 2 ? MESSAGE_EVENT_TYPE.THINKING : MESSAGE_EVENT_TYPE.LLM_DELTA,
+      text: `content-${index + 1}`,
+    }),
+  }));
 
   for (const spec of eventSpecs) {
     const envelope = manager.pushChannelEvent(channel, spec.event, spec.data);
@@ -102,15 +138,12 @@ test("broadcast event order should be identical across same-channel clients", ()
 
   const businessEventsA = clientA.sentEvents.filter((item) => item?.event !== "channel_state");
   const businessEventsB = clientB.sentEvents.filter((item) => item?.event !== "channel_state");
-  // All five events are valid transport events.  interaction_request is no
-  // longer silently dropped: it is validated and broadcast after its pending
-  // interaction record is registered.
   assert.equal(businessEventsA.length, eventSpecs.length);
   assert.equal(businessEventsB.length, eventSpecs.length);
   assert.deepEqual(clientA.sentEvents, clientB.sentEvents);
   assert.deepEqual(
-    businessEventsA.map((item) => `${item.event}:${Number(item?.data?.seq || 0)}`),
-    ["thinking:1", "delta:2", "interaction_request:3", "delta:4", "done:5"],
+    businessEventsA.map((item) => `${item.event}:${Number(item?.data?.ordering?.sequence || 0)}`),
+    ["message_event:1", "message_event:2", "message_event:3", "message_event:4", "message_event:5"],
   );
   assert.equal(clientA.__agentProxyLastSequenceByChannel[channelKey], 5);
   assert.equal(clientB.__agentProxyLastSequenceByChannel[channelKey], 5);
@@ -124,46 +157,22 @@ test("connection ids are stable per socket and isolated between sockets", () => 
 });
 
 test("message event tracing only accepts the shared authoritative envelope", () => {
-  const authoritative = {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    eventId: "event-1",
-    eventType: "tool_call_start",
-    sessionId: "session-1",
-    messageId: "message-1",
-    presentationMessageId: "message-1",
-    sequence: 7,
-    timestamp: "2026-07-22T00:00:00.000Z",
-    tool: "read_file",
-    toolCallId: "tool-1",
-    args: {},
-  };
-  assert.deepEqual(resolveMessageEventTrace("message_event", { event: authoritative }, 9), {
+  const authoritative = messageEnvelope({ sequence: 7 });
+  assert.deepEqual(resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, authoritative, 9), {
     protocolKind: "message_event",
     transportEvent: "message_event",
     transportSequence: 9,
-    eventId: "event-1",
-    eventType: "tool_call_start",
+    eventId: "event-7",
+    eventType: MESSAGE_EVENT_WIRE_EVENT,
     messageId: "message-1",
     authoritativeSequence: 7,
     sessionId: "session-1",
-    turnScopeId: "",
+    turnScopeId: "turn-1",
     dialogProcessId: "",
   });
-  assert.deepEqual(resolveMessageEventTrace("subagent_message_event", { event: authoritative }, 11), {
-    protocolKind: "message_event",
-    transportEvent: "subagent_message_event",
-    transportSequence: 11,
-    eventId: "event-1",
-    eventType: "tool_call_start",
-    messageId: "message-1",
-    authoritativeSequence: 7,
-    sessionId: "session-1",
-    turnScopeId: "",
-    dialogProcessId: "",
-  });
-  assert.equal(resolveMessageEventTrace("thinking", { event: authoritative }, 9).protocolKind, "legacy");
-  assert.equal(resolveMessageEventTrace("message_event", { event: { eventId: "loose" } }, 9).protocolKind, "legacy");
+  assert.equal(resolveMessageEventTrace("subagent_message_event", authoritative, 11).protocolKind, "non_message_event");
+  assert.equal(resolveMessageEventTrace("thinking", authoritative, 9).protocolKind, "non_message_event");
+  assert.equal(resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, { eventId: "loose" }, 9).protocolKind, "non_message_event");
 });
 
 test("broadcast only records unsuccessful delivery results", () => {
@@ -180,15 +189,17 @@ test("broadcast only records unsuccessful delivery results", () => {
   channel.subscribers.add(openSocket);
   channel.subscribers.add(closedSocket);
 
-  const envelope = manager.pushChannelEvent(channel, "thinking", {
-    sessionId: "session-1", dialogProcessId: "dp-1", seq: 1,
-  });
+  const envelope = manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    messageEnvelope({ sequence: 1 }),
+  );
   manager.broadcastChannelEvent(channel, envelope);
 
   const deliveries = records.filter(
     (item) =>
       item.event === "agentProxy.channel.broadcast.delivery" &&
-      item.data.transportEvent === "thinking",
+      item.data.transportEvent === MESSAGE_EVENT_WIRE_EVENT,
   );
   assert.deepEqual(deliveries.map((item) => item.data.result), ["skipped"]);
   assert.equal(deliveries[0]?.data?.dropReason, "socket_not_open");

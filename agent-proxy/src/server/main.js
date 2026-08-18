@@ -14,9 +14,9 @@ import { WsRouter } from "../websocket/ws-router.js";
 import {
   AGENT_PROXY_CLOSE_REASON,
   AGENT_PROXY_ERROR,
-  EVENT_TYPE,
 } from "../shared/constants.js";
 import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol";
+import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
   proxyHttpRequest,
   writeProxyError,
@@ -444,7 +444,7 @@ websocketServer.on("connection", (socket, request) => {
 
   wsRouter.handle(socket, connectionApiKey, connectionLocale);
   channelManager.sendSocketEvent(socket, {
-    event: EVENT_TYPE.TRANSPORT_READY,
+    event: AGENT_TRANSPORT_EVENT.READY,
     data: { serverInstanceId, protocolVersion: TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION },
   });
 

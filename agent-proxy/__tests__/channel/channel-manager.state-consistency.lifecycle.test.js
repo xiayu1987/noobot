@@ -8,9 +8,99 @@ import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
-import { createMockSocket, getEvent, listEvents, FakeUpstreamWebSocket } from "./channel-manager.state-consistency.test-helpers.js";
+import {
+  canonicalInteractionRequest,
+  canonicalMessageEvent,
+  createMockSocket,
+  getEvent,
+  listEvents,
+  FakeUpstreamWebSocket,
+} from "./channel-manager.state-consistency.test-helpers.js";
+import { authoritativeSnapshot } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
-import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import {
+  AGENT_TRANSPORT_EVENT,
+  createAgentTransportError,
+  createTurnStopCommand,
+} from "@noobot/agent-transport-protocol";
+import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_TYPE, MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
+import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
+
+test("channel transport preserves strict event payloads during broadcast and replay", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-strict-payload";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    identity: { sessionId },
+  });
+  const lifecycle = {
+    eventType: "attachment.parsed",
+    eventVersion: 1,
+    messageId: "attachment-event-1",
+    identity: { attachmentId: "attachment-1", sessionId, attachmentSource: "user" },
+    status: "parsed",
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    relation: {
+      relationType: "parsed_result",
+      sourceIdentity: { attachmentId: "attachment-1", sessionId, attachmentSource: "user" },
+      targetIdentity: { attachmentId: "parsed-1", sessionId, attachmentSource: "model" },
+      createdAt: "2026-08-17T00:00:00.000Z",
+    },
+  };
+  const live = createMockSocket();
+  manager.attachSubscriber(channel, live);
+  const attachmentEnvelope = createEventEnvelope({
+    family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    identity: {
+      eventId: lifecycle.messageId,
+      eventType: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+      sessionId,
+      messageId: lifecycle.messageId,
+    },
+    causality: {},
+    ordering: { domain: "attachment-lifecycle", scopeId: "attachment-1:session-strict-payload:user", sequence: 1 },
+    producer: { type: "test", id: "agent-proxy-test" },
+    occurredAt: lifecycle.occurredAt,
+    payload: lifecycle,
+  });
+  const envelope = manager.pushChannelEvent(channel, ATTACHMENT_LIFECYCLE_WIRE_EVENT, attachmentEnvelope);
+  manager.broadcastChannelEvent(channel, envelope);
+
+  assert.deepEqual(getEvent(live, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);
+
+  const replay = createMockSocket();
+  manager.replayChannelEvents(channel, replay, 0);
+  assert.deepEqual(getEvent(replay, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);
+});
+
+test("reconnect projects a pending interaction without mutating its strict payload", async () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const sessionId = "session-strict-reconnect-payload";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  const pendingInteraction = canonicalInteractionRequest({
+    requestId: "interaction-strict-1",
+    sessionId,
+    dialogProcessId: "dialog-strict-1",
+    turnScopeId: "turn-strict-1",
+    interactionType: "confirmation",
+    content: "Confirm operation",
+  });
+  channel.pendingInteractionRequests.set("interaction-strict-1", pendingInteraction);
+  const reconnect = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  await manager.handleReconnect(reconnect, { currentSessionId: sessionId });
+
+  const replay = getEvent(reconnect, "reconnect_data")?.data?.sessions?.[0]?.replayBatch;
+  assert.deepEqual(replay?.pendingInteractions, [pendingInteraction]);
+  assert.deepEqual(
+    channel.pendingInteractionRequests.get("interaction-strict-1"),
+    pendingInteraction,
+  );
+});
 
 test("invalid authoritative lifecycle has no journal or state projection side effects", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -64,25 +154,30 @@ test("upstream snapshot responses resolve and release the reconnect command", as
   upstream.emit("open");
   let resolution = null;
   channel.pendingSnapshotRequests.set("snapshot-command-1", {
-    resolve: (result) => { resolution = result; },
+    resolve: (result) => {
+      resolution = result;
+    },
   });
 
-  upstream.emit("message", JSON.stringify({
-    event: "turn_snapshot",
-    data: {
-      commandId: "snapshot-command-1",
-      sessionId: "session-snapshot-response",
-      sequence: 2,
-    },
-  }));
+  upstream.emit(
+    "message",
+    JSON.stringify({
+      event: "turn_snapshot",
+      data: authoritativeSnapshot({
+        commandId: "snapshot-command-1",
+        sessionId: "session-snapshot-response",
+        sequence: 2,
+      }),
+    }),
+  );
 
   assert.deepEqual(resolution, {
     ok: true,
-    snapshot: {
+    snapshot: authoritativeSnapshot({
       commandId: "snapshot-command-1",
       sessionId: "session-snapshot-response",
       sequence: 2,
-    },
+    }),
   });
   assert.equal(channel.pendingSnapshotRequests.size, 0);
 });
@@ -99,16 +194,23 @@ test("upstream snapshot errors resolve and release the reconnect command", () =>
   upstream.emit("open");
   let resolution = null;
   channel.pendingSnapshotRequests.set("snapshot-command-error", {
-    resolve: (result) => { resolution = result; },
+    resolve: (result) => {
+      resolution = result;
+    },
   });
 
-  upstream.emit("message", JSON.stringify({
-    event: "error",
-    data: {
-      commandId: "snapshot-command-error",
-      errorCode: "snapshot_not_found",
-    },
-  }));
+  upstream.emit(
+    "message",
+    JSON.stringify({
+      event: AGENT_TRANSPORT_EVENT.ERROR,
+      data: createAgentTransportError({
+        code: "snapshot_not_found",
+        message: "snapshot not found",
+        commandId: "snapshot-command-error",
+        identity: { sessionId: "session-snapshot-error" },
+      }),
+    }),
+  );
 
   assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
   assert.equal(channel.pendingSnapshotRequests.size, 0);
@@ -129,14 +231,17 @@ test("upstream execution query responses return only to the registered requester
   manager.attachSubscriber(channel, observer);
   channel.pendingExecutionRequests.set("execution-query-1", requester);
 
-  upstream.emit("message", JSON.stringify({
-    event: "execution_tree",
-    data: {
-      commandId: "execution-query-1",
-      rootExecutionId: "workflow-root",
-      tree: { executions: {} },
-    },
-  }));
+  upstream.emit(
+    "message",
+    JSON.stringify({
+      event: "execution_tree",
+      data: {
+        commandId: "execution-query-1",
+        rootExecutionId: "workflow-root",
+        tree: { executions: {} },
+      },
+    }),
+  );
 
   assert.equal(getEvent(requester, "execution_tree")?.data?.commandId, "execution-query-1");
   assert.equal(getEvent(observer, "execution_tree"), null);
@@ -169,14 +274,23 @@ test("stop action should broadcast stopping state before terminal", () => {
     seq: 2,
   });
   const stateEvents = listEvents(client, "channel_state");
-  assert.equal(stateEvents.some((item) => item?.data?.state === "stopping"), true);
-  assert.equal(stateEvents.some((item) => item?.data?.state === "user_stopped"), false);
+  assert.equal(
+    stateEvents.some((item) => item?.data?.state === "stopping"),
+    true,
+  );
+  assert.equal(
+    stateEvents.some((item) => item?.data?.state === "user_stopped"),
+    false,
+  );
 });
 
 test("startOrJoinChannel restarts running channel when upstream socket is not open", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-stale" });
-  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-stale" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-stale",
+  });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
@@ -213,7 +327,10 @@ test("startOrJoinChannel restarts running channel when upstream socket is not op
 test("startOrJoinChannel keeps running channel when upstream socket is open", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-live" });
-  const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-live" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-live",
+  });
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
@@ -256,16 +373,19 @@ test("forwarded stop does not synthesize stopping before Service confirms it", (
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
   manager.attachSubscriber(channel, client);
 
-  const forwarded = manager.forwardToUpstream(channel, createTurnStopCommand({
-    commandId: "stop:turn-stop",
-    identity: {
-      sessionId: "session-stop",
-      dialogProcessId: "dp-stop",
-      turnScopeId: "turn-stop",
-    },
-    concurrency: { expectedTurnRevision: 1 },
-    stop: {},
-  }));
+  const forwarded = manager.forwardToUpstream(
+    channel,
+    createTurnStopCommand({
+      commandId: "stop:turn-stop",
+      identity: {
+        sessionId: "session-stop",
+        dialogProcessId: "dp-stop",
+        turnScopeId: "turn-stop",
+      },
+      concurrency: { expectedTurnRevision: 1 },
+      stop: {},
+    }),
+  );
   assert.equal(forwarded, true);
 
   assert.equal(upstreamMessages.length, 1);
@@ -308,15 +428,21 @@ test("forwardToUpstream reports a closed upstream without throwing", () => {
   channel.ownerUserId = "user-1";
 
   assert.doesNotThrow(() => {
-    assert.equal(manager.forwardToUpstream(channel, createTurnStopCommand({
-      commandId: "stop:closed-upstream",
-      identity: {
-        sessionId: "session-closed-upstream",
-        turnScopeId: "turn-closed-upstream",
-      },
-      concurrency: { expectedTurnRevision: 1 },
-      stop: {},
-    })), false);
+    assert.equal(
+      manager.forwardToUpstream(
+        channel,
+        createTurnStopCommand({
+          commandId: "stop:closed-upstream",
+          identity: {
+            sessionId: "session-closed-upstream",
+            turnScopeId: "turn-closed-upstream",
+          },
+          concurrency: { expectedTurnRevision: 1 },
+          stop: {},
+        }),
+      ),
+      false,
+    );
   });
 });
 
@@ -365,25 +491,17 @@ test("successful upstream messages bypass session logs and retain data-plane met
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
   records.length = 0;
-  upstream.emit("message", JSON.stringify({
-    event: "message_event",
-    data: {
-      event: {
-        envelopeKind: "noobot.message_event",
-        envelopeVersion: 2,
-        eventId: "event-1",
-        eventType: "main_model_content",
-        messageId: "message-1",
-        presentationMessageId: "message-1",
-        sequence: 1,
-        timestamp: "2026-01-01T00:00:00.000Z",
+  upstream.emit(
+    "message",
+    JSON.stringify({
+      event: "message_event",
+      data: canonicalMessageEvent({
         sessionId: "session-upstream-content",
-        turnScopeId: "turn-1",
-        dialogProcessId: "dialog-1",
-        payload: { content: "authoritative result" },
-      },
-    },
-  }));
+        eventType: MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT,
+        text: "authoritative result",
+      }),
+    }),
+  );
 
   assert.equal(records.length, 0);
   assert.equal(client.sentEvents.at(-1)?.event, "message_event");
@@ -403,10 +521,10 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
   FakeUpstreamWebSocket.instances = [];
   const manager = new ChannelManager(FakeUpstreamWebSocket);
   const sessionId = "session-lifecycle-live";
-  const channel = manager.ensureChannel(
-    createChannelKey({ userId: "user-1", sessionId }),
-    { userId: "user-1", sessionId },
-  );
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -416,7 +534,7 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
   const upstream = FakeUpstreamWebSocket.instances.at(-1);
   upstream.emit("open");
 
-  const terminal = {
+  const terminalPayload = {
     protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
     eventId: "terminal-live-1",
     commandId: "terminal-live-command",
@@ -433,9 +551,13 @@ test("authoritative lifecycle is the only live business-state protocol emitted b
     completionCommitId: "terminal-live-command",
     summaryVersion: 4,
   };
+  const terminal = authoritativeLifecycle(terminalPayload);
   upstream.emit("message", JSON.stringify({ event: "turn_lifecycle", data: terminal }));
 
-  assert.deepEqual(listEvents(client, "turn_lifecycle").map((item) => item.data), [terminal]);
+  assert.deepEqual(
+    listEvents(client, "turn_lifecycle").map((item) => item.data),
+    [JSON.parse(JSON.stringify(terminal))],
+  );
   assert.equal(listEvents(client, "channel_state").length, 0);
   assert.equal(
     channel.conversationStateByDialogProcessId.get("dialog-lifecycle-live")?.state,

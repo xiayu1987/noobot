@@ -14,18 +14,21 @@ import {
 } from "../hooks/messages.js";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  formatAttachmentIdentityRef,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 import {
   buildDualLaneModelContext,
   MODEL_CONTEXT_LANE,
-} from "@noobot/context-protocol/dual-lane-context";
+} from "@noobot/context-protocol/assembly/dual-lane";
 
 export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const lines = (Array.isArray(attachments) ? attachments : [])
     .map((item = {}, index) => {
       const identity = projectAttachmentIdentity(item);
-      const attachmentId = identity.attachmentId;
+      const identityRef = formatAttachmentIdentityRef(identity);
       const name = String(
         item?.name ||
           item?.fileName ||
@@ -33,9 +36,7 @@ export function buildWorkflowInputAttachmentPlanningBlock(attachments = [], ctx 
       ).trim();
       const mimeType = String(item?.mimeType || "").trim();
       const parts = [
-        attachmentId ? `attachmentId=${attachmentId}` : "",
-        `sessionId=${identity.sessionId}`,
-        `attachmentSource=${identity.attachmentSource}`,
+        `identityRef=${identityRef}`,
         name ? `name=${name}` : "",
         mimeType ? `mimeType=${mimeType}` : "",
       ].filter(Boolean);

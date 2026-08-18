@@ -11,40 +11,33 @@ export function routeMessageProjectionEvent(event, data, context) {
   const {
     botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
     findCanonicalMessageById, findCanonicalMessagesById, logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId,
+    reduceSubSessionMessageEvent,
   } = context;
-  if (event === "subagent_message_event") {
-    logSessionEvent({
-      category: "debug", level: "warn", debugType: "workflow-diagnostics",
-      event: "frontend.workflowTransport.subSessionMessageRejected",
-      sessionId: data?.event?.sessionId || data?.route?.subSessionId || "",
-      dialogProcessId: data?.event?.dialogProcessId || "", turnScopeId: data?.event?.turnScopeId || "",
-      data: {
-        channelKind: String(data?.channelKind || ""), channelVersion: Number(data?.channelVersion || 0),
-        routeScope: String(data?.route?.scope || ""), hasEvent: Boolean(data?.event),
-        eventKeys: Object.keys(data?.event || {}).sort(), packetKeys: Object.keys(data || {}).sort(),
-      },
-    });
+  if (shouldProjectSubSessionEvent(event, data)) {
+    reduceSubSessionMessageEvent?.(data);
     return true;
   }
-  const messageEvent = data?.event || {};
+  const messageEvent = data;
+  const identity = messageEvent?.identity || {};
+  const payload = messageEvent?.payload || {};
+  const ordering = messageEvent?.ordering || {};
   const shouldProjectMain = shouldProjectMainSessionEvent(event, data || {});
   logSessionEvent({
     category: "transport", level: "debug",
     event: "frontend.messageEvent.routeEvaluated",
-    sessionId: messageEvent.sessionId || sessionId,
-    dialogProcessId: messageEvent.dialogProcessId || "",
-    turnScopeId: messageEvent.turnScopeId || turnScopeId,
+    sessionId: identity.sessionId || sessionId,
+    dialogProcessId: payload.dialogProcessId || "",
+    turnScopeId: identity.turnScopeId || turnScopeId,
     data: {
       channelEvent: String(event || ""), shouldProjectMain,
-      routeScope: String(data?.route?.scope || ""),
-      eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
-      messageId: messageEvent.messageId || "",
-      presentationMessageId: resolveMessageEventPresentationId(messageEvent),
+      eventId: identity.eventId || "", eventType: payload.eventType || "",
+      messageId: identity.messageId || "",
+      presentationMessageId: resolveMessageEventPresentationId(payload),
     },
   });
   if (shouldProjectMain) {
-    const presentationMessageId = resolveMessageEventPresentationId(messageEvent);
-    const targetSessionId = String(messageEvent.sessionId || sessionId || "").trim();
+    const presentationMessageId = resolveMessageEventPresentationId(payload);
+    const targetSessionId = String(identity.sessionId || sessionId || "").trim();
     const targetMessages = findCanonicalMessagesById?.(targetSessionId, presentationMessageId)
       || [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
     // The send flow creates the visible assistant projection before replay
@@ -55,7 +48,7 @@ export function routeMessageProjectionEvent(event, data, context) {
       botMessage &&
       String(botMessage?.sessionId || botMessage?.session_id || targetSessionId).trim() === targetSessionId &&
       String(botMessage?.turnScopeId || botMessage?.turn_scope_id || turnScopeId).trim() ===
-        String(messageEvent.turnScopeId || turnScopeId).trim() &&
+        String(identity.turnScopeId || turnScopeId).trim() &&
       String(botMessage?.role || "assistant").trim() === "assistant" &&
       !targetMessages.includes(botMessage)
     ) targetMessages.push(botMessage);
@@ -72,11 +65,11 @@ export function routeMessageProjectionEvent(event, data, context) {
     logSessionEvent({
       category: "transport", level: targetMessage ? "debug" : "warn",
       event: "frontend.messageEvent.targetResolved",
-      sessionId: targetSessionId, dialogProcessId: messageEvent.dialogProcessId || "",
-      turnScopeId: messageEvent.turnScopeId || turnScopeId,
+      sessionId: targetSessionId, dialogProcessId: payload.dialogProcessId || "",
+      turnScopeId: identity.turnScopeId || turnScopeId,
       data: {
-        eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
-        messageId: messageEvent.messageId || "", presentationMessageId,
+        eventId: identity.eventId || "", eventType: payload.eventType || "",
+        messageId: identity.messageId || "", presentationMessageId,
         targetSessionId, target: targetBefore,
       },
     });
@@ -89,12 +82,12 @@ export function routeMessageProjectionEvent(event, data, context) {
     const reduction = reductions.find((item) => item.applied) || reductions[0] || { result: "target_missing", applied: false };
     logSessionEvent({
       category: "transport", level: reduction.applied ? "debug" : "warn", event: "frontend.messageEvent.reduced",
-      sessionId: messageEvent.sessionId || sessionId, dialogProcessId: messageEvent.dialogProcessId || "",
-      turnScopeId: messageEvent.turnScopeId || turnScopeId,
+      sessionId: identity.sessionId || sessionId, dialogProcessId: payload.dialogProcessId || "",
+      turnScopeId: identity.turnScopeId || turnScopeId,
       data: {
-        source: "normal_live", eventId: messageEvent.eventId || "", eventType: messageEvent.eventType || "",
-        messageId: messageEvent.messageId || "", presentationMessageId,
-        sequence: messageEvent.sequence ?? null,
+        source: "normal_live", eventId: identity.eventId || "", eventType: payload.eventType || "",
+        messageId: identity.messageId || "", presentationMessageId,
+        sequence: ordering.sequence ?? null,
         result: reduction.result, errors: reduction.errors || [],
         targetBefore,
         targetAfter: {
@@ -115,5 +108,5 @@ export function routeMessageProjectionEvent(event, data, context) {
 }
 
 export function isIgnoredSubSessionEvent(event, data) {
-  return data?.scope === "sub_session" || (typeof event === "string" && event.startsWith("subagent_"));
+  return shouldProjectSubSessionEvent(event, data);
 }

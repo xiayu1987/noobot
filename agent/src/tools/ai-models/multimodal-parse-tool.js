@@ -19,6 +19,7 @@ import {
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
 import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
@@ -218,6 +219,10 @@ export function createMultimodalParseTool({ agentContext }) {
         identity: toolConfig?.configurable?.transferIdentity,
       });
       const attachments = normalizePersistedAttachments(persistedOutput);
+      if (attachments.length !== 1) {
+        throw new Error("multimodal_parse_requires_one_persisted_result_attachment");
+      }
+      const [parsedAttachment] = attachments;
       const outputResources = registerTransferAttachmentResources({
         agentContext,
         transferEnvelopes: persistedOutput?.transferEnvelopes || [],
@@ -229,7 +234,7 @@ export function createMultimodalParseTool({ agentContext }) {
               ? backwriteParsedAttachment({
                   runtime,
                   sourceAttachmentMeta,
-                  attachments,
+                  parsedAttachment,
                 })
               : null,
           ),
@@ -247,9 +252,9 @@ export function createMultimodalParseTool({ agentContext }) {
           model: { alias: modelSpec.alias || "", name: modelSpec.model || "" },
           summary: {
             input_modalities: requiredModalities,
-            parsed_from_attachment_ids: sourceAttachmentMetas
-              .map((attachment) => String(attachment?.attachmentId || "").trim())
-              .filter(Boolean),
+            source_attachment_identities: sourceAttachmentMetas
+              .filter((attachment) => attachment !== null && attachment !== undefined)
+              .map(projectAttachmentIdentity),
             source_attachment_backwritten_count: updatedSourceAttachments.length,
             input_file_count: inputFiles.length,
             total_file_size_bytes: totalFileSizeBytes,

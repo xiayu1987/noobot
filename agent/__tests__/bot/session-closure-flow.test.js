@@ -9,8 +9,9 @@ import { randomUUID } from "node:crypto";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
-import { createCurrentTurnMessagesStore } from "../../src/context/session/current-turn-store.js";
+import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
+import { createCanonicalMessageEventSessionManager } from "../helpers/canonical-message-event-session-manager.js";
 
 test("service -> bot -> agent -> toolchain -> return -> persist: should form full closed loop", async () => {
   const persistedTurns = [];
@@ -61,6 +62,9 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
       savedCurrentTurnTasksPayload = payload;
     },
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-closure-flow",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -74,6 +78,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         return attachments.map((attachment, index) => ({
           attachmentId: attachment.attachmentId || attachment.id || `input-${index}`,
           sessionId,
+          attachmentSource: "user",
           name: attachment.name || "input",
           mimeType: attachment.mimeType || attachment.type || "application/octet-stream",
           path: attachment.path || `/tmp/noobot-test/input-${index}`,
@@ -115,17 +120,14 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         "",
         "场景默认模型不应写入 runtimeModel",
       );
-      assert.equal(
-        Array.isArray(agentContext?.context?.modelContext?.messageBlocks?.system),
-        true,
-      );
+      assert.equal(Array.isArray(agentContext?.context?.modelContext?.messageBlocks?.system), true);
       assert.equal(
         agentContext.context.modelContext.messageBlocks.system[0],
         "[PROMPT_PATCHED] 你现在处于审计模式",
         "中途 context 提示应生效",
       );
-      const toolNames = (agentContext?.bindings?.tools || []).map(
-        (toolItem) => String(toolItem?.name || ""),
+      const toolNames = (agentContext?.bindings?.tools || []).map((toolItem) =>
+        String(toolItem?.name || ""),
       );
       assert.deepEqual(
         toolNames,
@@ -146,7 +148,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             tool_calls: [
               {
                 id: "call_switch_model",
-                function: { name: "switch_model", arguments: "{\"modelName\":\"gpt-4.1-mini\"}" },
+                function: { name: "switch_model", arguments: '{"modelName":"gpt-4.1-mini"}' },
               },
             ],
           },
@@ -155,7 +157,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             role: "tool",
             type: "tool_result",
             tool_call_id: "call_switch_model",
-            content: "{\"ok\":true,\"modelAlias\":\"anthropic\"}",
+            content: '{"ok":true,"modelAlias":"anthropic"}',
           },
           {
             messageId: "closure-assistant-message",
@@ -167,7 +169,7 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
             attachments: [
               {
                 attachmentId: "att-out-1",
-                sessionId: "",
+                sessionId,
                 attachmentSource: "model_generated",
                 name: "result.png",
                 mimeType: "image/png",
@@ -201,41 +203,53 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     };
     return {
       async buildInitialContext({ dialogProcessId = "" } = {}) {
-        const effectiveAttachments = Array.isArray(userMessageAttachments) && userMessageAttachments.length
-          ? userMessageAttachments
-          : attachments;
-        const firstIncoming = Array.isArray(effectiveAttachments) ? effectiveAttachments[0] || {} : {};
-        return createTestAgentExecutionScope({
-                currentTurnMessages: createCurrentTurnMessagesStore(),
-                runtimeModel: String(runConfig?.runtimeModel || ""),
-                userMessageAttachments: [
-                  {
-                    attachmentId: "att-in-1",
-                    sessionId,
-                    attachmentSource: "user",
-                    name: String(firstIncoming?.name || "input.png"),
-                    mimeType: String(firstIncoming?.mimeType || "image/png"),
-                    size: Number(firstIncoming?.size || 0),
-                    path: "/tmp/noobot-test/input.png",
-                    relativePath: "input.png",
-                  },
-                ],
-                attachments: [],
-                systemRuntime: {
-                  dialogProcessId,
-                },
-        }, {
-          identity: { sessionId, parentSessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
-          messageBlocks: {
-            system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
-            history: [{ role: "user", content: "历史记录" }],
+        const effectiveAttachments =
+          Array.isArray(userMessageAttachments) && userMessageAttachments.length
+            ? userMessageAttachments
+            : attachments;
+        const firstIncoming = Array.isArray(effectiveAttachments)
+          ? effectiveAttachments[0] || {}
+          : {};
+        return createTestAgentExecutionScope(
+          {
+            currentTurnMessages: createCurrentTurnMessagesStore(),
+            sessionManager,
+            runtimeModel: String(runConfig?.runtimeModel || ""),
+            userMessageAttachments: [
+              {
+                attachmentId: "att-in-1",
+                sessionId,
+                attachmentSource: "user",
+                name: String(firstIncoming?.name || "input.png"),
+                mimeType: String(firstIncoming?.mimeType || "image/png"),
+                size: Number(firstIncoming?.size || 0),
+                path: "/tmp/noobot-test/input.png",
+                relativePath: "input.png",
+              },
+            ],
+            attachments: [],
+            systemRuntime: {
+              dialogProcessId,
+            },
           },
-          tools: [
-                { name: "switch_model" },
-                { name: "task_summary" },
-                { name: "user_interaction" },
-          ],
-        });
+          {
+            identity: {
+              sessionId,
+              parentSessionId,
+              dialogProcessId,
+              turnScopeId: runConfig.turnScopeId,
+            },
+            messageBlocks: {
+              system: ["[PROMPT_PATCHED] 你现在处于审计模式"],
+              history: [{ role: "user", content: "历史记录" }],
+            },
+            tools: [
+              { name: "switch_model" },
+              { name: "task_summary" },
+              { name: "user_interaction" },
+            ],
+          },
+        );
       },
       async buildContinueContext({ dialogProcessId = "" } = {}) {
         return this.buildInitialContext({ dialogProcessId });
@@ -271,17 +285,14 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(capturedBuildContextInput?.runConfig?.scenario, "programming");
   assert.equal(capturedBuildContextInput?.runConfig?.runtimeModel, undefined);
   assert.equal(capturedBuildContextInput?.runConfig?.scenarioProfile?.model, "gpt-4.1-mini");
-  assert.deepEqual(
-    capturedBuildContextInput?.runConfig?.contextPolicy?.includeContextKeys,
-    [
-      "scenario",
-      "system_runtime",
-      "base_prompt",
-      "long_memory",
-      "services",
-      "mcp_servers",
-    ],
-  );
+  assert.deepEqual(capturedBuildContextInput?.runConfig?.contextPolicy?.promptSections, [
+    "scenario",
+    "system_runtime",
+    "base_prompt",
+    "long_memory",
+    "services",
+    "mcp_servers",
+  ]);
   assert.equal(
     capturedBuildContextInput?.userMessageAttachments?.[0]?.name,
     "input.png",
@@ -375,6 +386,9 @@ test("continue mode closed-loop: should build continue context and persist paren
     },
     async saveCurrentTurnTasks() {},
   };
+  const sessionManager = createCanonicalMessageEventSessionManager({
+    producerId: "session-closure-continue-flow",
+  });
 
   const engine = new SessionExecutionEngine({
     globalConfig: {},
@@ -417,37 +431,42 @@ test("continue mode closed-loop: should build continue context and persist paren
     }),
   });
 
-  engine._buildContextBuilder = ({
-    sessionId = "",
-    runConfig = {},
-  } = {}) => ({
+  engine._buildContextBuilder = ({ sessionId = "", runConfig = {} } = {}) => ({
     async buildInitialContext({ dialogProcessId = "" } = {}) {
-      return createTestAgentExecutionScope({
-              currentTurnMessages: createCurrentTurnMessagesStore(),
-              runtimeModel: String(runConfig?.runtimeModel || ""),
-              attachmentMetas: [],
-              systemRuntime: { dialogProcessId },
-      }, {
-        identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
-        messageBlocks: { system: ["initial"], history: [] },
-      });
+      return createTestAgentExecutionScope(
+        {
+          currentTurnMessages: createCurrentTurnMessagesStore(),
+          sessionManager,
+          runtimeModel: String(runConfig?.runtimeModel || ""),
+          attachmentMetas: [],
+          systemRuntime: { dialogProcessId },
+        },
+        {
+          identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+          messageBlocks: { system: ["initial"], history: [] },
+        },
+      );
     },
     async buildContinueContext({ dialogProcessId = "" } = {}) {
       continueContextBuilt = true;
       capturedRunConfig = { ...runConfig };
-      return createTestAgentExecutionScope({
-              currentTurnMessages: createCurrentTurnMessagesStore(),
-              runtimeModel: "",
-              attachmentMetas: [],
-              systemRuntime: { dialogProcessId, sessionId },
-      }, {
-        identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
-        messageBlocks: {
+      return createTestAgentExecutionScope(
+        {
+          currentTurnMessages: createCurrentTurnMessagesStore(),
+          sessionManager,
+          runtimeModel: "",
+          attachmentMetas: [],
+          systemRuntime: { dialogProcessId, sessionId },
+        },
+        {
+          identity: { sessionId, dialogProcessId, turnScopeId: runConfig.turnScopeId },
+          messageBlocks: {
             system: ["continue prompt"],
             history: [{ role: "user", content: "history" }],
+          },
+          tools: [{ name: "task_summary" }],
         },
-        tools: [{ name: "task_summary" }],
-      });
+      );
     },
   });
 

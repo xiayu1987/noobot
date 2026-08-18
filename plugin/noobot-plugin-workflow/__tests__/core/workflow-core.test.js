@@ -18,7 +18,6 @@ import { getWorkflowDefaultSemanticPrompt } from "../../src/core/i18n.js";
 import { parseWorkflowDslText } from "../../src/protocol/text-protocol.js";
 import { installTurnMessageEventRuntimeFixture } from "../helpers/workflow-hook-session-strategy-helper.js";
 
-
 test("default semantic prompt documents closed state-node constructs", () => {
   const zh = getWorkflowDefaultSemanticPrompt("zh-CN");
   assert.match(zh, /结构约束/);
@@ -64,19 +63,16 @@ function createMockBotHookManager() {
 test("normalizeOptions keeps injected strategy functions", () => {
   const subSessionRunner = async () => null;
   const workflowDialogPersister = async () => null;
-  const workflowEventLogger = async () => null;
   const options = normalizeOptions({
     enabled: true,
     mode: "on",
     subSessionRunner,
     workflowDialogPersister,
-    workflowEventLogger,
   });
   assert.equal(options.enabled, true);
   assert.equal(options.mode, "on");
   assert.equal(options.subSessionRunner, subSessionRunner);
   assert.equal(options.workflowDialogPersister, workflowDialogPersister);
-  assert.equal(options.workflowEventLogger, workflowEventLogger);
 });
 
 test("normalizeOptions keeps workflow extension hooks", () => {
@@ -93,7 +89,6 @@ test("normalizeOptions keeps workflow extension hooks", () => {
   assert.deepEqual(options.workflowExtensions, [extensionA, extensionB]);
 });
 
-
 test("normalizeOptions applies workflow execution defaults", () => {
   const options = normalizeOptions({
     enabled: true,
@@ -101,7 +96,10 @@ test("normalizeOptions applies workflow execution defaults", () => {
   });
   assert.equal(options.timeoutMs, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_TIMEOUT_MS);
   assert.equal(options.maxAutoTransitions, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_AUTO_TRANSITIONS);
-  assert.equal(options.maxParallelNodeAgents, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS);
+  assert.equal(
+    options.maxParallelNodeAgents,
+    WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
+  );
   assert.equal(options.miniRunnerMaxTurns, WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MINI_RUNNER_MAX_TURNS);
 });
 
@@ -177,7 +175,7 @@ test("parseWorkflowDslText keeps action node attachment refs", () => {
     [
       "WORKFLOW_DSL/1",
       'NODE id=start type=state stateType=start name="开始"',
-      'NODE id=act type=action name="节点A" task="请分析附件" attachments="att-1"',
+      'NODE id=act type=action name="节点A" task="请分析附件" attachments="attachment:v1:session-1/user/att-1"',
       'NODE id=end type=state stateType=end name="结束"',
       "EDGE from=start to=act",
       "EDGE from=act to=end",
@@ -185,21 +183,24 @@ test("parseWorkflowDslText keeps action node attachment refs", () => {
     ].join("\n"),
   );
   const actionNode = (semantic?.nodes || []).find((item) => String(item?.id || "") === "act");
-  assert.deepEqual(actionNode?.attachments, ["att-1"]);
+  assert.deepEqual(actionNode?.attachments, ["attachment:v1:session-1/user/att-1"]);
   assert.equal(semantic?.attachments, undefined);
   assert.equal(semantic?.attachmentMap, undefined);
 });
 
 test("parseWorkflowDslText rejects removed attachment declarations", () => {
   assert.throws(
-    () => parseWorkflowDslText([
-      "WORKFLOW_DSL/1",
-      'ATTACHMENT id="local-contract" attachmentId="att-1" sessionId="session-1" attachmentSource="user"',
-      'NODE id=start type=state stateType=start name="开始"',
-      'NODE id=end type=state stateType=end name="结束"',
-      "EDGE from=start to=end",
-      "END",
-    ].join("\n")),
+    () =>
+      parseWorkflowDslText(
+        [
+          "WORKFLOW_DSL/1",
+          'ATTACHMENT id="local-contract" attachmentId="att-1" sessionId="session-1" attachmentSource="user"',
+          'NODE id=start type=state stateType=start name="开始"',
+          'NODE id=end type=state stateType=end name="结束"',
+          "EDGE from=start to=end",
+          "END",
+        ].join("\n"),
+      ),
     /unknown command: ATTACHMENT/,
   );
 });
@@ -213,8 +214,8 @@ test("parseWorkflowDslText rejects composite nodes", () => {
           'NODE id=start type=state stateType=start name="开始"',
           'NODE id=sub type=composite name="子流程"',
           'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=sub',
-          'EDGE from=sub to=end',
+          "EDGE from=start to=sub",
+          "EDGE from=sub to=end",
           "END",
         ].join("\n"),
       ),
@@ -285,10 +286,10 @@ test("parseWorkflowDslText normalizes multi-outgoing start as branch", () => {
       'NODE id=a type=action name="节点A" task="执行A"',
       'NODE id=b type=action name="节点B" task="执行B"',
       'NODE id=merge type=state stateType=merge name="汇聚"',
-      'EDGE from=start to=a',
-      'EDGE from=start to=b',
-      'EDGE from=a to=merge',
-      'EDGE from=b to=merge',
+      "EDGE from=start to=a",
+      "EDGE from=start to=b",
+      "EDGE from=a to=merge",
+      "EDGE from=b to=merge",
       "END",
     ].join("\n"),
   );
@@ -399,7 +400,9 @@ test("workflow hook owns the turn and never falls back to main agent when semant
     runConfig: { locale: "zh-CN" },
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  const dispatchOutcome = await listener.handler(installTurnMessageEventRuntimeFixture(beforeContext));
+  const dispatchOutcome = await listener.handler(
+    installTurnMessageEventRuntimeFixture(beforeContext),
+  );
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
   assert.equal(dispatchOutcome?.disposition, "handled");
@@ -422,15 +425,17 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
       mode: "on",
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=act type=action name="节点A"',
-          'NODE id=end type=state stateType=end name="结束"',
-          'EDGE from=start to=act',
-          'EDGE from=act to=end',
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=act",
+            "EDGE from=act to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async (payload = {}) => {
         childRunPayload = payload;
@@ -459,7 +464,9 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
     agentResult: null,
     claimAgentDispatch: (claim = {}) => dispatchClaims.push(claim),
   };
-  const dispatchOutcome = await listener.handler(installTurnMessageEventRuntimeFixture(beforeContext));
+  const dispatchOutcome = await listener.handler(
+    installTurnMessageEventRuntimeFixture(beforeContext),
+  );
   assert.equal(dispatchClaims.length, 1);
   assert.equal(dispatchOutcome?.kind, "noobot.bot_dispatch_outcome");
   assert.equal(dispatchOutcome?.disposition, "handled");
@@ -467,14 +474,20 @@ test("workflow hook in before_agent_dispatch mode can request skipping main agen
   assert.equal(dispatchOutcome?.failure, null);
   assert.equal(dispatchClaims[0].owner, "workflow");
   assert.equal(dispatchClaims[0].source, "workflow_before_agent_dispatch");
-  assert.equal(dispatchClaims[0].executionId, `workflow:${dispatchClaims[0].origin?.workflowRunId}`);
+  assert.equal(
+    dispatchClaims[0].executionId,
+    `workflow:${dispatchClaims[0].origin?.workflowRunId}`,
+  );
   assert.equal(dispatchClaims[0].rootExecutionId, dispatchClaims[0].executionId);
   assert.equal(childRunPayload?.strategy?.parentExecutionId, dispatchClaims[0].executionId);
   assert.equal(childRunPayload?.strategy?.rootExecutionId, dispatchClaims[0].rootExecutionId);
   assert.equal(dispatchClaims[0].executionKind, "workflow");
   assert.equal(dispatchClaims[0].stage, "planning");
   assert.equal(dispatchClaims[0].origin?.type, "workflow");
-  assert.equal(dispatchClaims[0].origin?.workflowRunId, dispatchClaims[0].origin?.workflowRunId?.trim());
+  assert.equal(
+    dispatchClaims[0].origin?.workflowRunId,
+    dispatchClaims[0].origin?.workflowRunId?.trim(),
+  );
   assert.ok(dispatchClaims[0].origin?.workflowRunId);
   assert.ok(dispatchOutcome?.result);
   assert.equal(Array.isArray(dispatchOutcome?.result?.turnMessages), true);
@@ -502,21 +515,38 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "workflow-plugin-cleanup-"));
   const planningDir = path.join(tempRoot, "runtime/workflow/planning/s-delete/dialog-1");
   const sessionDir = path.join(tempRoot, "runtime/workflow/session/s-delete/wf_node_1");
+  const retainedSessionDir = path.join(tempRoot, "runtime/workflow/session/s-keep/wf_node_2");
   const untouchedDir = path.join(tempRoot, "runtime/workflow/planning/s-keep/dialog-2");
   await fs.mkdir(planningDir, { recursive: true });
   await fs.mkdir(sessionDir, { recursive: true });
+  await fs.mkdir(retainedSessionDir, { recursive: true });
   await fs.mkdir(untouchedDir, { recursive: true });
-  await fs.writeFile(path.join(planningDir, "planning.json"), "{\"ok\":true}\n", "utf8");
-  await fs.writeFile(path.join(sessionDir, "events.jsonl"), "{\"event\":\"ok\"}\n", "utf8");
-  await fs.writeFile(path.join(untouchedDir, "planning.json"), "{\"keep\":true}\n", "utf8");
+  await fs.writeFile(path.join(planningDir, "planning.json"), '{"ok":true}\n', "utf8");
+  await fs.writeFile(path.join(sessionDir, "events.jsonl"), '{"event":"ok"}\n', "utf8");
+  await fs.writeFile(
+    path.join(sessionDir, "meta.json"),
+    JSON.stringify({ sessionId: "workflow-node-session" }),
+    "utf8",
+  );
+  await fs.writeFile(
+    path.join(retainedSessionDir, "meta.json"),
+    JSON.stringify({ sessionId: "retained-workflow-node-session" }),
+    "utf8",
+  );
+  await fs.writeFile(path.join(untouchedDir, "planning.json"), '{"keep":true}\n', "utf8");
 
   try {
-    await cleanupHook.handler({
+    const cleanupResult = await cleanupHook.handler({
       sessionId: "s-delete",
       deletedSessionIds: ["s-delete"],
+      remainingSessionIds: ["s-keep"],
       basePath: tempRoot,
     });
 
+    assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
+    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, [
+      "retained-workflow-node-session",
+    ]);
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-delete")));
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/session/s-delete")));
     await fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-keep"));

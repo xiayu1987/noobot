@@ -6,19 +6,8 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
-import {
-  mkdir,
-  open,
-  readFile,
-  rename,
-  stat,
-  truncate,
-  writeFile,
-} from "node:fs/promises";
-import {
-  SESSION_ARTIFACT_FILE_NAMES,
-  readJsonArtifactFile,
-} from "../session-artifact-files.js";
+import { mkdir, open, readFile, rename, stat, truncate, writeFile } from "node:fs/promises";
+import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = TURN_THRESHOLDS.session.turnJournalSchemaVersion;
 
@@ -82,19 +71,9 @@ export function turnIdOrdinal(turnId = "") {
 export function isTerminalTurn(session, turn) {
   const scope = String(turn?.turnScopeId || "").trim();
   const dialog = String(turn?.dialogProcessId || "").trim();
-  const statuses = Array.isArray(session?.turnStatuses) ? session.turnStatuses : [];
-  return statuses.some(
-    (item) =>
-      String(item?.turnScopeId || "").trim() === scope &&
-      (!dialog ||
-        !String(item?.dialogProcessId || "").trim() ||
-        String(item.dialogProcessId).trim() === dialog) &&
-      ["completed", "user_stopped", "timeout", "failed", "error"].includes(
-        String(item?.status || "")
-          .trim()
-          .toLowerCase(),
-      ),
-  );
+  const lifecycleTurn = session?.turnLifecycle?.turns?.[scope];
+  if (!lifecycleTurn || String(lifecycleTurn.dialogProcessId || "").trim() !== dialog) return false;
+  return Boolean(lifecycleTurn.terminalStatus);
 }
 
 export function resolveTurnSummaryReceipts(session = {}, turn = {}) {

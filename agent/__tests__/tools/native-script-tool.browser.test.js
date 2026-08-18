@@ -15,9 +15,17 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import {
+  IDENTITY,
+  createRuntime,
+  hasChromiumCapability,
+} from "./native-script-tool.fixtures.js";
 
-test("execute_native_script uses the installed Chromium path with an isolated task HOME", async () => {
+test("execute_native_script uses the installed Chromium path with an isolated task HOME", async (t) => {
+  if (!(await hasChromiumCapability())) {
+    t.skip("Playwright Chromium is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {
@@ -54,7 +62,11 @@ await page.screenshot({ path: "browser/page.png" });
   assert.equal(persistedRequest.artifacts[0].name, "browser__page.png");
 });
 
-test("execute_native_script supports restricted offline browser content and page cleanup", async () => {
+test("execute_native_script supports restricted offline browser content and page cleanup", async (t) => {
+  if (!(await hasChromiumCapability())) {
+    t.skip("Playwright Chromium is not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-browser-content-"));
   const runtime = createRuntime(basePath);
   const [tool] = createNativeScriptTool({ agentContext: createTestAgentExecutionScope(runtime) });

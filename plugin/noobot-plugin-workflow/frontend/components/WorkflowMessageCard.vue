@@ -17,7 +17,10 @@ const props = defineProps({
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
   formatFileSize: { type: Function, default: (value = 0) => `${Number(value || 0)} B` },
-  isImageMime: { type: Function, default: (mimeType = "") => String(mimeType || "").startsWith("image/") },
+  isImageMime: {
+    type: Function,
+    default: (mimeType = "") => String(mimeType || "").startsWith("image/"),
+  },
   workflowNodeStateRegistry: { type: Object, default: null },
   subSessionMessageRegistry: { type: Object, default: null },
   subSessionMessageRegistryVersion: { type: Number, default: 0 },
@@ -35,10 +38,15 @@ function logCardRender(stage) {
   const content = String(props.messageItem?.content || "");
   props.logWorkflowDiagnostics?.(`frontend.workflowRender.card${stage}`, {
     sessionId: String(payload?.planningDialog?.sessionId || props.messageItem?.sessionId || ""),
-    dialogProcessId: String(props.messageItem?.dialogProcessId || payload?.planningDialog?.dialogProcessId || ""),
+    dialogProcessId: String(
+      props.messageItem?.dialogProcessId || payload?.planningDialog?.dialogProcessId || "",
+    ),
     turnScopeId: String(props.messageItem?.turnScopeId || ""),
     workflowRunId: String(
-      payload?.workflowRunId || payload?.execution?.workflowRunId || payload?.execution?.instanceId || "",
+      payload?.workflowRunId ||
+        payload?.execution?.workflowRunId ||
+        payload?.execution?.instanceId ||
+        "",
     ),
     liveProjection: props.messageItem?.__workflowLiveProjection === true,
     pluginPhase: String(props.messageItem?.pluginMeta?.phase || ""),
@@ -46,14 +54,20 @@ function logCardRender(stage) {
     assistantBodyPresent: Boolean(content.trim()),
     nodeSessionCount: Array.isArray(payload?.nodeSessions) ? payload.nodeSessions.length : 0,
     presentationMessageId: String(
-      props.messageItem?.presentationMessageId || props.messageItem?.messageId || props.messageItem?.id || "",
+      props.messageItem?.presentationMessageId ||
+        props.messageItem?.messageId ||
+        props.messageItem?.id ||
+        "",
     ),
     registryWorkflowCount: Object.keys(props.workflowNodeStateRegistry?.workflows || {}).length,
   });
 }
 
 onMounted(() => logCardRender("Mounted"));
-watch(() => props.messageItem, () => logCardRender("Updated"));
+watch(
+  () => props.messageItem,
+  () => logCardRender("Updated"),
+);
 watch(
   () => props.subSessionMessageRegistryVersion,
   (version, previousVersion) => {
@@ -66,11 +80,13 @@ watch(
       subSessionMessageRegistryVersion: Number(version || 0),
       subSessions: Object.values(sessions).map((session = {}) => ({
         sessionId: String(session?.sessionId || session?.id || ""),
-        messages: (Array.isArray(session?.messages) ? session.messages : []).map((message = {}) => ({
-          id: String(message?.id || message?.messageId || ""),
-          role: String(message?.role || ""),
-          contentLength: String(message?.content || "").length,
-        })),
+        messages: (Array.isArray(session?.messages) ? session.messages : []).map(
+          (message = {}) => ({
+            id: String(message?.id || message?.messageId || ""),
+            role: String(message?.role || ""),
+            contentLength: String(message?.content || "").length,
+          }),
+        ),
       })),
     });
   },
@@ -100,7 +116,6 @@ const {
   selectedNodeSessionDocs,
   displayNodeMessages,
   turnTimingsByTurnScopeId,
-  turnStatusesByTurnScopeId,
   nodeSessionAllMessages,
   selectedRuntimeBoxes,
   handleOpenThinkingDetails,
@@ -149,7 +164,6 @@ const {
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
     :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
-    :turn-statuses-by-turn-scope-id="turnStatusesByTurnScopeId"
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
     :user-id="userId"

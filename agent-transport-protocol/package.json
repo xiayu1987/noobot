@@ -5,15 +5,16 @@
   "type": "module",
   "description": "Strict frontend-to-agent transport command protocol",
   "exports": {
-    ".": "./src/index.mjs",
-    "./commands": "./src/commands.mjs",
-    "./run-preferences": "./src/run-preferences.mjs",
-    "./diagnostics": "./src/diagnostics.mjs",
+    ".": "./src/index.js",
+    "./commands": "./src/commands.js",
+    "./run-preferences": "./src/run-preferences.js",
+    "./diagnostics": "./src/diagnostics.js",
+    "./events": "./src/events.js",
     "./package.json": "./package.json",
-    "./bot-dispatch": "./src/bot-dispatch.mjs"
+    "./bot-dispatch": "./src/bot-dispatch.js"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/security-assessment-protocol": "file:../security-assessment-protocol",

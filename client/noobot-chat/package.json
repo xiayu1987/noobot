@@ -12,10 +12,10 @@
     "./plugin-api/session-domain": "./src/public/session-domain.js"
   },
   "scripts": {
-    "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.mjs",
-    "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.mjs",
-    "check:frontend-structure": "node scripts/check-frontend-structure.mjs",
-    "test:plugin-frontend-boundary-guard": "node --test scripts/check-plugin-frontend-reverse-deps.test.mjs",
+    "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.js",
+    "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.js",
+    "check:frontend-structure": "node scripts/check-frontend-structure.js",
+    "test:plugin-frontend-boundary-guard": "node --test scripts/check-plugin-frontend-reverse-deps.test.js",
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
     "build": "vite build",
@@ -49,7 +49,8 @@
     "mermaid": "^11.16.1",
     "noobot-i18n": "file:../../i18n",
     "pinia": "^4.0.3",
-    "vue": "^3.5.41"
+    "vue": "^3.5.41",
+    "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

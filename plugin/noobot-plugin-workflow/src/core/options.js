@@ -101,8 +101,6 @@ export function normalizeOptions(input = {}) {
         : null,
     workflowDialogPersister:
       typeof source?.workflowDialogPersister === "function" ? source.workflowDialogPersister : null,
-    workflowEventLogger:
-      typeof source?.workflowEventLogger === "function" ? source.workflowEventLogger : null,
     workflowNodeStateRepository:
       source?.workflowNodeStateRepository
       && typeof source.workflowNodeStateRepository.initialize === "function"

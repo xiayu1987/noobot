@@ -6,9 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import {
-  resolveHookClientEmitter,
-} from "@noobot/context-protocol/hook-context";
+import { resolveHookClientEmitter } from "@noobot/context-protocol/assembly/hook-context";
 
 import { createCapabilityRuntime } from "../capabilities/runtime.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
@@ -69,7 +67,9 @@ export async function ensureRunDir(paths) {
 export { resolveHookClientEmitter };
 
 export function isPrimaryExecutionScope(ctx = {}) {
-  const scope = String(ctx?.executionScope || "").trim().toLowerCase();
+  const scope = String(ctx?.executionScope || "")
+    .trim()
+    .toLowerCase();
   return !scope || scope === "primary";
 }
 
@@ -82,8 +82,7 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
       version: PLUGIN_VERSION,
       ...(data && typeof data === "object" ? data : {}),
     });
-  } catch {
-  }
+  } catch {}
 }
 
 export function resolveHookManager(api = {}) {

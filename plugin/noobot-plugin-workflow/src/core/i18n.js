@@ -80,48 +80,43 @@ export const WORKFLOW_I18N_KEYSET = Object.freeze({
     NO_DESCRIPTION: "workflowNoDescription",
     AVAILABLE_TOOLS_HEADER: "workflowAvailableToolsHeader",
     AVAILABLE_TOOLS_TASK_HINT: "workflowAvailableToolsTaskHint",
-    TOOL_CALL_UNKNOWN_SCRIPT: "workflowToolCallUnknownScript",
-    TOOL_CALL_NO_ARGUMENTS: "workflowToolCallNoArguments",
-    TOOL_CALL_SEMANTIC_LINE: "workflowToolCallSemanticLine",
   }),
 });
 
 const WORKFLOW_I18N_TEXT = Object.freeze({
   [WORKFLOW_LOCALE.ZH_CN]: Object.freeze({
     workflowNoDescription: "（无说明）",
-    workflowAvailableToolsHeader: "当前可用工具（name/description），规划工作流 action 节点时必须参考：",
+    workflowAvailableToolsHeader:
+      "当前可用工具（name/description），规划工作流 action 节点时必须参考：",
     workflowAvailableToolsTaskHint:
       "如果某个 action 节点应使用工具，请把合适的工具名写进该 NODE 的 task。不要臆造工具名；如果没有相关工具，就按普通任务描述。",
-    workflowToolCallUnknownScript: "未知脚本",
-    workflowToolCallNoArguments: "无参数",
-    workflowToolCallSemanticLine: "工具调用记录：{name}脚本被调用,参数{args}",
     workflowSemanticPlanByContext: "请基于以上会话上下文和以下当前用户消息规划工作流。",
     workflowSemanticCurrentUserMessage: "当前用户消息:\n{message}",
     workflowSemanticSourceInput: "主模型回复/工作流源输入:\n{source}",
     workflowSemanticEmpty: "(empty)",
     workflowInputDefaultLabel: "附件{index}",
     workflowNodeResultAttachmentTitle: "## 工作流节点结果附件",
-    workflowInputAttachmentsHeader: "用户附件（节点通过 canonical attachmentId 引用）:",
+    workflowInputAttachmentsHeader: "用户附件（节点通过 canonical identityRef 引用）:",
     workflowInputAttachmentsPlanHint1:
-      "规划工作流时，节点如需使用用户附件，只在 NODE 的 attachments 字段填写运行时提供的 canonical attachmentId。",
+      "规划工作流时，节点如需使用用户附件，只在 NODE 的 attachments 字段原样填写运行时提供的 canonical identityRef。",
     workflowInputAttachmentsPlanHint2:
-      "节点附件引用只传递 attachmentId；sessionId 和 attachmentSource 由运行时附件事实源校验，不在 DSL 中重复声明。",
+      "identityRef 已包含完整附件身份；不得拆分、改写或根据附件名称和 ID 自行构造。",
     workflowInputAttachmentsPlanHint3:
-      "attachments=\"user:*\" 表示使用全部用户附件；attachments=\"attachmentId1,attachmentId2\" 表示使用指定 canonical attachmentId。",
+      'attachments="user:*" 表示使用全部用户附件；attachments="identityRef1,identityRef2" 表示使用指定附件。',
     workflowInputAttachmentsPlanHint4:
-      "不要把附件路径写入 task 或 DSL；路径只能由附件服务根据 canonical attachmentId 解析。",
+      "不要把附件路径写入 task 或 DSL；路径只能由附件服务根据 canonical identityRef 解析。",
     workflowCurrentNodeFallback: "当前节点",
     workflowUserRawAttachmentsTitle: "# 用户原始附件",
     workflowCurrentNodeLine: "当前节点：{name}",
     workflowInputAttachmentsSystemHint:
-      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。执行任务时请按需读取/参考这些附件。",
+      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。每项都提供可直接用于文件工具参数的完整附件身份对象；必须原样使用，不得根据名称或 ID 构造。",
     workflowUpstreamNodeFallback: "上游节点",
     workflowSubAgentFailureFallback: "子 agent 执行失败",
     workflowFailureLineWithTask: "- {nodeLabel}（任务：{task}）: {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# 上游工作流节点结果附件",
     workflowUpstreamHint:
-      "以下信息来自直接上游动作节点。请在执行当前任务前先读取/参考可用附件；如果上游节点失败且无附件，请基于失败信息继续完成当前节点可完成的部分，并明确说明受影响范围。",
+      "以下信息来自直接上游动作节点。每个附件提供可直接用于文件工具参数的完整附件身份对象；必须原样使用。若上游失败且无附件，请继续可完成部分并说明影响。",
     workflowUpstreamFailureTitle: "## 上游失败节点",
     workflowUpstreamResultTitle: "## 上游结果附件",
     workflowNodeResultTitle: "# 工作流节点执行结果",
@@ -158,9 +153,6 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
       "Available tools (name/description), must be considered when planning workflow action nodes:",
     workflowAvailableToolsTaskHint:
       "When a workflow action should use tools, write the suitable tool name(s) into that NODE task. Do not invent tool names; if no listed tool is relevant, describe the task normally.",
-    workflowToolCallUnknownScript: "unknown_script",
-    workflowToolCallNoArguments: "none",
-    workflowToolCallSemanticLine: "Observed tool call: {name} script was called with arguments {args}",
     workflowSemanticPlanByContext:
       "Please plan the workflow based on the above conversation context and the following current user message.",
     workflowSemanticCurrentUserMessage: "Current user message:\n{message}",
@@ -168,27 +160,27 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowSemanticEmpty: "(empty)",
     workflowInputDefaultLabel: "Attachment {index}",
     workflowNodeResultAttachmentTitle: "## Workflow node result attachments",
-    workflowInputAttachmentsHeader: "User attachments (nodes reference canonical attachmentId):",
+    workflowInputAttachmentsHeader: "User attachments (nodes reference canonical identityRef):",
     workflowInputAttachmentsPlanHint1:
-      "When planning a workflow, put runtime-provided canonical attachmentId values directly in the NODE attachments field when an action needs user attachments.",
+      "When planning a workflow, copy runtime-provided canonical identityRef values verbatim into the NODE attachments field when an action needs user attachments.",
     workflowInputAttachmentsPlanHint2:
-      "Node attachment references contain attachmentId only; the runtime attachment fact source validates sessionId and attachmentSource. Do not redeclare them in DSL.",
+      "An identityRef contains the complete attachment identity. Do not split, rewrite, or construct it from a name or ID.",
     workflowInputAttachmentsPlanHint3:
-      "attachments=\"user:*\" means all user attachments; attachments=\"attachmentId1,attachmentId2\" means specific canonical attachmentId values.",
+      'attachments="user:*" means all user attachments; attachments="identityRef1,identityRef2" means specific attachments.',
     workflowInputAttachmentsPlanHint4:
-      "Do not put attachment paths in task or DSL; paths are resolved by the attachment service from canonical attachmentId.",
+      "Do not put attachment paths in task or DSL; paths are resolved by the attachment service from canonical identityRef.",
     workflowCurrentNodeFallback: "Current node",
     workflowUserRawAttachmentsTitle: "# Original user attachments",
     workflowCurrentNodeLine: "Current node: {name}",
     workflowInputAttachmentsSystemHint:
-      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Read/reference them as needed before execution.",
+      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Each item contains the complete attachment identity object accepted directly by file tools. Use it verbatim; never construct one from a name or ID.",
     workflowUpstreamNodeFallback: "Upstream node",
     workflowSubAgentFailureFallback: "Sub-agent execution failed",
     workflowFailureLineWithTask: "- {nodeLabel} (task: {task}): {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# Upstream workflow node result attachments",
     workflowUpstreamHint:
-      "The following information comes from direct upstream action nodes. Read/reference available attachments before executing the current task; if upstream failed and no attachments are available, continue the completable part and clearly state impact scope.",
+      "The following information comes from direct upstream action nodes. Each attachment contains the complete identity object accepted directly by file tools; use it verbatim. If upstream failed without an attachment, continue the completable part and state the impact.",
     workflowUpstreamFailureTitle: "## Upstream failed nodes",
     workflowUpstreamResultTitle: "## Upstream result attachments",
     workflowNodeResultTitle: "# Workflow node execution result",
@@ -228,7 +220,7 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "只输出 DSL，不要 JSON，不要 markdown，不要解释。",
     "",
     "DSL 指令：",
-    "- NODE id=... type=state|action name=\"...\" [stateType=start|end|branch|merge] [task=\"...\"] [attachments=\"...\"]",
+    '- NODE id=... type=state|action name="..." [stateType=start|end|branch|merge] [task="..."] [attachments="..."]',
     "- EDGE from=... to=...",
     "- AUTO type=submit stepIndex=0",
     "- END",
@@ -239,20 +231,20 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "- 并发：使用 stateType=branch 分出多个 action，使用 stateType=merge 汇聚。",
     "- action 必须写 task，task 是子 agent 可直接执行的任务描述。",
     "- 用户明确指定的工具名、参数值、调用次数、顺序和禁止条件必须逐字保留在对应 action 的 task 中，不得省略、改写或放宽。",
-    "- 如果输入里包含“用户附件”列表，且某个 action 需要读取/参考附件，直接在该 NODE 的 attachments 中填写运行时提供的 canonical attachmentId。",
-    "- DSL 不得声明附件路径、sessionId 或 attachmentSource；这些事实由运行时附件协议校验。",
-    "- attachments=\"user:*\" 表示该节点使用全部用户附件。",
-    "- attachments=\"attachmentId1,attachmentId2\" 表示该节点只使用指定 canonical attachmentId。",
-    "- 不要把附件路径拼进 task；路径只能由附件服务根据 canonical attachmentId 解析。",
+    "- 如果输入里包含“用户附件”列表，且某个 action 需要读取/参考附件，直接在该 NODE 的 attachments 中原样填写运行时提供的 canonical identityRef。",
+    "- identityRef 是附件协议生成的完整身份引用；不得拆分、改写或自行构造。",
+    '- attachments="user:*" 表示该节点使用全部用户附件。',
+    '- attachments="identityRef1,identityRef2" 表示该节点只使用指定附件。',
+    "- 不要把附件路径拼进 task；路径只能由附件服务根据 canonical identityRef 解析。",
     "",
     "示例：",
     "WORKFLOW_DSL/1",
-    "NODE id=start type=state stateType=start name=\"开始\"",
-    "NODE id=branch type=state stateType=branch name=\"并发分叉\"",
-    "NODE id=a type=action name=\"任务A\" task=\"读取用户附件并完成任务A\" attachments=\"att_001\"",
-    "NODE id=b type=action name=\"任务B\" task=\"完成任务B并输出结果\"",
-    "NODE id=merge type=state stateType=merge name=\"汇聚\"",
-    "NODE id=end type=state stateType=end name=\"结束\"",
+    'NODE id=start type=state stateType=start name="开始"',
+    'NODE id=branch type=state stateType=branch name="并发分叉"',
+    'NODE id=a type=action name="任务A" task="读取用户附件并完成任务A" attachments="attachment:v1:session_001/user/att_001"',
+    'NODE id=b type=action name="任务B" task="完成任务B并输出结果"',
+    'NODE id=merge type=state stateType=merge name="汇聚"',
+    'NODE id=end type=state stateType=end name="结束"',
     "EDGE from=start to=branch",
     "EDGE from=branch to=a",
     "EDGE from=branch to=b",
@@ -268,7 +260,7 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "Output DSL only. No JSON, no markdown, no explanation.",
     "",
     "DSL directives:",
-    "- NODE id=... type=state|action name=\"...\" [stateType=start|end|branch|merge] [task=\"...\"] [attachments=\"...\"]",
+    '- NODE id=... type=state|action name="..." [stateType=start|end|branch|merge] [task="..."] [attachments="..."]',
     "- EDGE from=... to=...",
     "- AUTO type=submit stepIndex=0",
     "- END",
@@ -279,20 +271,20 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
     "- Parallel: split via stateType=branch and merge via stateType=merge.",
     "- action must have task; task should be directly executable by sub-agent.",
     "- Explicit user constraints on tool names, argument values, call counts, ordering, and prohibitions must be preserved verbatim in the corresponding action task; do not omit, rewrite, or relax them.",
-    "- If input includes a user attachment list and an action needs attachments, put the runtime-provided canonical attachmentId values directly in NODE attachments.",
-    "- DSL must not declare attachment paths, sessionId, or attachmentSource; the runtime attachment protocol validates those facts.",
-    "- attachments=\"user:*\" means all user attachments.",
-    "- attachments=\"attachmentId1,attachmentId2\" means specific canonical attachmentId values.",
-    "- Do not put attachment paths into task; paths are resolved by the attachment service from canonical attachmentId.",
+    "- If input includes a user attachment list and an action needs attachments, copy the runtime-provided canonical identityRef values verbatim into NODE attachments.",
+    "- identityRef is the complete identity reference produced by the attachment protocol. Do not split, rewrite, or construct it.",
+    '- attachments="user:*" means all user attachments.',
+    '- attachments="identityRef1,identityRef2" means specific attachments.',
+    "- Do not put attachment paths into task; paths are resolved by the attachment service from canonical identityRef.",
     "",
     "Example:",
     "WORKFLOW_DSL/1",
-    "NODE id=start type=state stateType=start name=\"Start\"",
-    "NODE id=branch type=state stateType=branch name=\"Branch\"",
-    "NODE id=a type=action name=\"Task A\" task=\"Read user attachment and finish task A\" attachments=\"att_001\"",
-    "NODE id=b type=action name=\"Task B\" task=\"Finish task B and output result\"",
-    "NODE id=merge type=state stateType=merge name=\"Merge\"",
-    "NODE id=end type=state stateType=end name=\"End\"",
+    'NODE id=start type=state stateType=start name="Start"',
+    'NODE id=branch type=state stateType=branch name="Branch"',
+    'NODE id=a type=action name="Task A" task="Read user attachment and finish task A" attachments="attachment:v1:session_001/user/att_001"',
+    'NODE id=b type=action name="Task B" task="Finish task B and output result"',
+    'NODE id=merge type=state stateType=merge name="Merge"',
+    'NODE id=end type=state stateType=end name="End"',
     "EDGE from=start to=branch",
     "EDGE from=branch to=a",
     "EDGE from=branch to=b",
@@ -305,16 +297,19 @@ const DEFAULT_SEMANTIC_PROMPT_BY_LOCALE = Object.freeze({
 });
 
 export function normalizeWorkflowLocale(locale = "") {
-  const value = String(locale || "").trim().toLowerCase();
+  const value = String(locale || "")
+    .trim()
+    .toLowerCase();
   return value.startsWith("en") ? WORKFLOW_LOCALE.EN_US : WORKFLOW_LOCALE.ZH_CN;
 }
 
 export function resolveWorkflowLocaleFromContext(ctx = {}, fallbackLocale = WORKFLOW_LOCALE.ZH_CN) {
   const agentContext = resolveWorkflowAgentContext(ctx);
-  const runtime = resolveWorkflowRuntimeFromContext({
-    ...ctx,
-    agentContext: agentContext || ctx?.agentContext || null,
-  }) || {};
+  const runtime =
+    resolveWorkflowRuntimeFromContext({
+      ...ctx,
+      agentContext: agentContext || ctx?.agentContext || null,
+    }) || {};
   const localeCandidates = [
     ctx?.runConfig?.locale,
     ctx?.locale,
@@ -324,16 +319,16 @@ export function resolveWorkflowLocaleFromContext(ctx = {}, fallbackLocale = WORK
     runtime?.globalConfig?.locale,
     fallbackLocale,
   ];
-  const first = localeCandidates
-    .map((item) => String(item || "").trim())
-    .find(Boolean);
+  const first = localeCandidates.map((item) => String(item || "").trim()).find(Boolean);
   return normalizeWorkflowLocale(first || fallbackLocale);
 }
 
 export function tWorkflow(locale = WORKFLOW_LOCALE.ZH_CN, key = "", params = {}) {
   const normalizedLocale = normalizeWorkflowLocale(locale);
   const dict = WORKFLOW_I18N_TEXT[normalizedLocale] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN];
-  const template = String(dict?.[key] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN]?.[key] || "").trim();
+  const template = String(
+    dict?.[key] || WORKFLOW_I18N_TEXT[WORKFLOW_LOCALE.ZH_CN]?.[key] || "",
+  ).trim();
   if (!template) return "";
   return template.replace(/\{(\w+)\}/g, (_all, token) => String(params?.[token] ?? ""));
 }

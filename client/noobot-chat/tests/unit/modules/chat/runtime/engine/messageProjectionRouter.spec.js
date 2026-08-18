@@ -6,10 +6,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { routeMessageProjectionEvent } from "../../../../../../src/modules/chat/runtime/engine/messageProjectionRouter.js";
 import { hydrateTurnSnapshot } from "../../../../../../src/modules/chat/runtime/engine/turnProjectionStore.js";
+import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
-const finalEvent = (overrides = {}) => ({
-  envelopeKind: "noobot.message_event",
-  envelopeVersion: 2,
+const finalEvent = (overrides = {}) => canonicalMessageEvent({
   eventId: "event-final-1",
   eventType: "authoritative_final_content",
   sessionId: "session-1",
@@ -17,21 +16,14 @@ const finalEvent = (overrides = {}) => ({
   presentationMessageId: "assistant-message-1",
   dialogProcessId: "dialog-1",
   turnScopeId: "turn-1",
-  sequenceDomain: "message-event",
-  sequenceScopeId: "stream-message-1",
   sequence: 1,
-  timestamp: "2026-07-28T16:00:00.000Z",
+  occurredAt: "2026-07-28T16:00:00.000Z",
   text: "final answer",
   ...overrides,
 });
 
 function packet(event) {
-  return {
-    channelKind: "message_event",
-    channelVersion: 1,
-    route: { scope: "main_session", sessionId: event.sessionId },
-    event,
-  };
+  return event;
 }
 
 function contextFor(messages, logSessionEvent = vi.fn()) {

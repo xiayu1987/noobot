@@ -30,41 +30,47 @@ const props = defineProps({
   showParsedResult: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["preview", "download", "preview-parsed-result", "download-parsed-result"]);
+const emit = defineEmits([
+  "preview",
+  "download",
+  "preview-parsed-result",
+  "download-parsed-result",
+]);
 
 const mimeType = computed(() => String(props.attachmentItem?.mimeType || "").trim());
 const hasThumbnail = computed(() => Boolean(String(props.thumbnailUrl || "").trim()));
 const isImage = computed(() => props.isImageMime(mimeType.value));
 const isVideo = computed(() => mimeType.value.startsWith("video/"));
-const ownerType = computed(() =>
-  String(props.attachmentItem?.owner?.type || "").trim(),
+const ownerType = computed(() => String(props.attachmentItem?.owner?.type || "").trim());
+const resolvedName = computed(() =>
+  String(props.nameText || props.attachmentItem?.name || "").trim(),
 );
-const resolvedName = computed(
-  () => String(props.nameText || props.attachmentItem?.name || "").trim(),
-);
-const resolvedTitle = computed(
-  () => String(props.titleText || resolvedName.value || "").trim(),
-);
+const resolvedTitle = computed(() => String(props.titleText || resolvedName.value || "").trim());
 const resolvedSize = computed(() =>
   props.sizeValue === null ? Number(props.attachmentItem?.size || 0) : Number(props.sizeValue || 0),
 );
 const previewEnabled = computed(() =>
-  props.showPreview === null ? props.canPreviewAttachment(props.attachmentItem) : Boolean(props.showPreview),
+  props.showPreview === null
+    ? props.canPreviewAttachment(props.attachmentItem)
+    : Boolean(props.showPreview),
 );
 const showPluginBadge = computed(
-  () => props.badgeMode === "plugin" || (props.badgeMode === "auto" && ownerType.value === "plugin"),
+  () =>
+    props.badgeMode === "plugin" || (props.badgeMode === "auto" && ownerType.value === "plugin"),
 );
 const showAgentBadge = computed(() => props.badgeMode === "auto" && ownerType.value === "agent");
 const showCustomBadge = computed(() => Boolean(String(props.customBadgeText || "").trim()));
 const hasParsedResult = computed(
   () =>
     props.showParsedResult &&
-    resolveParsedResultAccessMeta(props.attachmentItem, {
-      userId: props.userId,
-    }).hasIdentity,
+    Boolean(resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId })),
 );
-const parsedResultPreviewEnabled = computed(() =>
-  hasParsedResult.value &&
+const parsedResultAccess = computed(() =>
+  resolveParsedResultAccessMeta(props.attachmentItem, { userId: props.userId }),
+);
+const parsedResultPreviewEnabled = computed(
+  () =>
+    hasParsedResult.value &&
     (typeof props.canPreviewParsedResult === "function"
       ? props.canPreviewParsedResult(props.attachmentItem)
       : previewEnabled.value),
@@ -79,12 +85,18 @@ function emitPreview() {
 <template>
   <div
     class="base-file-card noobot-flat-card"
-    :data-attachment-id="attachmentItem?.attachmentId || attachmentItem?.identity?.attachmentId || undefined"
-    :data-attachment-source="attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || undefined"
+    :data-attachment-id="
+      attachmentItem?.attachmentId || attachmentItem?.identity?.attachmentId || undefined
+    "
+    :data-attachment-source="
+      attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || undefined
+    "
     :class="{ 'is-previewable': previewEnabled }"
     :role="previewEnabled ? 'button' : undefined"
     :tabindex="previewEnabled ? 0 : undefined"
-    :title="previewEnabled ? translate('message.previewFile', { name: resolvedName || '' }) : undefined"
+    :title="
+      previewEnabled ? translate('message.previewFile', { name: resolvedName || '' }) : undefined
+    "
     @click="emitPreview"
     @keydown.enter.prevent="emitPreview"
     @keydown.space.prevent="emitPreview"
@@ -130,7 +142,10 @@ function emitPreview() {
         >
           {{ customBadgeText }}
         </span>
-        <span v-else-if="showPluginBadge" class="attachment-owner-badge noobot-soft-badge is-plugin">
+        <span
+          v-else-if="showPluginBadge"
+          class="attachment-owner-badge noobot-soft-badge is-plugin"
+        >
           {{ translate("message.pluginAttachment") }}
         </span>
         <span v-else-if="showAgentBadge" class="attachment-owner-badge noobot-soft-badge is-agent">
@@ -147,7 +162,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.previewParsedResult', {
-              name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
+              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('preview-parsed-result', attachmentItem)"
@@ -159,7 +174,7 @@ function emitPreview() {
           class="parsed-result-action noobot-flat-soft-btn"
           :title="
             translate('message.downloadParsedResult', {
-              name: attachmentItem.parsedResultName || translate('message.parsedResultDefaultName'),
+              name: parsedResultAccess?.name || translate('message.parsedResultDefaultName'),
             })
           "
           @click.stop="emit('download-parsed-result', attachmentItem)"

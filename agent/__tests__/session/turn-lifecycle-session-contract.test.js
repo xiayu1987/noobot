@@ -100,6 +100,15 @@ const event = (eventType, commandId, expectedRevision, extra = {}) => ({
   ...extra,
 });
 
+const eventIdOf = (envelope) => envelope?.identity?.eventId;
+const deliveryReceiptOf = (envelope) => ({
+  eventId: eventIdOf(envelope),
+  consumerId: "test-authority-consumer",
+  orderingDomain: envelope.ordering.domain,
+  orderingScopeId: envelope.ordering.scopeId,
+  sequence: envelope.ordering.sequence,
+});
+
 test("first send creates the session before committing action accepted", async () => {
   const h = newSessionHarness();
   const accepted = await h.service.applyTurnLifecycleEvent(
@@ -111,8 +120,8 @@ test("first send creates the session before committing action accepted", async (
   );
   assert.equal(accepted.applied, true);
   assert.equal(accepted.turn.state, TURN_STATE.ACTION_REQUESTING);
-  assert.equal(Boolean(accepted.envelope?.eventId), true);
-  assert.equal(accepted.envelope?.eventId, h.reload().authorityEventOutbox[0]?.eventId);
+  assert.equal(Boolean(eventIdOf(accepted.envelope)), true);
+  assert.equal(eventIdOf(accepted.envelope), h.reload().authorityEventOutbox[0]?.eventId);
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
 });
 
@@ -124,7 +133,8 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
       phase: TURN_PHASE.ACTION,
     }),
   );
-  const eventId = accepted.envelope.eventId;
+  const receipt = deliveryReceiptOf(accepted.envelope);
+  const { eventId } = receipt;
 
   const pending = await h.service.getPendingAuthorityEvents({ userId: "u1", sessionId: "s1" });
   assert.equal(pending.found, true);
@@ -146,7 +156,7 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   const acknowledged = await h.service.acknowledgeAuthorityEvent({
     userId: "u1",
     sessionId: "s1",
-    eventId,
+    ...receipt,
   });
   assert.equal(acknowledged.acknowledged, true);
   assert.equal(
@@ -158,7 +168,7 @@ test("authority outbox delivery is read, attempted, and acknowledged through the
   const replay = await h.service.acknowledgeAuthorityEvent({
     userId: "u1",
     sessionId: "s1",
-    eventId,
+    ...receipt,
   });
   assert.equal(replay.acknowledged, true);
   assert.equal(replay.deduplicated, true);
@@ -172,7 +182,8 @@ test("authority outbox delivery mutations remain atomic when session persistence
       phase: TURN_PHASE.ACTION,
     }),
   );
-  const eventId = accepted.envelope.eventId;
+  const receipt = deliveryReceiptOf(accepted.envelope);
+  const { eventId } = receipt;
 
   h.failNextSave();
   await assert.rejects(() =>
@@ -182,7 +193,7 @@ test("authority outbox delivery mutations remain atomic when session persistence
 
   h.failNextSave();
   await assert.rejects(() =>
-    h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId }),
+    h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", ...receipt }),
   );
   assert.equal(h.reload().authorityEventOutbox[0].delivery.deliveredAt, "");
 });
@@ -195,13 +206,17 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
       phase: TURN_PHASE.ACTION,
     }),
   );
-  const eventId = accepted.envelope.eventId;
-  await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", eventId });
+  const receipt = deliveryReceiptOf(accepted.envelope);
+  const { eventId } = receipt;
+  await h.service.acknowledgeAuthorityEvent({ userId: "u1", sessionId: "s1", ...receipt });
 
   const invalid = await h.service.compactAuthorityEvents({
     userId: "u1",
     sessionId: "s1",
     deliveredThroughSequence: 1,
+    consumerId: receipt.consumerId,
+    orderingDomain: receipt.orderingDomain,
+    orderingScopeId: receipt.orderingScopeId,
   });
   assert.equal(invalid.reason, "invalid_retention_cutoff");
   assert.equal(h.reload().authorityEventOutbox.length, 1);
@@ -212,6 +227,9 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
       userId: "u1",
       sessionId: "s1",
       deliveredThroughSequence: 1,
+      consumerId: receipt.consumerId,
+      orderingDomain: receipt.orderingDomain,
+      orderingScopeId: receipt.orderingScopeId,
       retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
     }),
   );
@@ -221,6 +239,9 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
     userId: "u1",
     sessionId: "s1",
     deliveredThroughSequence: 1,
+    consumerId: receipt.consumerId,
+    orderingDomain: receipt.orderingDomain,
+    orderingScopeId: receipt.orderingScopeId,
     retainDeliveredAfter: "2026-07-19T00:00:00.000Z",
   });
   assert.equal(compacted.compacted, true);
@@ -234,7 +255,7 @@ test("authority outbox compaction is explicit, receipt-safe, and atomic on persi
     }),
   );
   assert.equal(replay.deduplicated, true);
-  assert.equal(replay.envelope.eventId, eventId);
+  assert.equal(eventIdOf(replay.envelope), eventId);
 });
 
 test("missing session send requires an explicit provision intent", async () => {
@@ -265,7 +286,7 @@ test("initial provision replay is idempotent and concurrent first actions are mu
   });
   assert.equal(accepted.sessionCreated, true);
   assert.equal(replay.deduplicated, true);
-  assert.equal(replay.envelope?.eventId, accepted.envelope?.eventId);
+  assert.equal(eventIdOf(replay.envelope), eventIdOf(accepted.envelope));
   assert.equal(competing.reason, "session_action_conflict");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
   assert.equal(h.reload().authorityEventOutbox.length, 1);
@@ -323,9 +344,9 @@ test("authoritative lifecycle persists, sequences and restores the complete path
   assert.equal(displayLifecycle.turns.t1.executionState, "completed");
   assert.equal(restored.turns.t1.summaryVersion, 1);
   assert.equal(restored.turns.t1.terminalStatus.status, "completed");
-  assert.equal(h.reload().turnStatuses.length, 1);
+  assert.equal(restored.turns.t1.terminalStatus.status, "completed");
   assert.equal(h.reload().authorityEventOutbox.length, 4);
-  assert.equal(completed.envelope.eventId, h.reload().authorityEventOutbox[3].eventId);
+  assert.equal(eventIdOf(completed.envelope), h.reload().authorityEventOutbox[3].eventId);
   assert.equal(h.reload().turnTerminalCommits, undefined);
 });
 
@@ -343,7 +364,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   );
   assert.equal(h.reload().turnLifecycle.sequence, 0);
   assert.equal(h.reload().authorityEventOutbox.length, 0);
-  assert.equal(h.reload().turnStatuses.length, 0);
+  assert.deepEqual(h.reload().turnLifecycle.turns, {});
 
   await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
@@ -370,7 +391,6 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   );
   const afterTerminal = h.reload();
   assert.deepEqual(afterTerminal.turnLifecycle, beforeTerminal.turnLifecycle);
-  assert.deepEqual(afterTerminal.turnStatuses, beforeTerminal.turnStatuses);
   assert.deepEqual(afterTerminal.authorityEventOutbox, beforeTerminal.authorityEventOutbox);
 });
 
@@ -398,10 +418,9 @@ test("terminal materialization rejection does not mutate lifecycle or outbox", a
       terminalStatus: { command: "not-a-terminal-command" },
     }),
   );
-  assert.equal(rejected.reason, "invalid_turn_status_command");
+  assert.equal(rejected.reason, "invalid_turn_terminal_status");
   const after = h.reload();
   assert.deepEqual(after.turnLifecycle, before.turnLifecycle);
-  assert.deepEqual(after.turnStatuses, before.turnStatuses);
   assert.deepEqual(after.authorityEventOutbox, before.authorityEventOutbox);
 });
 

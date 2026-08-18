@@ -423,40 +423,61 @@ export function buildWorkflowDialogRelativeDir({
     : `runtime/workflow/planning/${sessionId}/${resolvedDialogProcessId}`;
 }
 
-export async function emitWorkflowRuntimeEvent({
-  options = {},
+export async function commitWorkflowRuntimeEvent({
   ctx = {},
-  dialogProcessId = "",
-  event = "",
-  level = "info",
-  data = {},
+  eventType = "",
+  payload = {},
+  orderingDomain = "",
+  orderingScopeId = "",
+  revision = 1,
+  messageId = "",
+  executionId = "",
 } = {}) {
-  if (typeof options?.workflowEventLogger !== "function") return null;
-  const userId = String(ctx?.userId || "").trim();
-  if (!userId) return null;
-  const resolvedDialogProcessId = String(dialogProcessId || ctx?.dialogProcessId || "").trim();
-  const relativeDir = buildWorkflowDialogRelativeDir({
-    ctx,
-    dialogProcessId: resolvedDialogProcessId,
-  });
-  if (!relativeDir) return null;
-  try {
-    return await options.workflowEventLogger({
-      userId,
-      relativeDir,
-      fileName: "events.jsonl",
-      event: {
-        source: "workflow-plugin",
-        level: String(level || "info").trim(),
-        event: String(event || "").trim(),
-        sessionId: String(ctx?.sessionId || "").trim(),
-        dialogProcessId: resolvedDialogProcessId,
-        ...(data && typeof data === "object" ? data : {}),
-      },
-    });
-  } catch {
-    return null;
+  const runtime = ctx?.agentContext?.bindings?.runtime;
+  const sessionManager = runtime?.sessionManager;
+  const userId = String(runtime?.userId || ctx?.userId || "").trim();
+  const sessionId = String(ctx?.sessionId || "").trim();
+  const turnScopeId = String(payload?.turnScopeId || ctx?.turnScopeId || runtime?.runConfig?.turnScopeId || "").trim();
+  if (!sessionManager?.commitAuthorityEvent) {
+    throw new Error("workflow authority event commit capability is required");
   }
+  const committed = await sessionManager.commitAuthorityEvent({
+    userId,
+    sessionId,
+    family: "workflow.runtime",
+    identity: {
+      eventType: String(eventType || "").trim(),
+      turnScopeId,
+      messageId: String(messageId || payload?.messageId || "").trim(),
+      executionId: String(executionId || payload?.nodeExecutionId || ctx?.workflowExecutionId || "").trim(),
+    },
+    causality: {
+      commandId: String(payload?.commandId || runtime?.runConfig?.commandId || "").trim(),
+      correlationId: String(payload?.workflowRunId || "").trim(),
+    },
+    ordering: {
+      domain: String(orderingDomain || "").trim(),
+      scopeId: String(orderingScopeId || payload?.workflowRunId || "").trim(),
+      revision: Number(revision),
+    },
+    producer: { type: "plugin", id: "workflow" },
+    payload,
+    persistenceContext: runtime?.runConfig?.persistenceContext || null,
+  });
+  if (!committed?.committed || !committed?.envelope) {
+    throw new Error(`workflow authority event commit failed: ${committed?.reason || "unknown"}`);
+  }
+  if (typeof ctx?.eventListener?.onEvent !== "function") {
+    throw new Error("workflow authority event dispatcher is required");
+  }
+  await ctx.eventListener.onEvent({
+    event: "authority_event_committed",
+    data: {
+      envelope: committed.envelope,
+      persistenceScope: runtime?.runConfig?.persistenceContext || null,
+    },
+  });
+  return committed.envelope;
 }
 
 export async function persistWorkflowPlanningDialog({

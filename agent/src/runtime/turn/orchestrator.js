@@ -7,11 +7,11 @@ import {
   collectScopedMessagesToSummarize,
   DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
   DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
-} from "@noobot/context-protocol/summary-policy";
+} from "@noobot/context-protocol/policy/summary";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../constants/index.js";
-import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/injected-message-policy";
+import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/policy/injected-message";
 import { handleEngineError } from "../errors/index.js";
 import {
   maybeFinalizeNoToolsAfterPhaseSummaryOverflow,
@@ -25,10 +25,12 @@ import { assertNotAborted } from "../utils/error-utils.js";
 import { processToolResults } from "./response-processor.js";
 import { invokeNoToolsTurn, invokeWithToolsTurn } from "./turn-executor.js";
 import { buildLoopResult } from "./turn-result-aggregator.js";
-import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { resolveParentSessionId } from "../../context/parent-session-id-resolver.js";
-import { removeContextMessagesByIds } from "@noobot/context-protocol/context-mutation";
-import { getMessageId } from "@noobot/context-protocol/message-store";
+import {
+  getSessionIdsFromAgentContext,
+  getSystemRuntimeFromRuntime,
+} from "../../context/agent-context-accessor.js";
+import { removeContextMessagesByIds } from "@noobot/context-protocol/mutation/context";
+import { getMessageId } from "@noobot/context-protocol/message/store";
 import {
   clearMainFlowFinalNoToolsTurnInstruction,
   consumeMainFlowFinalNoToolsTurnInstruction,
@@ -383,9 +385,10 @@ export function createTurnOrchestrator({
         turn: turn + Math.max(1, calls.length),
       });
     } catch (error) {
-      const systemRuntime = runtime?.systemRuntime || {};
+      const executionIdentity = getSessionIdsFromAgentContext(modelState.agentContext);
       handleEngineErrorFn({
         error,
+        abortSignal,
         eventListener,
         event: "turn_orchestrator_error",
         metadata: {
@@ -393,9 +396,9 @@ export function createTurnOrchestrator({
           turn,
           maxTurns,
           hasTools: Array.isArray(tools) && tools.length > 0,
-          sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-          parentSessionId: resolveParentSessionId({ runtime }),
-          dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
+          sessionId: executionIdentity.sessionId,
+          parentSessionId: executionIdentity.parentSessionId,
+          dialogProcessId: executionIdentity.dialogProcessId,
         },
       });
       throw error;

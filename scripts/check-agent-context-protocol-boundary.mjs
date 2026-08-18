@@ -16,7 +16,7 @@ async function sourceFiles(directory) {
   const files = [];
   for (const entry of entries) {
     const relative = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...await sourceFiles(relative));
+    if (entry.isDirectory()) files.push(...(await sourceFiles(relative)));
     else if (/\.(?:js|mjs)$/.test(entry.name)) files.push(relative);
   }
   return files;
@@ -38,18 +38,23 @@ for (const file of await sourceFiles("context-protocol/src")) {
     const importsAgentRuntime =
       specifier.startsWith("@noobot/agent") ||
       specifier.startsWith("noobot-agent") ||
-      (specifier.startsWith(".") && !path.resolve(ROOT, path.dirname(file), specifier).startsWith(path.join(ROOT, "context-protocol")));
+      (specifier.startsWith(".") &&
+        !path
+          .resolve(ROOT, path.dirname(file), specifier)
+          .startsWith(path.join(ROOT, "context-protocol")));
     if (importsAgentRuntime) {
-      violations.push(`${file}: context-protocol must not import Agent runtime module ${specifier}`);
+      violations.push(
+        `${file}: context-protocol must not import Agent runtime module ${specifier}`,
+      );
     }
   }
 }
 
 const runtimeConsumers = [
-  ...await sourceFiles("agent/src"),
-  ...await sourceFiles("plugin/noobot-plugin-harness/src"),
-  ...await sourceFiles("plugin/noobot-plugin-workflow/src"),
-  ...await sourceFiles("user-template"),
+  ...(await sourceFiles("agent/src")),
+  ...(await sourceFiles("plugin/noobot-plugin-harness/src")),
+  ...(await sourceFiles("plugin/noobot-plugin-workflow/src")),
+  ...(await sourceFiles("user-template")),
 ];
 const forbiddenReads = [
   [/execution\?*\.controllers\?*\.runtime/, "execution.controllers.runtime"],
@@ -64,20 +69,28 @@ for (const file of runtimeConsumers) {
   }
 }
 
-await assertAbsent("agent/src/context/runtime-state/message-store.js");
-await assertAbsent("agent/src/context/runtime-state/context-diagnostics.js");
+await assertAbsent("agent/src/context/runtime-state/store.js");
+await assertAbsent("agent/src/context/runtime-state/diagnostics.js");
 await assertAbsent("agent/src/bot/session/context-builder.js");
-await assertAbsent("agent/src/context/session/message-context-policy.js");
-await assertAbsent("agent/src/context/session/summarized-message-policy.js");
+await assertAbsent("agent/src/context/session/message-context.js");
+await assertAbsent("agent/src/context/session/summarized-message.js");
 await assertAbsent("agent/src/session/utils/context-window-normalizer.js");
+await assertAbsent("agent/src/context/session/dialog-process-id-resolver.js");
+await assertAbsent("agent/src/context/session/message-content-utils.js");
+await assertAbsent("agent/src/context/session/message-converter.js");
+await assertAbsent("agent/src/context/assembly/message-builder/message-utils.js");
+await assertAbsent("agent/src/context/parent-session-id-resolver.js");
 
-const resolverText = await readFile(
-  path.join(ROOT, "agent/src/context/session/dialog-process-id-resolver.js"),
-  "utf8",
-);
-for (const legacyPath of ["currentDialogProcessId", "controllers", "upstream", "systemRuntime"]) {
-  if (resolverText.includes(legacyPath)) {
-    violations.push(`dialog-process-id-resolver.js: forbidden identity fallback ${legacyPath}`);
+const forbiddenAgentProtocolDefinitions = [
+  [/function\s+resolveMessageRole\s*\(/, "message role resolver"],
+  [/function\s+resolveMessageToolCalls\s*\(/, "message tool-call resolver"],
+  [/function\s+resolveMessageToolCallId\s*\(/, "message tool-call id resolver"],
+  [/function\s+resolveParentSessionId(?:WithMeta)?\s*\(/, "parent session resolver"],
+];
+for (const file of await sourceFiles("agent/src")) {
+  const text = await readFile(path.join(ROOT, file), "utf8");
+  for (const [pattern, label] of forbiddenAgentProtocolDefinitions) {
+    if (pattern.test(text)) violations.push(`${file}: forbidden duplicate ${label}`);
   }
 }
 

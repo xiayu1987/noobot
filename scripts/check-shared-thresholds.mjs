@@ -20,22 +20,30 @@ function resolveRepoRoot() {
   const cwd = process.cwd();
   if (exists(path.join(cwd, "package.json")) && exists(path.join(cwd, "shared"))) return cwd;
   const parent = path.dirname(cwd);
-  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "shared"))) return parent;
+  if (exists(path.join(parent, "package.json")) && exists(path.join(parent, "shared")))
+    return parent;
   return cwd;
 }
 
 const ROOT = resolveRepoRoot();
-const TARGET_DIRS = ["agent", "service", "agent-proxy", "model-proxy", "client", "plugin", "workflow", "i18n"];
+const TARGET_DIRS = [
+  "agent",
+  "service",
+  "agent-proxy",
+  "model-proxy",
+  "client",
+  "plugin",
+  "workflow",
+  "i18n",
+];
 const CODE_EXT = new Set([".js", ".mjs", ".cjs", ".ts", ".tsx", ".vue"]);
 const SHARED_THRESHOLD_FILES = new Set([
-  "shared/length-thresholds.mjs",
-  "shared/quantity-thresholds.mjs",
-  "shared/time-thresholds.mjs",
-  "shared/turn-thresholds.mjs",
+  "shared/length-thresholds.js",
+  "shared/quantity-thresholds.js",
+  "shared/time-thresholds.js",
+  "shared/turn-thresholds.js",
 ]);
-const SELF_CONTAINED_ENTRY_FILES = new Set([
-  "client/shared/electron/main.js",
-]);
+const SELF_CONTAINED_ENTRY_FILES = new Set(["client/shared/electron/main.js"]);
 const IGNORE_PATH_PARTS = [
   `${path.sep}node_modules${path.sep}`,
   `${path.sep}.git${path.sep}`,
@@ -53,29 +61,35 @@ const CATEGORY_RULES = [
     category: "length",
     importPath: "@noobot/shared/length-thresholds",
     symbol: "LENGTH_THRESHOLDS",
-    namePattern: /(CHARS?|BYTES?|STRING(?:_?LENGTH)?|TEXT|PREVIEW|CONTENT|EXTENSION_?LENGTH|TRUNCATE_?LENGTH)/i,
-    propPattern: /^(?:maxChars|maxLength|maxStringLength|maxBytes|previewChars|contentChars|textChars|maxBufferBytes|maxFileSizeBytes|maxTotalSizeBytes)$/i,
+    namePattern:
+      /(CHARS?|BYTES?|STRING(?:_?LENGTH)?|TEXT|PREVIEW|CONTENT|EXTENSION_?LENGTH|TRUNCATE_?LENGTH)/i,
+    propPattern:
+      /^(?:maxChars|maxLength|maxStringLength|maxBytes|previewChars|contentChars|textChars|maxBufferBytes|maxFileSizeBytes|maxTotalSizeBytes)$/i,
   },
   {
     category: "quantity",
     importPath: "@noobot/shared/quantity-thresholds",
     symbol: "QUANTITY_THRESHOLDS",
     namePattern: /(ITEMS?|COUNT|LIMIT|LINES?|RESULTS?|FILES?|ENTRIES|CONCURRENCY|DEPTH|SIZE)$/i,
-    propPattern: /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|jsonlBatchSize|maxRuns)$/i,
+    propPattern:
+      /^(?:maxItems|maxFileCount|maxSubAgentDepth|maxLines|maxResults|maxFiles|maxEntries|maxBufferEntries|maxSize|limit|concurrency|jsonlBatchSize|maxRuns)$/i,
   },
   {
     category: "time",
     importPath: "@noobot/shared/time-thresholds",
     symbol: "TIME_THRESHOLDS",
-    namePattern: /(TIMEOUT|INTERVAL|DELAY|TTL|AGE|RETENTION|GRACE|DURATION|POLL|DEBOUNCE).*?(MS|SECONDS|DAYS)?$/i,
-    propPattern: /^(?:timeoutMs|intervalMs|delayMs|ttlMs|maxAgeMs|retentionMs|graceMs|durationSeconds|maxRunAgeDays)$/i,
+    namePattern:
+      /(TIMEOUT|INTERVAL|DELAY|TTL|AGE|RETENTION|GRACE|DURATION|POLL|DEBOUNCE).*?(MS|SECONDS|DAYS)?$/i,
+    propPattern:
+      /^(?:timeoutMs|intervalMs|delayMs|ttlMs|maxAgeMs|retentionMs|graceMs|durationSeconds|maxRunAgeDays)$/i,
   },
   {
     category: "turn",
     importPath: "@noobot/shared/turn-thresholds",
     symbol: "TURN_THRESHOLDS",
     namePattern: /(TURNS?|ROUNDS?|ATTEMPTS?|RETRIES|RETRY_?COUNT|MAX_?RETRY)/i,
-    propPattern: /^(?:maxTurns|turnsThreshold|triggerTurnsThreshold|rounds|maxAttempts|maxRetry|retryCount)$/i,
+    propPattern:
+      /^(?:maxTurns|turnsThreshold|triggerTurnsThreshold|rounds|maxAttempts|maxRetry|retryCount)$/i,
   },
 ];
 
@@ -165,7 +179,7 @@ function stripCommentsAndStrings(text = "") {
       state = "blockComment";
       continue;
     }
-    if (char === "\"" || char === "'") {
+    if (char === '"' || char === "'") {
       out += " ";
       quote = char;
       state = "string";
@@ -222,8 +236,7 @@ function collectViolations(filePath, text) {
   const code = stripCommentsAndStrings(text);
   const violations = [];
 
-  const declarations =
-    /\b(?:export\s+)?(?:const|let|var)\s+([A-Z_$][\w$]*)\s*=\s*([^;\n]+)/g;
+  const declarations = /\b(?:export\s+)?(?:const|let|var)\s+([A-Z_$][\w$]*)\s*=\s*([^;\n]+)/g;
   let match;
   while ((match = declarations.exec(code))) {
     const [, name, expr] = match;
@@ -238,8 +251,7 @@ function collectViolations(filePath, text) {
     });
   }
 
-  const properties =
-    /\b([A-Za-z_$][\w$]*)\s*:\s*([^,\n}]+)/g;
+  const properties = /\b([A-Za-z_$][\w$]*)\s*:\s*([^,\n}]+)/g;
   while ((match = properties.exec(code))) {
     const [, name, expr] = match;
     const rule = classifyName(name, "prop");
@@ -274,7 +286,9 @@ if (violations.length) {
       `- ${item.file}:${item.line}:${item.column} ${item.name} = ${item.expr} -> use ${item.rule.symbol} from ${item.rule.importPath}`,
     );
   }
-  console.error("\nPut length/quantity/time/turn thresholds in shared/*-thresholds.mjs and import them via @noobot/shared/*-thresholds.");
+  console.error(
+    "\nPut length/quantity/time/turn thresholds in shared/*-thresholds.js and import them via @noobot/shared/*-thresholds.",
+  );
   process.exit(1);
 }
 

@@ -24,14 +24,14 @@ export class BotManager {
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
 
-    this.sessionRuntime = createSessionServices(globalConfig);
+    this.attach = new AttachmentService(globalConfig);
+    this.sessionRuntime = createSessionServices(globalConfig, { attachmentService: this.attach });
     this.session = createSessionFacade(this.sessionRuntime);
     this.memory = new MemoryManager(globalConfig);
-    this.attach = new AttachmentService(globalConfig);
     this.skill = new SkillService(globalConfig);
 
     this.workspaceService = new WorkspaceService({ globalConfig });
-    this.configService = new ConfigService({ globalConfig });
+    this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({
       globalConfig,
       workspaceService: this.workspaceService,
@@ -122,6 +122,10 @@ export class BotManager {
     });
   }
 
+  deleteSessionMemoryBySessionIds({ userId, sessionIds = [] } = {}) {
+    return this.memory.deleteSessionMemoryBySessionIds({ userId, sessionIds });
+  }
+
   async deleteToolResultOverflowBySessionIds({ userId, sessionIds = [] } = {}) {
     const basePath = String(this.getWorkspacePath(userId) || "").trim();
     const normalizedIds = [
@@ -194,6 +198,10 @@ export class BotManager {
     return this.sessionRunner.getTurnLifecycleSnapshot(payload);
   }
 
+  async commitAuthorityEvent(payload = {}) {
+    return this.sessionRunner.commitAuthorityEvent(payload);
+  }
+
   async getPendingAuthorityEvents(payload = {}) {
     return this.sessionRunner.getPendingAuthorityEvents(payload);
   }
@@ -204,6 +212,10 @@ export class BotManager {
 
   async acknowledgeAuthorityEvent(payload = {}) {
     return this.sessionRunner.acknowledgeAuthorityEvent(payload);
+  }
+
+  async compactAuthorityEvents(payload = {}) {
+    return this.sessionRunner.compactAuthorityEvents(payload);
   }
 
   async getExecution(payload = {}) {

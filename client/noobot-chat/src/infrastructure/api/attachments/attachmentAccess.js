@@ -3,137 +3,80 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { buildAttachmentUrl } from "../chat/chatApi.js";
 import {
-  buildAttachmentUrl,
-  resolveAttachmentId,
-  resolveAttachmentSessionId,
-  resolveAttachmentSource,
-} from "../chat/chatApi.js";
+  ATTACHMENT_RELATION_TYPE,
+  attachmentIdentityKey,
+  findAttachmentRelation,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+function normalizedDraftAttachmentId(attachmentItem = {}) {
+  if (String(attachmentItem?.attachmentId || "").trim()) return "";
+  return String(
+    attachmentItem?.clientAttachmentId || attachmentItem?.draftAttachmentId || "",
+  ).trim();
 }
 
-function firstString(...values) {
-  for (const value of values) {
-    const normalized = String(value || "").trim();
-    if (normalized) return normalized;
+export function isDraftAttachmentItem(attachmentItem = {}) {
+  return Boolean(normalizedDraftAttachmentId(attachmentItem));
+}
+
+export function resolveAttachmentDisplayKey(attachmentItem = {}) {
+  const draftAttachmentId = normalizedDraftAttachmentId(attachmentItem);
+  if (draftAttachmentId) return `draft:${draftAttachmentId}`;
+  return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachmentItem))}`;
+}
+
+export function mergeAttachmentDisplayItems(...collections) {
+  const merged = new Map();
+  for (const attachmentItem of collections.flatMap((items) =>
+    Array.isArray(items) ? items : [],
+  )) {
+    merged.set(resolveAttachmentDisplayKey(attachmentItem), attachmentItem);
   }
-  return "";
+  return [...merged.values()];
 }
 
-function firstKnownSize(...values) {
-  for (const value of values) {
-    const size = Number(value);
-    if (Number.isFinite(size) && size >= 0) return size;
-  }
-  return null;
-}
-
-export function resolveBaseName(filePath = "") {
-  const normalized = String(filePath || "").trim().replaceAll("\\", "/");
-  if (!normalized) return "";
-  const parts = normalized.split("/");
-  return String(parts[parts.length - 1] || "").trim();
+function buildAccessUrl(identity, userId) {
+  return buildAttachmentUrl({ userId, ...identity });
 }
 
 export function resolveAttachmentAccessMeta(attachmentItem = {}, { userId = "" } = {}) {
-  const attachmentId = resolveAttachmentId(attachmentItem);
-  const sessionId = resolveAttachmentSessionId(attachmentItem);
-  const attachmentSource = resolveAttachmentSource(attachmentItem);
-  const url = attachmentId
-      ? buildAttachmentUrl({
-          userId,
-          attachmentId,
-          sessionId,
-          attachmentSource,
-        })
-      : "";
+  const identity = projectAttachmentIdentity(attachmentItem);
   return {
-    attachmentId,
-    sessionId,
-    attachmentSource,
-    url,
+    ...identity,
+    url: buildAccessUrl(identity, userId),
   };
 }
 
-export function resolveParsedResultAccessMeta(
-  attachmentItem = {},
-  { userId = "", defaultAttachmentSource = "" } = {},
-) {
-  const parsedResult = isPlainObject(attachmentItem?.parsedResult)
-    ? attachmentItem.parsedResult
-    : {};
-  const attachmentId = firstString(
-    parsedResult?.attachmentId,
-  );
-  const sessionId = firstString(
-    parsedResult?.sessionId,
-    parsedResult?.session_id,
-  );
-  const attachmentSource = firstString(
-    parsedResult?.attachmentSource,
-    parsedResult?.attachment_source,
-    parsedResult?.source,
-    defaultAttachmentSource,
-  );
-  const path = firstString(parsedResult?.path);
-  const relativePath = firstString(
-    parsedResult?.relativePath,
-    parsedResult?.relative_path,
-  );
-  const url = attachmentId && sessionId && attachmentSource
-      ? buildAttachmentUrl({
-          userId,
-          attachmentId,
-          sessionId,
-          attachmentSource,
-        })
-      : "";
-  const name = firstString(
-    parsedResult?.name,
-    parsedResult?.fileName,
-    parsedResult?.filename,
-    resolveBaseName(relativePath),
-    resolveBaseName(path),
-  );
-  const mimeType = firstString(
-    parsedResult?.mimeType,
-    parsedResult?.type,
-    parsedResult?.mime,
-    "text/markdown",
-  );
-  const size = firstKnownSize(
-    parsedResult?.size,
-    parsedResult?.bytes,
-  );
-
+export function resolveParsedResultAccessMeta(attachmentItem = {}, { userId = "" } = {}) {
+  if (isDraftAttachmentItem(attachmentItem)) return null;
+  const sourceIdentity = projectAttachmentIdentity(attachmentItem);
+  const relation = findAttachmentRelation(attachmentItem.relations, {
+    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+    sourceIdentity,
+  });
+  if (!relation) return null;
   return {
-    raw: parsedResult,
-    attachmentId,
-    sessionId,
-    attachmentSource,
-    path,
-    relativePath,
-    url,
-    name,
-    mimeType,
-    size,
-    hasIdentity: Boolean(attachmentId && url),
+    relation,
+    ...relation.targetIdentity,
+    url: buildAccessUrl(relation.targetIdentity, userId),
+    name: relation.name || "",
+    mimeType: relation.mimeType || "",
+    size: relation.size ?? null,
   };
 }
 
 export function buildParsedResultPreviewItem(attachmentItem = {}, options = {}) {
-  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, options);
+  const access = resolveParsedResultAccessMeta(attachmentItem, options);
+  if (!access) return null;
   return {
-    ...parsedResult.raw,
-    ...(parsedResult.attachmentId ? { attachmentId: parsedResult.attachmentId } : {}),
-    ...(parsedResult.sessionId ? { sessionId: parsedResult.sessionId } : {}),
-    ...(parsedResult.attachmentSource ? { attachmentSource: parsedResult.attachmentSource } : {}),
-    ...(parsedResult.path ? { path: parsedResult.path } : {}),
-    ...(parsedResult.relativePath ? { relativePath: parsedResult.relativePath } : {}),
-    name: parsedResult.name || String(attachmentItem?.name || "").trim(),
-    mimeType: parsedResult.mimeType,
-    ...(parsedResult.size !== null ? { size: parsedResult.size } : {}),
+    attachmentId: access.attachmentId,
+    sessionId: access.sessionId,
+    attachmentSource: access.attachmentSource,
+    name: access.name,
+    mimeType: access.mimeType,
+    ...(access.size === null ? {} : { size: access.size }),
   };
 }

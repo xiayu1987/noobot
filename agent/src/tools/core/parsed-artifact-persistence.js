@@ -4,11 +4,29 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { getTransferAttachments, materializeTextForToolResult, TRANSFER_SOURCE } from "../../transfer-adapter/index.js";
+import { randomUUID } from "node:crypto";
+import {
+  ATTACHMENT_EVENT_TYPE,
+  ATTACHMENT_LIFECYCLE,
+  ATTACHMENT_RELATION_TYPE,
+  createAttachmentLifecycleEvent,
+  findAttachmentRelation,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
+import { EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  getTransferAttachments,
+  materializeTextForToolResult,
+} from "../../transfer-adapter/index.js";
+import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
-import { ARTIFACT_GENERATION_SOURCE, TOOL_ATTACHMENT_SOURCE, TOOL_NAME } from "../constants/index.js";
+import {
+  ARTIFACT_GENERATION_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
+  TOOL_NAME,
+} from "../constants/index.js";
 
 function sanitizeArtifactBaseName(input = "", fallback = "multimodal-parse") {
   const normalized = String(input || "").trim();
@@ -53,33 +71,69 @@ export function normalizePersistedAttachments(persistedOutput) {
   return Array.isArray(persistedOutput?.attachments) ? persistedOutput.attachments : [];
 }
 
-export async function backwriteParsedAttachment({ runtime, sourceAttachmentMeta, attachments }) {
+export async function backwriteParsedAttachment({
+  runtime,
+  sourceAttachmentMeta,
+  parsedAttachment,
+}) {
   if (String(sourceAttachmentMeta?.attachmentSource || "").trim() !== "user") return null;
-  const firstAttachment = attachments?.[0] || null;
-  const parsedAttachmentMeta = firstAttachment?.identity
-    ? { ...firstAttachment.identity, name: firstAttachment.name, mimeType: firstAttachment.mimeType, size: firstAttachment.size }
-    : firstAttachment;
-  const sourceAttachmentId = String(sourceAttachmentMeta?.attachmentId || "").trim();
+  const sourceIdentity = projectAttachmentIdentity(sourceAttachmentMeta);
+  const targetAttachment = parsedAttachment?.identity
+    ? { ...parsedAttachment, ...parsedAttachment.identity }
+    : parsedAttachment;
   const attachmentService = runtime?.attachmentService || null;
   const userId = String(runtime?.userId || "").trim();
-  if (!sourceAttachmentId || !parsedAttachmentMeta || !attachmentService || !userId) return null;
-  try {
-    const updated = await attachmentService.linkParsedResultToAttachment({
-      userId,
-      sourceAttachmentId,
-      parsedAttachmentMeta,
-      toolName: TOOL_NAME.MULTIMODAL_PARSE,
-      sourceSessionId: String(sourceAttachmentMeta?.sessionId || "").trim(),
-      sourceAttachmentSource: "user",
-    });
-    updateRuntimeUserMessageAttachment(runtime, sourceAttachmentId, updated || {});
-    if (updated) emitEvent(runtime?.eventListener || null, "attachment_parsed", {
-      dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
-      turnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim(),
-      attachments: [updated],
-    });
-    return updated;
-  } catch {
-    return null;
+  if (!targetAttachment || !attachmentService || !userId) return null;
+  const updated = await attachmentService.linkParsedResultToAttachment({
+    userId,
+    sourceIdentity,
+    targetAttachment,
+    producerId: TOOL_NAME.MULTIMODAL_PARSE,
+  });
+  updateRuntimeUserMessageAttachment(runtime, sourceIdentity.attachmentId, updated);
+  const identity = projectAttachmentIdentity(updated);
+  const relation = findAttachmentRelation(updated.relations, {
+    relationType: ATTACHMENT_RELATION_TYPE.PARSED_RESULT,
+    sourceIdentity: identity,
+  });
+  const event = createAttachmentLifecycleEvent({
+    eventType: ATTACHMENT_EVENT_TYPE.PARSED,
+    eventVersion: 1,
+    messageId: `attachment-event:${randomUUID()}`,
+    identity,
+    status: ATTACHMENT_LIFECYCLE.PARSED,
+    occurredAt: new Date().toISOString(),
+    turnScopeId: String(runtime?.systemRuntime?.turnScopeId || "").trim() || undefined,
+    runId: String(runtime?.systemRuntime?.runId || "").trim() || undefined,
+    relation,
+  });
+  const sessionId = String(runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId || "").trim();
+  const parentSessionId = String(runtime?.systemRuntime?.parentSessionId || runtime?.runConfig?.parentSessionId || "").trim();
+  const committed = await runtime?.sessionManager?.commitAuthorityEvent?.({
+    userId,
+    sessionId,
+    parentSessionId,
+    family: EVENT_FAMILY.ATTACHMENT_LIFECYCLE,
+    identity: {
+      eventType: "attachment_lifecycle",
+      turnScopeId: event.turnScopeId,
+      messageId: event.messageId,
+    },
+    causality: { correlationId: event.runId },
+    ordering: {
+      domain: "attachment-lifecycle",
+      scopeId: [identity.attachmentId, identity.sessionId, identity.attachmentSource].join(":"),
+    },
+    producer: { type: "tool", id: TOOL_NAME.MULTIMODAL_PARSE },
+    payload: event,
+    persistenceContext: runtime?.runConfig?.persistenceContext || null,
+  });
+  if (!committed?.committed || !committed?.envelope) {
+    throw new Error(`attachment authority event commit failed: ${committed?.reason || "unknown"}`);
   }
+  await emitEvent(runtime?.eventListener || null, "authority_event_committed", {
+    envelope: committed.envelope,
+    persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
+  });
+  return updated;
 }

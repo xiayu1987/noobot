@@ -12,14 +12,13 @@ import { selectCompletedToolArtifacts } from "../../../../../../src/modules/chat
 const identity = (item) => ({ ...item });
 
 describe("buildSessionDetailProjection", () => {
-  it("projects messages, status placeholders and timings through one entrypoint", () => {
+  it("projects canonical messages and timings through one entrypoint", () => {
     const projection = buildSessionDetailProjection({
       sessionDetail: {
         sessionId: "session-1",
         messages: [
           { role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dialog-1" },
         ],
-        turnStatuses: [{ turnScopeId: "turn-1", dialogProcessId: "dialog-1", status: "thinking" }],
         turnTimings: [{ turnScopeId: "turn-1", thinkingStartedAt: "2026-01-01T00:00:00.000Z" }],
       },
       sessionDocs: [{ sessionId: "session-1" }],
@@ -28,14 +27,8 @@ describe("buildSessionDetailProjection", () => {
     });
 
     expect(projection.sessionId).toBe("session-1");
-    expect(projection.turnStatuses[0].status).toBe("thinking");
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
     expect(projection.messages.some((item) => item.role === "user")).toBe(true);
-    expect(
-      projection.messages.some(
-        (item) => item.placeholder === true || item.statusTurnScopeId === "turn-1",
-      ),
-    ).toBe(true);
   });
 
   it("does not create a mutable timing store from a sparse projection", () => {
@@ -49,38 +42,6 @@ describe("buildSessionDetailProjection", () => {
     });
 
     expect(projection).not.toHaveProperty("turnTimingsByTurnScopeId");
-  });
-
-  it("projects a persisted stopped turn assistant presentation without assistant content", () => {
-    const projection = buildSessionDetailProjection({
-      sessionDetail: {
-        sessionId: "session-stopped",
-        messages: [
-          {
-            role: "user",
-            content: "stop this",
-            turnScopeId: "turn-stopped",
-            dialogProcessId: "dialog-stopped",
-          },
-        ],
-        turnStatuses: [
-          {
-            status: "user_stopped",
-            turnScopeId: "turn-stopped",
-            dialogProcessId: "dialog-stopped",
-          },
-        ],
-      },
-      makeViewMessage: identity,
-    });
-
-    expect(projection.messages).toHaveLength(2);
-    expect(projection.messages[1]).toMatchObject({
-      role: "assistant",
-      turnStatusPlaceholder: true,
-      status: "user_stopped",
-    });
-    expect(projection.messages[1].content).toContain("本轮已由用户停止");
   });
 
   it("indexes workflow node timings by normalized turn scope key", () => {

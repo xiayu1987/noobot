@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  resolveTurnMessagesStore,
-  resolveTurnTasksStore,
-} from "../../context/session/current-turn-store.js";
+  requireCurrentTurnMessagesStore,
+  requireCurrentTurnTasksStore,
+} from "./current-turn-ledger.js";
 import { emitEvent } from "../../events/index.js";
 import { createStateCommitter } from "../tool-execution/state-committer.js";
 import { persistModelGeneratedArtifacts } from "../../artifacts/runtime/artifact-service.js";
@@ -23,18 +23,13 @@ export async function commitNoToolsTurnState({
   messageId = "",
   presentationMessageId = "",
 } = {}) {
-  const {
-    currentTurnMessages,
-    currentTurnTasks,
-    dialogProcessId,
-  } = loopState;
+  const { currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
   const { eventListener, runtime } = modelState;
 
-  const turnMessageStore = resolveTurnMessagesStore(currentTurnMessages);
+  const turnMessageStore = requireCurrentTurnMessagesStore(currentTurnMessages);
   const currentModelInfo = resolveCurrentModelInfo(modelState);
-  const turnTaskStore = resolveTurnTasksStore(currentTurnTasks, loopState.turnTasks || []);
+  const turnTaskStore = requireCurrentTurnTasksStore(currentTurnTasks);
   const stateCommitter = createStateCommitter({
-    messages,
     traces,
     turnMessageStore,
     dialogProcessId,

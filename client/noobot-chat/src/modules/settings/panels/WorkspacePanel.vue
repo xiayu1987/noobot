@@ -52,6 +52,7 @@ const syncingAll = ref(false);
 const resettingAll = ref(false);
 const activePath = ref("");
 const activePathSource = ref("user");
+const activePathType = ref("");
 const content = ref("");
 const isTextFile = ref(true);
 const editorInputRef = ref(null);
@@ -190,6 +191,11 @@ async function refreshAll() {
   ]);
 }
 
+async function reloadActiveFile() {
+  if (!activePath.value || activePathType.value !== "file") return;
+  await openFile({ path: activePath.value, type: "file" }, activePathSource.value);
+}
+
 async function openFile(node, source = "user") {
   if (!props.connected || !node || !props.userId || !props.apiKey) return;
   const normalizedSource = source === "all" ? "all" : "user";
@@ -198,6 +204,7 @@ async function openFile(node, source = "user") {
   if (node.type === "dir") {
     activePath.value = nodePath;
     activePathSource.value = normalizedSource;
+    activePathType.value = "dir";
     isTextFile.value = false;
     content.value = "";
     return;
@@ -216,6 +223,7 @@ async function openFile(node, source = "user") {
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
     activePath.value = data.path || nodePath;
     activePathSource.value = normalizedSource;
+    activePathType.value = "file";
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
   } catch (error) {
@@ -306,6 +314,7 @@ async function doResetWorkspace(sections = []) {
       throw new Error(data.error || translate("settings.resetWorkspaceFailed"));
     activePath.value = "";
     activePathSource.value = "user";
+    activePathType.value = "";
     content.value = "";
     isTextFile.value = true;
     await refreshAll();
@@ -326,6 +335,7 @@ async function syncWorkspace() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncConfigFailed"));
     await refreshAll();
+    await reloadActiveFile();
     ElMessage.success(translate("settings.syncDone"));
   } catch (error) {
     ElMessage.error(error.message || translate("settings.syncConfigFailed"));
@@ -342,6 +352,7 @@ async function syncAllWorkspace() {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.syncAllFailed"));
     await refreshAll();
+    await reloadActiveFile();
     ElMessage.success(
       translate("settings.syncDoneWithCount", {
         success: Number(data.success || 0),
@@ -368,6 +379,7 @@ async function doResetAllWorkspace(sections = []) {
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.resetAllFailed"));
     activePath.value = "";
     activePathSource.value = "user";
+    activePathType.value = "";
     content.value = "";
     isTextFile.value = true;
     await refreshAll();

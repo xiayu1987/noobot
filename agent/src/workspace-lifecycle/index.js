@@ -5,8 +5,8 @@
  */
 import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { synchronizeConfigFileFromTemplate } from "@noobot/agent-config-protocol";
 import { fatalSystemError } from "../shared/errors/index.js";
-import { deepMerge } from "../shared/utils/shared-utils.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 
@@ -183,7 +183,10 @@ async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "")
       ]);
       const templateJson = JSON.parse(templateRaw || "{}");
       const userJson = JSON.parse(userRaw || "{}");
-      const merged = deepMerge(templateJson, userJson);
+      const merged = synchronizeConfigFileFromTemplate({
+        template: templateJson,
+        target: userJson,
+      });
       await writeFile(dst, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
       continue;
     }

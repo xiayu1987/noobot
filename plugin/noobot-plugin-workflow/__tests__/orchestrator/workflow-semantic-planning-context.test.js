@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { resolveWorkflowSemanticContextMessages } from "../../src/core/hooks/messages.js";
 
 import {
   createMockBotHookManager,
@@ -47,6 +48,32 @@ function resolveTestModelMessages({ ctx = {} } = {}) {
   ];
 }
 
+test("workflow semantic context preserves canonical tool execution evidence", () => {
+  const messages = resolveWorkflowSemanticContextMessages({
+    options: {
+      resolveModelMessages: () => [
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [
+            { id: "call-workflow", function: { name: "read_file", arguments: "{}" } },
+          ],
+        },
+        {
+          role: "tool",
+          tool_call_id: "call-workflow",
+          content: '{"ok":true}',
+        },
+      ],
+    },
+    ctx: {},
+  });
+  assert.equal(messages[0].role, "assistant");
+  assert.equal(messages[0].tool_calls[0].id, "call-workflow");
+  assert.equal(messages[1].role, "tool");
+  assert.equal(messages[1].tool_call_id, "call-workflow");
+});
+
 test("workflow semantic planning passes conversation context before current user task", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -82,7 +109,6 @@ test("workflow semantic planning passes conversation context before current user
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -159,7 +185,6 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -235,7 +260,6 @@ test("workflow semantic planning includes current available tools like harness p
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -311,7 +335,6 @@ test("workflow semantic planning reads available tools from the canonical agentC
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 
@@ -382,7 +405,6 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       }),
       generatedArtifactPersister: async () => [],
       workflowDialogPersister: async () => null,
-      workflowEventLogger: async () => null,
     },
   });
 

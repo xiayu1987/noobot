@@ -8,12 +8,20 @@ import assert from "node:assert/strict";
 
 import { createUserInteractionBridge } from "../../ws/chat-websocket/user-interaction-bridge.js";
 
-test("same canonical interaction identity reuses one request before and after resolution", async () => {
-  const sentEvents = [];
+test("requires the interaction authority commit port at composition time", () => {
+  assert.throws(
+    () => createUserInteractionBridge({ pendingInteractionRequests: new Map() }),
+    /commitInteractionRequest is required/,
+  );
+});
+
+test("same canonical interaction identity reuses one authority commit before and after resolution", async () => {
+  const committedRequests = [];
   const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
-    sendEvent(event, data) {
-      sentEvents.push({ event, data });
+    async commitInteractionRequest(request) {
+      committedRequests.push(request);
+      return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: (key) => key,
     pendingInteractionRequests,
@@ -30,7 +38,8 @@ test("same canonical interaction identity reuses one request before and after re
   const first = userInteractionBridge.requestUserInteraction(payload);
   const duplicatePending = userInteractionBridge.requestUserInteraction(payload);
   assert.equal(first, duplicatePending);
-  assert.equal(sentEvents.length, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(committedRequests.length, 1);
   assert.equal(pendingInteractionRequests.size, 1);
 
   const [requestId, requestItem] = pendingInteractionRequests.entries().next().value;
@@ -42,17 +51,18 @@ test("same canonical interaction identity reuses one request before and after re
   const duplicateResolved = userInteractionBridge.requestUserInteraction(payload);
   assert.equal(duplicateResolved, first);
   assert.deepEqual(await duplicateResolved, { confirmed: true });
-  assert.equal(sentEvents.length, 1);
-  assert.equal(sentEvents[0]?.data?.interactionId, payload.interactionId);
-  assert.equal(sentEvents[0]?.data?.requestId, requestId);
+  assert.equal(committedRequests.length, 1);
+  assert.equal(committedRequests[0]?.payload?.interactionId, payload.interactionId);
+  assert.equal(committedRequests[0]?.payload?.requestId, requestId);
 });
 
 test("timeout publishes the canonical failed interaction lifecycle and rejects the request", async () => {
-  const sentEvents = [];
+  const committedRequests = [];
   const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
-    sendEvent(event, data) {
-      sentEvents.push({ event, data });
+    async commitInteractionRequest(request) {
+      committedRequests.push(request);
+      return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: () => "interaction timed out",
     pendingInteractionRequests,
@@ -68,20 +78,19 @@ test("timeout publishes the canonical failed interaction lifecycle and rejects t
   });
   await assert.rejects(request, /interaction timed out/);
   assert.equal(pendingInteractionRequests.size, 0);
-  assert.equal(sentEvents.length, 2);
-  assert.equal(sentEvents[0].event, "interaction_request");
-  assert.equal(sentEvents[1].event, "interaction_request");
-  assert.equal(sentEvents[1].data.lifecycle, "failed");
-  assert.equal(sentEvents[1].data.resolvedBy, "system");
-  assert.equal(sentEvents[1].data.interactionData.reason, "timeout");
+  assert.equal(committedRequests.length, 2);
+  assert.equal(committedRequests[1].payload.lifecycle, "failed");
+  assert.equal(committedRequests[1].payload.resolvedBy, "system");
+  assert.equal(committedRequests[1].payload.interactionData.reason, "timeout");
 });
 
 test("explicit per-request timeoutMs overrides the bridge default when shorter", async () => {
-  const sentEvents = [];
+  const committedRequests = [];
   const pendingInteractionRequests = new Map();
   const { userInteractionBridge } = createUserInteractionBridge({
-    sendEvent(event, data) {
-      sentEvents.push({ event, data });
+    async commitInteractionRequest(request) {
+      committedRequests.push(request);
+      return { identity: { eventId: `event-${committedRequests.length}` } };
     },
     translateText: () => "interaction timed out",
     pendingInteractionRequests,
@@ -98,6 +107,6 @@ test("explicit per-request timeoutMs overrides the bridge default when shorter",
     timeoutMs: 1,
   });
   await assert.rejects(request, /interaction timed out/);
-  assert.equal(sentEvents[0].data.timeoutMs, 1);
-  assert.equal(sentEvents[1].data.timeoutMs, 1);
+  assert.equal(committedRequests[0].payload.timeoutMs, 1);
+  assert.equal(committedRequests[1].payload.timeoutMs, 1);
 });

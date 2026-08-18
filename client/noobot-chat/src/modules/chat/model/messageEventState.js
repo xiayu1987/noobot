@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
 */
 
-import { resolveMessageEventSequenceIdentity } from "@noobot/event-protocol/message-event";
-
 export function initializeMessageEventState(message = {}) {
   if (!Array.isArray(message.toolTimeline)) message.toolTimeline = [];
   if (!Array.isArray(message.activityTimeline)) message.activityTimeline = [];
@@ -30,9 +28,9 @@ function createLaneState() {
 
 export function resolveMessageEventLaneState(message = {}, envelope = {}) {
   const root = initializeMessageEventState(message).messageEventState;
-  const sequenceScopeId = text(resolveMessageEventSequenceIdentity(envelope).sequenceScopeId);
-  const sourceMessageId = text(envelope?.messageId);
-  const presentationMessageId = text(envelope?.presentationMessageId || envelope?.messageId);
+  const sequenceScopeId = text(envelope?.ordering?.scopeId);
+  const sourceMessageId = text(envelope?.identity?.messageId);
+  const presentationMessageId = text(envelope?.payload?.presentationMessageId);
   const aggregateProjection = Boolean(
     sequenceScopeId && sourceMessageId && presentationMessageId && sourceMessageId !== presentationMessageId,
   );

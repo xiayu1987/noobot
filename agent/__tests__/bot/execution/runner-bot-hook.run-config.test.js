@@ -98,3 +98,60 @@ test("SessionExecutionRunner preserves provided thinkingStartedAt", async () => 
 
   assert.equal(capturedFinalizePayload?.thinkingStartedAt, providedThinkingStartedAt);
 });
+
+test("SessionExecutionRunner disposes the plugin activation scope exactly once after success", async () => {
+  let disposeCalls = 0;
+  const pluginActivationScope = {
+    dispose() {
+      disposeCalls += 1;
+    },
+  };
+  const runner = createRunner({
+    prepareRunConfig: ({ runConfig = {} } = {}) => ({
+      ...runConfig,
+      turnScopeId: runConfig.turnScopeId || "turn-plugin-scope-success",
+      pluginActivationScope,
+    }),
+  });
+
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    runConfig: {},
+  });
+
+  assert.equal(disposeCalls, 1);
+});
+
+test("SessionExecutionRunner disposes the plugin activation scope exactly once after failure", async () => {
+  let disposeCalls = 0;
+  const pluginActivationScope = {
+    dispose() {
+      disposeCalls += 1;
+    },
+  };
+  const runner = createRunner({
+    prepareRunConfig: ({ runConfig = {} } = {}) => ({
+      ...runConfig,
+      turnScopeId: runConfig.turnScopeId || "turn-plugin-scope-failure",
+      pluginActivationScope,
+    }),
+    agentRunner: async () => {
+      throw new Error("plugin scope failure path");
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        runConfig: {},
+      }),
+    /plugin scope failure path/,
+  );
+
+  assert.equal(disposeCalls, 1);
+});

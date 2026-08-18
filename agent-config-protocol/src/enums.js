@@ -127,6 +127,10 @@ export const CONTEXT_SECTION_ALIASES = {
   [CONTEXT_SECTION.ATTACHMENTS]: [CONTEXT_SECTION.ATTACHMENTS],
 };
 
+export const CONTEXT_RUNTIME_CAPABILITY = Object.freeze({
+  ATTACHMENTS: "attachments",
+});
+
 export function normalizeWithAliases(input = "", aliasesMap = {}) {
   const value = String(input || "")
     .trim()
@@ -185,4 +189,62 @@ export function normalizeDoc2DataFormat(input = "") {
 
 export function normalizeContextSection(input = "") {
   return normalizeWithAliases(input, CONTEXT_SECTION_ALIASES);
+}
+
+export function normalizeContextSectionSelection(input = []) {
+  const values = Array.isArray(input) ? input : [];
+  if (values.some((value) => String(value || "").trim() === "*")) return null;
+  return new Set(values.map(normalizeContextSection).filter(Boolean));
+}
+
+export function normalizeContextPolicy(contextPolicy = {}) {
+  const source =
+    contextPolicy && typeof contextPolicy === "object" && !Array.isArray(contextPolicy)
+      ? contextPolicy
+      : {};
+  const promptSections = Array.isArray(source.promptSections) ? source.promptSections : [];
+  const runtimeCapabilities =
+    source.runtimeCapabilities &&
+    typeof source.runtimeCapabilities === "object" &&
+    !Array.isArray(source.runtimeCapabilities)
+      ? source.runtimeCapabilities
+      : {};
+  return Object.freeze({
+    promptSections: Object.freeze(
+      promptSections.some((value) => String(value || "").trim() === "*")
+        ? ["*"]
+        : [...normalizeContextSectionSelection(promptSections)],
+    ),
+    runtimeCapabilities: Object.freeze({
+      [CONTEXT_RUNTIME_CAPABILITY.ATTACHMENTS]:
+        runtimeCapabilities[CONTEXT_RUNTIME_CAPABILITY.ATTACHMENTS] !== false,
+    }),
+  });
+}
+
+export function isContextSectionSelected(selection, section) {
+  if (selection === null) return true;
+  if (!(selection instanceof Set)) {
+    throw new TypeError("context section selection must be a Set or null");
+  }
+  const canonical = normalizeContextSection(section);
+  return Boolean(canonical && selection.has(canonical));
+}
+
+export function normalizeSelectedConnectors(selectedConnectors = {}) {
+  if (
+    !selectedConnectors ||
+    typeof selectedConnectors !== "object" ||
+    Array.isArray(selectedConnectors)
+  ) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(selectedConnectors)
+      .map(([connectorType, connectorName]) => [
+        String(connectorType || "").trim(),
+        String(connectorName || "").trim(),
+      ])
+      .filter(([connectorType]) => Boolean(connectorType)),
+  );
 }

@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { SystemMessage } from "@langchain/core/messages";
-import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/block-strategy";
+import { buildCanonicalMessageBlocks } from "@noobot/context-protocol/policy/block";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
-import { resolveDialogProcessId } from "../../session/dialog-process-id-resolver.js";
-import { resolveParentSessionId } from "../../parent-session-id-resolver.js";
 import { resolveRuntimeUserMessageAttachments } from "../../../artifacts/index.js";
 import {
   getAgentContextEnvelope,
@@ -19,46 +17,35 @@ import {
   emitContextIdentityDebug,
 } from "../../../observability/context-identity-debug.js";
 
-export function buildContextMessageBlocks(
-  agentContext,
-  { currentUserMessage = null } = {},
-) {
+export function buildContextMessageBlocks(agentContext, { currentUserMessage = null } = {}) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const context = getAgentContextEnvelope(agentContext);
   const systemRuntime = runtime?.systemRuntime || {};
-  const runtimeParentSessionId = resolveParentSessionId({ runtime });
+  const runtimeParentSessionId = context.identity.parentSessionId;
   const currentUserMessageAttachments = resolveRuntimeUserMessageAttachments(runtime);
   const fallbackUserMeta = {
     userName: String(runtime?.userId || "").trim(),
-    sessionId: String(systemRuntime?.sessionId || "").trim(),
+    sessionId: context.identity.sessionId,
     parentSessionId: runtimeParentSessionId,
     dialogProcessId: "",
-    parentDialogProcessId: String(
-      systemRuntime?.parentDialogProcessId || "",
-    ).trim(),
+    parentDialogProcessId: String(systemRuntime?.parentDialogProcessId || "").trim(),
     attachments: currentUserMessageAttachments,
     userMessageAttachments: currentUserMessageAttachments,
   };
   const messageBlocks = context.modelContext.messageBlocks;
-  const systemMessages = Array.isArray(messageBlocks?.system)
-    ? messageBlocks.system
-    : [];
-  const rawHistoryMessages = Array.isArray(messageBlocks?.history)
-    ? messageBlocks.history
-    : [];
+  const systemMessages = Array.isArray(messageBlocks?.system) ? messageBlocks.system : [];
+  const rawHistoryMessages = Array.isArray(messageBlocks?.history) ? messageBlocks.history : [];
   const restoredIncrementalMessages = Array.isArray(messageBlocks?.incremental)
     ? messageBlocks.incremental
     : [];
-  const currentTurnScopeId = String(
-    systemRuntime?.turnScopeId || systemRuntime?.config?.turnScopeId || "",
-  ).trim();
+  const currentTurnScopeId = context.identity.turnScopeId;
   fallbackUserMeta.turnScopeId = currentTurnScopeId;
   const historyMessages = rawHistoryMessages;
   const resolvedDialogProcessId = context.identity.dialogProcessId;
   fallbackUserMeta.dialogProcessId = resolvedDialogProcessId;
   const identity = {
-    userId: runtime?.userId || systemRuntime?.userId,
-    sessionId: systemRuntime?.sessionId,
+    userId: context.identity.userId,
+    sessionId: context.identity.sessionId,
     parentSessionId: runtimeParentSessionId,
     dialogProcessId: resolvedDialogProcessId,
     turnScopeId: currentTurnScopeId,
@@ -120,7 +107,8 @@ export function buildContextMessageBlocks(
   emitContextIdentityDebug(runtime?.eventListener, "modelProjectionBuilt", identity, {
     sourceMessageUid: String(currentUserMessage?.messageUid || "").trim(),
     contentProjectionId: projectedIds.find((id) => id === currentCanonicalId) || "",
-    userMetaProjectionId: projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",
+    userMetaProjectionId:
+      projectedIds.find((id) => id === `${currentCanonicalId}::user_meta`) || "",
     incrementalCount: incremental.length,
     flatMessageCount: system.length + history.length + incremental.length,
   });
@@ -133,10 +121,7 @@ export function buildContextMessageBlocks(
   };
 }
 
-export function buildContextMessages(
-  agentContext,
-  { currentUserMessage = null } = {},
-) {
+export function buildContextMessages(agentContext, { currentUserMessage = null } = {}) {
   return buildContextMessageBlocks(agentContext, {
     currentUserMessage,
   }).messages;

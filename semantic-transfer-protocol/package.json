@@ -5,11 +5,11 @@
   "type": "module",
   "description": "Canonical Noobot semantic information transfer protocol",
   "exports": {
-    ".": "./src/index.mjs",
+    ".": "./src/index.js",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test __tests__/*.test.mjs"
+    "test": "node --test __tests__/*.test.js"
   },
   "dependencies": {
     "@noobot/attachment-protocol": "file:../attachment-protocol",

@@ -7,11 +7,20 @@ import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
 import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
 import {
+  emitCommandReceipt,
   flushPromises,
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,
+  turnLifecycleProtocolEvent,
 } from "./chatWebSocketClientTestFixtures.js";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
@@ -67,15 +76,13 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       sessionLogSink,
     });
     const onEvent = vi.fn();
-    const streamPromise = client.stream(
-      streamCommand({
+    const payload = streamCommand({
         sessionId: "session-transport-log",
         turnScopeId: "turn-transport-log",
-      }),
-      onEvent,
-    );
+      });
+    const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
-    const authoritativeEvent = {
+    const authoritativeEvent = canonicalMessageEvent({
       eventId: "event-transport-log",
       eventType: "authoritative_final_content",
       sessionId: "session-transport-log",
@@ -88,13 +95,13 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       content: "complete assistant body",
       attachments: [{ path: "/workspace/result.txt" }],
       transferEnvelopes: [{ id: "transfer-1" }],
-    };
+    });
 
-    socket.emit("message_event", { seq: 41, event: authoritativeEvent });
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, authoritativeEvent);
 
     expect(onEvent).toHaveBeenCalledWith({
-      event: "message_event",
-      data: expect.objectContaining({ event: authoritativeEvent }),
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data: authoritativeEvent,
     });
     expect(sessionLogSink.log).toHaveBeenCalledWith({
       category: "transport",
@@ -110,7 +117,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
         parentSessionId: "parent-transport-log",
         messageId: "message-transport-log",
         presentationMessageId: "assistant-transport-log",
-        transportSequence: 41,
+        transportSequence: null,
         authoritativeSequence: 9,
         contentLength: 23,
         attachmentCount: 1,
@@ -118,10 +125,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       }),
     });
 
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "session-transport-log",
-      turnScopeId: "turn-transport-log",
-    });
+    emitCommandReceipt(socket, payload);
     await streamPromise;
     expect(sessionLogSink.log).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -132,16 +136,44 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     );
   });
 
+  it("uses channelSessionId only as transport routing identity", async () => {
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const payload = streamCommand({ sessionId: "session-route", turnScopeId: "turn-route" });
+    const streamPromise = client.stream(payload, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const data = canonicalMessageEvent({
+      eventId: "route-event",
+      sessionId: "session-route",
+      turnScopeId: "turn-route",
+      messageId: "route-message",
+      eventType: "llm_delta",
+      text: "routed",
+    });
+
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, data, "another-session");
+    expect(onEvent).not.toHaveBeenCalled();
+
+    socket.emit(MESSAGE_EVENT_WIRE_EVENT, data, "session-route");
+    expect(onEvent).toHaveBeenCalledWith({
+      event: MESSAGE_EVENT_WIRE_EVENT,
+      data,
+      channelSessionId: "session-route",
+    });
+    expect(data.identity.sessionId).toBe("session-route");
+
+    emitCommandReceipt(socket, payload);
+    await streamPromise;
+  });
+
   it("acknowledges authoritative lifecycle before handing it to the business reducer", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream(
-      streamCommand({
+    const payload = streamCommand({
         sessionId: "session-receipt-1",
         turnScopeId: "turn-receipt-1",
-      }),
-      onEvent,
-    );
+      });
+    const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
     const lifecycle = createTurnLifecycleEnvelope({
@@ -159,9 +191,12 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
-    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_lifecycle",
+      data: turnLifecycleProtocolEvent(lifecycle),
+    });
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
       {
         action: "turn.lifecycle.received",
@@ -171,10 +206,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
         turnScopeId: "turn-receipt-1",
       },
     ]);
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "session-receipt-1",
-      turnScopeId: "turn-receipt-1",
-    });
+    emitCommandReceipt(socket, payload);
     await streamPromise;
   });
 
@@ -207,7 +239,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
     expect(socket.sent.map((raw) => JSON.parse(raw))).toEqual([
       expect.objectContaining({
@@ -230,13 +262,11 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("still dispatches authoritative lifecycle when writing its receipt fails", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream(
-      streamCommand({
+    const payload = streamCommand({
         sessionId: "session-receipt-failure",
         turnScopeId: "turn-receipt-failure",
-      }),
-      onEvent,
-    );
+      });
+    const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     socket.send = () => {
       throw new Error("receipt send failed");
@@ -256,13 +286,13 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
       state: TURN_STATE.PROCESSING,
     });
 
-    socket.emit("turn_lifecycle", lifecycle);
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(lifecycle));
 
-    expect(onEvent).toHaveBeenCalledWith({ event: "turn_lifecycle", data: lifecycle });
-    socket.emit(StreamEventEnum.DONE, {
-      sessionId: "session-receipt-failure",
-      turnScopeId: "turn-receipt-failure",
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "turn_lifecycle",
+      data: turnLifecycleProtocolEvent(lifecycle),
     });
+    emitCommandReceipt(socket, payload);
     await streamPromise;
   });
 
@@ -295,39 +325,45 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("records transport_ready without forwarding it into a business stream", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
-    const streamPromise = client.stream(streamCommand({ turnScopeId: "turn-ready" }), onEvent);
+    const payload = streamCommand({ sessionId: "s-ready", turnScopeId: "turn-ready" });
+    const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
 
     socket.emit("transport_ready", { serverInstanceId: "proxy-instance-1", protocolVersion: 2 });
     expect(client.getTransportStatus().serverInstanceId).toBe("proxy-instance-1");
     expect(onEvent).not.toHaveBeenCalled();
 
-    const requestId = JSON.parse(socket.sent[0]).requestId;
-    socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-ready", requestId });
+    emitCommandReceipt(socket, payload);
     await streamPromise;
   });
 
   it("extracts a readable message from structured stream errors", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
-    const streamPromise = client.stream(
-      streamCommand({
+    const payload = streamCommand({
         sessionId: "s-error-object",
         turnScopeId: "turn-error-object",
-      }),
-      vi.fn(),
-    );
+      });
+    const streamPromise = client.stream(payload, vi.fn());
     const socket = MockWebSocket.instances[0];
 
-    socket.emit(StreamEventEnum.ERROR, {
-      sessionId: "s-error-object",
-      turnScopeId: "turn-error-object",
-      errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
-      error: { message: "session version conflict" },
+    const receipt = createAgentCommandReceipt({
+      commandId: payload.commandId,
+      commandType: payload.commandType,
+      outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+      identity: payload.identity,
+      error: {
+        code: "SESSION_AGGREGATE_VERSION_CONFLICT",
+        message: "session version conflict",
+      },
+      occurredAt: "2026-01-01T00:00:00.000Z",
     });
+    socket.emit(AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT, receipt);
 
     await expect(streamPromise).rejects.toMatchObject({
       message: "session version conflict",
-      data: expect.objectContaining({ errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT" }),
+      data: expect.objectContaining({
+        error: expect.objectContaining({ code: "SESSION_AGGREGATE_VERSION_CONFLICT" }),
+      }),
     });
   });
 
@@ -367,10 +403,7 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     recoveredSocket.onopen?.();
     expect(recoveredSocket.sent.map((item) => JSON.parse(item))).toEqual([payload]);
 
-    recoveredSocket.emit(StreamEventEnum.DONE, {
-      sessionId: payload.identity.sessionId,
-      turnScopeId: payload.identity.turnScopeId,
-    });
+    emitCommandReceipt(recoveredSocket, payload);
     await expect(streamPromise).resolves.toBeUndefined();
   });
 
@@ -429,24 +462,15 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const socket = MockWebSocket.instances[0];
     const onPayloadSent = vi.fn();
 
-    const streamPromise = client.stream(
-      { action: "continue", turnScopeId: "turn-continue" },
-      vi.fn(),
-      { onPayloadSent },
-    );
+    const payload = streamCommand({ sessionId: "s-continue", turnScopeId: "turn-continue" });
+    const streamPromise = client.stream(payload, vi.fn(), { onPayloadSent });
 
-    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual({
-      action: "continue",
-      turnScopeId: "turn-continue",
-    });
+    expect(socket.sent.map((item) => JSON.parse(item))).toContainEqual(payload);
     expect(socket.sent.some((item) => Object.hasOwn(JSON.parse(item), "requestId"))).toBe(false);
     expect(onPayloadSent).toHaveBeenCalledTimes(1);
-    expect(onPayloadSent).toHaveBeenCalledWith({
-      action: "continue",
-      turnScopeId: "turn-continue",
-    });
+    expect(onPayloadSent).toHaveBeenCalledWith(payload);
 
-    socket.emit(StreamEventEnum.DONE, { turnScopeId: "turn-continue" });
+    emitCommandReceipt(socket, payload);
     await streamPromise;
   });
 });

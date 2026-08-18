@@ -11,17 +11,22 @@ import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/consta
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
+  canonicalMessageEvent,
   FakeUpstreamWebSocket,
   getEvent,
   listEvents,
   sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import {
   createTurnLifecycleEnvelope,
   TURN_EVENT,
   TURN_LIFECYCLE_PROTOCOL_VERSION,
 } from "@noobot/session-protocol";
-import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
+import {
+  authoritativeLifecycle,
+  authoritativeSnapshot,
+} from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 test("authoritative lifecycle replay is session-scoped, ordered, and deduplicated", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -41,14 +46,18 @@ test("authoritative lifecycle replay is session-scoped, ordered, and deduplicate
 
   const replay = manager.getTurnLifecycleReplay(channel, "session-lifecycle-window", 0);
   assert.equal(replay.hasReplayGap, false);
-  assert.deepEqual(replay.events.map(({ eventId, sessionId, turnScopeId, revision, sequence }) => ({
-    eventId, sessionId, turnScopeId, revision, sequence,
+  assert.deepEqual(replay.events.map(({ identity, ordering }) => ({
+    eventId: identity.eventId,
+    sessionId: identity.sessionId,
+    turnScopeId: identity.turnScopeId,
+    revision: ordering.revision,
+    sequence: ordering.sequence,
   })), [
     { eventId: "e1", sessionId: "session-lifecycle-window", turnScopeId: "t1", revision: 1, sequence: 1 },
     { eventId: "e2", sessionId: "session-lifecycle-window", turnScopeId: "t1", revision: 2, sequence: 2 },
   ]);
   assert.deepEqual(
-    manager.getTurnLifecycleReplay(channel, "session-lifecycle-window", 1).events.map((item) => item.eventId),
+    manager.getTurnLifecycleReplay(channel, "session-lifecycle-window", 1).events.map((item) => item.identity.eventId),
     ["e2"],
   );
 });
@@ -88,13 +97,12 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
     state: "processing",
     phase: "processing",
   }));
-  manager.pushChannelEvent(channel, "delta", {
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
     sessionId,
     turnScopeId,
-    dialogProcessId: "dp-authoritative-running",
-    seq: 3,
-    content: "buffered after refresh",
-  });
+    sequence: 3,
+    text: "buffered after refresh",
+  }));
   const forwarded = [];
   channel.upstreamSocket = { readyState: 1, send: (raw) => forwarded.push(JSON.parse(raw)) };
   const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
@@ -104,9 +112,7 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
   const commandId = forwarded[0]?.commandId;
   channel.pendingSnapshotRequests.get(commandId).resolve({
     ok: true,
-    snapshot: {
-      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
-      eventType: "turn.snapshot",
+    snapshot: authoritativeSnapshot({
       commandId,
       sessionId,
       sequence: 2,
@@ -121,14 +127,14 @@ test("reconnect confirms a cached active lifecycle with the authoritative snapsh
         state: "processing",
       },
       recentTerminalTurns: [],
-    },
+    }),
   });
   await reconnectPromise;
 
   const session = getEvent(client, "reconnect_data").data.sessions[0];
   assert.equal("hasRunningTask" in session, false);
   assert.equal("currentRun" in session, false);
-  assert.equal(session.replayBatch.snapshot.activeTurnScopeId, turnScopeId);
+  assert.equal(session.replayBatch.snapshot.payload.activeTurnScopeId, turnScopeId);
   assert.deepEqual(session.replayBatch.events, []);
   assert.equal("dialogProcesses" in session, false);
 });
@@ -171,9 +177,7 @@ test("reconnect opens a query transport without replaying the stale run command"
   assert.equal(snapshotCommand.message, undefined);
   upstream.emit("message", JSON.stringify({
     event: "turn_snapshot",
-    data: {
-      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
-      eventType: "turn.snapshot",
+    data: authoritativeSnapshot({
       commandId: snapshotCommand.commandId,
       sessionId,
       sequence: 2,
@@ -189,14 +193,14 @@ test("reconnect opens a query transport without replaying the stale run command"
         state: "processing_failed",
         failure: { code: "service_restart_orphaned_turn" },
       }],
-    },
+    }),
   }));
   await reconnectPromise;
 
   const session = getEvent(client, "reconnect_data").data.sessions[0];
-  assert.equal(session.replayBatch.snapshot.activeTurnScopeId, "");
+  assert.equal(session.replayBatch.snapshot.payload.activeTurnScopeId, "");
   assert.equal(
-    session.replayBatch.snapshot.recentTerminalTurns[0].failure.code,
+    session.replayBatch.snapshot.payload.recentTerminalTurns[0].failure.code,
     "service_restart_orphaned_turn",
   );
 });
@@ -238,9 +242,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
 
   upstream.emit("message", JSON.stringify({
     event: "turn_snapshot",
-    data: {
-      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
-      eventType: "turn.snapshot",
+    data: authoritativeSnapshot({
       commandId: snapshotCommand.commandId,
       sessionId,
       sequence: 1,
@@ -254,7 +256,7 @@ test("snapshot query completion cannot close a connection claimed by a concurren
         state: "processing",
       },
       recentTerminalTurns: [],
-    },
+    }),
   }));
   await reconnectPromise;
 
@@ -345,9 +347,7 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
     secondChannel.pendingSnapshotRequests.get(commandId);
   snapshotRequest.resolve({
     ok: true,
-    snapshot: {
-      protocolVersion: TURN_LIFECYCLE_PROTOCOL_VERSION,
-      eventType: "turn.snapshot",
+    snapshot: authoritativeSnapshot({
       commandId,
       sessionId,
       sequence: 2,
@@ -362,14 +362,14 @@ test("reconnect confirms aggregated active lifecycle with one authoritative snap
         state: "processing",
       },
       recentTerminalTurns: [],
-    },
+    }),
   });
   await reconnectPromise;
 
   const session = getEvent(client, "reconnect_data").data.sessions[0];
   assert.equal("hasRunningTask" in session, false);
   assert.equal("currentRun" in session, false);
-  assert.equal(session.replayBatch.snapshot.activeTurnScopeId, turnScopeId);
+  assert.equal(session.replayBatch.snapshot.payload.activeTurnScopeId, turnScopeId);
   assert.deepEqual(session.replayBatch.events, []);
 });
 
@@ -409,7 +409,7 @@ test("latest terminal lifecycle wins across channels of the same session", () =>
   assert.equal("hasRunningTask" in session, false);
   assert.equal("currentRun" in session, false);
   assert.deepEqual(
-    session.replayBatch.events.map((item) => item.eventId || item.data?.eventId),
+    session.replayBatch.events.map((item) => item.identity.eventId),
     ["multi-terminal-1", "multi-terminal-2"],
   );
 });
@@ -431,9 +431,9 @@ test("parent and parallel child lifecycle windows coexist without cross-session 
     dialogProcessId: `dialog-${envelope.eventId}`,
   }));
 
-  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "parent-session", 0).events.map((e) => e.eventId), ["parent-1"]);
-  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.map((e) => e.eventId), ["child-a-1", "child-a-2"]);
-  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-b", 0).events.map((e) => e.eventId), ["child-b-1"]);
-  assert.equal(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.every((e) => e.parentSessionId === "parent-session"), true);
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "parent-session", 0).events.map((e) => e.identity.eventId), ["parent-1"]);
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.map((e) => e.identity.eventId), ["child-a-1", "child-a-2"]);
+  assert.deepEqual(manager.getTurnLifecycleReplay(channel, "child-b", 0).events.map((e) => e.identity.eventId), ["child-b-1"]);
+  assert.equal(manager.getTurnLifecycleReplay(channel, "child-a", 0).events.every((e) => e.payload.parentSessionId === "parent-session"), true);
 });
 

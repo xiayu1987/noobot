@@ -153,6 +153,22 @@ function buildAcceptanceSummary(items = []) {
   });
 }
 
+function buildAcceptanceValidationState(report = null) {
+  const source = report && typeof report === "object" ? report : null;
+  if (!source) return null;
+  return {
+    mode: String(source.mode || "").trim(),
+    forcedReason: String(source.forcedReason || "").trim(),
+    acceptedAt: String(source.acceptedAt || "").trim(),
+    summary: source.summary && typeof source.summary === "object" ? source.summary : {},
+    planAcceptanceStatusByPlanId:
+      source.planAcceptanceStatusByPlanId &&
+      typeof source.planAcceptanceStatusByPlanId === "object"
+        ? source.planAcceptanceStatusByPlanId
+        : {},
+  };
+}
+
 function buildChecklistFromParsedPlan(parsedPlan = null) {
   const source = parsedPlan && typeof parsedPlan === "object" ? parsedPlan : {};
   const mainPlans = Array.isArray(source?.mainPlans) ? source.mainPlans : [];
@@ -492,7 +508,7 @@ export function buildSemanticValidationPromptPayload({
       taskChecklist: [],
       finalPlanChecklist: [],
       plan: buildPlanSnapshot(bucket, locale),
-      acceptanceReport: baseReport,
+      acceptanceState: buildAcceptanceValidationState(baseReport),
       phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
         ? bucket.phaseAcceptanceReports
         : [],
@@ -528,7 +544,7 @@ export function buildSemanticValidationPromptPayload({
     finalMainPlan,
     refinementPlansForFinalMainPlan,
     plansInOrder,
-    acceptanceReport: baseReport,
+    acceptanceState: buildAcceptanceValidationState(baseReport),
     phaseAcceptanceReports: Array.isArray(bucket?.phaseAcceptanceReports)
       ? bucket.phaseAcceptanceReports
       : [],

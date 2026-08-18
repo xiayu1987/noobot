@@ -215,6 +215,8 @@ test("session display summary projects one explicit assistant presentation from 
             key: "call:tool-1",
             toolCallId: "tool-1",
             status: "completed",
+            call: { eventId: "tool-call-1", sequence: 2 },
+            resultEvent: { eventId: "tool-result-1", sequence: 3 },
           },
         ],
       },
@@ -232,7 +234,7 @@ test("session display summary projects one explicit assistant presentation from 
   });
 
   assert.equal(summary.messages.length, 1);
-  assert.equal(summary.messages[0].thinkingDetailCount, 2);
+  assert.equal(summary.messages[0].thinkingDetailCount, 3);
   assert.equal(summary.messages[0].activityTimeline.length, 1);
   assert.equal(summary.messages[0].toolTimeline.length, 1);
   assert.deepEqual(
@@ -254,4 +256,3 @@ test("session display summary projects one explicit assistant presentation from 
     },
   );
 });
-

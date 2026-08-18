@@ -11,7 +11,11 @@ import { buildSessionDisplaySummary } from "../../src/session/session-summary-bu
 
 function createService({ initialSession }) {
   const saved = [];
-  let currentSession = structuredClone(initialSession);
+  let currentSession = structuredClone({
+    aggregateVersion: 0,
+    turnLifecycle: { turns: {}, commandReceipts: [] },
+    ...initialSession,
+  });
   const sessionRepo = {
     async resolveParentSessionId() {
       return currentSession?.parentSessionId || "";
@@ -50,6 +54,7 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
     sessionId: "s1",
     anchor: { turnScopeId: "scope-delete" },
     expectedAggregateVersion: 2,
+    commandId: "delete-tail",
   });
 
   assert.equal(result.deletedCount, 2);
@@ -57,22 +62,21 @@ test("SessionMessageService.deleteFromMessage deletes from anchor message to ses
   assert.deepEqual(result.deletedTurnScopeIds, ["scope-delete", "scope-tail"]);
   assert.equal(result.aggregateVersion, 3);
   assert.equal(saved.length, 1);
-  assert.deepEqual(saved[0].messages.map((message) => message.content), ["keep"]);
+  assert.deepEqual(
+    saved[0].messages.map((message) => message.content),
+    ["keep"],
+  );
   assert.equal(saved[0].aggregateVersion, 3);
   assert.equal(saved[0].updatedAt, "2026-06-17T00:00:00.000Z");
 });
 
-test("SessionMessageService.deleteFromMessage cleans only the owning session turn statuses", async () => {
+test("SessionMessageService.deleteFromMessage mutates only the owning Session aggregate", async () => {
   const parent = createService({
     initialSession: {
       sessionId: "parent",
       messages: [
         { turnScopeId: "parent-keep", role: "user", content: "keep" },
         { turnScopeId: "parent-delete", role: "assistant", content: "delete" },
-      ],
-      turnStatuses: [
-        { turnScopeId: "parent-keep", status: "completed", reason: "run_completed" },
-        { turnScopeId: "parent-delete", status: "error", reason: "run_error" },
       ],
     },
   });
@@ -81,9 +85,6 @@ test("SessionMessageService.deleteFromMessage cleans only the owning session tur
       sessionId: "child",
       parentSessionId: "parent",
       messages: [{ turnScopeId: "child-turn", role: "user", content: "child" }],
-      turnStatuses: [
-        { turnScopeId: "child-turn", status: "timeout", reason: "run_timeout" },
-      ],
     },
   });
 
@@ -91,14 +92,15 @@ test("SessionMessageService.deleteFromMessage cleans only the owning session tur
     userId: "u1",
     sessionId: "parent",
     anchor: { turnScopeId: "parent-delete" },
+    commandId: "delete-parent-tail",
   });
 
   assert.deepEqual(
-    parent.getSession().turnStatuses.map((item) => item.turnScopeId),
+    parent.getSession().messages.map((item) => item.turnScopeId),
     ["parent-keep"],
   );
   assert.deepEqual(
-    child.getSession().turnStatuses.map((item) => item.turnScopeId),
+    child.getSession().messages.map((item) => item.turnScopeId),
     ["child-turn"],
   );
 });
@@ -117,14 +119,20 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
         activeTurnScopeId: "",
         turns: {
           "scope-keep": {
-            turnScopeId: "scope-keep", messageId: "message-keep",
-            presentationMessageId: "presentation-keep", state: "completed",
-            revision: 1, sequence: 1,
+            turnScopeId: "scope-keep",
+            messageId: "message-keep",
+            presentationMessageId: "presentation-keep",
+            state: "completed",
+            revision: 1,
+            sequence: 1,
           },
           "scope-delete": {
-            turnScopeId: "scope-delete", messageId: "message-delete",
-            presentationMessageId: "presentation-delete", state: "stop_completed",
-            revision: 2, sequence: 2,
+            turnScopeId: "scope-delete",
+            messageId: "message-delete",
+            presentationMessageId: "presentation-delete",
+            state: "stop_completed",
+            revision: 2,
+            sequence: 2,
           },
         },
       },
@@ -136,6 +144,7 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     sessionId: "s1",
     anchor: { turnScopeId: "scope-delete" },
     expectedAggregateVersion: 2,
+    commandId: "delete-terminal-tail",
   });
 
   const persisted = getSession();
@@ -145,7 +154,10 @@ test("SessionMessageService.deleteFromMessage removes deleted terminal Turns fro
     sessionId: "s1",
     commandId: "snapshot-after-delete",
   });
-  assert.deepEqual(summary.messages.map((message) => message.turnScopeId), ["scope-keep"]);
+  assert.deepEqual(
+    summary.messages.map((message) => message.turnScopeId),
+    ["scope-keep"],
+  );
   assert.deepEqual(
     summary.turnLifecycleSnapshot.recentTerminalTurns.map((turn) => turn.turnScopeId),
     ["scope-keep"],
@@ -172,6 +184,7 @@ test("SessionMessageService.deleteFromMessage returns 404 when anchor is missing
       userId: "u1",
       sessionId: "s1",
       anchor: { turnScopeId: "missing" },
+      commandId: "delete-missing",
     }),
     (error) => error?.statusCode === 404 && /anchor not found/.test(error.message),
   );
@@ -219,6 +232,7 @@ test("SessionMessageService.deleteFromMessage returns 409 when expectedAggregate
       sessionId: "s1",
       anchor: { turnScopeId: "scope-keep" },
       expectedAggregateVersion: 4,
+      commandId: "delete-conflict",
     }),
     (error) => error?.statusCode === 409 && error?.currentVersion === 5,
   );

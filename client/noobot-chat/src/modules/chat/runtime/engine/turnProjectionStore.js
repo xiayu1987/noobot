@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { mergeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { reduceMessageEvent, MESSAGE_EVENT_REDUCE_RESULT } from "./messageEventReducer.js";
 import { createTurnKey, messageOwnsTurn, resolveTurnIdentity } from "./turnIdentity.js";
 import {
@@ -13,7 +14,7 @@ import { mergeToolTimelines } from "./toolTimeline.js";
 import { mergeActivityTimelines } from "./activityTimeline.js";
 import { createTurnObservation } from "./turnObservation.js";
 import { mergeAttachmentSnapshot } from "../../model/dialogProcessChain.js";
-import { validateMessageEventEnvelope } from "@noobot/event-protocol/message-event";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import {
   resolveSessionRunMessageRuntimePatch,
@@ -111,7 +112,7 @@ export function dispatchTurnEnvelope({
   source = TURN_PROJECTION_SOURCE.NORMAL_LIVE,
 } = {}) {
   const reducerObservedAtMs = Date.now();
-  const eventTimestamp = String(envelope?.timestamp || "");
+  const eventTimestamp = String(envelope?.occurredAt || "");
   const eventTimestampMs = Date.parse(eventTimestamp);
   const identity = resolveTurnIdentity(envelope);
   const turnKey = createTurnKey(identity);
@@ -120,10 +121,10 @@ export function dispatchTurnEnvelope({
       requestedSessionId: identity.sessionId,
       canonicalSessionId: identity.sessionId,
       turnKey,
-      eventId: envelope?.eventId,
-      sequence: envelope?.sequence,
+      eventId: envelope?.identity?.eventId,
+      sequence: envelope?.ordering?.sequence,
       source,
-      authority: envelope?.authority,
+      authority: "authoritative",
       ...values,
     });
     logThinkingReplayDebug("frontend.turnProjection.envelopeObserved", () => ({
@@ -131,18 +132,17 @@ export function dispatchTurnEnvelope({
       dialogProcessId: identity.dialogProcessId,
       turnScopeId: identity.turnScopeId,
       source,
-      eventId: String(envelope?.eventId || ""),
-      eventType: String(envelope?.eventType || ""),
-      messageId: String(envelope?.messageId || ""),
-      presentationMessageId: String(envelope?.presentationMessageId || envelope?.messageId || ""),
-      envelopeKind: String(envelope?.envelopeKind || ""),
-      envelopeVersion: Number(envelope?.envelopeVersion || 0),
-      sequence: Number(envelope?.sequence || 0),
-      sequenceDomain: String(envelope?.sequenceDomain || ""),
-      sequenceScopeId: String(envelope?.sequenceScopeId || envelope?.messageId || ""),
-      authority: String(envelope?.authority || ""),
-      textLength: String(envelope?.text || "").length,
-      outputLength: String(envelope?.output || "").length,
+      eventId: String(envelope?.identity?.eventId || ""),
+      eventType: String(envelope?.payload?.eventType || ""),
+      messageId: String(envelope?.identity?.messageId || ""),
+      presentationMessageId: String(envelope?.payload?.presentationMessageId || ""),
+      protocolFamily: String(envelope?.protocol?.family || ""),
+      protocolVersion: Number(envelope?.protocol?.version || 0),
+      sequence: Number(envelope?.ordering?.sequence || 0),
+      sequenceDomain: String(envelope?.ordering?.domain || ""),
+      sequenceScopeId: String(envelope?.ordering?.scopeId || ""),
+      authority: "authoritative",
+      textLength: String(envelope?.payload?.text || "").length,
       eventTimestamp,
       reducerObservedAt: new Date(reducerObservedAtMs).toISOString(),
       sourceToReducerLatencyMs: Number.isFinite(eventTimestampMs)
@@ -166,8 +166,8 @@ export function dispatchTurnEnvelope({
   if (!turnKey) {
     return observe({ result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: ["turn_identity_missing"], reason: "missing_turn_identity" });
   }
-  const envelopeValidation = validateMessageEventEnvelope(envelope);
-  if (!envelopeValidation.valid) {
+  const envelopeValidation = validateProtocolEvent(envelope);
+  if (!envelopeValidation.valid || envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
     return observe({
       result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
       errors: envelopeValidation.errors,
@@ -185,7 +185,7 @@ export function dispatchTurnEnvelope({
     });
   }
   const state = resolveMessageEventLaneState(targetMessage, envelope);
-  const sequence = Number(envelope?.sequence || 0);
+  const sequence = Number(envelope?.ordering?.sequence || 0);
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence > lastSequence + 1) {
     state.pendingEnvelopes = {
@@ -262,16 +262,10 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   const snapshotTransferEnvelopes = Array.isArray(targetMessage.transferEnvelopes)
     ? targetMessage.transferEnvelopes
     : [];
-  const transferKeys = new Set(currentTransferEnvelopes.map((item) => `${item?.transferId || ""}:${item?.messageId || ""}`));
-  targetMessage.transferEnvelopes = [
-    ...currentTransferEnvelopes,
-    ...snapshotTransferEnvelopes.filter((item) => {
-      const key = `${item?.transferId || ""}:${item?.messageId || ""}`;
-      if (transferKeys.has(key)) return false;
-      transferKeys.add(key);
-      return true;
-    }),
-  ];
+  targetMessage.transferEnvelopes = mergeTransferEnvelopes(
+    currentTransferEnvelopes,
+    snapshotTransferEnvelopes,
+  );
   if (Array.isArray(snapshot?.attachments)) {
     targetMessage.attachments = mergeAttachmentSnapshot(
       currentAttachments,

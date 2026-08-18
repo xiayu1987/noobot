@@ -4,8 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 import { loadGlobalConfig } from "./global-config-loader.js";
-import { normalizeKnownConfigKeys } from "@noobot/agent-config-protocol";
-import { resolveConfigSecrets } from "./config-secret-resolver.js";
+import {
+  applyConfigMigrations,
+  createConfigBuildResult,
+  createConfigValueLookup,
+  normalizeConfigMigrations,
+  normalizeConfigValidators,
+  normalizeKnownConfigKeys,
+  resolveConfigTemplates,
+  validateEffectiveConfig,
+} from "@noobot/agent-config-protocol";
 import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 
 function cloneConfig(value) {
@@ -17,46 +25,6 @@ function cloneConfig(value) {
   }
 }
 
-function normalizeMigrationEntries(migrations = []) {
-  return (Array.isArray(migrations) ? migrations : [])
-    .map((entry, index) => {
-      if (typeof entry === "function") {
-        return {
-          name: entry.name || `migration#${index + 1}`,
-          migrate: entry,
-        };
-      }
-      if (entry && typeof entry.migrate === "function") {
-        return {
-          name: String(entry.name || "").trim() || `migration#${index + 1}`,
-          migrate: entry.migrate,
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-}
-
-function normalizeValidatorEntries(validators = []) {
-  return (Array.isArray(validators) ? validators : [])
-    .map((entry, index) => {
-      if (typeof entry === "function") {
-        return {
-          name: entry.name || `validator#${index + 1}`,
-          validate: entry,
-        };
-      }
-      if (entry && typeof entry.validate === "function") {
-        return {
-          name: String(entry.name || "").trim() || `validator#${index + 1}`,
-          validate: entry.validate,
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-}
-
 export function createGlobalConfigBuilder({
   source = null,
   sourceName = "",
@@ -64,13 +32,13 @@ export function createGlobalConfigBuilder({
   validators = [],
   loadGlobalConfigFn = loadGlobalConfig,
   normalizeRawConfigFn = normalizeKnownConfigKeys,
-  resolveConfigSecretsFn = resolveConfigSecrets,
+  resolveConfigTemplatesFn = resolveConfigTemplates,
   globalConfigPath = "",
   loadOptions = {},
 } = {}) {
   let lastRawConfig = {};
-  const normalizedMigrations = normalizeMigrationEntries(migrations);
-  const normalizedValidators = normalizeValidatorEntries(validators);
+  const normalizedMigrations = normalizeConfigMigrations(migrations);
+  const normalizedValidators = normalizeConfigValidators(validators);
 
   async function loadRawConfigBySource() {
     if (typeof source === "function") {
@@ -101,57 +69,6 @@ export function createGlobalConfigBuilder({
     return cloneConfig(lastRawConfig);
   }
 
-  async function applyMigrations(rawConfig, context = {}) {
-    let nextConfig = cloneConfig(rawConfig) || {};
-    const appliedMigrations = [];
-    for (const migration of normalizedMigrations) {
-      const output = await migration.migrate({
-        config: nextConfig,
-        context,
-      });
-      if (output !== undefined) nextConfig = output;
-      appliedMigrations.push(migration.name);
-    }
-    return {
-      config: nextConfig,
-      appliedMigrations,
-    };
-  }
-
-  async function runValidators({ rawConfig, resolvedConfig, context = {} } = {}) {
-    const warnings = [];
-    for (const validator of normalizedValidators) {
-      const result = await validator.validate({
-        rawConfig,
-        resolvedConfig,
-        context,
-      });
-      if (result === false) {
-        throw new Error(`[global-config-builder] validator failed: ${validator.name}`);
-      }
-      if (typeof result === "string" && String(result).trim()) {
-        warnings.push(String(result).trim());
-        continue;
-      }
-      if (result && typeof result === "object") {
-        if (result.ok === false) {
-          const detail = String(result.error || result.message || "").trim();
-          throw new Error(
-            detail
-              ? `[global-config-builder] validator failed: ${validator.name} (${detail})`
-              : `[global-config-builder] validator failed: ${validator.name}`,
-          );
-        }
-        if (Array.isArray(result.warnings)) {
-          warnings.push(
-            ...result.warnings.map((warning) => String(warning || "").trim()).filter(Boolean),
-          );
-        }
-      }
-    }
-    return warnings;
-  }
-
   async function build({
     configParams = {},
     reloadRawConfig = true,
@@ -166,19 +83,20 @@ export function createGlobalConfigBuilder({
       globalConfigPath,
       loadOptions,
     };
-    const migrationResult = await applyMigrations(rawConfig, buildContext);
+    const migrationResult = await applyConfigMigrations({ config: rawConfig, migrations: normalizedMigrations, context: buildContext });
     const migratedRawConfig = normalizeConfiguredModelProviders(migrationResult.config || {});
-    const resolvedConfig = resolveConfigSecretsFn(migratedRawConfig, { configParams, env });
-    resolvedConfig.configParams = { ...configParams };
-    const warnings = await runValidators({
+    const resolvedConfig = resolveConfigTemplatesFn(migratedRawConfig, {
+      lookup: createConfigValueLookup(env, configParams),
+    });
+    const warnings = await validateEffectiveConfig({
       rawConfig: migratedRawConfig,
       resolvedConfig,
+      validators: normalizedValidators,
       context: buildContext,
     });
-    return {
+    return createConfigBuildResult({
       rawConfig: migratedRawConfig,
       resolvedConfig,
-      configParams: { ...configParams },
       metadata: {
         source:
           String(sourceName || "").trim() ||
@@ -188,7 +106,7 @@ export function createGlobalConfigBuilder({
         migrations: migrationResult.appliedMigrations,
         warnings,
       },
-    };
+    });
   }
 
   return {

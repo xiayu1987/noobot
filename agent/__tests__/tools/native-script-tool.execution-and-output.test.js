@@ -15,7 +15,11 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import {
+  IDENTITY,
+  createRuntime,
+  hasFfmpegCapabilities,
+} from "./native-script-tool.fixtures.js";
 
 test("execute_native_script injects capabilities and persists task output", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-"));
@@ -126,7 +130,11 @@ await files.writeJson(target, { source, target, nested: args.nested });
   });
 });
 
-test("execute_native_script reads generated output and temporary text through task paths", async () => {
+test("execute_native_script reads generated output and temporary text through task paths", async (t) => {
+  if (!(await hasFfmpegCapabilities())) {
+    t.skip("FFmpeg and FFprobe are not installed");
+    return;
+  }
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-readback-"));
   let persistedRequest = null;
   const runtime = createRuntime(basePath, {

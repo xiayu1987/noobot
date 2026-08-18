@@ -9,36 +9,31 @@ import {
   resolveExtensionPoint,
 } from "./extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { validateProtocolEvent } from "@noobot/event-protocol";
 
-const AUTHORITATIVE_STATE_EVENTS = new Set([
-  "turn_lifecycle",
-  "turn_snapshot",
-  "execution_snapshot",
-  "execution_children",
-  "execution_tree",
-]);
-
-export function routeRuntimeStreamEvent(event = "", data = {}, context = {}) {
-  if (AUTHORITATIVE_STATE_EVENTS.has(String(event || "").trim())) return false;
+export function routeRuntimeStreamEvent(envelope = {}, context = {}) {
+  const validation = validateProtocolEvent(envelope);
+  if (!validation.valid) return false;
   const registered = listExtensionContributions(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE);
   const projectionContext = {
-    event,
-    data,
+    envelope,
+    descriptor: validation.descriptor,
     context,
   };
   const matched = resolveExtensionPoint(EXTENSION_POINTS.RUNTIME_STREAM_ROUTE, projectionContext);
   const routes = provideResolvedExtensionValues(matched, projectionContext);
   const buildProjectionDiagnostics = (extra = {}) => ({
     sessionId: String(
-      data?.route?.rootSessionId ||
-        data?.parentSessionId ||
-        data?.sessionId ||
+      envelope?.payload?.route?.rootSessionId ||
+        envelope?.payload?.parentSessionId ||
+        envelope?.identity?.sessionId ||
         context?.sessionId ||
         "",
     ),
-    dialogProcessId: String(data?.dialogProcessId || ""),
-    turnScopeId: String(data?.turnScopeId || context?.turnScopeId || ""),
-    transportEvent: String(event || ""),
+    dialogProcessId: String(envelope?.payload?.dialogProcessId || ""),
+    turnScopeId: String(envelope?.identity?.turnScopeId || context?.turnScopeId || ""),
+    eventType: String(envelope?.identity?.eventType || ""),
+    eventFamily: String(envelope?.protocol?.family || ""),
     source: String(context?.source || "unknown"),
     ...extra,
   });
@@ -51,7 +46,7 @@ export function routeRuntimeStreamEvent(event = "", data = {}, context = {}) {
   for (const route of routes) {
     if (typeof route !== "function") continue;
     try {
-      if (route({ event, data, context }) === true) return true;
+      if (route({ envelope, descriptor: validation.descriptor, context }) === true) return true;
     } catch (error) {
       context?.logRuntimeProjectionDiagnostics?.("frontend.pluginRuntime.projectorFailed", {
         ...buildProjectionDiagnostics(),

@@ -67,7 +67,7 @@ test("summary failure is classified as completion without authoritative complete
     const events = await callChatWs({ port: server.address().port, payload: scopedPayload });
     const lifecycleEvents = events
       .filter((item) => item?.event === "turn_lifecycle")
-      .map((item) => item.data);
+      .map((item) => item.data.payload);
     assert.equal(
       lifecycleEvents.some((item) => item.eventType === TURN_EVENT.COMPLETED),
       false,
@@ -100,17 +100,6 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
     error.name = "AbortError";
     throw error;
   };
-  authoritative.bot.materializeTerminal = async ({ event }) => ({
-    summaryVersion: 9,
-    turnStatus: {
-      version: 9,
-      sessionId: "s-stop-authoritative",
-      turnScopeId: event.turnScopeId,
-      dialogProcessId: event.dialogProcessId,
-      status: "user_stopped",
-      reason: "user_stop",
-    },
-  });
   const server = await startServerWithWs({ bot: authoritative.bot });
   try {
     const events = await stopChatWs({
@@ -142,21 +131,24 @@ test("authoritative stop follows accepted -> stop processed -> stop summary comp
       TURN_EVENT.STOP_COMPLETED,
     ]);
     assert.deepEqual(
-      events.filter((item) => item?.event === "turn_lifecycle").map((item) => item.data.eventType),
+      events
+        .filter((item) => item?.event === "turn_lifecycle")
+        .map((item) => item.data.payload.eventType),
       authoritative.committed(),
     );
     const turn = authoritative.lifecycle().turns["turn-stop-authoritative"];
     assert.equal(turn.state, "stop_completed");
-    assert.equal(turn.summaryVersion, 9);
+    assert.equal(turn.summaryVersion, 1);
     const stoppedEvent = events.find(
       (item) =>
-        item?.event === "turn_lifecycle" && item?.data?.eventType === TURN_EVENT.STOP_COMPLETED,
+        item?.event === "turn_lifecycle" &&
+        item?.data?.payload?.eventType === TURN_EVENT.STOP_COMPLETED,
     );
-    assert.equal(stoppedEvent?.data?.sessionId, "s-stop-authoritative");
-    assert.equal(stoppedEvent?.data?.turnScopeId, "turn-stop-authoritative");
-    assert.equal(stoppedEvent?.data?.dialogProcessId, "dp-stop-authoritative");
-    assert.equal(stoppedEvent?.data?.state, "stop_completed");
-    assert.ok(stoppedEvent?.data?.eventId);
+    assert.equal(stoppedEvent?.data?.identity?.sessionId, "s-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.identity?.turnScopeId, "turn-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.payload?.dialogProcessId, "dp-stop-authoritative");
+    assert.equal(stoppedEvent?.data?.payload?.state, "stop_completed");
+    assert.ok(stoppedEvent?.data?.identity?.eventId);
   } finally {
     await closeServer(server);
   }
@@ -205,6 +197,5 @@ test("rejected stop has no abort or interaction side effects", async () => {
   }
   assert.equal(rejectCount, 0);
   assert.equal(abortCount, 0);
-  assert.equal(sent.at(-1)?.data?.errorCode, "stop_not_allowed");
+  assert.equal(sent.at(-1)?.data?.error?.code, "stop_not_allowed");
 });
-

@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
+import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
@@ -68,7 +69,10 @@ export async function writeSessionSummaryDetails({
       atomic: true,
     });
     const { toolTimeline: _tool, activityTimeline: _activity, ...light } = message;
-    const thinkingDetailCount = toolTimeline.length + activityTimeline.length;
+    const thinkingDetailCount = countCanonicalThinkingDetailEvents({
+      toolTimeline,
+      activityTimeline,
+    });
     messages.push({
       ...light,
       hasThinkingDetails: true,

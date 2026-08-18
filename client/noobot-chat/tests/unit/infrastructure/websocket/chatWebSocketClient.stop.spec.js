@@ -5,9 +5,20 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { createChatWebSocketClient } from "../../../../src/infrastructure/websocket/chatWebSocketClient.js";
-import { StreamEventEnum } from "../../../../src/modules/chat/model/chatConstants.js";
-import { MockWebSocket, setupWebSocketTestHooks, streamCommand } from "./chatWebSocketClientTestFixtures.js";
+import {
+  MockWebSocket,
+  emitCommandReceipt,
+  setupWebSocketTestHooks,
+  streamCommand,
+  turnLifecycleProtocolEvent,
+} from "./chatWebSocketClientTestFixtures.js";
 import { createTurnStopCommand } from "@noobot/agent-transport-protocol";
+import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
 
 function stopCommand({
   commandId = "stop:main-turn",
@@ -33,11 +44,12 @@ describe("chatWebSocketClient stop transport", () => {
     client.connect();
     const socket = MockWebSocket.instances[0];
     let resolved = false;
-    const streamPromise = client.stream(streamCommand({
+    const runCommand = streamCommand({
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
-    }), vi.fn()).then(() => {
+    });
+    const streamPromise = client.stream(runCommand, vi.fn()).then(() => {
       resolved = true;
     });
 
@@ -48,20 +60,23 @@ describe("chatWebSocketClient stop transport", () => {
     await vi.advanceTimersByTimeAsync(10000);
     expect(resolved).toBe(false);
 
-    socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.STOP_ACCEPTED,
+      eventId: "stop-accepted:main-turn",
       commandId: "stop:main-turn",
       sessionId: "s-1",
       dialogProcessId: "main-dp",
       turnScopeId: "main-turn",
-      state: "action_requesting",
-    });
+      messageId: "assistant:main-turn",
+      presentationMessageId: "assistant:main-turn",
+      revision: 3,
+      sequence: 3,
+      phase: TURN_PHASE.STOP,
+      state: TURN_STATE.ACTION_REQUESTING,
+    })));
     await expect(stopPromise).resolves.toBe(true);
 
-    socket.emit(StreamEventEnum.USER_STOPPED, {
-      sessionId: "s-1",
-      dialogProcessId: "main-dp",
-      turnScopeId: "main-turn",
-    });
+    emitCommandReceipt(socket, runCommand, { outcome: "stopped" });
     await streamPromise;
     expect(resolved).toBe(true);
   });
@@ -101,11 +116,20 @@ describe("chatWebSocketClient stop transport", () => {
     const stopMessages = socket.sent.map((item) => JSON.parse(item));
     expect(stopMessages).toHaveLength(1);
     expect(stopMessages[0]).toEqual(firstCommand);
-    socket.emit(StreamEventEnum.TURN_LIFECYCLE, {
+    socket.emit("turn_lifecycle", turnLifecycleProtocolEvent(createTurnLifecycleEnvelope({
+      eventType: TURN_EVENT.STOP_ACCEPTED,
+      eventId: "stop-accepted:turn-1",
       commandId: "stop:turn-1",
+      sessionId: "s-1",
+      dialogProcessId: "main-dp",
       turnScopeId: "turn-1",
-      state: "action_requesting",
-    });
+      messageId: "assistant:turn-1",
+      presentationMessageId: "assistant:turn-1",
+      revision: 3,
+      sequence: 3,
+      phase: TURN_PHASE.STOP,
+      state: TURN_STATE.ACTION_REQUESTING,
+    })));
     await expect(first).resolves.toBe(true);
   });
 });

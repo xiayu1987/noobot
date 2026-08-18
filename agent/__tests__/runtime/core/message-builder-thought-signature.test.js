@@ -7,9 +7,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AIMessage } from "@langchain/core/messages";
 
-import { toConversationMessages } from "../../../src/context/session/message-converter.js";
+import { projectSessionRecordsToContextMessages as toConversationMessages } from "@noobot/context-protocol/message/session-projection";
 import { buildContextMessages } from "../../../src/context/assembly/message-builder.js";
-import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
+import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
 test("buildContextMessages preserves thought-signature payload/tool_calls and omits non-required kwargs", () => {
   const thoughtPayload = [
@@ -21,6 +21,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   ];
   const history = toConversationMessages([
     {
+      messageUid: "message-thought-signature",
       role: "assistant",
       content: "fallback text",
       rawModelContent: thoughtPayload,
@@ -43,27 +44,25 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
       turnScopeId: "turn-thought-signature",
     },
     {
+      messageUid: "message-task-summary-result",
       role: "tool",
-      content: "{\"toolName\":\"task_summary\",\"ok\":true,\"phaseSummary\":\"阶段小结\"}",
+      content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
       tool_call_id: "call_task_summary",
       dialogProcessId: "dialog-thought-signature",
       turnScopeId: "turn-thought-signature",
     },
   ]);
   const messages = buildContextMessages(
-    {
-      execution: {
-        controllers: {
-          runtime: {},
+    createTestAgentExecutionScope(
+      {
+        systemRuntime: {
+          sessionId: "session-thought-signature",
+          dialogProcessId: "dialog-thought-signature",
+          turnScopeId: "turn-thought-signature",
         },
       },
-      payload: {
-        messages: {
-          system: [],
-          history,
-        },
-      },
-    },
+      { messageBlocks: { system: [], history } },
+    ),
     { currentUserMessage: null },
   );
 
@@ -73,6 +72,7 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   assert.equal(aiMessage.tool_calls?.[0]?.id, "call_task_summary");
   assert.equal(aiMessage.tool_calls?.[0]?.name, "task_summary");
   assert.deepEqual(aiMessage.additional_kwargs || {}, {
+    noobotMessageId: "message-thought-signature",
     dialogProcessId: "dialog-thought-signature",
     turnScopeId: "turn-thought-signature",
   });

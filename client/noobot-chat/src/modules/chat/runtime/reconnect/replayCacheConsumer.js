@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  markReconnectSequenceApplied as markReconnectSequenceAppliedInCache,
-  normalizeReplayCacheKey,
   takeReplayCacheGroupsForSession,
 } from "./replayCache.js";
 import {
@@ -15,6 +13,7 @@ import {
   _trimStr,
   normalizeExecutionLogForRealtime,
 } from "./utils.js";
+import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 export async function consumeReconnectReplayCacheForSession({
   replayCache,
@@ -24,11 +23,11 @@ export async function consumeReconnectReplayCacheForSession({
 } = {}) {
   const replayGroups = takeReplayCacheGroupsForSession(replayCache, sessionId);
   for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
-    const isWorkflowNodeReplay = _trimStr(turnScopeId).startsWith("workflow-node:") ||
-      replayMessages.some(({ event = "", data = {} } = {}) =>
-        event === "subagent_message_event" ||
-        data?.route?.scope === "sub_session" ||
-        _trimStr(data?.event?.turnScopeId || data?.turnScopeId).startsWith("workflow-node:"));
+    const isWorkflowNodeReplay = replayMessages.some((envelope) => {
+      const result = validateProtocolEvent(envelope);
+      return result.valid && result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+        Boolean(envelope.payload?.workflowRunId && envelope.payload?.nodeExecutionId);
+    });
     if (isWorkflowNodeReplay) {
       await applySubSessionReplayMessages?.(replayMessages, {
         rootSessionId: _trimStr(sessionId),
@@ -43,18 +42,6 @@ export async function consumeReconnectReplayCacheForSession({
   }
 }
 
-export function markReconnectSequenceApplied(
-  appliedReconnectSequenceByTurnKey,
-  sequence = 0,
-  identity = {},
-) {
-  markReconnectSequenceAppliedInCache(
-    appliedReconnectSequenceByTurnKey,
-    sequence,
-    identity,
-  );
-}
-
 export async function applyReconnectMessagesToActiveSessionReplay({
   activeSession,
   activeSessionId,
@@ -63,19 +50,11 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   messages,
   dialogProcessId,
   turnScopeId = "",
-  appliedReconnectSequenceByTurnKey,
-  appliedReconnectEventKindsByTurnKey,
   classifyRealtimeLog,
   envelopeCallbacks,
-  markReconnectSequenceApplied: markSequenceApplied,
   navigateToLastMessage,
   processStore,
 } = {}) {
-  const replayKey = normalizeReplayCacheKey(activeSessionId?.value, turnScopeId);
-  const lastAppliedSeq = Number(
-    appliedReconnectSequenceByTurnKey[replayKey] || 0,
-  );
-  const boundary = appliedReconnectEventKindsByTurnKey?.[replayKey] || null;
   return applyReconnectReplayBatchToActiveSession({
     activeSession,
     activeSessionId,
@@ -84,14 +63,9 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     messages,
     dialogProcessId,
     turnScopeId,
-    lastAppliedSeq,
-    lastAppliedEventKinds: boundary && Number(boundary.sequence || 0) === lastAppliedSeq
-      ? boundary.eventKinds
-      : null,
     classifyRealtimeLog,
     normalizeExecutionLogForRealtime,
     envelopeCallbacks,
-    markReconnectSequenceApplied: markSequenceApplied,
     navigateToLastMessage,
     processStore,
   });

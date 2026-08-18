@@ -6,17 +6,10 @@
 
 export { AttachmentService } from "./service/attachment-service.js";
 export {
-  mergeAttachmentMetas,
   normalizeAttachmentMetas,
   mapAttachmentRecordsToMetas,
   normalizeAttachmentOwnerMeta,
-  normalizeAttachmentParsedResultMeta,
   normalizeAttachmentTurnScopeMeta,
-  attachmentMatchKeys,
-  findMatchingAttachmentMeta,
-  hasAttachmentMetaValue,
-  mergeAttachmentMetaPreferRich,
-  mergeAttachmentListsPreferRich,
   projectCanonicalAttachmentIdentity,
   projectCanonicalAttachmentIdentities,
   canonicalAttachmentIdentityKey,
@@ -38,8 +31,6 @@ export {
 } from "./policy/policy-validator.js";
 export { getMimeTypeFromExtension, isValidMimeType } from "./policy/mime-utils.js";
 export {
-  DEFAULT_ATTACHMENT_SESSION_ID,
-  DEFAULT_ATTACHMENT_SOURCE,
   DEFAULT_MIME_TYPE,
   MIME_TO_EXTENSION,
   VALID_ATTACHMENT_SOURCES,

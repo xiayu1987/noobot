@@ -14,7 +14,9 @@ import {
 } from "./constants.js";
 
 export function getFileExtension(fileName = "") {
-  const normalized = String(fileName || "").trim().toLowerCase();
+  const normalized = String(fileName || "")
+    .trim()
+    .toLowerCase();
   const idx = normalized.lastIndexOf(".");
   return idx < 0 ? "" : normalized.slice(idx + 1);
 }
@@ -28,10 +30,13 @@ export function isImageFile(fileName = "") {
 }
 
 export function isTextPreviewFile(fileName = "") {
-  const normalized = String(fileName || "").trim().toLowerCase();
+  const normalized = String(fileName || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return false;
   if (isMarkdownFile(normalized)) return true;
-  if (["dockerfile", "makefile", "license", "readme", "changelog"].includes(normalized)) return true;
+  if (["dockerfile", "makefile", "license", "readme", "changelog"].includes(normalized))
+    return true;
   return TEXT_PREVIEW_EXTS.has(getFileExtension(normalized));
 }
 
@@ -40,34 +45,50 @@ export function isOfficeFile(fileName = "") {
 }
 
 export function isMarkdownMime(mimeType = "", fileName = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
-  const name = String(fileName || "").trim().toLowerCase();
-  return MARKDOWN_MIMES.has(mime) || name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdx");
+  const mime = String(mimeType || "")
+    .trim()
+    .toLowerCase();
+  const name = String(fileName || "")
+    .trim()
+    .toLowerCase();
+  return (
+    MARKDOWN_MIMES.has(mime) ||
+    name.endsWith(".md") ||
+    name.endsWith(".markdown") ||
+    name.endsWith(".mdx")
+  );
 }
 
 export function isTextPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
+  const mime = String(mimeType || "")
+    .trim()
+    .toLowerCase();
   if (!mime) return false;
-  return mime.startsWith("text/") || [
-    "json",
-    "xml",
-    "yaml",
-    "yml",
-    "toml",
-    "csv",
-    "javascript",
-    "ecmascript",
-    "typescript",
-    "x-sh",
-    "shellscript",
-    "sql",
-    "graphql",
-    "x-www-form-urlencoded",
-  ].some((kw) => mime.includes(kw));
+  return (
+    mime.startsWith("text/") ||
+    [
+      "json",
+      "xml",
+      "yaml",
+      "yml",
+      "toml",
+      "csv",
+      "javascript",
+      "ecmascript",
+      "typescript",
+      "x-sh",
+      "shellscript",
+      "sql",
+      "graphql",
+      "x-www-form-urlencoded",
+    ].some((kw) => mime.includes(kw))
+  );
 }
 
 export function isImagePreviewType(mimeType = "", fileName = "", isImageMimeChecker = () => false) {
-  const mime = String(mimeType || "").trim().toLowerCase();
+  const mime = String(mimeType || "")
+    .trim()
+    .toLowerCase();
   return Boolean(isImageMimeChecker(mime)) || mime.startsWith("image/") || isImageFile(fileName);
 }
 
@@ -97,12 +118,16 @@ export function isNonImagePreviewOverSizeLimit({
 }
 
 export function isAudioPreviewMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
+  const mime = String(mimeType || "")
+    .trim()
+    .toLowerCase();
   return mime.startsWith("audio/");
 }
 
 export function isOfficeMime(mimeType = "") {
-  const mime = String(mimeType || "").trim().toLowerCase();
+  const mime = String(mimeType || "")
+    .trim()
+    .toLowerCase();
   return (
     mime.includes("msword") ||
     mime.includes("officedocument") ||
@@ -114,5 +139,5 @@ export function isOfficeMime(mimeType = "") {
 }
 
 export function hasParsedResult(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem).hasIdentity;
+  return Boolean(resolveParsedResultAccessMeta(attachmentItem));
 }

@@ -14,8 +14,11 @@ import {
 import {
   isAbortError,
   isUserStopAbort,
-  resolveAbortStopType,
 } from "../../../shared/utils/error-utils.js";
+import {
+  resolveExecutionAbortMessage,
+  resolveExecutionAbortType,
+} from "@noobot/session-protocol/execution-abort";
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
 
 export async function handleSessionRunFailure({
@@ -38,8 +41,10 @@ export async function handleSessionRunFailure({
   caller,
   message,
 }) {
-  if (isAbortError(error)) {
-    if (isUserStopAbort(error, abortSignal)) {
+  const aborted = isAbortError(error, abortSignal);
+  const userStopped = aborted && isUserStopAbort(error, abortSignal);
+  if (aborted) {
+    if (userStopped) {
       await lifecycleRuntime?.persistCurrentTurnMessages?.();
       const stoppedSnapshotPersistence =
         await persistStoppedSnapshotFromRuntime("runner_user_stop_catch");
@@ -49,9 +54,10 @@ export async function handleSessionRunFailure({
       });
       await lifecycleRuntime?.persistCurrentTurnMessages?.();
     } else {
+      const interruptionReason = resolveExecutionAbortMessage({ error, abortSignal });
       lifecycle?.interrupt?.({
-        reason: error?.message || String(error),
-        stopType: resolveAbortStopType(error, abortSignal),
+        reason: interruptionReason,
+        stopType: resolveExecutionAbortType({ error, abortSignal }),
         stoppedSnapshotPersistence: {
           status: "skipped",
           reason: "non_user_abort",
@@ -98,19 +104,20 @@ export async function handleSessionRunFailure({
     sessionId,
     parentSessionId,
     patch: {
-      status:
-        isAbortError(error) && isUserStopAbort(error, abortSignal)
-          ? SESSION_ASYNC_STATUS.USER_STOPPED
-          : SESSION_ASYNC_STATUS.FAILED,
+      status: userStopped
+        ? SESSION_ASYNC_STATUS.USER_STOPPED
+        : SESSION_ASYNC_STATUS.FAILED,
       endedAt: now(),
       error:
-        isAbortError(error) && isUserStopAbort(error, abortSignal)
+        userStopped
           ? tSystem("ws.dialogStoppedByUser")
-          : error?.message || String(error),
+          : aborted
+            ? resolveExecutionAbortMessage({ error, abortSignal })
+            : error?.message || String(error),
       result: null,
     },
   });
-  if (!isAbortError(error)) {
+  if (!aborted) {
     await errorLogger.log({
       userId,
       sessionId,

@@ -8,12 +8,11 @@ import { replaceMessageProjection } from "./message-store.js";
 import {
   resolveAuthoritativeModelContext,
   resolveModelContextTraceEmitter,
-} from "@noobot/context-protocol/hook-context";
+} from "@noobot/context-protocol/assembly/hook-context";
 import {
   summarizeDiagnosticBlocks,
   summarizeDiagnosticMessages,
-} from "@noobot/context-protocol/context-diagnostics";
-
+} from "@noobot/context-protocol/assembly/diagnostics";
 
 function emitHarnessModelContextTrace(ctx = {}, stage = "", payload = {}) {
   const emit = resolveModelContextTraceEmitter(ctx);
@@ -29,7 +28,12 @@ function emitHarnessModelContextTrace(ctx = {}, stage = "", payload = {}) {
 }
 
 export function applyAgentResolvedModelMessages(point = "", ctx = {}, options = {}) {
-  if (String(point || "").trim().toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return false;
+  if (
+    String(point || "")
+      .trim()
+      .toLowerCase() !== HOOK_POINT.AGENT.BEFORE_LLM_CALL
+  )
+    return false;
   const modelContext = resolveAuthoritativeModelContext(ctx);
   if (!modelContext || !Array.isArray(modelContext.messages)) return false;
   const resolver = options?.resolveModelMessages || options?.harness?.resolveModelMessages;

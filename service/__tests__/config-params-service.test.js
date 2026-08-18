@@ -32,11 +32,23 @@ async function waitForFile(file, { timeoutMs = 1000 } = {}) {
 
 async function readJsonl(file) {
   const text = await readFile(file, "utf8");
-  return text.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return text
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function serviceConfigEventFile(workspaceRoot) {
-  return path.join(workspaceRoot, "system", "runtime", "events", "system", "service", "config.jsonl");
+  return path.join(
+    workspaceRoot,
+    "system",
+    "runtime",
+    "events",
+    "system",
+    "service",
+    "config.jsonl",
+  );
 }
 
 test("collectConfigTemplateKeys: 只收集大写模板变量", async () => {
@@ -77,7 +89,7 @@ test("collectConfigTemplateKeys: 只收集大写模板变量", async () => {
   }
 });
 
-test("config-params-service: writes sanitized system events for config read failures", async () => {
+test("config-params-service: rejects invalid documents and writes sanitized system events", async () => {
   const tempDir = await createTempDir();
   const workspaceRoot = path.join(tempDir, "workspace");
   const runtimeRoot = path.join(tempDir, "runtime-root");
@@ -85,8 +97,16 @@ test("config-params-service: writes sanitized system events for config read fail
   try {
     await mkdir(path.join(workspaceRoot, "user-secret-token"), { recursive: true });
     await mkdir(templateRoot, { recursive: true });
-    await writeFile(path.join(workspaceRoot, "config-params.json"), "{ invalid SECRET_VALUE", "utf8");
-    await writeFile(path.join(workspaceRoot, "user-secret-token", "config-params.json"), "{ invalid APIKEY", "utf8");
+    await writeFile(
+      path.join(workspaceRoot, "config-params.json"),
+      "{ invalid SECRET_VALUE",
+      "utf8",
+    );
+    await writeFile(
+      path.join(workspaceRoot, "user-secret-token", "config-params.json"),
+      "{ invalid APIKEY",
+      "utf8",
+    );
     await writeFile(path.join(templateRoot, "config.json"), "{ invalid TOKEN", "utf8");
 
     const service = createConfigParamsService({
@@ -96,9 +116,12 @@ test("config-params-service: writes sanitized system events for config read fail
       runtimeEventsConfig: { workspaceRoot: runtimeRoot },
     });
 
-    assert.deepEqual(await service.readWorkspaceConfigParams(), { values: {}, descriptions: {} });
-    assert.deepEqual(await service.readUserConfigParams({ userId: "user-secret-token" }), { values: {}, descriptions: {} });
-    assert.deepEqual(await service.collectConfigTemplateKeys(), ["API_KEY"]);
+    await assert.rejects(service.readWorkspaceConfigParams(), SyntaxError);
+    await assert.rejects(
+      service.readUserConfigParams({ userId: "user-secret-token" }),
+      SyntaxError,
+    );
+    await assert.rejects(service.collectConfigTemplateKeys(), SyntaxError);
 
     const eventFile = serviceConfigEventFile(runtimeRoot);
     await waitForFile(eventFile);
@@ -130,4 +153,28 @@ test("config-params-service: writes sanitized system events for config read fail
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("config-params-service delegates document and catalog semantics to the protocol", () => {
+  const service = createConfigParamsService({ workspaceRootPath: () => "/tmp/workspace" });
+  assert.deepEqual(
+    service.normalizeConfigParams({
+      values: { api_key: " key " },
+      descriptions: { api_key: " Credential " },
+    }),
+    {
+      values: { API_KEY: "key" },
+      descriptions: { API_KEY: "Credential" },
+    },
+  );
+  assert.deepEqual(
+    service.buildConfigParamCatalog({
+      values: { api_key: "key" },
+      descriptions: { region: " Region " },
+    }),
+    [
+      { key: "API_KEY", description: "" },
+      { key: "REGION", description: "Region" },
+    ],
+  );
 });

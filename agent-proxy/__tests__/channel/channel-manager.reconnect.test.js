@@ -8,19 +8,13 @@ import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
 import { createChannelKey } from "../../src/shared/utils.js";
-
-function createMockSocket() {
-  return {
-    readyState: 1,
-    sentEvents: [],
-    __agentProxyChannelKeys: new Set(),
-    __agentProxyApiKey: "api-key-1",
-    __agentProxyUserId: "user-1",
-    send(raw) {
-      this.sentEvents.push(JSON.parse(String(raw || "{}")));
-    },
-  };
-}
+import {
+  canonicalInteractionRequest,
+  canonicalMessageEvent,
+  createMockSocket,
+} from "./channel-manager.state-consistency.test-helpers.js";
+import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
+import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 
 function getReconnectDataEvent(socket) {
   return socket.sentEvents.find((eventItem) => eventItem?.event === "reconnect_data");
@@ -65,19 +59,15 @@ test("reconnect should not replay resolved interaction_request", () => {
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
 
-  manager.pushChannelEvent(channel, "thinking", {
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    seq: 1,
-  });
-  manager.pushChannelEvent(channel, "interaction_request", {
+  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
+  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, canonicalInteractionRequest({
     requestId: "req-resolved",
     sessionId: "session-1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
     content: "confirm",
-    seq: 2,
-  });
+    sequence: 2,
+  }));
 
   channel.pendingInteractionRequests.delete("req-resolved");
   manager.requestChannelMap.delete("req-resolved");
@@ -112,14 +102,14 @@ test("reconnect should replay unresolved interaction_request with pending marker
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
 
-  manager.pushChannelEvent(channel, "interaction_request", {
+  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, canonicalInteractionRequest({
     requestId: "req-pending",
     sessionId: "session-1",
     dialogProcessId: "dp-1",
     turnScopeId: "turn-1",
     content: "confirm",
-    seq: 2,
-  });
+    sequence: 2,
+  }));
 
   const socket = createMockSocket();
   socket.__agentProxyChannelKeys.add(channelKey);
@@ -132,7 +122,7 @@ test("reconnect should replay unresolved interaction_request with pending marker
   assert.ok(reconnectDataEvent, "should send reconnect_data event");
   const sessionEntry = reconnectDataEvent.data.sessions.find((entry) => entry.sessionId === "session-1");
   const pendingInteractionEnvelope = sessionEntry?.replayBatch?.pendingInteractions?.find(
-    (envelope) => String(envelope?.data?.requestId || envelope?.requestId || "") === "req-pending",
+    (envelope) => envelope?.payload?.requestId === "req-pending",
   );
   assert.ok(pendingInteractionEnvelope, "should expose unresolved interaction in replayBatch.pendingInteractions");
   assert.equal(JSON.stringify(reconnectDataEvent.data).includes("__agentProxyPendingInteraction"), false);
@@ -150,13 +140,11 @@ test("reconnect excludes the data-plane journal even when it reached retention c
   channel.ownerUserId = "user-1";
 
   for (let seq = 1; seq <= 2000; seq += 1) {
-    manager.pushChannelEvent(channel, "model_context_trace", {
-      sessionId: "session-1",
-      dialogProcessId: "dp-1",
-      turnScopeId: "turn-1",
-      seq,
-      trace: "x".repeat(1024),
-    });
+    manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
+      sequence: seq,
+      messageId: "message-retention",
+      text: "x".repeat(1024),
+    }));
   }
 
   const socket = createMockSocket();
@@ -169,7 +157,7 @@ test("reconnect excludes the data-plane journal even when it reached retention c
   const sessionEntry = reconnectDataEvent.data.sessions[0];
   assert.equal("dialogProcesses" in sessionEntry, false);
   assert.deepEqual(sessionEntry.replayBatch.events, []);
-  assert.equal(JSON.stringify(reconnectDataEvent).includes("model_context_trace"), false);
+  assert.equal(JSON.stringify(reconnectDataEvent).includes("message-retention"), false);
   assert.ok(getReconnectCompleteEvent(socket), "reconnect must complete without draining the data journal");
   const prepared = records.find(
     (event) => event.event === "agentProxy.reconnect.authorityBatch.prepared",

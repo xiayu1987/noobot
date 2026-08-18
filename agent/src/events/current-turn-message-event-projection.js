@@ -29,41 +29,24 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}, {
   }
 
   const pendingMessageEvents = [];
-  const activityState = runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : (runtime.systemRuntime = {});
-  activityState.activityTimeline = activityState.activityTimeline && typeof activityState.activityTimeline === "object"
-    ? activityState.activityTimeline
-    : { sequence: 0 };
-
-  const reduceCurrentTurnActivity = (activityFact = {}) => {
-    const eventId = text(activityFact.eventId);
-    if (!eventId) return null;
-    const sequence = Number(activityFact.sequence) > 0
-      ? Number(activityFact.sequence)
-      : (activityState.activityTimeline.sequence += 1);
-    activityState.activityTimeline.sequence = Math.max(
-      Number(activityState.activityTimeline.sequence || 0),
-      sequence,
-    );
+  const reduceCurrentTurnActivity = (envelope = {}) => {
+    const eventId = text(envelope?.identity?.eventId);
+    const sequence = Number(envelope?.ordering?.sequence);
+    if (!eventId || !Number.isInteger(sequence) || sequence < 1) return null;
     return {
-      ...activityFact,
+      ...envelope.payload,
+      eventId,
       sequence,
-      sequenceDomain: text(activityFact.sequenceDomain || "message-event"),
-      sequenceScopeId: text(
-        activityFact.sequenceScopeId ||
-          runtime?.runConfig?.presentationMessageId ||
-          runtime?.systemRuntime?.turnScopeId ||
-          sequenceScopeId ||
-          "turn",
-      ),
-      authority: text(activityFact.authority || "authoritative"),
+      sequenceDomain: text(envelope.ordering.domain),
+      sequenceScopeId: text(envelope.ordering.scopeId),
+      authority: "authoritative",
+      timestamp: text(envelope.occurredAt),
     };
   };
 
   runtime.projectCurrentTurnMessageEvent = (envelope = {}) => {
     if (!envelope || typeof envelope !== "object") return null;
-    const eventId = text(envelope.eventId);
+    const eventId = text(envelope?.identity?.eventId);
     if (!eventId) return null;
     if (!isToolMessageEvent(envelope) && !isActivityMessageEvent(envelope)) return envelope;
 
@@ -83,8 +66,8 @@ export function initializeCurrentTurnMessageEventProjection(runtime = {}, {
     const currentTimeline = isToolEvent
       ? existingAssistantIndex.item.toolTimeline
       : existingAssistantIndex.item.activityTimeline;
-    const transferEnvelopes = Array.isArray(envelope.transferEnvelopes)
-      ? envelope.transferEnvelopes
+    const transferEnvelopes = Array.isArray(envelope?.payload?.transferEnvelopes)
+      ? envelope.payload.transferEnvelopes
       : [];
     const observed = isToolEvent
       ? (Array.isArray(currentTimeline) ? currentTimeline : []).some((item) =>

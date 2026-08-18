@@ -3,17 +3,27 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
+import express from "express";
 import {
+  collectSessionDeletionHookResult,
+  createHookManager,
+  HOOK_POINT,
+} from "@noobot/hook-protocol";
+import {
+  PLUGIN_HOST_PORT,
+  PLUGIN_LIFECYCLE_EVENT,
   PLUGIN_SURFACE,
   requireDeclaredPluginHook,
   requireDeclaredPluginHookEmission,
   requireDeclaredPluginRoute,
+  serializePluginContributionIdentity,
 } from "@noobot/plugin-protocol";
 import { createJsonRouteWrapper } from "../routes/route-wrapper.js";
 import {
-  activateLoadedNoobotPlugin,
   buildNoobotPluginDiagnostics,
+  createContributionTransaction,
+  createPluginActivationScope,
+  createPluginHostFacade,
   getNoobotPluginRuntime,
   listLoadedNoobotPluginEntries,
   refreshNoobotPluginRuntime,
@@ -30,16 +40,40 @@ function reportPluginEvent(record = {}) {
     source: "service",
     channel: RUNTIME_EVENT_CHANNELS.DIRECT,
     category: RUNTIME_EVENT_CATEGORIES.STATE,
-    level: record.event === "plugin.failed" ? "error" : "info",
+    level: record.event === PLUGIN_LIFECYCLE_EVENT.FAILED ? "error" : "info",
     event: record.event,
     data: record,
   });
 }
 
-function scopeHandlerId(pluginId = "", handlerId = "") {
-  const normalized = String(handlerId || "").trim();
-  if (!normalized) throw new TypeError(`plugin ${pluginId} hook handler id is required`);
-  return `${pluginId}:${normalized}`;
+function createRouteGeneration({ context = {} } = {}) {
+  const router = express.Router();
+  const jsonRoute = createJsonRouteWrapper({ translateText: context?.translateText });
+  const endpointKeys = new Set();
+  const routes = [];
+  return Object.freeze({
+    router,
+    routes,
+    stage(entry, routeId, handler) {
+      if (typeof handler !== "function") throw new TypeError(`plugin route handler is required: ${routeId}`);
+      const route = requireDeclaredPluginRoute(entry.manifest, routeId);
+      for (const routePath of route.paths) {
+        const endpoint = `${route.method} ${routePath}`;
+        if (endpointKeys.has(endpoint)) throw new Error(`duplicate plugin route endpoint: ${endpoint}`);
+        endpointKeys.add(endpoint);
+      }
+      routes.push(Object.freeze({ entry, route, handler }));
+      return Object.freeze({ id: route.id, method: route.method, paths: [...route.paths] });
+    },
+    commit() {
+      for (const { route, handler } of routes) {
+        const register = router[String(route.method || "").toLowerCase()];
+        if (typeof register !== "function") throw new Error(`service does not support route method ${route.method}`);
+        for (const routePath of route.paths) register.call(router, routePath, jsonRoute(handler));
+      }
+      return router;
+    },
+  });
 }
 
 export function createServicePluginHost({
@@ -53,101 +87,148 @@ export function createServicePluginHost({
   };
   let runtimePromise = null;
   let activationPromise = null;
-  let hookManager = createHookManager();
-  const activations = new Map();
+  let activeScope = null;
+  let activeRuntime = null;
+  let activeHookManager = createHookManager();
+  let activeRouter = express.Router();
+  let mountedApp = null;
+  let activationContext = null;
+  let lifecycleGeneration = 0;
+  let lifecycleState = "active";
+  let disposalPromise = null;
+
+  function assertLifecycleOwnership(generation) {
+    if (lifecycleState !== "active" || generation !== lifecycleGeneration) {
+      throw new Error("service plugin activation lost lifecycle ownership");
+    }
+  }
 
   function load({ refresh = false } = {}) {
-    if (refresh) {
-      runtimePromise = refreshPluginRuntime(runtimeOptions);
-      activationPromise = null;
-      hookManager = createHookManager();
-      activations.clear();
-    }
+    if (refresh) return refreshPluginRuntime(runtimeOptions);
     if (!runtimePromise) runtimePromise = loadPluginRuntime(runtimeOptions);
     return runtimePromise;
   }
 
-  function createPluginHost({ entry, app, context, registeredRoutes, registeredEndpoints }) {
-    const { manifest, pluginId } = entry;
-    const jsonRoute = createJsonRouteWrapper({ translateText: context?.translateText });
-    return Object.freeze({
-      hooks: Object.freeze({
-        register(point, handler, options = {}) {
-          requireDeclaredPluginHook(manifest, PLUGIN_SURFACE.SERVICE, point);
-          return hookManager.on(point, handler, {
-            ...options,
-            id: scopeHandlerId(pluginId, options?.id),
-          });
-        },
-        emit(point, payload, options) {
-          requireDeclaredPluginHookEmission(manifest, PLUGIN_SURFACE.SERVICE, point);
-          return hookManager.emit(point, payload, options);
-        },
-      }),
-      routes: Object.freeze({
-        bind(routeId, handler) {
-          if (!app) throw new Error(`plugin ${pluginId} cannot bind routes before service startup`);
-          if (typeof handler !== "function") throw new TypeError(`plugin route handler is required: ${routeId}`);
-          const route = requireDeclaredPluginRoute(manifest, routeId);
-          const routeKey = `${pluginId}:${route.id}`;
-          if (registeredRoutes.has(routeKey)) throw new Error(`duplicate plugin route binding: ${routeKey}`);
-          const register = app[String(route.method || "").toLowerCase()];
-          if (typeof register !== "function") throw new Error(`service does not support route method ${route.method}`);
-          for (const routePath of route.paths) {
-            const endpoint = `${route.method} ${routePath}`;
-            if (registeredEndpoints.has(endpoint)) throw new Error(`duplicate plugin route endpoint: ${endpoint}`);
-            registeredEndpoints.add(endpoint);
-            register.call(app, routePath, jsonRoute(handler));
-          }
-          registeredRoutes.add(routeKey);
-          return Object.freeze({ id: route.id, method: route.method, paths: [...route.paths] });
-        },
-      }),
-      ports: context?.ports || Object.freeze({}),
-    });
+  function mountDispatcher(app) {
+    if (!app || typeof app.use !== "function") throw new TypeError("service plugin host requires an Express application");
+    if (mountedApp && mountedApp !== app) throw new Error("service plugin host cannot mount on multiple applications");
+    if (!mountedApp) {
+      app.use((req, res, next) => activeRouter(req, res, next));
+      mountedApp = app;
+    }
   }
 
-  async function activatePlugins({ app = null, context = {} } = {}) {
-    if (activationPromise) return activationPromise;
-    activationPromise = (async () => {
-      const runtime = await load();
+  async function activatePlugins({ app, context = {}, refresh = false } = {}) {
+    if (lifecycleState !== "active") throw new Error("service plugin host is disposed");
+    if (activationPromise && !refresh) return activationPromise;
+    const operationGeneration = lifecycleGeneration;
+    const previousOperation = activationPromise;
+    const operation = (async () => {
+      if (previousOperation) {
+        try {
+          await previousOperation;
+        } catch {
+          // A failed candidate never becomes active; the next queued refresh
+          // still starts from the last committed generation.
+        }
+      }
+      assertLifecycleOwnership(operationGeneration);
+      mountDispatcher(app);
+      const runtime = await load({ refresh });
+      assertLifecycleOwnership(operationGeneration);
       for (const record of runtime.lifecycleEvents || []) reportPluginEvent(record);
       if (runtime.errors?.length) {
         throw new Error(`service plugin runtime failed: ${runtime.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`);
       }
-      const registeredRoutes = new Set();
-      const registeredEndpoints = new Set();
-      for (const entry of listLoadedNoobotPluginEntries(runtime)) {
-        const activation = await activateLoadedNoobotPlugin(entry, {
-          host: createPluginHost({ entry, app, context, registeredRoutes, registeredEndpoints }),
-          config: entry.manifest.configuration?.defaults || {},
-        });
-        activations.set(entry.pluginId, activation);
-        reportPluginEvent({
-          event: "plugin.activated",
-          pluginId: entry.pluginId,
-          pluginVersion: entry.manifest.version,
-          protocolVersion: entry.manifest.protocolVersion,
-          surface: PLUGIN_SURFACE.SERVICE,
-        });
+      const candidateHooks = createHookManager();
+      const generation = createRouteGeneration({ context });
+      const scope = await createPluginActivationScope({
+        entries: listLoadedNoobotPluginEntries(runtime),
+        lifecycleSink: reportPluginEvent,
+        configFactory: (entry) => entry.manifest.configuration?.defaults || {},
+        transactionFactory: (entry) => {
+          const routeStart = generation.routes.length;
+          return createContributionTransaction({
+            commit: () => undefined,
+            rollback: (staged) => {
+              for (const item of [...staged].reverse()) item.unregister?.();
+              generation.routes.splice(routeStart);
+            },
+          });
+        },
+        hostFactory: (entry, transaction) => createPluginHostFacade({
+          entry,
+          capabilityAdapters: {
+            [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
+              path: ["hooks", "register"],
+              value(point, handler, options = {}) {
+                const declaration = requireDeclaredPluginHook(
+                  entry.manifest,
+                  PLUGIN_SURFACE.SERVICE,
+                  point,
+                  options?.id,
+                );
+                const unregister = candidateHooks.on(point, handler, {
+                  ...options,
+                  id: serializePluginContributionIdentity({ pluginId: entry.pluginId, surface: entry.surface, localId: declaration.id }),
+                });
+                transaction.stage({
+                  type: "hook",
+                  point: declaration.point,
+                  registrationId: declaration.id,
+                  unregister,
+                });
+                return unregister;
+              },
+            },
+            [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
+              path: ["hooks", "emit"],
+              value(point, payload, options) {
+                requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.SERVICE, point);
+                return candidateHooks.emit(point, payload, options);
+              },
+            },
+            [PLUGIN_HOST_PORT.ROUTES_BIND]: {
+              path: ["routes", "bind"],
+              value: (routeId, handler) => {
+                const result = generation.stage(entry, routeId, handler);
+                transaction.stage({ type: "route", routeId });
+                return result;
+              },
+            },
+            [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: {
+              path: ["ports", "sessions"],
+              value: context?.ports?.sessions,
+            },
+            [PLUGIN_HOST_PORT.SERVICE_HTTP_STATUS]: {
+              path: ["ports", "http"],
+              value: context?.ports?.http,
+            },
+          },
+        }),
+      });
+      let candidateRouter;
+      try {
+        candidateRouter = generation.commit();
+        assertLifecycleOwnership(operationGeneration);
+      } catch (error) {
+        await scope.dispose({ cause: error });
       }
-      const declaredRoutes = listLoadedNoobotPluginEntries(runtime)
-        .flatMap((entry) => entry.manifest.contributes.service?.routes || []);
-      if (app && registeredRoutes.size !== declaredRoutes.length) {
-        throw new Error(`service plugins bound ${registeredRoutes.size} of ${declaredRoutes.length} declared routes`);
-      }
-      for (const entry of listLoadedNoobotPluginEntries(runtime)) {
-        reportPluginEvent({
-          event: "plugin.contribution_committed",
-          pluginId: entry.pluginId,
-          pluginVersion: entry.manifest.version,
-          protocolVersion: entry.manifest.protocolVersion,
-          surface: PLUGIN_SURFACE.SERVICE,
-        });
-      }
+      const previousScope = activeScope;
+      activeScope = scope;
+      activeRuntime = runtime;
+      activeHookManager = candidateHooks;
+      activeRouter = candidateRouter;
+      activationContext = { app, context };
+      if (previousScope) await previousScope.dispose();
       return runtime;
     })();
-    return activationPromise;
+    activationPromise = operation;
+    try {
+      return await operation;
+    } finally {
+      if (activationPromise === operation) activationPromise = null;
+    }
   }
 
   return Object.freeze({
@@ -155,39 +236,57 @@ export function createServicePluginHost({
       const runtime = await activatePlugins({ app, context });
       return listLoadedNoobotPluginEntries(runtime).map((entry) => ({
         pluginId: entry.pluginId,
-        activation: activations.get(entry.pluginId),
+        activation: activeScope.getActivation(entry.pluginId),
       }));
     },
 
+    async refresh() {
+      if (!activationContext) throw new Error("service plugins must be activated before refresh");
+      return activatePlugins({ ...activationContext, refresh: true });
+    },
+
     async getPluginDiagnostics({ refresh = false } = {}) {
-      const runtime = refresh ? await load({ refresh: true }) : await load();
+      const runtime = refresh ? await load({ refresh: true }) : (activeRuntime || await load());
       return buildNoobotPluginDiagnostics(runtime);
     },
 
-    async emitAfterSessionDelete({ bot = null, userId = "", sessionId = "", deletedSessionIds = [] } = {}) {
-      if (!activationPromise) throw new Error("service plugins must be activated during HTTP startup");
-      await activationPromise;
-      const basePath = bot && typeof bot.getWorkspacePath === "function"
-        ? String(bot.getWorkspacePath(userId) || "").trim()
-        : "";
-      if (!basePath) return;
-      await hookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
+    async emitAfterSessionDelete({ bot = null, userId = "", sessionId = "", deletedSessionIds = [], remainingSessionIds = [] } = {}) {
+      if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
+      const basePath = bot && typeof bot.getWorkspacePath === "function" ? String(bot.getWorkspacePath(userId) || "").trim() : "";
+      if (!basePath) return collectSessionDeletionHookResult();
+      const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
-        deletedSessionIds: Array.isArray(deletedSessionIds)
-          ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
-          : [],
+        deletedSessionIds: Array.isArray(deletedSessionIds) ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
+        remainingSessionIds: Array.isArray(remainingSessionIds) ? remainingSessionIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
         basePath,
         executionScope: "primary",
       });
+      return collectSessionDeletionHookResult(hookResult);
     },
 
     async dispose() {
-      for (const [pluginId, activation] of activations) {
-        await activation.dispose();
-        reportPluginEvent({ event: "plugin.deactivated", pluginId, surface: PLUGIN_SURFACE.SERVICE });
-      }
-      activations.clear();
+      if (disposalPromise) return disposalPromise;
+      if (lifecycleState === "disposed") return;
+      lifecycleState = "disposing";
+      lifecycleGeneration += 1;
+      const pendingOperation = activationPromise;
+      disposalPromise = (async () => {
+        if (pendingOperation) {
+          try { await pendingOperation; } catch { /* Disposal owns final cleanup. */ }
+        }
+        const scope = activeScope;
+        activeScope = null;
+        activeRuntime = null;
+        activeHookManager = createHookManager();
+        activeRouter = express.Router();
+        try {
+          if (scope) await scope.dispose();
+        } finally {
+          lifecycleState = "disposed";
+        }
+      })();
+      return disposalPromise;
     },
   });
 }

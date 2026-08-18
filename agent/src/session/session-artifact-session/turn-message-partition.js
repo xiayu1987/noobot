@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 
 export function splitSessionMessages(messages = [], dialogOrder = []) {
@@ -17,7 +17,7 @@ export function splitSessionMessages(messages = [], dialogOrder = []) {
   );
   const buckets = new Map();
   source.forEach((message, sourceIndex) => {
-    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
     const turnScopeId = String(message?.turnScopeId || "").trim();
     if (!turnScopeId || !dialogProcessId) {
       const error = new TypeError(

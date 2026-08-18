@@ -4,9 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { appendWorkflowPlanningMessage, emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
+import { appendWorkflowPlanningMessage, commitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import { resolveWorkflowParentRunConfig } from "../hooks/runtime.js";
 
 export function createPlanningExecutionStub({ workflowRunId = "", nodeSessions = [] } = {}) {
@@ -84,7 +87,6 @@ export async function prepareWorkflowPlanningMessage({
     messageId,
     presentationMessageId,
     workflowRunId,
-    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
     semanticText,
     workflowPayload: planningWorkflowPayload,
     nodeSessions: planningNodeSessions,
@@ -111,16 +113,14 @@ export async function prepareWorkflowPlanningMessage({
         : 0,
     },
   };
-  await emitWorkflowRuntimeEvent({
-    options,
+  await commitWorkflowRuntimeEvent({
     ctx,
-    event: "workflow_planning_message_prepared",
-    data: runtimeData,
+    eventType: WORKFLOW_RUNTIME_EVENT.PLANNING,
+    payload: runtimeData,
+    orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.PLANNING,
+    orderingScopeId: workflowRunId,
+    revision: 1,
+    messageId,
+    executionId: ctx?.workflowExecutionId,
   });
-  if (typeof ctx?.eventListener?.onEvent === "function") {
-    await ctx.eventListener.onEvent({
-      event: "workflow_planning_message_prepared",
-      data: runtimeData,
-    });
-  }
 }

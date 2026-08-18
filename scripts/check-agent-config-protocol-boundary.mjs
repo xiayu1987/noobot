@@ -29,6 +29,21 @@ async function assertAbsent(relativePath) {
   }
 }
 
+const obsoleteProtocolFiles = [
+  "protocol.js",
+  "run-config-resolver.js",
+  "key-normalizer.js",
+  "time-config-normalizer.js",
+  "config-file-migration.js",
+  "config-merge.js",
+  "builtin-scenarios.js",
+  "tool-policy.js",
+  "user-override-policy.js",
+];
+for (const fileName of obsoleteProtocolFiles) {
+  await assertAbsent(`agent-config-protocol/src/${fileName}`);
+}
+
 const protocolFiles = await filesUnder("agent-config-protocol/src");
 for (const file of protocolFiles) {
   const source = await readFile(path.join(ROOT, file), "utf8");
@@ -37,7 +52,12 @@ for (const file of protocolFiles) {
     if (
       specifier.startsWith("noobot-agent") ||
       specifier.startsWith("../agent") ||
-      specifier.includes("agent/src")
+      specifier.includes("agent/src") ||
+      specifier === "node:fs" ||
+      specifier.startsWith("node:fs/") ||
+      specifier === "node:path" ||
+      specifier === "@noobot/model-runtime" ||
+      specifier === "@noobot/plugin-runtime"
     ) {
       violations.push(`${file}: protocol must not import Agent runtime module ${specifier}`);
     }
@@ -64,13 +84,33 @@ for (const relativePath of [
   await assertAbsent(relativePath);
 
 const agentSourceFiles = await filesUnder("agent/src");
-for (const file of agentSourceFiles) {
+const agentScriptFiles = await filesUnder("agent/scripts");
+const serviceSourceFiles = await filesUnder("service/services");
+const serviceConfigScriptFiles = await filesUnder("service/scripts/project-launcher");
+const desktopConfigFiles = await filesUnder("client/shared/electron/runtime");
+const protocolConsumerFiles = [
+  ...agentSourceFiles,
+  ...agentScriptFiles,
+  ...serviceSourceFiles,
+  ...serviceConfigScriptFiles,
+  ...desktopConfigFiles,
+];
+for (const file of protocolConsumerFiles) {
   const source = await readFile(path.join(ROOT, file), "utf8");
   if (/\b(?:ToolPolicyManager|applyRunConfigToolPolicy|_applyRunConfigToolPolicy)\b/.test(source)) {
     violations.push(`${file}: obsolete parallel tool-policy entry is forbidden`);
   }
   if (/\btools\.(?:allowed|denied)\b/.test(source)) {
     violations.push(`${file}: legacy tool policy fields are forbidden`);
+  }
+  if (/function\s+normalizeConfigParamKey\b|const\s+normalizeConfigParamKey\b/.test(source)) {
+    violations.push(`${file}: config param key normalization must use the protocol`);
+  }
+  if (source.includes("[A-Z0-9_]+") && source.includes("${")) {
+    violations.push(`${file}: config template grammar must use the protocol`);
+  }
+  if (/\b(?:globalConfig|rawGlobalConfig)\??\.configParams\b/.test(source)) {
+    violations.push(`${file}: configParams must come from the explicit resolution context`);
   }
 }
 
@@ -79,6 +119,6 @@ if (violations.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `[agent-config-protocol-boundary] ok (${protocolFiles.length + agentSourceFiles.length} files)`,
+    `[agent-config-protocol-boundary] ok (${protocolFiles.length + protocolConsumerFiles.length} files)`,
   );
 }

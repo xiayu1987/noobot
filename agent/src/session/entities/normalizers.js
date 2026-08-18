@@ -10,8 +10,8 @@ export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
   normalizeSessionEntity,
-  normalizeSelectedConnectors,
   normalizeSessionTreeEntity,
 } from "./session-entity.js";
+export { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 export { normalizeTaskEntity } from "./task-entity.js";
 export { normalizeExecutionLogEntity } from "../../observability/execution-log/execution-log-entities.js";

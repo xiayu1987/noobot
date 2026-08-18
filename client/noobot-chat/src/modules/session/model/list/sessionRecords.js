@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../../chat/model/timeFields.js";
-import { findVisibleLastMessage, isPluginInjectedMessage } from "../../../chat/model/messageModel.js";
+import {
+  findVisibleLastMessage,
+  isPluginInjectedMessage,
+} from "../../../chat/model/messageModel.js";
 import { isNewerSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 
 export function createLocalSessionItem({ id, title, createConnectorPanelState }) {
@@ -29,26 +32,30 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
   const isUnavailable = item?.availability === "unavailable";
   const messages = Array.isArray(item.messages) ? item.messages : [];
   const titleFallback = item.sessionId.slice(0, 8);
-  const title = String(item.title || "").trim()
-    || sessionTitleFromMessages(messages, titleFallback);
+  const title =
+    String(item.title || "").trim() || sessionTitleFromMessages(messages, titleFallback);
   const messageCount = Number.isFinite(Number(item.messageCount))
     ? Number(item.messageCount)
     : messages.length || 0;
-  const summaryLastMessage = item.lastMessage && typeof item.lastMessage === "object"
-    ? item.lastMessage
-    : null;
-  const lastMessage = summaryLastMessage && !isPluginInjectedMessage(summaryLastMessage)
-    ? summaryLastMessage
-    : findVisibleLastMessage(messages);
+  const summaryLastMessage =
+    item.lastMessage && typeof item.lastMessage === "object" ? item.lastMessage : null;
+  const lastMessage =
+    summaryLastMessage && !isPluginInjectedMessage(summaryLastMessage)
+      ? summaryLastMessage
+      : findVisibleLastMessage(messages);
   return {
     title,
     isLocal: false,
     loaded: isUnavailable,
     isUnavailable,
     availability: isUnavailable ? "unavailable" : "available",
-    unavailableReason: isUnavailable && item?.unavailableReason
-      ? { code: String(item.unavailableReason.code || ""), message: String(item.unavailableReason.message || "") }
-      : null,
+    unavailableReason:
+      isUnavailable && item?.unavailableReason
+        ? {
+            code: String(item.unavailableReason.code || ""),
+            message: String(item.unavailableReason.message || ""),
+          }
+        : null,
     sessionId: item.sessionId,
     aggregateVersion: Number(item.aggregateVersion || 0),
     currentTaskId: item.currentTaskId || "",
@@ -61,19 +68,21 @@ export function mapSummaryToSession(item, { sessionTitleFromMessages, createConn
     updatedAt: item.updatedAt || "",
     caller: item.caller || "",
     depth: Number(item.depth || 0),
-    turnLifecycleSnapshot: item.turnLifecycleSnapshot && typeof item.turnLifecycleSnapshot === "object"
-      ? item.turnLifecycleSnapshot
-      : null,
-    turnStatuses: Array.isArray(item.turnStatuses) ? item.turnStatuses : [],
+    turnLifecycleSnapshot:
+      item.turnLifecycleSnapshot && typeof item.turnLifecycleSnapshot === "object"
+        ? item.turnLifecycleSnapshot
+        : null,
     turnTimings: Array.isArray(item.turnTimings) ? item.turnTimings : [],
   };
 }
 
-export function mergeExistingSessionState(mappedSession = {}, existingSession = null, { sessionTitleFromMessages }) {
+export function mergeExistingSessionState(
+  mappedSession = {},
+  existingSession = null,
+  { sessionTitleFromMessages },
+) {
   if (!existingSession) return mappedSession;
-  const existingMessages = Array.isArray(existingSession?.messages)
-    ? existingSession.messages
-    : [];
+  const existingMessages = Array.isArray(existingSession?.messages) ? existingSession.messages : [];
   const existingSessionDocs = Array.isArray(existingSession?.sessionDocs)
     ? existingSession.sessionDocs
     : [];
@@ -86,13 +95,13 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
   return {
     ...mappedSession,
     aggregateVersion,
-    turnLifecycleSnapshot: mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
-    turnStatuses: mappedSession.turnStatuses?.length
-      ? mappedSession.turnStatuses
-      : (Array.isArray(existingSession.turnStatuses) ? existingSession.turnStatuses : []),
+    turnLifecycleSnapshot:
+      mappedSession.turnLifecycleSnapshot || existingSession.turnLifecycleSnapshot || null,
     turnTimings: mappedSession.turnTimings?.length
       ? mappedSession.turnTimings
-      : (Array.isArray(existingSession.turnTimings) ? existingSession.turnTimings : []),
+      : Array.isArray(existingSession.turnTimings)
+        ? existingSession.turnTimings
+        : [],
     loaded: existingSession.loaded === true || mappedSession.loaded === true,
     isLocal: mappedSession.isLocal === false ? false : existingSession.isLocal === true,
     sessionId: mappedSession.sessionId || existingSession.sessionId,
@@ -104,8 +113,9 @@ export function mergeExistingSessionState(mappedSession = {}, existingSession = 
     lastMessage: existingMessages.length
       ? findVisibleLastMessage(existingMessages)
       : mappedSession.lastMessage,
-    title: String(mappedSession.title || "").trim()
-      || (existingMessages.length
+    title:
+      String(mappedSession.title || "").trim() ||
+      (existingMessages.length
         ? sessionTitleFromMessages(existingMessages, existingSession.title || mappedSession.title)
         : existingSession.title || mappedSession.title),
   };

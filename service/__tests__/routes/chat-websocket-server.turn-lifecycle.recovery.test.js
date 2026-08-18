@@ -83,7 +83,7 @@ test("socket close terminates an accepted turn and releases the session mutex", 
         const message = JSON.parse(String(raw || "{}"));
         if (
           message?.event === "turn_lifecycle" &&
-          message?.data?.eventType === TURN_EVENT.ACTION_ACCEPTED
+          message?.data?.payload?.eventType === TURN_EVENT.ACTION_ACCEPTED
         ) {
           ws.close(1000, "restart");
         }
@@ -113,6 +113,7 @@ test("socket close terminates an accepted turn and releases the session mutex", 
 test("a new action recovers a stale persisted turn lost after service restart", async () => {
   const authoritative = createAuthoritativeBot();
   await authoritative.bot.applyTurnLifecycleEvent({
+    sessionId: "s-before-restart",
     turnScopeId: "turn-before-restart",
     messageId: "turn-message-before-restart",
     presentationMessageId: "presentation-before-restart",
@@ -123,6 +124,7 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     action: "send",
   });
   await authoritative.bot.applyTurnLifecycleEvent({
+    sessionId: "s-before-restart",
     turnScopeId: "turn-before-restart",
     dialogProcessId: "dialog-before-restart",
     commandId: "command-before-restart:processing-started",
@@ -150,7 +152,11 @@ test("a new action recovers a stale persisted turn lost after service restart", 
     assert.equal(authoritative.lifecycle().turns["turn-before-restart"].state, "processing_failed");
     assert.equal(authoritative.lifecycle().turns["turn-after-restart"].state, "completed");
     assert.equal(
-      events.some((item) => item?.event === "done"),
+      events.some(
+        (item) =>
+          item?.event === "turn_lifecycle" &&
+          item?.data?.payload?.eventType === TURN_EVENT.COMPLETED,
+      ),
       true,
     );
     const orphanFailure = authoritative
@@ -204,18 +210,18 @@ test("snapshot reconnect recovers a stale persisted turn lost after service rest
       sessionId: "s-snapshot-restart",
       commandId: "snapshot-restart-1",
     });
-    assert.equal(first.activeTurn, null);
-    assert.equal(first.activeTurnScopeId, "");
-    assert.equal(first.recentTerminalTurns[0]?.turnScopeId, "turn-snapshot-restart");
-    assert.equal(first.recentTerminalTurns[0]?.state, TURN_STATE.PROCESSING_FAILED);
-    assert.equal(first.recentTerminalTurns[0]?.failure?.code, "service_restart_orphaned_turn");
+    assert.equal(first.payload.activeTurn, null);
+    assert.equal(first.payload.activeTurnScopeId, "");
+    assert.equal(first.payload.recentTerminalTurns[0]?.turnScopeId, "turn-snapshot-restart");
+    assert.equal(first.payload.recentTerminalTurns[0]?.state, TURN_STATE.PROCESSING_FAILED);
+    assert.equal(first.payload.recentTerminalTurns[0]?.failure?.code, "service_restart_orphaned_turn");
 
     const second = await requestTurnSnapshot({
       port: server.address().port,
       sessionId: "s-snapshot-restart",
       commandId: "snapshot-restart-2",
     });
-    assert.equal(second.activeTurn, null);
+    assert.equal(second.payload.activeTurn, null);
     assert.equal(
       authoritative
         .commitInputs()
@@ -275,8 +281,8 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
       sessionId: "s-live-snapshot",
       commandId: "snapshot-live",
     });
-    assert.equal(snapshot.activeTurn?.turnScopeId, "turn-live-snapshot");
-    assert.equal(snapshot.activeTurn?.state, TURN_STATE.PROCESSING);
+    assert.equal(snapshot.payload.activeTurn?.turnScopeId, "turn-live-snapshot");
+    assert.equal(snapshot.payload.activeTurn?.state, TURN_STATE.PROCESSING);
     assert.equal(
       authoritative.commitInputs().some((input) => input.eventType === TURN_EVENT.FAILED),
       false,

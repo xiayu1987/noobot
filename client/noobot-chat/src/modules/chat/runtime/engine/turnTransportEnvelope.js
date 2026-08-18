@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import {
-  isMessageEventEnvelope,
-  MESSAGE_EVENT_SEQUENCE_DOMAIN,
-  resolveMessageEventSequenceIdentity,
-} from "@noobot/event-protocol/message-event";
+  EVENT_FAMILY,
+  readProtocolEventReducerInput,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 
 export const TURN_TRANSPORT_SEQUENCE_DOMAIN = "transport";
 
@@ -19,31 +19,21 @@ export function normalizeTurnTransportEnvelope({
   source = "unknown",
 } = {}) {
   const payload = data && typeof data === "object" && !Array.isArray(data) ? data : {};
-  const messageEvent = isMessageEventEnvelope(payload?.event)
-    ? payload.event
-    : isMessageEventEnvelope(payload?.messageEvent)
-      ? payload.messageEvent
-      : null;
-  // Replay and live transports carry the canonical message envelope under
-  // `data.event`. Keep that envelope as the single payload source, while
-  // exposing its stable identity through the normalized transport record.
-  const normalizedData = messageEvent
-    ? {
-        ...payload,
-        messageEvent,
-        sessionId: text(payload?.sessionId || messageEvent.sessionId),
-        dialogProcessId: text(payload?.dialogProcessId || messageEvent.dialogProcessId),
-        turnScopeId: text(payload?.turnScopeId || messageEvent.turnScopeId),
-      }
-    : payload;
+  const validation = validateProtocolEvent(payload);
+  const protocolEnvelope = validation.valid ? payload : null;
+  const reducerInput = validation.valid ? readProtocolEventReducerInput(payload).input : null;
+  const messageEvent = validation.valid && validation.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE
+    ? payload
+    : null;
   return {
     event: text(event),
-    data: normalizedData,
+    data: reducerInput || payload,
+    protocolEnvelope,
     source: text(source) || "unknown",
     identity: {
-      sessionId: text(payload?.sessionId || messageEvent?.sessionId),
-      dialogProcessId: text(payload?.dialogProcessId || messageEvent?.dialogProcessId),
-      turnScopeId: text(payload?.turnScopeId || messageEvent?.turnScopeId),
+      sessionId: text(messageEvent?.identity?.sessionId),
+      dialogProcessId: text(messageEvent?.payload?.dialogProcessId),
+      turnScopeId: text(messageEvent?.identity?.turnScopeId),
     },
     transportCursor: {
       sequenceDomain: TURN_TRANSPORT_SEQUENCE_DOMAIN,
@@ -52,10 +42,11 @@ export function normalizeTurnTransportEnvelope({
     },
     messageEventCursor: messageEvent
       ? {
-          ...resolveMessageEventSequenceIdentity(messageEvent),
-          sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-          eventId: text(messageEvent.eventId),
-          messageId: text(messageEvent.messageId),
+          sequenceDomain: text(messageEvent.ordering.domain),
+          sequenceScopeId: text(messageEvent.ordering.scopeId),
+          sequence: Number(messageEvent.ordering.sequence),
+          eventId: text(messageEvent.identity.eventId),
+          messageId: text(messageEvent.identity.messageId),
         }
       : null,
   };

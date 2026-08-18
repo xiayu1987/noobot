@@ -10,15 +10,19 @@ import {
   selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnLifecycleEnvelope } from "@noobot/session-protocol";
+import { canonicalWorkflowRuntimeEvent } from "../helpers/workflowRuntimeEventFixture.js";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
 function applyNodeEvent(store, data) {
-  return store.applyWorkflowRuntimeEvent({ event: "workflow_node_state_committed", data }, { source: "test" });
+  return store.applyWorkflowRuntimeEvent(
+    canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.NODE_STATE, data),
+    { source: "test" },
+  );
 }
 
 function applyPlanningEvent(store, data) {
-  return store.applyWorkflowRuntimeEvent({
-    event: "workflow_planning_message_prepared",
-    data: {
+  return store.applyWorkflowRuntimeEvent(
+    canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
       sessionId: "parent-session",
       turnScopeId: "parent-turn-a",
       presentationMessageId: "assistant-presentation-a",
@@ -31,16 +35,17 @@ function applyPlanningEvent(store, data) {
         interaction: { semanticTextPreview: "WORKFLOW_DSL/1" },
       },
       ...data,
-    },
-  }, { source: "test" });
+    }),
+    { source: "test" },
+  );
 }
 
 function nodeEvent(overrides = {}) {
-  return {
+  const event = {
     workflowRunId: "workflow-run-a",
     nodeExecutionId: "node-exec-a",
     commandId: "cmd-a",
-    sessionId: "child-session-a",
+    nodeSessionId: "child-session-a",
     parentSessionId: "parent-session",
     dialogProcessId: "wf_node_node-exec-a",
     turnScopeId: "workflow-node:node-exec-a",
@@ -51,6 +56,11 @@ function nodeEvent(overrides = {}) {
     occurredAt: "2026-07-19T00:00:00.000Z",
     ...overrides,
   };
+  if (Object.hasOwn(overrides, "sessionId")) {
+    event.nodeSessionId = overrides.sessionId;
+    delete event.sessionId;
+  }
+  return event;
 }
 
 function storedNode(store, workflowRunId = "workflow-run-a", nodeExecutionId = "node-exec-a") {
@@ -65,13 +75,18 @@ describe("useChatStore workflow node state registry", () => {
   it("rejects events missing workflow or node identity", () => {
     const store = useChatStore();
 
-    expect(applyNodeEvent(store, nodeEvent({ workflowRunId: "" }))).toMatchObject({
+    const missingWorkflow = canonicalWorkflowRuntimeEvent(
+      WORKFLOW_RUNTIME_EVENT.NODE_STATE,
+      nodeEvent(),
+    );
+    missingWorkflow.payload.workflowRunId = "";
+    expect(store.applyWorkflowRuntimeEvent(missingWorkflow, { source: "test" })).toMatchObject({
       applied: false,
-      reason: "missing_identity",
+      reason: "missing_workflow_run",
     });
     expect(applyNodeEvent(store, nodeEvent({ nodeExecutionId: "" }))).toMatchObject({
       applied: false,
-      reason: "missing_identity",
+      reason: "missing_node_execution",
     });
     expect(store.workflowNodeStateRegistry).toBeNull();
   });
@@ -201,9 +216,9 @@ describe("useChatStore workflow node state registry", () => {
     applyNodeEvent(store, nodeEvent({ workflowRunId: "workflow-run-a", nodeExecutionId: "node-b", eventId: "evt-b", sessionId: "child-b" }));
     applyNodeEvent(store, nodeEvent({ workflowRunId: "workflow-run-b", nodeExecutionId: "node-a", eventId: "evt-c", sessionId: "child-c" }));
 
-    expect(storedNode(store, "workflow-run-a", "node-a").sessionId).toBe("child-a");
-    expect(storedNode(store, "workflow-run-a", "node-b").sessionId).toBe("child-b");
-    expect(storedNode(store, "workflow-run-b", "node-a").sessionId).toBe("child-c");
+    expect(storedNode(store, "workflow-run-a", "node-a").nodeSessionId).toBe("child-a");
+    expect(storedNode(store, "workflow-run-a", "node-b").nodeSessionId).toBe("child-b");
+    expect(storedNode(store, "workflow-run-b", "node-a").nodeSessionId).toBe("child-c");
   });
 
   it("deduplicates realtime and reconnect delivery of the same committed fact", () => {
@@ -215,7 +230,7 @@ describe("useChatStore workflow node state registry", () => {
 
     expect(Object.keys(store.workflowNodeStateRegistry.workflows["workflow-run-a"].nodes)).toEqual(["node-exec-a"]);
     expect(storedNode(store).status).toBe("succeeded");
-    expect(storedNode(store).sessionId).toBe("child-final");
+    expect(storedNode(store).nodeSessionId).toBe("child-final");
   });
 
   it("resetChatStore clears workflow node state registry", () => {
@@ -252,8 +267,8 @@ describe("useChatStore workflow node state registry", () => {
       plannedAt: "2026-07-19T00:00:00.000Z",
     });
     expect(storedNode(store, "workflow-run-a", "node-a").status).toBe("ready");
-    expect(storedNode(store, "workflow-run-a", "node-a").sessionId).toBe("child-session-a");
-    expect(storedNode(store, "workflow-run-a", "node-a").parentSessionId).toBe("parent-session");
+    expect(storedNode(store, "workflow-run-a", "node-a").nodeSessionId).toBe("child-session-a");
+    expect(storedNode(store, "workflow-run-a", "node-a").authoritySessionId).toBe("parent-session");
     expect(storedNode(store, "workflow-run-a", "node-a").revision).toBe(1);
     expect(storedNode(store, "workflow-run-a", "node-a").sequence).toBe(1);
     expect(storedNode(store, "workflow-run-a", "node-a").eventId).toBe("workflow-plan:node-a");
@@ -277,7 +292,7 @@ describe("useChatStore workflow node state registry", () => {
     expect(stalePlan.applied).toBe(false);
     expect(storedNode(store).status).toBe("running");
     expect(storedNode(store)).not.toHaveProperty("stepStatus");
-    expect(storedNode(store).sessionId).toBe("child-live");
+    expect(storedNode(store).nodeSessionId).toBe("child-live");
     expect(storedNode(store).revision).toBe(2);
   });
 
@@ -371,9 +386,18 @@ describe("useChatStore workflow node state registry", () => {
   it("rejects planning events without workflow identity or node sessions", () => {
     const store = useChatStore();
 
-    expect(applyPlanningEvent(store, { workflowRunId: "", nodeSessions: [nodeEvent()] })).toMatchObject({
+    const missingWorkflow = canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+      workflowRunId: "workflow-run-a",
+      sessionId: "parent-session",
+      turnScopeId: "parent-turn-a",
+      presentationMessageId: "assistant-presentation-a",
+      workflowPayload: {},
+      nodeSessions: [nodeEvent()],
+    });
+    missingWorkflow.payload.workflowRunId = "";
+    expect(store.applyWorkflowRuntimeEvent(missingWorkflow, { source: "test" })).toMatchObject({
       applied: false,
-      reason: "missing_planning_workflow_run",
+      reason: "missing_workflow_run",
     });
     expect(applyPlanningEvent(store, { workflowRunId: "workflow-run-a", nodeSessions: [] })).toMatchObject({
       applied: false,

@@ -3,6 +3,67 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createEventEnvelope, EVENT_FAMILY, INTERACTION_EVENT_TYPE, INTERACTION_SEQUENCE_DOMAIN } from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_TYPE,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
+
+export function canonicalMessageEvent({
+  sequence = 1,
+  sessionId = "session-1",
+  turnScopeId = "turn-1",
+  messageId = `message-${sequence}`,
+  eventType = MESSAGE_EVENT_TYPE.LLM_DELTA,
+  text = "content",
+} = {}) {
+  return createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId: `message-event:${messageId}:${sequence}`,
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId,
+      turnScopeId,
+      messageId,
+    },
+    causality: {},
+    ordering: {
+      domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      scopeId: messageId,
+      sequence,
+      aggregateVersion: sequence,
+    },
+    producer: { type: "test", id: "agent-proxy-test" },
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    payload: { eventType, presentationMessageId: messageId, text },
+  });
+}
+
+export function canonicalInteractionRequest({
+  requestId,
+  sessionId = "session-1",
+  turnScopeId = "turn-1",
+  dialogProcessId = "dialog-1",
+  sequence = 1,
+  ...payload
+} = {}) {
+  return createEventEnvelope({
+    family: EVENT_FAMILY.INTERACTION_REQUEST,
+    identity: {
+      eventId: `interaction-event:${requestId}:${sequence}`,
+      eventType: INTERACTION_EVENT_TYPE.REQUEST,
+      sessionId,
+      turnScopeId,
+    },
+    causality: {},
+    ordering: { domain: INTERACTION_SEQUENCE_DOMAIN, scopeId: requestId, sequence },
+    producer: { type: "test", id: "agent-proxy-test" },
+    occurredAt: "2026-08-17T00:00:00.000Z",
+    payload: { requestId, dialogProcessId, ...payload },
+  });
+}
+
 export function createMockSocket({ apiKey = "api-key-1", userId = "user-1" } = {}) {
   return {
     readyState: 1,

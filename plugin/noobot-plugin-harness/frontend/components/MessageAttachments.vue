@@ -7,13 +7,10 @@
 import { computed, ref, watch } from "vue";
 import { useLocale } from "noobot-chat/plugin-api/locale";
 import {
-  resolveBaseName,
+  mergeAttachmentDisplayItems,
+  resolveAttachmentDisplayKey,
   resolveParsedResultAccessMeta,
 } from "noobot-chat/plugin-api/attachment-domain";
-import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
 import { BaseAttachmentFileCard, BaseFileCardList } from "noobot-chat/plugin-api/ui";
 
 const props = defineProps({
@@ -27,9 +24,7 @@ const props = defineProps({
 
 const emit = defineEmits(["preview", "preview-resolved", "download"]);
 const { translate } = useLocale();
-const attachments = computed(() =>
-  (Array.isArray(props.attachments) ? props.attachments : []),
-);
+const attachments = computed(() => (Array.isArray(props.attachments) ? props.attachments : []));
 const isImageMime = (...args) => props.isImageMime(...args);
 const canPreviewAttachment = (...args) => props.canPreviewAttachment(...args);
 const canPreviewParsedResult = (...args) =>
@@ -40,119 +35,34 @@ const formatFileSize = (...args) => props.formatFileSize(...args);
 const pluginAttachmentsCollapsed = ref(true);
 const normalAttachments = computed(() =>
   dedupeAttachments(
-    attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin")
-      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
+    attachments.value.filter((item = {}) => resolveAttachmentOwnerType(item) !== "plugin"),
   ),
 );
 const pluginAttachments = computed(() =>
   dedupeAttachments(
-    attachments.value
-      .filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin")
-      .map((item = {}) => normalizeAttachmentParsedResultForDisplay(item)),
+    attachments.value.filter((item = {}) => resolveAttachmentOwnerType(item) === "plugin"),
   ),
 );
 
 function resolveAttachmentOwnerType(attachmentItem = {}) {
-  return String(
-    attachmentItem?.owner?.type ||
-      "",
-  ).trim();
-}
-
-function mergeAttachmentDisplayMeta(existingItem = {}, incomingItem = {}) {
-  const merged = { ...existingItem, ...incomingItem };
-  for (const field of [
-    "attachmentId",
-    "previewUrl",
-    "downloadUrl",
-    "parsedResultUrl",
-    "parsedResultName",
-    "parsedResultAttachmentId",
-    "sessionId",
-    "attachmentSource",
-    "source",
-    "mimeType",
-    "name",
-  ]) {
-    const incomingValue = incomingItem?.[field];
-    const existingValue = existingItem?.[field];
-    if (
-      (incomingValue === undefined || incomingValue === null || String(incomingValue).trim() === "") &&
-      existingValue !== undefined &&
-      existingValue !== null &&
-      String(existingValue).trim() !== ""
-    ) {
-      merged[field] = existingValue;
-    }
-  }
-  if (existingItem?.parsedResult && !incomingItem?.parsedResult) merged.parsedResult = existingItem.parsedResult;
-  if (existingItem?.parsedResult && incomingItem?.parsedResult) {
-    merged.parsedResult = mergeAttachmentDisplayMeta(existingItem.parsedResult, incomingItem.parsedResult);
-  }
-  return merged;
+  return String(attachmentItem?.owner?.type || "").trim();
 }
 
 function dedupeAttachments(list = []) {
-  const out = [];
-  const indexByIdentity = new Map();
-  for (const attachmentItem of Array.isArray(list) ? list : []) {
-    let identityKey = "";
-    try {
-      identityKey = attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
-    } catch {
-      continue;
-    }
-    const existingIndex = indexByIdentity.get(identityKey);
-    if (existingIndex === undefined) {
-      out.push(attachmentItem);
-      const nextIndex = out.length - 1;
-      indexByIdentity.set(identityKey, nextIndex);
-      continue;
-    }
-    out[existingIndex] = mergeAttachmentDisplayMeta(out[existingIndex] || {}, attachmentItem);
-    indexByIdentity.set(identityKey, existingIndex);
-  }
-  return out;
-}
-
-function resolveParsedResultUrl(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  }).url;
+  return mergeAttachmentDisplayItems([], Array.isArray(list) ? list : []);
 }
 
 function hasParsedResultIdentity(attachmentItem = {}) {
-  return resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  }).hasIdentity;
-}
-
-function normalizeAttachmentParsedResultForDisplay(attachmentItem = {}) {
-  const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
-    userId: String(props.userId || "").trim(),
-  });
-  const parsedResultPath = parsedResult.path;
-  const parsedResultRelativePath = parsedResult.relativePath;
-  const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
-  const parsedResultName = parsedResult.name ||
-    resolveBaseName(parsedResultRelativePath) ||
-    resolveBaseName(parsedResultPath);
-  if (!parsedResultUrl && !parsedResultName) return attachmentItem;
-  return {
-    ...attachmentItem,
-    ...(parsedResultUrl ? { parsedResultUrl } : {}),
-    ...(parsedResultName ? { parsedResultName } : {}),
-  };
+  return Boolean(
+    resolveParsedResultAccessMeta(attachmentItem, {
+      userId: String(props.userId || "").trim(),
+    }),
+  );
 }
 
 function makeAttachmentKey(attachmentItem = {}, attachmentIndex = 0) {
   void attachmentIndex;
-  try {
-    return attachmentIdentityKey(projectAttachmentIdentity(attachmentItem));
-  } catch {
-    return "invalid-attachment-identity";
-  }
+  return resolveAttachmentDisplayKey(attachmentItem);
 }
 
 watch(
@@ -168,15 +78,16 @@ function emitPreviewParsedResult(attachmentItem = {}) {
   const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
   });
+  if (!parsedResult) return;
   const url = parsedResult.url;
   if (!url) return;
   emit("preview-resolved", {
     attachmentId: parsedResult.attachmentId,
-    name:
-      parsedResult.name ||
-      translate("message.parsedResultDefaultName"),
+    name: parsedResult.name || translate("message.parsedResultDefaultName"),
     mimeType: parsedResult.mimeType || "text/markdown",
-    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0
+      ? { size: parsedResult.size }
+      : {}),
     previewUrl: url,
   });
 }
@@ -185,15 +96,16 @@ function emitDownloadParsedResult(attachmentItem = {}) {
   const parsedResult = resolveParsedResultAccessMeta(attachmentItem, {
     userId: String(props.userId || "").trim(),
   });
+  if (!parsedResult) return;
   const url = parsedResult.url;
   if (!url) return;
   emit("download", {
     attachmentId: parsedResult.attachmentId,
-    name:
-      parsedResult.name ||
-      translate("message.parsedResultDefaultName"),
+    name: parsedResult.name || translate("message.parsedResultDefaultName"),
     mimeType: parsedResult.mimeType || "text/markdown",
-    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0 ? { size: parsedResult.size } : {}),
+    ...(Number.isFinite(parsedResult.size) && parsedResult.size > 0
+      ? { size: parsedResult.size }
+      : {}),
     previewUrl: url,
   });
 }
@@ -228,7 +140,11 @@ function emitDownloadParsedResult(attachmentItem = {}) {
           {{ translate("message.pluginAttachment") }} ({{ pluginAttachments.length }})
         </span>
         <span class="plugin-attachments-action">
-          {{ pluginAttachmentsCollapsed ? translate("composer.expand") : translate("message.collapse") }}
+          {{
+            pluginAttachmentsCollapsed
+              ? translate("composer.expand")
+              : translate("message.collapse")
+          }}
         </span>
       </button>
       <div v-if="!pluginAttachmentsCollapsed" class="plugin-attachments-list">

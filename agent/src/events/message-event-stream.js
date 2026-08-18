@@ -6,19 +6,10 @@
 import { randomUUID } from "node:crypto";
 import { emitEvent } from "./index.js";
 import {
-  MESSAGE_EVENT_ENVELOPE_KIND,
-  MESSAGE_EVENT_ENVELOPE_VERSION,
-  MESSAGE_EVENT_SEQUENCE_DOMAIN,
-  assertMessageEventEnvelope,
-  isMessageEventEnvelope,
+  assertMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
 
-export {
-  MESSAGE_EVENT_ENVELOPE_KIND,
-  MESSAGE_EVENT_ENVELOPE_VERSION,
-  assertMessageEventEnvelope,
-  isMessageEventEnvelope,
-};
+export { assertMessageEventPayload };
 
 function text(value) {
   return String(value || "").trim();
@@ -37,7 +28,7 @@ function runtimeState(runtime = {}) {
     ? runtime.systemRuntime
     : (runtime.systemRuntime = {});
   if (!systemRuntime.messageEventStream || typeof systemRuntime.messageEventStream !== "object") {
-    systemRuntime.messageEventStream = { sequence: 0, activeMessageId: "" };
+    systemRuntime.messageEventStream = { activeMessageId: "" };
   }
   return systemRuntime;
 }
@@ -109,7 +100,6 @@ export function bindAssistantMessageEventStream(runtime = {}, {
   stream.parentSessionId = requestedParentSessionId;
   stream.workflowRunId = requestedWorkflowRunId;
   stream.nodeExecutionId = requestedNodeExecutionId;
-  stream.sequence = Math.max(0, Number(stream.sequence || 0));
   return stream;
 }
 
@@ -154,9 +144,9 @@ export function applyAuthoritativeMessageId(message = {}, messageId = "") {
   return target;
 }
 
-export function createMessageEvent(runtime = {}, eventType = "", data = {}) {
+export function createMessageEventPayload(runtime = {}, eventType = "", data = {}) {
   const state = runtimeState(runtime);
-  const stream = state.messageEventStream || (state.messageEventStream = { sequence: 0 });
+  const stream = state.messageEventStream || (state.messageEventStream = {});
   const messageId = text(data?.messageId || stream.activeMessageId);
   if (!messageId) throw new Error(`authoritative message event requires messageId: ${eventType}`);
   if (text(data?.messageId) && text(stream.activeMessageId) && messageId !== text(stream.activeMessageId)) {
@@ -168,49 +158,50 @@ export function createMessageEvent(runtime = {}, eventType = "", data = {}) {
   if (!presentationMessageId) {
     throw new Error(`authoritative message event requires presentationMessageId: ${eventType}`);
   }
-  const sequence = Math.max(0, Number(stream.sequence || 0)) + 1;
-  stream.sequence = sequence;
-  const eventId = text(data?.eventId) || `evt_${randomUUID()}`;
-  const toolCallId = text(data?.toolCallId || data?.tool_call_id || data?.call?.id);
+  const toolCallId = text(data?.toolCallId);
   const payload = deepFreeze({
     ...data,
-    envelopeKind: MESSAGE_EVENT_ENVELOPE_KIND,
-    envelopeVersion: MESSAGE_EVENT_ENVELOPE_VERSION,
-    sequenceDomain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-    eventId,
     eventType: text(eventType),
-    sessionId: text(data?.sessionId || state?.sessionId || runtime?.sessionId),
     parentSessionId: text(data?.parentSessionId || stream.parentSessionId || state?.parentSessionId),
     dialogProcessId: text(data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId),
-    turnScopeId: text(data?.turnScopeId || state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId),
     ...(text(data?.workflowRunId || stream.workflowRunId)
       ? { workflowRunId: text(data?.workflowRunId || stream.workflowRunId) }
       : {}),
     ...(text(data?.nodeExecutionId || stream.nodeExecutionId)
       ? { nodeExecutionId: text(data?.nodeExecutionId || stream.nodeExecutionId) }
       : {}),
-    messageId,
     presentationMessageId,
-    sequenceScopeId: messageId,
     ...(toolCallId ? { toolCallId } : {}),
-    sequence,
-    timestamp: new Date().toISOString(),
   });
-  assertMessageEventEnvelope(payload);
+  assertMessageEventPayload(payload);
   return payload;
 }
 
-export function emitPreparedMessageEvent(eventListener, payload = {}) {
-  assertMessageEventEnvelope(payload);
-  emitEvent(eventListener, payload.eventType, payload);
-  return payload;
-}
-
-export function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
-  const payload = createMessageEvent(runtime, eventType, data);
-  const projected = runtime?.projectCurrentTurnMessageEvent?.(payload);
-  if (runtime?.projectCurrentTurnMessageEvent && !projected) {
-    throw new Error(`canonical message event projector rejected event: ${payload.eventId}`);
+export async function emitMessageEvent(eventListener, runtime = {}, eventType = "", data = {}) {
+  const payload = createMessageEventPayload(runtime, eventType, data);
+  const state = runtimeState(runtime);
+  const committed = await runtime?.sessionManager?.commitMessageEvent?.({
+    userId: text(runtime?.userId),
+    sessionId: text(state?.sessionId || runtime?.sessionId),
+    parentSessionId: text(payload.parentSessionId),
+    turnScopeId: text(state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId),
+    messageId: text(state?.messageEventStream?.activeMessageId),
+    executionId: text(runtime?.runConfig?.executionId),
+    commandId: text(runtime?.runConfig?.commandId),
+    correlationId: text(runtime?.runConfig?.turnScopeId),
+    payload,
+    persistenceContext: state?.persistenceContext || null,
+  });
+  if (!committed?.committed || !committed?.envelope) {
+    throw new Error(`authoritative message event commit failed: ${committed?.reason || "unknown"}`);
   }
-  return emitPreparedMessageEvent(eventListener, payload);
+  const projected = runtime?.projectCurrentTurnMessageEvent?.(committed.envelope);
+  if (runtime?.projectCurrentTurnMessageEvent && !projected) {
+    throw new Error(`canonical message event projector rejected event: ${committed.envelope.identity.eventId}`);
+  }
+  await emitEvent(eventListener, "authority_event_committed", {
+    envelope: committed.envelope,
+    persistenceScope: state?.persistenceScope || null,
+  });
+  return committed.envelope;
 }

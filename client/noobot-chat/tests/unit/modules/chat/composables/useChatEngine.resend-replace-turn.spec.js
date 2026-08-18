@@ -499,7 +499,7 @@ describe("useChatEngine.resend replace turn", () => {
     expect(activeSession.value.messages[0].attachments).toEqual([originalAttachment]);
   });
 
-  it("resendMonotonicMessage keeps rich parsed attachment fields when serialized payload is raw", async () => {
+  it("resendMonotonicMessage keeps canonical attachment facts when serialized payload is raw", async () => {
     const richAttachment = {
       attachmentId: "attachment-rich",
       attachmentSource: "test",
@@ -512,16 +512,24 @@ describe("useChatEngine.resend replace turn", () => {
       sandboxPath: "/workspace/admin/runtime/attach/scoped/session-rich/user/attachment-rich.docx",
       previewUrl: "/preview/attachment-rich",
       downloadUrl: "/download/attachment-rich",
-      parsedResult: {
-        attachmentId: "parsed-rich",
-        sessionId: "session-rich",
-        attachmentSource: "test",
-        name: "AI 体系现状概览.md",
-        path: "/workspace/admin/runtime/attach/scoped/session-rich/model/parsed-rich.md",
-        relativePath: "runtime/attach/scoped/session-rich/model/parsed-rich.md",
-      },
-      parsedResultAttachmentId: "parsed-rich",
-      parsedResultUrl: "/download/parsed-rich",
+      relations: [
+        {
+          relationType: "parsed_result",
+          sourceIdentity: {
+            attachmentId: "attachment-rich",
+            sessionId: "session-rich",
+            attachmentSource: "test",
+          },
+          targetIdentity: {
+            attachmentId: "parsed-rich",
+            sessionId: "session-rich",
+            attachmentSource: "test",
+          },
+          name: "AI 体系现状概览.md",
+          mimeType: "text/markdown",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
     };
     const rawAttachment = {
       name: richAttachment.name,
@@ -586,7 +594,7 @@ describe("useChatEngine.resend replace turn", () => {
           attachments: [
             expect.objectContaining({
               attachmentId: "attachment-rich",
-              parsedResultAttachmentId: "parsed-rich",
+              relations: richAttachment.relations,
             }),
           ],
         }),
@@ -601,9 +609,7 @@ describe("useChatEngine.resend replace turn", () => {
         sandboxPath: richAttachment.sandboxPath,
         previewUrl: "/preview/attachment-rich",
         downloadUrl: "/download/attachment-rich",
-        parsedResultAttachmentId: "parsed-rich",
-        parsedResultUrl: "/download/parsed-rich",
-        parsedResult: expect.objectContaining({ attachmentId: "parsed-rich" }),
+        relations: richAttachment.relations,
       }),
     ]);
     expect(activeSession.value.messages[0].attachments[0]).toEqual(
@@ -618,7 +624,6 @@ describe("useChatEngine.resend replace turn", () => {
       sessionId: "local-resend-delete-attachments",
       attachmentSource: "test",
       name: "old.txt",
-      parsedResultAttachmentId: "parsed-old",
     };
     const replaceSessionTurnApi = vi.fn(
       async ({ turnScopeId, newContent, attachments, commandId, anchor }) => {

@@ -312,7 +312,9 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const agentSystemIndex = indexOf(/agent-system/);
   const historyUserIndex = indexOf(/history-user-first/);
   const historyAssistantIndex = indexOf(/history-assistant-latest/);
-  const toolCallSemanticIndex = indexOf(/工具调用记录：execute_script脚本被调用/);
+  const toolCallIndex = messages.findIndex(
+    (item = {}) => item.role === "assistant" && item.tool_calls?.[0]?.id === "call-ctx",
+  );
   const toolResultIndex = messages.findIndex((item = {}) =>
     String(item.content || "").includes('"stdout":"/workspace"'),
   );
@@ -325,8 +327,9 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[agentSystemIndex]?.role, "system");
   assert.equal(messages[historyUserIndex]?.role, "user");
   assert.equal(messages[historyAssistantIndex]?.role, "assistant");
-  assert.equal(messages[toolCallSemanticIndex]?.role, "user");
-  assert.equal(messages[toolResultIndex]?.role, "assistant");
+  assert.equal(messages[toolCallIndex]?.role, "assistant");
+  assert.equal(messages[toolResultIndex]?.role, "tool");
+  assert.equal(messages[toolResultIndex]?.tool_call_id, "call-ctx");
   assert.equal(messages[summaryIndex]?.role, "user");
   assert.equal(messages[planIndex]?.role, "user");
   assert.equal(messages[phaseReportIndex]?.role, "user");
@@ -334,8 +337,8 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[responsibilityIndex]?.role, "user");
   assert.equal(agentSystemIndex < historyUserIndex, true);
   assert.equal(historyUserIndex < historyAssistantIndex, true);
-  assert.equal(historyAssistantIndex < toolCallSemanticIndex, true);
-  assert.equal(toolCallSemanticIndex < toolResultIndex, true);
+  assert.equal(historyAssistantIndex < toolCallIndex, true);
+  assert.equal(toolCallIndex < toolResultIndex, true);
   assert.equal(toolResultIndex < summaryIndex, true);
   assert.equal(summaryIndex < planIndex, true);
   assert.equal(planIndex < phaseReportIndex, true);

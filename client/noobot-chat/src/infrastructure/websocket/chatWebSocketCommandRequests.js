@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeTrimmedString } from "./chatWebSocketProtocol.js";
+import {
+  AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_EVENT,
+  validateAgentCommandReceipt,
+} from "@noobot/agent-transport-protocol";
 
 export function createWebSocketCommandRequests({
   getActiveSocket,
@@ -27,14 +32,23 @@ export function createWebSocketCommandRequests({
     const commandId = normalizeTrimmedString(data?.commandId);
     const pending = commandId ? pendingRequests.get(commandId) : null;
     if (!pending) return;
-    if (event !== "error" && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
+    const isReceipt = event === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT;
+    if (!isReceipt && pending.expectedEvents.size && !pending.expectedEvents.has(event)) return;
+    if (isReceipt) {
+      const validation = validateAgentCommandReceipt(data);
+      if (!validation.valid) throw new TypeError(validation.errors.join(","));
+    }
     pendingRequests.delete(commandId);
     clearTimeout(pending.timeout);
-    if (event === "error") {
-      const error = new Error(data?.error || data?.errorCode || "execution_query_failed");
+    if (isReceipt && data.outcome === AGENT_COMMAND_RECEIPT_OUTCOME.FAILED) {
+      const error = new Error(data.error.message);
       error.event = event;
       error.data = data;
       pending.reject(error);
+      return;
+    }
+    if (isReceipt) {
+      pending.resolve({ event, data });
       return;
     }
     pending.resolve({ event, data });

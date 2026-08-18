@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { buildCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
 
-test("buildCapabilityModelMessages rewrites assistant tool_calls into semantic user message", () => {
+test("buildCapabilityModelMessages preserves assistant tool calls as canonical evidence", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
     agentMessages: [
@@ -29,30 +29,36 @@ test("buildCapabilityModelMessages rewrites assistant tool_calls into semantic u
   });
 
   assert.equal(output.length, 1);
-  assert.equal(output[0].role, "user");
-  assert.equal(output[0].content, "工具调用记录：execute_script脚本被调用,参数{\"command\":\"ls -la\"}");
+  assert.equal(output[0].role, "assistant");
+  assert.equal(output[0].content, "");
+  assert.equal(output[0].tool_calls[0].id, "call_1");
 });
 
-test("buildCapabilityModelMessages puts non-empty tool call content in an analysis record first", () => {
+test("buildCapabilityModelMessages keeps assistant content with its canonical tool call", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
     agentMessages: [{
       role: "assistant",
       content: "先检查当前配置",
-      tool_calls: [{ function: { name: "read_file", arguments: "{\"filePath\":\"a.js\"}" } }],
+      tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{\"filePath\":\"a.js\"}" } }],
     }],
   });
 
-  assert.deepEqual(output.map(({ role, content }) => ({ role, content })), [
-    { role: "user", content: "分析记录：先检查当前配置" },
-    { role: "user", content: "工具调用记录：read_file脚本被调用,参数{\"filePath\":\"a.js\"}" },
-  ]);
+  assert.equal(output.length, 1);
+  assert.equal(output[0].role, "assistant");
+  assert.equal(output[0].content, "先检查当前配置");
+  assert.equal(output[0].tool_calls[0].id, "call_1");
 });
 
-test("buildCapabilityModelMessages rewrites tool role into assistant role", () => {
+test("buildCapabilityModelMessages preserves a matched tool result", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
     agentMessages: [
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{}" } }],
+      },
       {
         role: "tool",
         content: "{\"ok\":true}",
@@ -61,9 +67,10 @@ test("buildCapabilityModelMessages rewrites tool role into assistant role", () =
     ],
   });
 
-  assert.equal(output.length, 1);
-  assert.equal(output[0].role, "assistant");
-  assert.equal(output[0].content, "{\"ok\":true}");
+  assert.equal(output.length, 2);
+  assert.equal(output[1].role, "tool");
+  assert.equal(output[1].tool_call_id, "call_1");
+  assert.equal(output[1].content, "{\"ok\":true}");
 });
 
 test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
@@ -111,7 +118,7 @@ test("buildCapabilityModelMessages keeps frontendUserMessage for unchanged messa
   ]);
 });
 
-test("buildCapabilityModelMessages only keeps role and content for converted message types", () => {
+test("buildCapabilityModelMessages keeps one authoritative tool execution pair", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
     agentMessages: [
@@ -119,7 +126,7 @@ test("buildCapabilityModelMessages only keeps role and content for converted mes
         role: "assistant",
         content: "",
         frontendUserMessage: true,
-        tool_calls: [{ function: { name: "execute_script", arguments: "{\"command\":\"pwd\"}" } }],
+        tool_calls: [{ id: "call_1", function: { name: "execute_script", arguments: "{\"command\":\"pwd\"}" } }],
       },
       {
         role: "tool",
@@ -128,12 +135,10 @@ test("buildCapabilityModelMessages only keeps role and content for converted mes
       },
     ],
   });
-  assert.deepEqual(output, [
-    { role: "user", content: "工具调用记录：execute_script脚本被调用,参数{\"command\":\"pwd\"}" },
-    { role: "assistant", content: "{\"ok\":true}" },
-  ]);
-  assert.deepEqual(Object.keys(output[0]).sort(), ["content", "role"]);
-  assert.deepEqual(Object.keys(output[1]).sort(), ["content", "role"]);
+  assert.equal(output[0].role, "assistant");
+  assert.equal(output[0].tool_calls[0].id, "call_1");
+  assert.equal(output[1].role, "tool");
+  assert.equal(output[1].tool_call_id, "call_1");
 });
 
 

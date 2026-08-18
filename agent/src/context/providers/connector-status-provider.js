@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum, normalizeSelectedConnectors } from "../../shared/utils/shared-utils.js";
+import { safeNum } from "../../shared/utils/shared-utils.js";
+import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { CONNECTOR_TYPE } from "@noobot/agent-config-protocol";
 import { CONNECTOR_RUNTIME_STATUS } from "../../integrations/connectors/constants.js";

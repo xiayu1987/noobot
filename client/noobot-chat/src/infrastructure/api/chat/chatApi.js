@@ -48,41 +48,6 @@ async function decodeJsonResponse(response, operation) {
   return response;
 }
 
-function firstNormalizedString(...values) {
-  for (const value of values) {
-    const normalized = String(value || "").trim();
-    if (normalized) return normalized;
-  }
-  return "";
-}
-
-export function resolveAttachmentId(attachmentItem = {}) {
-  return firstNormalizedString(
-    attachmentItem?.attachmentId,
-    attachmentItem?.attachment_id,
-    attachmentItem?.fileId,
-    attachmentItem?.file_id,
-    attachmentItem?.id,
-    attachmentItem?.uuid,
-  );
-}
-
-export function resolveAttachmentSessionId(attachmentItem = {}) {
-  return firstNormalizedString(
-    attachmentItem?.sessionId,
-    attachmentItem?.session_id,
-    attachmentItem?.sessionId,
-  );
-}
-
-export function resolveAttachmentSource(attachmentItem = {}) {
-  return firstNormalizedString(
-    attachmentItem?.attachmentSource,
-    attachmentItem?.attachment_source,
-    attachmentItem?.source,
-  );
-}
-
 export function buildAttachmentUrl({
   userId = "",
   attachmentId = "",

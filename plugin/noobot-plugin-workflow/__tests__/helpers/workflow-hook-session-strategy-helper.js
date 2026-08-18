@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   createTransferEnvelope,
   createTransferIdentity,
@@ -263,6 +264,10 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
     : (target.runConfig = {});
   const sessionId = String(target.sessionId || "test-session").trim();
   const dialogProcessId = String(target.dialogProcessId || "test-dialog").trim();
+  if (!String(target.turnScopeId || "").trim()) {
+    target.turnScopeId = String(runConfig.turnScopeId || `test-turn:${sessionId}:${dialogProcessId}`).trim();
+  }
+  if (!String(runConfig.turnScopeId || "").trim()) runConfig.turnScopeId = target.turnScopeId;
   if (!String(runConfig.messageId || "").trim()) {
     runConfig.messageId = `test-message:${sessionId}:${dialogProcessId}`;
   }
@@ -288,6 +293,32 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
   runtime.sharedTools = runtimeSharedTools;
   if (!runtime.runConfig || typeof runtime.runConfig !== "object") runtime.runConfig = runConfig;
+  if (!runtime.sessionManager) {
+    const sequences = new Map();
+    runtime.sessionManager = {
+      async commitAuthorityEvent({ sessionId: authoritySessionId, family, identity, causality, ordering, producer, payload }) {
+        const stream = `${ordering.domain}:${ordering.scopeId}`;
+        const sequence = (sequences.get(stream) || 0) + 1;
+        sequences.set(stream, sequence);
+        const envelope = createEventEnvelope({
+          family,
+          identity: {
+            ...identity,
+            eventId: `test-event:${stream}:${sequence}`,
+            sessionId: String(authoritySessionId || "").trim(),
+          },
+          causality,
+          ordering: { ...ordering, sequence, aggregateVersion: sequence },
+          producer,
+          occurredAt: new Date(sequence * 1000).toISOString(),
+          payload,
+        });
+        const validation = validateProtocolEvent(envelope);
+        assert.equal(validation.valid, true, validation.errors?.join(","));
+        return { committed: true, envelope, aggregateVersion: sequence };
+      },
+    };
+  }
   if (!Array.isArray(bindings.tools)) {
     bindings.tools = Array.isArray(agentContext?.payload?.tools?.registry)
       ? agentContext.payload.tools.registry
@@ -298,6 +329,9 @@ export function installTurnMessageEventRuntimeFixture(context = {}) {
   }
 
   if (!existingAgentContext) target.agentContext = agentContext;
+  if (typeof target?.eventListener?.onEvent !== "function") {
+    target.eventListener = { async onEvent() {} };
+  }
   if (typeof runtime.materializePendingCurrentTurnMessageEvents !== "function") {
     runtime.materializePendingCurrentTurnMessageEvents = () => ({
       activityTimeline: [],

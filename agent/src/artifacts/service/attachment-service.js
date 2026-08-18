@@ -10,13 +10,7 @@ import {
   ingestEmailArtifacts,
   saveAttachmentRecord,
 } from "./attachment-service-ingest.js";
-import {
-  collectSessionJsonFiles,
-  linkParsedResultInScopes,
-  linkParsedResultToAttachment,
-  syncParsedResultToSessionSnapshots,
-  walkSessionJsonFilesFromRoot,
-} from "./attachment-service-link.js";
+import { linkParsedResultToAttachment } from "./attachment-service-link.js";
 import {
   deleteScopedAttachmentsBySessionIds,
   pruneOrphanScopedAttachments,
@@ -53,18 +47,6 @@ export class AttachmentService {
     return linkParsedResultToAttachment(this, payload);
   }
 
-  async _linkParsedResultInScopes(payload = {}) {
-    return linkParsedResultInScopes(payload);
-  }
-
-  async _syncParsedResultToSessionSnapshots(payload = {}) {
-    return syncParsedResultToSessionSnapshots(payload);
-  }
-
-  async _walkSessionJsonFilesFromRoot(payload = {}) {
-    return walkSessionJsonFilesFromRoot(payload);
-  }
-
   async getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return getAttachmentById(this, { userId, attachmentId, sessionId, attachmentSource });
   }
@@ -77,12 +59,7 @@ export class AttachmentService {
     return resolveSourceAttachment(this, payload);
   }
 
-  async readAttachmentContent({
-    userId,
-    attachmentId,
-    sessionId = "",
-    attachmentSource = "",
-  }) {
+  async readAttachmentContent({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return readAttachmentContent(this, {
       userId,
       attachmentId,
@@ -95,11 +72,7 @@ export class AttachmentService {
     return deleteScopedAttachmentsBySessionIds(this, { userId, sessionIds });
   }
 
-  async pruneOrphanScopedAttachments({
-    userId,
-    keepSessionIds = [],
-    attachmentSources = [],
-  } = {}) {
+  async pruneOrphanScopedAttachments({ userId, keepSessionIds = [], attachmentSources = [] } = {}) {
     return pruneOrphanScopedAttachments(this, { userId, keepSessionIds, attachmentSources });
   }
 }

@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { assertTransferEnvelope } from "@noobot/semantic-transfer-protocol";
+import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -37,20 +37,11 @@ export const COMPACT_TRANSFER_FILE_FIELDS = Object.freeze([
   "preview",
 ]);
 
-function collectEnvelopes(value) {
-  if (Array.isArray(value)) return value;
-  if (isPlainObject(value) && Array.isArray(value.transferEnvelopes)) return value.transferEnvelopes;
-  return value ? [value] : [];
-}
-
 function validateAndDedupeEnvelopes(value) {
-  const seen = new Set();
-  return collectEnvelopes(value).map(assertTransferEnvelope).filter((envelope) => {
-    const key = `${envelope.transferId}:${envelope.messageId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const source = isPlainObject(value) && Array.isArray(value.transferEnvelopes)
+    ? value.transferEnvelopes
+    : value;
+  return normalizeTransferEnvelopes(source);
 }
 
 function compactAttachmentReference(reference = {}) {

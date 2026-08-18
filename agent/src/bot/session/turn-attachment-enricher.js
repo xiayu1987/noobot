@@ -3,22 +3,21 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  findMatchingAttachmentMeta,
-  mergeAttachmentMetaPreferRich,
-  readAttachIndex,
-} from "../../artifacts/index.js";
+import { readAttachIndex } from "../../artifacts/index.js";
+import { findAttachmentByIdentity } from "@noobot/attachment-protocol";
 import { filePath as path } from "@noobot/path-resolver";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
-
-export async function resolveExistingUserMessageAttachments(engine, {
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  turnScopeId = "",
-  dialogProcessId = "",
-} = {}) {
+export async function resolveExistingUserMessageAttachments(
+  engine,
+  {
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    turnScopeId = "",
+    dialogProcessId = "",
+  } = {},
+) {
   if (!userId || !sessionId || !engine.session?.findById) return [];
   let sessionDoc = null;
   try {
@@ -32,19 +31,18 @@ export async function resolveExistingUserMessageAttachments(engine, {
     if (String(messageItem?.role || "").trim() !== "user") continue;
     if (messageItem?.injectedMessage === true || messageItem?.pluginMessage === true) continue;
     const sameTurn = turnScopeId && String(messageItem?.turnScopeId || "").trim() === turnScopeId;
-    const sameDialog = dialogProcessId && String(messageItem?.dialogProcessId || "").trim() === dialogProcessId;
+    const sameDialog =
+      dialogProcessId && String(messageItem?.dialogProcessId || "").trim() === dialogProcessId;
     if (!sameTurn && !sameDialog) continue;
     return Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
   }
   return [];
 }
 
-export async function enrichUserInputAttachmentsFromIndex(engine, {
-  userId = "",
-  sessionId = "",
-  attachments = [],
-  existingAttachments = [],
-} = {}) {
+export async function enrichUserInputAttachmentsFromIndex(
+  engine,
+  { userId = "", sessionId = "", attachments = [], existingAttachments = [] } = {},
+) {
   const sourceAttachments = Array.isArray(attachments) ? attachments : [];
   if (!sourceAttachments.length) return sourceAttachments;
   const normalizedSessionId = String(sessionId || "").trim();
@@ -63,14 +61,18 @@ export async function enrichUserInputAttachmentsFromIndex(engine, {
   const indexedAttachments = Object.values(index?.attachments || {}).filter(
     (item) => item && typeof item === "object" && !Array.isArray(item),
   );
-  const richCandidates = [
-    ...(Array.isArray(existingAttachments) ? existingAttachments : []),
-    ...indexedAttachments,
-  ];
-  if (!richCandidates.length) return sourceAttachments;
+  const sessionAttachments = Array.isArray(existingAttachments) ? existingAttachments : [];
   return sourceAttachments.map((attachmentItem) => {
-    const match = findMatchingAttachmentMeta(attachmentItem, richCandidates);
-    return match ? mergeAttachmentMetaPreferRich(match, attachmentItem) : attachmentItem;
+    if (
+      !attachmentItem?.attachmentId ||
+      !attachmentItem?.sessionId ||
+      !attachmentItem?.attachmentSource
+    )
+      return attachmentItem;
+    const indexed = findAttachmentByIdentity(indexedAttachments, attachmentItem);
+    if (indexed) return { ...attachmentItem, ...indexed };
+    const persistedSnapshot = findAttachmentByIdentity(sessionAttachments, attachmentItem);
+    return persistedSnapshot ? { ...attachmentItem, ...persistedSnapshot } : attachmentItem;
   });
 }
 
@@ -81,8 +83,7 @@ export async function resolveAttachmentIndexBasePath(engine, userId = "") {
     try {
       const basePath = await engine.workspaceService.ensureUserWorkspace(normalizedUserId);
       if (basePath) return String(basePath || "").trim();
-    } catch {
-    }
+    } catch {}
   }
   const workspaceRoot = String(engine.globalConfig?.workspaceRoot || "").trim();
   return workspaceRoot ? path.resolve(workspaceRoot, normalizedUserId) : "";

@@ -384,6 +384,41 @@ test("captureSessionToShortMemory skips injected messages", async () => {
     await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
   );
   const records = shortDoc?.items?.[0]?.records || [];
+  assert.equal(shortDoc?.items?.[0]?.sessionId, "s1");
+  assert.equal(shortDoc?.items?.[0]?.parentSessionId, "");
   assert.equal(records.length, 1);
   assert.equal(records[0]?.content, "真实用户消息");
+});
+
+test("deleteSessionMemoryBySessionIds removes only memory with an explicit session identity", async () => {
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
+  const userId = "primary-user";
+  const userRoot = path.join(workspaceRoot, userId);
+  await mkdir(path.join(userRoot, "memory"), { recursive: true });
+  await writeFile(
+    path.join(userRoot, "memory/short-memory.json"),
+    JSON.stringify({
+      items: [
+        { sessionId: "s-delete", parentSessionId: "", records: [], createdAt: "2026-01-01" },
+        { sessionId: "node-1", parentSessionId: "s-delete", records: [], createdAt: "2026-01-02" },
+        { sessionId: "s-keep", parentSessionId: "", records: [], createdAt: "2026-01-03" },
+        { records: [], createdAt: "2026-01-04" },
+      ],
+    }),
+  );
+
+  const service = new MemoryManager({ workspaceRoot });
+  const result = await service.deleteSessionMemoryBySessionIds({
+    userId,
+    sessionIds: ["s-delete"],
+  });
+
+  assert.equal(result.deletedCount, 2);
+  const shortDoc = JSON.parse(
+    await readFile(path.join(userRoot, "memory/short-memory.json"), "utf8"),
+  );
+  assert.deepEqual(
+    shortDoc.items.map((item) => item.sessionId || ""),
+    ["s-keep", ""],
+  );
 });

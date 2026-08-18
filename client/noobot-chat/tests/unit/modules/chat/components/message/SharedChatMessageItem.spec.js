@@ -15,15 +15,21 @@ import {
 } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { clearSessionTurnUiStates } from "../../../../../../src/modules/chat/runtime/engine/turnUiStore.js";
+import {
+  canonicalWorkflowRuntimeEvent,
+  canonicalWorkflowSessionSnapshot,
+} from "../../helpers/workflowRuntimeEventFixture.js";
+import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 
 vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
   const { defineComponent, h } = await import("vue");
-  const passthrough = (name) => defineComponent({
-    name,
-    setup(_, { slots }) {
-      return () => h("div", { class: `${name}-stub` }, slots.default?.());
-    },
-  });
+  const passthrough = (name) =>
+    defineComponent({
+      name,
+      setup(_, { slots }) {
+        return () => h("div", { class: `${name}-stub` }, slots.default?.());
+      },
+    });
   return {
     BaseAttachmentFileCard: defineComponent({
       name: "BaseAttachmentFileCard",
@@ -32,11 +38,12 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
         nameText: { type: String, default: "" },
       },
       setup(props) {
-        return () => h(
-          "div",
-          { class: "BaseAttachmentFileCard-stub" },
-          props.nameText || props.attachmentItem?.name || props.attachmentItem?.fileName || "",
-        );
+        return () =>
+          h(
+            "div",
+            { class: "BaseAttachmentFileCard-stub" },
+            props.nameText || props.attachmentItem?.name || props.attachmentItem?.fileName || "",
+          );
       },
     }),
     BaseFileCardList: passthrough("BaseFileCardList"),
@@ -57,10 +64,15 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
       name: "BaseMessageShell",
       props: { hideHeader: { type: Boolean, default: false } },
       setup(props, { slots }) {
-        return () => h("div", {
-          class: "BaseMessageShell-stub",
-          "data-hide-header": String(props.hideHeader),
-        }, slots.default?.());
+        return () =>
+          h(
+            "div",
+            {
+              class: "BaseMessageShell-stub",
+              "data-hide-header": String(props.hideHeader),
+            },
+            slots.default?.(),
+          );
       },
     }),
     BaseMessageTypeTag: defineComponent({
@@ -91,11 +103,12 @@ const TestRenderer = defineComponent({
     legacyAttachmentCount: { type: Number, default: 0 },
   },
   setup(props) {
-    return () => h("div", {
-      class: "context-probe",
-      "data-attachment-count": String(props.attachmentCount),
-      "data-legacy-attachment-count": String(props.legacyAttachmentCount),
-    });
+    return () =>
+      h("div", {
+        class: "context-probe",
+        "data-attachment-count": String(props.attachmentCount),
+        "data-legacy-attachment-count": String(props.legacyAttachmentCount),
+      });
   },
 });
 
@@ -105,10 +118,11 @@ const AssetRenderer = defineComponent({
     attachmentCount: { type: Number, default: 0 },
   },
   setup(props) {
-    return () => h("div", {
-      class: "asset-renderer-probe",
-      "data-attachment-count": String(props.attachmentCount),
-    });
+    return () =>
+      h("div", {
+        class: "asset-renderer-probe",
+        "data-attachment-count": String(props.attachmentCount),
+      });
   },
 });
 
@@ -120,12 +134,13 @@ const RuntimeRenderer = defineComponent({
     running: { type: Boolean, default: false },
   },
   setup(props) {
-    return () => h("div", {
-      class: "runtime-probe",
-      "data-started-at": props.startedAt,
-      "data-finished-at": props.finishedAt,
-      "data-running": String(props.running),
-    });
+    return () =>
+      h("div", {
+        class: "runtime-probe",
+        "data-started-at": props.startedAt,
+        "data-finished-at": props.finishedAt,
+        "data-running": String(props.running),
+      });
   },
 });
 
@@ -224,11 +239,9 @@ describe("SharedChatMessageItem", () => {
     await nextTick();
 
     const panels = wrapper.get(".message-runtime-panels");
-    expect(panels.classes()).toEqual(expect.arrayContaining([
-      "has-status-steps",
-      "has-thinking-panel",
-      "is-running",
-    ]));
+    expect(panels.classes()).toEqual(
+      expect.arrayContaining(["has-status-steps", "has-thinking-panel", "is-running"]),
+    );
     expect(panels.find(".message-status-steps").exists()).toBe(true);
     expect(panels.find(".thinking-panel-probe").exists()).toBe(true);
 
@@ -324,7 +337,15 @@ describe("SharedChatMessageItem", () => {
         content: "collapsed body",
         sessionId: "session-content",
         turnScopeId: "turn-assets-history",
-        attachments: [{ attachmentId: "asset-1", sessionId: "session-content", attachmentSource: "test", name: "report.pdf", size: 42 }],
+        attachments: [
+          {
+            attachmentId: "asset-1",
+            sessionId: "session-content",
+            attachmentSource: "test",
+            name: "report.pdf",
+            size: 42,
+          },
+        ],
       },
     });
 
@@ -367,17 +388,17 @@ describe("SharedChatMessageItem", () => {
 
   it("keeps the single outer assistant header that owns a live workflow", () => {
     const wrapper = mountItem({
-      storeSetup: (store) => store.applyWorkflowRuntimeEvent({
-        event: "workflow_planning_message_prepared",
-        data: {
-          workflowRunId: "turn-workflow",
-          sessionId: "session-1",
-          dialogProcessId: "dialog-workflow",
-          turnScopeId: "turn-workflow",
-          semanticText: "WORKFLOW_DSL/1",
-          nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
-        },
-      }),
+      storeSetup: (store) =>
+        store.applyWorkflowRuntimeEvent(
+          canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
+            workflowRunId: "turn-workflow",
+            authoritySessionId: "session-1",
+            dialogProcessId: "dialog-workflow",
+            turnScopeId: "turn-workflow",
+            semanticText: "WORKFLOW_DSL/1",
+            nodeSessions: [{ nodeExecutionId: "node-1", status: "running" }],
+          }),
+        ),
       messageItem: {
         id: "workflow-thinking-host",
         role: "assistant",
@@ -408,17 +429,16 @@ describe("SharedChatMessageItem", () => {
     });
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
 
-    useChatStore().applyWorkflowRuntimeEvent({
-      event: "workflow_planning_message_prepared",
-      data: {
+    useChatStore().applyWorkflowRuntimeEvent(
+      canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.PLANNING, {
         workflowRunId: "workflow-late",
-        sessionId: "session-late",
+        authoritySessionId: "session-late",
         dialogProcessId: "dialog-workflow-late",
         turnScopeId: "turn-workflow-late",
         semanticText: "WORKFLOW_DSL/1",
         nodeSessions: [{ nodeExecutionId: "node-late", status: "running" }],
-      },
-    });
+      }),
+    );
     await nextTick();
 
     expect(wrapper.find(".BaseMessageShell-stub").attributes("data-hide-header")).toBe("false");
@@ -426,19 +446,19 @@ describe("SharedChatMessageItem", () => {
 
   it("passes displayed attachments to message card renderers with the legacy alias", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
-          pluginId: "shared-message-context-probe",
-          id: "shared-message-context-probe:card",
-          slot: "pre",
-          component: TestRenderer,
-          when: (context = {}) => context?.messageItem?.id === "msg-1",
-          resolveProps: (context = {}) => ({
-            attachmentCount: Array.isArray(context.displayedAttachments)
-              ? context.displayedAttachments.length
-              : -1,
-            legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
-              ? context.displayedAttachmentMetas.length
-              : -1,
-          }),
+      pluginId: "shared-message-context-probe",
+      id: "shared-message-context-probe:card",
+      slot: "pre",
+      component: TestRenderer,
+      when: (context = {}) => context?.messageItem?.id === "msg-1",
+      resolveProps: (context = {}) => ({
+        attachmentCount: Array.isArray(context.displayedAttachments)
+          ? context.displayedAttachments.length
+          : -1,
+        legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
+          ? context.displayedAttachmentMetas.length
+          : -1,
+      }),
     });
 
     const wrapper = mountItem();
@@ -451,19 +471,19 @@ describe("SharedChatMessageItem", () => {
 
   it("passes refreshed transfer envelope attachments through displayed attachments", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_PRE, {
-          pluginId: "shared-message-transfer-context-probe",
-          id: "shared-message-transfer-context-probe:card",
-          slot: "pre",
-          component: TestRenderer,
-          when: (context = {}) => context?.messageItem?.id === "msg-transfer",
-          resolveProps: (context = {}) => ({
-            attachmentCount: Array.isArray(context.displayedAttachments)
-              ? context.displayedAttachments.length
-              : -1,
-            legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
-              ? context.displayedAttachmentMetas.length
-              : -1,
-          }),
+      pluginId: "shared-message-transfer-context-probe",
+      id: "shared-message-transfer-context-probe:card",
+      slot: "pre",
+      component: TestRenderer,
+      when: (context = {}) => context?.messageItem?.id === "msg-transfer",
+      resolveProps: (context = {}) => ({
+        attachmentCount: Array.isArray(context.displayedAttachments)
+          ? context.displayedAttachments.length
+          : -1,
+        legacyAttachmentCount: Array.isArray(context.displayedAttachmentMetas)
+          ? context.displayedAttachmentMetas.length
+          : -1,
+      }),
     });
 
     const wrapper = mountItem({
@@ -479,10 +499,35 @@ describe("SharedChatMessageItem", () => {
             version: 2,
             transferId: "transfer-shared-1",
             messageId: "msg-transfer",
-            identity: { sessionId: "session-1", turnScopeId: "turn-1", runId: "run-1", producer: { type: "tool", id: "call-1" } },
+            identity: {
+              sessionId: "session-1",
+              turnScopeId: "turn-1",
+              runId: "run-1",
+              producer: { type: "tool", id: "call-1" },
+            },
             direction: "output",
-            payload: { mode: "attachment", attachments: [{ identity: { attachmentId: "att-transfer-1", sessionId: "session-1", attachmentSource: "test" }, role: "primary", name: "report.pdf", mimeType: "application/pdf", size: 42 }] },
-            intent: { source: "tool", reason: "test", scenario: "tool", strategy: "test" },
+            payload: {
+              mode: "attachment",
+              attachments: [
+                {
+                  identity: {
+                    attachmentId: "att-transfer-1",
+                    sessionId: "session-1",
+                    attachmentSource: "test",
+                  },
+                  role: "primary",
+                  name: "report.pdf",
+                  mimeType: "application/pdf",
+                  size: 42,
+                },
+              ],
+            },
+            intent: {
+              source: "tool",
+              reason: "semantic_transfer_tool_result",
+              scenario: "tool",
+              strategy: "tool_result_text",
+            },
             meta: {},
           },
         ],
@@ -510,22 +555,25 @@ describe("SharedChatMessageItem", () => {
     });
 
     const wrapper = mountItem({
-      storeSetup: (store) => store.applyWorkflowRuntimeEvent({
-        event: "workflow_session_snapshot_loaded",
-        data: {
-          sessionId: "child-session",
-          parentSessionId: "parent-session",
-          workflowRunId: "workflow-run-1",
-          nodeExecutionId: "node-execution-1",
-          aggregateVersion: 1,
-          turnTimings: [{
-            dialogProcessId: "child-dialog",
-            turnScopeId: "child-turn",
-            thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-            thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-          }],
-        },
-      }, { source: "test_snapshot" }),
+      storeSetup: (store) =>
+        store.applyWorkflowRuntimeEvent(
+          canonicalWorkflowSessionSnapshot({
+              nodeSessionId: "child-session",
+              authoritySessionId: "parent-session",
+              workflowRunId: "workflow-run-1",
+              nodeExecutionId: "node-execution-1",
+              aggregateVersion: 1,
+              turnTimings: [
+                {
+                  dialogProcessId: "child-dialog",
+                  turnScopeId: "child-turn",
+                  thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+                  thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+                },
+              ],
+            }),
+          { source: "test_snapshot" },
+        ),
       messageItem: {
         id: "msg-child-timing",
         role: "assistant",
@@ -534,15 +582,19 @@ describe("SharedChatMessageItem", () => {
         dialogProcessId: "child-dialog",
         turnScopeId: "child-turn",
       },
-      sessionDocs: [{
-        sessionId: "child-session",
-        turnTimings: [{
-          dialogProcessId: "child-dialog",
-          turnScopeId: "child-turn",
-          thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-          thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-        }],
-      }],
+      sessionDocs: [
+        {
+          sessionId: "child-session",
+          turnTimings: [
+            {
+              dialogProcessId: "child-dialog",
+              turnScopeId: "child-turn",
+              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+              thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+            },
+          ],
+        },
+      ],
     });
     const probe = wrapper.find(".runtime-probe");
 
@@ -575,22 +627,24 @@ describe("SharedChatMessageItem", () => {
           state: "sending",
           updatedAt: "2026-07-29T09:44:50.000Z",
         });
-        store.applyWorkflowRuntimeEvent({
-          event: "workflow_session_snapshot_loaded",
-          data: {
-            sessionId: "child-session-terminal",
-            parentSessionId: "parent-session",
-            workflowRunId: "workflow-run-1",
-            nodeExecutionId: "node-execution-1",
-            aggregateVersion: 1,
-            turnTimings: [{
-              dialogProcessId: "child-dialog-terminal",
-              turnScopeId: "workflow-node:terminal",
-              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-              thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-            }],
-          },
-        }, { source: "test_snapshot" });
+        store.applyWorkflowRuntimeEvent(
+          canonicalWorkflowSessionSnapshot({
+              nodeSessionId: "child-session-terminal",
+              authoritySessionId: "parent-session",
+              workflowRunId: "workflow-run-1",
+              nodeExecutionId: "node-execution-1",
+              aggregateVersion: 1,
+              turnTimings: [
+                {
+                  dialogProcessId: "child-dialog-terminal",
+                  turnScopeId: "workflow-node:terminal",
+                  thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+                  thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+                },
+              ],
+            }),
+          { source: "test_snapshot" },
+        );
       },
       messageItem: {
         id: "msg-child-terminal",
@@ -600,20 +654,19 @@ describe("SharedChatMessageItem", () => {
         dialogProcessId: "child-dialog-terminal",
         turnScopeId: "workflow-node:terminal",
       },
-      sessionDocs: [{
-        sessionId: "child-session-terminal",
-        turnTimings: [{
-          dialogProcessId: "child-dialog-terminal",
-          turnScopeId: "workflow-node:terminal",
-          thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-          thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-        }],
-        turnStatuses: [{
-          dialogProcessId: "child-dialog-terminal",
-          turnScopeId: "workflow-node:terminal",
-          status: "completed",
-        }],
-      }],
+      sessionDocs: [
+        {
+          sessionId: "child-session-terminal",
+          turnTimings: [
+            {
+              dialogProcessId: "child-dialog-terminal",
+              turnScopeId: "workflow-node:terminal",
+              thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+              thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+            },
+          ],
+        },
+      ],
     });
     const probe = wrapper.find(".runtime-probe");
 
@@ -623,17 +676,17 @@ describe("SharedChatMessageItem", () => {
 
   it("does not render the default asset list when a post renderer suppresses default assets", () => {
     contributeExtension(EXTENSION_POINTS.MESSAGE_CARD_POST, {
-          pluginId: "shared-message-assets-suppress-probe",
-          id: "shared-message-assets-suppress-probe:card",
-          slot: "post",
-          suppressDefaultAssets: true,
-          component: AssetRenderer,
-          when: (context = {}) => context?.messageItem?.id === "msg-assets-suppress",
-          resolveProps: (context = {}) => ({
-            attachmentCount: Array.isArray(context.displayedAttachments)
-              ? context.displayedAttachments.length
-              : -1,
-          }),
+      pluginId: "shared-message-assets-suppress-probe",
+      id: "shared-message-assets-suppress-probe:card",
+      slot: "post",
+      suppressDefaultAssets: true,
+      component: AssetRenderer,
+      when: (context = {}) => context?.messageItem?.id === "msg-assets-suppress",
+      resolveProps: (context = {}) => ({
+        attachmentCount: Array.isArray(context.displayedAttachments)
+          ? context.displayedAttachments.length
+          : -1,
+      }),
     });
 
     const wrapper = mountItem({
@@ -642,8 +695,20 @@ describe("SharedChatMessageItem", () => {
         role: "assistant",
         content: "done",
         attachments: [
-          { attachmentId: "att-1", sessionId: "runtime-panels-session", attachmentSource: "test", name: "a.txt", size: 12 },
-          { attachmentId: "att-2", sessionId: "runtime-panels-session", attachmentSource: "test", name: "b.txt", size: 34 },
+          {
+            attachmentId: "att-1",
+            sessionId: "runtime-panels-session",
+            attachmentSource: "test",
+            name: "a.txt",
+            size: 12,
+          },
+          {
+            attachmentId: "att-2",
+            sessionId: "runtime-panels-session",
+            attachmentSource: "test",
+            name: "b.txt",
+            size: 34,
+          },
         ],
       },
     });

@@ -5,7 +5,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
+import {
+  WORKFLOW_RUNTIME_EVENT,
+  WORKFLOW_SEQUENCE_DOMAIN,
+} from "@noobot/event-protocol/workflow-runtime-event";
 import {
   WORKFLOW_ACTION,
   WORKFLOW_PLUGIN_DEFAULTS,
@@ -27,7 +30,7 @@ import {
   runNodeAgent,
 } from "../hooks/node-agent.js";
 import {
-  emitWorkflowRuntimeEvent,
+  commitWorkflowRuntimeEvent,
   resolveSubSessionFinalOutput,
   stripHarnessReviewAppendix,
   truncateWorkflowResultText,
@@ -107,23 +110,18 @@ function resolvePlanningNodeIdentity({ planningNodeSessions = [], pendingStep = 
 async function publishWorkflowNodeStateCommitted({ options = {}, ctx = {}, fact = null } = {}) {
   const node = fact?.node && typeof fact.node === "object" ? fact.node : null;
   if (!node) return null;
-  const event = "workflow_node_state_committed";
+  const event = WORKFLOW_RUNTIME_EVENT.NODE_STATE;
   const data = {
-    sequenceDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
     workflowRunId: node.workflowRunId,
     nodeExecutionId: node.nodeExecutionId,
     commandId: node.commandId,
-    sessionId: node.sessionId,
-    parentSessionId: String(node.parentSessionId || ctx?.sessionId || "").trim(),
+    nodeSessionId: node.nodeSessionId,
     dialogProcessId: node.dialogProcessId,
     agentDialogProcessId: node.agentDialogProcessId,
     turnScopeId: node.turnScopeId,
     nodeId: node.nodeId,
     nodeName: node.nodeName,
     status: node.status,
-    revision: node.revision,
-    sequence: node.sequence,
-    eventId: node.eventId,
     failure: node.failure,
     activeChildExecutionId: node.activeChildExecutionId,
     attemptExecutionIds: node.attemptExecutionIds,
@@ -134,21 +132,15 @@ async function publishWorkflowNodeStateCommitted({ options = {}, ctx = {}, fact 
     applied: fact.applied === true,
     deduplicated: fact.deduplicated === true,
   };
-  let persisted = null;
-  let realtime = null;
-  try {
-    persisted = await emitWorkflowRuntimeEvent({ options, ctx, event, data });
-  } catch {
-    persisted = null;
-  }
-  try {
-    if (typeof ctx?.eventListener?.onEvent === "function") {
-      realtime = await ctx.eventListener.onEvent({ event, data });
-    }
-  } catch {
-    realtime = null;
-  }
-  return { persisted, realtime, event, data };
+  return commitWorkflowRuntimeEvent({
+    ctx,
+    eventType: event,
+    payload: data,
+    orderingDomain: WORKFLOW_SEQUENCE_DOMAIN.NODE_STATE,
+    orderingScopeId: node.workflowRunId,
+    revision: node.revision,
+    executionId: node.nodeExecutionId,
+  });
 }
 
 async function commitAndPublishWorkflowNodeState({
@@ -159,7 +151,7 @@ async function commitAndPublishWorkflowNodeState({
   nodeExecutionId = "",
   status = "",
   expectedRevision = null,
-  sessionId = "",
+  nodeSessionId = "",
   agentDialogProcessId = "",
   childExecutionId = "",
   failure = null,
@@ -169,7 +161,7 @@ async function commitAndPublishWorkflowNodeState({
     nodeExecutionId,
     status,
     expectedRevision,
-    sessionId,
+    nodeSessionId,
     agentDialogProcessId,
     childExecutionId,
     failure,
@@ -399,7 +391,7 @@ export async function runWorkflowExecution({
             nodeExecutionId: nodeIdentity.nodeExecutionId,
             status: WORKFLOW_NODE_STATUS.RUNNING,
             expectedRevision: currentNodeState?.revision ?? null,
-            sessionId: nodeIdentity.sessionId,
+            nodeSessionId: nodeIdentity.sessionId,
             childExecutionId,
           });
           nodeStateSnapshot = runningFact?.snapshot || nodeStateSnapshot;
@@ -428,7 +420,7 @@ export async function runWorkflowExecution({
               nodeExecutionId: nodeIdentity.nodeExecutionId,
               status: childTerminal.nodeStatus,
               expectedRevision: runningFact?.node?.revision ?? null,
-              sessionId: action?.subSession?.sessionId || "",
+              nodeSessionId: action?.subSession?.sessionId || "",
               agentDialogProcessId: action?.subSession?.dialogProcessId || "",
               childExecutionId,
               failure: childTerminal.nodeStatus === WORKFLOW_NODE_STATUS.FAILED
@@ -471,7 +463,7 @@ export async function runWorkflowExecution({
               nodeExecutionId: nodeIdentity.nodeExecutionId,
               status: stopped ? WORKFLOW_NODE_STATUS.STOPPED : WORKFLOW_NODE_STATUS.FAILED,
               expectedRevision: runningFact.node.revision,
-              sessionId: action?.subSession?.sessionId || "",
+              nodeSessionId: action?.subSession?.sessionId || "",
               agentDialogProcessId: action?.subSession?.dialogProcessId || "",
               childExecutionId,
               failure: {

@@ -42,7 +42,7 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
     skills: [{ name: "skill-a" }],
     services: [{ serviceName: "svc", endpointName: "query" }],
     mcpServers: [{ name: "mcp-a", type: "stdio" }],
-    attachments: [{ attachmentId: "att_1", path: "/tmp/a.png" }],
+    attachments: [{ attachmentId: "att_1", sessionId: "s1", attachmentSource: "user" }],
     connectorStatusSection: {
       connectors: { databases: [], terminals: [], emails: [] },
       current_connectors: {
@@ -173,7 +173,7 @@ test("composeSystemInfoSections uses attachments as attachment context", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
-    attachments: [{ attachmentId: "input_att", path: "/tmp/input.png" }],
+    attachments: [{ attachmentId: "input_att", sessionId: "s1", attachmentSource: "user" }],
   });
 
   const joined = sections.join("\n\n");

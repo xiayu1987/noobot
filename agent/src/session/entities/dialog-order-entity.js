@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { resolveMessageDialogProcessId } from "../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -34,7 +34,7 @@ export function deriveDialogOrderFromMessages(messages = []) {
   const anchorsByDialog = new Map();
   source.forEach((message, sourceIndex) => {
     if (!isDialogAnchor(message)) return;
-    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
     if (!dialogProcessId || anchorsByDialog.has(dialogProcessId)) return;
     anchorsByDialog.set(dialogProcessId, {
       dialogProcessId,
@@ -45,7 +45,7 @@ export function deriveDialogOrderFromMessages(messages = []) {
     });
   });
   source.forEach((message, sourceIndex) => {
-    const dialogProcessId = resolveMessageDialogProcessId(message);
+    const dialogProcessId = resolveContextMessageDialogProcessId(message);
     if (!dialogProcessId || anchorsByDialog.has(dialogProcessId)) return;
     anchorsByDialog.set(dialogProcessId, {
       dialogProcessId,
@@ -69,9 +69,10 @@ export function normalizeDialogOrderEntity(dialogOrder = [], messages = []) {
       turnScopeId: normalizeText(entry.turnScopeId),
       userMessageUid: normalizeText(entry.userMessageUid),
       startedAt: normalizeText(entry.startedAt),
-      dialogOrdinal: Number.isInteger(Number(entry.dialogOrdinal)) && Number(entry.dialogOrdinal) > 0
-        ? Number(entry.dialogOrdinal)
-        : index + 1,
+      dialogOrdinal:
+        Number.isInteger(Number(entry.dialogOrdinal)) && Number(entry.dialogOrdinal) > 0
+          ? Number(entry.dialogOrdinal)
+          : index + 1,
     }))
     .filter((entry) => entry.dialogProcessId && liveDialogIds.has(entry.dialogProcessId));
   const persistedByDialog = new Map(persisted.map((entry) => [entry.dialogProcessId, entry]));
@@ -92,15 +93,20 @@ export function normalizeDialogOrderEntity(dialogOrder = [], messages = []) {
 }
 
 export function appendDialogOrderEntry(dialogOrder = [], message = {}) {
-  const dialogProcessId = resolveMessageDialogProcessId(message);
+  const dialogProcessId = resolveContextMessageDialogProcessId(message);
   const source = Array.isArray(dialogOrder) ? dialogOrder : [];
-  if (!dialogProcessId || source.some((entry) => entry?.dialogProcessId === dialogProcessId)) return source;
-  const dialogOrdinal = source.reduce((max, entry) => Math.max(max, Number(entry?.dialogOrdinal) || 0), 0) + 1;
-  return [...source, {
-    dialogProcessId,
-    turnScopeId: normalizeText(message?.turnScopeId),
-    userMessageUid: normalizeText(message?.messageUid),
-    startedAt: normalizeText(message?.ts),
-    dialogOrdinal,
-  }];
+  if (!dialogProcessId || source.some((entry) => entry?.dialogProcessId === dialogProcessId))
+    return source;
+  const dialogOrdinal =
+    source.reduce((max, entry) => Math.max(max, Number(entry?.dialogOrdinal) || 0), 0) + 1;
+  return [
+    ...source,
+    {
+      dialogProcessId,
+      turnScopeId: normalizeText(message?.turnScopeId),
+      userMessageUid: normalizeText(message?.messageUid),
+      startedAt: normalizeText(message?.ts),
+      dialogOrdinal,
+    },
+  ];
 }

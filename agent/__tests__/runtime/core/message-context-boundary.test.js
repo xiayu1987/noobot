@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, "../../../..");
+const projectRoot = path.resolve(__dirname, "../../..");
 const coreRoot = path.join(projectRoot, "src/runtime");
 
 const allowedFiles = new Set([
@@ -27,12 +27,14 @@ const allowedFiles = new Set([
 
 async function collectJsFiles(rootDir) {
   const entries = await fs.readdir(rootDir, { withFileTypes: true });
-  const files = await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(rootDir, entry.name);
-    if (entry.isDirectory()) return collectJsFiles(fullPath);
-    if (!entry.isFile()) return [];
-    return fullPath.endsWith(".js") ? [fullPath] : [];
-  }));
+  const files = await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(rootDir, entry.name);
+      if (entry.isDirectory()) return collectJsFiles(fullPath);
+      if (!entry.isFile()) return [];
+      return fullPath.endsWith(".js") ? [fullPath] : [];
+    }),
+  );
   return files.flat();
 }
 

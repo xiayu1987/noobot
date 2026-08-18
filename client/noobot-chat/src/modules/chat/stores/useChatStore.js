@@ -126,12 +126,11 @@ export const useChatStore = defineStore("chat", () => {
   const workflows=createWorkflowStore({
     workflowNodeStateRegistry,
     ensureSubSessionMessageContainer:subSessions.ensureSubSessionMessageContainer,
-    reduceSubSessionMessageEvent:subSessions.reduceSubSessionMessageEvent,
     reduceSubSessionSnapshot:subSessions.reduceSubSessionSnapshot,
     removeSubSessionsByWorkflowRunIds:subSessions.removeSubSessionsByWorkflowRunIds,
     selectSubSessionMessages:subSessions.selectSubSessionMessages,
   });
   const executionSelectors=createChatExecutionSelectors({turnRuntimeRegistry,sessions,selectSubSessionMessages:subSessions.selectSubSessionMessages});
   function resetChatStore(){ input.value=""; uploadFiles.value=[]; turnRuntimeRegistry.value=createTurnRuntimeRegistryState(); workflowNodeStateRegistry.value=null; subSessionMessageRegistry.value=createSubSessionMessageRegistry(); subSessionMessageRegistryVersion.value+=1; sessions.value=[]; activeSessionId.value=""; loadingSessions.value=false; loadingSessionDetail.value=false; pendingInteractionRequest.value=null; pendingInteractionRequests.value=[]; interactionSubmitting.value=false; }
-  return { input,uploadFiles,turnRuntimeRegistry,workflowNodeStateRegistry,subSessionMessageRegistry,subSessionMessageRegistryVersion,sessions,activeSessionId,activeSession,loadingSessions,loadingSessionDetail,pendingInteractionRequest,pendingInteractionRequests,interactionSubmitting,...turnActions,...workflows,selectSubSessionMessages:subSessions.selectSubSessionMessages,selectSubSessionTurnRuntime:subSessions.selectSubSessionTurnRuntime,selectSubSessionTiming:subSessions.selectSubSessionTiming,...executionSelectors,resetChatStore };
+  return { input,uploadFiles,turnRuntimeRegistry,workflowNodeStateRegistry,subSessionMessageRegistry,subSessionMessageRegistryVersion,sessions,activeSessionId,activeSession,loadingSessions,loadingSessionDetail,pendingInteractionRequest,pendingInteractionRequests,interactionSubmitting,...turnActions,...workflows,reduceSubSessionMessageEvent:subSessions.reduceSubSessionMessageEvent,selectSubSessionMessages:subSessions.selectSubSessionMessages,selectSubSessionTurnRuntime:subSessions.selectSubSessionTurnRuntime,selectSubSessionTiming:subSessions.selectSubSessionTiming,...executionSelectors,resetChatStore };
 });

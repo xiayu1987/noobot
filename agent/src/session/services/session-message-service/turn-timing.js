@@ -3,20 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isSameTurnStatus } from "../../entities/turn-status-entity.js";
-import { resolveMessageDialogProcessId } from "../../../context/session/dialog-process-id-resolver.js";
+import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
 import { normalizeAnchorValue } from "./anchor-utils.js";
 
 export function resolveTurnTimingKey(item = {}) {
-  return normalizeAnchorValue(item?.turnScopeId) || resolveMessageDialogProcessId(item);
+  return normalizeAnchorValue(item?.turnScopeId);
 }
 
 export function upsertSessionTurnTiming(session = {}, timing = {}) {
   const turnScopeId = normalizeAnchorValue(timing?.turnScopeId);
-  const dialogProcessId = resolveMessageDialogProcessId(timing);
+  const dialogProcessId = resolveContextMessageDialogProcessId(timing);
   const thinkingStartedAt = normalizeAnchorValue(timing?.thinkingStartedAt);
   const thinkingFinishedAt = normalizeAnchorValue(timing?.thinkingFinishedAt);
-  if ((!turnScopeId && !dialogProcessId) || (!thinkingStartedAt && !thinkingFinishedAt)) return;
+  if (!turnScopeId || (!thinkingStartedAt && !thinkingFinishedAt)) return;
   const incoming = {
     turnScopeId,
     dialogProcessId,
@@ -37,12 +36,7 @@ export function upsertSessionTurnTiming(session = {}, timing = {}) {
 export function pruneSessionTurnTimings(session = {}) {
   const messages = Array.isArray(session.messages) ? session.messages : [];
   const liveKeys = new Set(messages.map(resolveTurnTimingKey).filter(Boolean));
-  session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : [])
-    .filter((item) => liveKeys.has(resolveTurnTimingKey(item)));
-}
-
-export function pruneSessionTurnStatuses(session = {}) {
-  const messages = Array.isArray(session.messages) ? session.messages : [];
-  session.turnStatuses = (Array.isArray(session.turnStatuses) ? session.turnStatuses : [])
-    .filter((status) => messages.some((message) => isSameTurnStatus(status, message)));
+  session.turnTimings = (Array.isArray(session.turnTimings) ? session.turnTimings : []).filter(
+    (item) => liveKeys.has(resolveTurnTimingKey(item)),
+  );
 }

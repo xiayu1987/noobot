@@ -6,12 +6,9 @@
 import { logger } from "../../observability/index.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../../runtime/i18n-adapter.js";
-import {
-  parseDataUrl,
-  sanitizeGeneratedArtifactName,
-} from "../../shared/utils/mime-utils.js";
-import { resolveDialogProcessIdFromContext } from "../../context/session/dialog-process-id-resolver.js";
+import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/mime-utils.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
+import { normalizeDialogProcessId } from "@noobot/session-protocol";
 
 export function extractGeneratedMediaCandidates(aiContent) {
   if (!Array.isArray(aiContent)) return [];
@@ -19,13 +16,17 @@ export function extractGeneratedMediaCandidates(aiContent) {
   let mediaIndex = 0;
   for (const contentPart of aiContent) {
     if (!contentPart || typeof contentPart !== "object") continue;
-    const partType = String(contentPart?.type || "").trim().toLowerCase();
+    const partType = String(contentPart?.type || "")
+      .trim()
+      .toLowerCase();
     if (!partType.includes("image") && !partType.includes("video")) continue;
 
     const imageUrl = String(contentPart?.image_url?.url || "").trim();
     const videoUrl = String(contentPart?.video_url?.url || "").trim();
     const directUrl = String(contentPart?.url || "").trim();
-    const sourceType = String(contentPart?.source?.type || "").trim().toLowerCase();
+    const sourceType = String(contentPart?.source?.type || "")
+      .trim()
+      .toLowerCase();
     const sourceMediaType = String(contentPart?.source?.media_type || "")
       .trim()
       .toLowerCase();
@@ -115,23 +116,23 @@ export async function fetchRemoteMediaArtifact(
 }
 
 function resolveGeneratedArtifactOwnership(runtime = {}, dialogProcessId = "") {
-  const systemRuntime = runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : {};
-  const runConfig = runtime?.runConfig && typeof runtime.runConfig === "object"
-    ? runtime.runConfig
-    : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
-      ? systemRuntime.runConfig
+  const systemRuntime =
+    runtime?.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
       : {};
+  const runConfig =
+    runtime?.runConfig && typeof runtime.runConfig === "object"
+      ? runtime.runConfig
+      : systemRuntime?.runConfig && typeof systemRuntime.runConfig === "object"
+        ? systemRuntime.runConfig
+        : {};
   const turnScopeId = String(
     systemRuntime?.turnScopeId ||
       systemRuntime?.config?.turnScopeId ||
       runConfig?.turnScopeId ||
       "",
   ).trim();
-  const resolvedDialogProcessId = resolveDialogProcessIdFromContext({
-    dialogProcessId: dialogProcessId || systemRuntime?.dialogProcessId || systemRuntime?.currentDialogProcessId || "",
-  });
+  const resolvedDialogProcessId = normalizeDialogProcessId(dialogProcessId);
   const sessionId = String(systemRuntime?.sessionId || systemRuntime?.rootSessionId || "").trim();
   return { turnScopeId, dialogProcessId: resolvedDialogProcessId, sessionId };
 }
@@ -160,7 +161,9 @@ export async function persistModelGeneratedArtifacts({
     const fetchPromises = [];
     for (const contentPart of aiContent) {
       if (!contentPart || typeof contentPart !== "object") continue;
-      const partType = String(contentPart?.type || "").trim().toLowerCase();
+      const partType = String(contentPart?.type || "")
+        .trim()
+        .toLowerCase();
       if (!partType.includes("image") && !partType.includes("video")) continue;
       const imageUrl = String(contentPart?.image_url?.url || "").trim();
       const videoUrl = String(contentPart?.video_url?.url || "").trim();
@@ -169,14 +172,7 @@ export async function persistModelGeneratedArtifacts({
       if (!/^https?:\/\//i.test(remoteUrl)) continue;
       remoteMediaIndex += 1;
 
-      fetchPromises.push(
-        fetchRemoteMediaArtifact(
-          remoteUrl,
-          fetchImpl,
-          remoteMediaIndex,
-          runtime,
-        )
-      );
+      fetchPromises.push(fetchRemoteMediaArtifact(remoteUrl, fetchImpl, remoteMediaIndex, runtime));
     }
 
     if (fetchPromises.length > 0) {
@@ -207,7 +203,7 @@ export async function persistModelGeneratedArtifacts({
     artifacts: allMediaCandidates,
   });
   emitEvent(eventListener, "model_generated_attachments_saved", {
-    dialogProcessId: resolveDialogProcessIdFromContext({ dialogProcessId }),
+    dialogProcessId: normalizeDialogProcessId(dialogProcessId),
     count: attachmentRecords.length,
     attachments: attachmentRecords,
   });

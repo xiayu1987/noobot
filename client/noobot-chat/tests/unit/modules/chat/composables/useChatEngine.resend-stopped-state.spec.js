@@ -73,26 +73,27 @@ describe("useChatEngine.resend stopped state", () => {
     const stoppedTurnScopeId = "turn-immediate-stop";
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
-      json: async () => createTurnTerminalResolution({
-        commandId: "resolve-immediate-stop",
-        sessionId,
-        turnScopeId: stoppedTurnScopeId,
-        resolved: true,
-        aggregateVersion: 12,
-        turn: {
+      json: async () =>
+        createTurnTerminalResolution({
+          commandId: "resolve-immediate-stop",
           sessionId,
           turnScopeId: stoppedTurnScopeId,
-          dialogProcessId: "dp-immediate-stop",
-          state: "stop_completed",
-          phase: "stop",
-          revision: 5,
-          sequence: 5,
-          completionCommitId: "commit-immediate-stop",
-          summaryVersion: 5,
-          terminalStatus: { status: "user_stopped" },
-          capabilities: { actionLocked: false, canStop: false },
-        },
-      }),
+          resolved: true,
+          aggregateVersion: 12,
+          turn: {
+            sessionId,
+            turnScopeId: stoppedTurnScopeId,
+            dialogProcessId: "dp-immediate-stop",
+            state: "stop_completed",
+            phase: "stop",
+            revision: 5,
+            sequence: 5,
+            completionCommitId: "commit-immediate-stop",
+            summaryVersion: 5,
+            terminalStatus: { status: "user_stopped" },
+            capabilities: { actionLocked: false, canStop: false },
+          },
+        }),
     }));
     const stream = vi.fn(async () => {});
     const replaceSessionTurnApi = vi.fn(
@@ -380,13 +381,6 @@ describe("useChatEngine.resend stopped state", () => {
           makeSession(sessionId, {
             messages: [user, assistant],
             rawMessages: [user, assistant],
-            turnStatuses: [
-              {
-                status: "user_stopped",
-                turnScopeId: stopped.turnScopeId,
-                dialogProcessId: stopped.dialogProcessId,
-              },
-            ],
           }),
         ],
       };
@@ -395,11 +389,54 @@ describe("useChatEngine.resend stopped state", () => {
       const session = detail.sessions?.[0];
       if (session) activeSession.value = { ...activeSession.value, ...session };
     });
+    let terminalResolutionCount = 0;
+    const terminalResolutionFetcher = vi.fn(async (url) => {
+      terminalResolutionCount += 1;
+      const turnScopeId = decodeURIComponent(
+        String(url).match(/\/turns\/([^/]+)\/terminal/)?.[1] || "",
+      );
+      const revision = terminalResolutionCount + 2;
+      const completionCommitId = `commit:${sessionId}:${turnScopeId}:${revision}`;
+      return {
+        ok: true,
+        json: async () =>
+          createTurnTerminalResolution({
+            commandId: `resolve:${turnScopeId}:${revision}`,
+            sessionId,
+            turnScopeId,
+            resolved: true,
+            aggregateVersion: terminalResolutionCount,
+            turn: {
+              sessionId,
+              turnScopeId,
+              state: "stop_completed",
+              phase: "stop",
+              revision,
+              sequence: revision,
+              completionCommitId,
+              summaryVersion: revision,
+              terminalStatus: { status: "user_stopped" },
+            },
+            materialization: {
+              completionCommitId,
+              summaryVersion: revision,
+              revision,
+              sequence: revision,
+              terminalStatus: { status: "user_stopped" },
+              messages: [],
+            },
+          }),
+      };
+    });
     const { engine, activeSession, turnRuntimeRegistry } = createHarness({
       sessionId,
       stream,
-      terminalResolutionState: "stop_completed",
-      deps: { replaceSessionTurnApi, fetchSessionDetail, applySessionDetail },
+      deps: {
+        replaceSessionTurnApi,
+        fetchSessionDetail,
+        applySessionDetail,
+        terminalResolutionFetcher,
+      },
     });
     activeSession.value.messages = [
       { role: RoleEnum.USER, content: "original", turnScopeId: "client-turn:original" },

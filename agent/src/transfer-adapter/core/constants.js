@@ -4,31 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const TRANSFER_PROTOCOL = "noobot.semantic-transfer";
-export const TRANSFER_VERSION = 2;
-
-export const TRANSFER_DIRECTION = Object.freeze({
-  INPUT: "input",
-  OUTPUT: "output",
-});
-
-export const TRANSFER_TRANSPORT = Object.freeze({
-  DIRECT: "direct",
-  ATTACHMENT: "attachment",
-});
-
-export const TRANSFER_SOURCE = Object.freeze({
-  USER: "user",
-  SYSTEM: "system",
-  AGENT: "agent",
-  SUBAGENT: "subagent",
-  MODEL: "model",
-  TOOL: "tool",
-  CONNECTOR: "connector",
-  PLUGIN: "plugin",
-  SERVICE: "service",
-});
-
 export const TRANSFER_REASON = Object.freeze({
   SEMANTIC_TRANSFER_OUTPUT: "semantic_transfer_output",
   SEMANTIC_TRANSFER_TOOL_RESULT: "semantic_transfer_tool_result",

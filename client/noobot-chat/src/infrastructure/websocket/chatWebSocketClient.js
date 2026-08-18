@@ -15,17 +15,20 @@ import {
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
+  createAgentTransportEvent,
+  getAgentTransportEventSessionId,
   getAgentCommandIdentity,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
+import { EVENT_FAMILY, readProtocolEventPayload } from "@noobot/event-protocol";
 
 import { createWebSocketCommandRequests } from "./chatWebSocketCommandRequests.js";
 import { createSocketHandlerRegistry } from "./chatWebSocketSocketHandlers.js";
 import {
-  canSettleStreamForEvent,
-  createStreamEventError,
+  createCommandReceiptError,
+  isCommandReceiptForPayload,
   isEventForStreamScope,
-  isTerminalChannelStateEvent,
+  isFailedCommandReceipt,
   normalizeErrorMessage,
   normalizeTrimmedString,
 } from "./chatWebSocketProtocol.js";
@@ -35,7 +38,6 @@ export function createChatWebSocketClient({
   resolveTransportOwner = () => "",
   refreshAuthentication = null,
   sessionLogSink = null,
-  terminalChannelStateGraceMs = TIME_THRESHOLDS.client.wsTerminalChannelStateGraceMs,
   translateText = (key = "") => String(key || ""),
 } = {}) {
   const transport = createWebSocketTransportSupervisor({
@@ -168,38 +170,33 @@ export function createChatWebSocketClient({
   }
 
   function resolveAuthoritativeSequence(event, data = {}) {
-    return Number(
-      event === TURN_LIFECYCLE_WIRE_EVENT
-        ? data?.sequence
-        : data?.event?.sequence,
-    ) || null;
+    return Number(data?.ordering?.sequence) || null;
   }
 
   function logTransportEventReceived(event, data = {}, { hasLiveSubscriber = false } = {}) {
-    const authoritativeEvent = data?.event && typeof data.event === "object" ? data.event : {};
+    const identity = data?.identity && typeof data.identity === "object" ? data.identity : {};
+    const payload = data?.payload && typeof data.payload === "object" ? data.payload : {};
     try {
       sessionLogSink?.log?.({
         category: "transport",
         level: "debug",
         event: "frontend.websocket.transportEventReceived",
-        sessionId: normalizeTrimmedString(data?.sessionId || authoritativeEvent.sessionId),
-        dialogProcessId: normalizeTrimmedString(data?.dialogProcessId || authoritativeEvent.dialogProcessId),
-        turnScopeId: normalizeTrimmedString(data?.turnScopeId || authoritativeEvent.turnScopeId),
+        sessionId: normalizeTrimmedString(identity.sessionId),
+        dialogProcessId: normalizeTrimmedString(payload.dialogProcessId),
+        turnScopeId: normalizeTrimmedString(identity.turnScopeId),
         data: {
           protocolEvent: event,
-          eventId: normalizeTrimmedString(data?.eventId || authoritativeEvent.eventId),
-          eventType: normalizeTrimmedString(data?.eventType || authoritativeEvent.eventType),
-          parentSessionId: normalizeTrimmedString(data?.parentSessionId || authoritativeEvent.parentSessionId),
-          messageId: normalizeTrimmedString(data?.messageId || authoritativeEvent.messageId),
-          presentationMessageId: normalizeTrimmedString(
-            data?.presentationMessageId || authoritativeEvent.presentationMessageId,
-          ),
-          transportSequence: Number(data?.seq || 0) || null,
+          eventId: normalizeTrimmedString(identity.eventId),
+          eventType: normalizeTrimmedString(payload.eventType),
+          parentSessionId: normalizeTrimmedString(payload.parentSessionId),
+          messageId: normalizeTrimmedString(identity.messageId),
+          presentationMessageId: normalizeTrimmedString(payload.presentationMessageId),
+          transportSequence: null,
           authoritativeSequence: resolveAuthoritativeSequence(event, data),
-          contentLength: String(authoritativeEvent?.content ?? authoritativeEvent?.text ?? data?.text ?? "").length,
-          attachmentCount: Array.isArray(authoritativeEvent?.attachments) ? authoritativeEvent.attachments.length : 0,
-          transferEnvelopeCount: Array.isArray(authoritativeEvent?.transferEnvelopes)
-            ? authoritativeEvent.transferEnvelopes.length
+          contentLength: String(payload.content ?? payload.text ?? "").length,
+          attachmentCount: Array.isArray(payload.attachments) ? payload.attachments.length : 0,
+          transferEnvelopeCount: Array.isArray(payload.transferEnvelopes)
+            ? payload.transferEnvelopes.length
             : 0,
           reconnecting,
           activeStream: Boolean(activeStreamContext),
@@ -220,22 +217,32 @@ export function createChatWebSocketClient({
         let parsedData = {};
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
-          const event = String(parsed?.event || "message");
-          const data = parsed?.data || {};
+          const receivedTransportEvent = createAgentTransportEvent(parsed);
+          const lifecyclePayload = receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
+            ? readProtocolEventPayload(receivedTransportEvent.data, {
+                wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
+                family: EVENT_FAMILY.TURN_LIFECYCLE,
+              })
+            : null;
+          const transportEvent = receivedTransportEvent;
+          const { event, data } = transportEvent;
+          const lifecycleData = lifecyclePayload?.valid ? lifecyclePayload.payload : data;
+          const channelSessionId = getAgentTransportEventSessionId(transportEvent);
           parsedEvent = event;
           parsedData = data;
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
-          logTransportEventReceived(event, data, { hasLiveSubscriber });
+          const observedData = receivedTransportEvent.data;
+          logTransportEventReceived(event, observedData, { hasLiveSubscriber });
           logWorkflowDiagnostics("frontend.websocket.transportEventReceived", () => ({
-            sessionId: normalizeTrimmedString(data?.sessionId),
-            dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-            turnScopeId: normalizeTrimmedString(data?.turnScopeId),
+            sessionId: normalizeTrimmedString(observedData?.identity?.sessionId),
+            dialogProcessId: normalizeTrimmedString(observedData?.payload?.dialogProcessId),
+            turnScopeId: normalizeTrimmedString(observedData?.identity?.turnScopeId),
             protocolEvent: event,
-            eventId: normalizeTrimmedString(data?.eventId || data?.event?.eventId),
-            eventType: normalizeTrimmedString(data?.eventType || data?.event?.eventType),
-            parentSessionId: normalizeTrimmedString(data?.parentSessionId || data?.event?.parentSessionId),
-            transportSequence: Number(data?.seq || 0) || null,
-            authoritativeSequence: resolveAuthoritativeSequence(event, data),
+            eventId: normalizeTrimmedString(observedData?.identity?.eventId),
+            eventType: normalizeTrimmedString(observedData?.payload?.eventType),
+            parentSessionId: normalizeTrimmedString(observedData?.payload?.parentSessionId),
+            transportSequence: null,
+            authoritativeSequence: resolveAuthoritativeSequence(event, observedData),
             reconnecting,
             activeStream: Boolean(activeStreamContext),
             hasLiveSubscriber,
@@ -244,7 +251,7 @@ export function createChatWebSocketClient({
             transport.markReady(ws, { nextServerInstanceId: data?.serverInstanceId });
             return;
           }
-          commandRequests.settle(event, data);
+          commandRequests.settle(event, lifecycleData);
           const reconnectControlEvent =
             event === StreamEventEnum.RECONNECT_DATA ||
             event === StreamEventEnum.RECONNECT_COMPLETE;
@@ -259,12 +266,12 @@ export function createChatWebSocketClient({
                 : "unowned";
           const dispatchEligible = owner !== "unowned";
           if (owner === "unowned" && event === "message_event") {
-            pendingMessageEvents.push({ event, data });
+            pendingMessageEvents.push(transportEvent);
             return;
           }
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
             if (
-              data?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+              lifecycleData?.eventType === TURN_EVENT.ACTION_ACCEPTED &&
               activeStreamContext?.payload &&
               activeStreamContext.agentTransportAcceptedLogged !== true
             ) {
@@ -277,20 +284,20 @@ export function createChatWebSocketClient({
                   acknowledgedByBackend: true,
                   transport: "websocket",
                   lifecycleEventType: TURN_EVENT.ACTION_ACCEPTED,
-                  lifecycleEventId: normalizeTrimmedString(data?.eventId),
-                  lifecycleRevision: Number(data?.revision || 0),
+                  lifecycleEventId: normalizeTrimmedString(lifecycleData?.eventId),
+                  lifecycleRevision: Number(lifecycleData?.revision || 0),
                 },
               );
             }
             logWorkflowDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
-              sessionId: normalizeTrimmedString(data?.sessionId),
-              parentSessionId: normalizeTrimmedString(data?.parentSessionId),
-              dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
-              turnScopeId: normalizeTrimmedString(data?.turnScopeId),
-              eventId: normalizeTrimmedString(data?.eventId),
-              eventType: normalizeTrimmedString(data?.eventType),
+              sessionId: normalizeTrimmedString(lifecycleData?.sessionId),
+              parentSessionId: normalizeTrimmedString(lifecycleData?.parentSessionId),
+              dialogProcessId: normalizeTrimmedString(lifecycleData?.dialogProcessId),
+              turnScopeId: normalizeTrimmedString(lifecycleData?.turnScopeId),
+              eventId: normalizeTrimmedString(lifecycleData?.eventId),
+              eventType: normalizeTrimmedString(lifecycleData?.eventType),
               transportSequence: Number(data?.seq || 0) || null,
-              authoritativeSequence: Number(data?.sequence || 0) || null,
+              authoritativeSequence: Number(lifecycleData?.sequence || 0) || null,
               reconnecting,
               activeStream: Boolean(activeStreamContext),
               hasLiveSubscriber,
@@ -300,14 +307,14 @@ export function createChatWebSocketClient({
             // Receipt is a transport acknowledgement. Send it immediately after
             // validating the envelope so a business reducer failure cannot stall
             // the authoritative lifecycle delivery queue.
-            acknowledgeTurnLifecycleReceipt(ws, event, data);
+            acknowledgeTurnLifecycleReceipt(ws, event, lifecycleData);
           }
           if (owner === "reconnect_handler") {
-            activeReconnectContext.handleProtocolEvent({ event, data });
+            activeReconnectContext.handleProtocolEvent(transportEvent);
           } else if (owner === "stream_handler") {
-            activeStreamContext.handleProtocolEvent({ event, data });
+            activeStreamContext.handleProtocolEvent(transportEvent);
           } else if (owner === "transport_live_subscriber") {
-            liveEventSubscriber({ event, data });
+            liveEventSubscriber(transportEvent);
           }
           logWorkflowDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
@@ -377,7 +384,6 @@ export function createChatWebSocketClient({
       };
       let settled = false;
       let doneReceived = false;
-      let terminalChannelStateTimer = null;
       let handshakeTimeout = null;
       let authenticationRetryStarted = false;
       let unregisterStreamHandlers = () => {};
@@ -385,10 +391,6 @@ export function createChatWebSocketClient({
       const finalize = (fn) => {
         if (settled) return;
         settled = true;
-        if (terminalChannelStateTimer) {
-          clearTimeout(terminalChannelStateTimer);
-          terminalChannelStateTimer = null;
-        }
         if (handshakeTimeout) {
           clearTimeout(handshakeTimeout);
           handshakeTimeout = null;
@@ -402,16 +404,6 @@ export function createChatWebSocketClient({
         unregisterHandshakeHandlers();
         unregisterStreamHandlers();
         fn();
-      };
-
-      const scheduleTerminalChannelStateFinalize = (data = {}) => {
-        if (settled || doneReceived || terminalChannelStateTimer) return;
-        terminalChannelStateTimer = setTimeout(() => {
-          terminalChannelStateTimer = null;
-          if (settled || doneReceived) return;
-          doneReceived = true;
-          finalize(() => resolve());
-        }, Math.max(0, Number(terminalChannelStateGraceMs || 0)));
       };
 
       let ws = null;
@@ -541,25 +533,27 @@ export function createChatWebSocketClient({
         if (!streamSocket) return;
         unregisterHandshakeHandlers();
         unregisterStreamHandlers();
-        const handleProtocolEvent = ({ event, data }) => {
+        const handleProtocolEvent = (transportEvent) => {
           if (settled) return;
           try {
+            const { event, data } = transportEvent;
+            const channelSessionId = getAgentTransportEventSessionId(transportEvent);
             if (event === "transport_ready") return;
-            onEvent({ event, data });
-            const eventMatchesCurrentStream = isEventForStreamScope(data, payload);
-            const eventCanSettleCurrentStream = canSettleStreamForEvent(data, payload);
-            if (event === StreamEventEnum.ERROR && eventMatchesCurrentStream) {
-              finalize(() => reject(createStreamEventError(data, translateText)));
+            const eventMatchesCurrentStream = isEventForStreamScope(
+              data,
+              payload,
+              channelSessionId,
+            );
+            if (!eventMatchesCurrentStream) return;
+            onEvent(transportEvent);
+            if (isCommandReceiptForPayload(event, data, payload)) {
+              doneReceived = true;
+              if (isFailedCommandReceipt(data)) {
+                finalize(() => reject(createCommandReceiptError(data, translateText)));
+              } else {
+                finalize(() => resolve());
+              }
               return;
-            }
-            if (event === StreamEventEnum.DONE && eventCanSettleCurrentStream) {
-              doneReceived = true;
-              finalize(() => resolve());
-            } else if (event === StreamEventEnum.USER_STOPPED && eventCanSettleCurrentStream) {
-              doneReceived = true;
-              finalize(() => resolve());
-            } else if (eventCanSettleCurrentStream && isTerminalChannelStateEvent(event, data)) {
-              scheduleTerminalChannelStateFinalize(data);
             }
           } catch (error) {
             finalize(() => reject(error));
@@ -590,7 +584,9 @@ export function createChatWebSocketClient({
           };
           const pending = pendingMessageEvents.splice(0, pendingMessageEvents.length);
           for (const packet of pending) {
-            if (isEventForStreamScope(packet.data, payload)) handleProtocolEvent(packet);
+            if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
+              handleProtocolEvent(packet);
+            }
             else pendingMessageEvents.push(packet);
           }
         }

@@ -6,7 +6,6 @@
 
 import { WORKFLOW_PHASE_STATUS, WORKFLOW_PHASES } from "../constants.js";
 import { throwIfWorkflowAborted } from "../hooks/runtime.js";
-import { emitWorkflowRuntimeEvent } from "../hooks/persistence.js";
 import { buildWorkflowOrchestrationPayload } from "../orchestration-payload.js";
 import { enrichWorkflowPayload } from "./payload-enrichment.js";
 
@@ -41,15 +40,6 @@ export async function buildFinalWorkflowPayload({
   });
   phaseTracker.end(WORKFLOW_PHASES.PAYLOAD_BUILD, WORKFLOW_PHASE_STATUS.SUCCEEDED);
   workflowPayload.phaseTimeline = phaseTracker.list();
-  await emitWorkflowRuntimeEvent({
-    options,
-    ctx,
-    event: "workflow_payload_build_succeeded",
-    data: {
-      interactionId: String(workflowPayload?.interactionId || "").trim(),
-    },
-  });
-
   enrichWorkflowPayload({
     workflowPayload,
     ctx,

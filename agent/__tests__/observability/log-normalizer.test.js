@@ -8,66 +8,140 @@ import assert from "node:assert/strict";
 
 import { classifyExecutionEvent } from "../../src/observability/event-log/log-normalizer.js";
 import {
-  assertMessageEventEnvelope,
+  createEventEnvelope,
+  EVENT_FAMILY,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
+import {
+  MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_WIRE_EVENT,
+} from "@noobot/event-protocol/message-event";
+import {
   bindAssistantMessageEventStream,
   beginAssistantMessageEventStream,
   emitMessageEvent,
-  isMessageEventEnvelope,
 } from "../../src/events/message-event-stream.js";
 
 function runtimeForTurn({ messageId = "turn-message-1", presentationMessageId = "presentation-1" } = {}) {
+  let sequence = 0;
   const runtime = {
     runConfig: { messageId, presentationMessageId },
-    systemRuntime: { sessionId: "session-1" },
+    systemRuntime: { sessionId: "session-1", turnScopeId: "turn-1" },
+    sessionManager: {
+      async commitMessageEvent({ sessionId, turnScopeId, messageId: committedMessageId, payload }) {
+        sequence += 1;
+        return {
+          committed: true,
+          envelope: createEventEnvelope({
+            family: EVENT_FAMILY.MESSAGE_TIMELINE,
+            identity: {
+              eventId: `event-${sequence}`,
+              eventType: MESSAGE_EVENT_WIRE_EVENT,
+              sessionId,
+              turnScopeId,
+              messageId: committedMessageId,
+            },
+            ordering: {
+              domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+              scopeId: messageId,
+              sequence,
+            },
+            producer: { type: "test", id: "message-event-commit" },
+            occurredAt: `2026-01-01T00:00:0${sequence}.000Z`,
+            payload,
+          }),
+        };
+      },
+    },
   };
   bindAssistantMessageEventStream(runtime, { messageId, presentationMessageId });
   return runtime;
 }
 
-test("authoritative message events declare the message-event sequence domain", () => {
+test("authoritative message events declare the message-event sequence domain", async () => {
   const emitted = [];
   const runtime = runtimeForTurn();
   beginAssistantMessageEventStream(runtime);
-  const envelope = emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", { text: "token" });
+  const envelope = await emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", { text: "token" });
 
-  assert.equal(envelope.sequenceDomain, "message-event");
-  assert.equal(envelope.sequenceScopeId, envelope.messageId);
-  assert.equal(emitted[0]?.data?.sequenceDomain, "message-event");
-  assert.equal(emitted[0]?.data?.sequenceScopeId, envelope.messageId);
+  assert.equal(envelope.ordering.domain, MESSAGE_EVENT_SEQUENCE_DOMAIN);
+  assert.equal(envelope.ordering.scopeId, envelope.identity.messageId);
+  assert.equal(emitted[0]?.event, "authority_event_committed");
+  assert.equal(emitted[0]?.data?.envelope, envelope);
 });
 
-test("one Turn Aggregate owns a contiguous event sequence across model messages", () => {
+test("message events use the execution-bound persistence context", async () => {
+  const runtime = runtimeForTurn();
+  const persistenceContext = { kind: "noobot.session_persistence_scope", scope: "child" };
+  runtime.systemRuntime.persistenceContext = persistenceContext;
+  runtime.runConfig.persistenceContext = { scope: "stale-config-value" };
+  let committedContext = null;
+  const commit = runtime.sessionManager.commitMessageEvent;
+  runtime.sessionManager.commitMessageEvent = async (payload) => {
+    committedContext = payload.persistenceContext;
+    return commit(payload);
+  };
+
+  beginAssistantMessageEventStream(runtime);
+  await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
+
+  assert.equal(committedContext, persistenceContext);
+});
+
+test("message event delivery exposes only the cross-layer persistence scope", async () => {
+  const runtime = runtimeForTurn();
+  const persistenceContext = { kind: "noobot.session_persistence_context", secret: "agent-only" };
+  const persistenceScope = {
+    scopeId: "agent:child-1",
+    parentSessionId: "parent-1",
+    relativeDir: "parent-1/child-1",
+    allowedRoot: "runtime/session/parent-1/child-1",
+  };
+  runtime.systemRuntime.persistenceContext = persistenceContext;
+  runtime.systemRuntime.persistenceScope = persistenceScope;
+  const emitted = [];
+
+  beginAssistantMessageEventStream(runtime);
+  await emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", {
+    text: "token",
+  });
+
+  assert.equal(emitted[0]?.data?.persistenceScope, persistenceScope);
+  assert.notEqual(emitted[0]?.data?.persistenceScope, persistenceContext);
+});
+
+test("one Turn Aggregate owns a contiguous event sequence across model messages", async () => {
   const runtime = runtimeForTurn();
   const listener = { onEvent() {} };
   const firstMessageId = beginAssistantMessageEventStream(runtime);
-  const first = emitMessageEvent(listener, runtime, "llm_delta", { text: "first" });
-  const second = emitMessageEvent(listener, runtime, "llm_delta", { text: "second" });
+  const first = await emitMessageEvent(listener, runtime, "llm_delta", { text: "first" });
+  const second = await emitMessageEvent(listener, runtime, "llm_delta", { text: "second" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
-  const next = emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
+  const next = await emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
-  assert.deepEqual([first.sequence, second.sequence, next.sequence], [1, 2, 3]);
-  assert.equal(first.sequenceScopeId, "turn-message-1");
-  assert.equal(next.sequenceScopeId, "turn-message-1");
+  assert.deepEqual([first.ordering.sequence, second.ordering.sequence, next.ordering.sequence], [1, 2, 3]);
+  assert.equal(first.ordering.scopeId, "turn-message-1");
+  assert.equal(next.ordering.scopeId, "turn-message-1");
 });
 
-test("model streams keep independent identities while sharing the run presentation identity", () => {
+test("model streams keep independent identities while sharing the run presentation identity", async () => {
   const runtime = runtimeForTurn({
     messageId: "turn-message-preallocated",
     presentationMessageId: "msg_preallocated",
   });
   const firstMessageId = beginAssistantMessageEventStream(runtime);
-  const first = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "first" });
+  const first = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "first" });
   const nextMessageId = beginAssistantMessageEventStream(runtime);
-  const next = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "next" });
+  const next = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
-  assert.equal(first.messageId, "turn-message-preallocated");
-  assert.equal(next.messageId, "turn-message-preallocated");
-  assert.equal(first.presentationMessageId, "msg_preallocated");
-  assert.equal(next.presentationMessageId, "msg_preallocated");
-  assert.equal(first.envelopeVersion, 2);
-  assert.deepEqual([first.sequence, next.sequence], [1, 2]);
+  assert.equal(first.identity.messageId, "turn-message-preallocated");
+  assert.equal(next.identity.messageId, "turn-message-preallocated");
+  assert.equal(first.payload.presentationMessageId, "msg_preallocated");
+  assert.equal(next.payload.presentationMessageId, "msg_preallocated");
+  assert.equal(first.protocol.version, 3);
+  assert.deepEqual([first.ordering.sequence, next.ordering.sequence], [1, 2]);
 });
 
 test("Turn message event identity is immutable after binding", () => {
@@ -78,7 +152,7 @@ test("Turn message event identity is immutable after binding", () => {
   }), /messageId conflict/);
 });
 
-test("workflow ownership is immutable and emitted by the common message stream", () => {
+test("workflow ownership is immutable and emitted by the common message stream", async () => {
   const runtime = {
     runConfig: {
       messageId: "workflow-message",
@@ -86,7 +160,24 @@ test("workflow ownership is immutable and emitted by the common message stream",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
     },
-    systemRuntime: { sessionId: "child-session", parentSessionId: "root-session" },
+    systemRuntime: { sessionId: "child-session", parentSessionId: "root-session", turnScopeId: "turn-workflow" },
+  };
+  let sequence = 0;
+  runtime.sessionManager = {
+    async commitMessageEvent({ sessionId, turnScopeId, messageId, payload }) {
+      sequence += 1;
+      return {
+        committed: true,
+        envelope: createEventEnvelope({
+          family: EVENT_FAMILY.MESSAGE_TIMELINE,
+          identity: { eventId: `workflow-event-${sequence}`, eventType: MESSAGE_EVENT_WIRE_EVENT, sessionId, turnScopeId, messageId },
+          ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: messageId, sequence },
+          producer: { type: "test", id: "workflow-message-event-commit" },
+          occurredAt: "2026-01-01T00:00:00.000Z",
+          payload,
+        }),
+      };
+    },
   };
   bindAssistantMessageEventStream(runtime, {
     messageId: "workflow-message",
@@ -96,10 +187,10 @@ test("workflow ownership is immutable and emitted by the common message stream",
     nodeExecutionId: "node-execution-1",
   });
   beginAssistantMessageEventStream(runtime);
-  const envelope = emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
-  assert.equal(envelope.parentSessionId, "root-session");
-  assert.equal(envelope.workflowRunId, "workflow-run-1");
-  assert.equal(envelope.nodeExecutionId, "node-execution-1");
+  const envelope = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
+  assert.equal(envelope.payload.parentSessionId, "root-session");
+  assert.equal(envelope.payload.workflowRunId, "workflow-run-1");
+  assert.equal(envelope.payload.nodeExecutionId, "node-execution-1");
   assert.throws(() => bindAssistantMessageEventStream(runtime, {
     messageId: "workflow-message",
     presentationMessageId: "workflow-presentation",
@@ -110,23 +201,18 @@ test("workflow ownership is immutable and emitted by the common message stream",
 });
 
 test("authoritative message envelope validation rejects partial events", () => {
-  const envelope = {
-    envelopeKind: "noobot.message_event",
-    envelopeVersion: 2,
-    eventId: "evt-1",
-    eventType: "llm_delta",
-    sessionId: "session-1",
-    messageId: "message-1",
-    presentationMessageId: "presentation-1",
-    sequence: 1,
-    timestamp: "2026-01-01T00:00:00.000Z",
-    text: "token",
-  };
-  assert.equal(isMessageEventEnvelope(envelope), true);
-  assert.equal(assertMessageEventEnvelope(envelope), envelope);
-  assert.throws(() => assertMessageEventEnvelope({ ...envelope, text: undefined }), /missing_text/);
-  assert.equal(isMessageEventEnvelope({ ...envelope, messageId: "" }), false);
-  assert.throws(() => assertMessageEventEnvelope({ ...envelope, eventId: "" }), /invalid authoritative/);
+  const envelope = createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: { eventId: "evt-1", eventType: MESSAGE_EVENT_WIRE_EVENT, sessionId: "session-1", turnScopeId: "turn-1", messageId: "message-1" },
+    ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 1 },
+    producer: { type: "test", id: "message-event-validation" },
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    payload: { eventType: "llm_delta", presentationMessageId: "presentation-1", text: "token" },
+  });
+  assert.equal(validateProtocolEvent(envelope).valid, true);
+  assert.equal(validateProtocolEvent({ ...envelope, payload: { ...envelope.payload, text: undefined } }).valid, false);
+  assert.equal(validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, messageId: "" } }).valid, false);
+  assert.equal(validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, eventId: "" } }).valid, false);
 });
 
 test("classifyExecutionEvent classifies structured execution events", () => {

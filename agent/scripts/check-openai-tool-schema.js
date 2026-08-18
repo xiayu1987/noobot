@@ -14,8 +14,13 @@ import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { buildTools } from "noobot-agent/tools";
 import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
 import { sanitizeUserConfig } from "noobot-agent/config";
+import {
+  createConfigValueLookup,
+  mergeConfigParamLayers,
+  normalizeConfigParamsDocument,
+  resolveConfigTemplates,
+} from "@noobot/agent-config-protocol";
 import { loadGlobalConfig } from "../src/config/core/global-config-loader.js";
-import { resolveConfigSecrets } from "../src/config/core/config-secret-resolver.js";
 import { createAgentContextEnvelope, createModelContext } from "@noobot/context-protocol";
 import { createAgentExecutionScope } from "../src/context/agent-execution-scope.js";
 import { resolveDefaultModelSpec, resolveModelSpecByName } from "noobot-agent/model";
@@ -91,37 +96,6 @@ async function readJsonSafe(filePath = "", fallback = {}) {
   } catch {
     return fallback;
   }
-}
-
-function normalizeConfigParams(input = {}) {
-  const rawValues = input?.values && typeof input.values === "object" ? input.values : {};
-  return Object.fromEntries(
-    Object.entries(rawValues)
-      .map(([paramKey, paramValue]) => [
-        String(paramKey || "")
-          .trim()
-          .toUpperCase(),
-        String(paramValue ?? "").trim(),
-      ])
-      .filter(([paramKey]) => Boolean(paramKey)),
-  );
-}
-
-function mergeConfigParamsWithFallback(systemParams = {}, userParams = {}) {
-  const base = {
-    ...(systemParams && typeof systemParams === "object" ? systemParams : {}),
-  };
-  const userSource = userParams && typeof userParams === "object" ? userParams : {};
-  for (const [paramKey, rawValue] of Object.entries(userSource)) {
-    const normalizedKey = String(paramKey || "")
-      .trim()
-      .toUpperCase();
-    if (!normalizedKey) continue;
-    const normalizedValue = String(rawValue ?? "").trim();
-    if (!normalizedValue) continue;
-    base[normalizedKey] = normalizedValue;
-  }
-  return base;
 }
 
 function dedupeToolsByName(tools = []) {
@@ -273,29 +247,14 @@ async function main() {
     path.join(resolvedWorkspaceRoot, args.userId, "config-params.json"),
     {},
   );
-  const workspaceConfigParams = normalizeConfigParams(workspaceConfigParamsRaw);
-  const userConfigParams = normalizeConfigParams(userConfigParamsRaw);
-  const globalConfigParams =
-    rawGlobalConfig?.configParams && typeof rawGlobalConfig.configParams === "object"
-      ? rawGlobalConfig.configParams
-      : {};
-  const mergedConfigParams = mergeConfigParamsWithFallback(
-    mergeConfigParamsWithFallback(globalConfigParams, workspaceConfigParams),
-    userConfigParams,
-  );
-  const globalConfig = resolveConfigSecrets(rawGlobalConfig, {
-    configParams: mergedConfigParams,
-    env: process.env,
+  const workspaceConfigParams = normalizeConfigParamsDocument(workspaceConfigParamsRaw).values;
+  const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw).values;
+  const mergedConfigParams = mergeConfigParamLayers(workspaceConfigParams, userConfigParams);
+  const lookup = createConfigValueLookup(process.env, mergedConfigParams);
+  const globalConfig = resolveConfigTemplates(rawGlobalConfig, {
+    lookup,
   });
-  const userConfig = {
-    ...sanitizeUserConfig(
-      resolveConfigSecrets(rawUserConfig, {
-        configParams: mergedConfigParams,
-        env: process.env,
-      }),
-    ),
-    configParams: mergedConfigParams,
-  };
+  const userConfig = sanitizeUserConfig(resolveConfigTemplates(rawUserConfig, { lookup }));
   const agentContext = createMinimalAgentContext({
     userId: args.userId,
     globalConfig,

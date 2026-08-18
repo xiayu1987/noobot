@@ -3,6 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-export * from "./contracts/index.mjs";
+export * from "./contracts/index.js";
 export * from "./domain/index.js";
 export * from "./application/index.js";

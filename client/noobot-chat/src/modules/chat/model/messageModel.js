@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  resolveAttachmentAccessMeta,
-  resolveParsedResultAccessMeta,
-} from "../../../infrastructure/api/attachments/attachmentAccess.js";
+import { resolveAttachmentAccessMeta } from "../../../infrastructure/api/attachments/attachmentAccess.js";
 import { mergeAttachments } from "./dialogProcessChain.js";
 import { getMessageTransferAttachments, getMessageTransferEnvelopes } from "./transferEnvelopes.js";
 import {
@@ -36,65 +33,12 @@ function normalizeArray(value) {
 
 function getMessageAttachments(messageItem = {}) {
   const sourceAttachments = Array.isArray(messageItem?.attachments) ? messageItem.attachments : [];
-  const transferAttachments = getMessageTransferAttachments(messageItem).map((attachmentItem) =>
-    enrichTransferAttachmentScope(attachmentItem, messageItem),
-  );
-  const toolTimelineAttachments = selectCompletedToolArtifacts(messageItem).attachments.map(
-    (attachmentItem) => enrichTransferAttachmentScope(attachmentItem, messageItem),
-  );
+  const transferAttachments = getMessageTransferAttachments(messageItem);
+  const toolTimelineAttachments = selectCompletedToolArtifacts(messageItem).attachments;
   const derivedAttachments = mergeAttachments(transferAttachments, toolTimelineAttachments);
   return derivedAttachments.length
     ? mergeAttachments(derivedAttachments, sourceAttachments)
     : sourceAttachments;
-}
-
-function isPlainObject(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function enrichTransferAttachmentScope(attachmentItem = {}, messageItem = {}) {
-  const sessionId = getMessageSessionId(messageItem);
-  const turnScopeId = getMessageTurnScopeId(messageItem);
-  const dialogProcessId = getMessageDialogProcessId(messageItem);
-  const parentDialogProcessId = getMessageParentDialogProcessId(messageItem);
-  const role = getMessageRole(messageItem);
-  if (!sessionId && !turnScopeId && !dialogProcessId && !parentDialogProcessId && !role) {
-    return attachmentItem;
-  }
-  const owner = isPlainObject(attachmentItem?.owner) ? attachmentItem.owner : {};
-  const attachmentSource = String(
-    attachmentItem?.attachmentSource || attachmentItem?.identity?.attachmentSource || "",
-  )
-    .trim()
-    .toLowerCase();
-  const turnScope = isPlainObject(attachmentItem?.turnScope) ? attachmentItem.turnScope : {};
-  return {
-    ...attachmentItem,
-    ...(sessionId && !attachmentItem.sessionId && !attachmentItem.session_id ? { sessionId } : {}),
-    owner: {
-      ...(attachmentSource === "model" && !owner.type ? { type: "agent" } : {}),
-      ...(sessionId && !owner.sessionId && !owner.session_id ? { sessionId } : {}),
-      ...(turnScopeId && !owner.turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId && !owner.dialogProcessId && !owner.dialog_process_id
-        ? { dialogProcessId }
-        : {}),
-      ...(role && !owner.role ? { role } : {}),
-      ...owner,
-    },
-    turnScope: {
-      ...(sessionId && !turnScope.sessionId && !turnScope.session_id ? { sessionId } : {}),
-      ...(turnScopeId && !turnScope.turnScopeId ? { turnScopeId } : {}),
-      ...(dialogProcessId && !turnScope.dialogProcessId && !turnScope.dialog_process_id
-        ? { dialogProcessId }
-        : {}),
-      ...(parentDialogProcessId &&
-      !turnScope.parentDialogProcessId &&
-      !turnScope.parent_dialog_process_id
-        ? { parentDialogProcessId }
-        : {}),
-      ...turnScope,
-    },
-  };
 }
 
 const EXECUTION_LOG_DISPLAY_LIMIT = QUANTITY_THRESHOLDS.client.executionLogDisplayLimit;
@@ -106,56 +50,20 @@ function buildModelRunLabel(messageItem = {}) {
   return modelAlias || modelName || "";
 }
 
-function normalizeAttachment(
-  attachmentItem = {},
-  { userId = "", isImageMime = () => false, scopeSessionId = "", scopeAttachmentSource = "" } = {},
-) {
-  const scopedAttachment = {
-    ...attachmentItem,
-    ...(String(scopeSessionId || "").trim() && !String(attachmentItem?.sessionId || "").trim()
-      ? { sessionId: String(scopeSessionId).trim() }
-      : {}),
-    ...(String(scopeAttachmentSource || "").trim() &&
-    !String(attachmentItem?.attachmentSource || "").trim()
-      ? { attachmentSource: String(scopeAttachmentSource).trim() }
-      : {}),
-  };
-  const attachmentAccess = resolveAttachmentAccessMeta(scopedAttachment, { userId });
-  const parsedAccess = resolveParsedResultAccessMeta(scopedAttachment, { userId });
+function normalizeAttachment(attachmentItem = {}, { userId = "" } = {}) {
+  const attachmentAccess = resolveAttachmentAccessMeta(attachmentItem, { userId });
   const attachmentId = attachmentAccess.attachmentId;
   const mimeType = String(attachmentItem?.mimeType || "application/octet-stream");
   const sessionId = attachmentAccess.sessionId;
   const attachmentSource = attachmentAccess.attachmentSource;
-  const parsedResultSize = parsedAccess.size;
   return {
-    ...scopedAttachment,
+    ...attachmentItem,
     attachmentId,
     sessionId,
     attachmentSource,
     mimeType,
     url: attachmentAccess.url,
     previewUrl: String(attachmentItem?.previewUrl || ""),
-    parsedResult: parsedAccess.hasIdentity
-      ? {
-          ...parsedAccess.raw,
-          ...(parsedAccess.attachmentId ? { attachmentId: parsedAccess.attachmentId } : {}),
-          ...(parsedAccess.sessionId ? { sessionId: parsedAccess.sessionId } : {}),
-          ...(parsedAccess.attachmentSource
-            ? { attachmentSource: parsedAccess.attachmentSource }
-            : {}),
-          ...(parsedResultSize !== null && parsedResultSize > 0 ? { size: parsedResultSize } : {}),
-          ...(parsedAccess.path ? { path: parsedAccess.path } : {}),
-          ...(parsedAccess.relativePath ? { relativePath: parsedAccess.relativePath } : {}),
-        }
-      : scopedAttachment?.parsedResult,
-    parsedResultAttachmentId: parsedAccess.attachmentId,
-    parsedResultPath: parsedAccess.path,
-    parsedResultRelativePath: parsedAccess.relativePath,
-    parsedResultSessionId: parsedAccess.sessionId,
-    parsedResultAttachmentSource: parsedAccess.attachmentSource,
-    ...(parsedResultSize !== null && parsedResultSize > 0 ? { parsedResultSize } : {}),
-    parsedResultUrl: parsedAccess.url,
-    parsedResultName: parsedAccess.name,
   };
 }
 
@@ -352,13 +260,10 @@ function normalizeFoldedPresentationMessage(sourceMessage = {}, projectedMessage
   return normalizedMessage;
 }
 
-function buildViewMessage(messageItem = {}, { userId = "", isImageMime = () => false } = {}) {
+function buildViewMessage(messageItem = {}, { userId = "" } = {}) {
   const normalizedAttachments = getMessageAttachments(messageItem).map((attachmentItem) =>
     normalizeAttachment(attachmentItem, {
       userId,
-      isImageMime,
-      scopeSessionId: getMessageSessionId(messageItem),
-      scopeAttachmentSource: getMessageRole(messageItem) === "user" ? "user" : "model",
     }),
   );
   return createMessageModel({
