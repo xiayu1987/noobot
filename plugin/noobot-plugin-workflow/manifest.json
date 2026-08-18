@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "workflow",
   "name": "noobot-plugin-workflow",
-  "version": "4.1.9",
+  "version": "4.2.0",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -12,7 +12,10 @@
     "agent": {
       "hooks": {
         "registers": [
-          { "id": "workflow_after_agent_dispatch", "point": "bot.before_agent_dispatch" }
+          {
+            "id": "workflow_after_agent_dispatch",
+            "point": "bot.before_agent_dispatch"
+          }
         ],
         "emits": [
           "workflow.node_agent_execute"
@@ -29,7 +32,10 @@
     "service": {
       "hooks": {
         "registers": [
-          { "id": "workflow_after_session_delete", "point": "service.after_session_delete" }
+          {
+            "id": "workflow_after_session_delete",
+            "point": "service.after_session_delete"
+          }
         ],
         "emits": []
       },
