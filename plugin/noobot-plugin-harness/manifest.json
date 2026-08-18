@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "harness",
   "name": "noobot-plugin-harness",
-  "version": "4.1.9",
+  "version": "4.2.0",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -12,28 +12,94 @@
     "agent": {
       "hooks": {
         "registers": [
-          { "id": "noobot-plugin-harness.trace.agent.before_context_build", "point": "agent.before_context_build" },
-          { "id": "noobot-plugin-harness.trace.agent.after_context_build", "point": "agent.after_context_build" },
-          { "id": "noobot-plugin-harness.trace.agent.context_build_error", "point": "agent.context_build_error" },
-          { "id": "noobot-plugin-harness.trace.agent.before_turn", "point": "agent.before_turn" },
-          { "id": "noobot-plugin-harness.trace.agent.after_turn", "point": "agent.after_turn" },
-          { "id": "noobot-plugin-harness.trace.agent.on_abort", "point": "agent.on_abort" },
-          { "id": "noobot-plugin-harness.trace.agent.on_error", "point": "agent.on_error" },
-          { "id": "noobot-plugin-harness.trace.agent.before_llm_call", "point": "agent.before_llm_call" },
-          { "id": "noobot-plugin-harness.trace.agent.after_llm_call", "point": "agent.after_llm_call" },
-          { "id": "noobot-plugin-harness.trace.agent.llm_call_error", "point": "agent.llm_call_error" },
-          { "id": "noobot-plugin-harness.trace.agent.before_tool_calls", "point": "agent.before_tool_calls" },
-          { "id": "noobot-plugin-harness.trace.agent.after_tool_calls", "point": "agent.after_tool_calls" },
-          { "id": "noobot-plugin-harness.trace.agent.before_tool_call", "point": "agent.before_tool_call" },
-          { "id": "noobot-plugin-harness.trace.agent.after_tool_call", "point": "agent.after_tool_call" },
-          { "id": "noobot-plugin-harness.trace.agent.tool_call_error", "point": "agent.tool_call_error" },
-          { "id": "noobot-plugin-harness.trace.agent.before_state_commit", "point": "agent.before_state_commit" },
-          { "id": "noobot-plugin-harness.trace.agent.after_state_commit", "point": "agent.after_state_commit" },
-          { "id": "noobot-plugin-harness.trace.agent.before_final_output", "point": "agent.before_final_output" },
-          { "id": "noobot-plugin-harness.flush.agent.after_turn", "point": "agent.after_turn" },
-          { "id": "noobot-plugin-harness.flush.agent.on_abort", "point": "agent.on_abort" },
-          { "id": "noobot-plugin-harness.flush.agent.on_error", "point": "agent.on_error" },
-          { "id": "noobot-plugin-harness.flush.agent.context_build_error", "point": "agent.context_build_error" }
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_context_build",
+            "point": "agent.before_context_build"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_context_build",
+            "point": "agent.after_context_build"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.context_build_error",
+            "point": "agent.context_build_error"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_turn",
+            "point": "agent.before_turn"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_turn",
+            "point": "agent.after_turn"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.on_abort",
+            "point": "agent.on_abort"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.on_error",
+            "point": "agent.on_error"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_llm_call",
+            "point": "agent.before_llm_call"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_llm_call",
+            "point": "agent.after_llm_call"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.llm_call_error",
+            "point": "agent.llm_call_error"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_tool_calls",
+            "point": "agent.before_tool_calls"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_tool_calls",
+            "point": "agent.after_tool_calls"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_tool_call",
+            "point": "agent.before_tool_call"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_tool_call",
+            "point": "agent.after_tool_call"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.tool_call_error",
+            "point": "agent.tool_call_error"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_state_commit",
+            "point": "agent.before_state_commit"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.after_state_commit",
+            "point": "agent.after_state_commit"
+          },
+          {
+            "id": "noobot-plugin-harness.trace.agent.before_final_output",
+            "point": "agent.before_final_output"
+          },
+          {
+            "id": "noobot-plugin-harness.flush.agent.after_turn",
+            "point": "agent.after_turn"
+          },
+          {
+            "id": "noobot-plugin-harness.flush.agent.on_abort",
+            "point": "agent.on_abort"
+          },
+          {
+            "id": "noobot-plugin-harness.flush.agent.on_error",
+            "point": "agent.on_error"
+          },
+          {
+            "id": "noobot-plugin-harness.flush.agent.context_build_error",
+            "point": "agent.context_build_error"
+          }
         ],
         "emits": []
       }
@@ -41,7 +107,10 @@
     "service": {
       "hooks": {
         "registers": [
-          { "id": "noobot-plugin-harness.cleanup.service.after_session_delete", "point": "service.after_session_delete" }
+          {
+            "id": "noobot-plugin-harness.cleanup.service.after_session_delete",
+            "point": "service.after_session_delete"
+          }
         ],
         "emits": []
       }
