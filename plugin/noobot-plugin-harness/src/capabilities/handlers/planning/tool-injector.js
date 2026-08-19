@@ -19,6 +19,10 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 
@@ -38,6 +42,11 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ),
         ),
     }),
+    metadata: {
+      contextPolicy: createFlowControlContextPolicy(
+        FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+      ),
+    },
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);

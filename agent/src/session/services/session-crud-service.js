@@ -194,14 +194,26 @@ export class SessionCrudService {
 
   async getSessionThinkingDetail({ userId, sessionId, turnScopeId = "", dialogProcessId = "" }) {
     const normalizedSessionId = String(sessionId || "").trim();
-    const turn = await this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
-      turnScopeId,
-      dialogProcessId,
-    });
+    const [turn, displaySummary] = await Promise.all([
+      this.sessionRepo.readSessionTurn(userId, normalizedSessionId, {
+        turnScopeId,
+        dialogProcessId,
+      }),
+      this.sessionRepo.readSessionDisplaySummary(userId, normalizedSessionId),
+    ]);
+    const summaryMessage = (Array.isArray(displaySummary?.messages) ? displaySummary.messages : [])
+      .find((message = {}) => (
+        String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
+        (!dialogProcessId ||
+          String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim())
+      ));
+    const detailContentHash = String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim();
     return buildThinkingDetailPayload(
       {
         sessionId: normalizedSessionId,
-        revision: `session-aggregate:${turn?.aggregateVersion || 0}`,
+        revision: detailContentHash || (
+          turn ? `turn-journal:${turn.turnId}:${turn.committedBytes}` : ""
+        ),
         sessions: turn ? [{ sessionId: normalizedSessionId, rawMessages: turn.messages }] : [],
       },
       { turnScopeId, dialogProcessId },

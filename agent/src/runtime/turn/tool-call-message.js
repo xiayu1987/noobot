@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AIMessage } from "@langchain/core/messages";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 
 function clonePlainObjectWithoutToolCalls(value = null) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -16,25 +17,33 @@ function clonePlainObjectWithoutToolCalls(value = null) {
 
 export function formatToolCallsForStorage(toolCalls = []) {
   return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((call = {}) => ({
-      id: String(call?.id || ""),
-      type: "function",
-      function: {
-        name: String(call?.name || ""),
-        arguments: JSON.stringify(call?.args || {}),
-      },
-    }))
+    .map((call = {}) => {
+      const contextPolicy = resolveToolContextPolicy(call);
+      return {
+        id: String(call?.id || ""),
+        type: "function",
+        function: {
+          name: String(call?.name || ""),
+          arguments: JSON.stringify(call?.args || {}),
+        },
+        ...(contextPolicy ? { contextPolicy } : {}),
+      };
+    })
     .filter((call) => call.function.name);
 }
 
 export function formatToolCallsForLangChain(toolCalls = []) {
   return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((call = {}) => ({
-      id: String(call?.id || ""),
-      name: String(call?.name || ""),
-      args: call?.args || {},
-      type: "tool_call",
-    }))
+    .map((call = {}) => {
+      const contextPolicy = resolveToolContextPolicy(call);
+      return {
+        id: String(call?.id || ""),
+        name: String(call?.name || ""),
+        args: call?.args || {},
+        type: "tool_call",
+        ...(contextPolicy ? { contextPolicy } : {}),
+      };
+    })
     .filter((call) => call.name);
 }
 

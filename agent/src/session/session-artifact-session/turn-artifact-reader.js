@@ -32,6 +32,7 @@ async function materializeTurn(sessionDir, item) {
   return {
     turnId: item.turnId,
     artifactOrdinal: item.artifactOrdinal,
+    committedBytes: Math.max(0, Number(item.committedBytes) || 0),
     turnScopeId: item.turnScopeId,
     dialogProcessId: item.dialogProcessId,
     messages: materializeTurnJournal(records, item.messageOrder, summarySnapshots),
@@ -87,7 +88,6 @@ export async function readSessionTurn({
   if (!matches[0]) return null;
   return {
     sessionId: String(session.sessionId || "").trim(),
-    aggregateVersion: Math.max(0, Number(session.aggregateVersion) || 0),
     ...(await materializeTurn(sessionDir, matches[0])),
     turnId: String(matches[0].turnId || "").trim(),
     artifactOrdinal: Number(matches[0].artifactOrdinal || 0),

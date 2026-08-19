@@ -17,6 +17,10 @@ import {
   createTaskCheckReceipt,
   parseTaskCheckContent,
 } from "@noobot/context-protocol/task/check";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 export const TASK_CHECK_TOOL_NAME = TOOL_NAME.TASK_CHECK;
 
@@ -31,6 +35,11 @@ export function createTaskCheckTool(ctx = {}) {
       schema: z.object({
         checkContent: z.string().describe(tTool(runtime, "tools.task_check.fieldCheckContent")),
       }),
+      metadata: {
+        contextPolicy: createFlowControlContextPolicy(
+          FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+        ),
+      },
       func: async ({ checkContent }) => {
         const content = String(checkContent || "").trim();
         if (!content) {

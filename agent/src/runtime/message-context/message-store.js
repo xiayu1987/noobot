@@ -12,6 +12,7 @@ export function appendToolResultModelMessage({
   toolCallId = "",
   content = "",
   messageUid = "",
+  contextPolicy = null,
 } = {}) {
   if (!modelContext || typeof modelContext !== "object") {
     throw new TypeError("Tool result model message requires the authoritative modelContext");
@@ -27,6 +28,7 @@ export function appendToolResultModelMessage({
       tool_call_id: canonicalToolCallId,
       content: String(content || ""),
       additional_kwargs: { noobotMessageId: canonicalMessageUid },
+      ...(contextPolicy ? { contextPolicy } : {}),
     }),
     { block: "incremental" },
   );

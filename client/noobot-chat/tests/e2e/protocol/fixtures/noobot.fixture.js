@@ -26,6 +26,55 @@ import {
 
 const E2E_MODEL_ALIAS = "gpt_5_4";
 
+export async function installE2eModelPreferences(pageOrContext) {
+  await pageOrContext.addInitScript((modelAlias) => {
+    const setInitialValue = (key, value) => {
+      if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+    };
+    const scenarioModels = { full: modelAlias, programming: modelAlias, text: modelAlias };
+    const scenarioSelections = Object.fromEntries(
+      Object.entries(scenarioModels).map(([scenario, value]) => [
+        scenario,
+        { value, source: "user" },
+      ]),
+    );
+    const pluginModels = Object.fromEntries(
+      Object.keys(scenarioModels).map((scenario) => [
+        scenario,
+        {
+          harness: {
+            stepModels: {
+              planning: modelAlias,
+              guidance: modelAlias,
+              acceptance: modelAlias,
+              default: modelAlias,
+            },
+          },
+          workflow: { semanticModel: modelAlias },
+        },
+      ]),
+    );
+    setInitialValue("noobot_selected_model", modelAlias);
+    setInitialValue(
+      "noobot_selected_model_by_scenario",
+      JSON.stringify(scenarioModels),
+    );
+    setInitialValue(
+      "noobot_selected_model_selection_by_scenario_v2",
+      JSON.stringify(scenarioSelections),
+    );
+    setInitialValue(
+      "noobot_plugin_model_config_by_scenario_v2",
+      JSON.stringify(pluginModels),
+    );
+    setInitialValue("noobot_bot_scenario", "full");
+    setInitialValue(
+      "noobot_memory_model_by_scenario_v1",
+      JSON.stringify({ __default__: modelAlias, ...scenarioModels }),
+    );
+  }, E2E_MODEL_ALIAS);
+}
+
 async function writeJsonLines(filePath, records) {
   const body = records.map((record) => JSON.stringify(record)).join("\n");
   await fs.writeFile(filePath, body ? `${body}\n` : "", "utf8");
@@ -138,52 +187,7 @@ export const test = artifactTest.extend({
   noobot: async ({ page }, use, testInfo) => {
     const credentials = readE2eCredentials();
     const policy = modelObservationPolicyForTitle(testInfo.title);
-    await page.addInitScript((modelAlias) => {
-      const setInitialValue = (key, value) => {
-        if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
-      };
-      const scenarioModels = { full: modelAlias, programming: modelAlias, text: modelAlias };
-      const scenarioSelections = Object.fromEntries(
-        Object.entries(scenarioModels).map(([scenario, value]) => [
-          scenario,
-          { value, source: "user" },
-        ]),
-      );
-      const pluginModels = Object.fromEntries(
-        Object.keys(scenarioModels).map((scenario) => [
-          scenario,
-          {
-            harness: {
-              stepModels: {
-                planning: modelAlias,
-                guidance: modelAlias,
-                acceptance: modelAlias,
-                default: modelAlias,
-              },
-            },
-            workflow: { semanticModel: modelAlias },
-          },
-        ]),
-      );
-      setInitialValue("noobot_selected_model", modelAlias);
-      setInitialValue(
-        "noobot_selected_model_by_scenario",
-        JSON.stringify(scenarioModels),
-      );
-      setInitialValue(
-        "noobot_selected_model_selection_by_scenario_v2",
-        JSON.stringify(scenarioSelections),
-      );
-      setInitialValue(
-        "noobot_plugin_model_config_by_scenario_v2",
-        JSON.stringify(pluginModels),
-      );
-      setInitialValue("noobot_bot_scenario", "full");
-      setInitialValue(
-        "noobot_memory_model_by_scenario_v1",
-        JSON.stringify({ __default__: modelAlias, ...scenarioModels }),
-      );
-    }, E2E_MODEL_ALIAS);
+    await installE2eModelPreferences(page);
     await page.goto("/");
     const connectConfig = await connectThroughUi(page, credentials);
     const { apiKey: _apiKey, ...publicConnectConfig } = connectConfig || {};

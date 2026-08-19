@@ -6,8 +6,8 @@
 import { emitEvent } from "../../events/index.js";
 import { REQUEST_HELP_TOOL_NAME } from "../../tools/collaboration/request-help-tool.js";
 import { settleToolCallInTurn } from "../tool-execution/tool-runner.js";
-import { DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME } from "@noobot/context-protocol/policy/summary";
 import { FINAL_ANSWER_TOOL_NAME } from "../../tools/collaboration/final-answer-tool.js";
+import { TOOL_NAME } from "../../tools/constants/index.js";
 import { runAgentRuntimeHook } from "../../extensions/hooks/index.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { buildHookContext } from "../hooks/hook-context-builder.js";
@@ -75,7 +75,7 @@ export async function processToolResults({
   const toolCallResults = toolCallSettlements.map((settlement) => settlement.result);
 
   const hasTaskSummaryCall = toolCallResults.some(
-    (result) => String(result?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    (result) => String(result?.call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
   );
   const hasRequestHelpCall = toolCallResults.some(
     (result) => String(result?.call?.name || "").trim() === REQUEST_HELP_TOOL_NAME,

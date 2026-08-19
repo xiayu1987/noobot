@@ -5,8 +5,6 @@
  */
 
 import {
-  DEFAULT_TASK_CHECK_TOOL_NAME,
-  DEFAULT_TASK_SUMMARY_TOOL_NAME,
   markCurrentTurnArraySummarized,
   markCurrentTurnStoreSummarized,
   mirrorSummarizedMessagesById,
@@ -24,8 +22,6 @@ import { resolveMessageId } from "./message.js";
 export function applyTurnCompletionPolicy({
   modelMessages = [],
   turnMessageStore = null,
-  taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-  taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
   policyOptions = {},
 } = {}) {
   if (!turnMessageStore || typeof turnMessageStore.updateWhere !== "function") {
@@ -35,8 +31,6 @@ export function applyTurnCompletionPolicy({
   // UID decisions to provider objects instead of classifying a second snapshot.
   const markedMessageIds = new Set();
   const markedCount = markCurrentTurnStoreSummarized(turnMessageStore, {
-    taskSummaryToolName,
-    taskCheckToolName,
     policyOptions,
     onMarked: (message) => {
       const id = resolveMessageId(message);
@@ -53,14 +47,10 @@ export function applyTurnCompletionPolicy({
 export function projectTurnCompletionMessages(
   messages = [],
   {
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
   } = {},
 ) {
   return markCurrentTurnArraySummarized(messages, {
-    taskSummaryToolName,
-    taskCheckToolName,
     policyOptions,
   });
 }

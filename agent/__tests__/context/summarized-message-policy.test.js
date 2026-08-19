@@ -14,6 +14,12 @@ import {
   shouldMarkCurrentTurnSummarizedModelMessage,
 } from "@noobot/context-protocol/policy/summary";
 import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-turn-ledger.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
+
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
 test("markCurrentTurnArraySummarized preserves only latest task_summary call and result", () => {
   const oldAssistantMessage = {
@@ -27,6 +33,7 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
           name: "task_summary",
           arguments: "{}",
         },
+        contextPolicy: boundaryPolicy,
       },
     ],
   };
@@ -35,6 +42,7 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
     content: JSON.stringify({ toolName: "task_summary", ok: true }),
     tool_call_id: "call_task_summary_old",
     toolName: "task_summary",
+    contextPolicy: boundaryPolicy,
   };
   const latestAssistantMessage = {
     role: "assistant",
@@ -47,6 +55,7 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
           name: "task_summary",
           arguments: "{}",
         },
+        contextPolicy: boundaryPolicy,
       },
     ],
   };
@@ -55,6 +64,7 @@ test("markCurrentTurnArraySummarized preserves only latest task_summary call and
     content: JSON.stringify({ toolName: "task_summary", ok: true }),
     tool_call_id: "call_task_summary_latest",
     toolName: "task_summary",
+    contextPolicy: boundaryPolicy,
   };
 
   assert.equal(shouldMarkCurrentTurnSummarizedMessage(oldAssistantMessage), false);
@@ -133,7 +143,13 @@ test("summarization includes every restored incremental tool call and result wit
   const latestSummaryCall = {
     type: "ai",
     content: "",
-    tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }],
+    tool_calls: [{
+      id: "call_summary",
+      name: "task_summary",
+      args: {},
+      type: "tool_call",
+      contextPolicy: boundaryPolicy,
+    }],
     lc_kwargs: {},
   };
   const messages = [
@@ -164,6 +180,7 @@ test("LangChain AIMessage-like task_summary tool_call is not marked summarized",
         name: "task_summary",
         args: {},
         type: "tool_call",
+        contextPolicy: boundaryPolicy,
       },
     ],
   };
@@ -182,6 +199,7 @@ test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain tas
           name: "task_summary",
           args: {},
           type: "tool_call",
+          contextPolicy: boundaryPolicy,
         },
       ],
       lc_kwargs: {},
@@ -191,6 +209,7 @@ test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain tas
       content: JSON.stringify({ toolName: "task_summary", ok: true }),
       tool_call_id: "call_task_summary_old",
       toolName: "task_summary",
+      contextPolicy: boundaryPolicy,
       lc_kwargs: {},
     },
     {
@@ -202,6 +221,7 @@ test("markCurrentTurnModelMessagesSummarized preserves only latest LangChain tas
           name: "task_summary",
           args: {},
           type: "tool_call",
+          contextPolicy: boundaryPolicy,
         },
       ],
       lc_kwargs: {},
@@ -321,7 +341,13 @@ test("markCurrentTurnModelMessagesSummarized includes restored old injections an
     {
       type: "ai",
       content: "",
-      tool_calls: [{ id: "call_summary", name: "task_summary", args: {}, type: "tool_call" }],
+      tool_calls: [{
+        id: "call_summary",
+        name: "task_summary",
+        args: {},
+        type: "tool_call",
+        contextPolicy: boundaryPolicy,
+      }],
       lc_kwargs: {},
     },
   ];
@@ -369,7 +395,11 @@ test("model and store projections apply one summarization scope policy", () => {
     {
       role: "assistant",
       content: "",
-      tool_calls: [{ id: "call_summary", function: { name: "task_summary", arguments: "{}" } }],
+      tool_calls: [{
+        id: "call_summary",
+        function: { name: "task_summary", arguments: "{}" },
+        contextPolicy: boundaryPolicy,
+      }],
       lc_kwargs: {},
     },
     {
@@ -377,6 +407,7 @@ test("model and store projections apply one summarization scope policy", () => {
       content: JSON.stringify({ toolName: "task_summary", ok: true }),
       tool_call_id: "call_summary",
       toolName: "task_summary",
+      contextPolicy: boundaryPolicy,
       lc_kwargs: {},
     },
   ];

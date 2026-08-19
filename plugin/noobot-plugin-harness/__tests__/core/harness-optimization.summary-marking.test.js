@@ -23,6 +23,14 @@ import {
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 import { appendMessage, replaceMessageProjection } from "../../src/core/message-store.js";
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
+
+const checkpointEvidencePolicy = createFlowControlContextPolicy(
+  FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+);
 
 function stampRoundIdentity(messages = [], dialogProcessId = "dp-1", turnScopeId = "turn-1") {
   for (const message of messages) Object.assign(message, { dialogProcessId, turnScopeId });
@@ -467,6 +475,74 @@ test("guidance summary checkpoint requests only messages before checkpoint", asy
       oldToolResult.additional_kwargs.noobotMessageId,
     ]),
   );
+});
+
+test("guidance summary checkpoint retains classified Harness control-tool evidence", async () => {
+  const refinementCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{
+      id: "refinement",
+      function: { name: "request_plan_refinement" },
+      contextPolicy: checkpointEvidencePolicy,
+    }],
+  };
+  const refinementResult = {
+    role: "tool",
+    toolName: "request_plan_refinement",
+    tool_call_id: "refinement",
+    content: '{"ok":true,"tool":"request_plan_refinement"}',
+    contextPolicy: checkpointEvidencePolicy,
+  };
+  const businessCall = {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "business", function: { name: "execute_script" } }],
+  };
+  const businessResult = {
+    role: "tool",
+    toolName: "execute_script",
+    tool_call_id: "business",
+    content: '{"ok":true,"toolName":"execute_script"}',
+  };
+  const messages = [refinementCall, refinementResult, businessCall, businessResult];
+  stampRoundIdentity(messages);
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        execution: {
+          dialogProcessId: "dp-1",
+          controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+        },
+        payload: {
+          harness: {
+            state: { counters: {}, flags: {}, signals: {}, pending: {} },
+            taskChecklist: [],
+            acceptanceReports: [],
+            reviewReports: [],
+            planningRawOutputs: [],
+            logs: { planning: [], guidance: [], acceptance: [], review: [] },
+          },
+        },
+      },
+    },
+    {
+      messages,
+      activeTurnIdentity: { dialogProcessId: "dp-1", turnScopeId: "turn-1" },
+    },
+  );
+  const messageId = (message) => message.additional_kwargs.noobotMessageId;
+  ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds = messages.map(messageId);
+
+  await markGuidanceSummarizedMessages(ctx, {});
+
+  const instruction =
+    ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0];
+  assert.deepEqual(new Set(instruction.summarizedMessageIds), new Set([
+    messageId(businessCall),
+    messageId(businessResult),
+  ]));
+  assert.equal(Object.hasOwn(instruction, "retainedMessageIds"), false);
 });
 
 test("guidance summary checkpoint selects matching messageBlocks instead of flat block prefix", async () => {

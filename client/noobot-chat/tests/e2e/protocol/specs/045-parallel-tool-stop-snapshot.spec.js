@@ -104,7 +104,16 @@ test("@full PBE-045 并行工具停止时结果完整进入快照并由 Continue
   const snapshot = snapshots[0];
   assertSerializedModelMessageSnapshot(snapshot);
 
-  const stoppedRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
+  const stoppedRecords = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) => {
+      const events = toolEventsForTurn(records, sent.identity.turnScopeId).filter(
+        (record) => String(record.data?.tool || "").trim() === "execute_script",
+      );
+      return events.filter((record) => record.event === "tool_call_end").length === 4;
+    },
+  );
   const toolEvents = toolEventsForTurn(stoppedRecords, sent.identity.turnScopeId).filter(
     (record) => String(record.data?.tool || "").trim() === "execute_script",
   );

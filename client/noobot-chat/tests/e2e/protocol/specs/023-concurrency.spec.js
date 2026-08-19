@@ -3,7 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { test, expect } from "../fixtures/noobot.fixture.js";
+import {
+  test,
+  expect,
+  installE2eModelPreferences,
+} from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import { editLatestUserMessage } from "../helpers/browser-actions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
@@ -13,24 +17,36 @@ test("@full PBE-023 Session version 冲突", async ({ noobot, protocolCapture, b
   await sendAndStop({ page: noobot.page, capture: protocolCapture, sessionId: noobot.sessionId,
     prompt: uniquePrompt(testInfo, "version conflict baseline") });
   const staleContext = await browser.newContext();
+  await installE2eModelPreferences(staleContext);
   const stalePage = await staleContext.newPage();
   protocolCapture.bindPage(stalePage);
   try {
     await stalePage.goto(`/?session=${encodeURIComponent(noobot.sessionId)}`);
     await connectThroughUi(stalePage, readE2eCredentials());
     await expect(stalePage.locator(".monotonic-chip-btn.is-primary").last()).toBeVisible();
-    await staleContext.setOffline(true);
-    await editLatestUserMessage(noobot.page, uniquePrompt(testInfo, "authoritative replacement"));
+    const replacementResponses = [];
+    for (const page of [noobot.page, stalePage]) {
+      page.on("response", (response) => {
+        if (/replace-turn/i.test(response.url())) {
+          replacementResponses.push({ page, status: response.status() });
+        }
+      });
+    }
+    await Promise.all([
+      editLatestUserMessage(noobot.page, uniquePrompt(testInfo, "first concurrent replacement")),
+      editLatestUserMessage(stalePage, uniquePrompt(testInfo, "second concurrent replacement")),
+    ]);
+    await expect.poll(() => replacementResponses.map(({ status }) => status).sort()).toEqual([
+      200,
+      409,
+    ]);
     await waitForCommand(protocolCapture, noobot.sessionId, "turn.resend");
-    await noobot.page.locator(".stop-float-btn").click();
-    await expect(noobot.page.locator(".stop-float-btn")).toBeHidden();
-    await staleContext.setOffline(false);
-    const staleResponses = [];
-    stalePage.on("response", (response) => {
-      if (/replace-turn/i.test(response.url())) staleResponses.push(response.status());
-    });
-    await editLatestUserMessage(stalePage, uniquePrompt(testInfo, "stale replacement"));
-    await expect.poll(() => staleResponses.at(-1) || 0).toBe(409);
+    const successfulPage = replacementResponses.find(({ status }) => status === 200)?.page;
+    const stopButton = successfulPage?.locator(".stop-float-btn");
+    if (stopButton && await stopButton.isVisible()) {
+      await stopButton.click();
+      await expect(stopButton).toBeHidden();
+    }
     const resends = commandsForSession(protocolCapture, noobot.sessionId).filter((item) => item.commandType === "turn.resend");
     expect(resends).toHaveLength(1);
   } finally {

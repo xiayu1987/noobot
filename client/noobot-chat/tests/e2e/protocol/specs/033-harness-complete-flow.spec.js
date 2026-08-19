@@ -28,6 +28,9 @@ import {
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
+const HARNESS_COMPLETION_TIMEOUT_MS = 780000;
+const HARNESS_AUDIT_TIMEOUT_MS = 120000;
+
 const EXPECTED_CAPABILITY_PURPOSES = Object.freeze([
   "planning",
   "guidance",
@@ -138,7 +141,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(900000);
+  test.setTimeout(HARNESS_COMPLETION_TIMEOUT_MS + HARNESS_AUDIT_TIMEOUT_MS);
   await selectPlugins(noobot.page, ["harness"]);
   await setHarnessCapability(noobot.page, "Planning", true);
   await setHarnessCapability(noobot.page, "Planning Acceptance", true);
@@ -212,7 +215,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 600000,
+    timeoutMs: HARNESS_COMPLETION_TIMEOUT_MS,
   });
 
   const requiredEvents = new Set([

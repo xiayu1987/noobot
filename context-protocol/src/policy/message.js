@@ -10,10 +10,10 @@ import {
   resolveContextMessageFlags,
   resolveContextMessageId,
   resolveContextMessageRole,
-  recoverContextTaskSummaryToolResult,
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
+import { recoverContextTaskSummaryToolResult } from "../task/summary-context.js";
 
 function text(value) {
   return String(value || "").trim();

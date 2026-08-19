@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import {
+  resolveContextMessageDialogProcessId,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "@noobot/context-protocol/message/codec";
 import { createHash } from "node:crypto";
 import { isTerminalTurnLifecycleState } from "@noobot/authoritative-state/domain";
 
@@ -45,18 +49,6 @@ function checkpointConflict(message = "", code = "TURN_SUMMARY_CHECKPOINT_CONFLI
   return error;
 }
 
-function resolveToolCalls(message = {}) {
-  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
-  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
-  return [];
-}
-
-function resolveToolCallId(message = {}) {
-  return String(
-    message?.tool_call_id || message?.toolCallId || message?.lc_kwargs?.tool_call_id || "",
-  ).trim();
-}
-
 function toolPairKey(message = {}, callId = "") {
   return [
     resolveContextMessageDialogProcessId(message),
@@ -72,11 +64,11 @@ function assertSummarizedToolPairClosure(messages = [], summarizedMessageUids = 
   for (const message of messages) {
     const messageUid = String(message?.messageUid || "").trim();
     if (!messageUid) continue;
-    for (const call of resolveToolCalls(message)) {
-      const callId = String(call?.id || call?.tool_call_id || "").trim();
+    for (const call of resolveContextToolCalls(message)) {
+      const callId = resolveContextToolCallId(call);
       if (callId) callOwnerById.set(toolPairKey(message, callId), messageUid);
     }
-    const resultCallId = resolveToolCallId(message);
+    const resultCallId = resolveContextToolCallId(message);
     if (!resultCallId) continue;
     const pairKey = toolPairKey(message, resultCallId);
     const resultUids = resultUidsByCallId.get(pairKey) || [];

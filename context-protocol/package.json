@@ -36,7 +36,9 @@
     "./policy/window": "./src/policy/window.js",
     "./task/check": "./src/task/check.js",
     "./task/check-receipt": "./src/task/check-receipt.js",
-    "./task/summary": "./src/task/summary.js"
+    "./task/summary": "./src/task/summary.js",
+    "./task/summary-context": "./src/task/summary-context.js",
+    "./tool/context-policy": "./src/tool/context-policy.js"
   },
   "scripts": {
     "check": "node -e \"import('./src/index.js').then(()=>console.log('ok')).catch(error=>{console.error(error);process.exit(1)})\"",

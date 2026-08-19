@@ -22,6 +22,10 @@ import {
   MAIN_FLOW_CONTROL_REASON,
   requestMainFlowFinalNoToolsTurn,
 } from "../../runtime/main-flow-control.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
 
@@ -63,6 +67,11 @@ export function createTaskSummaryTool(ctx = {}) {
     schema: z.object({
       summaryContent: z.string().describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
     }),
+    metadata: {
+      contextPolicy: createFlowControlContextPolicy(
+        FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
+      ),
+    },
     func: async ({ summaryContent }) => {
       const summaryText = String(summaryContent || "").trim();
       if (!summaryText) {

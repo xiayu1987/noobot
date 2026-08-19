@@ -201,8 +201,9 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   );
   const checkpointEvent = checkpointEvents.at(-1);
   expect(checkpointEvent).toBeTruthy();
-  const preservedTaskCheckMessageUids = checkpointEvent.data?.preservedTaskCheckMessageUids || [];
-  expect(preservedTaskCheckMessageUids).toHaveLength(2);
+  const preservedCheckpointEvidenceMessageUids =
+    checkpointEvent.data?.preservedCheckpointEvidenceMessageUids || [];
+  expect(preservedCheckpointEvidenceMessageUids).toHaveLength(2);
   const preservedCheck = checks.find(({ message, call }) => {
     const result = firstMessages.find(
       (candidate) =>
@@ -210,8 +211,8 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
         String(candidate.tool_call_id || "").trim() === toolCallId(call),
     );
     return (
-      preservedTaskCheckMessageUids.includes(message.messageUid) &&
-      preservedTaskCheckMessageUids.includes(result?.messageUid)
+      preservedCheckpointEvidenceMessageUids.includes(message.messageUid) &&
+      preservedCheckpointEvidenceMessageUids.includes(result?.messageUid)
     );
   });
   expect(preservedCheck).toBeTruthy();
@@ -220,8 +221,20 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
       message.role === "tool" &&
       String(message.tool_call_id || "").trim() === toolCallId(preservedCheck.call),
   );
-  expect(preservedCheck.message.summarized).toBe(false);
-  expect(preservedCheckResult?.summarized).toBe(false);
+  expect(preservedCheckResult).toBeTruthy();
+  const postCheckpointInvocations = firstInvocations.filter(
+    (invocation) => Number(invocation.data?.context?.summaryCheckpointRevision) >= 1,
+  );
+  expect(postCheckpointInvocations.length).toBeGreaterThan(0);
+  for (const messageUid of preservedCheckpointEvidenceMessageUids) {
+    expect(
+      postCheckpointInvocations.some((invocation) =>
+        invocation.data.messages.evidence.some(
+          (message) => message.messageId === messageUid,
+        ),
+      ),
+    ).toBe(true);
+  }
   const summarizedTaskCheckPrompts = taskCheckPrompts.filter(
     (message) => message.summarized === true,
   );

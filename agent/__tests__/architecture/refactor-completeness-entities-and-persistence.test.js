@@ -11,6 +11,10 @@ import {
   normalizeSessionTreeEntity,
   normalizeSelectedConnectors
 } from '../../src/session/entities.js';
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from '@noobot/context-protocol/tool/context-policy';
 
 describe('2. 字段对齐测试', () => {
   describe('normalizeMessageEntity 字段对齐', () => {
@@ -59,6 +63,27 @@ describe('2. 字段对齐测试', () => {
       const raw = { role: 'assistant', type: 'tool_call', content: '' };
       const normalized = normalizeMessageEntity(raw);
       assert.ok(Array.isArray(normalized.tool_calls), 'tool_call 类型应保证 tool_calls 为数组');
+    });
+
+    it('流程控制分类快照在调用和结果实体中保持一致', () => {
+      const contextPolicy = createFlowControlContextPolicy(
+        FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+      );
+      const call = normalizeMessageEntity({
+        role: 'assistant',
+        type: 'tool_call',
+        tool_calls: [{ id: 'call-1', function: { name: 'control' }, contextPolicy }],
+      });
+      const result = normalizeMessageEntity({
+        role: 'tool',
+        type: 'tool_result',
+        tool_call_id: 'call-1',
+        toolName: 'control',
+        contextPolicy,
+      });
+
+      assert.deepEqual(call.tool_calls[0].contextPolicy, contextPolicy);
+      assert.deepEqual(result.contextPolicy, contextPolicy);
     });
 
     it('summarized 字段默认应为 false', () => {
