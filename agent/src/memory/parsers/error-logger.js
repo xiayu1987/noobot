@@ -13,16 +13,14 @@ export async function appendParseErrorLog({
   rawContent = "",
   candidate = "",
   error = "",
-  } = {}) {
+} = {}) {
   try {
     if (!basePath) return;
     const lessonsDir = storage.experienceDir(basePath);
     await storage.ensureDir(lessonsDir);
     const logPath = path.join(lessonsDir, "_parse-error.log");
     const rawText =
-      typeof rawContent === "string"
-        ? rawContent
-        : JSON.stringify(rawContent ?? "", null, 2);
+      typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent ?? "", null, 2);
     const block = [
       `[${new Date().toISOString()}] stage=${String(stage || "").trim() || "unknown"}`,
       `error=${String(error || "").trim() || "unknown_parse_error"}`,
@@ -33,6 +31,7 @@ export async function appendParseErrorLog({
       "",
     ].join("\n");
     await storage.appendText(logPath, block);
-  } catch {
+  } catch (logError) {
+    console.warn("[memory] Failed to persist parser diagnostic:", logError);
   }
 }

@@ -49,13 +49,19 @@ function resetSshState(key = "") {
   if (!normalizedKey) return;
   const state = sshShellStates.get(normalizedKey);
   if (!state) return;
+  const failures = [];
   try {
     state?.stream?.end?.();
-  } catch {}
+  } catch (error) {
+    failures.push(error);
+  }
   try {
     state?.client?.end?.();
-  } catch {}
+  } catch (error) {
+    failures.push(error);
+  }
   sshShellStates.delete(normalizedKey);
+  if (failures.length) throw new AggregateError(failures, "SSH channel cleanup failed");
 }
 
 async function ensureSshShellState({

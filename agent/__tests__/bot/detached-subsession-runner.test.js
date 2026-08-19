@@ -393,11 +393,13 @@ test("detached sub-session transfers canonical parent attachments into child own
       },
     ],
     systemMessageFactory: ({ attachments }) => [
-      JSON.stringify(attachments.map(({ attachmentId, sessionId, attachmentSource }) => ({
-        attachmentId,
-        sessionId,
-        attachmentSource,
-      }))),
+      JSON.stringify(
+        attachments.map(({ attachmentId, sessionId, attachmentSource }) => ({
+          attachmentId,
+          sessionId,
+          attachmentSource,
+        })),
+      ),
     ],
     strategy: createCompleteStrategy(),
   });
@@ -812,8 +814,8 @@ test("createDetachedSubSessionRunner aborts before execution when signal is alre
   assert.equal(runCalled, false);
 });
 
-test("createDetachedSubSessionRunner falls back to empty userConfig when loading config fails", async () => {
-  const { calls, deps } = createDeps({
+test("createDetachedSubSessionRunner propagates user config loading failures", async () => {
+  const { deps } = createDeps({
     configService: {
       async loadUserConfig() {
         throw new Error("config unavailable");
@@ -821,12 +823,15 @@ test("createDetachedSubSessionRunner falls back to empty userConfig when loading
     },
   });
   const runner = createDetachedSubSessionRunner(deps);
-  await runner({
-    parentExecutionScope: createParentExecutionScope(),
-    parentContext: createParentContext(),
-    strategy: createCompleteStrategy(),
-  });
-  assert.deepEqual(calls.prepareRunConfigPayload.userConfig, {});
+  await assert.rejects(
+    () =>
+      runner({
+        parentExecutionScope: createParentExecutionScope(),
+        parentContext: createParentContext(),
+        strategy: createCompleteStrategy(),
+      }),
+    /config unavailable/,
+  );
 });
 
 test("createScopedSubSessionEventListener injects child session coordinates", () => {

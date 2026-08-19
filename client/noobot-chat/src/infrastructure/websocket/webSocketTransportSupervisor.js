@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { closeWebSocket } from "./closeWebSocket.js";
 
 export const WEB_SOCKET_TRANSPORT_PHASE = Object.freeze({
   IDLE: "idle",
@@ -92,9 +93,10 @@ export function createWebSocketTransportSupervisor({
     authenticationRecoveryAttempted = false;
     serverInstanceId = "";
     lastFailureReason = "";
-    phase = nextSocket?.readyState === WebSocket.OPEN
-      ? WEB_SOCKET_TRANSPORT_PHASE.OPEN
-      : WEB_SOCKET_TRANSPORT_PHASE.CONNECTING;
+    phase =
+      nextSocket?.readyState === WebSocket.OPEN
+        ? WEB_SOCKET_TRANSPORT_PHASE.OPEN
+        : WEB_SOCKET_TRANSPORT_PHASE.CONNECTING;
     return { socket: nextSocket, previousSocket, previousOwner, transportOwner, generation };
   }
 
@@ -112,13 +114,13 @@ export function createWebSocketTransportSupervisor({
     const attempt = createAttempt(resolvedUrl, resolvedOwner);
     if (!attempt?.socket) return attempt;
     if (attempt.previousSocket && attempt.previousSocket !== attempt.socket) {
-      try { attempt.previousSocket.close?.(1000, "transport_identity_changed"); } catch {}
+      closeWebSocket(attempt.previousSocket, 1000, "transport_identity_changed");
     }
     return {
       ...attempt,
       credentialsChanged: Boolean(attempt.previousSocket),
       identityChanged: Boolean(
-        attempt.previousSocket && attempt.previousOwner !== attempt.transportOwner
+        attempt.previousSocket && attempt.previousOwner !== attempt.transportOwner,
       ),
     };
   }
@@ -178,25 +180,32 @@ export function createWebSocketTransportSupervisor({
   }
 
   function scheduleReconnect(callback, { immediate = false } = {}) {
-    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED || reconnectTimer) return false;
+    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED || reconnectTimer)
+      return false;
     if (immediate) {
       callback?.();
       return true;
     }
     const baseDelay = Math.max(0, Number(reconnectBaseDelayMs || 0));
     const maxDelay = Math.max(baseDelay, Number(reconnectMaxDelayMs || baseDelay));
-    const delayMs = Math.min(maxDelay, baseDelay * (2 ** Math.max(0, reconnectAttempt - 1)));
+    const delayMs = Math.min(maxDelay, baseDelay * 2 ** Math.max(0, reconnectAttempt - 1));
     const scheduledGeneration = generation;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      if (generation !== scheduledGeneration || isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED) return;
+      if (
+        generation !== scheduledGeneration ||
+        isTerminal() ||
+        phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED
+      )
+        return;
       callback?.();
     }, delayMs);
     return true;
   }
 
   function recover({ reconnect = null, suspendOnAuthenticationFailure = false } = {}) {
-    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED) return Promise.resolve(false);
+    if (isTerminal() || phase === WEB_SOCKET_TRANSPORT_PHASE.SUSPENDED)
+      return Promise.resolve(false);
     if (typeof refreshAuthentication !== "function") {
       return Promise.resolve(scheduleReconnect(reconnect));
     }
@@ -238,7 +247,7 @@ export function createWebSocketTransportSupervisor({
     connectionUrl = "";
     transportOwner = "";
     phase = WEB_SOCKET_TRANSPORT_PHASE.DISPOSED;
-    try { currentSocket?.close?.(code, reason); } catch {}
+    closeWebSocket(currentSocket, code, reason);
   }
 
   function status() {

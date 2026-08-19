@@ -11,10 +11,7 @@ import { randomUUID } from "node:crypto";
 import { config } from "../shared/config.js";
 import { ChannelManager } from "../channel/channel-manager.js";
 import { WsRouter } from "../websocket/ws-router.js";
-import {
-  AGENT_PROXY_CLOSE_REASON,
-  AGENT_PROXY_ERROR,
-} from "../shared/constants.js";
+import { AGENT_PROXY_CLOSE_REASON, AGENT_PROXY_ERROR } from "../shared/constants.js";
 import { TURN_LIFECYCLE_TRANSPORT_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import { AGENT_TRANSPORT_EVENT } from "@noobot/agent-transport-protocol";
 import {
@@ -97,43 +94,58 @@ function getContentType(filePath) {
 }
 
 function isFrontendBypassPath(pathname = "") {
-  return pathname === "/health"
-    || pathname === "/internal/connect"
-    || pathname === "/api/internal/connect"
-    || pathname === "/agent-proxy/ws"
-    || pathname === "/api/agent-proxy/ws"
-    || pathname === "/chat/ws"
-    || pathname === "/api/chat/ws"
-    || pathname === "/logs/ws"
-    || pathname === "/api/logs/ws"
-    || pathname.startsWith("/api/")
-    || pathname === "/ide"
-    || pathname.startsWith("/ide/");
+  return (
+    pathname === "/health" ||
+    pathname === "/internal/connect" ||
+    pathname === "/api/internal/connect" ||
+    pathname === "/agent-proxy/ws" ||
+    pathname === "/api/agent-proxy/ws" ||
+    pathname === "/chat/ws" ||
+    pathname === "/api/chat/ws" ||
+    pathname === "/logs/ws" ||
+    pathname === "/api/logs/ws" ||
+    pathname.startsWith("/api/") ||
+    pathname === "/ide" ||
+    pathname.startsWith("/ide/")
+  );
 }
 
 function tryServeFrontend(request, response, pathname) {
   if (!shouldServeFrontend || isFrontendBypassPath(pathname)) return false;
-  if (!(["GET", "HEAD"].includes(String(request?.method || "GET").toUpperCase()))) return false;
+  if (!["GET", "HEAD"].includes(String(request?.method || "GET").toUpperCase())) return false;
   let decodedPathname = "/";
   try {
     decodedPathname = decodeURIComponent(pathname || "/");
   } catch {
-    response.writeHead(400, decorateProxyResponseHeaders({ "content-type": "text/plain; charset=utf-8" }));
+    response.writeHead(
+      400,
+      decorateProxyResponseHeaders({ "content-type": "text/plain; charset=utf-8" }),
+    );
     response.end("Bad Request");
     return true;
   }
   const relativePath = decodedPathname === "/" ? "index.html" : decodedPathname.replace(/^\/+/, "");
   const candidatePath = path.resolve(frontendRoot, relativePath);
   const normalizedRoot = path.resolve(frontendRoot);
-  if (!candidatePath.startsWith(`${normalizedRoot}${path.sep}`) && candidatePath !== normalizedRoot) {
-    response.writeHead(403, decorateProxyResponseHeaders({ "content-type": "text/plain; charset=utf-8" }));
+  if (
+    !candidatePath.startsWith(`${normalizedRoot}${path.sep}`) &&
+    candidatePath !== normalizedRoot
+  ) {
+    response.writeHead(
+      403,
+      decorateProxyResponseHeaders({ "content-type": "text/plain; charset=utf-8" }),
+    );
     response.end("Forbidden");
     return true;
   }
-  const filePath = fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()
-    ? candidatePath
-    : frontendIndexPath;
-  response.writeHead(200, decorateProxyResponseHeaders({ "content-type": getContentType(filePath) }));
+  const filePath =
+    fs.existsSync(candidatePath) && fs.statSync(candidatePath).isFile()
+      ? candidatePath
+      : frontendIndexPath;
+  response.writeHead(
+    200,
+    decorateProxyResponseHeaders({ "content-type": getContentType(filePath) }),
+  );
   if (String(request?.method || "GET").toUpperCase() === "HEAD") {
     response.end();
     return true;
@@ -152,7 +164,9 @@ function isLogProxyPath(pathname = "") {
 }
 
 function agentProxyLogDiagnostic(message, data = {}) {
-  const raw = String(process.env.AGENT_PROXY_SESSION_LOG_DIAGNOSTIC || "true").trim().toLowerCase();
+  const raw = String(process.env.AGENT_PROXY_SESSION_LOG_DIAGNOSTIC || "true")
+    .trim()
+    .toLowerCase();
   if (["0", "false", "no", "off"].includes(raw)) return;
   void writeRoutedRuntimeEvent({
     source: "agent-proxy",
@@ -187,7 +201,10 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
       });
     }
   } catch {
-    agentProxyLogDiagnostic("proxy upgrade failed", { reason: "invalid-url", url: request?.url || "" });
+    agentProxyLogDiagnostic("proxy upgrade failed", {
+      reason: "invalid-url",
+      url: request?.url || "",
+    });
     socket.destroy();
     return;
   }
@@ -220,7 +237,9 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
   upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
     upgradeEstablished = true;
     if (isLogProxyPath(parseRequestPathname(request))) {
-      agentProxyLogDiagnostic("proxy upgrade accepted", { statusCode: upstreamResponse.statusCode || 101 });
+      agentProxyLogDiagnostic("proxy upgrade accepted", {
+        statusCode: upstreamResponse.statusCode || 101,
+      });
     }
     bridgeDuplexStreams({
       upstream: upstreamSocket,
@@ -270,7 +289,10 @@ function proxyUpgradeToHttpUpstream(request, socket, head) {
   });
   upstreamRequest.on("error", (error) => {
     if (isLogProxyPath(parseRequestPathname(request))) {
-      agentProxyLogDiagnostic("proxy upgrade error", { pathname: upstreamUrl?.pathname || "", error: error?.message || String(error) });
+      agentProxyLogDiagnostic("proxy upgrade error", {
+        pathname: upstreamUrl?.pathname || "",
+        error: error?.message || String(error),
+      });
     }
     socket.destroy();
   });
@@ -313,10 +335,7 @@ const httpServer = http.createServer((request, response) => {
   }
 
   if (pathname === "/health") {
-    response.writeHead(
-      200,
-      decorateProxyResponseHeaders({ "Content-Type": "application/json" }),
-    );
+    response.writeHead(200, decorateProxyResponseHeaders({ "Content-Type": "application/json" }));
     response.end(
       JSON.stringify({
         ok: true,
@@ -376,7 +395,11 @@ httpServer.on("upgrade", (request, socket, head) => {
   }
 
   if (isLogProxyPath(pathname)) {
-    agentProxyLogDiagnostic("log path hit", { pathname, clientIp, hasApiKey: Boolean(parseRequestQuery(request).apiKey) });
+    agentProxyLogDiagnostic("log path hit", {
+      pathname,
+      clientIp,
+      hasApiKey: Boolean(parseRequestQuery(request).apiKey),
+    });
     logAgentProxyEvent(parseRequestQuery(request).apiKey, {
       category: "agent-proxy",
       event: "agentProxy.logs.upgrade",
@@ -436,7 +459,10 @@ websocketServer.on("connection", (socket, request) => {
     channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.MISSING_APIKEY);
     try {
       socket.close(1008, AGENT_PROXY_CLOSE_REASON.MISSING_APIKEY);
-    } catch {
+    } catch (error) {
+      agentProxyLogDiagnostic("missing api key socket close failed", {
+        error: error?.message || String(error),
+      });
     }
     downstreamConnections.finalize(socket, "missing_apikey");
     return;
@@ -453,7 +479,10 @@ websocketServer.on("connection", (socket, request) => {
       category: "agent-proxy",
       event: "agentProxy.chat.closed",
       sessionId: "agent-proxy",
-      data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
+      data: {
+        socketId: socket.__agentProxySocketId,
+        channels: [...(socket.__agentProxyChannelKeys || [])],
+      },
     });
     downstreamConnections.finalize(socket, "close");
   });
@@ -464,7 +493,10 @@ websocketServer.on("connection", (socket, request) => {
       level: "warn",
       event: "agentProxy.chat.error",
       sessionId: "agent-proxy",
-      data: { socketId: socket.__agentProxySocketId, channels: [...(socket.__agentProxyChannelKeys || [])] },
+      data: {
+        socketId: socket.__agentProxySocketId,
+        channels: [...(socket.__agentProxyChannelKeys || [])],
+      },
     });
     downstreamConnections.close(socket, {
       code: 1011,

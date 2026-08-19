@@ -253,7 +253,9 @@ class SubscriberBroadcastMethods {
       this.clearPendingLifecycleDeliveries(targetSocket);
       try {
         targetSocket.close(1011, "lifecycle_receipt_timeout");
-      } catch {}
+      } catch (error) {
+        console.warn("[agent-proxy] lifecycle timeout socket close failed", error);
+      }
       return false;
     }
     if (TERMINAL_TURN_EVENTS.has(delivery.eventType)) {
@@ -470,7 +472,9 @@ class SubscriberBroadcastMethods {
     if (Number(targetSocket.bufferedAmount || 0) > config.wsMaxBufferedBytes) {
       try {
         targetSocket.close(1008, "slow_consumer");
-      } catch {}
+      } catch (error) {
+        console.warn("[agent-proxy] slow consumer socket close failed", error);
+      }
       return { result: "skipped", reason: "backpressure_limit" };
     }
     try {
@@ -501,7 +505,8 @@ class SubscriberBroadcastMethods {
       event: AGENT_TRANSPORT_EVENT.ERROR,
       data: createAgentTransportError({
         code: "AGENT_PROXY_ERROR",
-        message: String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
+        message:
+          String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
         identity: {
           sessionId: targetSocket?.__agentProxySessionId,
           turnScopeId: targetSocket?.__agentProxyTurnScopeId,

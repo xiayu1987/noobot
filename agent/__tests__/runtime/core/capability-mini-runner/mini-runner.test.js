@@ -18,6 +18,7 @@ import {
 } from "@noobot/model-protocol";
 import { bindAssistantMessageEventStream } from "../../../../src/events/message-event-stream.js";
 import { createCanonicalMessageEventSessionManager } from "../../../helpers/canonical-message-event-session-manager.js";
+import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 
 const modelSpec = Object.freeze({
   alias: "test",
@@ -98,6 +99,7 @@ function createContext({ modelPort, tools = [], eventListener = null } = {}) {
 
 function createInvoker(options = {}) {
   return createAgentCapabilityModelInvoker({
+    configSnapshot: createConfigSnapshot(),
     resolveDefaultModelSpecFn: () => modelSpec,
     resolveModelSpecByNameFn: () => modelSpec,
     ...options,
@@ -151,9 +153,8 @@ test("guidance analysis publishes only the canonical Message Event content field
     ctx,
   });
 
-  const payload = committedEvents.find(
-    (event = {}) => event?.event === "authority_event_committed",
-  )?.data?.envelope?.payload;
+  const payload = committedEvents.find((event = {}) => event?.event === "authority_event_committed")
+    ?.data?.envelope?.payload;
   assert.equal(payload?.eventType, "thinking");
   assert.equal(payload?.text, "guidance result");
   assert.equal(Object.hasOwn(payload, "output"), false);
@@ -225,6 +226,7 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
   let resolvedName = "";
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
+    configSnapshot: createConfigSnapshot(),
     resolveDefaultModelSpecFn: () => {
       throw new Error("default model must not be selected");
     },

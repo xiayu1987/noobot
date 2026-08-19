@@ -218,40 +218,47 @@ function readInstalledTagName(baseInstallDir) {
   }
 }
 
+async function inspectExistingInstallation(binaryPath) {
+  try {
+    await chmod(binaryPath, 0o755);
+    await ensureVsdaWebFallback(installDir);
+    if (!checkUpdate) {
+      console.log(`[openvscode] already available: ${binaryPath}`);
+      return { done: true, release: null, asset: null };
+    }
+    try {
+      const release = await resolveRelease();
+      const installedTagName = readInstalledTagName(installDir);
+      if (installedTagName && installedTagName === String(release?.tag_name || "").trim()) {
+        console.log(`[openvscode] already up to date: ${installedTagName}`);
+        return { done: true, release, asset: null };
+      }
+      const asset = pickAsset(release);
+      console.log(
+        `[openvscode] update available: ${installedTagName || "unknown"} -> ${release?.tag_name || "unknown"}`,
+      );
+      return { done: false, release, asset };
+    } catch (error) {
+      if (!skipUpdateCheckIfUnreachable) throw error;
+      console.warn(`[openvscode] update check skipped (unreachable): ${error?.message || error}`);
+      console.log(`[openvscode] already available: ${binaryPath}`);
+      return { done: true, release: null, asset: null };
+    }
+  } catch (error) {
+    console.warn(`[openvscode] update check skipped: ${error?.message || error}`);
+    return { done: false, release: null, asset: null };
+  }
+}
+
 async function main() {
   const binaryPath = path.join(installDir, "bin/openvscode-server");
   let release = null;
   let asset = null;
   if (!force) {
-    try {
-      await chmod(binaryPath, 0o755);
-      await ensureVsdaWebFallback(installDir);
-      if (!checkUpdate) {
-        console.log(`[openvscode] already available: ${binaryPath}`);
-        return;
-      }
-      try {
-        release = await resolveRelease();
-      } catch (error) {
-        if (skipUpdateCheckIfUnreachable) {
-          console.warn(
-            `[openvscode] update check skipped (unreachable): ${error?.message || error}`,
-          );
-          console.log(`[openvscode] already available: ${binaryPath}`);
-          return;
-        }
-        throw error;
-      }
-      const installedTagName = readInstalledTagName(installDir);
-      if (installedTagName && installedTagName === String(release?.tag_name || "").trim()) {
-        console.log(`[openvscode] already up to date: ${installedTagName}`);
-        return;
-      }
-      asset = pickAsset(release);
-      console.log(
-        `[openvscode] update available: ${installedTagName || "unknown"} -> ${release?.tag_name || "unknown"}`,
-      );
-    } catch {}
+    const existing = await inspectExistingInstallation(binaryPath);
+    if (existing.done) return;
+    release = existing.release;
+    asset = existing.asset;
   }
 
   if (!release) release = await resolveRelease();

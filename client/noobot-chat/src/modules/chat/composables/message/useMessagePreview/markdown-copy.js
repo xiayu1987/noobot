@@ -20,12 +20,20 @@ export function buildNoCopyableSet(translate, key) {
 }
 
 export function matchesAnyText(messageText = "", textSet) {
-  return [...textSet].filter(Boolean).some((candidateText) =>
-    String(messageText || "").includes(candidateText),
-  );
+  return [...textSet]
+    .filter(Boolean)
+    .some((candidateText) => String(messageText || "").includes(candidateText));
 }
 
-export async function handleCopyMarkdown({ textContent, renderMarkdown, translate, notify, noCopyableContentTexts, noCopyableTextTexts, rich = true }) {
+export async function handleCopyMarkdown({
+  textContent,
+  renderMarkdown,
+  translate,
+  notify,
+  noCopyableContentTexts,
+  noCopyableTextTexts,
+  rich = true,
+}) {
   try {
     if (rich) {
       const rawHtmlContent = String(textContent || renderMarkdown(textContent) || "").trim();
@@ -36,7 +44,9 @@ export async function handleCopyMarkdown({ textContent, renderMarkdown, translat
       notify({ type: "success", message: translate("message.copiedMarkdown") });
     }
   } catch (error) {
-    const errorMessage = String(error?.message || translate(rich ? "message.copyFormatFailed" : "message.copyTextFailed"));
+    const errorMessage = String(
+      error?.message || translate(rich ? "message.copyFormatFailed" : "message.copyTextFailed"),
+    );
     const targetSet = rich ? noCopyableContentTexts : noCopyableTextTexts;
     if (matchesAnyText(errorMessage, targetSet)) {
       notify({ type: "warning", message: errorMessage });

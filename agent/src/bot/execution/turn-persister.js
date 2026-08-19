@@ -314,7 +314,15 @@ export class SessionTurnPersister {
           persistenceContext,
         });
       }
-    } catch {}
+    } catch (error) {
+      emitEvent(eventListener, "session_turn_diagnostic_persistence_failed", {
+        sessionId,
+        parentSessionId: normalizedParentSessionId,
+        dialogProcessId: normalizeDialogProcessId(dialogProcessId),
+        turnScopeId: normalizedTurnScopeId,
+        error: error?.message || String(error || ""),
+      });
+    }
     const turnPayload = {
       userId,
       sessionId,

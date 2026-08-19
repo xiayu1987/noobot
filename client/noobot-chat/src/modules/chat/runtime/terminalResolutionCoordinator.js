@@ -39,8 +39,11 @@ function compareVersion(left = {}, right = {}) {
   const leftCommit = clean(left.completionCommitId);
   const rightCommit = clean(right.completionCommitId);
   if (leftCommit && rightCommit && leftCommit !== rightCommit) return null;
-  if (left.summaryVersion != null && right.summaryVersion != null &&
-      left.summaryVersion !== right.summaryVersion) {
+  if (
+    left.summaryVersion != null &&
+    right.summaryVersion != null &&
+    left.summaryVersion !== right.summaryVersion
+  ) {
     return left.summaryVersion > right.summaryVersion ? 1 : -1;
   }
   const comparisons = [];
@@ -55,8 +58,12 @@ function compareVersion(left = {}, right = {}) {
 }
 
 function hasVersion(input = {}) {
-  return input.revision != null || input.sequence != null ||
-    input.summaryVersion != null || Boolean(clean(input.completionCommitId));
+  return (
+    input.revision != null ||
+    input.sequence != null ||
+    input.summaryVersion != null ||
+    Boolean(clean(input.completionCommitId))
+  );
 }
 
 function maxVersion(left = {}, right = {}) {
@@ -67,8 +74,10 @@ function maxVersion(left = {}, right = {}) {
 }
 
 function isTerminalNotification(event = {}) {
-  return event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
-    TERMINAL_NOTIFICATION_TYPES.has(clean(event.eventType || event.raw?.eventType).toLowerCase());
+  return (
+    event?.type === SESSION_RUN_EVENT.BACKEND_TURN_LIFECYCLE &&
+    TERMINAL_NOTIFICATION_TYPES.has(clean(event.eventType || event.raw?.eventType).toLowerCase())
+  );
 }
 
 export function createTerminalResolutionCoordinator({
@@ -84,7 +93,11 @@ export function createTerminalResolutionCoordinator({
   let requestSequence = 0;
   let disposed = false;
   const trace = (event, details) => {
-    try { onTrace(event, details); } catch {}
+    try {
+      onTrace(event, details);
+    } catch (error) {
+      console.warn(`[noobot:terminal-resolution] trace failed for ${event}`, error);
+    }
   };
 
   const getEntry = (key) => {
@@ -114,11 +127,19 @@ export function createTerminalResolutionCoordinator({
     const session = clean(sessionId);
     const scope = clean(turnScopeId);
     if (!session || !scope) {
-      trace("stateMachine.terminal.skipped", { sessionId: session, turnScopeId: scope, reason: "missing_turn_identity" });
+      trace("stateMachine.terminal.skipped", {
+        sessionId: session,
+        turnScopeId: scope,
+        reason: "missing_turn_identity",
+      });
       return Promise.resolve({ applied: false, reason: "missing_turn_identity" });
     }
     if (disposed) {
-      trace("stateMachine.terminal.skipped", { sessionId: session, turnScopeId: scope, reason: "terminal_resolution_disposed" });
+      trace("stateMachine.terminal.skipped", {
+        sessionId: session,
+        turnScopeId: scope,
+        reason: "terminal_resolution_disposed",
+      });
       return Promise.resolve({ applied: false, reason: "terminal_resolution_disposed" });
     }
     const key = keyOf(userId, session, scope);
@@ -127,8 +148,11 @@ export function createTerminalResolutionCoordinator({
     entry.turnScopeId = scope;
     const requestedVersion = versionOf(options);
     onDiscovery({
-      sessionId: session, turnScopeId: scope, source: options.source || "unknown",
-      revision: Number(requestedVersion.revision || 0), sequence: Number(requestedVersion.sequence || 0),
+      sessionId: session,
+      turnScopeId: scope,
+      source: options.source || "unknown",
+      revision: Number(requestedVersion.revision || 0),
+      sequence: Number(requestedVersion.sequence || 0),
       summaryVersion: Number(requestedVersion.summaryVersion || 0),
     });
     entry.targetVersion = maxVersion(entry.targetVersion, requestedVersion);
@@ -141,7 +165,12 @@ export function createTerminalResolutionCoordinator({
     }
 
     if (entry.cooldownUntil > Date.now()) {
-      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "cooldown", reason: entry.cooldownResult?.reason || "" });
+      trace("stateMachine.terminal.cache", {
+        sessionId: session,
+        turnScopeId: scope,
+        decision: "cooldown",
+        reason: entry.cooldownResult?.reason || "",
+      });
       return Promise.resolve(entry.cooldownResult);
     }
     if (entry.cooldownUntil) {
@@ -151,7 +180,11 @@ export function createTerminalResolutionCoordinator({
 
     const resolvedComparison = compareVersion(requestedVersion, entry.resolvedVersion || {});
     if (entry.resolvedResult && resolvedComparison !== null && resolvedComparison <= 0) {
-      if (entry.resolvedResult.applied !== true && entry.resolvedResult.retryable === true && entry.resolvedResponse) {
+      if (
+        entry.resolvedResult.applied !== true &&
+        entry.resolvedResult.retryable === true &&
+        entry.resolvedResponse
+      ) {
         const reapplied = applyTurnTerminalResolution?.(entry.resolvedResponse) || {
           applied: false,
           reason: "resolution_apply_unavailable",
@@ -159,43 +192,75 @@ export function createTerminalResolutionCoordinator({
         entry.resolvedResult = reapplied;
         return Promise.resolve(reapplied);
       }
-      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "resolved", applied: entry.resolvedResult?.applied === true, reason: entry.resolvedResult?.reason || "" });
+      trace("stateMachine.terminal.cache", {
+        sessionId: session,
+        turnScopeId: scope,
+        decision: "resolved",
+        applied: entry.resolvedResult?.applied === true,
+        reason: entry.resolvedResult?.reason || "",
+      });
       return Promise.resolve(entry.resolvedResult);
     }
     const exhaustedComparison = compareVersion(requestedVersion, entry.exhaustedVersion || {});
     if (entry.exhaustedResult && exhaustedComparison !== null && exhaustedComparison <= 0) {
-      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "exhausted", reason: entry.exhaustedResult?.reason || "" });
+      trace("stateMachine.terminal.cache", {
+        sessionId: session,
+        turnScopeId: scope,
+        decision: "exhausted",
+        reason: entry.exhaustedResult?.reason || "",
+      });
       return Promise.resolve(entry.exhaustedResult);
     }
     if (entry.inFlight) {
-      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "in_flight" });
+      trace("stateMachine.terminal.cache", {
+        sessionId: session,
+        turnScopeId: scope,
+        decision: "in_flight",
+      });
       return entry.inFlight;
     }
     if (entry.timer) {
-      trace("stateMachine.terminal.cache", { sessionId: session, turnScopeId: scope, decision: "retry_timer" });
+      trace("stateMachine.terminal.cache", {
+        sessionId: session,
+        turnScopeId: scope,
+        decision: "retry_timer",
+      });
       return entry.timer.promise;
     }
 
     const retry = Number(options.retry || 0);
-    const commandId = clean(options.commandId) ||
+    const commandId =
+      clean(options.commandId) ||
       `terminal-resolution:${Date.now().toString(36)}:${(++requestSequence).toString(36)}`;
     const generation = ++entry.generation;
 
     trace("stateMachine.terminal.fetch.start", {
-      sessionId: session, turnScopeId: scope, source: options.source || "unknown", retry,
-      revision: Number(requestedVersion.revision || 0), sequence: Number(requestedVersion.sequence || 0),
+      sessionId: session,
+      turnScopeId: scope,
+      source: options.source || "unknown",
+      retry,
+      revision: Number(requestedVersion.revision || 0),
+      sequence: Number(requestedVersion.sequence || 0),
     });
     const request = Promise.resolve()
-      .then(() => resolveTurnTerminalStateApi({
-        userId: valueOf(userId),
-        sessionId: session,
-        turnScopeId: scope,
-        commandId,
-      }, { fetcher }))
+      .then(() =>
+        resolveTurnTerminalStateApi(
+          {
+            userId: valueOf(userId),
+            sessionId: session,
+            turnScopeId: scope,
+            commandId,
+          },
+          { fetcher },
+        ),
+      )
       .then((response) => {
         trace("stateMachine.terminal.fetch.result", {
-          sessionId: session, turnScopeId: scope, resolved: response?.resolved === true,
-          retryable: response?.retryable === true, reason: response?.reason || "",
+          sessionId: session,
+          turnScopeId: scope,
+          resolved: response?.resolved === true,
+          retryable: response?.retryable === true,
+          reason: response?.reason || "",
           revision: Number(response?.turn?.revision || response?.revision || 0),
           sequence: Number(response?.turn?.sequence || response?.sequence || 0),
           terminalState: response?.turn?.state || "",
@@ -208,8 +273,11 @@ export function createTerminalResolutionCoordinator({
             reason: "resolution_apply_unavailable",
           };
           trace("stateMachine.terminal.apply", {
-            sessionId: session, turnScopeId: scope, applied: result?.applied === true,
-            retryable: result?.retryable === true, reason: result?.reason || "",
+            sessionId: session,
+            turnScopeId: scope,
+            applied: result?.applied === true,
+            retryable: result?.retryable === true,
+            reason: result?.reason || "",
             state: result?.turn?.displayState || result?.turn?.state || "",
             terminal: result?.turn?.terminal || null,
             projectionApplied: result?.subSessionEffect?.runtimeProjection?.applied === true,
@@ -243,24 +311,35 @@ export function createTerminalResolutionCoordinator({
         onUnresolved({ sessionId: session, turnScopeId: scope, response, retry });
         if (response?.retryable === true && retry < maxRetries && !disposed) {
           const delay = Math.max(0, Number(response.retryAfterMs || 250));
-          trace("stateMachine.terminal.retry", { sessionId: session, turnScopeId: scope, retry: retry + 1, delayMs: delay });
+          trace("stateMachine.terminal.retry", {
+            sessionId: session,
+            turnScopeId: scope,
+            retry: retry + 1,
+            delayMs: delay,
+          });
           let timerId;
           const retryPromise = new Promise((resolveRetry) => {
             timerId = setTimeout(() => {
               if (entry.timer?.id === timerId) entry.timer = null;
               if (entry.inFlight === request) entry.inFlight = null;
-              resolveRetry(resolve(session, scope, {
-                retry: retry + 1,
-                commandId,
-                source: options.source || "terminal_resolution_retry",
-                ...entry.targetVersion,
-              }));
+              resolveRetry(
+                resolve(session, scope, {
+                  retry: retry + 1,
+                  commandId,
+                  source: options.source || "terminal_resolution_retry",
+                  ...entry.targetVersion,
+                }),
+              );
             }, delay);
           });
           entry.timer = { id: timerId, promise: retryPromise };
           return retryPromise;
         }
-        const result = { applied: false, reason: response?.reason || "terminal_unresolved", response };
+        const result = {
+          applied: false,
+          reason: response?.reason || "terminal_unresolved",
+          response,
+        };
         if (response?.retryable !== true || retry >= maxRetries) {
           entry.exhaustedVersion = { ...entry.targetVersion };
           entry.exhaustedResult = result;
@@ -272,14 +351,18 @@ export function createTerminalResolutionCoordinator({
         const retryAfterMs = Math.max(250, Number(error?.retryAfterMs || 0));
         const result = {
           applied: false,
-          reason: status === 429 ? "terminal_resolution_rate_limited" : "terminal_resolution_failed",
+          reason:
+            status === 429 ? "terminal_resolution_rate_limited" : "terminal_resolution_failed",
           retryable: false,
           retryAfterMs,
           error,
         };
         trace("stateMachine.terminal.fetch.failed", {
-          sessionId: session, turnScopeId: scope, status,
-          reason: result.reason, retryAfterMs,
+          sessionId: session,
+          turnScopeId: scope,
+          status,
+          reason: result.reason,
+          retryAfterMs,
         });
         if (generation === entry.generation) {
           entry.cooldownUntil = Date.now() + (status === 429 ? retryAfterMs : 1000);

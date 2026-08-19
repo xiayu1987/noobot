@@ -6,7 +6,12 @@
 import fs from "node:fs";
 import os from "node:os";
 import { createRequire } from "node:module";
-import { clientPathDelimiter, clientPathDirname, joinClientPath, normalizeClientPath } from "../../path-resolver.js";
+import {
+  clientPathDelimiter,
+  clientPathDirname,
+  joinClientPath,
+  normalizeClientPath,
+} from "../../path-resolver.js";
 
 function normalizeString(value = "") {
   return String(value || "").trim();
@@ -27,13 +32,17 @@ function uniqueTruthyStrings(values = []) {
 function pathExists(filePath = "", exists = fs.existsSync) {
   try {
     return Boolean(filePath) && exists(filePath);
-  } catch {
+  } catch (error) {
+    console.warn("[desktop] Electron userData path unavailable", error);
     return false;
   }
 }
 
 function splitPathEnv(pathValue = "", platform = process.platform) {
-  return normalizeString(pathValue).split(clientPathDelimiter(platform)).map(normalizeString).filter(Boolean);
+  return normalizeString(pathValue)
+    .split(clientPathDelimiter(platform))
+    .map(normalizeString)
+    .filter(Boolean);
 }
 
 function resolveExecutableName(command = "", platform = process.platform) {
@@ -43,11 +52,10 @@ function resolveExecutableName(command = "", platform = process.platform) {
   return `${normalized}.exe`;
 }
 
-function findExecutableInPath(command = "", {
-  env = process.env,
-  platform = process.platform,
-  exists = fs.existsSync,
-} = {}) {
+function findExecutableInPath(
+  command = "",
+  { env = process.env, platform = process.platform, exists = fs.existsSync } = {},
+) {
   const executableName = resolveExecutableName(command, platform);
   if (!executableName) return "";
   for (const directory of splitPathEnv(env.PATH || "", platform)) {
@@ -60,7 +68,8 @@ function findExecutableInPath(command = "", {
 function getUserDataPath(app = null) {
   try {
     if (app?.isReady?.()) return app.getPath("userData");
-  } catch {
+  } catch (error) {
+    console.warn("[desktop] Electron userData path unavailable", error);
   }
   return process.env.HOME || os.tmpdir();
 }
@@ -71,10 +80,7 @@ function getManagedDependenciesRoot({ app = null } = {}) {
 
 function getManagedBinDirs({ app = null } = {}) {
   const root = getManagedDependenciesRoot({ app });
-  return [
-    joinClientPath(root, "ffmpeg", "bin"),
-    joinClientPath(root, "nodejs", "bin"),
-  ];
+  return [joinClientPath(root, "ffmpeg", "bin"), joinClientPath(root, "nodejs", "bin")];
 }
 
 function resolveFirstExistingPath(candidates = [], exists = fs.existsSync) {
@@ -93,7 +99,9 @@ function resolvePlaywrightChromiumExecutable({
   if (configured) return configured;
   try {
     const requireFromBackend = createRequire(joinClientPath(backendRoot, "package.json"));
-    const executablePath = normalizeString(requireFromBackend("playwright").chromium.executablePath());
+    const executablePath = normalizeString(
+      requireFromBackend("playwright").chromium.executablePath(),
+    );
     return pathExists(executablePath, exists) ? executablePath : "";
   } catch {
     return "";
@@ -116,8 +124,22 @@ function resolveLibreOfficeExecutable({
     const macCandidates = [
       "/Applications/LibreOffice.app/Contents/MacOS/soffice",
       "/Applications/LibreOffice.app/Contents/MacOS/soffice.bin",
-      joinClientPath(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice"),
-      joinClientPath(env.HOME || "", "Applications", "LibreOffice.app", "Contents", "MacOS", "soffice.bin"),
+      joinClientPath(
+        env.HOME || "",
+        "Applications",
+        "LibreOffice.app",
+        "Contents",
+        "MacOS",
+        "soffice",
+      ),
+      joinClientPath(
+        env.HOME || "",
+        "Applications",
+        "LibreOffice.app",
+        "Contents",
+        "MacOS",
+        "soffice.bin",
+      ),
     ];
     return (
       resolveFirstExistingPath([...configuredCandidates, ...macCandidates], exists) ||
@@ -130,9 +152,7 @@ function resolveLibreOfficeExecutable({
   if (platform === "win32") {
     const programFiles = env.PROGRAMFILES || "C:\\Program Files";
     const programFilesX86 =
-      env["PROGRAMFILES(X86)"] ||
-      env.PROGRAMFILES_X86 ||
-      "C:\\Program Files (x86)";
+      env["PROGRAMFILES(X86)"] || env.PROGRAMFILES_X86 || "C:\\Program Files (x86)";
     const winCandidates = [
       joinClientPath(programFiles, "LibreOffice", "program", "soffice.exe"),
       joinClientPath(programFiles, "LibreOffice", "program", "libreoffice.exe"),
@@ -162,11 +182,10 @@ function resolveLibreOfficeExecutable({
   );
 }
 
-function resolveManagedBinaryPath(command = "", {
-  app = null,
-  platform = process.platform,
-  exists = fs.existsSync,
-} = {}) {
+function resolveManagedBinaryPath(
+  command = "",
+  { app = null, platform = process.platform, exists = fs.existsSync } = {},
+) {
   if (platform !== "darwin") return "";
   const executableName = resolveExecutableName(command, platform);
   if (!executableName) return "";
@@ -177,12 +196,10 @@ function resolveManagedBinaryPath(command = "", {
   return "";
 }
 
-function resolveBinaryPath(command = "", {
-  app = null,
-  env = process.env,
-  platform = process.platform,
-  exists = fs.existsSync,
-} = {}) {
+function resolveBinaryPath(
+  command = "",
+  { app = null, env = process.env, platform = process.platform, exists = fs.existsSync } = {},
+) {
   const envKey = `NOOBOT_${normalizeString(command).toUpperCase()}_PATH`;
   const configuredPath = normalizeString(env[envKey]);
   if (configuredPath) return configuredPath;
@@ -199,8 +216,12 @@ function pathCompareKey(filePath = "", platform = process.platform) {
 
 function prependPathDirs(pathValue = "", dirs = [], platform = process.platform) {
   const existingParts = splitPathEnv(pathValue, platform);
-  const existingKeys = new Set(existingParts.map((directory) => pathCompareKey(directory, platform)));
-  const prependParts = uniqueTruthyStrings(dirs).filter((directory) => !existingKeys.has(pathCompareKey(directory, platform)));
+  const existingKeys = new Set(
+    existingParts.map((directory) => pathCompareKey(directory, platform)),
+  );
+  const prependParts = uniqueTruthyStrings(dirs).filter(
+    (directory) => !existingKeys.has(pathCompareKey(directory, platform)),
+  );
   return [...prependParts, ...existingParts].join(clientPathDelimiter(platform));
 }
 
@@ -268,12 +289,23 @@ function buildDependencySourceItem({
   };
 }
 
-function summarizeDarwinDependencySources({ runtimeEnv = {}, env = process.env, platform = "darwin", app = null, exists = fs.existsSync } = {}) {
+function summarizeDarwinDependencySources({
+  runtimeEnv = {},
+  env = process.env,
+  platform = "darwin",
+  app = null,
+  exists = fs.existsSync,
+} = {}) {
   const libreOfficeCustom = hasCustomDependencySource(env, "NOOBOT_LIBREOFFICE_MAC_DMG_URL");
   const ffmpegCustom = hasCustomDependencySource(env, "NOOBOT_FFMPEG_MAC_URL");
   const nodeCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_MAC_URL");
   const nodeVersionCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_MAC_VERSION");
-  const nodePath = resolveBinaryPath("node", { app, env: { ...env, PATH: runtimeEnv.PATH || env.PATH || "" }, platform, exists });
+  const nodePath = resolveBinaryPath("node", {
+    app,
+    env: { ...env, PATH: runtimeEnv.PATH || env.PATH || "" },
+    platform,
+    exists,
+  });
   return [
     buildDependencySourceItem({
       key: "playwright",
@@ -319,7 +351,12 @@ function summarizeDarwinDependencySources({ runtimeEnv = {}, env = process.env, 
   ];
 }
 
-function summarizeWin32DependencySources({ runtimeEnv = {}, env = process.env, platform = "win32", exists = fs.existsSync } = {}) {
+function summarizeWin32DependencySources({
+  runtimeEnv = {},
+  env = process.env,
+  platform = "win32",
+  exists = fs.existsSync,
+} = {}) {
   const libreOfficeCustom = hasCustomDependencySource(env, "NOOBOT_LIBREOFFICE_WIN_URL");
   const ffmpegCustom = hasCustomDependencySource(env, "NOOBOT_FFMPEG_WIN_URL");
   const nodeCustom = hasCustomDependencySource(env, "NOOBOT_NODEJS_WIN_URL");
@@ -382,13 +419,24 @@ export function summarizeDependencySources({
   if (normalizedPlatform === "darwin") {
     return {
       platform: normalizedPlatform,
-      dependencies: summarizeDarwinDependencySources({ runtimeEnv, env, platform: normalizedPlatform, app, exists }),
+      dependencies: summarizeDarwinDependencySources({
+        runtimeEnv,
+        env,
+        platform: normalizedPlatform,
+        app,
+        exists,
+      }),
     };
   }
   if (normalizedPlatform === "win32") {
     return {
       platform: normalizedPlatform,
-      dependencies: summarizeWin32DependencySources({ runtimeEnv, env, platform: normalizedPlatform, exists }),
+      dependencies: summarizeWin32DependencySources({
+        runtimeEnv,
+        env,
+        platform: normalizedPlatform,
+        exists,
+      }),
     };
   }
   return {
@@ -407,6 +455,8 @@ export function summarizeDependencyRuntimeEnv(runtimeEnv = {}) {
     ffprobePath: runtimeEnv.NOOBOT_FFPROBE_PATH || "",
     libreOfficePath: runtimeEnv.LIBRE_OFFICE_EXE || "",
     playwrightChromiumPath: runtimeEnv.NOOBOT_PLAYWRIGHT_CHROMIUM_PATH || "",
-    pathPrefix: splitPathEnv(runtimeEnv.PATH || "").slice(0, 5).join(" | "),
+    pathPrefix: splitPathEnv(runtimeEnv.PATH || "")
+      .slice(0, 5)
+      .join(" | "),
   };
 }

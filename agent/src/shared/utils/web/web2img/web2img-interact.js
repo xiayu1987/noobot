@@ -13,16 +13,15 @@ async function waitPageReady(page, runtimeDefaults) {
   await page.waitForLoadState("load", {
     timeout: pageCfg.loadTimeoutMs,
   });
-  await page.waitForFunction(
-    () => document.readyState === "complete",
-    null,
-    { timeout: pageCfg.readyStateTimeoutMs },
-  );
+  await page.waitForFunction(() => document.readyState === "complete", null, {
+    timeout: pageCfg.readyStateTimeoutMs,
+  });
   try {
     await page.waitForLoadState("networkidle", {
       timeout: pageCfg.networkIdleTimeoutMs,
     });
-  } catch {
+  } catch (error) {
+    if (error?.name !== "TimeoutError") throw error;
   }
   await page.waitForTimeout(pageCfg.readyPostWaitMs);
 }
@@ -40,10 +39,12 @@ async function tryExpandContent(page, patterns, runtimeDefaults) {
             await targetElement.click({ timeout: expandCfg.clickTimeoutMs });
             await page.waitForTimeout(expandCfg.postClickWaitMs);
           }
-        } catch {
+        } catch (error) {
+          console.debug(`[web2img] Expand candidate failed for ${kw}:`, error);
         }
       }
-    } catch {
+    } catch (error) {
+      console.debug(`[web2img] Expand selector failed for ${kw}:`, error);
     }
   }
 }
@@ -92,10 +93,4 @@ async function preparePageForCapture(page, expandPatterns, runtimeDefaults) {
   await waitTextStable(page, runtimeDefaults);
 }
 
-export {
-  waitPageReady,
-  tryExpandContent,
-  autoScroll,
-  waitTextStable,
-  preparePageForCapture,
-};
+export { waitPageReady, tryExpandContent, autoScroll, waitTextStable, preparePageForCapture };

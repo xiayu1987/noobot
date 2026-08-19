@@ -82,7 +82,9 @@ export function emitHarnessHookProgress(ctx = {}, event = "", data = {}) {
       version: PLUGIN_VERSION,
       ...(data && typeof data === "object" ? data : {}),
     });
-  } catch {}
+  } catch (error) {
+    console.warn(`[harness] Failed to emit hook progress ${event}:`, error);
+  }
 }
 
 export function resolveHookManager(api = {}) {

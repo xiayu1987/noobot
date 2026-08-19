@@ -3,36 +3,52 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { isIP } from 'node:net';
+import { isIP } from "node:net";
 
 const SENSITIVE_FIELD_PATTERNS = [
-  'password', 'token', 'secret', 'authorization', 'cookie', 'credential',
-  'api_key', 'ssh_key', 'connection_string', 'dsn', 'jdbc',
+  "password",
+  "token",
+  "secret",
+  "authorization",
+  "cookie",
+  "credential",
+  "api_key",
+  "ssh_key",
+  "connection_string",
+  "dsn",
+  "jdbc",
 ];
-const REDACTED_SENSITIVE_FIELD_VALUE = '[Redacted]';
+const REDACTED_SENSITIVE_FIELD_VALUE = "[Redacted]";
 
-function normalizeSensitiveFieldText(input = '') {
-  return String(input || '').trim().toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+function normalizeSensitiveFieldText(input = "") {
+  return String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
-function canonicalSensitiveFieldText(input = '') {
-  return normalizeSensitiveFieldText(input).replace(/[_-]+/g, '');
+function canonicalSensitiveFieldText(input = "") {
+  return normalizeSensitiveFieldText(input).replace(/[_-]+/g, "");
 }
 const normalizedPatterns = SENSITIVE_FIELD_PATTERNS.map(normalizeSensitiveFieldText);
 const canonicalPatterns = SENSITIVE_FIELD_PATTERNS.map(canonicalSensitiveFieldText);
-function matchesSensitiveFieldPattern(input = '') {
+function matchesSensitiveFieldPattern(input = "") {
   const normalized = normalizeSensitiveFieldText(input);
   const canonical = canonicalSensitiveFieldText(input);
   if (!normalized && !canonical) return false;
-  return normalizedPatterns.some((pattern, index) =>
-    normalized.includes(pattern) || canonical.includes(canonicalPatterns[index]));
+  return normalizedPatterns.some(
+    (pattern, index) =>
+      normalized.includes(pattern) || canonical.includes(canonicalPatterns[index]),
+  );
 }
 function sanitizeSensitiveFields(value, depth = 0, options = {}) {
   const maxDepth = Number.isInteger(options.maxDepth) ? options.maxDepth : 32;
   const replacement = options.replacement || REDACTED_SENSITIVE_FIELD_VALUE;
   if (depth > maxDepth) return options.maxDepthValue === undefined ? value : options.maxDepthValue;
-  if (Array.isArray(value)) return value.map((item) => sanitizeSensitiveFields(item, depth + 1, options));
-  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value))
+    return value.map((item) => sanitizeSensitiveFields(item, depth + 1, options));
+  if (!value || typeof value !== "object") return value;
   const out = {};
   for (const [key, child] of Object.entries(value)) {
     out[key] = matchesSensitiveFieldPattern(key)
@@ -41,18 +57,18 @@ function sanitizeSensitiveFields(value, depth = 0, options = {}) {
   }
   return out;
 }
-function maskRangePreservingFormat(value = '') {
-  return String(value).replace(/[\p{L}\p{N}]/gu, 'x');
+function maskRangePreservingFormat(value = "") {
+  return String(value).replace(/[\p{L}\p{N}]/gu, "x");
 }
 function isValidCnId(value) {
   if (!/^\d{17}[\dXx]$/.test(value)) return false;
   const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
-  const checks = '10X98765432';
+  const checks = "10X98765432";
   const sum = weights.reduce((total, weight, index) => total + Number(value[index]) * weight, 0);
   return checks[sum % 11] === value[17].toUpperCase();
 }
 function isValidBankCard(value) {
-  const normalized = String(value).replace(/[ -]/g, '');
+  const normalized = String(value).replace(/[ -]/g, "");
   if (!/^\d{12,19}$/.test(normalized)) return false;
   let sum = 0;
   let doubled = false;
@@ -65,18 +81,23 @@ function isValidBankCard(value) {
   return sum % 10 === 0;
 }
 function isValidInternationalPhone(value) {
-  const digits = String(value).replace(/\D/g, '');
-  return String(value).trim().startsWith('+') && digits.length >= 8 && digits.length <= 15;
+  const digits = String(value).replace(/\D/g, "");
+  return String(value).trim().startsWith("+") && digits.length >= 8 && digits.length <= 15;
 }
 function isValidUsSsn(value) {
-  const digits = String(value).replace(/-/g, '');
+  const digits = String(value).replace(/-/g, "");
   if (!/^\d{9}$/.test(digits)) return false;
   const area = Number(digits.slice(0, 3));
-  return area !== 0 && area !== 666 && area < 900
-    && digits.slice(3, 5) !== '00' && digits.slice(5) !== '0000';
+  return (
+    area !== 0 &&
+    area !== 666 &&
+    area < 900 &&
+    digits.slice(3, 5) !== "00" &&
+    digits.slice(5) !== "0000"
+  );
 }
 function isValidIban(value) {
-  const compact = String(value).replace(/\s/g, '').toUpperCase();
+  const compact = String(value).replace(/\s/g, "").toUpperCase();
   if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(compact)) return false;
   const rearranged = compact.slice(4) + compact.slice(0, 4);
   let remainder = 0;
@@ -86,31 +107,33 @@ function isValidIban(value) {
   }
   return remainder === 1;
 }
-function isPrivateOrLocalIpv4(value = '') {
+function isPrivateOrLocalIpv4(value = "") {
   if (isIP(value) !== 4) return false;
-  const [first, second] = value.split('.').map(Number);
-  return first === 10
-    || first === 127
-    || (first === 169 && second === 254)
-    || (first === 172 && second >= 16 && second <= 31)
-    || (first === 192 && second === 168);
+  const [first, second] = value.split(".").map(Number);
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 }
-function expandIpv6(value = '') {
+function expandIpv6(value = "") {
   if (isIP(value) !== 6) return [];
-  const halves = value.toLowerCase().split('::');
-  const head = halves[0] ? halves[0].split(':') : [];
-  const tail = halves[1] ? halves[1].split(':') : [];
+  const halves = value.toLowerCase().split("::");
+  const head = halves[0] ? halves[0].split(":") : [];
+  const tail = halves[1] ? halves[1].split(":") : [];
   const missing = 8 - head.length - tail.length;
-  const sections = halves.length === 1
-    ? head
-    : [...head, ...Array.from({ length: missing }, () => '0'), ...tail];
-  return sections.length === 8 ? sections.map((section) => Number.parseInt(section || '0', 16)) : [];
+  const sections =
+    halves.length === 1 ? head : [...head, ...Array.from({ length: missing }, () => "0"), ...tail];
+  return sections.length === 8
+    ? sections.map((section) => Number.parseInt(section || "0", 16))
+    : [];
 }
-function isPrivateOrLocalIpv6(value = '') {
+function isPrivateOrLocalIpv6(value = "") {
   const sections = expandIpv6(value);
   if (sections.length !== 8) return false;
-  const isLoopback = sections.slice(0, 7).every((section) => section === 0)
-    && sections[7] === 1;
+  const isLoopback = sections.slice(0, 7).every((section) => section === 0) && sections[7] === 1;
   const firstSection = sections[0];
   const isUniqueLocal = (firstSection & 0xfe00) === 0xfc00;
   const isLinkLocal = (firstSection & 0xffc0) === 0xfe80;
@@ -130,13 +153,18 @@ function collectPiiRanges(text) {
   addMatches(/(?<![\d-])\d{3}-\d{2}-\d{4}(?![\d-])/g, isValidUsSsn);
   addMatches(/(?<![A-Z0-9])(?:\d[ -]?){12,19}(?![A-Z0-9])/gi, isValidBankCard);
   addMatches(/(?<![A-Z0-9])[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}(?![A-Z0-9])/gi, isValidIban);
-  addMatches(/(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
-    (value) => isIP(value) === 4 && !isPrivateOrLocalIpv4(value));
-  addMatches(/(?<![\w:])(?=[A-F0-9:]*:)[A-F0-9:]{2,39}(?![\w:])/gi,
-    (value) => isIP(value) === 6 && !isPrivateOrLocalIpv6(value));
+  addMatches(
+    /(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])/g,
+    (value) => isIP(value) === 4 && !isPrivateOrLocalIpv4(value),
+  );
+  addMatches(
+    /(?<![\w:])(?=[A-F0-9:]*:)[A-F0-9:]{2,39}(?![\w:])/gi,
+    (value) => isIP(value) === 6 && !isPrivateOrLocalIpv6(value),
+  );
   addMatches(/(?<![A-F0-9])(?:[A-F0-9]{2}[:-]){5}[A-F0-9]{2}(?![A-F0-9])/gi);
 
-  const passport = /(?:passport(?:\s+(?:no|number))?|passport[_-]?(?:no|number)|护照(?:号|号码)?|旅券番号)\s*[:=#]?\s*([A-Z0-9][A-Z0-9 -]{5,18}[A-Z0-9])/gi;
+  const passport =
+    /(?:passport(?:\s+(?:no|number))?|passport[_-]?(?:no|number)|护照(?:号|号码)?|旅券番号)\s*[:=#]?\s*([A-Z0-9][A-Z0-9 -]{5,18}[A-Z0-9])/gi;
   for (const match of text.matchAll(passport)) {
     const candidate = match[1];
     const start = match.index + match[0].lastIndexOf(candidate);
@@ -144,7 +172,7 @@ function collectPiiRanges(text) {
   }
   return ranges;
 }
-function shannonEntropy(value = '') {
+function shannonEntropy(value = "") {
   if (!value) return 0;
   const counts = new Map();
   for (const character of value) counts.set(character, (counts.get(character) || 0) + 1);
@@ -169,12 +197,14 @@ const SECRET_RULES = [
   /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
 ];
 const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
-const SECRET_ASSIGNMENT = /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(['"]?)([^\s'"]{8,})\1/gi;
+const SECRET_ASSIGNMENT =
+  /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(['"]?)([^\s'"]{8,})\1/gi;
 function collectSecretRanges(text) {
-  const value = String(text || '');
+  const value = String(text || "");
   const ranges = [];
   for (const pattern of SECRET_RULES) {
-    for (const match of value.matchAll(pattern)) ranges.push([match.index, match.index + match[0].length]);
+    for (const match of value.matchAll(pattern))
+      ranges.push([match.index, match.index + match[0].length]);
   }
   for (const match of value.matchAll(BEARER_SECRET)) {
     const start = match.index + match[0].lastIndexOf(match[1]);
@@ -202,46 +232,51 @@ function applyMaskedRanges(text, ranges) {
   let output = text;
   for (let index = merged.length - 1; index >= 0; index -= 1) {
     const [start, end] = merged[index];
-    output = output.slice(0, start) + maskRangePreservingFormat(output.slice(start, end)) + output.slice(end);
+    output =
+      output.slice(0, start) +
+      maskRangePreservingFormat(output.slice(start, end)) +
+      output.slice(end);
   }
   return output;
 }
-function sanitizePersonalInformation(text = '') {
-  const value = String(text || '');
+function sanitizePersonalInformation(text = "") {
+  const value = String(text || "");
   return applyMaskedRanges(value, collectPiiRanges(value));
 }
-function sanitizeSecrets(text = '') {
-  const value = String(text || '');
+function sanitizeSecrets(text = "") {
+  const value = String(text || "");
   return applyMaskedRanges(value, collectSecretRanges(value));
 }
-function sanitizeText(text = '', options = {}) {
-  const value = options.personalInformation === false
-    ? String(text || '')
-    : sanitizePersonalInformation(text);
+function sanitizeText(text = "", options = {}) {
+  const value =
+    options.personalInformation === false ? String(text || "") : sanitizePersonalInformation(text);
   return options.secrets === false ? value : sanitizeSecrets(value);
 }
-function sanitizeToolResultText(toolResultText = '', options = {}) {
-  const text = String(toolResultText || '');
+function sanitizeToolResultText(toolResultText = "", options = {}) {
+  const text = String(toolResultText || "");
   let fieldSanitized = text;
   try {
     fieldSanitized = JSON.stringify(sanitizeSensitiveFields(JSON.parse(text)));
   } catch {
+    fieldSanitized = text;
   }
   return sanitizeText(fieldSanitized, options);
 }
 function sanitizeHeaders(headers = {}, options = {}) {
-  return sanitizeSensitiveFields(headers, 0, { replacement: options.replacement || '[REDACTED]' });
+  return sanitizeSensitiveFields(headers, 0, { replacement: options.replacement || "[REDACTED]" });
 }
-function sanitizeUrl(rawUrl = '', options = {}) {
-  const replacement = options.replacement || '[REDACTED]';
-  const value = String(rawUrl || '');
-  if (!value || !value.includes('?')) return sanitizePersonalInformation(value);
+function sanitizeUrl(rawUrl = "", options = {}) {
+  const replacement = options.replacement || "[REDACTED]";
+  const value = String(rawUrl || "");
+  if (!value || !value.includes("?")) return sanitizePersonalInformation(value);
   try {
-    const parsed = new URL(value, 'http://noobot.local');
+    const parsed = new URL(value, "http://noobot.local");
     for (const key of parsed.searchParams.keys()) {
       if (matchesSensitiveFieldPattern(key)) parsed.searchParams.set(key, replacement);
     }
-    const output = /^https?:\/\//i.test(value) ? parsed.toString() : `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    const output = /^https?:\/\//i.test(value)
+      ? parsed.toString()
+      : `${parsed.pathname}${parsed.search}${parsed.hash}`;
     return sanitizePersonalInformation(output);
   } catch {
     return sanitizePersonalInformation(value);
@@ -249,9 +284,22 @@ function sanitizeUrl(rawUrl = '', options = {}) {
 }
 
 export {
-  SENSITIVE_FIELD_PATTERNS, REDACTED_SENSITIVE_FIELD_VALUE,
-  normalizeSensitiveFieldText, canonicalSensitiveFieldText, matchesSensitiveFieldPattern,
-  sanitizeSensitiveFields, maskRangePreservingFormat, collectPiiRanges, applyMaskedRanges,
-  shannonEntropy, SECRET_RULES, collectSecretRanges, sanitizeSecrets, sanitizeText,
-  sanitizeToolResultText, sanitizePersonalInformation, sanitizeHeaders, sanitizeUrl,
+  SENSITIVE_FIELD_PATTERNS,
+  REDACTED_SENSITIVE_FIELD_VALUE,
+  normalizeSensitiveFieldText,
+  canonicalSensitiveFieldText,
+  matchesSensitiveFieldPattern,
+  sanitizeSensitiveFields,
+  maskRangePreservingFormat,
+  collectPiiRanges,
+  applyMaskedRanges,
+  shannonEntropy,
+  SECRET_RULES,
+  collectSecretRanges,
+  sanitizeSecrets,
+  sanitizeText,
+  sanitizeToolResultText,
+  sanitizePersonalInformation,
+  sanitizeHeaders,
+  sanitizeUrl,
 };

@@ -155,13 +155,11 @@ export class BotManager {
     for (const sessionId of normalizedIds) {
       const safeSessionDir = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
       if (!safeSessionDir) continue;
-      try {
-        await Promise.allSettled([
-          rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true }),
-          rm(path.join(legacyOverflowRoot, safeSessionDir), { recursive: true, force: true }),
-        ]);
-        deletedSessionIds.push(sessionId);
-      } catch {}
+      await Promise.all([
+        rm(path.join(semanticTransferRoot, safeSessionDir), { recursive: true, force: true }),
+        rm(path.join(legacyOverflowRoot, safeSessionDir), { recursive: true, force: true }),
+      ]);
+      deletedSessionIds.push(sessionId);
     }
     return { deletedSessionIds, deletedCount: deletedSessionIds.length };
   }

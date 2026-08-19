@@ -87,6 +87,14 @@ function shouldBlockRequest(request) {
   }
 }
 
+async function waitForPlaywrightState(action) {
+  try {
+    await action();
+  } catch (error) {
+    if (error?.name !== "TimeoutError") throw error;
+  }
+}
+
 export async function browseUrlHtml({
   url = "",
   waitUntil = "domcontentloaded",
@@ -147,16 +155,16 @@ export async function browseUrlHtml({
           waitUntil,
           timeout: resolvedTimeoutMs,
         });
-        await page
-          .waitForFunction(() => document.readyState === "complete", null, {
+        await waitForPlaywrightState(() =>
+          page.waitForFunction(() => document.readyState === "complete", null, {
             timeout: Math.min(resolvedTimeoutMs, 20000),
-          })
-          .catch(() => {});
-        try {
-          await page.waitForLoadState("networkidle", {
+          }),
+        );
+        await waitForPlaywrightState(() =>
+          page.waitForLoadState("networkidle", {
             timeout: resolvedNetworkIdleTimeoutMs,
-          });
-        } catch {}
+          }),
+        );
         await page.waitForTimeout(300);
         return {
           ok: true,

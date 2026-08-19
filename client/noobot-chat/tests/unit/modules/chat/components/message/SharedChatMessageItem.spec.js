@@ -223,6 +223,22 @@ describe("SharedChatMessageItem", () => {
     clearExtensionRegistry();
   });
 
+  it("mounts attachment and generated file previews as application-level fullscreen dialogs", () => {
+    const wrapper = mountItem();
+    const previewDialogs = [...document.body.querySelectorAll("el-dialog-stub")];
+
+    expect(previewDialogs).toHaveLength(2);
+    for (const previewDialog of previewDialogs) {
+      expect(wrapper.element.contains(previewDialog)).toBe(false);
+      expect(previewDialog.hasAttribute("fullscreen")).toBe(true);
+      expect(previewDialog.getAttribute("teleported")).toBe("false");
+      expect(previewDialog.getAttribute("modal-class")).toBe("noobot-file-preview-overlay");
+      expect(previewDialog.hasAttribute("width")).toBe(false);
+      expect(previewDialog.hasAttribute("top")).toBe(false);
+    }
+    wrapper.unmount();
+  });
+
   it("applies one outer breathing state only while both runtime panels are visible and running", async () => {
     contributeThinkingPanel(VisibleThinkingRenderer, "runtime-panels-running");
     const wrapper = mountItem({
@@ -558,20 +574,20 @@ describe("SharedChatMessageItem", () => {
       storeSetup: (store) =>
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
-              nodeSessionId: "child-session",
-              authoritySessionId: "parent-session",
-              workflowRunId: "workflow-run-1",
-              nodeExecutionId: "node-execution-1",
-              aggregateVersion: 1,
-              turnTimings: [
-                {
-                  dialogProcessId: "child-dialog",
-                  turnScopeId: "child-turn",
-                  thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-                  thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-                },
-              ],
-            }),
+            nodeSessionId: "child-session",
+            authoritySessionId: "parent-session",
+            workflowRunId: "workflow-run-1",
+            nodeExecutionId: "node-execution-1",
+            aggregateVersion: 1,
+            turnTimings: [
+              {
+                dialogProcessId: "child-dialog",
+                turnScopeId: "child-turn",
+                thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+                thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+              },
+            ],
+          }),
           { source: "test_snapshot" },
         ),
       messageItem: {
@@ -629,20 +645,20 @@ describe("SharedChatMessageItem", () => {
         });
         store.applyWorkflowRuntimeEvent(
           canonicalWorkflowSessionSnapshot({
-              nodeSessionId: "child-session-terminal",
-              authoritySessionId: "parent-session",
-              workflowRunId: "workflow-run-1",
-              nodeExecutionId: "node-execution-1",
-              aggregateVersion: 1,
-              turnTimings: [
-                {
-                  dialogProcessId: "child-dialog-terminal",
-                  turnScopeId: "workflow-node:terminal",
-                  thinkingStartedAt: "2026-07-29T09:44:50.000Z",
-                  thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
-                },
-              ],
-            }),
+            nodeSessionId: "child-session-terminal",
+            authoritySessionId: "parent-session",
+            workflowRunId: "workflow-run-1",
+            nodeExecutionId: "node-execution-1",
+            aggregateVersion: 1,
+            turnTimings: [
+              {
+                dialogProcessId: "child-dialog-terminal",
+                turnScopeId: "workflow-node:terminal",
+                thinkingStartedAt: "2026-07-29T09:44:50.000Z",
+                thinkingFinishedAt: "2026-07-29T09:44:56.296Z",
+              },
+            ],
+          }),
           { source: "test_snapshot" },
         );
       },

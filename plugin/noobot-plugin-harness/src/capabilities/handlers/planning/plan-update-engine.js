@@ -3,10 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  CAPABILITY_DOMAIN,
-  appendCapabilityLog,
-} from "./deps.js";
+import { CAPABILITY_DOMAIN } from "../shared/constants.js";
+import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
@@ -16,7 +14,11 @@ const PLAN_UPDATE_POLICY = Object.freeze({
 });
 
 export function normalizePlanUpdateStage(stage = "") {
-  return String(stage || "").trim().toLowerCase() === "revision" ? "revision" : "refinement";
+  return String(stage || "")
+    .trim()
+    .toLowerCase() === "revision"
+    ? "revision"
+    : "refinement";
 }
 
 function resolveStageAttemptCounterKey(stage = "revision") {
@@ -88,17 +90,15 @@ export function canAttemptPlanUpdate(
 
 export function setPendingPlanUpdate(
   state = {},
-  {
-    active = false,
-    stage = "revision",
-    targetMainStepIndexes = [],
-  } = {},
+  { active = false, stage = "revision", targetMainStepIndexes = [] } = {},
 ) {
   if (!state || typeof state !== "object") return false;
   if (!state.pending || typeof state.pending !== "object") state.pending = {};
   const pending = state.pending;
   if (active !== true) {
-    const stageText = String(stage || "").trim().toLowerCase();
+    const stageText = String(stage || "")
+      .trim()
+      .toLowerCase();
     if (stageText === "revision") {
       pending.planRevision = false;
       pending.planRevisionContext = null;

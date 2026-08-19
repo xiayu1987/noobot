@@ -57,13 +57,17 @@ export class WsRouter {
     });
     try {
       this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.ROUTE_FAILED);
-    } catch {}
+    } catch (sendError) {
+      console.warn("[agent-proxy] route failure response failed", sendError);
+    }
     try {
       socket.close?.(1011, "route_failed");
     } catch {
       try {
         socket.terminate?.();
-      } catch {}
+      } catch (terminateError) {
+        console.warn("[agent-proxy] route failure socket terminate failed", terminateError);
+      }
     }
   }
 
@@ -191,7 +195,9 @@ export class WsRouter {
           }
           try {
             socket.close?.(1008, "invalid_agent_command");
-          } catch {}
+          } catch (closeError) {
+            console.warn("[agent-proxy] invalid command socket close failed", closeError);
+          }
           return;
         }
         this._handleRouteFailedSocket(socket, error);

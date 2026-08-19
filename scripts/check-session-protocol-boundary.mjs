@@ -7,9 +7,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const productionRoots = ["agent/src", "service", "client/noobot-chat/src", "authoritative-state/src"];
+const productionRoots = [
+  "agent/src",
+  "service",
+  "client/noobot-chat/src",
+  "authoritative-state/src",
+];
 const ignored = new Set(["vendor", "dist", "node_modules", "__tests__", "tests"]);
 const violations = [];
+const canonicalTurnCommitProtocol = "session-protocol/src/turn-commit.js";
 
 function visit(relative) {
   const absolute = path.join(root, relative);
@@ -39,10 +45,32 @@ function inspect(relative) {
     [/(?:\?\.|\.)channel_state\b/, "legacy persisted channel state field"],
     [/version\s*\?\?\s*revision/, "Session version compatibility read"],
   ];
-  for (const [pattern, message] of checks) if (pattern.test(source)) violations.push(`${relative}: ${message}`);
+  for (const [pattern, message] of checks)
+    if (pattern.test(source)) violations.push(`${relative}: ${message}`);
 }
 
 for (const relative of productionRoots) visit(relative);
+
+function inspectTurnCommitProtocolDefinitions(relative) {
+  const source = fs.readFileSync(path.join(root, relative), "utf8");
+  if (
+    relative !== canonicalTurnCommitProtocol &&
+    /\b(?:validate|assert)TurnCommittedEventData\b/.test(source)
+  ) {
+    violations.push(`${relative}: duplicate turn_committed protocol implementation`);
+  }
+}
+
+function visitSessionProtocol(relative) {
+  const absolute = path.join(root, relative);
+  for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+    const child = path.join(relative, entry.name);
+    if (entry.isDirectory()) visitSessionProtocol(child);
+    else if (/\.js$/.test(entry.name)) inspectTurnCommitProtocolDefinitions(child);
+  }
+}
+
+visitSessionProtocol("session-protocol/src");
 if (violations.length) {
   console.error(violations.join("\n"));
   process.exitCode = 1;

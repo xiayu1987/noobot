@@ -36,10 +36,8 @@ export function resolveFallbackAttachments(meta = {}) {
   return [];
 }
 
-export function buildHumanMessageContent(msg = {}, fallbackAttachments = []) {
-  const textContent = String(msg?.content || "");
-  void fallbackAttachments;
-  return textContent;
+export function buildHumanMessageContent(msg = {}) {
+  return String(msg?.content || "");
 }
 
 function buildUserMetaAttachmentInfo(attachmentItem = {}) {
@@ -116,7 +114,7 @@ export function buildHumanMessagesForUser(
     allowFallbackRoundIdentity = true,
   } = {},
 ) {
-  const contentText = buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackMeta));
+  const contentText = buildHumanMessageContent(msg);
   const isFrontendUserMessage = msg?.frontendUserMessage === true;
   const identityKwargs = projectContextMessageIdentityMetadata(msg);
   const userMetaMessageId = deriveMessageProjectionId(identityKwargs.noobotMessageId, "user_meta");

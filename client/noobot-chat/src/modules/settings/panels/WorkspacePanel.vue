@@ -281,7 +281,9 @@ async function downloadFile() {
       try {
         const data = await response.json();
         if (data?.error) errorText = String(data.error);
-      } catch {}
+      } catch (error) {
+        console.debug("[workspace] download error response is not JSON", error);
+      }
       throw new Error(errorText);
     }
     const fileName =
@@ -417,13 +419,11 @@ async function confirmResetDialog() {
   }
   const sections = [...resetDialogSections.value];
   resetDialogVisible.value = false;
-  try {
-    if (resetDialogMode.value === "all") {
-      await doResetAllWorkspace(sections);
-      return;
-    }
-    await doResetWorkspace(sections);
-  } catch {}
+  if (resetDialogMode.value === "all") {
+    await doResetAllWorkspace(sections);
+    return;
+  }
+  await doResetWorkspace(sections);
 }
 
 async function insertParamAtCursor(key = "") {

@@ -8,6 +8,10 @@ import path from "node:path";
 import { HARNESS_FILES } from "../core/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
+function isMissingPathError(error) {
+  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+}
+
 function normalizeSessionIds(input = []) {
   if (Array.isArray(input)) {
     return input.map((item) => String(item || "").trim()).filter(Boolean);
@@ -22,13 +26,17 @@ async function resolveRunManifest(manifestPath = "") {
     const raw = await fs.readFile(manifestPath, "utf8");
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
+  } catch (error) {
+    if (isMissingPathError(error)) return {};
+    throw error;
   }
 }
 
 function resolveLockMaxAgeMs(options = {}) {
-  if (Number.isFinite(Number(options?.runWriteLockMaxAgeMs)) && Number(options.runWriteLockMaxAgeMs) > 0) {
+  if (
+    Number.isFinite(Number(options?.runWriteLockMaxAgeMs)) &&
+    Number(options.runWriteLockMaxAgeMs) > 0
+  ) {
     return Number(options.runWriteLockMaxAgeMs);
   }
   if (Number.isFinite(Number(options?.cleanupGraceMs)) && Number(options.cleanupGraceMs) > 0) {
@@ -45,10 +53,15 @@ async function isRunWriteLocked(runDirPath = "", options = {}) {
     const lockAge = Date.now() - Number(stat?.mtimeMs || 0);
     const maxAge = resolveLockMaxAgeMs(options);
     if (lockAge <= maxAge) return true;
-    await fs.unlink(lockPath).catch(() => {});
+    try {
+      await fs.unlink(lockPath);
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
     return false;
-  } catch {
-    return false;
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    throw error;
   }
 }
 
@@ -87,12 +100,13 @@ export async function cleanupOldRuns(basePath, options = {}) {
       try {
         const stat = await fs.stat(manifestPath);
         mtime = stat.mtimeMs;
-      } catch {
+      } catch (error) {
+        if (!isMissingPathError(error)) throw error;
         try {
           const dirStat = await fs.stat(runDirPath);
           mtime = dirStat.mtimeMs;
-        } catch {
-          mtime = 0;
+        } catch (directoryError) {
+          if (!isMissingPathError(directoryError)) throw directoryError;
         }
       }
       runInfo.push({ dir, mtime, age: now - mtime });
@@ -130,11 +144,13 @@ export async function cleanupOldRuns(basePath, options = {}) {
       try {
         await fs.rm(target, { recursive: true, force: true });
         deleted++;
-      } catch {
+      } catch (error) {
+        console.warn(`[harness] Failed to delete run directory ${target}:`, error);
         errors++;
       }
     }
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
   }
 
   return { deleted, errors, skippedLocked };
@@ -178,11 +194,13 @@ export async function cleanupRunsBySessionIds(basePath, sessionIds = [], options
       try {
         await fs.rm(runDirPath, { recursive: true, force: true });
         deleted += 1;
-      } catch {
+      } catch (error) {
+        console.warn(`[harness] Failed to delete session run directory ${runDirPath}:`, error);
         errors += 1;
       }
     }
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
   }
 
   return { deleted, errors, matchedRuns, skippedLocked };

@@ -92,7 +92,9 @@ export function createPluginServicePorts({ bot = null, translateText = null } = 
         let entries = [];
         try {
           entries = await fs.readdir(outputDir);
-        } catch {}
+        } catch (error) {
+          if (error?.code !== "ENOENT" && error?.code !== "ENOTDIR") throw error;
+        }
         const snapshot = await readSessionArtifactSnapshot({
           outputDir,
           executionLogOptions: executionPage

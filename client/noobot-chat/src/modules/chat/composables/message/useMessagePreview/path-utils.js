@@ -8,7 +8,11 @@ export function parseContentDisposition(contentDisposition = "") {
   if (!contentDisposition) return "";
   const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8Match?.[1]) {
-    try { return decodeURIComponent(String(utf8Match[1]).trim()); } catch { return String(utf8Match[1]).trim(); }
+    try {
+      return decodeURIComponent(String(utf8Match[1]).trim());
+    } catch {
+      return String(utf8Match[1]).trim();
+    }
   }
   const basicMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
   return String(basicMatch?.[1] || "").trim();
@@ -28,7 +32,9 @@ export function sanitizeWorkspaceRelativePath(pathValue = "") {
 }
 
 export function resolveWorkspaceRelativePath(pathValue = "", userId = "") {
-  const normalizedPath = String(pathValue || "").trim().replaceAll("\\", "/");
+  const normalizedPath = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/");
   if (!normalizedPath) return "";
   if (!normalizedPath.startsWith("/") && !/^[a-zA-Z]:\//.test(normalizedPath)) {
     return sanitizeWorkspaceRelativePath(normalizedPath);
@@ -59,7 +65,9 @@ export function resolveFileItemRelativePath(fileItem = {}, userId = "") {
 }
 
 export function isHostAbsolutePath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  const normalized = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/");
   return /^[a-zA-Z]:\//.test(normalized) || normalized.startsWith("/");
 }
 
@@ -85,7 +93,9 @@ export function createFileAccessTraceId(prefix = "preview") {
 }
 
 export function maskWorkspacePath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  const normalized = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/");
   if (!normalized) return "";
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;
@@ -93,7 +103,9 @@ export function maskWorkspacePath(pathValue = "") {
 }
 
 export function maskHostPath(pathValue = "") {
-  const normalized = String(pathValue || "").trim().replaceAll("\\", "/");
+  const normalized = String(pathValue || "")
+    .trim()
+    .replaceAll("\\", "/");
   if (!normalized) return "";
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length <= 2) return normalized;

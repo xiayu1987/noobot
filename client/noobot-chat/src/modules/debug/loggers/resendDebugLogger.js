@@ -5,7 +5,7 @@
  */
 
 import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStateMachine.js";
-import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -26,7 +26,8 @@ export function summarizeDebugMessage(message = {}) {
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
-    dialogProcessId: message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
+    dialogProcessId:
+      message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
     parentDialogProcessId: message.parentDialogProcessId || message.parent_dialog_process_id || "",
     pending: message.pending === true,
     statusLabel: message.statusLabel || "",
@@ -67,7 +68,5 @@ export function summarizeDebugMessages(messages = [], limit = 12) {
 }
 
 export function logResendDebug(phase, payload = {}) {
-  try {
-    return emitLazyDebug(sessionLogSink, "resend", phase, payload);
-  } catch {}
+  return emitLazyDebugSafely(sessionLogSink, "resend", phase, payload);
 }

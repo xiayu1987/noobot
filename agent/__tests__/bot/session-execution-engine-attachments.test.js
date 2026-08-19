@@ -11,8 +11,20 @@ import path from "node:path";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 
+async function createAttachmentWorkspaceService() {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-attach-workspace-"));
+  return {
+    async ensureUserWorkspace(userId) {
+      const userWorkspace = path.join(workspaceRoot, userId);
+      await mkdir(userWorkspace, { recursive: true });
+      return userWorkspace;
+    },
+  };
+}
+
 test("_prepareAgentTurnExecution uses canonical payload attachments when prepared runtime has none", async () => {
   const engine = Object.create(SessionExecutionEngine.prototype);
+  engine.workspaceService = await createAttachmentWorkspaceService();
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.agentRuntimeFacade = {
     async prepareTurnExecution() {
@@ -174,6 +186,7 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
     downloadUrl: "/download/att-session-rich",
   };
   const engine = Object.create(SessionExecutionEngine.prototype);
+  engine.workspaceService = await createAttachmentWorkspaceService();
   engine._buildContextBuilder = () => ({ kind: "context-builder" });
   engine.session = {
     async findById() {
@@ -217,6 +230,34 @@ test("_prepareAgentTurnExecution enriches raw resend payload from existing sessi
   assert.equal(prepared.userMessageAttachments.length, 1);
   assert.equal(prepared.userMessageAttachments[0].attachmentId, "att-session-rich");
   assert.equal(prepared.userMessageAttachments[0].path, richAttachment.path);
+});
+
+test("_prepareAgentTurnExecution fails closed when attachment enrichment has no WorkspaceService", async () => {
+  const engine = Object.create(SessionExecutionEngine.prototype);
+  engine._buildContextBuilder = () => ({ kind: "context-builder" });
+  engine.agentRuntimeFacade = {
+    async prepareTurnExecution() {
+      return { agentContext: { bindings: { runtime: { userMessageAttachments: [] } } } };
+    },
+  };
+
+  await assert.rejects(
+    engine._prepareAgentTurnExecution({
+      buildContextPayload: {
+        userId: "admin",
+        sessionId: "session-missing-workspace-service",
+        userMessageAttachments: [
+          {
+            attachmentId: "att-missing-workspace-service",
+            sessionId: "session-missing-workspace-service",
+            attachmentSource: "user",
+            name: "input.txt",
+          },
+        ],
+      },
+    }),
+    /attachment enrichment requires WorkspaceService/,
+  );
 });
 
 test("_prepareAgentTurnExecution does not restore old rich attachments when payload explicitly deletes all", async () => {

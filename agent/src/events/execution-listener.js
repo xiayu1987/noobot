@@ -60,6 +60,7 @@ export function createExecutionEventListener({
   const defaults = { dialogProcessId, sessionId, parentSessionId, turnScopeId };
   let persistenceTail = Promise.resolve();
   let deliveryTail = Promise.resolve();
+  const persistenceFailures = [];
   const deliveryFailures = [];
 
   const appendExecutionLog = (record) => {
@@ -73,10 +74,17 @@ export function createExecutionEventListener({
       turnScopeId: data.turnScopeId,
       data,
     };
-    persistenceTail = persistenceTail
-      .catch(() => {})
-      .then(() => sessionManager?.appendExecutionLog?.(canonicalRecord))
-      .catch(() => {});
+    persistenceTail = persistenceTail.then(async () => {
+      try {
+        await sessionManager?.appendExecutionLog?.(canonicalRecord);
+      } catch (error) {
+        persistenceFailures.push({
+          event: canonicalRecord.event,
+          error: error?.message || String(error || ""),
+          cause: error,
+        });
+      }
+    });
     return persistenceTail;
   };
 
@@ -84,10 +92,14 @@ export function createExecutionEventListener({
     sourceEvent: event,
     eventId: String(data?.envelope?.identity?.eventId || "").trim(),
     eventType: String(data?.envelope?.identity?.eventType || event || "").trim(),
-    sessionId: String(data?.envelope?.identity?.sessionId || data?.sessionId || sessionId || "").trim(),
+    sessionId: String(
+      data?.envelope?.identity?.sessionId || data?.sessionId || sessionId || "",
+    ).trim(),
     parentSessionId: String(data?.parentSessionId || parentSessionId || "").trim(),
     dialogProcessId: String(data?.dialogProcessId || dialogProcessId || "").trim(),
-    turnScopeId: String(data?.envelope?.identity?.turnScopeId || data?.turnScopeId || turnScopeId || "").trim(),
+    turnScopeId: String(
+      data?.envelope?.identity?.turnScopeId || data?.turnScopeId || turnScopeId || "",
+    ).trim(),
     messageId: String(data?.envelope?.identity?.messageId || "").trim(),
     presentationMessageId: String(data?.presentationMessageId || "").trim(),
     sequence: Number(data?.envelope?.ordering?.sequence || 0),
@@ -171,7 +183,18 @@ export function createExecutionEventListener({
     });
 
   return {
-    flushPersistence: () => persistenceTail,
+    flushPersistence: async () => {
+      await persistenceTail;
+      if (persistenceFailures.length > 0) {
+        const error = new Error(
+          `execution log persistence failed: ${persistenceFailures[0].error}`,
+          { cause: persistenceFailures[0].cause },
+        );
+        error.code = "EXECUTION_LOG_PERSISTENCE_FAILED";
+        error.failures = persistenceFailures.map(({ cause: _cause, ...failure }) => failure);
+        throw error;
+      }
+    },
     flushDelivery: async () => {
       await deliveryTail;
       if (deliveryFailures.length > 0) {
@@ -189,19 +212,17 @@ export function createExecutionEventListener({
 
       const executionRecord = projectExecutionLogRecord(event, data);
       const { category, type } = classifyExecutionEvent(executionRecord.event);
-      try {
-        appendExecutionLog({
-          userId,
-          sessionId,
-          parentSessionId,
-          dialogProcessId,
-          event: executionRecord.event,
-          category,
-          type,
-          data: executionRecord.data,
-          ts,
-        });
-      } catch {}
+      appendExecutionLog({
+        userId,
+        sessionId,
+        parentSessionId,
+        dialogProcessId,
+        event: executionRecord.event,
+        category,
+        type,
+        data: executionRecord.data,
+        ts,
+      });
 
       // Execution diagnostics are persisted locally and never become client
       // facts. Only the explicit private run contract may cross this boundary.

@@ -111,7 +111,9 @@ const statusKeyMap = {
 };
 
 function formatSessionStatus(status = "") {
-  const normalized = String(status || "").trim().toLowerCase();
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
   return translate(statusKeyMap[normalized] || "common.statusIdle");
 }
 
@@ -150,7 +152,10 @@ async function promptRenameSession(sessionItem = {}) {
       },
     );
     emit("rename-session", { sessionId: sessionItem.sessionId, title: String(value || "").trim() });
-  } catch {
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      console.warn("[noobot:session] rename dialog failed", error);
+    }
   }
 }
 
@@ -188,7 +193,10 @@ watch(
                   class="session-item noobot-subtle-row"
                   :data-session-id="sessionItem.sessionId"
                   :data-session-local="sessionItem.isLocal === true ? 'true' : 'false'"
-                  :class="{ active: sessionItem.sessionId === activeSessionId, unavailable: sessionItem.isUnavailable === true }"
+                  :class="{
+                    active: sessionItem.sessionId === activeSessionId,
+                    unavailable: sessionItem.isUnavailable === true,
+                  }"
                   :aria-disabled="sessionItem.isUnavailable === true ? 'true' : undefined"
                   @click="emit('select-session', sessionItem.sessionId)"
                 >
@@ -203,7 +211,11 @@ watch(
                       </span>
                       <template v-else>
                         <span class="status-dot" :class="sessionRuntimeStatus(sessionItem)"></span>
-                        #{{ sessionItem.sessionId ? sessionItem.sessionId.slice(0, 8) : translate("common.notStarted") }}
+                        #{{
+                          sessionItem.sessionId
+                            ? sessionItem.sessionId.slice(0, 8)
+                            : translate("common.notStarted")
+                        }}
                       </template>
                     </div>
                   </div>
@@ -231,9 +243,9 @@ watch(
                 </div>
               </template>
               <div class="session-popover">
-                  <div class="session-popover__title">{{ sessionItem.title }}</div>
+                <div class="session-popover__title">{{ sessionItem.title }}</div>
                 <div v-if="sessionItem.isUnavailable" class="session-popover__reason">
-                  {{ translate("common.sessionUnavailableLegacyProtocol") }}<br>
+                  {{ translate("common.sessionUnavailableLegacyProtocol") }}<br />
                   {{ sessionItem.unavailableReason?.message }}
                 </div>
                 <ul class="session-popover__meta">
@@ -246,7 +258,9 @@ watch(
                   </li>
                   <li>
                     <span class="k">{{ translate("common.sessionId") }}</span>
-                    <span class="v">{{ sessionItem.sessionId || translate("common.notStarted") }}</span>
+                    <span class="v">{{
+                      sessionItem.sessionId || translate("common.notStarted")
+                    }}</span>
                   </li>
                   <li>
                     <span class="k">{{ translate("common.sessionMessageCount") }}</span>
@@ -348,7 +362,9 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
   color: var(--noobot-text-main);
 }
 
@@ -383,7 +399,11 @@ watch(
   color: var(--noobot-text-muted);
   opacity: 0;
   transform: none;
-  transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .session-item:hover .session-rename-btn,

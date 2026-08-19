@@ -5,6 +5,7 @@
  */
 import { filePath as path } from "@noobot/path-resolver";
 import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
 
 export const SESSION_ARTIFACT_FILE_NAMES = Object.freeze({
   session: "session.json",
@@ -44,26 +45,13 @@ export async function writeJsonArtifactFile(filePath = "", payload = {}) {
 }
 
 export async function readJsonArtifactFile(filePath = "", fallback = null) {
-  try {
-    const raw = await readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch (error) {
-    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return fallback;
-    const failure = new Error(
-      error instanceof SyntaxError ? `artifact JSON is corrupted: ${filePath}` : `artifact JSON cannot be read: ${filePath}`,
-    );
-    failure.code = error instanceof SyntaxError
-      ? "ARTIFACT_JSON_CORRUPTED"
-      : error?.code === "EACCES" || error?.code === "EPERM"
-        ? "ARTIFACT_PERMISSION_DENIED"
-        : "ARTIFACT_IO_FAILED";
-    failure.artifactPath = filePath;
-    failure.cause = error;
-    throw failure;
-  }
+  return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
-export function createSessionDeletedArtifactError(sessionId = "", operation = "session artifact mutation") {
+export function createSessionDeletedArtifactError(
+  sessionId = "",
+  operation = "session artifact mutation",
+) {
   const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
   error.statusCode = 410;
   error.errorCode = "SESSION_DELETED";

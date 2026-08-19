@@ -28,6 +28,7 @@ import {
   requireModelContextSequencePolicy,
   validateModelResponse,
 } from "@noobot/model-protocol";
+import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
@@ -128,7 +129,12 @@ function buildPluginCapabilityLogBase({
   };
 }
 
-async function emitPluginCapabilityRealtimeLog({ ctx = {}, event = "", text = "", data = {} } = {}) {
+async function emitPluginCapabilityRealtimeLog({
+  ctx = {},
+  event = "",
+  text = "",
+  data = {},
+} = {}) {
   const normalizedText = String(text || "").trim();
   if (!event) return;
   const isWorkflowSemanticResponse =
@@ -185,13 +191,13 @@ export function createAgentCapabilityModelInvoker({
   enableToolBinding = false,
   headerNamespace = "plugin",
   flowPrefix = "",
-  fallbackGlobalConfig = null,
-  fallbackUserConfig = null,
+  configSnapshot,
   resolveDefaultModelSpecFn = resolveDefaultModelSpec,
   resolveModelSpecByNameFn = resolveModelSpecByName,
   adaptToolsForBindingFn = adaptToolsForBinding,
   executeToolCallFn = executeToolCallInTurn,
 } = {}) {
+  const effectiveConfig = validateConfigSnapshot(configSnapshot).config;
   const baseAllowPolicy = resolveAllowPolicy(toolAllowlist);
   const maxTurnCount =
     Number.isFinite(Number(maxTurns)) && Number(maxTurns) > 0
@@ -220,18 +226,6 @@ export function createAgentCapabilityModelInvoker({
       runMessages.unshift({ role: "system", content: String(prompt) });
     }
 
-    const globalConfig =
-      runtime?.globalConfig && typeof runtime.globalConfig === "object"
-        ? runtime.globalConfig
-        : fallbackGlobalConfig && typeof fallbackGlobalConfig === "object"
-          ? fallbackGlobalConfig
-          : {};
-    const userConfig =
-      runtime?.userConfig && typeof runtime.userConfig === "object"
-        ? runtime.userConfig
-        : fallbackUserConfig && typeof fallbackUserConfig === "object"
-          ? fallbackUserConfig
-          : {};
     const normalizedModelName = String(modelName || "").trim();
     const pluginCapabilityLogBase = buildPluginCapabilityLogBase({
       purpose,
@@ -277,10 +271,10 @@ export function createAgentCapabilityModelInvoker({
     const modelSpec = normalizedModelName
       ? resolveModelSpecByNameFn({
           modelName: normalizedModelName,
-          globalConfig,
-          userConfig,
+          globalConfig: effectiveConfig,
+          userConfig: {},
         })
-      : resolveDefaultModelSpecFn({ globalConfig, userConfig });
+      : resolveDefaultModelSpecFn({ globalConfig: effectiveConfig, userConfig: {} });
     const modelPort = runtime?.modelPort;
     if (!modelPort || typeof modelPort.invoke !== "function") {
       throw new TypeError("capability model execution requires the host ModelPort");
@@ -324,8 +318,8 @@ export function createAgentCapabilityModelInvoker({
       : baseAllowPolicy;
     const tools = resolveToolsFromContext(ctx, effectiveAllowPolicy);
     const adapted = adaptToolsForBindingFn(tools, {
-      globalConfig,
-      userConfig,
+      globalConfig: effectiveConfig,
+      userConfig: {},
     });
     const boundTools = Array.isArray(adapted?.tools) ? adapted.tools : [];
     const bindOptions =

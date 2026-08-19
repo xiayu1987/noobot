@@ -15,6 +15,7 @@ import {
   ATOMIC_RENAME_RETRY_DELAYS_MS,
   writeFileAtomic,
 } from "../shared/storage/atomic-file-write.js";
+import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
 
 export class StorageService {
   constructor({
@@ -52,12 +53,7 @@ export class StorageService {
   }
 
   async readJson(filePath, fallback = {}) {
-    try {
-      const raw = await fsReadFile(filePath, "utf8");
-      return JSON.parse(raw);
-    } catch {
-      return fallback;
-    }
+    return readPersistedJsonFile({ filePath, fallback, readFile: fsReadFile });
   }
 
   async writeJson(filePath, data) {

@@ -12,7 +12,8 @@ export function parseJsonObjectSafely(input = "") {
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       return parsed;
     }
-  } catch {
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
   }
   return null;
 }

@@ -272,7 +272,10 @@ export function registerChatWebSocketServer(
     };
 
     const dispatchAuthorityEvents = createAuthorityEventDispatcher({ resolveBot, sendEvent });
-    const commitInteractionRequest = createInteractionAuthorityBridge({ resolveBot, dispatchAuthorityEvents });
+    const commitInteractionRequest = createInteractionAuthorityBridge({
+      resolveBot,
+      dispatchAuthorityEvents,
+    });
     const commitTurnLifecycle = createTurnLifecycleBridge({ resolveBot, dispatchAuthorityEvents });
     const recoverPersistedTurnFinalize = (request = {}) =>
       recoverTurnFinalize({
@@ -367,7 +370,12 @@ export function registerChatWebSocketServer(
         });
         try {
           webSocket.close(1011, "message handler failed");
-        } catch {}
+        } catch (closeError) {
+          logConnection("service.websocket.connection.closeFailed", {
+            errorType: closeError?.name || "Error",
+            errorCode: String(closeError?.code || ""),
+          });
+        }
       });
     });
 
@@ -382,11 +390,13 @@ export function registerChatWebSocketServer(
             : Buffer.isBuffer(reasonBuffer)
               ? reasonBuffer.toString("utf8")
               : "";
-        state.currentAbortController.abort(createExecutionAbortReason({
-          type: EXECUTION_ABORT_TYPE.SOCKET_CLOSE,
-          code: Number(code || 0) || undefined,
-          reason: reasonText || "websocket closed",
-        }));
+        state.currentAbortController.abort(
+          createExecutionAbortReason({
+            type: EXECUTION_ABORT_TYPE.SOCKET_CLOSE,
+            code: Number(code || 0) || undefined,
+            reason: reasonText || "websocket closed",
+          }),
+        );
       }
       if (transportStillOwned && state.currentRunHandle) {
         detachRunTransport(state.currentRunHandle, state.currentRunTransportBinding);

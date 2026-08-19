@@ -30,10 +30,7 @@ function isConversationModel(providerSpec = {}) {
   return configuredValue === undefined ? true : configuredValue === true;
 }
 
-export function createModelTool({
-  agentContext,
-  sessionId,
-}) {
+export function createModelTool({ agentContext, sessionId }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const allEnabledProviders = runtime.allEnabledProviders || {};
 
@@ -63,40 +60,29 @@ export function createModelTool({
         if (byModelName) alias = byModelName[0];
       }
       if (!allEnabledProviders[alias]) {
-        throw recoverableToolError(
-          tModel(runtime, "modelNotFound", { input }),
-          {
-            code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
-          },
-        );
+        throw recoverableToolError(tModel(runtime, "modelNotFound", { input }), {
+          code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
+        });
       }
       if (!isConversationModel(allEnabledProviders[alias])) {
-        throw recoverableToolError(
-          tModel(runtime, "notConversationModel", { alias }),
-          {
-            code: ERROR_CODE.RECOVERABLE_MODEL_NOT_CONVERSATION,
-          },
-        );
+        throw recoverableToolError(tModel(runtime, "notConversationModel", { alias }), {
+          code: ERROR_CODE.RECOVERABLE_MODEL_NOT_CONVERSATION,
+        });
+      }
+      const resolvedSessionId = String(runtime?.systemRuntime?.sessionId || sessionId || "").trim();
+      if (
+        runtime?.sessionManager &&
+        typeof runtime.sessionManager.setSessionModelAlias === "function" &&
+        String(runtime?.userId || "").trim() &&
+        resolvedSessionId
+      ) {
+        await runtime.sessionManager.setSessionModelAlias({
+          userId: String(runtime.userId || "").trim(),
+          sessionId: resolvedSessionId,
+          modelAlias: alias,
+        });
       }
       runtime.runtimeModel = alias;
-      try {
-        const resolvedSessionId = String(
-          runtime?.systemRuntime?.sessionId || sessionId || "",
-        ).trim();
-        if (
-          runtime?.sessionManager &&
-          typeof runtime.sessionManager.setSessionModelAlias === "function" &&
-          String(runtime?.userId || "").trim() &&
-          resolvedSessionId
-        ) {
-          await runtime.sessionManager.setSessionModelAlias({
-            userId: String(runtime.userId || "").trim(),
-            sessionId: resolvedSessionId,
-            modelAlias: alias,
-          });
-        }
-      } catch {
-      }
       return toToolJsonResult(TOOL_NAME.SWITCH_MODEL, {
         ok: true,
         sessionId,

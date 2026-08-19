@@ -3,36 +3,26 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  access,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { MEMORY_FILE_SPLIT_MAX_CHARS, getMemoryFileSplitMaxChars } from "../constants.js";
 import {
-  MEMORY_FILE_SPLIT_MAX_CHARS,
-  getMemoryFileSplitMaxChars,
-} from "../constants.js";
+  isMissingPersistencePathError,
+  readPersistedJsonFile,
+} from "../../shared/storage/json-file-reader.js";
 
 export async function fileExists(filePath = "") {
   try {
     await access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (isMissingPersistencePathError(error)) return false;
+    throw error;
   }
 }
 
 export async function readJson(filePath, fallback = {}) {
-  try {
-    const raw = await readFile(filePath, "utf8");
-    return JSON.parse(raw);
-  } catch {
-    return fallback;
-  }
+  return readPersistedJsonFile({ filePath, fallback, readFile });
 }
 
 export async function writeJson(filePath, payload = {}) {
@@ -40,18 +30,18 @@ export async function writeJson(filePath, payload = {}) {
 }
 
 export async function readText(filePath, fallback = "") {
+  let baseText;
   try {
-    const baseText = await readFile(filePath, "utf8");
-    const partEntries = await listSplitPartEntries(filePath);
-    if (!partEntries.length) return baseText;
-    const chunks = [baseText];
-    for (const item of partEntries) {
-      chunks.push(await readFile(item.path, "utf8"));
-    }
-    return chunks.join("");
-  } catch {
-    return fallback;
+    baseText = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (isMissingPersistencePathError(error)) return fallback;
+    throw error;
   }
+  const partEntries = await listSplitPartEntries(filePath);
+  if (!partEntries.length) return baseText;
+  const chunks = [baseText];
+  for (const item of partEntries) chunks.push(await readFile(item.path, "utf8"));
+  return chunks.join("");
 }
 
 export async function appendText(filePath, content = "") {
@@ -124,8 +114,9 @@ export async function ensureDir(dirPath = "") {
 export async function safeReadDirEntries(dirPath = "") {
   try {
     return await readdir(dirPath, { withFileTypes: true });
-  } catch {
-    return [];
+  } catch (error) {
+    if (isMissingPersistencePathError(error)) return [];
+    throw error;
   }
 }
 

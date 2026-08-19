@@ -1,30 +1,70 @@
-.attachment-preview-dialog,
-.generated-file-preview-dialog {
+.el-dialog.attachment-preview-dialog,
+.el-dialog.generated-file-preview-dialog,
+.el-dialog.workflow-session-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
+  border-radius: 0;
+}
+
+.noobot-file-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
 }
 
 .attachment-preview-dialog .el-dialog__header,
-.generated-file-preview-dialog .el-dialog__header {
+.generated-file-preview-dialog .el-dialog__header,
+.workflow-session-preview-dialog .el-dialog__header {
+  flex: 0 0 auto;
   margin-right: 0;
   padding: 14px 18px;
   background: var(--noobot-panel-head-bg);
   border-bottom: 1px solid var(--noobot-divider);
 }
 
+.attachment-preview-dialog .el-dialog__body,
+.generated-file-preview-dialog .el-dialog__body,
+.workflow-session-preview-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.attachment-preview-dialog .preview-body,
+.generated-file-preview-dialog .preview-body,
+.workflow-session-preview-dialog .preview-body {
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
 .attachment-preview-dialog .el-dialog__title,
-.generated-file-preview-dialog .el-dialog__title {
+.generated-file-preview-dialog .el-dialog__title,
+.workflow-session-preview-dialog .el-dialog__title {
   color: var(--noobot-text-strong);
   font-weight: 600;
 }
 
 .attachment-preview-dialog .el-dialog__headerbtn .el-dialog__close,
-.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close {
+.generated-file-preview-dialog .el-dialog__headerbtn .el-dialog__close,
+.workflow-session-preview-dialog .el-dialog__headerbtn .el-dialog__close {
   color: var(--noobot-text-secondary);
 }
 
 .attachment-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
-.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
+.generated-file-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close,
+.workflow-session-preview-dialog .el-dialog__headerbtn:hover .el-dialog__close {
   color: var(--noobot-text-strong);
 }
 

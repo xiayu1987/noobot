@@ -3,11 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import { pad, tryParseJson } from './common.js';
-import { normalizeUsageCacheDiagnostics } from './cache-diagnostics.js';
-import { sanitizeHeaders, sanitizeUrl } from '@noobot/sanitize';
+import fs from "node:fs";
+import path from "node:path";
+import { pad, tryParseJson } from "./common.js";
+import { normalizeUsageCacheDiagnostics } from "./cache-diagnostics.js";
+import { sanitizeHeaders, sanitizeUrl } from "@noobot/sanitize";
 
 function createLogger({
   logDir,
@@ -28,18 +28,20 @@ function createLogger({
     fs.mkdirSync(logDir, { recursive: true });
   }
 
-  function sanitizePathSegment(value = '', fallback = '') {
-    const normalizedValue = String(value || '').trim();
+  function sanitizePathSegment(value = "", fallback = "") {
+    const normalizedValue = String(value || "").trim();
     if (!normalizedValue) return fallback;
 
-    return normalizedValue
-      .replace(/[\\/]+/g, '_')
-      .replace(/[^a-zA-Z0-9._-]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 160) || fallback;
+    return (
+      normalizedValue
+        .replace(/[\\/]+/g, "_")
+        .replace(/[^a-zA-Z0-9._-]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 160) || fallback
+    );
   }
 
-  function getModelFlowLogDir(modelName = '', flowName = '') {
+  function getModelFlowLogDir(modelName = "", flowName = "") {
     return path.join(
       logDir,
       sanitizePathSegment(modelName, unknownModelName),
@@ -48,26 +50,26 @@ function createLogger({
   }
 
   function getModelFlowSessionLogDir(
-    modelName = '',
-    flowName = '',
-    sessionId = '',
-    parentSessionId = '',
+    modelName = "",
+    flowName = "",
+    sessionId = "",
+    parentSessionId = "",
   ) {
     const modelFlowDir = getModelFlowLogDir(modelName, flowName);
     const safeSessionId = sanitizePathSegment(sessionId, unknownSessionId);
     const safeParentSessionId = sanitizePathSegment(parentSessionId, unknownSessionId);
-    const hasParent = String(parentSessionId || '').trim().length > 0;
+    const hasParent = String(parentSessionId || "").trim().length > 0;
 
     return hasParent
-      ? path.join(modelFlowDir, safeParentSessionId, 'children', safeSessionId)
+      ? path.join(modelFlowDir, safeParentSessionId, "children", safeSessionId)
       : path.join(modelFlowDir, safeSessionId);
   }
 
   function ensureModelFlowSessionLogDir(
-    modelName = '',
-    flowName = '',
-    sessionId = '',
-    parentSessionId = '',
+    modelName = "",
+    flowName = "",
+    sessionId = "",
+    parentSessionId = "",
   ) {
     const modelFlowSessionLogDir = getModelFlowSessionLogDir(
       modelName,
@@ -79,7 +81,7 @@ function createLogger({
     return modelFlowSessionLogDir;
   }
 
-  function isManagedLogFile(fileName = '') {
+  function isManagedLogFile(fileName = "") {
     return new RegExp(`^${logPrefix}-\\d{4}-\\d{2}-\\d{2}-\\d{3}\\.log$`).test(fileName);
   }
 
@@ -90,7 +92,8 @@ function createLogger({
       let stat = null;
       try {
         stat = fs.statSync(filePath);
-      } catch (_) {
+      } catch (error) {
+        console.warn("Unable to inspect model proxy log entry:", filePath, error);
         continue;
       }
 
@@ -98,7 +101,8 @@ function createLogger({
         cleanupOldLogsInDir(filePath, now);
         try {
           if (!fs.readdirSync(filePath).length) fs.rmdirSync(filePath);
-        } catch (_) {
+        } catch (error) {
+          console.warn("Unable to remove empty model proxy log directory:", filePath, error);
         }
         continue;
       }
@@ -106,7 +110,8 @@ function createLogger({
       if (!isManagedLogFile(file)) continue;
       try {
         if (now - stat.mtimeMs > retainMs) fs.unlinkSync(filePath);
-      } catch (_) {
+      } catch (error) {
+        console.warn("Unable to remove expired model proxy log:", filePath, error);
       }
     }
   }
@@ -119,10 +124,10 @@ function createLogger({
 
   function getWritableLogFilePath(
     entrySizeBytes,
-    modelName = '',
-    flowName = '',
-    sessionId = '',
-    parentSessionId = '',
+    modelName = "",
+    flowName = "",
+    sessionId = "",
+    parentSessionId = "",
   ) {
     const modelFlowSessionLogDir = ensureModelFlowSessionLogDir(
       modelName,
@@ -143,17 +148,24 @@ function createLogger({
       .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
 
     let index = indices.length ? indices[indices.length - 1] : 1;
-    let filePath = path.join(modelFlowSessionLogDir, `${logPrefix}-${dateStr}-${pad(index, 3)}.log`);
+    let filePath = path.join(
+      modelFlowSessionLogDir,
+      `${logPrefix}-${dateStr}-${pad(index, 3)}.log`,
+    );
 
     try {
       if (fs.existsSync(filePath)) {
         const stat = fs.statSync(filePath);
         if (stat.size + entrySizeBytes > maxLogFileSizeBytes) {
           index += 1;
-          filePath = path.join(modelFlowSessionLogDir, `${logPrefix}-${dateStr}-${pad(index, 3)}.log`);
+          filePath = path.join(
+            modelFlowSessionLogDir,
+            `${logPrefix}-${dateStr}-${pad(index, 3)}.log`,
+          );
         }
       }
-    } catch (_) {
+    } catch (error) {
+      console.warn("Unable to inspect model proxy log size:", filePath, error);
     }
 
     return filePath;
@@ -164,13 +176,13 @@ function createLogger({
     modelName = unknownModelName,
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
-    parentSessionId = '',
+    parentSessionId = "",
   ) {
     try {
       ensureLogDir();
       cleanupOldLogs(Date.now());
 
-      const bytes = Buffer.byteLength(logEntry, 'utf8');
+      const bytes = Buffer.byteLength(logEntry, "utf8");
       const filePath = getWritableLogFilePath(
         bytes,
         modelName,
@@ -179,20 +191,20 @@ function createLogger({
         parentSessionId,
       );
       fs.appendFile(filePath, logEntry, (err) => {
-        if (err) console.error('Error writing log:', err);
+        if (err) console.error("Error writing log:", err);
       });
     } catch (err) {
-      console.error('Logger error:', err);
+      console.error("Logger error:", err);
     }
   }
 
   function logRequest({
     req,
-    bodyText = '',
+    bodyText = "",
     modelName = unknownModelName,
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
-    parentSessionId = '',
+    parentSessionId = "",
     cacheDiagnostics = {},
     bodyComplete = true,
   } = {}) {
@@ -202,7 +214,7 @@ function createLogger({
 Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}
-ParentSessionId: ${parentSessionId || '[root]'}
+ParentSessionId: ${parentSessionId || "[root]"}
 URL: ${sanitizeUrl(req.url)}
 Method: ${req.method}
 Headers: ${JSON.stringify(sanitizeHeaders(req.headers), null, 2)}
@@ -216,31 +228,31 @@ ${bodyText}
   }
 
   function logTerminal({
-    outcome = 'error',
+    outcome = "error",
     status,
     headers = {},
-    bodyText = '',
+    bodyText = "",
     rawBodyText = bodyText,
     error = null,
     modelName = unknownModelName,
     flowName = unknownFlowName,
     sessionId = unknownSessionId,
-    parentSessionId = '',
+    parentSessionId = "",
   } = {}) {
     const responseObject = tryParseJson(rawBodyText);
     const cacheDiagnostics = normalizeUsageCacheDiagnostics(responseObject);
     const logEntry = `
 --- ${new Date().toLocaleString()} ---
 [Terminal]
-Outcome: ${String(outcome || 'error').trim() || 'error'}
+Outcome: ${String(outcome || "error").trim() || "error"}
 Model: ${modelName}
 Flow: ${flowName}
 SessionId: ${sessionId}
-ParentSessionId: ${parentSessionId || '[root]'}
-Status: ${Number.isFinite(Number(status)) ? Number(status) : '[none]'}
+ParentSessionId: ${parentSessionId || "[root]"}
+Status: ${Number.isFinite(Number(status)) ? Number(status) : "[none]"}
 Headers: ${JSON.stringify(sanitizeHeaders(headers), null, 2)}
 CacheDiagnostics: ${JSON.stringify(cacheDiagnostics, null, 2)}
-Error: ${error ? JSON.stringify(error, null, 2) : '[none]'}
+Error: ${error ? JSON.stringify(error, null, 2) : "[none]"}
 Body:
 ${bodyText}
 ----------------
@@ -257,8 +269,4 @@ ${bodyText}
   };
 }
 
-export {
-  createLogger,
-  sanitizeHeaders,
-  sanitizeUrl,
-};
+export { createLogger, sanitizeHeaders, sanitizeUrl };

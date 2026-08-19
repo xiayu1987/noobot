@@ -8,7 +8,8 @@ function destroyStream(stream) {
   if (!stream || stream.destroyed) return;
   try {
     stream.destroy();
-  } catch {
+  } catch (error) {
+    console.warn("[agent-proxy] stream destroy failed", error);
   }
 }
 
@@ -26,12 +27,24 @@ export function bridgeDuplexStreams({
   const finalize = (reason, error = null) => {
     if (finalized) return false;
     finalized = true;
-    try { upstream.unpipe?.(downstream); } catch {}
-    try { downstream.unpipe?.(upstream); } catch {}
+    try {
+      upstream.unpipe?.(downstream);
+    } catch (error) {
+      console.warn("[agent-proxy] upstream unpipe failed", error);
+    }
+    try {
+      downstream.unpipe?.(upstream);
+    } catch (error) {
+      console.warn("[agent-proxy] downstream unpipe failed", error);
+    }
     destroyStream(upstream);
     destroyStream(downstream);
     if (error && typeof onError === "function") {
-      try { onError({ reason, error }); } catch {}
+      try {
+        onError({ reason, error });
+      } catch (callbackError) {
+        console.warn("[agent-proxy] stream error callback failed", callbackError);
+      }
     }
     return true;
   };
@@ -57,6 +70,8 @@ export function bridgeDuplexStreams({
 
   return {
     close: () => finalize("local_close"),
-    get finalized() { return finalized; },
+    get finalized() {
+      return finalized;
+    },
   };
 }

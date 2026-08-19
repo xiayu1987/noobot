@@ -22,7 +22,8 @@ export function emitLazyDebug(sink, debugType, event, payload = {}) {
       debugType,
       event,
       sessionId: resolvedPayload?.sessionId || resolvedPayload?.runState?.sessionId || "",
-      dialogProcessId: resolvedPayload?.dialogProcessId || resolvedPayload?.runState?.dialogProcessId || "",
+      dialogProcessId:
+        resolvedPayload?.dialogProcessId || resolvedPayload?.runState?.dialogProcessId || "",
       turnScopeId: resolvedPayload?.turnScopeId || resolvedPayload?.runState?.turnScopeId || "",
       data: {
         debugType,
@@ -32,4 +33,13 @@ export function emitLazyDebug(sink, debugType, event, payload = {}) {
       },
     };
   });
+}
+
+export function emitLazyDebugSafely(sink, debugType, event, payload = {}) {
+  try {
+    return emitLazyDebug(sink, debugType, event, payload);
+  } catch (error) {
+    console.warn(`[noobot:${debugType}] debug sink failed for ${event}`, error);
+    return false;
+  }
 }

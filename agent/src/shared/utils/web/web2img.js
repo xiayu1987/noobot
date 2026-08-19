@@ -32,7 +32,8 @@ function isUrl(textValue) {
 
 function safeName(name, maxLen = 120) {
   let normalizedName = (name || "").replace(/[^\w\-.]+/g, "_").replace(/^_+|_+$/g, "");
-  if (normalizedName.length > maxLen) normalizedName = normalizedName.slice(0, maxLen).replace(/_+$/g, "");
+  if (normalizedName.length > maxLen)
+    normalizedName = normalizedName.slice(0, maxLen).replace(/_+$/g, "");
   return normalizedName || "unknown";
 }
 
@@ -46,10 +47,7 @@ function safeStemFromUrl(url, maxLen = 120) {
 
 function hostDirName(url) {
   let host = "unknown_host";
-  try {
-    host = new URL(url).host || host;
-  } catch {
-  }
+  if (URL.canParse(url)) host = new URL(url).host || host;
   return `web_${safeName(host)}`;
 }
 
@@ -87,9 +85,7 @@ async function loadUrls(inputValue) {
 
   if (statResult && statResult.isDirectory()) {
     const files = (await fsp.readdir(resolvedPath))
-      .filter((fileName) =>
-        TEXT_EXTENSIONS.has(path.extname(String(fileName || "")).toLowerCase()),
-      )
+      .filter((fileName) => TEXT_EXTENSIONS.has(path.extname(String(fileName || "")).toLowerCase()))
       .sort((leftName, rightName) => leftName.localeCompare(rightName));
     const fileContents = await Promise.all(
       files.map((fileName) => fsp.readFile(path.join(resolvedPath, fileName), "utf-8")),
@@ -144,11 +140,16 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
         if (processedImages.length > 0 && path.resolve(processedImages[0]) !== rawImagePath) {
           await fsp.unlink(rawImagePath);
         }
-      } catch {
+      } catch (error) {
+        console.warn(`[web2img] Failed to remove intermediate image ${rawImagePath}:`, error);
       }
     }
 
-    const [usefulText, fullText] = await extractUsefulAndFullText(page, adPatterns, preferTrafilatura);
+    const [usefulText, fullText] = await extractUsefulAndFullText(
+      page,
+      adPatterns,
+      preferTrafilatura,
+    );
 
     await fsp.writeFile(usefulTextPath, `URL: ${url}\n\n${usefulText}`, "utf-8");
     await fsp.writeFile(fullTextPath, `URL: ${url}\n\n${fullText}`, "utf-8");
@@ -165,7 +166,9 @@ async function processOneUrl(url, outputDir, browser, preferTrafilatura, config)
 
       host_dir_uri: pathToFileURL(hostDir).href,
       raw_image_path_uri: rawExists ? pathToFileURL(rawImagePath).href : "",
-      image_paths_uri: processedImages.map((imagePath) => pathToFileURL(path.resolve(imagePath)).href),
+      image_paths_uri: processedImages.map(
+        (imagePath) => pathToFileURL(path.resolve(imagePath)).href,
+      ),
       useful_text_path_uri: pathToFileURL(usefulTextPath).href,
       full_text_path_uri: pathToFileURL(fullTextPath).href,
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -13,8 +13,5 @@ export function setTerminalResolutionDebugLogSink(sink = null) {
 }
 
 export function logTerminalResolutionDebug(event, payload = {}) {
-  try {
-    return emitLazyDebug(sessionLogSink, "terminal-resolution", event, payload);
-  } catch {
-  }
+  return emitLazyDebugSafely(sessionLogSink, "terminal-resolution", event, payload);
 }

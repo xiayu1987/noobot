@@ -86,6 +86,61 @@ test("existing workspace receives managed template updates without replacing use
   }
 });
 
+test("workspace initialization migrates legacy long memory before template synchronization", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.userPath, "memory", "long-memory"), { recursive: true });
+    await writeFile(
+      path.join(fixture.userPath, "memory", "long-memory.json"),
+      JSON.stringify({ staticMemory: "1. migrated memory" }),
+    );
+    await writeFile(
+      path.join(fixture.userPath, "memory", "long-memory", "metadata.json"),
+      JSON.stringify({ items: [{ id: 1, key: "style", value: "concise" }] }),
+    );
+
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
+      "1. migrated memory\n",
+    );
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "long-memory", "metadata.md"), "utf8"),
+      'M1 key="style" value="concise"\n',
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("legacy long-memory migration does not publish current files after parse failure", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
+    await writeFile(path.join(fixture.userPath, "memory", "long-memory.json"), "{broken");
+
+    await assert.rejects(
+      ensureUserWorkspaceInitialized({
+        workspaceRoot: fixture.workspaceRoot,
+        workspaceTemplatePath: fixture.workspaceTemplatePath,
+        userId: "user-1",
+      }),
+      { code: "PERSISTED_JSON_CORRUPTED" },
+    );
+    await assert.rejects(
+      readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
+      { code: "ENOENT" },
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("explicit workspace sync adds every nested config node through the config protocol", async () => {
   const fixture = await createFixture();
   try {

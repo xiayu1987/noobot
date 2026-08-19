@@ -314,10 +314,8 @@ class SessionArtifactMethods {
       .filter(Boolean);
     let removed = 0;
     for (const sessionId of ids) {
-      try {
-        await fsRm(await this._sessionDisplaySummaryFile(userId, sessionId, ""), { force: true });
-        removed += 1;
-      } catch {}
+      await fsRm(await this._sessionDisplaySummaryFile(userId, sessionId, ""), { force: true });
+      removed += 1;
     }
     return removed;
   }

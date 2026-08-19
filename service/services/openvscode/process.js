@@ -54,13 +54,15 @@ export function stopInstanceBestEffort(
   const pid = Number(instance?.pid || 0);
   if (!Number.isInteger(pid) || pid <= 0) return;
   const child = { pid, kill: (signal) => process.kill(pid, signal) };
-  void terminateProcessTree(child, "SIGTERM");
+  void terminateProcessTree(child, "SIGTERM").catch((error) => {
+    console.warn(`[openvscode] graceful process termination failed: ${error?.message || error}`);
+  });
   if (Number(forceAfterMs || 0) > 0) {
     const timer = setTimeout(() => {
       if (!isProcessAlive(pid)) return;
-      try {
-        void terminateProcessTree(child, "SIGKILL");
-      } catch {}
+      void terminateProcessTree(child, "SIGKILL").catch((error) => {
+        console.warn(`[openvscode] forced process termination failed: ${error?.message || error}`);
+      });
     }, Number(forceAfterMs));
     timer.unref?.();
   }

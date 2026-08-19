@@ -14,6 +14,7 @@ import {
   createWebSocketTransportSupervisor,
   WEB_SOCKET_TRANSPORT_PHASE,
 } from "./webSocketTransportSupervisor.js";
+import { closeWebSocket } from "./closeWebSocket.js";
 
 const MAX_QUEUE_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxQueueSize;
 const MAX_BATCH_SIZE = QUANTITY_THRESHOLDS.sessionLog.maxBatchSize;
@@ -22,7 +23,9 @@ const DEFAULT_MAX_DEBUG_QUEUE_BYTES = QUANTITY_THRESHOLDS.sessionLog.maxDebugQue
 const DEFAULT_DEBUG_TTL_MS = TIME_THRESHOLDS.client.sessionLogDebugTtlMs;
 
 function envFlag(name, fallback = false) {
-  const raw = String(import.meta?.env?.[name] || "").trim().toLowerCase();
+  const raw = String(import.meta?.env?.[name] || "")
+    .trim()
+    .toLowerCase();
   if (!raw) return fallback;
   return ["1", "true", "yes", "on"].includes(raw);
 }
@@ -95,7 +98,7 @@ export function createSessionLogWebSocketClient({
     }
     transport.noteFailure(currentSocket);
     if (closeSocket) {
-      try { currentSocket?.close?.(1011, "transport_error"); } catch {}
+      closeWebSocket(currentSocket, 1011, "transport_error");
     }
     logDiagnostic("disconnected", {
       code: event?.code || 0,
@@ -133,7 +136,11 @@ export function createSessionLogWebSocketClient({
     if (parsed?.event !== "ack") return;
     const ackCount = Math.max(0, Math.min(Number(parsed.count || 1), inFlight.length));
     inFlight.splice(0, ackCount);
-    logDiagnostic("ack", { count: ackCount, queueLength: reliableQueue.length + debugQueue.length, inFlightLength: inFlight.length });
+    logDiagnostic("ack", {
+      count: ackCount,
+      queueLength: reliableQueue.length + debugQueue.length,
+      inFlightLength: inFlight.length,
+    });
     if (!inFlight.length) flush();
   }
 
@@ -141,7 +148,10 @@ export function createSessionLogWebSocketClient({
     if (disposed || isSuspended()) return null;
     const attempt = transport.acquire();
     if (!attempt?.socket) {
-      logDiagnostic("connect skipped", { reason: "empty-url", queueLength: reliableQueue.length + debugQueue.length });
+      logDiagnostic("connect skipped", {
+        reason: "empty-url",
+        queueLength: reliableQueue.length + debugQueue.length,
+      });
       return null;
     }
     const currentSocket = attempt.socket;
@@ -160,10 +170,16 @@ export function createSessionLogWebSocketClient({
       inFlight.length = 0;
     }
     if (attempt.reused) return currentSocket;
-    logDiagnostic("connecting", { queueLength: reliableQueue.length + debugQueue.length, generation: attempt.generation });
+    logDiagnostic("connecting", {
+      queueLength: reliableQueue.length + debugQueue.length,
+      generation: attempt.generation,
+    });
     currentSocket.onopen = () => {
       if (!transport.markOpen(currentSocket) || disposed) return;
-      logDiagnostic("open", { queueLength: reliableQueue.length + debugQueue.length, inFlightLength: inFlight.length });
+      logDiagnostic("open", {
+        queueLength: reliableQueue.length + debugQueue.length,
+        inFlightLength: inFlight.length,
+      });
       flush();
     };
     currentSocket.onmessage = (raw) => {
@@ -203,7 +219,7 @@ export function createSessionLogWebSocketClient({
       } catch (error) {
         logDiagnostic("send failed", { errorType: error?.name || "Error" });
         handleDisconnect(socket, { reason: "send_failed" });
-        try { socket.close?.(1011, "send_failed"); } catch {}
+        closeWebSocket(socket, 1011, "send_failed");
         break;
       }
     }
@@ -211,18 +227,23 @@ export function createSessionLogWebSocketClient({
   }
 
   function debugTypeOf(event = {}) {
-    return String(event.debugType || event.data?.debugType || event.event || "").trim().toLowerCase();
+    return String(event.debugType || event.data?.debugType || event.event || "")
+      .trim()
+      .toLowerCase();
   }
 
   function isEnabled(debugType = "") {
-    const type = String(debugType || "").trim().toLowerCase();
+    const type = String(debugType || "")
+      .trim()
+      .toLowerCase();
     return Boolean(type && policy.debug?.[type] === true);
   }
 
   function updatePolicy(nextPolicy = {}) {
     if (!nextPolicy || typeof nextPolicy !== "object") return false;
     policy = {
-      debug: nextPolicy.debug && typeof nextPolicy.debug === "object" ? { ...nextPolicy.debug } : {},
+      debug:
+        nextPolicy.debug && typeof nextPolicy.debug === "object" ? { ...nextPolicy.debug } : {},
       limits: {
         maxDebugQueue: Number.isFinite(Number(nextPolicy.limits?.maxDebugQueue))
           ? Math.max(0, Number(nextPolicy.limits.maxDebugQueue))
@@ -253,9 +274,14 @@ export function createSessionLogWebSocketClient({
       defaultCategory: SESSION_LOG_DEFAULT_CATEGORY,
       includeTimestamp: false,
     });
-    const isDebug = record.category === "debug" || record.level === "debug" || Boolean(record.data?.debugType);
+    const isDebug =
+      record.category === "debug" || record.level === "debug" || Boolean(record.data?.debugType);
     if (isDebug) {
-      if (!isEnabled(debugTypeOf(record)) || reliableQueue.length || inFlight.some((entry) => entry.reliable)) {
+      if (
+        !isEnabled(debugTypeOf(record)) ||
+        reliableQueue.length ||
+        inFlight.some((entry) => entry.reliable)
+      ) {
         droppedDebugCount += 1;
         return false;
       }
@@ -267,7 +293,12 @@ export function createSessionLogWebSocketClient({
         droppedDebugCount += 1;
         return false;
       }
-      debugQueue.push({ record, reliable: false, bytes, expiresAt: Date.now() + policy.limits.debugTtlMs });
+      debugQueue.push({
+        record,
+        reliable: false,
+        bytes,
+        expiresAt: Date.now() + policy.limits.debugTtlMs,
+      });
       debugQueueBytes += bytes;
     } else {
       const reliableInFlight = inFlight.filter((entry) => entry.reliable).length;
@@ -277,7 +308,12 @@ export function createSessionLogWebSocketClient({
       }
       reliableQueue.push({ record, reliable: true, bytes: 0, expiresAt: Infinity });
     }
-    logDiagnostic("queued", { category: record.category, event: record.event, sessionId: record.sessionId, queueLength: reliableQueue.length + debugQueue.length });
+    logDiagnostic("queued", {
+      category: record.category,
+      event: record.event,
+      sessionId: record.sessionId,
+      queueLength: reliableQueue.length + debugQueue.length,
+    });
     connect();
     flush();
     return true;
@@ -318,9 +354,10 @@ export function createSessionLogWebSocketClient({
     connect,
     log,
     debug: (debugTypeOrEvent = {}, factory = null) => {
-      const type = typeof debugTypeOrEvent === "string"
-        ? String(debugTypeOrEvent).trim().toLowerCase()
-        : debugTypeOf(debugTypeOrEvent);
+      const type =
+        typeof debugTypeOrEvent === "string"
+          ? String(debugTypeOrEvent).trim().toLowerCase()
+          : debugTypeOf(debugTypeOrEvent);
       if (!type || !isEnabled(type)) return false;
       const event = typeof factory === "function" ? factory() : debugTypeOrEvent;
       return log({ ...event, debugType: type, category: "debug" });

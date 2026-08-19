@@ -20,7 +20,6 @@ import {
   shouldSkipSummarizedHistoryMessage,
 } from "./task-summary.js";
 import {
-  resolveFallbackAttachments,
   buildHumanMessageContent,
   buildHumanMessagesForUser,
   shouldBuildUserMetaForHistoryMessage,
@@ -44,7 +43,6 @@ export function buildHistoryMessages({
   effectiveHistoryMessages = [],
   runtime = {},
   fallbackUserMeta = {},
-  includeUserMeta = true,
   allowMessageAttachments = true,
 } = {}) {
   const history = [];
@@ -130,7 +128,7 @@ export function buildHistoryMessages({
     } else {
       history.push(
         new HumanMessage({
-          content: buildHumanMessageContent(msg, resolveFallbackAttachments(fallbackUserMeta)),
+          content: buildHumanMessageContent(msg),
           additional_kwargs: projectContextMessageIdentityMetadata(msg),
         }),
       );

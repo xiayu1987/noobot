@@ -3,7 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { FrontendRunState, SESSION_RUN_EVENT, USER_STOP_REQUEST_STORAGE_KEY, USER_STOP_REQUEST_TTL_MS } from "./constants.js";
+import {
+  FrontendRunState,
+  SESSION_RUN_EVENT,
+  USER_STOP_REQUEST_STORAGE_KEY,
+  USER_STOP_REQUEST_TTL_MS,
+} from "./constants.js";
 import { normalizeSessionRunEvent } from "./core.js";
 import { trim } from "./normalize.js";
 import { nowMs } from "../../model/timeFields.js";
@@ -25,7 +30,9 @@ export function writeStopRequests(entries = []) {
     const storage = globalThis?.localStorage;
     if (!storage) return;
     storage.setItem(USER_STOP_REQUEST_STORAGE_KEY, JSON.stringify(entries));
-  } catch {}
+  } catch (error) {
+    console.warn("[noobot:stop] failed to persist stop request", error);
+  }
 }
 
 export function isFreshStopRequest(entry = {}, timestamp = nowMs()) {
@@ -43,7 +50,11 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
     if (!isFreshStopRequest(entry, event.timestamp)) return false;
     if (trim(entry.sessionId) !== event.sessionId) return true;
     const entryDialogProcessId = trim(entry.dialogProcessId);
-    return Boolean(entryDialogProcessId && event.dialogProcessId && entryDialogProcessId !== event.dialogProcessId);
+    return Boolean(
+      entryDialogProcessId &&
+      event.dialogProcessId &&
+      entryDialogProcessId !== event.dialogProcessId,
+    );
   });
   entries.push({
     sessionId: event.sessionId,
@@ -57,7 +68,11 @@ export function rememberStopRequestedEvent(rawEvent = {}) {
   return event;
 }
 
-export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+export function resolveRememberedStopRequestedEvent({
+  sessionId = "",
+  dialogProcessId = "",
+  turnScopeId = "",
+} = {}) {
   const normalizedSessionId = trim(sessionId);
   const normalizedDialogProcessId = trim(dialogProcessId);
   const normalizedTurnScopeId = trim(turnScopeId);
@@ -86,7 +101,11 @@ export function resolveRememberedStopRequestedEvent({ sessionId = "", dialogProc
   });
 }
 
-export function clearRememberedStopRequests({ sessionId = "", dialogProcessId = "", turnScopeId = "" } = {}) {
+export function clearRememberedStopRequests({
+  sessionId = "",
+  dialogProcessId = "",
+  turnScopeId = "",
+} = {}) {
   const normalizedSessionId = trim(sessionId);
   const normalizedDialogProcessId = trim(dialogProcessId);
   const normalizedTurnScopeId = trim(turnScopeId);
@@ -95,7 +114,11 @@ export function clearRememberedStopRequests({ sessionId = "", dialogProcessId = 
     if (trim(entry.sessionId) !== normalizedSessionId) return true;
     const entryTurnScopeId = trim(entry.turnScopeId);
     if (normalizedTurnScopeId || entryTurnScopeId) {
-      return !(normalizedTurnScopeId && entryTurnScopeId && normalizedTurnScopeId === entryTurnScopeId);
+      return !(
+        normalizedTurnScopeId &&
+        entryTurnScopeId &&
+        normalizedTurnScopeId === entryTurnScopeId
+      );
     }
     const entryDialogProcessId = trim(entry.dialogProcessId);
     if (!normalizedDialogProcessId || !entryDialogProcessId) return false;

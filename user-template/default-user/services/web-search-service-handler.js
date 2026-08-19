@@ -4,46 +4,42 @@
  * SPDX-License-Identifier: MIT
  */
 function resolveLocale(runtime = null) {
-  const localeText = String(
-    runtime?.systemRuntime?.config?.locale ||
-      runtime?.locale ||
-      "",
-  )
+  const localeText = String(runtime?.systemRuntime?.config?.locale || runtime?.locale || "")
     .trim()
     .toLowerCase();
   return localeText.startsWith("en") ? "en-US" : "zh-CN";
 }
 
 const WEB_SEARCH_I18N = {
-  "fetchMissing": {
+  fetchMissing: {
     "zh-CN": "runtime.sharedTools 中缺少 fetch",
     "en-US": "fetch missing in runtime.sharedTools",
   },
-  "bodyFormatInvalid": {
+  bodyFormatInvalid: {
     "zh-CN": "body 格式错误：此服务不接受 body，请使用 queryString。",
     "en-US": "Invalid body format: this service does not accept body, use queryString.",
   },
-  "queryStringMissingSearch": {
+  queryStringMissingSearch: {
     "zh-CN": "queryString 格式错误：缺少 search（或 q）。",
     "en-US": "Invalid queryString format: missing search (or q).",
   },
-  "customParamInvalidUrl": {
+  customParamInvalidUrl: {
     "zh-CN": "custom_param 必须是有效的实例 URL",
     "en-US": "custom_param must be a valid instance URL",
   },
-  "customParamNotInInstances": {
+  customParamNotInInstances: {
     "zh-CN": "custom_param 不在 SEARX 实例列表中",
     "en-US": "custom_param is not in the SEARX instance list",
   },
-  "searxInstanceSourceLabel": {
+  searxInstanceSourceLabel: {
     "zh-CN": "SEARX 实例来源地址",
     "en-US": "SEARX instance source URL",
   },
-  "hintKeyword": {
+  hintKeyword: {
     "zh-CN": "关键词",
     "en-US": "keyword",
   },
-  "resultContentLimited": {
+  resultContentLimited: {
     "zh-CN": "搜索内容有限，请减少关键字，扩大范围搜索",
     "en-US": "Limited search content. Please reduce keywords and broaden your search scope.",
   },
@@ -51,16 +47,12 @@ const WEB_SEARCH_I18N = {
 
 function tWebSearch(locale = "zh-CN", key = "") {
   const row = WEB_SEARCH_I18N[String(key || "").trim()] || {};
-  return String(
-    row[locale] || row["zh-CN"] || row["en-US"] || String(key || "").trim(),
-  );
+  return String(row[locale] || row["zh-CN"] || row["en-US"] || String(key || "").trim());
 }
 
 function formatHint(endpointCfg = {}, locale = "zh-CN") {
   return {
-    queryString:
-      endpointCfg?.query_string_format ||
-      `search=${tWebSearch(locale, "hintKeyword")}`,
+    queryString: endpointCfg?.query_string_format || `search=${tWebSearch(locale, "hintKeyword")}`,
     body: endpointCfg?.body_format || "{}",
   };
 }
@@ -85,7 +77,8 @@ function parseSearxInstancesYaml(text = "") {
     try {
       const normalized = new URL(matched[1]).toString().replace(/\/+$/, "");
       if (!out.includes(normalized)) out.push(normalized);
-    } catch {
+    } catch (error) {
+      console.warn("[web-search] invalid instance URL in remote registry", error);
     }
   }
   return out;
@@ -95,11 +88,10 @@ function normalizeInstanceList(list = []) {
   const out = [];
   for (const item of Array.isArray(list) ? list : []) {
     try {
-      const normalized = new URL(String(item || "").trim())
-        .toString()
-        .replace(/\/+$/, "");
+      const normalized = new URL(String(item || "").trim()).toString().replace(/\/+$/, "");
       if (normalized && !out.includes(normalized)) out.push(normalized);
-    } catch {
+    } catch (error) {
+      console.warn("[web-search] invalid configured instance URL", error);
     }
   }
   return out;
@@ -125,7 +117,8 @@ async function getRemoteSearxInstances(fetcher) {
       instances: parsed,
     };
     return parsed;
-  } catch {
+  } catch (error) {
+    console.warn("[web-search] remote instance registry unavailable", error);
     return [];
   }
 }
@@ -202,7 +195,8 @@ async function requestWithFallback({
         source: "primary",
       };
     }
-  } catch {
+  } catch (error) {
+    console.warn("[web-search] primary provider request failed", error);
   }
 
   const normalizedCustomParam = String(customParam || "").trim();
@@ -211,7 +205,8 @@ async function requestWithFallback({
     let normalizedUrl = "";
     try {
       normalizedUrl = new URL(normalizedCustomParam).toString().replace(/\/+$/, "");
-    } catch {
+    } catch (error) {
+      console.warn("[web-search] fallback provider request failed", { base, error });
       return {
         ok: false,
         status: 0,
@@ -259,7 +254,8 @@ async function requestWithFallback({
           attemptedFallbackUrls,
         };
       }
-    } catch {
+    } catch (error) {
+      console.warn("[web-search] fallback provider request failed", { base, error });
     }
   }
 
@@ -300,12 +296,7 @@ export default async function webSearchServiceHandler({
   }
 
   const search = String(queryString?.search || queryString?.q || "").trim();
-  const outputFormat =
-    String(
-      endpointCfg?.custom_param_format ||
-      "json",
-    ).trim() ||
-    "json";
+  const outputFormat = String(endpointCfg?.custom_param_format || "json").trim() || "json";
   if (!search) {
     return {
       ok: false,
