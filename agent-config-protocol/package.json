@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.js",
     "./enums": "./src/enums.js",
+    "./connector-status-projection": "./src/connector-status-projection.js",
     "./tool-policy": "./src/policy/tool-policy.js"
   },
   "scripts": {

@@ -5,6 +5,8 @@
  */
 
 import { getMessageRuntimeChannelState } from "../../chat/runtime/sessionRunStateMachine.js";
+import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
+export { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
@@ -38,23 +40,6 @@ export function summarizeDebugMessage(message = {}) {
     thinkingFinishedAt: message.thinkingFinishedAt || "",
     contentLength: String(message.content || message.text || message.message || "").length,
     attachments: summarizeDebugAttachments(message.attachments),
-  };
-}
-
-export function summarizeDebugAttachments(attachments) {
-  if (!Array.isArray(attachments)) {
-    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
-  }
-  return {
-    kind: "array",
-    count: attachments.length,
-    items: attachments.slice(0, 8).map((attachment = {}) => ({
-      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
-      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
-      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
-      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
-      url: attachment.url ? "present" : "",
-    })),
   };
 }
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   RUNTIME_EVENT_CATEGORIES,
   RUNTIME_EVENT_CHANNELS,
@@ -25,24 +26,31 @@ async function recordCollabArtifactPersistFailure({
   containerId,
   error,
 } = {}) {
-  await writeRoutedRuntimeEvent(
+  await runBestEffort(
+    () =>
+      writeRoutedRuntimeEvent(
+        {
+          source: "agent",
+          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+          category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
+          event: "agent.collab.persistCompletedTaskResultsAsAttachments.failed",
+          userId,
+          sessionId,
+          parentSessionId,
+          data: {
+            containerId: String(containerId || ""),
+            error: error?.message || String(error || ""),
+          },
+        },
+        {
+          workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
+        },
+      ),
     {
-      source: "agent",
-      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.SYSTEM,
-      event: "agent.collab.persistCompletedTaskResultsAsAttachments.failed",
-      userId,
-      sessionId,
-      parentSessionId,
-      data: {
-        containerId: String(containerId || ""),
-        error: error?.message || String(error || ""),
-      },
+      operationName: "collaboration.recordArtifactPersistenceFailure",
+      context: { sessionId, containerId },
     },
-    {
-      workspaceRoot: runtime?.globalConfig?.workspaceRoot || "",
-    },
-  ).catch(() => {});
+  );
 }
 
 function toSafeArtifactName(value = "") {

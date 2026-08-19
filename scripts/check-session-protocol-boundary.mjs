@@ -16,6 +16,7 @@ const productionRoots = [
 const ignored = new Set(["vendor", "dist", "node_modules", "__tests__", "tests"]);
 const violations = [];
 const canonicalTurnCommitProtocol = "session-protocol/src/turn-commit.js";
+const canonicalTurnScopeIdentityProtocol = "session-protocol/src/identity/turn-scope-identity.js";
 
 function visit(relative) {
   const absolute = path.join(root, relative);
@@ -58,6 +59,14 @@ function inspectTurnCommitProtocolDefinitions(relative) {
     /\b(?:validate|assert)TurnCommittedEventData\b/.test(source)
   ) {
     violations.push(`${relative}: duplicate turn_committed protocol implementation`);
+  }
+  if (
+    relative !== canonicalTurnScopeIdentityProtocol &&
+    /\b(?:function|const)\s+(?:canonicalizeTurnScopeId|turnScopeIdentityKey|areCanonicalTurnScopeIdsEqual)\b/.test(
+      source,
+    )
+  ) {
+    violations.push(`${relative}: duplicate Turn Scope identity protocol implementation`);
   }
 }
 

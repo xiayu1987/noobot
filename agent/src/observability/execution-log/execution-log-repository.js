@@ -82,7 +82,7 @@ export class ExecutionLogRepository {
 
   async _withAppendQueue(queueKey = "", operation = async () => {}) {
     const previous = this.appendQueues.get(queueKey) || Promise.resolve();
-    const current = previous.catch(() => {}).then(operation);
+    const current = previous.then(operation, operation);
     this.appendQueues.set(queueKey, current);
     try {
       return await current;

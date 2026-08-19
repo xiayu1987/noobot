@@ -3,37 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { readdir, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { init, parse } from "es-module-lexer";
+import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const sourceRoots = [
-  "agent/src",
-  "plugin/noobot-plugin-harness/src",
-  "plugin/noobot-plugin-workflow/src",
-];
-const ignoredDirectories = new Set([
-  "node_modules",
-  "vendor",
-  "dist",
-  "build",
-  "__tests__",
-  "tests",
-]);
-
-async function collectModules(relativeDirectory, modules) {
-  const absoluteDirectory = path.join(root, relativeDirectory);
-  for (const entry of await readdir(absoluteDirectory, { withFileTypes: true })) {
-    if (ignoredDirectories.has(entry.name)) continue;
-    const relativePath = path.join(relativeDirectory, entry.name);
-    if (entry.isDirectory()) {
-      await collectModules(relativePath, modules);
-    } else if (/\.(?:js|mjs)$/.test(entry.name)) {
-      modules.add(path.normalize(relativePath));
-    }
-  }
-}
 
 function resolveLocalImport(fromModule, specifier, modules) {
   if (!specifier.startsWith(".")) return "";
@@ -48,8 +23,12 @@ function resolveLocalImport(fromModule, specifier, modules) {
 }
 
 await init;
-const modules = new Set();
-for (const sourceRoot of sourceRoots) await collectModules(sourceRoot, modules);
+const modules = new Set(
+  await getFirstPartyProductionFiles({
+    repositoryRoot: root,
+    extensions: [".js", ".mjs"],
+  }),
+);
 const graph = new Map();
 for (const modulePath of modules) {
   const source = await readFile(path.join(root, modulePath), "utf8");

@@ -3,37 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { safeNum } from "../../shared/utils/shared-utils.js";
 import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { mergeConnectorStatusItems } from "@noobot/agent-config-protocol/connector-status-projection";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { CONNECTOR_TYPE } from "@noobot/agent-config-protocol";
 import { CONNECTOR_RUNTIME_STATUS } from "../../integrations/connectors/constants.js";
-function normalizeHistoryConnectorItems(items = []) {
-  return (Array.isArray(items) ? items : []).map((connectorItem) => ({
-    connector_name: String(connectorItem?.connector_name || "").trim(),
-    connector_type: String(connectorItem?.connector_type || "").trim(),
-    connected_at: String(connectorItem?.last_connected_at || "").trim(),
-    connection_meta:
-      connectorItem?.connection_meta && typeof connectorItem.connection_meta === "object"
-        ? connectorItem.connection_meta
-        : {},
-    status:
-      String(connectorItem?.status || CONNECTOR_RUNTIME_STATUS.DISCONNECTED).trim() ||
-      CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
-    status_code: Number(connectorItem?.status_code ?? 410),
-    status_message:
-      String(connectorItem?.status_message || "").trim() ||
-      tSystem("status.disconnectedFromHistory"),
-    checked_at: String(connectorItem?.checked_at || connectorItem?.last_connected_at || "").trim(),
-    last_connected_at: String(connectorItem?.last_connected_at || "").trim(),
-    connect_count: safeNum(connectorItem?.connect_count),
-    connection_defaults:
-      connectorItem?.connection_defaults && typeof connectorItem.connection_defaults === "object"
-        ? connectorItem.connection_defaults
-        : {},
-  }));
-}
-
 function normalizeRuntimeConnectorItems(items = [], connectorType = "") {
   const normalizedConnectorType = String(connectorType || "").trim();
   return (Array.isArray(items) ? items : []).map((connectorItem) => ({
@@ -61,42 +35,13 @@ function mergeRuntimeAndHistoryConnectorGroup({
   runtimeConnectors = [],
   historyConnectors = [],
 } = {}) {
-  const runtimeList = Array.isArray(runtimeConnectors) ? runtimeConnectors : [];
-  const historyList = normalizeHistoryConnectorItems(historyConnectors);
-  const mergedByName = new Map();
-  for (const historyItem of historyList) {
-    const connectorName = String(historyItem?.connector_name || "").trim();
-    if (!connectorName) continue;
-    mergedByName.set(connectorName, historyItem);
-  }
-  for (const runtimeItem of runtimeList) {
-    const connectorName = String(runtimeItem?.connector_name || "").trim();
-    if (!connectorName) continue;
-    const previousItem = mergedByName.get(connectorName) || {};
-    mergedByName.set(connectorName, {
-      ...previousItem,
-      ...runtimeItem,
-      status:
-        String(runtimeItem?.status || CONNECTOR_RUNTIME_STATUS.CONNECTED).trim() ||
-        CONNECTOR_RUNTIME_STATUS.CONNECTED,
-      status_code: Number(runtimeItem?.status_code ?? 0),
-      status_message: String(runtimeItem?.status_message || tSystem("connectors.statusOk")).trim(),
-      checked_at:
-        String(runtimeItem?.checked_at || runtimeItem?.connected_at || "").trim() ||
-        String(previousItem?.checked_at || "").trim(),
-      last_connected_at:
-        String(runtimeItem?.connected_at || "").trim() ||
-        String(previousItem?.last_connected_at || "").trim(),
-    });
-  }
-  return Array.from(mergedByName.values()).sort((leftConnector, rightConnector) => {
-    const leftTime = new Date(
-      leftConnector?.last_connected_at || leftConnector?.checked_at || 0,
-    ).getTime();
-    const rightTime = new Date(
-      rightConnector?.last_connected_at || rightConnector?.checked_at || 0,
-    ).getTime();
-    return rightTime - leftTime;
+  return mergeConnectorStatusItems({
+    runtimeConnectors,
+    historyConnectors,
+    connectedStatus: CONNECTOR_RUNTIME_STATUS.CONNECTED,
+    connectedMessage: tSystem("connectors.statusOk"),
+    disconnectedStatus: CONNECTOR_RUNTIME_STATUS.DISCONNECTED,
+    disconnectedMessage: tSystem("status.disconnectedFromHistory"),
   });
 }
 

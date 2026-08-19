@@ -14,7 +14,7 @@ function resolveRole(message = {}) {
   return resolveContextMessageRole(message);
 }
 
-function extractTextContent(content = "") {
+export function extractContextTextContent(content = "") {
   if (content === undefined || content === null) return "";
   if (typeof content === "string") return content.trim();
   if (Array.isArray(content)) {
@@ -37,7 +37,7 @@ function extractTextContent(content = "") {
 function normalizeMessage(message = {}) {
   const role = resolveRole(message);
   if (!role) throw new TypeError("auxiliary history message role is required");
-  const content = extractTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
+  const content = extractContextTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
   if (role === "assistant") {
     const toolCalls = resolveContextToolCalls(message);
     if (!content && !toolCalls.length) return null;

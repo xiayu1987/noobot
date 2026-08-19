@@ -4,9 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 import { app } from "electron";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
-import { appendEarlyLog, createStartupLogger, desktopAppName, installEarlyDiagnostics } from "./runtime/logging.js";
+import {
+  appendEarlyLog,
+  createStartupLogger,
+  desktopAppName,
+  installEarlyDiagnostics,
+} from "./runtime/logging.js";
 import { createDesktopConfigManager } from "./runtime/config.js";
 import { registerFileIpcHandlers } from "./ipc/files.js";
 import { createDesktopDependencyManager } from "./dependencies/manager.js";
@@ -18,7 +24,9 @@ import { createDependencyProcessTools } from "./dependencies/process.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(process.env.NOOBOT_DESKTOP_REPO_ROOT || path.resolve(__dirname, "../../.."));
+const repoRoot = path.resolve(
+  process.env.NOOBOT_DESKTOP_REPO_ROOT || path.resolve(__dirname, "../../.."),
+);
 const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 
 installEarlyDiagnostics({ app, filename: __filename, dirname: __dirname });
@@ -36,7 +44,9 @@ const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
 const defaultClientUrl = process.env.NOOBOT_CLIENT_URL || "http://127.0.0.1:10060";
 const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
-const startupDebugEnabled = /^(1|true|yes|on)$/i.test(String(process.env.NOOBOT_STARTUP_DEBUG || ""));
+const startupDebugEnabled = /^(1|true|yes|on)$/i.test(
+  String(process.env.NOOBOT_STARTUP_DEBUG || ""),
+);
 const {
   appendDesktopLog,
   appendStartupLog,
@@ -53,19 +63,24 @@ let pendingDependencyResolve = null;
 let desktopConfigState = null;
 const startupStatuses = [];
 
-const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow } = createDesktopWindowManager({
-  app,
-  dirname: __dirname,
-  agentProxyOrigin,
-  defaultClientUrl,
-  appendEarlyLog,
-  appendDesktopLog,
-});
+const { createWindow, resolveNoobotUrl, reloadWebContents, getMainWindow } =
+  createDesktopWindowManager({
+    app,
+    dirname: __dirname,
+    agentProxyOrigin,
+    defaultClientUrl,
+    appendEarlyLog,
+    appendDesktopLog,
+  });
 
 function sendStatus(status) {
   const language = desktopConfigState?.superAdmin?.language === "en-US" ? "en-US" : "zh-CN";
   const localizedStatus = { ...status, language };
-  writeStartupLog("main", "status", { phase: localizedStatus?.phase, dependency: localizedStatus?.dependency, message: String(localizedStatus?.message || "").slice(0, 500) });
+  writeStartupLog("main", "status", {
+    phase: localizedStatus?.phase,
+    dependency: localizedStatus?.dependency,
+    message: String(localizedStatus?.message || "").slice(0, 500),
+  });
   startupStatuses.push(localizedStatus);
   if (startupStatuses.length > 300) startupStatuses.shift();
   if (status?.message) {
@@ -92,7 +107,8 @@ function sendStatus(status) {
   });
 }
 
-const { ensureDesktopGlobalConfig, saveConfigParamValues, saveSuperAdminConfig } = createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog });
+const { ensureDesktopGlobalConfig, saveConfigParamValues, saveSuperAdminConfig } =
+  createDesktopConfigManager({ repoRoot, packagedBackendRoot, appendDesktopLog });
 const { runProcess: runDependencyProcess } = createDependencyProcessTools({ appendEarlyLog });
 
 const { ensureSelectedDependencies, inspectDependencies } = createDesktopDependencyManager({
@@ -104,12 +120,19 @@ const { ensureSelectedDependencies, inspectDependencies } = createDesktopDepende
   getDependencyProxyUrl: () => String(desktopConfigState?.superAdmin?.dependencyProxyUrl || ""),
 });
 
-const { requestSuperAdminConfig, requestMissingConfigParams, requestDependencySetup } = createStartupConfigRequesters({
-  sendStatus,
-  setPendingConfigResolve: (resolve) => { pendingConfigResolve = resolve; },
-  setPendingSuperAdminResolve: (resolve) => { pendingSuperAdminResolve = resolve; },
-  setPendingDependencyResolve: (resolve) => { pendingDependencyResolve = resolve; },
-});
+const { requestSuperAdminConfig, requestMissingConfigParams, requestDependencySetup } =
+  createStartupConfigRequesters({
+    sendStatus,
+    setPendingConfigResolve: (resolve) => {
+      pendingConfigResolve = resolve;
+    },
+    setPendingSuperAdminResolve: (resolve) => {
+      pendingSuperAdminResolve = resolve;
+    },
+    setPendingDependencyResolve: (resolve) => {
+      pendingDependencyResolve = resolve;
+    },
+  });
 
 const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager({
   app,
@@ -128,7 +151,9 @@ const { ensureServiceStarted, stopManagedService } = createDesktopServiceManager
   appendAgentProxyLog,
   ensureDesktopGlobalConfig,
   getDesktopConfigState: () => desktopConfigState,
-  setDesktopConfigState: (state) => { desktopConfigState = state; },
+  setDesktopConfigState: (state) => {
+    desktopConfigState = state;
+  },
   requestSuperAdminConfig,
   requestMissingConfigParams,
   requestDependencySetup,
@@ -149,12 +174,16 @@ const { boot, hasBootStarted } = createDesktopBootstrap({
 });
 
 async function startBoot(reason) {
-  appendEarlyLog(`[main:startBoot] requested; reason=${reason}; isReady=${app.isReady()}; bootStarted=${hasBootStarted()}`);
+  appendEarlyLog(
+    `[main:startBoot] requested; reason=${reason}; isReady=${app.isReady()}; bootStarted=${hasBootStarted()}`,
+  );
   try {
     await boot();
     appendEarlyLog(`[main:startBoot] completed; reason=${reason}`);
   } catch (error) {
-    appendEarlyLog(`[main:startBoot] failed; reason=${reason}; error=${error?.stack || error?.message || String(error)}`);
+    appendEarlyLog(
+      `[main:startBoot] failed; reason=${reason}; error=${error?.stack || error?.message || String(error)}`,
+    );
     throw error;
   }
 }
@@ -164,13 +193,21 @@ registerStartupIpcHandlers({
   app,
   getStartupStatuses: () => startupStatuses,
   getDesktopConfigState: () => desktopConfigState,
-  setDesktopConfigState: (state) => { desktopConfigState = state; },
+  setDesktopConfigState: (state) => {
+    desktopConfigState = state;
+  },
   getPendingConfigResolve: () => pendingConfigResolve,
-  setPendingConfigResolve: (resolve) => { pendingConfigResolve = resolve; },
+  setPendingConfigResolve: (resolve) => {
+    pendingConfigResolve = resolve;
+  },
   getPendingSuperAdminResolve: () => pendingSuperAdminResolve,
-  setPendingSuperAdminResolve: (resolve) => { pendingSuperAdminResolve = resolve; },
+  setPendingSuperAdminResolve: (resolve) => {
+    pendingSuperAdminResolve = resolve;
+  },
   getPendingDependencyResolve: () => pendingDependencyResolve,
-  setPendingDependencyResolve: (resolve) => { pendingDependencyResolve = resolve; },
+  setPendingDependencyResolve: (resolve) => {
+    pendingDependencyResolve = resolve;
+  },
   ensureDesktopGlobalConfig,
   saveConfigParamValues,
   saveSuperAdminConfig,
@@ -183,21 +220,28 @@ registerStartupIpcHandlers({
   runProcess: runDependencyProcess,
 });
 
-app.whenReady()
+app
+  .whenReady()
   .then(() => startBoot("whenReady"))
-  .catch((error) => appendEarlyLog(`[main:whenReady] failed: ${error?.stack || error?.message || String(error)}`));
+  .catch((error) =>
+    appendEarlyLog(`[main:whenReady] failed: ${error?.stack || error?.message || String(error)}`),
+  );
 
 app.once("ready", () => {
   setImmediate(() => {
     if (!hasBootStarted()) {
-      startBoot("ready-event-fallback").catch(() => {});
+      void runBestEffort(() => startBoot("ready-event-fallback"), {
+        operationName: "desktop.startBoot.readyEvent",
+      });
     }
   });
 });
 
 setTimeout(() => {
   if (app.isReady() && !hasBootStarted()) {
-    startBoot("timer-fallback").catch(() => {});
+    void runBestEffort(() => startBoot("timer-fallback"), {
+      operationName: "desktop.startBoot.timer",
+    });
   }
 }, 5000);
 app.on("window-all-closed", () => app.quit());

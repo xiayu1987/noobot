@@ -197,7 +197,10 @@ export function bindCurrentTurnPersistence({
       });
     };
     const next = persistenceTail.then(persist, persist);
-    persistenceTail = next.catch(() => {});
+    persistenceTail = next.then(
+      () => undefined,
+      () => undefined,
+    );
     return next;
   };
 

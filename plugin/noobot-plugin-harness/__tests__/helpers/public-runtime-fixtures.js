@@ -12,6 +12,7 @@ import {
   TRANSFER_DIRECTION,
 } from "@noobot/semantic-transfer-protocol";
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
 let testScopeSequence = 0;
 let testTransferSequence = 0;
@@ -248,6 +249,7 @@ export function ensureTestHookContext(ctx = {}) {
   delete ctx.messages;
   delete ctx.messageBlocks;
   delete ctx.activeTurnIdentity;
+  migrateHarnessBucket(ctx);
   return ctx;
 }
 

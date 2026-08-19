@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../interfaces/can-persistence.js';
-import IModel from '../../../design/model/interfaces/model.js';
-import IProcessChain from '../state/interfaces/process-chain.js';
-import IState from '../state/interfaces/state.js';
-
 class IBizinst {
   setBusiness(business) {}
   getBusiness() {}
@@ -26,4 +21,4 @@ class IBizinst {
   getBizinstRunState() {}
 }
 
-export default  IBizinst;
+export default IBizinst;

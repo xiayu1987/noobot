@@ -5,8 +5,13 @@
  */
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { readPersistedJsonFile } from "../../shared/storage/json-file-reader.js";
-import { renderLongMemoryMetadataItems } from "./reader.js";
+import { readPersistedJsonFile } from "../shared/storage/json-file-reader.js";
+import {
+  normalizeExperienceMetadata,
+  renderExperienceMetadataText,
+} from "./experience/metadata-store.js";
+import { renderExperienceModelText } from "./experience/model/text-protocol.js";
+import { renderLongMemoryMetadataItems } from "./long-memory/reader.js";
 
 async function pathExists(filePath) {
   try {
@@ -47,7 +52,7 @@ async function prepareMigration({ legacyPath, currentPath, render }) {
   return { currentPath, content: `${content}\n` };
 }
 
-export async function migrateLegacyLongMemoryFiles(basePath = "") {
+export async function migrateLegacyMemoryFiles(basePath = "") {
   const memoryDir = path.join(basePath, "memory");
   const migrations = (
     await Promise.all([
@@ -65,6 +70,16 @@ export async function migrateLegacyLongMemoryFiles(basePath = "") {
         legacyPath: path.join(memoryDir, "long-memory-model.json"),
         currentPath: path.join(memoryDir, "long-memory-model.md"),
         render: renderLegacyLongMemoryModel,
+      }),
+      prepareMigration({
+        legacyPath: path.join(memoryDir, "experience", "metadata.json"),
+        currentPath: path.join(memoryDir, "experience", "metadata.md"),
+        render: (payload) => renderExperienceMetadataText(normalizeExperienceMetadata(payload)),
+      }),
+      prepareMigration({
+        legacyPath: path.join(memoryDir, "experience-model.json"),
+        currentPath: path.join(memoryDir, "experience-model.md"),
+        render: renderExperienceModelText,
       }),
     ])
   ).filter(Boolean);

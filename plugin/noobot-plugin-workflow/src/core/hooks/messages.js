@@ -9,7 +9,10 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { resolveWorkflowLocaleFromContext, tWorkflow, WORKFLOW_I18N_KEYSET } from "../i18n.js";
 import { resolveWorkflowAgentContext } from "./runtime.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assembly/auxiliary-history";
+import {
+  extractContextTextContent,
+  projectAuxiliaryHistoryMessages,
+} from "@noobot/context-protocol/assembly/auxiliary-history";
 
 export function resolveAssistantOutput(agentResult = {}) {
   const direct = String(agentResult?.output || agentResult?.answer || "").trim();
@@ -34,23 +37,7 @@ export function resolveWorkflowSourceText(ctx = {}, agentResult = {}, hookPoint 
 }
 
 export function extractWorkflowMessageTextContent(content = "") {
-  if (content === undefined || content === null) return "";
-  if (typeof content === "string") return content.trim();
-  if (Array.isArray(content)) {
-    return content
-      .map((item = {}) => {
-        if (typeof item === "string") return item;
-        if (!item || typeof item !== "object") return "";
-        return String(item?.text || item?.content || item?.value || "").trim();
-      })
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-  }
-  if (typeof content === "object") {
-    return String(content?.text || content?.content || content?.value || "").trim();
-  }
-  return String(content || "").trim();
+  return extractContextTextContent(content);
 }
 
 export function compactWorkflowText(
@@ -61,7 +48,9 @@ export function compactWorkflowText(
     .replace(/\s+/g, " ")
     .trim();
   const fallback = LENGTH_THRESHOLDS.contextPreview.workflowCompactTextChars;
-  const limit = Number.isFinite(Number(maxLength)) ? Math.max(80, Math.floor(Number(maxLength))) : fallback;
+  const limit = Number.isFinite(Number(maxLength))
+    ? Math.max(80, Math.floor(Number(maxLength)))
+    : fallback;
   if (raw.length <= limit) return raw;
   return `${raw.slice(0, limit).trim()}...`;
 }
@@ -69,9 +58,7 @@ export function compactWorkflowText(
 export function resolveWorkflowAvailableToolCatalog(ctx = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const agentContext = resolveWorkflowAgentContext(ctx);
-  const registry = Array.isArray(agentContext?.bindings?.tools)
-    ? agentContext.bindings.tools
-    : [];
+  const registry = Array.isArray(agentContext?.bindings?.tools) ? agentContext.bindings.tools : [];
   const catalog = [];
   const seenNames = new Set();
   for (const item of registry) {
@@ -105,9 +92,15 @@ export function buildWorkflowAvailableToolsPlanningBlock(ctx = {}, locale = "zh-
   ].join("\n");
 }
 
-export function resolveWorkflowSemanticContextMessages({ options = {}, ctx = {}, locale = "zh-CN" } = {}) {
+export function resolveWorkflowSemanticContextMessages({
+  options = {},
+  ctx = {},
+  locale = "zh-CN",
+} = {}) {
   if (typeof options?.resolveModelMessages !== "function") {
-    throw new TypeError("workflow semantic context requires the authoritative modelContext resolver");
+    throw new TypeError(
+      "workflow semantic context requires the authoritative modelContext resolver",
+    );
   }
   const resolved = options.resolveModelMessages({
     ctx,

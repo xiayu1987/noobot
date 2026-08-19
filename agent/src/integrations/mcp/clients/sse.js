@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { recoverableToolError } from "../../../shared/errors/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
@@ -117,11 +118,9 @@ export class SseMcpClient extends BaseMcpClient {
     if (this.signal) {
       if (this.signal.aborted) this._streamAbortController.abort();
       else {
-        this.signal.addEventListener(
-          "abort",
-          () => this._streamAbortController?.abort(),
-          { once: true },
-        );
+        this.signal.addEventListener("abort", () => this._streamAbortController?.abort(), {
+          once: true,
+        });
       }
     }
     const response = await this.fetch(this.baseUrl, {
@@ -264,15 +263,15 @@ export class SseMcpClient extends BaseMcpClient {
 
   async _doNotify({ method, params = {} }) {
     await this.connect();
-    await this.fetch(this.messageUrl, {
-      method: "POST",
-      headers: buildRequestHeaders(this.headers),
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method,
-        params,
-      }),
-      signal: this.signal || undefined,
-    }).catch(() => {});
+    await runBestEffort(
+      () =>
+        this.fetch(this.messageUrl, {
+          method: "POST",
+          headers: buildRequestHeaders(this.headers),
+          body: JSON.stringify({ jsonrpc: "2.0", method, params }),
+          signal: this.signal || undefined,
+        }),
+      { operationName: "mcp.sse.notify", context: { method } },
+    );
   }
 }

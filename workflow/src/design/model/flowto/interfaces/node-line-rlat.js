@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../interfaces/can-persistence.js';
-import INode from '../../node/interfaces/node.js';
-
 class INodeLineRLAT {
   getNode() {}
   setNode(node) {}
@@ -16,4 +13,4 @@ class INodeLineRLAT {
   setRLATType(rLATType) {}
 }
 
-export default  INodeLineRLAT;
+export default INodeLineRLAT;

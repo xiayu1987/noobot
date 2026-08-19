@@ -6,6 +6,7 @@
 import { chromium } from "playwright";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { logger } from "../../../observability/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { normalizeTimeMs } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
@@ -147,9 +148,15 @@ export async function browseUrlHtml({
       try {
         await page.route("**/*", (route) => {
           if (shouldBlockRequest(route.request())) {
-            return route.abort().catch(() => {});
+            return runBestEffort(() => route.abort(), {
+              operationName: "browserSimulation.abortRoute",
+              context: { targetUrl },
+            });
           }
-          return route.continue().catch(() => {});
+          return runBestEffort(() => route.continue(), {
+            operationName: "browserSimulation.continueRoute",
+            context: { targetUrl },
+          });
         });
         const response = await page.goto(targetUrl, {
           waitUntil,
@@ -176,10 +183,16 @@ export async function browseUrlHtml({
           error: "",
         };
       } finally {
-        await page.close().catch(() => {});
+        await runBestEffort(() => page.close(), {
+          operationName: "browserSimulation.closePage",
+          context: { targetUrl },
+        });
       }
     } finally {
-      await context.close().catch(() => {});
+      await runBestEffort(() => context.close(), {
+        operationName: "browserSimulation.closeContext",
+        context: { targetUrl },
+      });
     }
   } catch (error) {
     logger.error(`[browseUrlHtml] ${targetUrl} failed: ${error?.message || String(error)}`);
@@ -199,22 +212,26 @@ async function closeSharedBrowser() {
   if (!sharedBrowser) return;
   const current = sharedBrowser;
   sharedBrowser = null;
-  await current.close().catch(() => {});
+  await runBestEffort(() => current.close(), {
+    operationName: "browserSimulation.closeSharedBrowser",
+  });
 }
 
 process.on("exit", () => {
   if (sharedBrowser) {
-    sharedBrowser.close().catch(() => {});
+    void runBestEffort(() => sharedBrowser.close(), {
+      operationName: "browserSimulation.closeSharedBrowserOnExit",
+    });
     sharedBrowser = null;
   }
 });
 process.on("SIGINT", () => {
-  closeSharedBrowser()
-    .catch(() => {})
-    .finally(() => process.exit(130));
+  void runBestEffort(closeSharedBrowser, {
+    operationName: "browserSimulation.closeSharedBrowserOnSigint",
+  }).finally(() => process.exit(130));
 });
 process.on("SIGTERM", () => {
-  closeSharedBrowser()
-    .catch(() => {})
-    .finally(() => process.exit(143));
+  void runBestEffort(closeSharedBrowser, {
+    operationName: "browserSimulation.closeSharedBrowserOnSigterm",
+  }).finally(() => process.exit(143));
 });

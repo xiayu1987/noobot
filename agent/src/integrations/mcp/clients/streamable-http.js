@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { recoverableToolError } from "../../../shared/errors/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { BaseMcpClient, buildJsonRpcRequest, buildRequestHeaders } from "./base.js";
 import { ERROR_CODE } from "../../../shared/errors/constants.js";
@@ -27,16 +28,12 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
       body: JSON.stringify(buildJsonRpcRequest(requestId, method, params)),
       signal: this.signal || undefined,
     });
-    const responseSessionId = String(
-      response.headers?.get?.("mcp-session-id") || "",
-    ).trim();
+    const responseSessionId = String(response.headers?.get?.("mcp-session-id") || "").trim();
     if (responseSessionId) this.sessionId = responseSessionId;
     if (!response.ok) {
       const text = await response.text().catch(() => "");
       const reqId = String(
-        response.headers?.get?.("x-request-id") ||
-          response.headers?.get?.("request-id") ||
-          "",
+        response.headers?.get?.("x-request-id") || response.headers?.get?.("request-id") || "",
       ).trim();
       throw recoverableToolError(
         `${tSystem("mcp.httpError")}(${method}): ${response.status} ${response.statusText} ${text}`.trim(),
@@ -58,15 +55,15 @@ export class StreamableHttpMcpClient extends BaseMcpClient {
 
   async _doNotify({ method, params = {} }) {
     const requestHeaders = buildRequestHeaders(this.headers, this._sessionHeaders());
-    await this.fetch(this.baseUrl, {
-      method: "POST",
-      headers: requestHeaders,
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        method,
-        params,
-      }),
-      signal: this.signal || undefined,
-    }).catch(() => {});
+    await runBestEffort(
+      () =>
+        this.fetch(this.baseUrl, {
+          method: "POST",
+          headers: requestHeaders,
+          body: JSON.stringify({ jsonrpc: "2.0", method, params }),
+          signal: this.signal || undefined,
+        }),
+      { operationName: "mcp.streamableHttp.notify", context: { method } },
+    );
   }
 }

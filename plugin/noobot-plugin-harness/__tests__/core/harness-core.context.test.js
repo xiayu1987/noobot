@@ -22,7 +22,10 @@ import {
   buildDynamicPolicyPromptProtocolInstruction,
 } from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
 import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
+import {
+  HARNESS_BUCKET_VERSION,
+  HARNESS_PROMPT_INJECTION_ID_FIELD,
+} from "../../src/capabilities/handlers/shared/constants.js";
 import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
@@ -42,13 +45,13 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
           planningRawOutputs: [],
           lastPlanningRawOutput: null,
           logs: { planning: [], guidance: [], acceptance: [], review: [] },
-          __harnessBucketVersion: 1,
+          __harnessBucketVersion: HARNESS_BUCKET_VERSION,
         },
       },
     },
   };
   ensureTestAgentExecutionScope(ctx);
-  ctx.agentContext.payload.harness.state.__harnessBucketVersion = 1;
+  ctx.agentContext.payload.harness.state.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
 
   const first = ensureHarnessBucket(ctx);
   assert.ok(first);
@@ -78,41 +81,45 @@ test("ensureHarnessBucket fast-path keeps initialized references stable", async 
   assert.equal(second.state.signals.successfulToolCount, 3);
 });
 
-
 test("hook context uses explicit modelContext instead of agent payload messages", () => {
-  const ctx = createTestHookContext({
-    agentContext: {
-      payload: {
-        messages: {
-          system: [{ role: "system", content: "ignored payload system" }],
-          history: [],
-          incremental: [],
+  const ctx = createTestHookContext(
+    {
+      agentContext: {
+        payload: {
+          messages: {
+            system: [{ role: "system", content: "ignored payload system" }],
+            history: [],
+            incremental: [],
+          },
         },
       },
     },
-  }, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system ctx" }],
-      history: [{ role: "user", content: "history ctx" }],
-      incremental: [{ role: "assistant", content: "incremental ctx" }],
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system ctx" }],
+        history: [{ role: "user", content: "history ctx" }],
+        incremental: [{ role: "assistant", content: "incremental ctx" }],
+      },
     },
-  });
+  );
 
-  assert.deepEqual(ctx.modelContext.messageBlocks.system.map(({ role, content }) => ({ role, content })), [
-    { role: "system", content: "system ctx" },
-  ]);
-  assert.deepEqual(ctx.modelContext.messageBlocks.history.map(({ role, content }) => ({ role, content })), [
-    { role: "user", content: "history ctx" },
-  ]);
-  assert.deepEqual(ctx.modelContext.messageBlocks.incremental.map(({ role, content }) => ({ role, content })), [
-    { role: "assistant", content: "incremental ctx" },
-  ]);
+  assert.deepEqual(
+    ctx.modelContext.messageBlocks.system.map(({ role, content }) => ({ role, content })),
+    [{ role: "system", content: "system ctx" }],
+  );
+  assert.deepEqual(
+    ctx.modelContext.messageBlocks.history.map(({ role, content }) => ({ role, content })),
+    [{ role: "user", content: "history ctx" }],
+  );
+  assert.deepEqual(
+    ctx.modelContext.messageBlocks.incremental.map(({ role, content }) => ({ role, content })),
+    [{ role: "assistant", content: "incremental ctx" }],
+  );
   assert.ok(ctx.modelContext.messageBlocks.system[0].additional_kwargs?.noobotMessageId);
-  assert.deepEqual(ctx.modelContext.messages.map((item = {}) => item.content), [
-    "system ctx",
-    "history ctx",
-    "incremental ctx",
-  ]);
+  assert.deepEqual(
+    ctx.modelContext.messages.map((item = {}) => item.content),
+    ["system ctx", "history ctx", "incremental ctx"],
+  );
 });
 
 test("hook context canonicalizes messages and messageBlocks through one store", () => {
@@ -126,20 +133,17 @@ test("hook context canonicalizes messages and messageBlocks through one store", 
     content: "",
     tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
   };
-  const ctx = createTestHookContext({}, {
-    messages: [
-      { role: "user", content: "task" },
-      ctxMessage,
-    ],
-    messageBlocks: {
-      system: [],
-      history: [],
-      incremental: [
-        { role: "user", content: "task" },
-        blockCopy,
-      ],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messages: [{ role: "user", content: "task" }, ctxMessage],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "task" }, blockCopy],
+      },
     },
-  });
+  );
 
   assert.equal(ctx.modelContext.messages[1], ctx.modelContext.messageBlocks.incremental[1]);
   assert.ok(ctx.modelContext.messages[1].additional_kwargs?.noobotMessageId);

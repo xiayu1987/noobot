@@ -5,10 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  createTestHookContext,
-  ensureTestAgentExecutionScope,
-} from "../helpers/public-runtime-fixtures.js";
+import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -68,7 +65,7 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
     },
   };
   const meta = { harness: { pendingTtlHookTurns: 1 } };
-  ensureTestAgentExecutionScope(ctx);
+  createTestHookContext(ctx);
 
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, true);
@@ -227,7 +224,11 @@ test("capability runtime skips disabled planning guidance and acceptance handler
 });
 
 test("resolveFsmTargetByHook uses rule table consistently", () => {
-  const toPlanning = resolveFsmTargetByHook(HOOK_POINT.AGENT.BEFORE_TURN, {}, HARNESS_FSM_STATES.IDLE);
+  const toPlanning = resolveFsmTargetByHook(
+    HOOK_POINT.AGENT.BEFORE_TURN,
+    {},
+    HARNESS_FSM_STATES.IDLE,
+  );
   const toPlanned = resolveFsmTargetByHook(
     HOOK_POINT.AGENT.AFTER_LLM_CALL,
     {
@@ -246,7 +247,11 @@ test("resolveFsmTargetByHook uses rule table consistently", () => {
     { hasToolCalls: true, calls: [{ name: "read_file" }] },
     HARNESS_FSM_STATES.PLANNING,
   );
-  const toFailed = resolveFsmTargetByHook(HOOK_POINT.AGENT.ON_ERROR, {}, HARNESS_FSM_STATES.EXECUTING);
+  const toFailed = resolveFsmTargetByHook(
+    HOOK_POINT.AGENT.ON_ERROR,
+    {},
+    HARNESS_FSM_STATES.EXECUTING,
+  );
 
   assert.equal(toPlanning, HARNESS_FSM_STATES.PLANNING);
   assert.equal(toPlanned, HARNESS_FSM_STATES.PLANNED);

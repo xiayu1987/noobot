@@ -11,10 +11,6 @@ const VENDOR_CHUNK_RULES = Object.freeze([
   ["vendor-vue", ["/vue/", "/@vue/", "/pinia/"]],
   ["vendor-element-plus", ["/element-plus/", "/@element-plus/"]],
   ["vendor-markdown", ["/markdown-it/", "/linkify-it/", "/mdurl/", "/uc.micro/"]],
-  [
-    "vendor-diagram-parser",
-    ["/langium/", "/vscode-languageserver-", "/vscode-uri/", "/chevrotain/"],
-  ],
 ]);
 
 function resolveVendorChunk(moduleId = "") {

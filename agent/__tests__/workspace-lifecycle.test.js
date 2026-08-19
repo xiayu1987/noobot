@@ -118,6 +118,43 @@ test("workspace initialization migrates legacy long memory before template synch
   }
 });
 
+test("workspace initialization migrates legacy experience files before normal reads", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(path.join(fixture.userPath, "memory", "experience"), { recursive: true });
+    await writeFile(
+      path.join(fixture.userPath, "memory", "experience", "metadata.json"),
+      JSON.stringify({ domainNames: ["coding"], updatedAt: "2026-08-19T00:00:00.000Z" }),
+    );
+    await writeFile(
+      path.join(fixture.userPath, "memory", "experience-model.json"),
+      JSON.stringify({ coding: { quality: ["protocol"] } }),
+    );
+
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    const metadata = await readFile(
+      path.join(fixture.userPath, "memory", "experience", "metadata.md"),
+      "utf8",
+    );
+    const model = await readFile(
+      path.join(fixture.userPath, "memory", "experience-model.md"),
+      "utf8",
+    );
+    assert.match(metadata, /DOMAIN: coding/);
+    assert.match(metadata, /UPDATED_AT: 2026-08-19T00:00:00.000Z/);
+    assert.match(model, /DOMAIN: coding/);
+    assert.match(model, /CATEGORY: quality/);
+    assert.match(model, /- protocol/);
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("legacy long-memory migration does not publish current files after parse failure", async () => {
   const fixture = await createFixture();
   try {

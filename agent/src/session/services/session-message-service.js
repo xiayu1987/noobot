@@ -81,7 +81,10 @@ export class SessionMessageService {
       release = resolve;
     });
     this._mutationTails.set(key, current);
-    await previous.catch(() => {});
+    await previous.then(
+      () => undefined,
+      () => undefined,
+    );
     try {
       if (typeof this.sessionRepo?.withSessionMutation === "function") {
         try {

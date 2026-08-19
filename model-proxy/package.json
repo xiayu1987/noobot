@@ -21,6 +21,7 @@
     "nodemon": "^3.1.14"
   },
   "dependencies": {
+    "@noobot/shared": "file:../shared",
     "@noobot/sanitize": "file:../sanitize",
     "http-proxy-3": "^1.23.3"
   }

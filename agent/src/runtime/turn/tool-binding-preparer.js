@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { adaptToolsForBinding, appendToolCompatibilityLog } from "../../models/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { emitEvent } from "../../events/index.js";
 
 export function prepareToolBinding({ tools, modelState, runtime, eventListener, turn }) {
@@ -23,12 +24,16 @@ export function prepareToolBinding({ tools, modelState, runtime, eventListener, 
       turn,
       droppedTools: adaptedBinding.droppedToolNames,
     });
-    appendToolCompatibilityLog({
-      modelState,
-      runtime,
-      event: "tool_binding_adapter_dropped_tools",
-      tools: adaptedBinding.droppedToolNames,
-    }).catch(() => {});
+    void runBestEffort(
+      () =>
+        appendToolCompatibilityLog({
+          modelState,
+          runtime,
+          event: "tool_binding_adapter_dropped_tools",
+          tools: adaptedBinding.droppedToolNames,
+        }),
+      { operationName: "toolBinding.appendCompatibilityLog" },
+    );
   }
 
   if (

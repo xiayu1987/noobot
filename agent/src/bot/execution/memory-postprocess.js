@@ -5,6 +5,7 @@
  */
 
 import { emitEvent } from "../../events/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { mergeConfig, normalizeTimeMs, resolveTimeMs } from "../../config/index.js";
 import { BOT_MANAGE_LOG_EVENT, BOT_MANAGE_LOG_SOURCE } from "../config/constants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -143,9 +144,10 @@ export class MemoryPostProcessService {
   }
 
   scheduleMemorySummarizeFlow(payload = {}) {
-    Promise.resolve()
-      .then(() => this.runMemorySummarizeFlow(payload))
-      .catch(() => {});
+    void runBestEffort(() => this.runMemorySummarizeFlow(payload), {
+      operationName: "memoryPostprocess.runScheduledSummary",
+      context: { sessionId: payload.sessionId },
+    });
   }
 
   async runMemoryPostProcessFlow({

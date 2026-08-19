@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -230,17 +231,21 @@ export class ConnectorEventListener {
         },
       });
     } catch (error) {
-      await recordConnectorInteractionFailure({
-        runtime: this.runtime,
-        sessionId: this.sessionId,
-        dialogProcessId: this.dialogProcessId,
-        event: "agent.connector.notifyConnectorConnected.failed",
-        error,
-        data: {
-          connectorType: normalizedType,
-          connectorName: normalizedName,
+      await runBestEffort(
+        () =>
+          recordConnectorInteractionFailure({
+            runtime: this.runtime,
+            sessionId: this.sessionId,
+            dialogProcessId: this.dialogProcessId,
+            event: "agent.connector.notifyConnectorConnected.failed",
+            error,
+            data: { connectorType: normalizedType, connectorName: normalizedName },
+          }),
+        {
+          operationName: "connector.recordConnectedInteractionFailure",
+          context: { connectorType: normalizedType, connectorName: normalizedName },
         },
-      }).catch(() => {});
+      );
     }
   }
 
@@ -280,18 +285,25 @@ export class ConnectorEventListener {
         },
       });
     } catch (error) {
-      await recordConnectorInteractionFailure({
-        runtime: this.runtime,
-        sessionId: this.sessionId,
-        dialogProcessId: this.dialogProcessId,
-        event: "agent.connector.notifyReconnectRequired.failed",
-        error,
-        data: {
-          connectorType: normalizedType,
-          connectorName: normalizedName,
-          reconnectToolName: normalizedReconnectToolName,
+      await runBestEffort(
+        () =>
+          recordConnectorInteractionFailure({
+            runtime: this.runtime,
+            sessionId: this.sessionId,
+            dialogProcessId: this.dialogProcessId,
+            event: "agent.connector.notifyReconnectRequired.failed",
+            error,
+            data: {
+              connectorType: normalizedType,
+              connectorName: normalizedName,
+              reconnectToolName: normalizedReconnectToolName,
+            },
+          }),
+        {
+          operationName: "connector.recordReconnectInteractionFailure",
+          context: { connectorType: normalizedType, connectorName: normalizedName },
         },
-      }).catch(() => {});
+      );
     }
   }
 

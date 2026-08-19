@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { openSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   DEFAULT_CLEANUP_INTERVAL_MS,
   DEFAULT_HOST,
@@ -77,7 +78,10 @@ export function createOpenVSCodeService({
       nowMs - Number(instance.lastAccessPersistedAtMs || 0) >= DEFAULT_TOUCH_PERSIST_INTERVAL_MS
     ) {
       instance.lastAccessPersistedAtMs = nowMs;
-      persistInstance(instance).catch(() => {});
+      void runBestEffort(() => persistInstance(instance), {
+        operationName: "openvscode.persistTouchedInstance",
+        context: { userId: instance.userId },
+      });
     }
   }
 
@@ -198,7 +202,10 @@ export function createOpenVSCodeService({
       stopInstanceBestEffort(memoryInstance, {
         forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
       });
-      removePersistedInstance(memoryInstance).catch(() => {});
+      void runBestEffort(() => removePersistedInstance(memoryInstance), {
+        operationName: "openvscode.removeIncompatibleMemoryInstance",
+        context: { userId: normalizedUserId },
+      });
     }
     if (memoryInstance) forgetInstance(memoryInstance);
 
@@ -214,7 +221,10 @@ export function createOpenVSCodeService({
       stopInstanceBestEffort(persistedInstance, {
         forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
       });
-      removePersistedInstance(persistedInstance).catch(() => {});
+      void runBestEffort(() => removePersistedInstance(persistedInstance), {
+        operationName: "openvscode.removeIncompatiblePersistedInstance",
+        context: { userId: normalizedUserId },
+      });
     }
     return null;
   }
@@ -383,7 +393,10 @@ export function createOpenVSCodeService({
     for (const instance of Array.from(instancesByUser.values())) {
       stopInstanceBestEffort(instance, { forceAfterMs: openVSCodeConfig.shutdownGraceMs });
       forgetInstance(instance);
-      removePersistedInstance(instance).catch(() => {});
+      void runBestEffort(() => removePersistedInstance(instance), {
+        operationName: "openvscode.removeStoppedInstance",
+        context: { userId: instance.userId },
+      });
     }
   }
 
@@ -415,7 +428,9 @@ export function createOpenVSCodeService({
     if (cleanupTimer) return;
     const openVSCodeConfig = getOpenVSCodeConfig(getGlobalConfig());
     cleanupTimer = setInterval(() => {
-      cleanupIdleInstances().catch(() => {});
+      void runBestEffort(cleanupIdleInstances, {
+        operationName: "openvscode.cleanupIdleInstances",
+      });
     }, openVSCodeConfig.cleanupIntervalMs || DEFAULT_CLEANUP_INTERVAL_MS);
     cleanupTimer.unref?.();
   }

@@ -8,9 +8,10 @@ import assert from "node:assert/strict";
 
 import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
 import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
+import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 import { ensureTestAgentExecutionScope } from "../helpers/public-runtime-fixtures.js";
 
-test("ensureHarnessBucket normalizes plan-update counters and pending fields", () => {
+test("explicit hook-boundary migration normalizes plan-update counters and pending fields", () => {
   const ctx = {
     agentContext: {
       payload: {
@@ -39,6 +40,9 @@ test("ensureHarnessBucket normalizes plan-update counters and pending fields", (
   };
   ensureTestAgentExecutionScope(ctx);
 
+  assert.throws(() => ensureHarnessBucket(ctx), /harness_bucket_migration_required:2/);
+  const migration = migrateHarnessBucket(ctx);
+  assert.deepEqual(migration, { migrated: true, fromVersion: 2, toVersion: 4 });
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
   const { state } = holder;
@@ -78,6 +82,7 @@ test("ensureHarnessBucket keeps state version as alias of bucket version", () =>
     },
   };
   ensureTestAgentExecutionScope(ctx);
+  migrateHarnessBucket(ctx);
   const holder = ensureHarnessBucket(ctx);
   assert.ok(holder);
   assert.equal(holder.state.__harnessBucketVersion, HARNESS_BUCKET_VERSION);

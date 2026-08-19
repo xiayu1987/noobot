@@ -223,14 +223,14 @@ describe("SharedChatMessageItem", () => {
     clearExtensionRegistry();
   });
 
-  it("mounts attachment and generated file previews as application-level fullscreen dialogs", () => {
+  it("mounts constrained preview dialogs inside the application-level viewport overlay", () => {
     const wrapper = mountItem();
     const previewDialogs = [...document.body.querySelectorAll("el-dialog-stub")];
 
     expect(previewDialogs).toHaveLength(2);
     for (const previewDialog of previewDialogs) {
       expect(wrapper.element.contains(previewDialog)).toBe(false);
-      expect(previewDialog.hasAttribute("fullscreen")).toBe(true);
+      expect(previewDialog.hasAttribute("fullscreen")).toBe(false);
       expect(previewDialog.getAttribute("teleported")).toBe("false");
       expect(previewDialog.getAttribute("modal-class")).toBe("noobot-file-preview-overlay");
       expect(previewDialog.hasAttribute("width")).toBe(false);

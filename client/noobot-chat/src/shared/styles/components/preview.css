@@ -4,21 +4,44 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: 100vw;
-  max-width: none;
-  height: 100vh;
-  height: 100dvh;
-  max-height: none;
+  width: min(1280px, calc(100vw - 48px));
+  max-width: 100%;
+  height: min(900px, calc(100dvh - 48px));
+  max-height: 100%;
   margin: 0;
   background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-panel-border);
-  border-radius: 0;
+  border-radius: var(--noobot-radius-sm);
 }
 
 .noobot-file-preview-overlay {
   position: fixed;
   inset: 0;
   z-index: 5000;
+}
+
+.noobot-file-preview-overlay .el-overlay-dialog {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  .el-dialog.attachment-preview-dialog,
+  .el-dialog.generated-file-preview-dialog,
+  .el-dialog.workflow-session-preview-dialog {
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+  }
+
+  .noobot-file-preview-overlay .el-overlay-dialog {
+    padding: 8px;
+  }
 }
 
 .attachment-preview-dialog .el-dialog__header,

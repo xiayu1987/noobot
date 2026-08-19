@@ -40,10 +40,7 @@ export class ExperienceManager {
   async readMetadata(basePath) {
     const metadataPath = this.storage.experienceMetadataPath(basePath);
     const text = String((await this.storage.readText(metadataPath, "")) || "").trim();
-    if (text) return parseExperienceMetadataText(text);
-    const legacyJsonPath = metadataPath.replace(/\.md$/i, ".json");
-    const legacyJson = await this.storage.readJson(legacyJsonPath, null);
-    return normalizeExperienceMetadata(legacyJson);
+    return text ? parseExperienceMetadataText(text) : normalizeExperienceMetadata(null);
   }
 
   async writeMetadata(basePath, metadata = null) {

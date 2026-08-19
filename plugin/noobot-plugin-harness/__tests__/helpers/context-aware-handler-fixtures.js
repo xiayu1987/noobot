@@ -11,14 +11,14 @@ import {
   createTestResolveModelMessages,
   ensureTestHookContext,
 } from "./public-runtime-fixtures.js";
+import { migrateHarnessBucket } from "../../src/core/bucket-migration.js";
 
 const resolveModelMessages = createTestResolveModelMessages();
 
 function ensureTestHandlerMeta(input = {}) {
   const meta = input.meta && typeof input.meta === "object" ? input.meta : (input.meta = {});
-  const harness = meta.harness && typeof meta.harness === "object"
-    ? meta.harness
-    : (meta.harness = {});
+  const harness =
+    meta.harness && typeof meta.harness === "object" ? meta.harness : (meta.harness = {});
   if (typeof harness.resolveModelMessages !== "function") {
     harness.resolveModelMessages = resolveModelMessages;
   }
@@ -29,6 +29,7 @@ function wrapFactory(factory) {
     const handler = factory(...args);
     return (input = {}) => {
       ensureTestHookContext(input.ctx || (input.ctx = {}));
+      migrateHarnessBucket(input.ctx);
       ensureTestHandlerMeta(input);
       return handler(input);
     };

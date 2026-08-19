@@ -9,24 +9,13 @@ import {
 } from "../assembly/model-runtime.js";
 import {
   deriveContextMessageProjectionId,
+  readContextMessageField,
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "./codec.js";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function readField(message = {}, field = "") {
-  const key = String(field || "").trim();
-  if (!key) return "";
-  return String(
-    message?.[key] ||
-      message?.additional_kwargs?.[key] ||
-      message?.lc_kwargs?.[key] ||
-      message?.lc_kwargs?.additional_kwargs?.[key] ||
-      "",
-  ).trim();
 }
 
 const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
@@ -52,7 +41,9 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
     "modelContext.activeTurnIdentity",
   );
   const existing = normalizeRoundIdentity(
-    Object.fromEntries(ROUND_IDENTITY_FIELDS.map((field) => [field, readField(message, field)])),
+    Object.fromEntries(
+      ROUND_IDENTITY_FIELDS.map((field) => [field, readContextMessageField(message, field)]),
+    ),
   );
   if (!active.dialogProcessId) {
     requireCompleteRoundIdentity(existing, "canonical message round identity");
@@ -84,7 +75,7 @@ function resolveRole(message = {}) {
 }
 
 function resolveMessageId(message = {}) {
-  const canonicalMessageId = readField(message, "noobotMessageId");
+  const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
   const persistedMessageUid = String(message?.messageUid || "").trim();
   if (canonicalMessageId && persistedMessageUid && canonicalMessageId !== persistedMessageUid) {
     throw new Error("persisted messageUid conflicts with canonical noobotMessageId");
@@ -157,7 +148,7 @@ function canonicalEntityShape(message = {}) {
     content: resolveMessageContent(message),
     toolCallId: resolveContextToolCallId(message),
     toolCallIds: resolveToolCallIds(message),
-    internalType: readField(message, "noobotInternalMessageType"),
+    internalType: readContextMessageField(message, "noobotInternalMessageType"),
   });
 }
 
@@ -327,7 +318,9 @@ export function removeMessagesByInternalTypes(holder = {}, internalTypes = []) {
   for (const blockName of ["system", "history", "incremental"]) {
     const source = normalizeList(blocks[blockName]);
     nextBlocks[blockName] = source.filter((message) => {
-      if (!normalizedTypes.has(readField(message, "noobotInternalMessageType"))) return true;
+      if (!normalizedTypes.has(readContextMessageField(message, "noobotInternalMessageType"))) {
+        return true;
+      }
       removedMessages.push(message);
       return false;
     });
@@ -343,7 +336,7 @@ export function removeMessagesByInternalTypes(holder = {}, internalTypes = []) {
     removedInternalTypes: [
       ...new Set(
         removedMessages
-          .map((message) => readField(message, "noobotInternalMessageType"))
+          .map((message) => readContextMessageField(message, "noobotInternalMessageType"))
           .filter(Boolean),
       ),
     ],

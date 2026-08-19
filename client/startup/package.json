@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@noobot/shared": "file:../../shared",
     "@noobot/client-shared": "file:../shared",
     "@element-plus/icons-vue": "^2.3.2",
     "element-plus": "^2.14.4",

@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./best-effort": "./best-effort.js",
+    "./config-file": "./config-file.js",
+    "./debug-projection": "./debug-projection.js",
     "./length-thresholds": "./length-thresholds.js",
     "./message-diagnostics": "./message-diagnostics.js",
     "./quantity-thresholds": "./quantity-thresholds.js",
