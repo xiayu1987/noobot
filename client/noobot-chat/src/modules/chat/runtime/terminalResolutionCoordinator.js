@@ -280,8 +280,8 @@ export function createTerminalResolutionCoordinator({
             reason: result?.reason || "",
             state: result?.turn?.displayState || result?.turn?.state || "",
             terminal: result?.turn?.terminal || null,
-            projectionApplied: result?.subSessionEffect?.runtimeProjection?.applied === true,
-            projectionReason: result?.subSessionEffect?.runtimeProjection?.reason || "",
+            projectionApplied: result?.subSessionEffect?.subSessionProjection?.applied === true,
+            projectionReason: result?.subSessionEffect?.subSessionProjection?.reason || "",
           });
           if (generation === entry.generation) {
             entry.resolvedVersion = versionOf(response);

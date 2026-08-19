@@ -48,8 +48,8 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
         .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
       const logReduction = (reduction = {}) => {
         const rejected = reduction?.applied !== true;
-        const runtimeProjection = reduction?.subSessionEffect?.runtimeProjection || null;
-        const projectedSession = runtimeProjection?.session || null;
+        const subSessionProjection = reduction?.subSessionEffect?.subSessionProjection || null;
+        const projectedSession = subSessionProjection?.session || null;
         return logSessionEvent?.({
           category: terminalLifecycle || rejected ? "state" : "debug",
           level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),
@@ -71,8 +71,8 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
             sequence: Number(data?.sequence || 0),
             applied: reduction?.applied === true,
             reason: reduction?.reason || "",
-            projectionApplied: runtimeProjection?.applied === true,
-            projectionReason: runtimeProjection?.reason || "",
+            projectionApplied: subSessionProjection?.applied === true,
+            projectionReason: subSessionProjection?.reason || "",
             projectedStatus: projectedSession?.status || "",
             projectedMessages: (Array.isArray(projectedSession?.messages) ? projectedSession.messages : [])
               .map((message = {}) => ({

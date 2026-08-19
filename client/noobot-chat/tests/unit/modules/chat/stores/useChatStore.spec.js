@@ -170,7 +170,6 @@ describe("useChatStore sub session projection", () => {
       expect.objectContaining({ tool: "search", result: "ok", status: "completed" }),
     ]);
     expect(store.selectSubSessionTurnRuntime("sub-session-1", "turn-1")).toBeNull();
-    expect(store.selectSubSessionTiming("sub-session-1", "turn-1")).toBeNull();
     expect(session?.sequence).toBe(5);
     expect(session?.revision).toBe(1);
   });

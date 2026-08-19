@@ -629,17 +629,6 @@ export function createSubSessionStore({
       : null;
   }
 
-  function selectSubSessionTiming(sessionId = "", turnScopeId = "") {
-    const runtime = selectSubSessionTurnRuntime(sessionId, turnScopeId);
-    if (!runtime) return null;
-    return {
-      sessionId: runtime.sessionId,
-      turnScopeId: runtime.turnScopeId,
-      thinkingStartedAt: runtime.startedAt || "",
-      thinkingFinishedAt: runtime.finishedAt || "",
-    };
-  }
-
   function removeSubSessionsByWorkflowRunIds(workflowRunIds = [], { parentSessionId = "" } = {}) {
     const owners = new Set(
       (Array.isArray(workflowRunIds) ? workflowRunIds : []).map(text).filter(Boolean),
@@ -670,7 +659,6 @@ export function createSubSessionStore({
     reduceSubSessionSnapshot,
     selectSubSessionMessages,
     selectSubSessionTurnRuntime,
-    selectSubSessionTiming,
     removeSubSessionsByWorkflowRunIds,
   };
 }

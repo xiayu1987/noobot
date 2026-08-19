@@ -13,14 +13,104 @@ import { StreamEventEnum, RoleEnum } from "../../../../../src/modules/chat/model
 import { FrontendRunState } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { createSessionListActions } from "../../../../../src/modules/session/model/list/sessionListActions.js";
 import {
+  createTurnLifecycleEnvelope,
+  TURN_EVENT,
+  TURN_PHASE,
+  TURN_STATE,
+} from "@noobot/session-protocol";
+import {
   applyTurnRuntimeEvent,
   applyTurnLifecycleSnapshot,
   selectSessionTurnRuntime,
+  selectTurnMessageRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 
 describe("useChatEngine.interaction-stop: terminal", () => {
+  it("commits a child terminal notification even when terminal materialization is unavailable", async () => {
+    const sessionId = "workflow-child-session";
+    const parentSessionId = "workflow-root-session";
+    const turnScopeId = "workflow-node:calculation";
+    const thinkingStartedAt = "2026-08-19T10:00:00.000Z";
+    const thinkingFinishedAt = "2026-08-19T10:00:17.500Z";
+    let releaseTerminalResolution;
+    const terminalResolutionFetcher = vi.fn(async () => ({
+      ok: true,
+      json: async () => new Promise((resolve) => {
+        releaseTerminalResolution = resolve;
+      }),
+    }));
+    const { engine, turnRuntimeRegistry } = createHarness({
+      sessionId: parentSessionId,
+      deps: { terminalResolutionFetcher },
+    });
+    const identity = {
+      sessionId,
+      parentSessionId,
+      turnScopeId,
+      dialogProcessId: "workflow-child-dialog",
+      messageId: "workflow-child-assistant",
+      presentationMessageId: "workflow-child-assistant",
+      userId: "u-1",
+      action: "send",
+    };
+    const events = [
+      [TURN_EVENT.ACTION_ACCEPTED, TURN_PHASE.ACTION, TURN_STATE.ACTION_REQUESTING],
+      [TURN_EVENT.PROCESSING_STARTED, TURN_PHASE.PROCESSING, TURN_STATE.PROCESSING],
+      [TURN_EVENT.PROCESSING_COMPLETED, TURN_PHASE.COMPLETION, TURN_STATE.COMPLETION_REQUESTING],
+      [TURN_EVENT.COMPLETED, TURN_PHASE.COMPLETION, TURN_STATE.COMPLETED],
+    ];
+
+    const applyEvent = ([eventType, phase, state], sequence) =>
+      engine.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
+        ...identity,
+        eventId: `workflow-child-${sequence + 1}`,
+        commandId: `workflow-child-command-${sequence + 1}`,
+        eventType,
+        phase,
+        state,
+        executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
+        startedAt: thinkingStartedAt,
+        finishedAt: eventType === TURN_EVENT.COMPLETED ? thinkingFinishedAt : "",
+        revision: sequence + 1,
+        sequence: sequence + 1,
+        ...(eventType === TURN_EVENT.COMPLETED
+          ? {
+              completionCommitId: "workflow-child-completion",
+              summaryVersion: 1,
+              terminalStatus: { status: "completed", reason: "run_completed" },
+            }
+          : {}),
+      }));
+    for (const [sequence, event] of events.slice(0, -1).entries()) {
+      expect((await applyEvent(event, sequence)).applied).toBe(true);
+    }
+
+    const terminalResult = applyEvent(events.at(-1), events.length - 1);
+    await vi.waitFor(() => expect(releaseTerminalResolution).toBeTypeOf("function"));
+    expect(
+      selectTurnMessageRuntime(turnRuntimeRegistry.value, { sessionId, turnScopeId }),
+    ).toMatchObject({
+      terminal: "completed",
+      running: false,
+      startedAt: thinkingStartedAt,
+      finishedAt: thinkingFinishedAt,
+    });
+    releaseTerminalResolution({
+      protocolVersion: 2,
+      eventType: "turn.terminal_resolved",
+      commandId: "resolve-workflow-child",
+      sessionId,
+      turnScopeId,
+      resolved: false,
+      retryable: false,
+      reason: "session_not_found",
+    });
+    await expect(terminalResult).resolves.toMatchObject({ applied: true });
+    expect(terminalResolutionFetcher).toHaveBeenCalledOnce();
+  });
+
   it("applies the real refresh terminal payload atomically when discovery races snapshot hydration", async () => {
     const sessionId = "3801ff60-0a8d-4dd8-903f-139febe37254";
     const turnScopeId = "client-turn:mryihoqc:3qrncu3i";

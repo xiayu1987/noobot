@@ -29,6 +29,26 @@ import {
 } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
+async function assertCompletedWorkflowChildPresentation(page) {
+  const actionNode = page.locator(".workflow-node:not(.is-state-node)").last();
+  await expect(actionNode).toBeVisible();
+  await actionNode.click();
+
+  const runtimeStep = page.locator(".workflow-node-session-drawer .workflow-runtime-step-box:not(:disabled)").last();
+  await expect(runtimeStep).toBeVisible();
+  await runtimeStep.click();
+
+  const executionView = page.locator(".workflow-node-session-drawer .agent-execution-view");
+  await expect(executionView).toBeVisible();
+  const statusSteps = executionView.locator(".message-status-steps");
+  await expect(statusSteps).not.toHaveCount(0);
+  await expect(executionView.locator(".message-status-steps.is-running")).toHaveCount(0);
+  await expect(statusSteps.last()).toHaveClass(/is-success/);
+  const thinkingElapsed = executionView.locator(".thinking-elapsed").last();
+  await expect(thinkingElapsed).toBeVisible();
+  await expect(thinkingElapsed).not.toContainText("--:--");
+}
+
 test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protocolCapture }, testInfo) => {
   const workflowCompletionTimeoutMs = 360000;
   test.setTimeout(workflowCompletionTimeoutMs + 180000);
@@ -175,6 +195,11 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({
         (event) => event.turnScopeId === command.identity.turnScopeId,
       );
       expect(events.some((event) => event.executionId)).toBe(true);
+      await assertCompletedWorkflowChildPresentation(noobot.page);
+      const visibleCloseButton = noobot.page.locator(
+        ".workflow-node-session-drawer .el-drawer__close-btn:visible",
+      );
+      await visibleCloseButton.last().click();
     }
     return command;
   };
