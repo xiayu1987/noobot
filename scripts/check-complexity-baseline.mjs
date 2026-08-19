@@ -9,9 +9,9 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 601,
-  longFunctionCount: 125,
-  maxComplexity: 91,
+  complexityCount: 598,
+  longFunctionCount: 121,
+  maxComplexity: 88,
   hotspots: Object.freeze({
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
@@ -52,6 +52,13 @@ const baseline = Object.freeze({
     "agent/src/session/session-summary-builders/display-summary-stats.js": [0, 0, 0],
     "plugin/noobot-plugin-workflow/frontend/runtime/workflowNodeSessionDetail.js": [0, 0, 0],
     "plugin/noobot-plugin-workflow/frontend/runtime/workflowUnifiedSessionDetail.js": [0, 0, 0],
+    "agent-proxy/src/channel/manager/reconnect.js": [0, 0, 0],
+    "agent-proxy/src/channel/manager/reconnect/session-replay.js": [0, 0, 0],
+    "agent-proxy/src/channel/manager/reconnect/snapshot-transaction.js": [0, 0, 0],
+    "agent-proxy/src/channel/manager/reconnect/reconnect-publisher.js": [0, 0, 0],
+    "service/ws/chat-websocket-server.js": [0, 0, 0],
+    "service/ws/chat-websocket/connection-handler.js": [0, 0, 0],
+    "service/ws/chat-websocket/outbound-event-sender.js": [0, 0, 0],
   }),
 });
 
