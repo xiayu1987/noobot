@@ -9,6 +9,13 @@ import { createCurrentTurnMessagesStore } from "../../src/runtime/turn/current-t
 import { commitSummaryCheckpoint } from "../../src/bot/session/summary-checkpoint-committer.js";
 import { createModelContext } from "@noobot/context-protocol/assembly/hook-context";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "@noobot/context-protocol/message/injected-types";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
+
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
 
 test("summary checkpoint persists unmodified messages before atomically marking exact UIDs", async () => {
   const messages = [
@@ -263,7 +270,7 @@ test("successive summary checkpoints preserve the latest task_check before the c
     {
       messageUid: "old-check-call",
       role: "assistant",
-      tool_calls: [{ id: "old-check", name: "task_check" }],
+      tool_calls: [{ id: "old-check", name: "task_check", contextPolicy: evidencePolicy }],
     },
     {
       messageUid: "old-check-result",
@@ -271,11 +278,12 @@ test("successive summary checkpoints preserve the latest task_check before the c
       toolName: "task_check",
       tool_call_id: "old-check",
       content: "old",
+      contextPolicy: evidencePolicy,
     },
     {
       messageUid: "old-summary-call",
       role: "assistant",
-      tool_calls: [{ id: "old-summary", name: "task_summary" }],
+      tool_calls: [{ id: "old-summary", name: "task_summary", contextPolicy: boundaryPolicy }],
     },
     {
       messageUid: "old-summary-result",
@@ -283,11 +291,12 @@ test("successive summary checkpoints preserve the latest task_check before the c
       toolName: "task_summary",
       tool_call_id: "old-summary",
       content: "old summary",
+      contextPolicy: boundaryPolicy,
     },
     {
       messageUid: "latest-check-call",
       role: "assistant",
-      tool_calls: [{ id: "latest-check", name: "task_check" }],
+      tool_calls: [{ id: "latest-check", name: "task_check", contextPolicy: evidencePolicy }],
     },
     {
       messageUid: "latest-check-result",
@@ -295,11 +304,12 @@ test("successive summary checkpoints preserve the latest task_check before the c
       toolName: "task_check",
       tool_call_id: "latest-check",
       content: "latest",
+      contextPolicy: evidencePolicy,
     },
     {
       messageUid: "current-summary-call",
       role: "assistant",
-      tool_calls: [{ id: "current-summary", name: "task_summary" }],
+      tool_calls: [{ id: "current-summary", name: "task_summary", contextPolicy: boundaryPolicy }],
     },
   ];
   const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
@@ -334,6 +344,60 @@ test("successive summary checkpoints preserve the latest task_check before the c
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
     ["latest-check-call", "latest-check-result"],
+  );
+});
+
+test("summary checkpoint preserves classified control-tool evidence", async () => {
+  const messages = [
+    {
+      messageUid: "refinement-call",
+      role: "assistant",
+      tool_calls: [{
+        id: "refinement",
+        name: "request_plan_refinement",
+        contextPolicy: evidencePolicy,
+      }],
+    },
+    {
+      messageUid: "refinement-result",
+      role: "tool",
+      toolName: "request_plan_refinement",
+      tool_call_id: "refinement",
+      content: "completed",
+      contextPolicy: evidencePolicy,
+    },
+    { messageUid: "business", role: "assistant", content: "work" },
+  ];
+  const runtime = { currentTurnMessages: createCurrentTurnMessagesStore(messages) };
+  let checkpointPayload = null;
+
+  await commitSummaryCheckpoint({
+    session: {
+      async commitTurnSummaryCheckpoint(payload) {
+        checkpointPayload = payload;
+        return { committed: true, markedCount: 1, checkpointRevision: 1 };
+      },
+    },
+    turnPersister: { async appendAgentMessages() {} },
+    runtime,
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-1",
+    turnScopeId: "turn-1",
+    summaryCompletion: {
+      source: "plugin.summary",
+      summarizedMessageIds: messages.map((message) => message.messageUid),
+    },
+  });
+
+  assert.deepEqual(checkpointPayload.summarizedMessageUids, ["business"]);
+  assert.deepEqual(checkpointPayload.retainedMessageUids, [
+    "refinement-call",
+    "refinement-result",
+  ]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
+    ["refinement-call", "refinement-result"],
   );
 });
 

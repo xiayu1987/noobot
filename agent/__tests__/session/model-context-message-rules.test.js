@@ -14,6 +14,12 @@ import {
 } from "@noobot/context-protocol/policy/window";
 import { markCurrentTurnArraySummarized } from "@noobot/context-protocol/policy/summary";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
+
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
 const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 const resolveMainModelFinalMessages = (options = {}) =>
@@ -264,12 +270,17 @@ test("model-context rules 2 note: agent-side summary marking policy remains unch
     {
       role: "assistant",
       content: "",
-      tool_calls: [{ id: "call-summary", function: { name: "task_summary", arguments: "{}" } }],
+      tool_calls: [{
+        id: "call-summary",
+        function: { name: "task_summary", arguments: "{}" },
+        contextPolicy: boundaryPolicy,
+      }],
     },
     {
       role: "tool",
       content: '{"toolName":"task_summary","ok":true,"phaseSummary":"阶段小结"}',
       tool_call_id: "call-summary",
+      contextPolicy: boundaryPolicy,
     },
   ];
 

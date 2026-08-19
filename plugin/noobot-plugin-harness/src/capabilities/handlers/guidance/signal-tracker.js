@@ -3,11 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
+import {
+  GUIDANCE_REASON,
+  TOOL_NAME_SET,
+  ensureHarnessBucket,
+} from "./deps.js";
 import {
   collectClosedToolCallBatchMessages,
   collectDialogScopedMessagesToSummarize,
-  collectLatestTaskCheckMessageIndexes,
 } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
@@ -36,7 +39,6 @@ function assertSummaryHistoryClosed(history = []) {
     maxMessages: history.length,
     limitToProvidedMessagesOnly: true,
     retentionMessages: history,
-    taskSummaryToolName: "task_summary",
   });
   if (!pendingHistoryMessages.length) return;
   const messageIds = pendingHistoryMessages.map((message) => getMessageId(message)).filter(Boolean);
@@ -80,29 +82,17 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
     maxMessages: checkpointTargets.length,
     limitToProvidedMessagesOnly: true,
     retentionMessages: coveredMessages,
-    taskSummaryToolName: "task_summary",
   });
-  const latestTaskCheckIndexes = collectLatestTaskCheckMessageIndexes(checkpointTargets, {
-    taskCheckToolName: "task_check",
-  });
-  const latestTaskCheckIds = new Set(
-    [...latestTaskCheckIndexes]
-      .map((index) => getMessageId(checkpointTargets[index]))
-      .filter(Boolean),
-  );
-  const filteredSummaryTargets = summaryTargets.filter(
-    (message) => !latestTaskCheckIds.has(getMessageId(message)),
-  );
   requestSummaryCheckpointMainFlowInstruction(ctx, {
     source: "plugin.summary",
     summarizedMessageIds: [
-      ...new Set(filteredSummaryTargets.map((message) => getMessageId(message)).filter(Boolean)),
+      ...new Set(summaryTargets.map((message) => getMessageId(message)).filter(Boolean)),
     ],
   });
   if (holder?.state?.pending && hasSummaryCheckpoint) {
     holder.state.pending.summaryCheckpointMessageIds = null;
   }
-  return filteredSummaryTargets.length;
+  return summaryTargets.length;
 }
 
 export function markToolSignals(ctx = {}) {

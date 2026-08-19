@@ -10,12 +10,9 @@ import {
   CONTEXT_INJECTED_MESSAGE_TYPE,
   resolveContextInternalMessageType,
 } from "@noobot/context-protocol/policy/injected-message";
-import {
-  DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
-  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
-} from "@noobot/context-protocol/policy/summary";
 import { resolveContextMessageContent } from "@noobot/context-protocol/message/codec";
 import { REQUEST_HELP_TOOL_NAME } from "../tools/collaboration/request-help-tool.js";
+import { TOOL_NAME } from "../tools/constants/index.js";
 import { appendTurnContextControlMessage } from "./turn/turn-context-message-appender.js";
 import { MAIN_FLOW_CONTROL_REASON, requestMainFlowFinalNoToolsTurn } from "./main-flow-control.js";
 
@@ -32,7 +29,7 @@ function hasTool(tools = [], toolName) {
 }
 
 function hasTaskSummaryTool(tools = []) {
-  return hasTool(tools, TASK_SUMMARY_TOOL_NAME);
+  return hasTool(tools, TOOL_NAME.TASK_SUMMARY);
 }
 
 function isMessageSummarized(message = {}) {
@@ -114,7 +111,7 @@ export function maybeRequestPhaseSummary({ modelState, loopState, toolCallResult
   if (!systemRuntime) return false;
 
   const hasTaskSummaryCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
-    (r) => String(r?.call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+    (r) => String(r?.call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
   );
   if (hasTaskSummaryCall) return false;
 
@@ -178,10 +175,10 @@ export function maybeRequestTaskCheck({ modelState, loopState, toolCallResults =
   const runtime = modelState?.runtime || {};
   const systemRuntime = getSystemRuntime(runtime);
   if (!systemRuntime) return false;
-  if (!hasTool(loopState?.tools || [], TASK_CHECK_TOOL_NAME)) return false;
+  if (!hasTool(loopState?.tools || [], TOOL_NAME.TASK_CHECK)) return false;
 
   const hasTaskCheckCall = (Array.isArray(toolCallResults) ? toolCallResults : []).some(
-    (result) => String(result?.call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
+    (result) => String(result?.call?.name || "").trim() === TOOL_NAME.TASK_CHECK,
   );
   if (hasTaskCheckCall) {
     systemRuntime.taskCheckLoopCount = 0;

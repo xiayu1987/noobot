@@ -11,12 +11,12 @@ import {
   resolveToolCallId,
   readMessageField,
 } from "./message.js";
-import { isTaskSummaryToolMessage } from "./summary.js";
+import { isCheckpointBoundaryToolMessage } from "./summary.js";
 import { resolveModelFinalMessages } from "./window.js";
 import {
   extractContextTaskSummary,
   recoverContextTaskSummaryToolResult,
-} from "../message/codec.js";
+} from "../task/summary-context.js";
 
 function text(value) {
   return String(value || "").trim();
@@ -53,7 +53,7 @@ export function normalizeUnpairedTaskSummaryToolResults(messages = []) {
       .forEach((id) => knownToolCallIds.add(id));
   }
   return source.map((message) => {
-    if (resolveMessageRole(message) !== "tool" || !isTaskSummaryToolMessage(message))
+    if (resolveMessageRole(message) !== "tool" || !isCheckpointBoundaryToolMessage(message))
       return message;
     const toolCallId = resolveToolCallId(message);
     if (toolCallId && knownToolCallIds.has(toolCallId)) return message;

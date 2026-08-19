@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { DEFAULT_TASK_SUMMARY_TOOL_NAME } from "./summary.js";
-
 export const MAIN_CONTEXT_POLICY = Object.freeze({
   policyVersion: 1,
-  summaryToolName: DEFAULT_TASK_SUMMARY_TOOL_NAME,
+  flowControlRetention: "latest_per_tool_identity",
   preserveLatestInjectionPerType: true,
   requireToolPairClosure: true,
   excludeActiveExecutionFromHistory: true,

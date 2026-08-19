@@ -67,11 +67,17 @@ export function createPluginServicePorts({ bot = null, translateText = null } = 
       },
       async readWorkflowThinkingDetail({ userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId, locale }) {
         const { outputDir } = resolveWorkflowDir({ userId, sessionId, dialogProcessId: routeDialogProcessId, locale });
-        const { session } = await readSessionArtifactSnapshot({ outputDir, includeExecutionLogs: false });
+        const { session, sessionSummary } = await readSessionArtifactSnapshot({ outputDir, includeExecutionLogs: false });
+        const summaryMessage = (Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : [])
+          .find((message = {}) => (
+            String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
+            (!dialogProcessId ||
+              String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim())
+          ));
         return buildThinkingDetailPayload({
           exists: Boolean(session?.sessionId),
           sessionId: String(session?.sessionId || "").trim(),
-          revision: `session-aggregate:${Math.max(0, Number(session?.aggregateVersion) || 0)}`,
+          revision: String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim(),
           sessions: [{ sessionId: String(session?.sessionId || "").trim(), rawMessages: Array.isArray(session?.messages) ? session.messages : [] }],
         }, { dialogProcessId, turnScopeId });
       },

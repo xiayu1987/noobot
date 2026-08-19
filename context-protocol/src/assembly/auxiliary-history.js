@@ -4,19 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  resolveContextMessageRole,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "../message/codec.js";
+
 function resolveRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
-  const type = String(message?.type || message?.lc_kwargs?.type || "")
-    .trim()
-    .toLowerCase();
-  const resolved = role || type;
-  if (resolved === "developer" || resolved === "system") return "system";
-  if (resolved === "human" || resolved === "user") return "user";
-  if (resolved === "ai" || resolved === "assistant") return "assistant";
-  if (resolved === "tool") return "tool";
-  return "";
+  return resolveContextMessageRole(message);
 }
 
 function extractTextContent(content = "") {
@@ -39,38 +34,12 @@ function extractTextContent(content = "") {
   return String(content).trim();
 }
 
-function resolveToolCalls(message = {}) {
-  const candidates = [
-    message?.tool_calls,
-    message?.toolCalls,
-    message?.additional_kwargs?.tool_calls,
-    message?.lc_kwargs?.tool_calls,
-    message?.lc_kwargs?.additional_kwargs?.tool_calls,
-  ];
-  return candidates.find(Array.isArray) || [];
-}
-
-function resolveToolCallId(message = {}) {
-  return String(
-    message?.tool_call_id ||
-      message?.toolCallId ||
-      message?.additional_kwargs?.tool_call_id ||
-      message?.lc_kwargs?.tool_call_id ||
-      message?.lc_kwargs?.additional_kwargs?.tool_call_id ||
-      "",
-  ).trim();
-}
-
-function resolveCallId(call = {}) {
-  return String(call?.id || call?.tool_call_id || call?.toolCallId || "").trim();
-}
-
 function normalizeMessage(message = {}) {
   const role = resolveRole(message);
   if (!role) throw new TypeError("auxiliary history message role is required");
   const content = extractTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
   if (role === "assistant") {
-    const toolCalls = resolveToolCalls(message);
+    const toolCalls = resolveContextToolCalls(message);
     if (!content && !toolCalls.length) return null;
     const normalized = {
       role,
@@ -88,7 +57,7 @@ function normalizeMessage(message = {}) {
     return normalized;
   }
   if (role === "tool") {
-    const toolCallId = resolveToolCallId(message);
+    const toolCallId = resolveContextToolCallId(message);
     if (!toolCallId) throw new TypeError("auxiliary tool result requires tool_call_id");
     return { role, content, tool_call_id: toolCallId };
   }
@@ -111,7 +80,7 @@ function assertToolEvidenceAlignment(messages = []) {
   for (const message of messages) {
     if (message.role === "assistant") {
       for (const call of message.tool_calls || []) {
-        const id = resolveCallId(call);
+        const id = resolveContextToolCallId(call);
         if (!id) throw new TypeError("auxiliary assistant tool call requires id");
         if (declared.has(id)) throw new Error(`duplicate auxiliary tool call id: ${id}`);
         declared.add(id);

@@ -9,12 +9,12 @@ import {
   normalizeUnpairedTaskSummaryToolResults,
 } from "@noobot/context-protocol/policy/block";
 import {
-  hasTaskSummaryToolCall,
-  isTaskSummaryToolMessage,
+  hasCheckpointBoundaryToolCall,
+  isCheckpointBoundaryToolMessage,
 } from "@noobot/context-protocol/policy/summary";
 
 export function isTaskSummaryToolResultMessage(msg = {}) {
-  return isTaskSummaryToolMessage(msg);
+  return isCheckpointBoundaryToolMessage(msg);
 }
 
 export function buildTaskSummaryFallbackHumanMessage(msg = {}) {
@@ -32,7 +32,7 @@ ${summaryText}`,
 
 export function shouldSkipSummarizedHistoryMessage(msg = {}) {
   if (msg?.summarized !== true) return false;
-  return !hasTaskSummaryToolCall(msg) && !isTaskSummaryToolResultMessage(msg);
+  return !hasCheckpointBoundaryToolCall(msg) && !isTaskSummaryToolResultMessage(msg);
 }
 
 export { normalizeUnpairedTaskSummaryToolResults };

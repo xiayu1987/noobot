@@ -92,6 +92,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const message = {
       ...normalMessage,
       sessionId: "session-1",
+      thinkingDetailRef: { contentHash: "sha256:detail-seven" },
     };
     const activeSession = ref({
       sessionId: "session-1",
@@ -99,7 +100,7 @@ describe("useThinkingDetailsPanel request isolation", () => {
       messages: [message],
     });
     const fetcher = vi.fn(async () => ({
-      revision: "session-aggregate:7",
+      revision: "sha256:detail-seven",
       messageItem: { ...message, loaded: true },
     }));
     const panel = createPanel(fetcher, activeSession);
@@ -111,6 +112,37 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(panel.thinkingDetailsVisible.value).toBe(true);
     expect(panel.thinkingDetailsMessageItem.value.loaded).toBe(true);
+  });
+
+  it("does not reuse detail when its authoritative content hash changes", async () => {
+    const firstMessage = {
+      ...normalMessage,
+      sessionId: "session-1",
+      thinkingDetailRef: { contentHash: "sha256:first-detail" },
+    };
+    const secondMessage = {
+      ...firstMessage,
+      thinkingDetailRef: { contentHash: "sha256:second-detail" },
+    };
+    const activeSession = ref({ sessionId: "session-1", aggregateVersion: 1, messages: [firstMessage] });
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce({
+        revision: "sha256:first-detail",
+        messageItem: { ...firstMessage, detailGeneration: 1 },
+      })
+      .mockResolvedValueOnce({
+        revision: "sha256:second-detail",
+        messageItem: { ...secondMessage, detailGeneration: 2 },
+      });
+    const panel = createPanel(fetcher, activeSession);
+
+    await panel.openThinkingDetailsPanel({ messageItem: firstMessage });
+    panel.closeThinkingDetailsPanel();
+    activeSession.value = { sessionId: "session-1", aggregateVersion: 1, messages: [secondMessage] };
+    await panel.openThinkingDetailsPanel({ messageItem: secondMessage });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(panel.thinkingDetailsMessageItem.value.detailGeneration).toBe(2);
   });
 
   it("binds the drawer to the active canonical turn instead of a stale click payload", async () => {

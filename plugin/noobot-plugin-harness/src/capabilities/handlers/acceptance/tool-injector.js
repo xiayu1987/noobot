@@ -5,6 +5,10 @@
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   ACCEPTANCE_MODE,
@@ -65,6 +69,11 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         .optional()
         .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.MODE_DESCRIPTION)),
     }),
+    metadata: {
+      contextPolicy: createFlowControlContextPolicy(
+        FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+      ),
+    },
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
       const capabilityLogStartIndex = Array.isArray(toolCtx.harnessCapabilityLogs)

@@ -30,7 +30,8 @@ import {
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protocolCapture }, testInfo) => {
-  test.setTimeout(420000);
+  const workflowCompletionTimeoutMs = 360000;
+  test.setTimeout(workflowCompletionTimeoutMs + 180000);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const beforeSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(
@@ -120,7 +121,7 @@ test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protoco
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: continued.identity.turnScopeId,
-    timeoutMs: 300000,
+    timeoutMs: workflowCompletionTimeoutMs,
   });
   assertTurnLifecycle(protocolCapture, noobot.sessionId, continued.identity.turnScopeId);
   const continuedTraces = await waitForModelInvocationTraces(

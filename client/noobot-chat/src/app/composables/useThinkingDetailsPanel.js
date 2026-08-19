@@ -13,7 +13,6 @@ import {
 import {
   getMessageDialogProcessId,
   getMessageRole,
-  getMessageSessionId,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
 } from "../../modules/chat/model/messageIdentity.js";
@@ -119,13 +118,7 @@ export function useThinkingDetailsPanel({
   }
 
   function expectedThinkingDetailRevision(messageItem = {}) {
-    const messageSessionId = getMessageSessionId(messageItem);
-    const sessionId = String(activeSessionId?.value || "").trim();
-    if (!messageSessionId || messageSessionId !== sessionId) return "";
-    const aggregateVersion = Number(activeSession?.value?.aggregateVersion);
-    return Number.isFinite(aggregateVersion) && aggregateVersion >= 0
-      ? `session-aggregate:${aggregateVersion}`
-      : "";
+    return String(messageItem?.thinkingDetailRef?.contentHash || "").trim();
   }
 
   async function fetchThinkingDetailForMessage(messageItem = {}, fetchDetailOverride = null) {
@@ -199,7 +192,12 @@ export function useThinkingDetailsPanel({
       initialMessageItem,
       activeSessionId?.value,
     );
-    const cachedThinkingDetail = getCachedThinkingDetail(cachedIdentity);
+    const expectedRevision = expectedThinkingDetailRevision(initialMessageItem);
+    const cachedCandidate = getCachedThinkingDetail(cachedIdentity);
+    const cachedThinkingDetail = expectedRevision &&
+      String(cachedCandidate?.revision || "").trim() === expectedRevision
+      ? cachedCandidate
+      : null;
     const initialDetailMessage = cachedThinkingDetail?.messageItem || initialMessageItem;
     closeAllDrawers?.();
     closeMobileSidebar?.();

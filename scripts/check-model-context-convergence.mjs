@@ -247,6 +247,18 @@ const forbiddenPatterns = [
     advice:
       "注入消息只能使用 injectedMessage/injectedBy/injectedMessageType 协议字段，禁止从内容前缀推断。",
   },
+  {
+    name: "tool-name-driven summary retention contract",
+    pattern:
+      /\b(?:DEFAULT_TASK_SUMMARY_TOOL_NAME|DEFAULT_TASK_CHECK_TOOL_NAME|taskSummaryToolName|taskCheckToolName|collectLatestTaskSummaryMessageIndexes|collectLatestTaskCheckMessageIndexes)\b/g,
+    advice:
+      "小结保留只能使用 Context Protocol 的 flow-control 分类，具体工具名只属于 Agent 业务执行。",
+  },
+  {
+    name: "tool identity inferred from result content",
+    pattern: /\bresolveContextToolName\b/g,
+    advice: "工具身份必须来自显式调用协议，禁止解析工具结果正文推导身份。",
+  },
 ];
 
 for (const file of sourceFiles) {
@@ -450,8 +462,29 @@ assertFileContains("context-protocol/src/policy/summary.js", [
     pattern: /export\s+function\s+markScopedMessagesSummarized\b/,
   },
   {
-    name: "owns latest task summary pair",
-    pattern: /export\s+function\s+collectLatestTaskSummaryMessageIndexes\b/,
+    name: "owns latest checkpoint boundary selection",
+    pattern: /export\s+function\s+collectLatestCheckpointBoundaryMessageIndexes\b/,
+  },
+  {
+    name: "owns latest checkpoint evidence selection",
+    pattern: /export\s+function\s+collectLatestCheckpointEvidenceMessageIndexes\b/,
+  },
+]);
+assertFileContains("context-protocol/src/tool/context-policy.js", [
+  {
+    name: "owns flow-control semantic classification",
+    pattern: /FLOW_CONTROL:\s*"flow_control"/,
+  },
+  {
+    name: "owns checkpoint boundary and evidence roles",
+    pattern: /CHECKPOINT_BOUNDARY:\s*"checkpoint_boundary"[\s\S]*?CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/,
+  },
+]);
+assertFileContains("context-protocol/src/message/codec.js", [
+  {
+    name: "owns canonical tool-call identity precedence",
+    pattern:
+      /export\s+function\s+resolveContextToolCallId[\s\S]*?value\?\.tool_call_id[\s\S]*?value\?\.id/,
   },
 ]);
 assertFileContains("context-protocol/src/policy/terminal-history.js", [

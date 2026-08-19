@@ -13,6 +13,7 @@ import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   dedupeAttachmentsByIdentity,
   parseAttachmentRelations,
@@ -196,8 +197,10 @@ export function normalizeMessageEntity(message = {}, now = () => new Date().toIS
   }
   const toolCallId = String(message?.tool_call_id || "").trim();
   const toolName = String(message?.toolName || message?.tool_name || "").trim();
+  const contextPolicy = resolveToolContextPolicy(message);
   if (toolCallId) normalizedMessage.tool_call_id = toolCallId;
   if (toolName) normalizedMessage.toolName = toolName;
+  if (contextPolicy) normalizedMessage.contextPolicy = contextPolicy;
   if (Array.isArray(message?.tool_calls)) {
     normalizedMessage.tool_calls = message.tool_calls;
   }

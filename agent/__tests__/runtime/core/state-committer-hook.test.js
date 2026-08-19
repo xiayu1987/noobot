@@ -9,6 +9,10 @@ import assert from "node:assert/strict";
 import { createStateCommitter } from "../../../src/runtime/tool-execution/state-committer.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { createModelContext } from "@noobot/context-protocol";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 function createInMemoryTurnStore() {
   return {
@@ -123,8 +127,11 @@ test("state-committer emits before/after hooks for tool result commit", async ()
     runtime,
   });
 
+  const contextPolicy = createFlowControlContextPolicy(
+    FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+  );
   await committer.pushToolResult({
-    call: { id: "call_1", name: "demo_tool", args: { x: 1 } },
+    call: { id: "call_1", name: "demo_tool", args: { x: 1 }, contextPolicy },
     toolResultText: "original_tool_result",
   });
 
@@ -132,6 +139,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(turnMessageStore.items.length, 1);
   assert.equal(turnMessageStore.items[0].role, "tool");
   assert.equal(turnMessageStore.items[0].content, "tool_result_overridden_by_hook");
+  assert.deepEqual(turnMessageStore.items[0].contextPolicy, contextPolicy);
   assert.match(turnMessageStore.items[0].messageUid, /^sm_/);
   assert.equal(turnMessageStore.items[0].messageId, turnMessageStore.items[0].messageUid);
   assert.equal(traces.length, 1);
@@ -139,6 +147,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
   assert.equal(traces[0].result, "tool_result_overridden_by_hook");
   assert.equal(messages.length, 1);
   assert.equal(messages[0]?.content, "tool_result_overridden_by_hook");
+  assert.deepEqual(messages[0]?.lc_kwargs?.contextPolicy, contextPolicy);
 });
 
 test("state-committer completes tool result hooks and commit after the parent Turn is stopped", async () => {

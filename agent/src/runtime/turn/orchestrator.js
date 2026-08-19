@@ -3,11 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  collectScopedMessagesToSummarize,
-  DEFAULT_TASK_SUMMARY_TOOL_NAME as TASK_SUMMARY_TOOL_NAME,
-  DEFAULT_TASK_CHECK_TOOL_NAME as TASK_CHECK_TOOL_NAME,
-} from "@noobot/context-protocol/policy/summary";
+import { collectScopedMessagesToSummarize } from "@noobot/context-protocol/policy/summary";
+import { TOOL_NAME } from "../../tools/constants/index.js";
 import { emitEvent } from "../../events/index.js";
 import { tEngine } from "../i18n-adapter.js";
 import { DEFAULT_TOOL_LOOP_LIMIT_BUFFER_TURNS } from "../constants/index.js";
@@ -57,7 +54,7 @@ export function createTurnOrchestrator({
   function resolveTaskSummaryCall(calls = []) {
     return (
       (Array.isArray(calls) ? calls : []).find(
-        (call = {}) => String(call?.name || "").trim() === TASK_SUMMARY_TOOL_NAME,
+        (call = {}) => String(call?.name || "").trim() === TOOL_NAME.TASK_SUMMARY,
       ) || null
     );
   }
@@ -65,7 +62,7 @@ export function createTurnOrchestrator({
   function resolveTaskCheckCall(calls = []) {
     return (
       (Array.isArray(calls) ? calls : []).find(
-        (call = {}) => String(call?.name || "").trim() === TASK_CHECK_TOOL_NAME,
+        (call = {}) => String(call?.name || "").trim() === TOOL_NAME.TASK_CHECK,
       ) || null
     );
   }
@@ -277,8 +274,6 @@ export function createTurnOrchestrator({
             turn,
             toolCallCount: calls.length,
             controlToolName: String(controlToolCall?.name || "").trim(),
-            ...(taskSummaryCall ? { taskSummaryToolName: TASK_SUMMARY_TOOL_NAME } : {}),
-            ...(taskCheckCall ? { taskCheckToolName: TASK_CHECK_TOOL_NAME } : {}),
           },
         );
         return runFunctionCallLoop({ modelState, loopState, turn: turn + 1 });
@@ -344,7 +339,6 @@ export function createTurnOrchestrator({
           maxMessages: incrementalMessages.length,
           limitToProvidedMessagesOnly: true,
           retentionMessages: incrementalMessages,
-          taskSummaryToolName: TASK_SUMMARY_TOOL_NAME,
         }).messages;
         requestMainFlowSummaryCheckpoint(runtime, {
           source: "task_summary",

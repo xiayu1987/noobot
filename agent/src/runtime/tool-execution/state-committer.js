@@ -15,6 +15,7 @@ import {
   currentAssistantPresentationMessageId,
 } from "../../events/message-event-stream.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 
 const HIDDEN_INTERMEDIATE_GENERATION_SOURCES = new Set(["tool_result_overflow"]);
 
@@ -182,6 +183,7 @@ export function createStateCommitter({
       const resolvedCallName = resolveCallName(call);
       const compactedToolResultText = compactToolResultTextForModel(toolResultText);
       const messageUid = createSessionMessageUid();
+      const contextPolicy = resolveToolContextPolicy(call);
       const toolResultPayload = {
         messageUid,
         messageId: messageUid,
@@ -192,6 +194,7 @@ export function createStateCommitter({
         ...(ownership.turnScopeId ? { turnScopeId: ownership.turnScopeId } : {}),
         tool_call_id: resolvedCallId,
         toolName: resolvedCallName,
+        ...(contextPolicy ? { contextPolicy } : {}),
         ...(currentAssistantPresentationMessageId(runtime)
           ? { presentationMessageId: currentAssistantPresentationMessageId(runtime) }
           : {}),
@@ -224,6 +227,7 @@ export function createStateCommitter({
         toolCallId: resolvedCallId,
         content: normalizedToolResultText,
         messageUid,
+        contextPolicy,
       });
       if (turnMessageStore?.push) {
         turnMessageStore.push(toolResultPayload);

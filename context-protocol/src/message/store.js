@@ -7,7 +7,11 @@ import {
   getModelContextRuntime,
   resetModelContextMessageStore,
 } from "../assembly/model-runtime.js";
-import { deriveContextMessageProjectionId } from "./codec.js";
+import {
+  deriveContextMessageProjectionId,
+  resolveContextToolCallId,
+  resolveContextToolCalls,
+} from "./codec.js";
 
 function normalizeList(value) {
   return Array.isArray(value) ? value : [];
@@ -143,24 +147,15 @@ function resolveMessageContent(message = {}) {
   return typeof content === "string" ? content : JSON.stringify(content);
 }
 
-function resolveToolCallId(message = {}) {
-  return readField(message, "tool_call_id") || readField(message, "toolCallId");
-}
-
 function resolveToolCallIds(message = {}) {
-  const calls = Array.isArray(message?.tool_calls)
-    ? message.tool_calls
-    : Array.isArray(message?.lc_kwargs?.tool_calls)
-      ? message.lc_kwargs.tool_calls
-      : [];
-  return calls.map((call = {}) => String(call?.id || call?.tool_call_id || "").trim());
+  return resolveContextToolCalls(message).map(resolveContextToolCallId);
 }
 
 function canonicalEntityShape(message = {}) {
   return JSON.stringify({
     role: resolveRole(message),
     content: resolveMessageContent(message),
-    toolCallId: resolveToolCallId(message),
+    toolCallId: resolveContextToolCallId(message),
     toolCallIds: resolveToolCallIds(message),
     internalType: readField(message, "noobotInternalMessageType"),
   });

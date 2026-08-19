@@ -85,7 +85,7 @@ test("thinking detail projects the complete turn timeline onto the final assista
 test("thinking detail publishes its authoritative source revision", () => {
   const payload = buildThinkingDetailPayload({
     sessionId: "revision-session",
-    revision: "session-aggregate:9",
+    revision: "sha256:thinking-detail-content",
     sessions: [{
       sessionId: "revision-session",
       rawMessages: [{
@@ -96,7 +96,7 @@ test("thinking detail publishes its authoritative source revision", () => {
     }],
   }, { turnScopeId: "revision-turn" });
 
-  assert.equal(payload.revision, "session-aggregate:9");
+  assert.equal(payload.revision, "sha256:thinking-detail-content");
 });
 
 test("stopped turn detail uses the persisted presentation identity without a final answer", () => {
@@ -251,7 +251,8 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
 
     const turn = await readSessionTurn({ sessionDir, turnScopeId: "turn-two" });
     assert.equal(turn.turnScopeId, "turn-two");
-    assert.equal(turn.aggregateVersion, 0);
+    assert.ok(turn.committedBytes > 0);
+    assert.equal(Object.hasOwn(turn, "aggregateVersion"), false);
     assert.deepEqual(turn.messages.map((message) => message.messageUid), ["sm-two"]);
   } finally {
     await rm(sessionDir, { recursive: true, force: true });

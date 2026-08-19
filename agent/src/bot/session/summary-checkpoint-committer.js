@@ -11,8 +11,8 @@ import {
 import { createHash } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import {
-  collectLatestTaskCheckMessageIndexes,
-  hasTaskSummaryToolCall,
+  collectLatestCheckpointEvidenceMessageIndexes,
+  hasCheckpointBoundaryToolCall,
 } from "@noobot/context-protocol/policy/summary";
 
 function isSummarized(message = {}) {
@@ -104,12 +104,14 @@ export async function commitSummaryCheckpoint({
   }
 
   const turnMessages = currentTurnMessages.toArray();
-  const summaryCallIndex = turnMessages.findLastIndex((message) => hasTaskSummaryToolCall(message));
-  const taskCheckScope =
+  const summaryCallIndex = turnMessages.findLastIndex((message) =>
+    hasCheckpointBoundaryToolCall(message),
+  );
+  const checkpointEvidenceScope =
     summaryCallIndex >= 0 ? turnMessages.slice(0, summaryCallIndex) : turnMessages;
-  const latestTaskCheckIds = new Set(
-    [...collectLatestTaskCheckMessageIndexes(taskCheckScope)]
-      .map((index) => resolveMessageUid(taskCheckScope[index]))
+  const retainedCheckpointEvidenceIds = new Set(
+    [...collectLatestCheckpointEvidenceMessageIndexes(checkpointEvidenceScope)]
+      .map((index) => resolveMessageUid(checkpointEvidenceScope[index]))
       .filter(Boolean),
   );
   const normalizedSummaryCompletion =
@@ -118,7 +120,7 @@ export async function commitSummaryCheckpoint({
           ...summaryCompletion,
           summarizedMessageIds: Array.isArray(summaryCompletion.summarizedMessageIds)
             ? summaryCompletion.summarizedMessageIds.filter(
-                (id) => !latestTaskCheckIds.has(String(id || "").trim()),
+                (id) => !retainedCheckpointEvidenceIds.has(String(id || "").trim()),
               )
             : summaryCompletion.summarizedMessageIds,
         }
@@ -200,12 +202,12 @@ export async function commitSummaryCheckpoint({
       turnScopeId,
       persistedMessageUids,
       summarizedMessageUids,
-      retainedMessageUids: [...latestTaskCheckIds],
+      retainedMessageUids: [...retainedCheckpointEvidenceIds],
     }),
     expectedCheckpointRevision: runtime?.summaryCheckpointRevision,
     persistedMessageUids,
     summarizedMessageUids,
-    retainedMessageUids: [...latestTaskCheckIds],
+    retainedMessageUids: [...retainedCheckpointEvidenceIds],
   });
   if (checkpointResult && Number.isFinite(Number(checkpointResult.checkpointRevision))) {
     runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);
@@ -231,7 +233,7 @@ export async function commitSummaryCheckpoint({
     summarizedMessageCount: summarizedMessageUids.length,
     persistedMessageCount: pendingMessages.length,
     markedMessageCount: Number(markedCount) || 0,
-    preservedTaskCheckMessageUids: [...latestTaskCheckIds].sort(),
+    preservedCheckpointEvidenceMessageUids: [...retainedCheckpointEvidenceIds].sort(),
     exactCheckpoint: true,
   });
   if (!committed) {

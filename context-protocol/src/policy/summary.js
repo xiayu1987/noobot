@@ -17,9 +17,10 @@ import {
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
 import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
-
-export const DEFAULT_TASK_SUMMARY_TOOL_NAME = "task_summary";
-export const DEFAULT_TASK_CHECK_TOOL_NAME = "task_check";
+import {
+  FLOW_CONTROL_ROLE,
+  hasFlowControlRole,
+} from "../tool/context-policy.js";
 
 const summaryCheckpointControlTypes = new Set(SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES);
 
@@ -51,111 +52,69 @@ export function getMessageRole(message = {}) {
   return { ai: "assistant", human: "user", system: "system", tool: "tool" }[type] || "";
 }
 
-export function resolveToolNameFromMessage(message = {}) {
-  const explicit = String(message?.toolName || message?.tool_name || "").trim();
-  if (explicit) return explicit;
-  try {
-    return String(JSON.parse(String(message?.content || ""))?.toolName || "").trim();
-  } catch {
-    return "";
-  }
+function resolveToolCallName(call = {}) {
+  return String(call?.name || call?.function?.name || "").trim();
 }
 
-export function resolveToolNamesFromToolCalls(toolCalls = []) {
-  return (Array.isArray(toolCalls) ? toolCalls : [])
-    .map((call) => String(call?.name || call?.function?.name || "").trim())
-    .filter(Boolean);
+function hasToolCallWithFlowControlRole(message = {}, role = "") {
+  return getMessageToolCalls(message).some((call) => hasFlowControlRole(call, role));
 }
 
-export function hasTaskSummaryToolCall(
-  message = {},
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  return resolveToolNamesFromToolCalls(getMessageToolCalls(message)).includes(taskSummaryToolName);
+function isToolResultWithFlowControlRole(message = {}, role = "") {
+  return resolveMessageRole(message) === "tool" && hasFlowControlRole(message, role);
 }
 
-function getTaskSummaryToolCallIds(
-  message = {},
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  return getMessageToolCalls(message)
-    .filter(
-      (call) => String(call?.name || call?.function?.name || "").trim() === taskSummaryToolName,
-    )
-    .map((call) => String(call?.id || call?.tool_call_id || "").trim())
-    .filter(Boolean);
+export function hasCheckpointBoundaryToolCall(message = {}) {
+  return hasToolCallWithFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 }
 
-export function isTaskSummaryToolMessage(
-  message = {},
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  return resolveToolNameFromMessage(message) === taskSummaryToolName;
+export function isCheckpointBoundaryToolMessage(message = {}) {
+  return isToolResultWithFlowControlRole(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 }
 
-function isTaskSummaryMessage(message, options) {
-  return hasTaskSummaryToolCall(message, options) || isTaskSummaryToolMessage(message, options);
+function isFlowControlRoleMessage(message = {}, role = "") {
+  return hasToolCallWithFlowControlRole(message, role) || isToolResultWithFlowControlRole(message, role);
 }
 
-function hasNamedToolCall(message = {}, toolName = "") {
-  return resolveToolNamesFromToolCalls(getMessageToolCalls(message)).includes(toolName);
-}
-
-function isNamedToolMessage(message = {}, toolName = "") {
-  return resolveToolNameFromMessage(message) === toolName;
-}
-
-function isNamedToolPairMessage(message = {}, toolName = "") {
-  return hasNamedToolCall(message, toolName) || isNamedToolMessage(message, toolName);
-}
-
-function getNamedToolCallIds(message = {}, toolName = "") {
-  return getMessageToolCalls(message)
-    .filter((call) => String(call?.name || call?.function?.name || "").trim() === toolName)
-    .map((call) => String(call?.id || call?.tool_call_id || "").trim())
-    .filter(Boolean);
-}
-
-function collectLatestNamedToolMessageIndexes(messages = [], toolName = "") {
+function collectLatestFlowControlMessageIndexesByTool(messages = [], role = "") {
   const source = Array.isArray(messages) ? messages : [];
-  const latest = new Set();
-  for (let index = source.length - 1; index >= 0; index -= 1) {
-    const message = source[index];
-    if (!isNamedToolPairMessage(message, toolName)) continue;
-    latest.add(index);
-    const toolCallId = String(message?.tool_call_id || message?.toolCallId || "").trim();
-    if (isNamedToolMessage(message, toolName) && toolCallId) {
-      for (let previous = index - 1; previous >= 0; previous -= 1) {
-        if (!getNamedToolCallIds(source[previous], toolName).includes(toolCallId)) continue;
-        latest.add(previous);
-        break;
-      }
+  const indexes = new Set();
+  const latestAssistantIndexByTool = new Map();
+  for (const [index, message] of source.entries()) {
+    if (resolveMessageRole(message) !== "assistant") continue;
+    for (const call of getMessageToolCalls(message)) {
+      if (!hasFlowControlRole(call, role)) continue;
+      const toolName = resolveToolCallName(call);
+      if (toolName) latestAssistantIndexByTool.set(toolName, index);
     }
-    break;
   }
-  return latest;
+  for (const assistantIndex of latestAssistantIndexByTool.values()) {
+    indexes.add(assistantIndex);
+    const callIds = getMessageToolCalls(source[assistantIndex]).map(resolveToolCallId).filter(Boolean);
+    for (const [index, message] of source.entries()) {
+      if (resolveMessageRole(message) !== "tool") continue;
+      if (callIds.includes(resolveToolCallId(message))) indexes.add(index);
+    }
+  }
+  return indexes;
 }
 
-export function collectLatestTaskSummaryMessageIndexes(
-  messages = [],
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  return collectLatestNamedToolMessageIndexes(messages, taskSummaryToolName);
+export function collectLatestCheckpointBoundaryMessageIndexes(messages = []) {
+  return collectLatestFlowControlMessageIndexesByTool(
+    messages,
+    FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
+  );
 }
 
-export function collectLatestTaskCheckMessageIndexes(
-  messages = [],
-  { taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME } = {},
-) {
-  return collectLatestNamedToolMessageIndexes(messages, taskCheckToolName);
+export function collectLatestCheckpointEvidenceMessageIndexes(messages = []) {
+  return collectLatestFlowControlMessageIndexesByTool(
+    messages,
+    FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+  );
 }
 
-export function shouldMarkCurrentTurnSummarizedMessage(
-  message = {},
-  { taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME } = {},
-) {
-  if (hasTaskSummaryToolCall(message, { taskSummaryToolName })) return false;
-  if (isTaskSummaryToolMessage(message, { taskSummaryToolName })) return false;
+export function shouldMarkCurrentTurnSummarizedMessage(message = {}) {
+  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) return false;
   return shouldMarkCurrentTurnSummarizedByPolicy(message);
 }
 
@@ -167,10 +126,8 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
     messages = [],
     index = -1,
     latestInjectedIndexes = null,
-    latestTaskSummaryIndexes = null,
-    latestTaskCheckIndexes = null,
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
+    latestCheckpointBoundaryIndexes = null,
+    latestCheckpointEvidenceIndexes = null,
     policyOptions = {},
   } = {},
 ) {
@@ -183,34 +140,29 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
       : collectLatestInjectedMessageIndexes(source, policyOptions);
   if (injected && latestInjected.has(index)) return false;
   if (injected) return true;
-  if (isTaskSummaryMessage(message, { taskSummaryToolName })) {
-    const latestSummary =
-      latestTaskSummaryIndexes instanceof Set
-        ? latestTaskSummaryIndexes
-        : collectLatestTaskSummaryMessageIndexes(source, { taskSummaryToolName });
-    if (latestSummary.has(index)) return false;
+  const latestBoundary = latestCheckpointBoundaryIndexes instanceof Set
+    ? latestCheckpointBoundaryIndexes
+    : collectLatestCheckpointBoundaryMessageIndexes(source);
+  const latestEvidence = latestCheckpointEvidenceIndexes instanceof Set
+    ? latestCheckpointEvidenceIndexes
+    : collectLatestCheckpointEvidenceMessageIndexes(source);
+  if (latestBoundary.has(index) || latestEvidence.has(index)) return false;
+  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
     return shouldMarkCurrentTurnSummarizedByPolicy(message);
   }
-  if (isNamedToolPairMessage(message, taskCheckToolName)) {
-    const latestTaskCheck =
-      latestTaskCheckIndexes instanceof Set
-        ? latestTaskCheckIndexes
-        : collectLatestTaskCheckMessageIndexes(source, { taskCheckToolName });
-    if (latestTaskCheck.has(index)) return false;
+  if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
     return shouldMarkCurrentTurnSummarizedByPolicy(message);
   }
-  return shouldMarkCurrentTurnSummarizedMessage(message, { taskSummaryToolName });
+  return shouldMarkCurrentTurnSummarizedMessage(message);
 }
 
-function summaryScope(messages, { taskSummaryToolName, taskCheckToolName, policyOptions }) {
+function summaryScope(messages, { policyOptions }) {
   const source = Array.isArray(messages) ? messages : [];
   return {
     source,
     latestInjectedIndexes: collectLatestInjectedMessageIndexes(source, policyOptions),
-    latestTaskSummaryIndexes: collectLatestTaskSummaryMessageIndexes(source, {
-      taskSummaryToolName,
-    }),
-    latestTaskCheckIndexes: collectLatestTaskCheckMessageIndexes(source, { taskCheckToolName }),
+    latestCheckpointBoundaryIndexes: collectLatestCheckpointBoundaryMessageIndexes(source),
+    latestCheckpointEvidenceIndexes: collectLatestCheckpointEvidenceMessageIndexes(source),
   };
 }
 
@@ -308,26 +260,18 @@ export function collectClosedToolCallBatchMessages(
 export function markCurrentTurnStoreSummarized(
   store = null,
   {
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
     onMarked = null,
   } = {},
 ) {
   if (!store || typeof store.updateWhere !== "function") return 0;
   const scoped = typeof store.toArray === "function" ? store.toArray() : [];
-  const dimensions = summaryScope(scoped, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
+  const dimensions = summaryScope(scoped, { policyOptions });
   return store.updateWhere({ summarized: true }, (message, index) => {
     const marked = shouldMarkCurrentTurnSummarizedMessageInScope(message, {
       ...dimensions,
       messages: scoped,
       index,
-      taskSummaryToolName,
-      taskCheckToolName,
       policyOptions,
     });
     if (marked && typeof onMarked === "function") onMarked(message);
@@ -349,23 +293,15 @@ export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set
 export function markCurrentTurnArraySummarized(
   messages = [],
   {
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
   } = {},
 ) {
-  const dimensions = summaryScope(messages, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
+  const dimensions = summaryScope(messages, { policyOptions });
   return dimensions.source.map((message, index) =>
     shouldMarkCurrentTurnSummarizedMessageInScope(message, {
       ...dimensions,
       messages: dimensions.source,
       index,
-      taskSummaryToolName,
-      taskCheckToolName,
       policyOptions,
     })
       ? { ...(message || {}), summarized: true }
@@ -376,24 +312,16 @@ export function markCurrentTurnArraySummarized(
 export function markCurrentTurnModelMessagesSummarized(
   messages = [],
   {
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
   } = {},
 ) {
-  const dimensions = summaryScope(messages, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
+  const dimensions = summaryScope(messages, { policyOptions });
   for (const [index, message] of dimensions.source.entries()) {
     if (
       !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
         ...dimensions,
         messages: dimensions.source,
         index,
-        taskSummaryToolName,
-        taskCheckToolName,
         policyOptions,
       })
     )
@@ -410,8 +338,6 @@ export function collectScopedMessagesToSummarize(
     maxMessages = Number.POSITIVE_INFINITY,
     limitToProvidedMessagesOnly = false,
     retentionMessages = messages,
-    taskSummaryToolName = DEFAULT_TASK_SUMMARY_TOOL_NAME,
-    taskCheckToolName = DEFAULT_TASK_CHECK_TOOL_NAME,
     policyOptions = {},
   } = {},
 ) {
@@ -422,27 +348,19 @@ export function collectScopedMessagesToSummarize(
     Number.isFinite(numericLimit) && numericLimit >= 0
       ? Math.min(source.length, Math.floor(numericLimit))
       : source.length;
-  const dimensions = summaryScope(source, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
-  const retentionDimensions = summaryScope(retentionSource, {
-    taskSummaryToolName,
-    taskCheckToolName,
-    policyOptions,
-  });
+  const dimensions = summaryScope(source, { policyOptions });
+  const retentionDimensions = summaryScope(retentionSource, { policyOptions });
   const preservedInjected = collectPreservedMessages(
     retentionSource,
     retentionDimensions.latestInjectedIndexes,
   );
-  const preservedTaskSummaries = collectPreservedMessages(
+  const preservedCheckpointBoundaries = collectPreservedMessages(
     retentionSource,
-    retentionDimensions.latestTaskSummaryIndexes,
+    retentionDimensions.latestCheckpointBoundaryIndexes,
   );
-  const preservedTaskChecks = collectPreservedMessages(
+  const preservedCheckpointEvidence = collectPreservedMessages(
     retentionSource,
-    retentionDimensions.latestTaskCheckIndexes,
+    retentionDimensions.latestCheckpointEvidenceIndexes,
   );
   const selectedMessages = [];
   for (let index = 0; index < limit; index += 1) {
@@ -456,19 +374,17 @@ export function collectScopedMessagesToSummarize(
     const injected = isInjectedMessage(message, policyOptions);
     if (injected) {
       if (isPreservedMessage(message, preservedInjected)) continue;
-    } else if (isTaskSummaryMessage(message, { taskSummaryToolName })) {
-      if (isPreservedMessage(message, preservedTaskSummaries)) continue;
+    } else if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
+      if (isPreservedMessage(message, preservedCheckpointBoundaries)) continue;
       if (!shouldMarkCurrentTurnSummarizedByPolicy(message)) continue;
-    } else if (isNamedToolPairMessage(message, taskCheckToolName)) {
-      if (isPreservedMessage(message, preservedTaskChecks)) continue;
+    } else if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE)) {
+      if (isPreservedMessage(message, preservedCheckpointEvidence)) continue;
       if (!shouldMarkCurrentTurnSummarizedByPolicy(message)) continue;
     } else if (
       !shouldMarkCurrentTurnSummarizedMessageInScope(message, {
         ...dimensions,
         messages: source,
         index,
-        taskSummaryToolName,
-        taskCheckToolName,
         policyOptions,
       })
     ) {

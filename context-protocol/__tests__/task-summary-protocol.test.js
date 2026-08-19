@@ -11,7 +11,13 @@ import {
   parseTaskSummaryContent,
   parseTaskSummaryReceipt,
 } from "../src/task/summary.js";
-import { recoverContextTaskSummaryToolResult } from "../src/message/codec.js";
+import { recoverContextTaskSummaryToolResult } from "../src/task/summary-context.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "../src/tool/context-policy.js";
+
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 
 const valid = [
   "NOOBOT_TASK_SUMMARY/1",
@@ -49,7 +55,7 @@ test("task summary receipt accepts only the four canonical derived fields", () =
   );
 });
 
-test("task summary context recovery accepts only the canonical v1 receipt", () => {
+test("task summary context recovery accepts only a classified canonical v1 boundary receipt", () => {
   const receipt = createTaskSummaryReceipt(valid);
   const content = JSON.stringify({
     toolName: "task_summary",
@@ -61,6 +67,7 @@ test("task summary context recovery accepts only the canonical v1 receipt", () =
     role: "tool",
     content,
     tool_call_id: "summary-call-1",
+    contextPolicy: boundaryPolicy,
   });
   assert.equal(recovered.role, "user");
   assert.equal(recovered.content, content);
@@ -72,6 +79,15 @@ test("task summary context recovery accepts only the canonical v1 receipt", () =
     recoverContextTaskSummaryToolResult({
       role: "tool",
       content: JSON.stringify({ toolName: "task_summary", summaryContent: valid }),
+      contextPolicy: boundaryPolicy,
+    }),
+    null,
+  );
+  assert.equal(
+    recoverContextTaskSummaryToolResult({
+      role: "tool",
+      content,
+      tool_call_id: "unclassified-call",
     }),
     null,
   );

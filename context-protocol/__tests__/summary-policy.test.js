@@ -8,11 +8,88 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   collectDialogScopedMessagesToSummarize,
+  collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-types.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "../src/tool/context-policy.js";
+
+const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+
+function flowCall(id, name, contextPolicy) {
+  return { id, name, contextPolicy };
+}
+
+function flowResult(id, toolName, content, contextPolicy) {
+  return { role: "tool", tool_call_id: id, toolName, content, contextPolicy };
+}
+
+test("checkpoint evidence selection retains the latest closed batch per canonical tool identity", () => {
+  const messages = [
+    { role: "assistant", tool_calls: [flowCall("old", "plan_control", evidencePolicy)] },
+    flowResult("old", "plan_control", "old", evidencePolicy),
+    { role: "assistant", tool_calls: [flowCall("accept", "accept_control", evidencePolicy)] },
+    flowResult("accept", "accept_control", "accepted", evidencePolicy),
+    { role: "assistant", tool_calls: [{ id: "business", name: "execute_script" }] },
+    { role: "tool", tool_call_id: "business", toolName: "execute_script", content: "ok" },
+    {
+      role: "assistant",
+      tool_calls: [
+        flowCall("latest", "plan_control", evidencePolicy),
+        { id: "parallel", name: "read_file" },
+      ],
+    },
+    flowResult("latest", "plan_control", "latest", evidencePolicy),
+    { role: "tool", tool_call_id: "parallel", toolName: "read_file", content: "file" },
+  ];
+
+  assert.deepEqual(
+    [...collectLatestCheckpointEvidenceMessageIndexes(messages)].sort((left, right) => left - right),
+    [2, 3, 6, 7, 8],
+  );
+});
+
+test("checkpoint evidence pairs a persisted tool result by tool_call_id, not its message id", () => {
+  const messages = [
+    {
+      messageUid: "evidence-call-message",
+      id: "assistant-provider-message",
+      role: "assistant",
+      type: "tool_call",
+      tool_calls: [flowCall("evidence-call", "flow_evidence", evidencePolicy)],
+    },
+    {
+      messageUid: "evidence-result-message",
+      id: "tool-result-message",
+      role: "tool",
+      type: "tool_result",
+      tool_call_id: "evidence-call",
+      content: "recorded",
+    },
+  ];
+
+  assert.deepEqual([...collectLatestCheckpointEvidenceMessageIndexes(messages)], [0, 1]);
+  assert.deepEqual(
+    markCurrentTurnArraySummarized(messages).map((message) => message.summarized === true),
+    [false, false],
+  );
+});
+
+test("an unclassified tool name is never inferred to be checkpoint evidence", () => {
+  const messages = [
+    { role: "assistant", tool_calls: [{ id: "fake", name: "task_check" }] },
+    { role: "tool", tool_call_id: "fake", toolName: "task_check", content: "not classified" },
+  ];
+
+  assert.deepEqual([...collectLatestCheckpointEvidenceMessageIndexes(messages)], []);
+  assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, messages);
+});
 
 test("summary retention keeps the latest injection independently in every dialog", () => {
   const injected = (id, dialogProcessId, content) => ({
@@ -44,8 +121,8 @@ test("summary retention keeps the latest injection independently in every dialog
 
 test("summary policy preserves latest task summary pair and latest injection", () => {
   const result = markCurrentTurnArraySummarized([
-    { role: "assistant", tool_calls: [{ id: "old", name: "task_summary" }] },
-    { role: "tool", tool_call_id: "old", toolName: "task_summary", content: "old" },
+    { role: "assistant", tool_calls: [flowCall("old", "summary_control", boundaryPolicy)] },
+    flowResult("old", "summary_control", "old", boundaryPolicy),
     {
       role: "user",
       injectedMessage: true,
@@ -53,8 +130,8 @@ test("summary policy preserves latest task summary pair and latest injection", (
       injectedMessageType: "guidance",
       content: "old guidance",
     },
-    { role: "assistant", tool_calls: [{ id: "latest", name: "task_summary" }] },
-    { role: "tool", tool_call_id: "latest", toolName: "task_summary", content: "latest" },
+    { role: "assistant", tool_calls: [flowCall("latest", "summary_control", boundaryPolicy)] },
+    flowResult("latest", "summary_control", "latest", boundaryPolicy),
     {
       role: "user",
       injectedMessage: true,
@@ -114,14 +191,14 @@ test("checkpoint control prompts are summarized while normal injections retain t
 
 test("summary checkpoint preserves only the latest task_check call and result pair", () => {
   const result = markCurrentTurnArraySummarized([
-    { role: "assistant", tool_calls: [{ id: "check-old", name: "task_check" }] },
-    { role: "tool", tool_call_id: "check-old", toolName: "task_check", content: "old" },
+    { role: "assistant", tool_calls: [flowCall("check-old", "check_control", evidencePolicy)] },
+    flowResult("check-old", "check_control", "old", evidencePolicy),
     { role: "assistant", tool_calls: [{ id: "business", name: "execute_script" }] },
     { role: "tool", tool_call_id: "business", toolName: "execute_script", content: "ok" },
-    { role: "assistant", tool_calls: [{ id: "check-latest", name: "task_check" }] },
-    { role: "tool", tool_call_id: "check-latest", toolName: "task_check", content: "latest" },
-    { role: "assistant", tool_calls: [{ id: "summary", name: "task_summary" }] },
-    { role: "tool", tool_call_id: "summary", toolName: "task_summary", content: "summary" },
+    { role: "assistant", tool_calls: [flowCall("check-latest", "check_control", evidencePolicy)] },
+    flowResult("check-latest", "check_control", "latest", evidencePolicy),
+    { role: "assistant", tool_calls: [flowCall("summary", "summary_control", boundaryPolicy)] },
+    flowResult("summary", "summary_control", "summary", boundaryPolicy),
   ]);
 
   assert.deepEqual(
@@ -136,19 +213,21 @@ test("summary selection keeps a parallel tool-call batch atomic when task_check 
     tool_calls: [
       { id: "read-a", name: "read_file" },
       { id: "read-b", name: "read_file" },
-      { id: "check", name: "task_check" },
+      flowCall("check", "check_control", evidencePolicy),
     ],
   };
   const messages = [
     assistant,
     { role: "tool", tool_call_id: "read-a", toolName: "read_file", content: "a" },
     { role: "tool", tool_call_id: "read-b", toolName: "read_file", content: "b" },
-    { role: "tool", tool_call_id: "check", toolName: "task_check", content: "check" },
+    flowResult("check", "check_control", "check", evidencePolicy),
   ];
 
   const selected = collectScopedMessagesToSummarize(messages).messages;
+  const marked = markCurrentTurnArraySummarized(messages);
 
   assert.deepEqual(selected, []);
+  assert.deepEqual(marked.map((message) => message.summarized === true), [false, false, false, false]);
 });
 
 test("summary selection does not select an incomplete parallel tool-call batch", () => {
