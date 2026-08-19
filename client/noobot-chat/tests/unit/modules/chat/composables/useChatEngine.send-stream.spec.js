@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
@@ -14,14 +13,12 @@ import {
   emitAuthorityCompletionRequested,
   emitAuthorityTerminal,
 } from "../helpers/useChatEngineHarness.js";
-import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import {
   BackendChannelState,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
-import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import {
   applyTurnTimingUpdate,
   selectTurnMessageRuntime,
@@ -83,9 +80,7 @@ describe("useChatEngine.send-stream", () => {
       errorCode: "SESSION_AGGREGATE_VERSION_CONFLICT",
       currentVersion: 2,
     };
-    const stream = vi.fn()
-      .mockRejectedValueOnce(conflict)
-      .mockResolvedValueOnce(undefined);
+    const stream = vi.fn().mockRejectedValueOnce(conflict).mockResolvedValueOnce(undefined);
     const fetchSessionDetail = vi.fn();
     const applySessionDetail = vi.fn();
     const { engine, activeSession } = createHarness({
@@ -97,14 +92,16 @@ describe("useChatEngine.send-stream", () => {
     await expect(engine.send()).resolves.toBe(true);
 
     expect(stream).toHaveBeenCalledTimes(2);
-    expect(stream.mock.calls.map(([payload]) => (
-      payload.concurrency.expectedAggregateVersion
-    ))).toEqual([0, 2]);
+    expect(
+      stream.mock.calls.map(([payload]) => payload.concurrency.expectedAggregateVersion),
+    ).toEqual([0, 2]);
     expect(stream.mock.calls[1][0].identity).toEqual(stream.mock.calls[0][0].identity);
-    expect(activeSession.value.messages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: RoleEnum.USER, frontendUserMessage: true }),
-      expect.objectContaining({ role: RoleEnum.ASSISTANT }),
-    ]));
+    expect(activeSession.value.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: RoleEnum.USER, frontendUserMessage: true }),
+        expect.objectContaining({ role: RoleEnum.ASSISTANT }),
+      ]),
+    );
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
   });
@@ -478,21 +475,23 @@ describe("useChatEngine.send-stream", () => {
         event: StreamEventEnum.DELTA,
         data: { dialogProcessId: "dp-new", text: "partial " },
       });
-      onEvent(createAuthoritativeMessageEnvelope("authoritative_final_content", {
-        eventId: "evt-final-answer",
-        sessionId: "local-1",
-        messageId: "model-output-final-answer",
-        presentationMessageId: payload.presentation.assistantMessageId,
-        dialogProcessId: "dp-new",
-        turnScopeId: payload.identity.turnScopeId,
-        seq: 1,
-        text: "final answer",
-        modelAlias: "alias-a",
-        modelName: "model-a",
-        modelRuns: [{ runId: "r1" }],
-        attachments: [{ name: "f1" }],
-        tool_calls: [{ id: "tc1" }],
-      }));
+      onEvent(
+        createAuthoritativeMessageEnvelope("authoritative_final_content", {
+          eventId: "evt-final-answer",
+          sessionId: "local-1",
+          messageId: "model-output-final-answer",
+          presentationMessageId: payload.presentation.assistantMessageId,
+          dialogProcessId: "dp-new",
+          turnScopeId: payload.identity.turnScopeId,
+          seq: 1,
+          text: "final answer",
+          modelAlias: "alias-a",
+          modelName: "model-a",
+          modelRuns: [{ runId: "r1" }],
+          attachments: [{ name: "f1" }],
+          tool_calls: [{ id: "tc1" }],
+        }),
+      );
       onEvent({
         event: StreamEventEnum.DONE,
         data: {
@@ -704,16 +703,18 @@ describe("useChatEngine.send-stream", () => {
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "sending", {
         turnScopeId: payload.identity.turnScopeId,
       });
-      onEvent(createAuthoritativeMessageEnvelope("authoritative_final_content", {
-        eventId: "evt-channel-final-content",
-        sessionId: "local-channel-complete",
-        messageId: "model-output-channel-complete",
-        presentationMessageId: payload.presentation.assistantMessageId,
-        dialogProcessId: "dp-channel-complete",
-        turnScopeId: payload.identity.turnScopeId,
-        seq: 1,
-        text: "overlay answer",
-      }));
+      onEvent(
+        createAuthoritativeMessageEnvelope("authoritative_final_content", {
+          eventId: "evt-channel-final-content",
+          sessionId: "local-channel-complete",
+          messageId: "model-output-channel-complete",
+          presentationMessageId: payload.presentation.assistantMessageId,
+          dialogProcessId: "dp-channel-complete",
+          turnScopeId: payload.identity.turnScopeId,
+          seq: 1,
+          text: "overlay answer",
+        }),
+      );
       emitChannelState(onEvent, "local-channel-complete", "dp-channel-complete", "completed", {
         turnScopeId: payload.identity.turnScopeId,
       });
@@ -845,90 +846,5 @@ describe("useChatEngine.send-stream", () => {
     // neither event may trigger an implicit session-detail refresh.
     expect(fetchSessionDetail).not.toHaveBeenCalled();
     expect(applySessionDetail).not.toHaveBeenCalled();
-  });
-
-  it("stopped final detail preserves a fresh replacement turn instead of replacing it with a stale stopped snapshot", async () => {
-    let replacementTurnScopeId = "";
-    const staleStoppedTurnScopeId = "client-turn:old-stopped-detail";
-    const fetchSessionDetail = vi.fn(async () => ({
-      sessionId: "local-stop-detail-preserve",
-      sessions: [
-        {
-          sessionId: "local-stop-detail-preserve",
-          messages: [
-            { role: RoleEnum.USER, content: "old question", turnScopeId: staleStoppedTurnScopeId },
-            {
-              role: RoleEnum.ASSISTANT,
-              content: "old partial",
-              turnScopeId: staleStoppedTurnScopeId,
-              statusLabel: "chat.stopped",
-              stopState: "user_stopped",
-              channelState: { state: "user_stopped", turnScopeId: staleStoppedTurnScopeId },
-            },
-          ],
-        },
-      ],
-    }));
-    const stream = vi.fn(async (payload, onEvent) => {
-      replacementTurnScopeId = payload.identity.turnScopeId;
-      emitChannelState(onEvent, "local-stop-detail-preserve", "dp-new", "user_stopped", {
-        turnScopeId: payload.identity.turnScopeId,
-      });
-      onEvent({
-        event: StreamEventEnum.USER_STOPPED,
-        data: {
-          sessionId: "local-stop-detail-preserve",
-          dialogProcessId: "dp-new",
-          turnScopeId: payload.identity.turnScopeId,
-        },
-      });
-    });
-    const harness = createHarness({
-      sessionId: "local-stop-detail-preserve",
-      stream,
-    });
-    const sessions = ref([harness.activeSession.value]);
-    const { applySessionDetail } = createSessionDetailApplicator({
-      sessions,
-      activeSessionId: harness.activeSessionId,
-      makeViewMessage: (message) => ({ ...message }),
-      foldMessagesForView: (messages) => messages.map((message) => ({ ...message })),
-      sessionTitleFromMessages: () => "title",
-      applyCompletedToolLogsToMessages: vi.fn(),
-      scrollBottom: vi.fn(),
-      isSameSessionIdentity: (a, b) => String(a) === String(b),
-    });
-    harness.deps.fetchSessionDetail = fetchSessionDetail;
-    harness.deps.applySessionDetail = applySessionDetail;
-    harness.activeSession.value.messages = [
-      {
-        id: "msg-user-fresh",
-        messageId: "msg-user-fresh",
-        role: RoleEnum.USER,
-        content: "edited question",
-        turnScopeId: "client-turn:fresh",
-      },
-    ];
-
-    await harness.engine.send({
-      content: "edited question",
-      turnScopeId: "client-turn:fresh",
-      reuseExistingUserTurn: true,
-      userMessageId: "msg-user-fresh",
-    });
-
-    const messages = harness.activeSession.value.messages;
-    expect(replacementTurnScopeId).toBe("client-turn:fresh");
-    expect(messages.some((message) => message.turnScopeId === staleStoppedTurnScopeId)).toBe(false);
-    expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          role: RoleEnum.USER,
-          content: "edited question",
-          turnScopeId: "client-turn:fresh",
-        }),
-        expect.objectContaining({ role: RoleEnum.ASSISTANT, turnScopeId: "client-turn:fresh" }),
-      ]),
-    );
   });
 });

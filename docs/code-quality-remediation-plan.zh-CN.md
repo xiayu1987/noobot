@@ -139,6 +139,15 @@
 - 定向验证：Agent Proxy 重连、状态一致性、交互和生命周期 50 项通过；Service WebSocket 发送、继续、停止、恢复、执行查询和权威生命周期 54 项通过。
 - 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；源码依赖图覆盖 1572 个模块且零循环，前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
 
+### 2026-08-19 第九批文件规模硬门禁
+
+- 新增 `check:file-effective-lines` 并接入 `check:quality`：每个一方代码文件最多 800 个有效代码行。有效代码行不包含空行、纯单行注释、纯块注释和纯 HTML 注释，但包含注释前后的代码、多行字符串、Vue Template 与 Style 内容。
+- 门禁复用根工作区的一方源码清单并显式包含 `tests`、`__tests__`、`__mocks__`、`*.test.*` 和 `*.spec.*`；依赖、构建物、生成物、第三方源码和运行时工作区仍由唯一清单协议排除。本批实际扫描 2377 个代码文件。
+- 该门禁没有历史基线、白名单或文件级豁免。任何文件达到 801 个有效代码行即失败，并报告相对路径与准确行数；计数器和完整源码清单由 7 项协议测试覆盖。
+- 9 个存量超限文件均按语义边界整改：Model Context Convergence 拆为编排、源码策略审计和请求日志审计；Tool Runner、Detached Sub-session、Session Artifact、Session Version 测试提取唯一夹具；前端 Send Stream、Resume State、Stopped Resend 和 Replace Turn 测试按终态详情、替换轮状态与运行时夹具拆分。
+- 当前门禁通过，最大文件为 `agent/__tests__/session/session-version-hardening.test.js`，有效代码行恰为 800。定向验证：Agent 96 项、前端 50 项、有效行计数与源码清单 7 项全部通过。
+- 拆分后的生产源码清单扩大到 1671 个文件，重复项与重复行保持 `166 / 4410`，重复率从 `1.82065891%` 收紧为实际测得的 `1.81962221%`；复杂度基线保持实际测得的 `598 / 121 / 88`，未因新增门禁放宽任何指标。
+
 ## 定向验证记录
 
 - Session Protocol：35 项通过。

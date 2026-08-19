@@ -8,82 +8,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-
-import {
-  executeToolCall as executeToolCallWithoutTurn,
-  executeToolCallInTurn,
-} from "../../../src/runtime/tool-execution/tool-runner.js";
-import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createHookManager, HOOK_POINT } from "@noobot/hook-protocol";
 import { confirmToolOperation } from "../../../src/tools/execution/tool-risk.js";
 import { SECURITY_EVIDENCE_SOURCE } from "@noobot/security-assessment-protocol";
-import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
-
-function executeToolCall(options = {}) {
-  const runtime = options.runtime && typeof options.runtime === "object" ? options.runtime : {};
-  runtime.userId = String(runtime.userId || options.userId || "test-user");
-  runtime.globalConfig =
-    runtime.globalConfig && typeof runtime.globalConfig === "object" ? runtime.globalConfig : {};
-  runtime.globalConfig.workspaceRoot = String(
-    runtime.globalConfig.workspaceRoot || runtime.basePath || os.tmpdir(),
-  );
-  const systemRuntime =
-    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-      ? runtime.systemRuntime
-      : (runtime.systemRuntime = {});
-  const identity = String(options.identity || options.call?.id || "test-tool-call");
-  systemRuntime.sessionId = String(systemRuntime.sessionId || "test-session");
-  systemRuntime.dialogProcessId = String(systemRuntime.dialogProcessId || "test-dialog");
-  systemRuntime.turnScopeId = String(systemRuntime.turnScopeId || "test-turn");
-  systemRuntime.executionId = String(
-    systemRuntime.executionId || `agent:${systemRuntime.turnScopeId}`,
-  );
-  runtime.runConfig =
-    runtime.runConfig && typeof runtime.runConfig === "object" ? runtime.runConfig : {};
-  runtime.runConfig.turnScopeId = String(
-    runtime.runConfig.turnScopeId || systemRuntime.turnScopeId,
-  );
-  runtime.runConfig.executionId = String(
-    runtime.runConfig.executionId || systemRuntime.executionId,
-  );
-  runtime.runConfig.sessionId = String(runtime.runConfig.sessionId || systemRuntime.sessionId);
-  systemRuntime.messageEventStream =
-    systemRuntime.messageEventStream && typeof systemRuntime.messageEventStream === "object"
-      ? systemRuntime.messageEventStream
-      : {
-          sequence: 0,
-        };
-  if (!systemRuntime.messageEventStream.activeMessageId) {
-    bindAssistantMessageEventStream(runtime, {
-      messageId: String(options.messageId || `message-${identity}`),
-      presentationMessageId: String(options.presentationMessageId || `presentation-${identity}`),
-    });
-  }
-  if (options.eventListener && !runtime.sessionManager) {
-    runtime.sessionManager = createCanonicalMessageEventSessionManager();
-  }
-  return options.eventListener
-    ? executeToolCallInTurn({ ...options, runtime })
-    : executeToolCallWithoutTurn({ ...options, runtime });
-}
-
-function getPrimaryTransferAttachment(envelope = {}) {
-  return Array.isArray(envelope?.payload?.attachments) ? envelope.payload.attachments[0] || {} : {};
-}
-
-function findTransferEnvelopeByReason(envelopes = [], reason = "") {
-  return (Array.isArray(envelopes) ? envelopes : []).find(
-    (item = {}) => item?.intent?.reason === reason,
-  );
-}
-
-function findCommittedMessagePayload(events = [], eventType = "") {
-  return (Array.isArray(events) ? events : []).find(
-    (event = {}) =>
-      event?.event === "authority_event_committed" &&
-      event?.data?.envelope?.payload?.eventType === eventType,
-  )?.data?.envelope?.payload;
-}
+import {
+  attachmentEnvelope,
+  executeToolCall,
+  findCommittedMessagePayload,
+  findTransferEnvelopeByReason,
+  getPrimaryTransferAttachment,
+} from "./tool-runner.test-helpers.js";
 
 test("executeToolCall gives tools an output transfer identity named after the canonical tool", async () => {
   let identity = null;
@@ -118,49 +52,6 @@ test("executeToolCall keeps resource identity internal to the runtime result", a
   assert.equal("resources" in publicResult, false);
   assert.equal(result.internalResources[0].resourceId, "res_internal");
 });
-
-function attachmentEnvelope({
-  callId,
-  attachmentId,
-  sessionId = "test-session",
-  messageId = `message-${callId}`,
-  name = "result.txt",
-  mimeType = "text/plain",
-  size = 0,
-} = {}) {
-  return {
-    protocol: "noobot.semantic-transfer",
-    version: 2,
-    transferId: `transfer:${messageId}:tool:${callId}:output:tool_result_text:structured`,
-    messageId,
-    identity: {
-      sessionId,
-      turnScopeId: "test-turn",
-      runId: "agent:test-turn",
-      producer: { type: "tool", id: callId },
-    },
-    direction: "output",
-    payload: {
-      mode: "attachment",
-      attachments: [
-        {
-          identity: { attachmentId, sessionId, attachmentSource: "model" },
-          role: "primary",
-          name,
-          mimeType,
-          size,
-        },
-      ],
-    },
-    intent: {
-      source: "tool",
-      reason: "semantic_transfer_tool_result",
-      scenario: "tool",
-      strategy: "tool_result_text",
-    },
-    meta: { persisted: true },
-  };
-}
 
 test("executeToolCall does not promote ordinary tool attachments into semantic transfer", async () => {
   const call = {
@@ -424,14 +315,8 @@ test("canonical tool events publish the server-assessed maximum risk level", asy
     result.securityAssessment.evidence.map((item) => item.riskLevel),
     ["low", "low", "high"],
   );
-  assert.equal(
-    findCommittedMessagePayload(events, "tool_call_start")?.riskLevel,
-    "low",
-  );
-  assert.equal(
-    findCommittedMessagePayload(events, "tool_call_end")?.riskLevel,
-    "high",
-  );
+  assert.equal(findCommittedMessagePayload(events, "tool_call_start")?.riskLevel, "low");
+  assert.equal(findCommittedMessagePayload(events, "tool_call_end")?.riskLevel, "high");
 });
 
 test("tool operation baseline risk is published even when invocation fails before confirmation", async () => {
@@ -453,14 +338,8 @@ test("tool operation baseline risk is published even when invocation fails befor
 
   assert.equal(result.success, false);
   assert.equal(result.riskLevel, "medium");
-  assert.equal(
-    findCommittedMessagePayload(events, "tool_call_start")?.riskLevel,
-    "medium",
-  );
-  assert.equal(
-    findCommittedMessagePayload(events, "tool_call_end")?.riskLevel,
-    "medium",
-  );
+  assert.equal(findCommittedMessagePayload(events, "tool_call_start")?.riskLevel, "medium");
+  assert.equal(findCommittedMessagePayload(events, "tool_call_end")?.riskLevel, "medium");
 });
 
 test("canonical tool_call_end preserves a complete JSON tool result beyond 200 characters", async () => {

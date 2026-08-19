@@ -21,51 +21,11 @@ import {
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import {
   applyTurnRuntimeEvent,
-  applyTurnTerminalResolution,
   selectSessionTurnRuntime,
 } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-
-function settleStoppedTurn(turnRuntimeRegistry, { sessionId, turnScopeId, messages = [] }) {
-  const revision = 100;
-  const sequence = 100;
-  const completionCommitId = `commit-${turnScopeId}-${revision}`;
-  const result = applyTurnTerminalResolution(
-    turnRuntimeRegistry.value,
-    createTurnTerminalResolution({
-      commandId: `resolve-${turnScopeId}-${revision}`,
-      sessionId,
-      turnScopeId,
-      resolved: true,
-      aggregateVersion: 1,
-      turn: {
-        sessionId,
-        turnScopeId,
-        state: "stop_completed",
-        phase: "stop",
-        revision,
-        sequence,
-        completionCommitId,
-        summaryVersion: revision,
-        capabilities: { actionLocked: false, canStop: false },
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      },
-      materialization: {
-        completionCommitId,
-        summaryVersion: revision,
-        revision,
-        sequence,
-        terminalStatus: { status: "stop_completed" },
-        messages,
-      },
-    }),
-  );
-  if (result?.applied && result.registry) {
-    turnRuntimeRegistry.value = { ...result.registry };
-  }
-  return result;
-}
+import { settleStoppedTurn } from "./useChatEngine.resend-stopped-state.test-helpers.js";
 
 describe("useChatEngine.resend stopped state", () => {
   it("edit-resends immediately after stop without requiring a session refresh", async () => {

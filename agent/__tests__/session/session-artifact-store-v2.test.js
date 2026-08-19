@@ -5,8 +5,7 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -22,37 +21,11 @@ import {
   writeSessionArtifact as writeSessionArtifactCanonical,
 } from "../../src/session/session-artifact-store.js";
 import { SessionMutationCoordinator } from "../../src/session/session-mutation-coordinator.js";
-
-async function withTemp(fn) {
-  const root = await mkdtemp(path.join(tmpdir(), "noobot-artifact-v2-"));
-  try {
-    await fn(root);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-}
-
-function canonicalMessages(messages = []) {
-  return messages.map((message, index) => {
-    const turnScopeId = String(message?.turnScopeId || `turn-fixture-${index + 1}`);
-    return {
-      messageUid: String(message?.messageUid || `sm_fixture_${index + 1}`),
-      dialogProcessId: String(message?.dialogProcessId || `dialog-${turnScopeId}`),
-      turnScopeId,
-      ...message,
-    };
-  });
-}
-
-async function writeSessionArtifact(options = {}) {
-  return writeSessionArtifactCanonical({
-    ...options,
-    sessionPayload: {
-      ...options.sessionPayload,
-      messages: canonicalMessages(options.sessionPayload?.messages),
-    },
-  });
-}
+import {
+  canonicalMessages,
+  withTemp,
+  writeSessionArtifact,
+} from "./session-artifact-store-v2.test-helpers.js";
 
 test("execution events roll by UTF-8 byte size and preserve order", async () =>
   withTemp(async (root) => {
