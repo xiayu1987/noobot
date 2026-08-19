@@ -24,79 +24,99 @@ async function transferCanonicalAttachmentsToSubSession({
   if (!source.length) return [];
   const output = [];
   for (const attachment of source) {
-    const attachmentId = String(attachment?.attachmentId || "").trim();
-    const path = String(attachment?.path || "").trim();
-    if (!attachmentId || !path) {
-      output.push(attachment);
-      continue;
-    }
-    const attachmentSessionId = String(attachment?.sessionId || "").trim();
-    if (attachmentSessionId === subSessionId) {
-      output.push(attachment);
-      continue;
-    }
-    if (attachmentSessionId !== parentSessionId) {
-      throw new Error("detached sub-session attachment must belong to its parent session");
-    }
-    if (
-      !attachmentService ||
-      typeof attachmentService.getAttachmentById !== "function" ||
-      typeof attachmentService.readAttachmentContent !== "function" ||
-      typeof attachmentService.ingest !== "function"
-    ) {
-      throw new Error(
-        "detached sub-session canonical attachment transfer requires AttachmentService",
-      );
-    }
-    const attachmentSource = String(attachment?.attachmentSource || "user").trim() || "user";
-    const parentRecord = await attachmentService.getAttachmentById({
-      userId,
-      attachmentId,
-      sessionId: parentSessionId,
-      attachmentSource,
-    });
-    if (!parentRecord) {
-      throw new Error(
-        "detached sub-session source attachment does not exist in its parent session",
-      );
-    }
-    const sourceContent = await attachmentService.readAttachmentContent({
-      userId,
-      attachmentId,
-      sessionId: parentSessionId,
-      attachmentSource,
-    });
-    if (!sourceContent?.content) {
-      throw new Error("detached sub-session source attachment content is unavailable");
-    }
-    const [transferred] = await attachmentService.ingest({
-      userId,
-      sessionId: subSessionId,
-      attachmentSource: "user",
-      attachmentPolicy:
-        attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
-      attachments: [
-        {
-          clientAttachmentId: String(
-            attachment?.clientAttachmentId || `session-transfer:${attachmentId}`,
-          ).trim(),
-          name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
-          mimeType: String(
-            parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",
-          ).trim(),
-          contentBase64: sourceContent.content.toString("base64"),
-          ...(typeof attachment?.isSandbox === "boolean"
-            ? { isSandbox: attachment.isSandbox }
-            : {}),
-        },
-      ],
-    });
-    if (!transferred || String(transferred?.sessionId || "").trim() !== subSessionId) {
-      throw new Error("detached sub-session attachment transfer did not create child ownership");
-    }
-    output.push(transferred);
+    output.push(
+      await transferCanonicalAttachment({
+        attachmentService,
+        userId,
+        parentSessionId,
+        subSessionId,
+        attachment,
+        attachmentPolicy,
+      }),
+    );
   }
   return output;
+}
+
+async function transferCanonicalAttachment({
+  attachmentService,
+  userId,
+  parentSessionId,
+  subSessionId,
+  attachment,
+  attachmentPolicy,
+}) {
+  const attachmentId = String(attachment?.attachmentId || "").trim();
+  const path = String(attachment?.path || "").trim();
+  if (!attachmentId || !path) return attachment;
+  const attachmentSessionId = String(attachment?.sessionId || "").trim();
+  if (attachmentSessionId === subSessionId) return attachment;
+  assertParentAttachmentOwnership(attachmentSessionId, parentSessionId);
+  assertCanonicalAttachmentService(attachmentService);
+  const attachmentSource = String(attachment?.attachmentSource || "user").trim() || "user";
+  const parentRecord = await attachmentService.getAttachmentById({
+    userId,
+    attachmentId,
+    sessionId: parentSessionId,
+    attachmentSource,
+  });
+  assertParentAttachmentRecord(parentRecord);
+  const sourceContent = await attachmentService.readAttachmentContent({
+    userId,
+    attachmentId,
+    sessionId: parentSessionId,
+    attachmentSource,
+  });
+  assertParentAttachmentContent(sourceContent);
+  const [transferred] = await attachmentService.ingest({
+    userId,
+    sessionId: subSessionId,
+    attachmentSource: "user",
+    attachmentPolicy:
+      attachmentPolicy && typeof attachmentPolicy === "object" ? attachmentPolicy : {},
+    attachments: [
+      createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId),
+    ],
+  });
+  if (!transferred || String(transferred?.sessionId || "").trim() !== subSessionId) {
+    throw new Error("detached sub-session attachment transfer did not create child ownership");
+  }
+  return transferred;
+}
+
+function assertParentAttachmentOwnership(attachmentSessionId, parentSessionId) {
+  if (attachmentSessionId === parentSessionId) return;
+  throw new Error("detached sub-session attachment must belong to its parent session");
+}
+
+function assertParentAttachmentRecord(parentRecord) {
+  if (parentRecord) return;
+  throw new Error("detached sub-session source attachment does not exist in its parent session");
+}
+
+function assertParentAttachmentContent(sourceContent) {
+  if (sourceContent?.content) return;
+  throw new Error("detached sub-session source attachment content is unavailable");
+}
+
+function assertCanonicalAttachmentService(attachmentService) {
+  const requiredMethods = ["getAttachmentById", "readAttachmentContent", "ingest"];
+  if (requiredMethods.every((method) => typeof attachmentService?.[method] === "function")) return;
+  throw new Error("detached sub-session canonical attachment transfer requires AttachmentService");
+}
+
+function createTransferredAttachment(attachment, parentRecord, sourceContent, attachmentId) {
+  return {
+    clientAttachmentId: String(
+      attachment?.clientAttachmentId || `session-transfer:${attachmentId}`,
+    ).trim(),
+    name: String(parentRecord?.name || attachment?.name || "attachment").trim(),
+    mimeType: String(
+      parentRecord?.mimeType || attachment?.mimeType || "application/octet-stream",
+    ).trim(),
+    contentBase64: sourceContent.content.toString("base64"),
+    ...(typeof attachment?.isSandbox === "boolean" ? { isSandbox: attachment.isSandbox } : {}),
+  };
 }
 
 function assertDetachedSubSessionStrategy(strategy = {}) {
@@ -121,436 +141,566 @@ export function createDetachedSubSessionRunner({
   sessionRunner = null,
   session = null,
   attachmentService = null,
-  pluginRuntime = {},
   mergeRunConfigPluginPolicy = null,
   prepareRunConfig = null,
   now = () => new Date().toISOString(),
 } = {}) {
-  return async ({
-    parentExecutionScope = null,
-    parentContext = {},
-    message = "",
-    attachments = [],
-    runConfigPatch = {},
-    systemMessageFactory = null,
-    strategy = {},
-    metadata = {},
-    eventListener = null,
-    abortSignal = null,
-  } = {}) => {
-    if (!sessionRunner || typeof sessionRunner.runSession !== "function") {
-      throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
-    }
-    if (!session || typeof session.createScopedPersistenceContext !== "function") {
-      throw new Error("detached sub-session runner requires scoped persistence context support");
-    }
-    const sourceContext = parentContext && typeof parentContext === "object" ? parentContext : {};
-    let inheritedRuntime;
-    try {
-      inheritedRuntime = getRuntimeFromAgentContext(parentExecutionScope);
-    } catch (error) {
-      emitEvent(eventListener, "detached_sub_session_scope_rejected", {
-        userId: String(strategy?.userId || parentContext?.userId || "").trim(),
-        parentSessionId: String(strategy?.parentSessionId || parentContext?.sessionId || "").trim(),
-        scopeId: String(metadata?.scope || "detached_sub_session").trim(),
-        reason: "bindings.runtime_missing",
-        error: error?.message || String(error),
-      });
-      throw error;
-    }
-    const inheritedAbortSignal =
-      abortSignal || sourceContext?.abortSignal || inheritedRuntime?.abortSignal || null;
-    const inheritedUserInteractionBridge =
-      sourceContext?.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
-    const throwIfSubSessionAborted = createAbortGuard(inheritedAbortSignal);
-    throwIfSubSessionAborted();
-
-    const userId = String(strategy?.userId || sourceContext?.userId || "").trim();
-    const parentSessionId = String(
-      strategy?.parentSessionId || sourceContext?.sessionId || "",
-    ).trim();
-    const parentDialogProcessId = String(
-      strategy?.parentDialogProcessId || sourceContext?.dialogProcessId || "",
-    ).trim();
-    if (!userId || !parentSessionId) {
-      throw new Error("sub-session runner requires userId and parentSessionId");
-    }
-
-    const subSessionId = String(strategy?.sessionId || "").trim();
-    const subDialogProcessId = String(strategy?.dialogProcessId || "").trim();
-    const turnScopeId = String(strategy?.turnScopeId || "").trim();
-    const executionId = String(strategy?.executionId || "").trim();
-    const relativeDir = String(strategy?.relativeDir || "").trim();
-    const allowedRoot = String(strategy?.allowedRoot || "").trim();
-    assertDetachedSubSessionStrategy(strategy);
-    const scopedEventListener = createScopedSubSessionEventListener(eventListener, {
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      dialogProcessId: subDialogProcessId || subSessionId,
-      turnScopeId,
-    });
-
-    const inheritedRunConfig = clearParentTurnTransactionIdentity({
-      ...(sourceContext?.runConfig && typeof sourceContext.runConfig === "object"
-        ? sourceContext.runConfig
-        : inheritedRuntime?.runConfig && typeof inheritedRuntime.runConfig === "object"
-          ? inheritedRuntime.runConfig
-          : {}),
-    });
-    if (typeof mergeRunConfigPluginPolicy !== "function") {
-      throw new TypeError("detached sub-session runner requires mergeRunConfigPluginPolicy");
-    }
-    const mergedRunConfig = mergeRunConfigPluginPolicy({
-      baseRunConfig: inheritedRunConfig,
-      runConfigPatch,
-      disabledPlugins: strategy?.disabledPlugins || [],
-    });
-    const childRuntimeModel = String(runConfigPatch?.runtimeModel || "").trim();
-    const selectedModel = readSelectedModelValue(mergedRunConfig?.selectedModel);
-    const parentRuntimeModel = String(inheritedRunConfig?.runtimeModel || "").trim();
-    const inheritedRuntimeModel = String(inheritedRuntime?.runtimeModel || "").trim();
-    const effectiveRuntimeModel =
-      childRuntimeModel || selectedModel || parentRuntimeModel || inheritedRuntimeModel;
-    if (effectiveRuntimeModel) mergedRunConfig.runtimeModel = effectiveRuntimeModel;
-    else delete mergedRunConfig.runtimeModel;
-    mergedRunConfig.executionId = executionId;
-    mergedRunConfig.executionKind = "agent";
-    mergedRunConfig.parentExecutionId = String(
-      strategy?.parentExecutionId || metadata?.parentExecutionId || "",
-    ).trim();
-    mergedRunConfig.rootExecutionId = String(
-      strategy?.rootExecutionId || metadata?.rootExecutionId || mergedRunConfig.executionId,
-    ).trim();
-    // A detached Turn owns a distinct canonical message domain.  Neither the
-    // parent context, the node patch nor config preparation may choose this
-    // identity because all three can contain the parent workflow message.
-    const childPresentationMessageId = `msg_${randomUUID()}`;
-    const childMessageId = `msg_event_${childPresentationMessageId}`;
-    mergedRunConfig.presentationMessageId = childPresentationMessageId;
-    mergedRunConfig.messageId = childMessageId;
-    delete mergedRunConfig.assistantMessageId;
-    if (!String(mergedRunConfig.thinkingStartedAt || "").trim()) {
-      mergedRunConfig.thinkingStartedAt = String(now()).trim();
-    }
-    delete mergedRunConfig.hookManager;
-    delete mergedRunConfig.hooks;
-    delete mergedRunConfig.botHookManager;
-    delete mergedRunConfig.botHooks;
-
-    const subSessionUserConfig = await loadSubSessionUserConfig({
-      workspaceService,
-      configService,
-      userId,
-    });
-    const effectiveRunConfig = prepareRunConfig({
-      userId,
-      runConfig: mergedRunConfig,
-      userConfig: subSessionUserConfig,
-    });
-    if (
-      !effectiveRunConfig ||
-      typeof effectiveRunConfig !== "object" ||
-      Array.isArray(effectiveRunConfig)
-    ) {
-      throw new Error("detached sub-session prepareRunConfig must return a run config object");
-    }
-    effectiveRunConfig.presentationMessageId = childPresentationMessageId;
-    effectiveRunConfig.messageId = childMessageId;
-    delete effectiveRunConfig.assistantMessageId;
-    const subSessionAttachments = await transferCanonicalAttachmentsToSubSession({
-      attachmentService,
-      userId,
-      parentSessionId,
-      subSessionId,
-      attachments,
-      attachmentPolicy: effectiveRunConfig?.attachments,
-    });
-    const resolvedSystemMessages =
-      typeof systemMessageFactory === "function"
-        ? await systemMessageFactory({ attachments: subSessionAttachments })
-        : [];
-    if (!Array.isArray(resolvedSystemMessages)) {
-      throw new TypeError("detached sub-session systemMessageFactory must return an array");
-    }
-    emitEvent(eventListener, "detached_sub_session_message_identity_bound", {
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      dialogProcessId: subDialogProcessId,
-      turnScopeId,
-      workflowRunId: String(effectiveRunConfig.workflowRunId || "").trim(),
-      nodeExecutionId: String(
-        effectiveRunConfig.workflowNodeExecutionId || effectiveRunConfig.nodeExecutionId || "",
-      ).trim(),
-      messageId: childMessageId,
-      presentationMessageId: childPresentationMessageId,
-    });
-
-    const runtimePluginState = buildRuntimePluginState({
-      effectiveRunConfig,
-      disabledPlugins: strategy?.disabledPlugins,
-      pluginRuntime,
-    });
-    emitEvent(eventListener, "plugin_runtime_resolved", runtimePluginState);
-
-    const lifecycle =
-      typeof session.getSessionLifecycle === "function"
-        ? await session.getSessionLifecycle({ userId, sessionId: subSessionId })
-        : null;
-    const persistenceContext = session.createScopedPersistenceContext({
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      scopeId: mergedRunConfig.executionId,
-      relativeDir,
-      allowedRoot,
-      ...(Number.isInteger(Number(lifecycle?.generation)) && Number(lifecycle.generation) > 0
-        ? { sessionGeneration: Number(lifecycle.generation) }
-        : {}),
-      metadataContributor: () => ({
-        userId,
-        sessionId: subSessionId,
-        parentSessionId,
-        parentDialogProcessId,
-        dialogProcessId: subDialogProcessId || subSessionId,
-        ...(metadata && typeof metadata === "object" ? metadata : {}),
-        runtimePluginState,
-      }),
-    });
-
-    const persistenceScope = Object.freeze({
-      scopeId: mergedRunConfig.executionId,
-      parentSessionId,
-      relativeDir,
-      allowedRoot,
-    });
-
-    const lifecycleIdentity = {
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      persistenceContext,
-      persistenceScope,
-      turnScopeId,
-      dialogProcessId: subDialogProcessId || subSessionId,
-      messageId: childMessageId,
-      presentationMessageId: childPresentationMessageId,
-      executionId: mergedRunConfig.executionId,
-      executionKind: "agent",
-      parentExecutionId: mergedRunConfig.parentExecutionId,
-      rootExecutionId: mergedRunConfig.rootExecutionId,
-      origin: metadata?.origin || {},
-      stage: String(metadata?.scope || "detached_sub_session").trim(),
-    };
-    const lifecycleCommandId = String(
-      strategy?.commandId || runConfigPatch?.commandId || turnScopeId || subSessionId,
-    ).trim();
-    const commitLifecycle = async (event = {}) => {
-      if (typeof session.applyTurnLifecycleEvent !== "function") {
-        throw new Error("detached sub-session requires authoritative Turn lifecycle support");
-      }
-      const committed = await session.applyTurnLifecycleEvent({
-        ...lifecycleIdentity,
-        ...event,
-      });
-      if (!committed?.applied && !committed?.deduplicated) {
-        throw new Error(committed?.reason || "detached sub-session lifecycle commit failed");
-      }
-      if (committed?.envelope) {
-        await scopedEventListener?.onEvent?.({
-          event: "turn_lifecycle_committed",
-          data: {
-            envelope: committed.envelope,
-            persistenceScope,
-          },
-        });
-      }
-      return committed;
-    };
-
-    await commitLifecycle({
-      commandId: `${lifecycleCommandId}:accepted`,
-      eventType: TURN_EVENT.ACTION_ACCEPTED,
-      phase: TURN_PHASE.ACTION,
-      action: "send",
-      executionState: "accepted",
-      startedAt: effectiveRunConfig.thinkingStartedAt,
-      createSessionIfAbsent: true,
-      expectedRevision: 0,
-    });
-    await commitLifecycle({
-      commandId: `${lifecycleCommandId}:processing-started`,
-      eventType: TURN_EVENT.PROCESSING_STARTED,
-      phase: TURN_PHASE.PROCESSING,
-      executionState: "sending",
-    });
-
-    let result;
-    try {
-      result = await sessionRunner.runSession({
-        userId,
-        sessionId: subSessionId,
-        parentSessionId,
-        parentDialogProcessId,
-        dialogProcessId: subDialogProcessId,
-        caller: CALLER_ROLE.BOT,
-        message,
-        attachments: subSessionAttachments,
-        systemMessages: resolvedSystemMessages,
-        eventListener: scopedEventListener,
-        abortSignal: inheritedAbortSignal,
-        userInteractionBridge: inheritedUserInteractionBridge,
-        runConfig: effectiveRunConfig,
-        turnScopeId,
-        parentAsyncResultContainer: null,
-        persistenceContext,
-        persistenceScope,
-      });
-      const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
-      if (returnedDialogProcessId && returnedDialogProcessId !== subDialogProcessId) {
-        const identityError = new Error(
-          "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
-        );
-        identityError.code = "DETACHED_DIALOG_IDENTITY_MISMATCH";
-        emitEvent(eventListener, "detached_sub_session_identity_mismatch", {
-          userId,
-          sessionId: subSessionId,
-          parentSessionId,
-          turnScopeId,
-          executionId: mergedRunConfig.executionId,
-          authoritativeDialogProcessId: subDialogProcessId,
-          returnedDialogProcessId,
-          code: identityError.code,
-        });
-        throw identityError;
-      }
-    } catch (error) {
-      let terminalLifecycle = null;
-      const stopped = inheritedAbortSignal?.aborted || error?.name === "AbortError";
-      if (stopped) {
-        await commitLifecycle({
-          commandId: `${lifecycleCommandId}:stop-accepted`,
-          eventType: TURN_EVENT.STOP_ACCEPTED,
-          phase: TURN_PHASE.ACTION,
-          action: "stop",
-        });
-        await commitLifecycle({
-          commandId: `${lifecycleCommandId}:stop-processing-completed`,
-          eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
-          phase: TURN_PHASE.STOP,
-        });
-        const completionCommitId = `${lifecycleCommandId}:stop-completed`;
-        terminalLifecycle = await commitLifecycle({
-          commandId: completionCommitId,
-          eventType: TURN_EVENT.STOP_COMPLETED,
-          phase: TURN_PHASE.STOP,
-          executionState: "user_stopped",
-          completionCommitId,
-          terminalStatus: {
-            command: "user_stopped",
-            description: "子 Agent 已停止",
-          },
-          finishedAt: String(now()).trim(),
-        });
-      } else {
-        terminalLifecycle = await commitLifecycle({
-          commandId: `${lifecycleCommandId}:failed`,
-          eventType: TURN_EVENT.FAILED,
-          phase: TURN_PHASE.PROCESSING,
-          failure: {
-            phase: TURN_PHASE.PROCESSING,
-            code: String(error?.code || "detached_sub_session_failed").trim(),
-            message: String(error?.message || "detached sub-session failed"),
-            retryable: false,
-          },
-        });
-      }
-      if (error && typeof error === "object") {
-        error.lifecycle = createDetachedTerminalReceipt({
-          lifecycle: terminalLifecycle?.turn || error.lifecycle,
-          executionId: mergedRunConfig.executionId,
-          failed: !stopped,
-        });
-      }
-      emitEvent(
-        eventListener,
-        stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
-        {
-          userId,
-          sessionId: subSessionId,
-          parentSessionId,
-          dialogProcessId: subDialogProcessId,
-          turnScopeId,
-          executionId: mergedRunConfig.executionId,
-          ...(stopped
-            ? { reason: "user_stop" }
-            : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
-          state: String(terminalLifecycle?.turn?.state || "").trim(),
-          revision: Number(terminalLifecycle?.turn?.revision || 0),
-          sequence: Number(terminalLifecycle?.turn?.sequence || 0),
-        },
-      );
-      throw error;
-    }
-
-    await commitLifecycle({
-      commandId: `${lifecycleCommandId}:processing-completed`,
-      eventType: TURN_EVENT.PROCESSING_COMPLETED,
-      phase: TURN_PHASE.COMPLETION,
-    });
-    const completionCommitId = `${lifecycleCommandId}:completed`;
-    const terminalLifecycle = await commitLifecycle({
-      commandId: completionCommitId,
-      eventType: TURN_EVENT.COMPLETED,
-      phase: TURN_PHASE.COMPLETION,
-      executionState: "completed",
-      completionCommitId,
-      terminalStatus: {
-        command: "completed",
-        description: "子 Agent 已正常完成",
-      },
-      finishedAt: String(now()).trim(),
-    });
-
-    const dialogProcessId = String(
-      result?.dialogProcessId || subDialogProcessId || subSessionId,
-    ).trim();
-    const transferEnvelopes = Array.from(
-      new Map(
-        (Array.isArray(result?.turnMessages) ? result.turnMessages : [])
-          .flatMap((message = {}) =>
-            Array.isArray(message?.transferEnvelopes) ? message.transferEnvelopes : [],
-          )
-          .map((envelope) => [String(envelope?.transferId || ""), envelope])
-          .filter(([transferId]) => transferId),
-      ).values(),
-    );
-    return {
-      userId,
-      sessionId: subSessionId,
-      parentSessionId,
-      dialogProcessId,
-      persisted: result?.session || null,
-      lifecycle: createDetachedTerminalReceipt({
-        lifecycle: terminalLifecycle?.turn || result?.lifecycle,
-        executionId: mergedRunConfig.executionId,
-      }),
-      result: {
-        sessionId: subSessionId,
-        parentSessionId,
-        parentDialogProcessId,
-        caller: CALLER_ROLE.BOT,
-        answer: String(result?.output || result?.answer || "").trim(),
-        traces: Array.isArray(result?.traces) ? result.traces : [],
-        messages: Array.isArray(result?.turnMessages) ? result.turnMessages : [],
-        ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-        turnTasks: Array.isArray(result?.turnTasks) ? result.turnTasks : [],
-        executionLogs: [],
-        dialogProcessId,
-      },
-    };
+  const dependencies = {
+    workspaceService,
+    configService,
+    sessionRunner,
+    session,
+    attachmentService,
+    mergeRunConfigPluginPolicy,
+    prepareRunConfig,
+    now,
   };
+  return (request = {}) => runDetachedSubSession(dependencies, request);
+}
+
+async function runDetachedSubSession(dependencies, request) {
+  assertDetachedRunnerDependencies(dependencies);
+  const runtime = resolveDetachedRuntime(request);
+  const identity = resolveDetachedIdentity(request, runtime);
+  const prepared = await prepareDetachedExecution(dependencies, request, runtime, identity);
+  const lifecycle = await createDetachedLifecycle(dependencies, request, identity, prepared);
+  await commitDetachedStart(lifecycle, prepared.effectiveRunConfig.thinkingStartedAt);
+  let result;
+  try {
+    result = await executeDetachedSession(
+      dependencies,
+      request,
+      runtime,
+      identity,
+      prepared,
+      lifecycle,
+    );
+  } catch (error) {
+    await commitDetachedError(error, dependencies, request, runtime, identity, lifecycle);
+    throw error;
+  }
+  const terminalLifecycle = await commitDetachedCompletion(dependencies, lifecycle);
+  return projectDetachedResult(result, identity, prepared, terminalLifecycle);
+}
+
+function assertDetachedRunnerDependencies({ sessionRunner, session }) {
+  if (typeof sessionRunner?.runSession !== "function") {
+    throw new Error("detached sub-session runner requires the main SessionExecutionRunner");
+  }
+  if (typeof session?.createScopedPersistenceContext !== "function") {
+    throw new Error("detached sub-session runner requires scoped persistence context support");
+  }
+}
+
+function resolveDetachedRuntime(request) {
+  const {
+    parentExecutionScope,
+    eventListener,
+    strategy = {},
+    parentContext = {},
+    metadata = {},
+  } = request;
+  try {
+    return getRuntimeFromAgentContext(parentExecutionScope);
+  } catch (error) {
+    emitEvent(eventListener, "detached_sub_session_scope_rejected", {
+      userId: String(strategy.userId || parentContext?.userId || "").trim(),
+      parentSessionId: String(strategy.parentSessionId || parentContext?.sessionId || "").trim(),
+      scopeId: String(metadata.scope || "detached_sub_session").trim(),
+      reason: "bindings.runtime_missing",
+      error: error?.message || String(error),
+    });
+    throw error;
+  }
+}
+
+function resolveDetachedIdentity(request, inheritedRuntime) {
+  const sourceContext =
+    request.parentContext && typeof request.parentContext === "object" ? request.parentContext : {};
+  const strategy = request.strategy || {};
+  const identity = {
+    userId: String(strategy.userId || sourceContext.userId || "").trim(),
+    parentSessionId: String(strategy.parentSessionId || sourceContext.sessionId || "").trim(),
+    parentDialogProcessId: String(
+      strategy.parentDialogProcessId || sourceContext.dialogProcessId || "",
+    ).trim(),
+  };
+  identity.abortSignal =
+    request.abortSignal || sourceContext.abortSignal || inheritedRuntime?.abortSignal || null;
+  identity.userInteractionBridge =
+    sourceContext.userInteractionBridge || inheritedRuntime?.userInteractionBridge || null;
+  createAbortGuard(identity.abortSignal)();
+  if (!identity.userId || !identity.parentSessionId) {
+    throw new Error("sub-session runner requires userId and parentSessionId");
+  }
+  assertDetachedSubSessionStrategy(strategy);
+  Object.assign(identity, resolveChildStrategyIdentity(strategy));
+  identity.scopedEventListener = createScopedSubSessionEventListener(request.eventListener, {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    turnScopeId: identity.turnScopeId,
+  });
+  return identity;
+}
+
+function resolveChildStrategyIdentity(strategy) {
+  return {
+    subSessionId: String(strategy.sessionId || "").trim(),
+    subDialogProcessId: String(strategy.dialogProcessId || "").trim(),
+    turnScopeId: String(strategy.turnScopeId || "").trim(),
+    executionId: String(strategy.executionId || "").trim(),
+    relativeDir: String(strategy.relativeDir || "").trim(),
+    allowedRoot: String(strategy.allowedRoot || "").trim(),
+  };
+}
+
+async function prepareDetachedExecution(dependencies, request, inheritedRuntime, identity) {
+  const { strategy = {}, metadata = {}, runConfigPatch = {}, parentContext = {} } = request;
+  const inheritedRunConfig = clearParentTurnTransactionIdentity({
+    ...(isObjectRecord(parentContext.runConfig)
+      ? parentContext.runConfig
+      : isObjectRecord(inheritedRuntime?.runConfig)
+        ? inheritedRuntime.runConfig
+        : {}),
+  });
+  const mergedRunConfig = createDetachedRunConfig(
+    dependencies,
+    { strategy, metadata, runConfigPatch },
+    inheritedRunConfig,
+    inheritedRuntime,
+    identity,
+  );
+  const userConfig = await loadSubSessionUserConfig({
+    workspaceService: dependencies.workspaceService,
+    configService: dependencies.configService,
+    userId: identity.userId,
+  });
+  const effectiveRunConfig = dependencies.prepareRunConfig({
+    userId: identity.userId,
+    runConfig: mergedRunConfig,
+    userConfig,
+  });
+  assertPreparedRunConfig(effectiveRunConfig);
+  bindDetachedMessageIdentity(effectiveRunConfig, mergedRunConfig);
+  const subSessionAttachments = await transferCanonicalAttachmentsToSubSession({
+    attachmentService: dependencies.attachmentService,
+    userId: identity.userId,
+    parentSessionId: identity.parentSessionId,
+    subSessionId: identity.subSessionId,
+    attachments: request.attachments,
+    attachmentPolicy: effectiveRunConfig.attachments,
+  });
+  const systemMessages = await resolveDetachedSystemMessages(
+    request.systemMessageFactory,
+    subSessionAttachments,
+  );
+  emitDetachedIdentityEvents(dependencies, request, identity, effectiveRunConfig);
+  return { mergedRunConfig, effectiveRunConfig, subSessionAttachments, systemMessages };
+}
+
+function createDetachedRunConfig(
+  dependencies,
+  { strategy, metadata, runConfigPatch },
+  inheritedRunConfig,
+  inheritedRuntime,
+  identity,
+) {
+  if (typeof dependencies.mergeRunConfigPluginPolicy !== "function") {
+    throw new TypeError("detached sub-session runner requires mergeRunConfigPluginPolicy");
+  }
+  const config = dependencies.mergeRunConfigPluginPolicy({
+    baseRunConfig: inheritedRunConfig,
+    runConfigPatch,
+    disabledPlugins: strategy.disabledPlugins || [],
+  });
+  const runtimeModel =
+    String(runConfigPatch.runtimeModel || "").trim() ||
+    readSelectedModelValue(config.selectedModel) ||
+    String(inheritedRunConfig.runtimeModel || "").trim() ||
+    String(inheritedRuntime?.runtimeModel || "").trim();
+  if (runtimeModel) config.runtimeModel = runtimeModel;
+  else delete config.runtimeModel;
+  config.executionId = identity.executionId;
+  config.executionKind = "agent";
+  config.parentExecutionId = String(
+    strategy.parentExecutionId || metadata.parentExecutionId || "",
+  ).trim();
+  config.rootExecutionId = String(
+    strategy.rootExecutionId || metadata.rootExecutionId || identity.executionId,
+  ).trim();
+  const presentationMessageId = `msg_${randomUUID()}`;
+  config.presentationMessageId = presentationMessageId;
+  config.messageId = `msg_event_${presentationMessageId}`;
+  delete config.assistantMessageId;
+  if (!String(config.thinkingStartedAt || "").trim()) {
+    config.thinkingStartedAt = String(dependencies.now()).trim();
+  }
+  for (const key of ["hookManager", "hooks", "botHookManager", "botHooks"]) delete config[key];
+  return config;
+}
+
+function assertPreparedRunConfig(config) {
+  if (isObjectRecord(config)) return;
+  throw new Error("detached sub-session prepareRunConfig must return a run config object");
+}
+
+function bindDetachedMessageIdentity(effectiveRunConfig, mergedRunConfig) {
+  effectiveRunConfig.presentationMessageId = mergedRunConfig.presentationMessageId;
+  effectiveRunConfig.messageId = mergedRunConfig.messageId;
+  delete effectiveRunConfig.assistantMessageId;
+}
+
+async function resolveDetachedSystemMessages(systemMessageFactory, attachments) {
+  const messages =
+    typeof systemMessageFactory === "function" ? await systemMessageFactory({ attachments }) : [];
+  if (!Array.isArray(messages)) {
+    throw new TypeError("detached sub-session systemMessageFactory must return an array");
+  }
+  return messages;
+}
+
+function emitDetachedIdentityEvents(dependencies, request, identity, effectiveRunConfig) {
+  emitEvent(request.eventListener, "detached_sub_session_message_identity_bound", {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId: identity.subDialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    workflowRunId: String(effectiveRunConfig.workflowRunId || "").trim(),
+    nodeExecutionId: String(
+      effectiveRunConfig.workflowNodeExecutionId || effectiveRunConfig.nodeExecutionId || "",
+    ).trim(),
+    messageId: effectiveRunConfig.messageId,
+    presentationMessageId: effectiveRunConfig.presentationMessageId,
+  });
+  const runtimePluginState = buildRuntimePluginState({
+    effectiveRunConfig,
+    disabledPlugins: request.strategy?.disabledPlugins,
+  });
+  emitEvent(request.eventListener, "plugin_runtime_resolved", runtimePluginState);
+}
+
+async function createDetachedLifecycle(dependencies, request, identity, prepared) {
+  const { session } = dependencies;
+  const generation = await resolveDetachedSessionGeneration(session, identity);
+  const runtimePluginState = buildRuntimePluginState({
+    effectiveRunConfig: prepared.effectiveRunConfig,
+    disabledPlugins: request.strategy?.disabledPlugins,
+  });
+  const persistenceScope = Object.freeze({
+    scopeId: identity.executionId,
+    parentSessionId: identity.parentSessionId,
+    relativeDir: identity.relativeDir,
+    allowedRoot: identity.allowedRoot,
+  });
+  const persistenceContext = session.createScopedPersistenceContext({
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    scopeId: identity.executionId,
+    relativeDir: identity.relativeDir,
+    allowedRoot: identity.allowedRoot,
+    ...(generation ? { sessionGeneration: generation } : {}),
+    metadataContributor: () => createDetachedMetadata(request, identity, runtimePluginState),
+  });
+  const lifecycleIdentity = createLifecycleIdentity(
+    request,
+    identity,
+    prepared.mergedRunConfig,
+    persistenceContext,
+    persistenceScope,
+  );
+  return {
+    persistenceContext,
+    persistenceScope,
+    commandId: String(
+      request.strategy?.commandId ||
+        request.runConfigPatch?.commandId ||
+        identity.turnScopeId ||
+        identity.subSessionId,
+    ).trim(),
+    commit: createLifecycleCommitter(session, lifecycleIdentity, identity.scopedEventListener),
+  };
+}
+
+async function resolveDetachedSessionGeneration(session, identity) {
+  if (typeof session.getSessionLifecycle !== "function") return 0;
+  const lifecycle = await session.getSessionLifecycle({
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+  });
+  const generation = Number(lifecycle?.generation);
+  return Number.isInteger(generation) && generation > 0 ? generation : 0;
+}
+
+function createDetachedMetadata(request, identity, runtimePluginState) {
+  return {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    parentDialogProcessId: identity.parentDialogProcessId,
+    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    ...(isObjectRecord(request.metadata) ? request.metadata : {}),
+    runtimePluginState,
+  };
+}
+
+function createLifecycleIdentity(request, identity, config, persistenceContext, persistenceScope) {
+  return {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    persistenceContext,
+    persistenceScope,
+    turnScopeId: identity.turnScopeId,
+    dialogProcessId: identity.subDialogProcessId || identity.subSessionId,
+    messageId: config.messageId,
+    presentationMessageId: config.presentationMessageId,
+    executionId: identity.executionId,
+    executionKind: "agent",
+    parentExecutionId: config.parentExecutionId,
+    rootExecutionId: config.rootExecutionId,
+    origin: request.metadata?.origin || {},
+    stage: String(request.metadata?.scope || "detached_sub_session").trim(),
+  };
+}
+
+function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListener) {
+  return async (event = {}) => {
+    if (typeof session.applyTurnLifecycleEvent !== "function") {
+      throw new Error("detached sub-session requires authoritative Turn lifecycle support");
+    }
+    const committed = await session.applyTurnLifecycleEvent({ ...lifecycleIdentity, ...event });
+    if (!committed?.applied && !committed?.deduplicated) {
+      throw new Error(committed?.reason || "detached sub-session lifecycle commit failed");
+    }
+    if (committed.envelope) {
+      await scopedEventListener?.onEvent?.({
+        event: "turn_lifecycle_committed",
+        data: {
+          envelope: committed.envelope,
+          persistenceScope: lifecycleIdentity.persistenceScope,
+        },
+      });
+    }
+    return committed;
+  };
+}
+
+async function commitDetachedStart(lifecycle, startedAt) {
+  await lifecycle.commit({
+    commandId: `${lifecycle.commandId}:accepted`,
+    eventType: TURN_EVENT.ACTION_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "send",
+    executionState: "accepted",
+    startedAt,
+    createSessionIfAbsent: true,
+    expectedRevision: 0,
+  });
+  await lifecycle.commit({
+    commandId: `${lifecycle.commandId}:processing-started`,
+    eventType: TURN_EVENT.PROCESSING_STARTED,
+    phase: TURN_PHASE.PROCESSING,
+    executionState: "sending",
+  });
+}
+
+async function executeDetachedSession(
+  dependencies,
+  request,
+  runtime,
+  identity,
+  prepared,
+  lifecycle,
+) {
+  const result = await dependencies.sessionRunner.runSession({
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    parentDialogProcessId: identity.parentDialogProcessId,
+    dialogProcessId: identity.subDialogProcessId,
+    caller: CALLER_ROLE.BOT,
+    message: request.message || "",
+    attachments: prepared.subSessionAttachments,
+    systemMessages: prepared.systemMessages,
+    eventListener: identity.scopedEventListener,
+    abortSignal: identity.abortSignal,
+    userInteractionBridge: identity.userInteractionBridge,
+    runConfig: prepared.effectiveRunConfig,
+    turnScopeId: identity.turnScopeId,
+    parentAsyncResultContainer: null,
+    persistenceContext: lifecycle.persistenceContext,
+    persistenceScope: lifecycle.persistenceScope,
+  });
+  assertDetachedDialogIdentity(result, request, identity);
+  return result;
+}
+
+function assertDetachedDialogIdentity(result, request, identity) {
+  const returnedDialogProcessId = String(result?.dialogProcessId || "").trim();
+  if (!returnedDialogProcessId || returnedDialogProcessId === identity.subDialogProcessId) return;
+  const error = new Error(
+    "detached sub-session returned a dialogProcessId different from its authoritative turn identity",
+  );
+  error.code = "DETACHED_DIALOG_IDENTITY_MISMATCH";
+  emitEvent(request.eventListener, "detached_sub_session_identity_mismatch", {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    turnScopeId: identity.turnScopeId,
+    executionId: identity.executionId,
+    authoritativeDialogProcessId: identity.subDialogProcessId,
+    returnedDialogProcessId,
+    code: error.code,
+  });
+  throw error;
+}
+
+async function commitDetachedError(error, dependencies, request, runtime, identity, lifecycle) {
+  const stopped = identity.abortSignal?.aborted || error?.name === "AbortError";
+  const terminalLifecycle = stopped
+    ? await commitDetachedStop(dependencies, lifecycle)
+    : await commitDetachedFailure(error, lifecycle);
+  if (error && typeof error === "object") {
+    error.lifecycle = createDetachedTerminalReceipt({
+      lifecycle: terminalLifecycle?.turn || error.lifecycle,
+      executionId: identity.executionId,
+      failed: !stopped,
+    });
+  }
+  emitDetachedTerminalEvent(request, identity, terminalLifecycle, error, stopped);
+}
+
+async function commitDetachedStop(dependencies, lifecycle) {
+  await lifecycle.commit({
+    commandId: `${lifecycle.commandId}:stop-accepted`,
+    eventType: TURN_EVENT.STOP_ACCEPTED,
+    phase: TURN_PHASE.ACTION,
+    action: "stop",
+  });
+  await lifecycle.commit({
+    commandId: `${lifecycle.commandId}:stop-processing-completed`,
+    eventType: TURN_EVENT.STOP_PROCESSING_COMPLETED,
+    phase: TURN_PHASE.STOP,
+  });
+  const completionCommitId = `${lifecycle.commandId}:stop-completed`;
+  return lifecycle.commit({
+    commandId: completionCommitId,
+    eventType: TURN_EVENT.STOP_COMPLETED,
+    phase: TURN_PHASE.STOP,
+    executionState: "user_stopped",
+    completionCommitId,
+    terminalStatus: { command: "user_stopped", description: "子 Agent 已停止" },
+    finishedAt: String(dependencies.now()).trim(),
+  });
+}
+
+function commitDetachedFailure(error, lifecycle) {
+  return lifecycle.commit({
+    commandId: `${lifecycle.commandId}:failed`,
+    eventType: TURN_EVENT.FAILED,
+    phase: TURN_PHASE.PROCESSING,
+    failure: {
+      phase: TURN_PHASE.PROCESSING,
+      code: String(error?.code || "detached_sub_session_failed").trim(),
+      message: String(error?.message || "detached sub-session failed"),
+      retryable: false,
+    },
+  });
+}
+
+function emitDetachedTerminalEvent(request, identity, terminalLifecycle, error, stopped) {
+  emitEvent(
+    request.eventListener,
+    stopped ? "detached_sub_session_stop_committed" : "detached_sub_session_failure_committed",
+    {
+      userId: identity.userId,
+      sessionId: identity.subSessionId,
+      parentSessionId: identity.parentSessionId,
+      dialogProcessId: identity.subDialogProcessId,
+      turnScopeId: identity.turnScopeId,
+      executionId: identity.executionId,
+      ...(stopped
+        ? { reason: "user_stop" }
+        : { errorCode: String(error?.code || "detached_sub_session_failed").trim() }),
+      state: String(terminalLifecycle?.turn?.state || "").trim(),
+      revision: Number(terminalLifecycle?.turn?.revision || 0),
+      sequence: Number(terminalLifecycle?.turn?.sequence || 0),
+    },
+  );
+}
+
+async function commitDetachedCompletion(dependencies, lifecycle) {
+  await lifecycle.commit({
+    commandId: `${lifecycle.commandId}:processing-completed`,
+    eventType: TURN_EVENT.PROCESSING_COMPLETED,
+    phase: TURN_PHASE.COMPLETION,
+  });
+  const completionCommitId = `${lifecycle.commandId}:completed`;
+  return lifecycle.commit({
+    commandId: completionCommitId,
+    eventType: TURN_EVENT.COMPLETED,
+    phase: TURN_PHASE.COMPLETION,
+    executionState: "completed",
+    completionCommitId,
+    terminalStatus: { command: "completed", description: "子 Agent 已正常完成" },
+    finishedAt: String(dependencies.now()).trim(),
+  });
+}
+
+function projectDetachedResult(result, identity, prepared, terminalLifecycle) {
+  const dialogProcessId = String(
+    result?.dialogProcessId || identity.subDialogProcessId || identity.subSessionId,
+  ).trim();
+  const transferEnvelopes = collectTransferEnvelopes(result?.turnMessages);
+  return {
+    userId: identity.userId,
+    sessionId: identity.subSessionId,
+    parentSessionId: identity.parentSessionId,
+    dialogProcessId,
+    persisted: result?.session || null,
+    lifecycle: createDetachedTerminalReceipt({
+      lifecycle: terminalLifecycle?.turn || result?.lifecycle,
+      executionId: prepared.mergedRunConfig.executionId,
+    }),
+    result: {
+      sessionId: identity.subSessionId,
+      parentSessionId: identity.parentSessionId,
+      parentDialogProcessId: identity.parentDialogProcessId,
+      caller: CALLER_ROLE.BOT,
+      answer: String(result?.output || result?.answer || "").trim(),
+      traces: readArray(result?.traces),
+      messages: readArray(result?.turnMessages),
+      ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
+      turnTasks: readArray(result?.turnTasks),
+      executionLogs: [],
+      dialogProcessId,
+    },
+  };
+}
+
+function readArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function collectTransferEnvelopes(turnMessages) {
+  return Array.from(
+    new Map(
+      (Array.isArray(turnMessages) ? turnMessages : [])
+        .flatMap((message = {}) =>
+          Array.isArray(message.transferEnvelopes) ? message.transferEnvelopes : [],
+        )
+        .map((envelope) => [String(envelope?.transferId || ""), envelope])
+        .filter(([transferId]) => transferId),
+    ).values(),
+  );
+}
+
+function isObjectRecord(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function clearParentTurnTransactionIdentity(runConfig = {}) {
@@ -576,14 +726,7 @@ export function createDetachedTerminalReceipt({
   const sourceState = String(lifecycle?.state || lifecycle?.branchState || "")
     .trim()
     .toLowerCase();
-  const state =
-    sourceState === "completed"
-      ? "completed"
-      : sourceState === "user_stopped"
-        ? "stop_completed"
-        : failed || ["failed", "interrupted"].includes(sourceState)
-          ? "processing_failed"
-          : sourceState;
+  const state = resolveDetachedReceiptState(sourceState, failed);
   return {
     ...lifecycle,
     executionId: String(lifecycle?.executionId || executionId || "").trim(),
@@ -591,16 +734,24 @@ export function createDetachedTerminalReceipt({
     state,
     revision: Number(lifecycle?.revision || 0),
     sequence: Number(lifecycle?.sequence || 0),
-    failure: failed
-      ? {
-          code: String(
-            lifecycle?.code || lifecycle?.failure?.code || "CHILD_EXECUTION_FAILED",
-          ).trim(),
-          message: String(
-            lifecycle?.error || lifecycle?.failure?.message || "child execution failed",
-          ).trim(),
-        }
-      : lifecycle?.failure || null,
+    failure: resolveDetachedReceiptFailure(lifecycle, failed),
+  };
+}
+
+function resolveDetachedReceiptState(sourceState, failed) {
+  if (sourceState === "completed") return "completed";
+  if (sourceState === "user_stopped") return "stop_completed";
+  if (failed || ["failed", "interrupted"].includes(sourceState)) return "processing_failed";
+  return sourceState;
+}
+
+function resolveDetachedReceiptFailure(lifecycle, failed) {
+  if (!failed) return lifecycle?.failure || null;
+  return {
+    code: String(lifecycle?.code || lifecycle?.failure?.code || "CHILD_EXECUTION_FAILED").trim(),
+    message: String(
+      lifecycle?.error || lifecycle?.failure?.message || "child execution failed",
+    ).trim(),
   };
 }
 
@@ -643,12 +794,8 @@ async function loadSubSessionUserConfig({
   configService = null,
   userId = "",
 } = {}) {
-  try {
-    const workspacePath = workspaceService.getWorkspacePath(userId);
-    return await configService.loadUserConfig(workspacePath);
-  } catch {
-    return {};
-  }
+  const workspacePath = workspaceService.getWorkspacePath(userId);
+  return configService.loadUserConfig(workspacePath);
 }
 
 function buildRuntimePluginState({ effectiveRunConfig = {}, disabledPlugins = [] } = {}) {

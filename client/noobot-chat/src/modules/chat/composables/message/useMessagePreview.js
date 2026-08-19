@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { onBeforeUnmount, ref } from "vue";
+import { onBeforeUnmount } from "vue";
 import { attachmentService as defaultAttachmentService } from "../../../../infrastructure/api/attachments/attachmentService.js";
 import {
   buildParsedResultPreviewItem,
@@ -11,30 +11,16 @@ import {
   resolveParsedResultAccessMeta,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
-import {
-  hasParsedResult,
-  isAudioPreviewMime,
-  isImageFile,
-  isImagePreviewType,
-  isMarkdownFile,
-  isMarkdownMime,
-  isNonImagePreviewOverSizeLimit,
-  isOfficeFile,
-  isOfficeMime,
-  isTextPreviewFile,
-  isTextPreviewMime,
-} from "./useMessagePreview/file-type.js";
-import {
-  createFileAccessTraceId,
-  maskHostPath,
-  maskWorkspacePath,
-  parseContentDisposition,
-  resolveFileItemHostPath,
-  resolveFileItemName,
-  resolveFileItemRelativePath,
-} from "./useMessagePreview/path-utils.js";
-import { logFileAccess, triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
+import { triggerBlobDownload } from "./useMessagePreview/file-access-log.js";
 import { buildNoCopyableSet, handleCopyMarkdown } from "./useMessagePreview/markdown-copy.js";
+import {
+  createAttachmentPreviewState,
+  createFilePreviewState,
+} from "./useMessagePreview/preview-state.js";
+import { createFileDownloadController } from "./useMessagePreview/file-download-controller.js";
+import { createFilePreviewController } from "./useMessagePreview/file-preview-controller.js";
+import { createAttachmentPreviewController } from "./useMessagePreview/attachment-preview-controller.js";
+import { canPreviewFileItem } from "./useMessagePreview/file-preview-capabilities.js";
 
 export function useMessagePreview({
   userId = "",
@@ -44,743 +30,63 @@ export function useMessagePreview({
   notify = () => {},
 } = {}) {
   const { translate } = useLocale();
-  const noCopyableContentTexts = buildNoCopyableSet(translate, "noCopyableContent");
-  const noCopyableTextTexts = buildNoCopyableSet(translate, "noCopyableText");
-
-  const filePreview = {
-    visible: ref(false),
-    loading: ref(false),
-    error: ref(""),
-    fileName: ref(""),
-    mode: ref("text"),
-    textContent: ref(""),
-    imageUrl: ref(""),
-  };
-  const attachmentPreview = {
-    visible: ref(false),
-    type: ref(""),
-    url: ref(""),
-    name: ref(""),
-    loading: ref(false),
-    error: ref(""),
-    textContent: ref(""),
-  };
-  let attachmentObjectUrl = "";
-
-  function cleanupPreviewImageUrl() {
-    if (!filePreview.imageUrl.value) return;
-    URL.revokeObjectURL(filePreview.imageUrl.value);
-    filePreview.imageUrl.value = "";
-  }
-
-  function resetPreviewState() {
-    filePreview.visible.value = false;
-    filePreview.loading.value = false;
-    filePreview.error.value = "";
-    filePreview.fileName.value = "";
-    filePreview.mode.value = "text";
-    filePreview.textContent.value = "";
-    cleanupPreviewImageUrl();
-  }
-
-  function resetAttachmentPreviewState() {
-    if (attachmentObjectUrl) {
-      URL.revokeObjectURL(attachmentObjectUrl);
-      attachmentObjectUrl = "";
-    }
-    attachmentPreview.visible.value = false;
-    attachmentPreview.type.value = "";
-    attachmentPreview.url.value = "";
-    attachmentPreview.name.value = "";
-    attachmentPreview.loading.value = false;
-    attachmentPreview.error.value = "";
-    attachmentPreview.textContent.value = "";
-  }
-
-  function resolveAttachmentUrl(attachmentItem = {}) {
-    return resolveAttachmentAccessMeta(attachmentItem, {
-      userId: String(userId || "").trim(),
-    }).url;
-  }
-
-  function resolveParsedResultUrl(attachmentItem = {}) {
-    return (
-      resolveParsedResultAccessMeta(attachmentItem, {
-        userId: String(userId || "").trim(),
-      })?.url || ""
-    );
-  }
-
-  function resolveHostAccessChannel({ useHostChannel = false, desktopHostApi = null } = {}) {
-    if (!useHostChannel) return "workspace-api";
-    return desktopHostApi ? "desktop-host-ipc" : "backend-host-api";
-  }
-
-  function buildWorkspaceFileAccessLogPayload({
-    traceId = "",
-    isSandbox = undefined,
-    useHostChannel = false,
-    desktopHostApi = null,
-    normalizedUserId = "",
-    fileItem = {},
-    relativePath = "",
-    hostPath = "",
-  } = {}) {
-    return {
-      traceId,
-      isSandbox,
-      channel: resolveHostAccessChannel({ useHostChannel, desktopHostApi }),
-      hasUserId: Boolean(normalizedUserId),
-      hasRelativePath: Boolean(fileItem?.relativePath),
-      hasHostPath: Boolean(hostPath),
-      hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
-      hasResolvedPath: Boolean(fileItem?.resolvedPath),
-      relativePath: maskWorkspacePath(relativePath),
-      hostPath: maskHostPath(hostPath),
-    };
-  }
-
-  async function runDownloadFromUrl({
-    url = "",
-    fileName = "download",
-    errorI18nKey = "message.downloadFailed",
-  } = {}) {
-    if (!url) return;
-    try {
-      const response = await attachmentService.fetchUrl(url);
-      if (!response?.ok) {
-        throw new Error(
-          translate("message.downloadFailedHttp", { status: response?.status || 500 }),
-        );
-      }
-      const blob = await response.blob();
-      await triggerBlobDownload(blob, fileName);
-    } catch (error) {
-      notify({ type: "error", message: error?.message || translate(errorI18nKey) });
-    }
-  }
-
-  async function copyMarkdownFromText({
-    textContent = "",
-    renderedPreviewHtml = "",
-    rich = false,
-  } = {}) {
-    const content = rich
-      ? renderedPreviewHtml || renderMarkdown(String(textContent || ""))
-      : String(textContent || "");
-    await handleCopyMarkdown({
-      textContent: content,
-      renderMarkdown,
-      translate,
-      notify,
-      noCopyableContentTexts,
-      noCopyableTextTexts,
-      rich,
-    });
-  }
-
-  async function onDownloadFile(fileItem = {}) {
-    const traceId = createFileAccessTraceId("download");
-    const normalizedUserId = String(userId || "").trim();
-    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
-    const hostPath = resolveFileItemHostPath(fileItem);
-    const isSandbox = fileItem?.isSandbox;
-    const useHostChannel = isSandbox === false && Boolean(hostPath);
-    const missingSandboxFlag = typeof isSandbox !== "boolean";
-    logFileAccess(
-      "download.click",
-      buildWorkspaceFileAccessLogPayload({
-        traceId,
-        isSandbox,
-        useHostChannel,
-        desktopHostApi: window?.noobotDesktop?.downloadHostFile,
-        normalizedUserId,
-        fileItem,
-        relativePath,
-        hostPath,
-      }),
-    );
-    if (useHostChannel) {
-      try {
-        logFileAccess("download.request", {
-          traceId,
-          channel: window?.noobotDesktop?.downloadHostFile
-            ? "desktop-host-ipc"
-            : "backend-host-api",
-          isSandbox,
-          hostPath: maskHostPath(hostPath),
-        });
-        let res;
-        if (window?.noobotDesktop?.downloadHostFile) {
-          res = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
-          if (res?.cancelled) {
-            logFileAccess("download.response", {
-              traceId,
-              channel: "desktop-host-ipc",
-              ok: false,
-              cancelled: true,
-            });
-            return;
-          }
-          if (!res?.ok) throw new Error(res?.error || translate("message.downloadFailed"));
-          logFileAccess("download.response", {
-            traceId,
-            channel: "desktop-host-ipc",
-            ok: true,
-            hasSavedPath: Boolean(res?.savedPath),
-          });
-          return;
-        }
-        res = await attachmentService.downloadHostFile({ path: hostPath, traceId, isSandbox });
-        logFileAccess("download.response", {
-          traceId,
-          channel: "backend-host-api",
-          ok: Boolean(res?.ok),
-          status: Number(res?.status || 0),
-        });
-        if (!res.ok)
-          throw new Error(translate("message.downloadFailedHttp", { status: res.status }));
-        const blob = await res.blob();
-        const fileName =
-          parseContentDisposition(res.headers?.get("content-disposition") || "") ||
-          resolveFileItemName(fileItem, hostPath) ||
-          "download";
-        await triggerBlobDownload(blob, fileName);
-        return;
-      } catch (error) {
-        logFileAccess("download.failed", {
-          traceId,
-          channel: window?.noobotDesktop?.downloadHostFile
-            ? "desktop-host-ipc"
-            : "backend-host-api",
-          error: String(error?.message || error || ""),
-        });
-        notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
-        return;
-      }
-    }
-    if (missingSandboxFlag && hostPath && !relativePath) {
-      logFileAccess("download.invalidMetadata", {
-        traceId,
-        reason: "rejectedMissingSandboxFlag",
-        isSandbox,
-        hasHostPath: true,
-        hostPath: maskHostPath(hostPath),
-      });
-      notify({ type: "error", message: translate("message.downloadFailed") });
-      return;
-    }
-    if (!normalizedUserId || !relativePath) {
-      logFileAccess("download.invalidMetadata", {
-        traceId,
-        hasUserId: Boolean(normalizedUserId),
-        isSandbox,
-        reason: "missingWorkspaceMetadata",
-        hasRelativePath: Boolean(fileItem?.relativePath),
-        hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
-        hasResolvedPath: Boolean(fileItem?.resolvedPath),
-      });
-      notify({ type: "error", message: translate("message.downloadFailed") });
-      return;
-    }
-    try {
-      logFileAccess("download.request", {
-        traceId,
-        channel: "workspace-api",
-        isSandbox,
-        relativePath: maskWorkspacePath(relativePath),
-      });
-      const res = await attachmentService.downloadWorkspaceFile({
-        userId: normalizedUserId,
-        path: relativePath,
-        traceId,
-      });
-      logFileAccess("download.response", {
-        traceId,
-        ok: Boolean(res?.ok),
-        status: Number(res?.status || 0),
-        contentType: String(res.headers?.get("content-type") || ""),
-        contentDisposition: Boolean(res.headers?.get("content-disposition")),
-      });
-      if (!res.ok) {
-        let errorText = translate("message.downloadFailedHttp", { status: res.status });
-        try {
-          const data = await res.json();
-          if (data?.error) errorText = String(data.error);
-        } catch {}
-        throw new Error(errorText);
-      }
-      const blob = await res.blob();
-      const fileName =
-        parseContentDisposition(res.headers?.get("content-disposition") || "") ||
-        resolveFileItemName(fileItem, relativePath) ||
-        "download";
-      await triggerBlobDownload(blob, fileName);
-    } catch (error) {
-      logFileAccess("download.failed", { traceId, error: String(error?.message || error || "") });
-      notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
-    }
-  }
-
-  async function onDownloadAttachment(attachmentItem = {}) {
-    await runDownloadFromUrl({
-      url: resolveAttachmentUrl(attachmentItem),
-      fileName: attachmentItem?.name || "attachment",
-      errorI18nKey: "message.downloadFailed",
-    });
-  }
-
-  async function onDownloadParsedResult(attachmentItem = {}) {
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem);
-    await runDownloadFromUrl({
-      url: resolveParsedResultUrl(attachmentItem),
-      fileName: parsedItem?.name || translate("message.parsedResultDefaultName"),
-      errorI18nKey: "message.downloadFailed",
-    });
-  }
-
-  async function openFilePreview(fileItem = {}) {
-    const traceId = createFileAccessTraceId("preview");
-    const normalizedUserId = String(userId || "").trim();
-    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
-    const hostPath = resolveFileItemHostPath(fileItem);
-    const isSandbox = fileItem?.isSandbox;
-    const useHostChannel = isSandbox === false && Boolean(hostPath);
-    const missingSandboxFlag = typeof isSandbox !== "boolean";
-    const fileName = resolveFileItemName(fileItem, relativePath);
-    const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
-    if (
-      isNonImagePreviewOverSizeLimit({
-        fileItem,
-        mimeType,
-        fileName,
-        isImageMimeChecker: isImageMime,
-      })
-    ) {
-      notify({ type: "warning", message: translate("message.previewFileTooLarge") });
-      return;
-    }
-    logFileAccess(
-      "preview.click",
-      buildWorkspaceFileAccessLogPayload({
-        traceId,
-        isSandbox,
-        useHostChannel,
-        desktopHostApi: window?.noobotDesktop?.readHostFile,
-        normalizedUserId,
-        fileItem,
-        relativePath,
-        hostPath,
-      }),
-    );
-    if (missingSandboxFlag && hostPath && !relativePath) {
-      logFileAccess("preview.invalidMetadata", {
-        traceId,
-        reason: "rejectedMissingSandboxFlag",
-        isSandbox,
-        hasHostPath: true,
-        hostPath: maskHostPath(hostPath),
-      });
-      notify({ type: "error", message: translate("message.previewFailed") });
-      return;
-    }
-    if (useHostChannel && fileName) {
-      filePreview.visible.value = true;
-      filePreview.loading.value = true;
-      filePreview.error.value = "";
-      filePreview.fileName.value = fileName;
-      filePreview.mode.value = "text";
-      filePreview.textContent.value = "";
-      cleanupPreviewImageUrl();
-      try {
-        const channel = window?.noobotDesktop?.readHostFile
-          ? "desktop-host-ipc"
-          : "backend-host-api";
-        if (isImageFile(fileName)) {
-          const imageChannel = window?.noobotDesktop?.downloadHostFile
-            ? "desktop-host-ipc"
-            : "backend-host-api";
-          logFileAccess("preview.imageRequest", {
-            traceId,
-            channel: imageChannel,
-            isSandbox,
-            hostPath: maskHostPath(hostPath),
-          });
-          if (window?.noobotDesktop?.downloadHostFile) {
-            const result = await window.noobotDesktop.downloadHostFile({ path: hostPath, traceId });
-            if (!result?.ok) throw new Error(result?.error || translate("message.previewFailed"));
-            filePreview.imageUrl.value = result.url;
-          } else {
-            const res = await attachmentService.downloadHostFile({
-              path: hostPath,
-              traceId,
-              isSandbox,
-            });
-            if (!res.ok)
-              throw new Error(translate("message.previewFailedHttp", { status: res.status }));
-            filePreview.imageUrl.value = URL.createObjectURL(await res.blob());
-          }
-          filePreview.mode.value = "image";
-          logFileAccess("preview.imageResponse", { traceId, channel: imageChannel, ok: true });
-          return;
-        }
-        logFileAccess("preview.textRequest", {
-          traceId,
-          channel,
-          isSandbox,
-          hostPath: maskHostPath(hostPath),
-        });
-        let data;
-        if (window?.noobotDesktop?.readHostFile) {
-          data = await window.noobotDesktop.readHostFile({ path: hostPath, traceId });
-        } else {
-          const res = await attachmentService.getHostFile({ path: hostPath, traceId, isSandbox });
-          data = await res.json();
-          if (!res.ok)
-            data = {
-              ok: false,
-              error: data?.error || translate("message.previewFailedHttp", { status: res.status }),
-            };
-        }
-        logFileAccess("preview.textResponse", {
-          traceId,
-          channel,
-          ok: Boolean(data?.ok),
-          isText: data?.isText,
-        });
-        if (!data?.ok) throw new Error(data?.error || translate("message.previewFailed"));
-        if (data.isText === false) throw new Error(translate("message.fileTypeNotSupported"));
-        filePreview.textContent.value = String(data.content || "");
-        filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
-        return;
-      } catch (error) {
-        logFileAccess("preview.failed", {
-          traceId,
-          channel: window?.noobotDesktop?.readHostFile ? "desktop-host-ipc" : "backend-host-api",
-          error: String(error?.message || error || ""),
-        });
-        filePreview.error.value = error?.message || translate("message.previewFailed");
-        return;
-      } finally {
-        filePreview.loading.value = false;
-      }
-    }
-    if (!normalizedUserId || !relativePath || !fileName) {
-      logFileAccess("preview.invalidMetadata", {
-        traceId,
-        hasUserId: Boolean(normalizedUserId),
-        isSandbox,
-        reason: "missingWorkspaceMetadata",
-        hasRelativePath: Boolean(fileItem?.relativePath),
-        hasFileName: Boolean(fileItem?.fileName || fileItem?.name),
-        hasResolvedPath: Boolean(fileItem?.resolvedPath),
-      });
-      notify({ type: "error", message: translate("message.previewFailed") });
-      return;
-    }
-
-    filePreview.visible.value = true;
-    filePreview.loading.value = true;
-    filePreview.error.value = "";
-    filePreview.fileName.value = fileName;
-    filePreview.mode.value = "text";
-    filePreview.textContent.value = "";
-    cleanupPreviewImageUrl();
-
-    try {
-      if (isImageFile(fileName)) {
-        logFileAccess("preview.imageRequest", {
-          traceId,
-          channel: "workspace-api",
-          isSandbox,
-          relativePath: maskWorkspacePath(relativePath),
-        });
-        const downloadRes = await attachmentService.downloadWorkspaceFile({
-          userId: normalizedUserId,
-          path: relativePath,
-          traceId,
-        });
-        logFileAccess("preview.imageResponse", {
-          traceId,
-          ok: Boolean(downloadRes?.ok),
-          status: Number(downloadRes?.status || 0),
-          contentType: String(downloadRes.headers?.get("content-type") || ""),
-        });
-        if (!downloadRes.ok) {
-          let errorText = translate("message.previewFailedHttp", { status: downloadRes.status });
-          try {
-            const data = await downloadRes.json();
-            if (data?.error) errorText = String(data.error);
-          } catch {}
-          throw new Error(errorText);
-        }
-        const blob = await downloadRes.blob();
-        filePreview.imageUrl.value = URL.createObjectURL(blob);
-        filePreview.mode.value = "image";
-        return;
-      }
-
-      const res = await attachmentService.getWorkspaceFile({
-        userId: normalizedUserId,
-        path: relativePath,
-        traceId,
-      });
-      logFileAccess("preview.textResponse", {
-        traceId,
-        ok: Boolean(res?.ok),
-        status: Number(res?.status || 0),
-        contentType: String(res.headers?.get("content-type") || ""),
-      });
-      const contentType = String(res.headers?.get("content-type") || "").toLowerCase();
-      let data = null;
-      if (contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const rawText = await res.text();
-        try {
-          data = JSON.parse(String(rawText || "{}"));
-        } catch {
-          throw new Error(translate("message.previewFailedHttp", { status: res.status || 500 }));
-        }
-      }
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || translate("message.previewFailed"));
-      }
-      if (data.isText === false) {
-        throw new Error(translate("message.fileTypeNotSupported"));
-      }
-      filePreview.textContent.value = String(data.content || "");
-      filePreview.mode.value = isMarkdownFile(fileName) ? "markdown" : "text";
-    } catch (error) {
-      logFileAccess("preview.failed", { traceId, error: String(error?.message || error || "") });
-      filePreview.error.value = error?.message || translate("message.previewFailed");
-    } finally {
-      filePreview.loading.value = false;
-    }
-  }
-
-  function closePreviewDialog() {
-    resetPreviewState();
-  }
-
-  function canPreviewAttachment(attachmentItem = {}) {
-    const mimeType = String(attachmentItem?.mimeType || "").trim();
-    const name = String(attachmentItem?.name || "").trim();
-    if (
-      isNonImagePreviewOverSizeLimit({
-        fileItem: attachmentItem,
-        mimeType,
-        fileName: name,
-        isImageMimeChecker: isImageMime,
-      })
-    ) {
-      return false;
-    }
-    const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
-    if (officeLike) {
-      return Boolean(
-        resolveParsedResultAccessMeta(attachmentItem, {
-          userId: String(userId || "").trim(),
-        }),
-      );
-    }
-    return (
-      isImagePreviewType(mimeType, name, isImageMime) ||
-      mimeType.startsWith("video/") ||
-      isAudioPreviewMime(mimeType) ||
-      isTextPreviewMime(mimeType) ||
-      isMarkdownMime(mimeType, name) ||
-      isTextPreviewFile(name)
-    );
-  }
-
-  function canPreviewParsedResult(attachmentItem = {}) {
-    const parsedMeta = resolveParsedResultAccessMeta(attachmentItem, {
-      userId: String(userId || "").trim(),
-    });
-    if (!parsedMeta) return false;
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
-      userId: String(userId || "").trim(),
-    });
-    return !isNonImagePreviewOverSizeLimit({
-      fileItem: parsedItem,
-      mimeType: parsedItem.mimeType,
-      fileName: parsedItem.name,
-      isImageMimeChecker: isImageMime,
-    });
-  }
-
-  function canPreviewFile(fileItem = {}) {
-    const normalizedUserId = String(userId || "").trim();
-    const relativePath = resolveFileItemRelativePath(fileItem, normalizedUserId);
-    const fileName = resolveFileItemName(fileItem, relativePath);
-    const mimeType = String(fileItem?.mimeType || fileItem?.type || "").trim();
-    const hasPreviewPath = Boolean(
-      relativePath || resolveFileItemHostPath(fileItem) || fileItem?.resolvedPath || fileItem?.path,
-    );
-    if (!hasPreviewPath) return false;
-    return !isNonImagePreviewOverSizeLimit({
-      fileItem,
-      mimeType,
-      fileName,
-      isImageMimeChecker: isImageMime,
-    });
-  }
-
-  async function openResolvedAttachmentPreview(attachmentItem = {}) {
-    resetAttachmentPreviewState();
-    const mimeType = String(attachmentItem?.mimeType || "").trim();
-    const name = String(attachmentItem?.name || "").trim();
-    if (
-      isNonImagePreviewOverSizeLimit({
-        fileItem: attachmentItem,
-        mimeType,
-        fileName: name,
-        isImageMimeChecker: isImageMime,
-      })
-    ) {
-      notify({ type: "warning", message: translate("message.previewFileTooLarge") });
-      return;
-    }
-    const officeLike = isOfficeMime(mimeType) || isOfficeFile(name);
-    const targetUrl = resolveAttachmentUrl(attachmentItem);
-    if (!targetUrl) return;
-
-    const isImage = !officeLike && isImagePreviewType(mimeType, name, isImageMime);
-    const isVideo = !officeLike && mimeType.startsWith("video/");
-    const isAudio = !officeLike && isAudioPreviewMime(mimeType);
-    if (isImage || isVideo || isAudio) {
-      attachmentPreview.visible.value = true;
-      attachmentPreview.loading.value = true;
-      attachmentPreview.type.value = isImage ? "image" : isVideo ? "video" : "audio";
-      attachmentPreview.name.value = name;
-      try {
-        const response = await attachmentService.fetchUrl(targetUrl);
-        if (!response?.ok) {
-          throw new Error(
-            translate("message.previewFailedHttp", { status: response?.status || 500 }),
-          );
-        }
-        const blob = await response.blob();
-        attachmentObjectUrl = URL.createObjectURL(blob);
-        attachmentPreview.url.value = attachmentObjectUrl;
-      } catch (error) {
-        attachmentPreview.error.value =
-          error?.message || translate("message.attachmentPreviewFailed");
-      } finally {
-        attachmentPreview.loading.value = false;
-      }
-      return;
-    }
-    const markdownMode = officeLike ? true : isMarkdownMime(mimeType, name);
-    if (!markdownMode && !isTextPreviewMime(mimeType) && !isTextPreviewFile(name)) return;
-
-    attachmentPreview.visible.value = true;
-    attachmentPreview.loading.value = true;
-    attachmentPreview.error.value = "";
-    attachmentPreview.textContent.value = "";
-    attachmentPreview.url.value = "";
-    attachmentPreview.name.value = name;
-    attachmentPreview.type.value = markdownMode ? "markdown" : "text";
-    try {
-      const response = await attachmentService.fetchUrl(targetUrl);
-      if (!response?.ok) {
-        throw new Error(
-          translate("message.previewFailedHttp", { status: response?.status || 500 }),
-        );
-      }
-      attachmentPreview.textContent.value = String(await response.text());
-    } catch (error) {
-      attachmentPreview.error.value =
-        error?.message || translate("message.attachmentPreviewFailed");
-    } finally {
-      attachmentPreview.loading.value = false;
-    }
-  }
-
-  async function openParsedResultPreview(attachmentItem = {}) {
-    const parsedItem = buildParsedResultPreviewItem(attachmentItem, {
-      userId: String(userId || "").trim(),
-    });
-    if (!parsedItem) return;
-    const parsedResultUrl = resolveParsedResultUrl(attachmentItem);
-    await openResolvedAttachmentPreview({
-      ...parsedItem,
-      previewUrl: parsedResultUrl,
-    });
-  }
-
-  async function openAttachmentPreview(attachmentItem = {}) {
-    const mimeType = String(attachmentItem?.mimeType || "").trim();
-    const name = String(attachmentItem?.name || "").trim();
-    if (
-      (isOfficeMime(mimeType) || isOfficeFile(name)) &&
-      Boolean(
-        resolveParsedResultAccessMeta(attachmentItem, {
-          userId: String(userId || "").trim(),
-        }),
-      )
-    ) {
-      await openParsedResultPreview(attachmentItem);
-      return;
-    }
-    await openResolvedAttachmentPreview(attachmentItem);
-  }
-
-  function closeAttachmentPreview() {
-    resetAttachmentPreviewState();
-  }
-
-  async function onCopyMarkdownRich(renderedPreviewHtml = "") {
-    await copyMarkdownFromText({
-      textContent: filePreview.textContent.value,
-      renderedPreviewHtml,
-      rich: true,
-    });
-  }
-
-  async function onCopyMarkdownText() {
-    await copyMarkdownFromText({
-      textContent: filePreview.textContent.value,
-      rich: false,
-    });
-  }
-
-  async function onCopyAttachmentMarkdownRich(renderedPreviewHtml = "") {
-    await copyMarkdownFromText({
-      textContent: attachmentPreview.textContent.value,
-      renderedPreviewHtml,
-      rich: true,
-    });
-  }
-
-  async function onCopyAttachmentMarkdownText() {
-    await copyMarkdownFromText({
-      textContent: attachmentPreview.textContent.value,
-      rich: false,
-    });
-  }
-
-  async function onCopyMessageMarkdownRich({ textContent = "", renderedPreviewHtml = "" } = {}) {
-    await copyMarkdownFromText({
-      textContent,
-      renderedPreviewHtml,
-      rich: true,
-    });
-  }
-
-  async function onCopyMessageMarkdownText(textContent = "") {
-    await copyMarkdownFromText({
-      textContent,
-      rich: false,
-    });
-  }
-
-  onBeforeUnmount(() => {
-    cleanupPreviewImageUrl();
-    resetAttachmentPreviewState();
+  const filePreview = createFilePreviewState();
+  const attachmentPreview = createAttachmentPreviewState();
+  const { onDownloadFile } = createFileDownloadController({
+    userId,
+    attachmentService,
+    translate,
+    notify,
+  });
+  const { openFilePreview } = createFilePreviewController({
+    userId,
+    attachmentService,
+    translate,
+    notify,
+    isImageMime,
+    filePreview,
+  });
+  const attachmentController = createAttachmentPreviewController({
+    userId,
+    attachmentService,
+    translate,
+    notify,
+    isImageMime,
+    attachmentPreview,
+  });
+  const downloadController = createAttachmentDownloadController({
+    userId,
+    attachmentService,
+    translate,
+    notify,
+  });
+  const copyController = createMarkdownCopyController({
+    translate,
+    notify,
+    renderMarkdown,
+    filePreview: filePreview.state,
+    attachmentPreview: attachmentPreview.state,
   });
 
+  onBeforeUnmount(() => {
+    filePreview.cleanupImageUrl();
+    attachmentPreview.reset();
+  });
+
+  return {
+    ...projectPreviewState(filePreview.state, attachmentPreview.state),
+    ...attachmentController,
+    ...downloadController,
+    ...copyController,
+    canPreviewFile: (fileItem = {}) => canPreviewFileItem(fileItem, userId, isImageMime),
+    openFilePreview,
+    closePreviewDialog: filePreview.reset,
+    closeAttachmentPreview: attachmentPreview.reset,
+    onDownloadFile,
+  };
+}
+
+function projectPreviewState(filePreview, attachmentPreview) {
   return {
     previewVisible: filePreview.visible,
     previewLoading: filePreview.loading,
@@ -796,23 +102,76 @@ export function useMessagePreview({
     attachmentPreviewLoading: attachmentPreview.loading,
     attachmentPreviewError: attachmentPreview.error,
     attachmentPreviewTextContent: attachmentPreview.textContent,
-    canPreviewAttachment,
-    canPreviewParsedResult,
-    canPreviewFile,
-    openAttachmentPreview,
-    openParsedResultPreview,
-    openResolvedAttachmentPreview,
-    closeAttachmentPreview,
-    openFilePreview,
-    closePreviewDialog,
-    onDownloadFile,
-    onDownloadAttachment,
-    onDownloadParsedResult,
-    onCopyMarkdownRich,
-    onCopyMarkdownText,
-    onCopyAttachmentMarkdownRich,
-    onCopyAttachmentMarkdownText,
-    onCopyMessageMarkdownRich,
-    onCopyMessageMarkdownText,
+  };
+}
+
+function createAttachmentDownloadController({ userId, attachmentService, translate, notify }) {
+  async function downloadFromUrl(url, fileName) {
+    if (!url) return;
+    try {
+      const response = await attachmentService.fetchUrl(url);
+      if (!response?.ok) {
+        throw new Error(
+          translate("message.downloadFailedHttp", { status: response?.status || 500 }),
+        );
+      }
+      await triggerBlobDownload(await response.blob(), fileName);
+    } catch (error) {
+      notify({ type: "error", message: error?.message || translate("message.downloadFailed") });
+    }
+  }
+  const options = () => ({ userId: String(userId || "").trim() });
+  return {
+    async onDownloadAttachment(item = {}) {
+      await downloadFromUrl(
+        resolveAttachmentAccessMeta(item, options()).url,
+        item.name || "attachment",
+      );
+    },
+    async onDownloadParsedResult(item = {}) {
+      const parsedItem = buildParsedResultPreviewItem(item, options());
+      await downloadFromUrl(
+        resolveParsedResultAccessMeta(item, options())?.url || "",
+        parsedItem?.name || translate("message.parsedResultDefaultName"),
+      );
+    },
+  };
+}
+
+function createMarkdownCopyController({
+  translate,
+  notify,
+  renderMarkdown,
+  filePreview,
+  attachmentPreview,
+}) {
+  const noCopyableContentTexts = buildNoCopyableSet(translate, "noCopyableContent");
+  const noCopyableTextTexts = buildNoCopyableSet(translate, "noCopyableText");
+  const copy = ({ textContent = "", renderedPreviewHtml = "", rich = false } = {}) =>
+    handleCopyMarkdown({
+      textContent: rich
+        ? renderedPreviewHtml || renderMarkdown(String(textContent || ""))
+        : String(textContent || ""),
+      renderMarkdown,
+      translate,
+      notify,
+      noCopyableContentTexts,
+      noCopyableTextTexts,
+      rich,
+    });
+  return {
+    onCopyMarkdownRich: (html = "") =>
+      copy({ textContent: filePreview.textContent.value, renderedPreviewHtml: html, rich: true }),
+    onCopyMarkdownText: () => copy({ textContent: filePreview.textContent.value }),
+    onCopyAttachmentMarkdownRich: (html = "") =>
+      copy({
+        textContent: attachmentPreview.textContent.value,
+        renderedPreviewHtml: html,
+        rich: true,
+      }),
+    onCopyAttachmentMarkdownText: () => copy({ textContent: attachmentPreview.textContent.value }),
+    onCopyMessageMarkdownRich: ({ textContent = "", renderedPreviewHtml = "" } = {}) =>
+      copy({ textContent, renderedPreviewHtml, rich: true }),
+    onCopyMessageMarkdownText: (textContent = "") => copy({ textContent }),
   };
 }

@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 function isZhLocale(locale = "") {
-  const normalized = String(locale || "").trim().toLowerCase();
+  const normalized = String(locale || "")
+    .trim()
+    .toLowerCase();
   return normalized.startsWith("zh");
 }
 
@@ -13,7 +15,8 @@ export function resolveLocaleFromRequest(request = null) {
     const requestUrl = new URL(request?.url || "", "http://localhost");
     const explicitLocale = String(requestUrl.searchParams.get("locale") || "").trim();
     if (explicitLocale) return explicitLocale;
-  } catch {
+  } catch (error) {
+    console.warn("[agent-proxy-i18n] request locale URL is invalid", error);
   }
   const acceptLanguage = String(request?.headers?.["accept-language"] || "").trim();
   if (!acceptLanguage) return "";
@@ -24,10 +27,7 @@ const ZH_CN_MAP = new Map([
   ["agentProxy error", "agentProxy 错误"],
   ["agentProxy invalid json payload", "agentProxy JSON 载荷无效"],
   ["agentProxy channel not found for stop", "agentProxy 未找到用于 stop 的 channel"],
-  [
-    "agentProxy channel not found for interaction",
-    "agentProxy 未找到用于 interaction 的 channel",
-  ],
+  ["agentProxy channel not found for interaction", "agentProxy 未找到用于 interaction 的 channel"],
   ["agentProxy channel not found for join", "agentProxy 未找到用于 join 的 channel"],
   ["agentProxy upstream not running", "agentProxy 上游未运行"],
   ["agentProxy upstream is unavailable", "agentProxy 上游不可用"],

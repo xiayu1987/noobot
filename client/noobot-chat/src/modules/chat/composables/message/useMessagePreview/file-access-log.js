@@ -12,8 +12,12 @@ export function logFileAccess(event, payload = {}) {
       event,
       ...payload,
     };
-    window?.noobotDesktop?.logFileAccess?.(entry).catch?.(() => {});
-  } catch {}
+    globalThis?.noobotDesktop?.logFileAccess?.(entry).catch?.((error) => {
+      console.warn(`[noobot:file-access] desktop log failed for ${event}`, error);
+    });
+  } catch (error) {
+    console.warn(`[noobot:file-access] log construction failed for ${event}`, error);
+  }
 }
 
 export async function triggerBlobDownload(blob, fileName) {

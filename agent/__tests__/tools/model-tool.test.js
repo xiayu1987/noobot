@@ -70,6 +70,33 @@ test("switch_model: 应能通过 modelName 映射到 alias 并切换", async () 
   assert.equal(runtime.runtimeModel, "gemini");
 });
 
+test("switch_model: persistence failure does not publish a new runtime model", async () => {
+  const runtime = {
+    allEnabledProviders: {
+      openai: { model: "gpt-4o" },
+      gemini: { model: "gemini-2.5-pro" },
+    },
+    userId: "u1",
+    systemRuntime: { sessionId: "s-persistence-failure" },
+    sessionManager: {
+      async setSessionModelAlias() {
+        throw new Error("session model persistence failed");
+      },
+    },
+    runtimeModel: "openai",
+  };
+  const switchModelTool = getSwitchModelTool({
+    runtime,
+    sessionId: "s-persistence-failure",
+  });
+
+  await assert.rejects(
+    switchModelTool.invoke({ modelName: "gemini" }),
+    /session model persistence failed/,
+  );
+  assert.equal(runtime.runtimeModel, "openai");
+});
+
 test("switch_model: 不存在的模型应返回失败", async () => {
   const runtime = {
     allEnabledProviders: {

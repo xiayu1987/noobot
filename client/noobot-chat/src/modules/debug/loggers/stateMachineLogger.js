@@ -8,7 +8,7 @@ import {
   getMessageRuntimeChannelState,
   SESSION_RUN_MESSAGE_RUNTIME_MARK,
 } from "../../chat/runtime/sessionRunStateMachine.js";
-import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -30,7 +30,8 @@ export function summarizeStateMachineMessage(message = {}) {
     presentationMessageId: message.presentationMessageId || "",
     role: message.role || message.messageRole || message.type || "",
     sessionId: message.sessionId || message.session_id || message.owner?.sessionId || "",
-    dialogProcessId: message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
+    dialogProcessId:
+      message.dialogProcessId || message.dialog_process_id || message.owner?.dialogProcessId || "",
     turnScopeId: message.turnScopeId || message.owner?.turnScopeId || "",
     pending: message.pending === true,
     channelState: channelState?.state || "",
@@ -86,9 +87,8 @@ export function summarizeStateMachineTurn(turn = {}, projection = null) {
 
 export function summarizeTurnLifecycleSnapshot(snapshot = {}) {
   if (!snapshot || typeof snapshot !== "object") return null;
-  const activeTurn = snapshot.activeTurn && typeof snapshot.activeTurn === "object"
-    ? snapshot.activeTurn
-    : null;
+  const activeTurn =
+    snapshot.activeTurn && typeof snapshot.activeTurn === "object" ? snapshot.activeTurn : null;
   return {
     sessionId: clean(snapshot.sessionId),
     activeTurnScopeId: clean(snapshot.activeTurnScopeId),
@@ -97,25 +97,25 @@ export function summarizeTurnLifecycleSnapshot(snapshot = {}) {
     recentTerminalTurnCount: Array.isArray(snapshot.recentTerminalTurns)
       ? snapshot.recentTerminalTurns.length
       : 0,
-    activeTurn: activeTurn ? {
-      sessionId: clean(activeTurn.sessionId || snapshot.sessionId),
-      dialogProcessId: clean(activeTurn.dialogProcessId),
-      turnScopeId: clean(activeTurn.turnScopeId),
-      executionId: clean(activeTurn.executionId),
-      executionKind: clean(activeTurn.executionKind),
-      state: clean(activeTurn.state),
-      phase: clean(activeTurn.phase),
-      executionState: clean(activeTurn.executionState),
-      canStop: activeTurn.capabilities?.canStop === true,
-      actionLocked: activeTurn.capabilities?.actionLocked === true,
-      revision: Number(activeTurn.revision || 0),
-      sequence: Number(activeTurn.sequence || 0),
-    } : null,
+    activeTurn: activeTurn
+      ? {
+          sessionId: clean(activeTurn.sessionId || snapshot.sessionId),
+          dialogProcessId: clean(activeTurn.dialogProcessId),
+          turnScopeId: clean(activeTurn.turnScopeId),
+          executionId: clean(activeTurn.executionId),
+          executionKind: clean(activeTurn.executionKind),
+          state: clean(activeTurn.state),
+          phase: clean(activeTurn.phase),
+          executionState: clean(activeTurn.executionState),
+          canStop: activeTurn.capabilities?.canStop === true,
+          actionLocked: activeTurn.capabilities?.actionLocked === true,
+          revision: Number(activeTurn.revision || 0),
+          sequence: Number(activeTurn.sequence || 0),
+        }
+      : null,
   };
 }
 
 export function logStateMachineDebug(event, payload = {}) {
-  try {
-    return emitLazyDebug(sessionLogSink, "state-machine", event, payload);
-  } catch {}
+  return emitLazyDebugSafely(sessionLogSink, "state-machine", event, payload);
 }

@@ -494,53 +494,57 @@ function toggleAssistantContent() {
     />
   </BaseMessageShell>
 
-  <el-dialog
-    v-model="attachmentPreviewVisible"
-    :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
-    width="72%"
-    top="6vh"
-    :class="attachmentPreviewDialogClass"
-    destroy-on-close
-    @closed="closeAttachmentPreview"
-  >
-    <BasePreviewContent
-      content-type="attachment"
-      :active="attachmentPreviewVisible"
-      :attachment-preview-type="attachmentPreviewType"
-      :attachment-preview-url="attachmentPreviewUrl"
-      :attachment-preview-name="attachmentPreviewName"
-      :attachment-preview-loading="attachmentPreviewLoading"
-      :attachment-preview-error="attachmentPreviewError"
-      :attachment-preview-text-content="attachmentPreviewTextContent"
-      :render-markdown="renderMarkdown"
-      @copy-markdown-rich="onCopyAttachmentMarkdownRich"
-      @copy-markdown-text="onCopyAttachmentMarkdownText"
-    />
-  </el-dialog>
+  <Teleport to="body">
+    <el-dialog
+      v-model="attachmentPreviewVisible"
+      :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
+      fullscreen
+      :teleported="false"
+      modal-class="noobot-file-preview-overlay"
+      :class="attachmentPreviewDialogClass"
+      destroy-on-close
+      @closed="closeAttachmentPreview"
+    >
+      <BasePreviewContent
+        content-type="attachment"
+        :active="attachmentPreviewVisible"
+        :attachment-preview-type="attachmentPreviewType"
+        :attachment-preview-url="attachmentPreviewUrl"
+        :attachment-preview-name="attachmentPreviewName"
+        :attachment-preview-loading="attachmentPreviewLoading"
+        :attachment-preview-error="attachmentPreviewError"
+        :attachment-preview-text-content="attachmentPreviewTextContent"
+        :render-markdown="renderMarkdown"
+        @copy-markdown-rich="onCopyAttachmentMarkdownRich"
+        @copy-markdown-text="onCopyAttachmentMarkdownText"
+      />
+    </el-dialog>
 
-  <el-dialog
-    v-model="previewVisible"
-    :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
-    width="72%"
-    top="6vh"
-    :class="filePreviewDialogClass"
-    destroy-on-close
-    @closed="closePreviewDialog"
-  >
-    <BasePreviewContent
-      content-type="file"
-      :active="previewVisible"
-      :preview-loading="previewLoading"
-      :preview-error="previewError"
-      :preview-file-name="previewFileName"
-      :preview-mode="previewMode"
-      :preview-text-content="previewTextContent"
-      :preview-image-url="previewImageUrl"
-      :render-markdown="renderMarkdown"
-      @copy-markdown-rich="onCopyMarkdownRich"
-      @copy-markdown-text="onCopyMarkdownText"
-    />
-  </el-dialog>
+    <el-dialog
+      v-model="previewVisible"
+      :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
+      fullscreen
+      :teleported="false"
+      modal-class="noobot-file-preview-overlay"
+      :class="filePreviewDialogClass"
+      destroy-on-close
+      @closed="closePreviewDialog"
+    >
+      <BasePreviewContent
+        content-type="file"
+        :active="previewVisible"
+        :preview-loading="previewLoading"
+        :preview-error="previewError"
+        :preview-file-name="previewFileName"
+        :preview-mode="previewMode"
+        :preview-text-content="previewTextContent"
+        :preview-image-url="previewImageUrl"
+        :render-markdown="renderMarkdown"
+        @copy-markdown-rich="onCopyMarkdownRich"
+        @copy-markdown-text="onCopyMarkdownText"
+      />
+    </el-dialog>
+  </Teleport>
 </template>
 
 <style scoped>

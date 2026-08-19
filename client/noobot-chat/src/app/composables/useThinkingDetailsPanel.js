@@ -281,7 +281,18 @@ export function useThinkingDetailsPanel({
         return;
       thinkingDetailsMessageItem.value = detail.messageItem || currentMessage;
       thinkingDetailsAllMessages.value = [];
-    } catch {}
+    } catch (error) {
+      logThinkingPanelState("frontend.thinkingReplay.detailRefreshFailed", () => ({
+        sessionId: activeSessionId?.value,
+        dialogProcessId,
+        turnScopeId,
+        error: String(error?.message || error || ""),
+      }));
+      notify?.({
+        type: "warning",
+        message: error?.message || translate?.("chat.loadSessionDetailFailed"),
+      });
+    }
   });
 
   return {

@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { emitEvent } from "./index.js";
-import {
-  assertMessageEventPayload,
-} from "@noobot/event-protocol/message-event";
+import { emitEvent } from "./emitter.js";
+import { assertMessageEventPayload } from "@noobot/event-protocol/message-event";
 
 export { assertMessageEventPayload };
 
@@ -24,33 +22,35 @@ function deepFreeze(value, seen = new WeakSet()) {
 
 function runtimeState(runtime = {}) {
   if (!runtime || typeof runtime !== "object") return {};
-  const systemRuntime = runtime.systemRuntime && typeof runtime.systemRuntime === "object"
-    ? runtime.systemRuntime
-    : (runtime.systemRuntime = {});
+  const systemRuntime =
+    runtime.systemRuntime && typeof runtime.systemRuntime === "object"
+      ? runtime.systemRuntime
+      : (runtime.systemRuntime = {});
   if (!systemRuntime.messageEventStream || typeof systemRuntime.messageEventStream !== "object") {
     systemRuntime.messageEventStream = { activeMessageId: "" };
   }
   return systemRuntime;
 }
 
-export function bindAssistantMessageEventStream(runtime = {}, {
-  messageId = "",
-  presentationMessageId = "",
-  parentSessionId = "",
-  workflowRunId = "",
-  nodeExecutionId = "",
-} = {}) {
+export function bindAssistantMessageEventStream(
+  runtime = {},
+  {
+    messageId = "",
+    presentationMessageId = "",
+    parentSessionId = "",
+    workflowRunId = "",
+    nodeExecutionId = "",
+  } = {},
+) {
   const state = runtimeState(runtime);
   const requestedMessageId = text(
-    messageId ||
-    runtime?.runConfig?.messageId ||
-    state?.config?.messageId,
+    messageId || runtime?.runConfig?.messageId || state?.config?.messageId,
   );
   const requestedPresentationMessageId = text(
     presentationMessageId ||
-    runtime?.runConfig?.presentationMessageId ||
-    state?.config?.presentationMessageId ||
-    requestedMessageId,
+      runtime?.runConfig?.presentationMessageId ||
+      state?.config?.presentationMessageId ||
+      requestedMessageId,
   );
   const requestedParentSessionId = text(
     parentSessionId || runtime?.runConfig?.parentSessionId || state?.parentSessionId,
@@ -60,10 +60,10 @@ export function bindAssistantMessageEventStream(runtime = {}, {
   );
   const requestedNodeExecutionId = text(
     nodeExecutionId ||
-    runtime?.runConfig?.workflowNodeExecutionId ||
-    runtime?.runConfig?.nodeExecutionId ||
-    state?.config?.workflowNodeExecutionId ||
-    state?.config?.nodeExecutionId,
+      runtime?.runConfig?.workflowNodeExecutionId ||
+      runtime?.runConfig?.nodeExecutionId ||
+      state?.config?.workflowNodeExecutionId ||
+      state?.config?.nodeExecutionId,
   );
   if (!requestedMessageId || !requestedPresentationMessageId) {
     throw new Error("turn message event identity is incomplete");
@@ -80,7 +80,10 @@ export function bindAssistantMessageEventStream(runtime = {}, {
   if (currentMessageId && currentMessageId !== requestedMessageId) {
     throw new Error("turn message event messageId conflict");
   }
-  if (currentPresentationMessageId && currentPresentationMessageId !== requestedPresentationMessageId) {
+  if (
+    currentPresentationMessageId &&
+    currentPresentationMessageId !== requestedPresentationMessageId
+  ) {
     throw new Error("turn message event presentationMessageId conflict");
   }
   const currentParentSessionId = text(stream.parentSessionId);
@@ -149,8 +152,14 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
   const stream = state.messageEventStream || (state.messageEventStream = {});
   const messageId = text(data?.messageId || stream.activeMessageId);
   if (!messageId) throw new Error(`authoritative message event requires messageId: ${eventType}`);
-  if (text(data?.messageId) && text(stream.activeMessageId) && messageId !== text(stream.activeMessageId)) {
-    throw new Error(`authoritative message event messageId conflicts with Turn domain: ${eventType}`);
+  if (
+    text(data?.messageId) &&
+    text(stream.activeMessageId) &&
+    messageId !== text(stream.activeMessageId)
+  ) {
+    throw new Error(
+      `authoritative message event messageId conflicts with Turn domain: ${eventType}`,
+    );
   }
   const presentationMessageId = text(
     data?.presentationMessageId || stream.activePresentationMessageId || messageId,
@@ -162,8 +171,12 @@ export function createMessageEventPayload(runtime = {}, eventType = "", data = {
   const payload = deepFreeze({
     ...data,
     eventType: text(eventType),
-    parentSessionId: text(data?.parentSessionId || stream.parentSessionId || state?.parentSessionId),
-    dialogProcessId: text(data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId),
+    parentSessionId: text(
+      data?.parentSessionId || stream.parentSessionId || state?.parentSessionId,
+    ),
+    dialogProcessId: text(
+      data?.dialogProcessId || state?.dialogProcessId || state?.currentDialogProcessId,
+    ),
     ...(text(data?.workflowRunId || stream.workflowRunId)
       ? { workflowRunId: text(data?.workflowRunId || stream.workflowRunId) }
       : {}),
@@ -184,7 +197,9 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
     userId: text(runtime?.userId),
     sessionId: text(state?.sessionId || runtime?.sessionId),
     parentSessionId: text(payload.parentSessionId),
-    turnScopeId: text(state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId),
+    turnScopeId: text(
+      state?.turnScopeId || state?.config?.turnScopeId || runtime?.runConfig?.turnScopeId,
+    ),
     messageId: text(state?.messageEventStream?.activeMessageId),
     executionId: text(runtime?.runConfig?.executionId),
     commandId: text(runtime?.runConfig?.commandId),
@@ -197,7 +212,9 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
   }
   const projected = runtime?.projectCurrentTurnMessageEvent?.(committed.envelope);
   if (runtime?.projectCurrentTurnMessageEvent && !projected) {
-    throw new Error(`canonical message event projector rejected event: ${committed.envelope.identity.eventId}`);
+    throw new Error(
+      `canonical message event projector rejected event: ${committed.envelope.identity.eventId}`,
+    );
   }
   await emitEvent(eventListener, "authority_event_committed", {
     envelope: committed.envelope,

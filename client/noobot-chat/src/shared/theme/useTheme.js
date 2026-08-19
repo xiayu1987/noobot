@@ -8,9 +8,8 @@ import { ref } from "vue";
 const STORAGE_KEY = "noobot_theme";
 const SUPPORTED_THEMES = new Set(["dark", "light", "system"]);
 const isBrowser = typeof window !== "undefined" && typeof document !== "undefined";
-const systemThemeMedia = isBrowser && window.matchMedia
-  ? window.matchMedia("(prefers-color-scheme: dark)")
-  : null;
+const systemThemeMedia =
+  isBrowser && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
 function resolveSystemTheme() {
   return systemThemeMedia?.matches ? "dark" : "light";
@@ -42,7 +41,8 @@ function applyTheme(nextTheme = "dark") {
   document.documentElement.setAttribute("data-theme", resolveAppliedTheme(resolvedTheme));
   try {
     globalThis.localStorage?.setItem?.(STORAGE_KEY, resolvedTheme);
-  } catch {
+  } catch (error) {
+    console.warn("[noobot:theme] failed to persist theme", error);
   }
 }
 

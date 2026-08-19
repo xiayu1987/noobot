@@ -7,6 +7,24 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 
+const VENDOR_CHUNK_RULES = Object.freeze([
+  ["vendor-vue", ["/vue/", "/@vue/", "/pinia/"]],
+  ["vendor-element-plus", ["/element-plus/", "/@element-plus/"]],
+  ["vendor-markdown", ["/markdown-it/", "/linkify-it/", "/mdurl/", "/uc.micro/"]],
+  [
+    "vendor-diagram-parser",
+    ["/langium/", "/vscode-languageserver-", "/vscode-uri/", "/chevrotain/"],
+  ],
+]);
+
+function resolveVendorChunk(moduleId = "") {
+  const normalizedId = String(moduleId || "").replaceAll("\\", "/");
+  if (!normalizedId.includes("/node_modules/")) return undefined;
+  return VENDOR_CHUNK_RULES.find(([, packageMarkers]) =>
+    packageMarkers.some((packageMarker) => normalizedId.includes(packageMarker)),
+  )?.[0];
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const connectToken = String(
@@ -17,6 +35,13 @@ export default defineConfig(({ mode }) => {
     plugins: [vue()],
     resolve: {
       dedupe: ["vue"],
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          manualChunks: resolveVendorChunk,
+        },
+      },
     },
     test: {
       environment: "jsdom",

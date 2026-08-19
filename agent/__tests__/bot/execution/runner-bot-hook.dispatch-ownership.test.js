@@ -15,6 +15,7 @@ import {
   createTestAgentExecutionScope,
 } from "./runner-bot-hook.fixtures.js";
 import { createModelResponse } from "@noobot/model-protocol";
+import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 
 function createCompletedModelResponse(request, text) {
   const output = {
@@ -55,6 +56,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const events = [];
   const capabilityModelInvoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
+    configSnapshot: createConfigSnapshot(),
   });
   botHookManager.on(HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH, async (ctx = {}) => {
     await capabilityModelInvoker({
@@ -79,17 +81,20 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
           return createCompletedModelResponse(request, "WORKFLOW_DSL/1\nEND");
         },
       };
-      const runtimeAgentContext = createTestAgentExecutionScope({
-        attachmentMetas: [],
-        eventListener: buildContextPayload.eventListener,
-        modelHost: {
-          modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
+      const runtimeAgentContext = createTestAgentExecutionScope(
+        {
+          attachmentMetas: [],
+          eventListener: buildContextPayload.eventListener,
+          modelHost: {
+            modelSpec: { alias: "test", model: "test", format: "openai_compatible" },
+            modelPort,
+            modelState: {},
+            invocationIdentity,
+          },
           modelPort,
-          modelState: {},
-          invocationIdentity,
         },
-        modelPort,
-      }, { identity: invocationIdentity });
+        { identity: invocationIdentity },
+      );
       return { agentContext: runtimeAgentContext, runtimeAgentContext };
     },
   });
@@ -107,8 +112,9 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   });
 
   const committedEvent = events.find(
-    (item = {}) => item.event === "authority_event_committed"
-      && item?.data?.envelope?.payload?.event === "workflow_semantic_response",
+    (item = {}) =>
+      item.event === "authority_event_committed" &&
+      item?.data?.envelope?.payload?.event === "workflow_semantic_response",
   );
   const envelope = committedEvent?.data?.envelope;
   assert.equal(envelope?.identity?.messageId, "message-workflow-semantic");
@@ -350,4 +356,3 @@ test("a structured dispatch takeover must claim ownership before returning handl
   );
   assert.equal(rootAgentCalls, 0);
 });
-

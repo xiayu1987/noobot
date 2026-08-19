@@ -21,22 +21,37 @@ export function createDependencyProcessTools({ appendEarlyLog = () => {} } = {})
         if (settled) return;
         settled = true;
         if (timer) clearTimeout(timer);
-        appendEarlyLog(`[process:finish] ${commandLine}; ok=${payload.ok}; code=${payload.code ?? ""}; elapsedMs=${Date.now() - startedAt}; error=${payload.error || ""}`);
+        appendEarlyLog(
+          `[process:finish] ${commandLine}; ok=${payload.ok}; code=${payload.code ?? ""}; elapsedMs=${Date.now() - startedAt}; error=${payload.error || ""}`,
+        );
         resolve(payload);
       };
       timer = setTimeout(() => {
         appendEarlyLog(`[process:timeout] ${commandLine}; killing child`);
-        try { child?.kill(); } catch {}
+        try {
+          child?.kill();
+        } catch (error) {
+          appendEarlyLog(`[process:kill:error] ${error?.message || String(error)}`);
+        }
         finish({ ok: false, code: -1, stdout, stderr, error: `Timed out after ${timeoutMs}ms` });
       }, timeoutMs);
       try {
-        child = spawn(command, args, { cwd: cwd || undefined, windowsHide: true, shell: false, env: env ? { ...process.env, ...env } : process.env });
+        child = spawn(command, args, {
+          cwd: cwd || undefined,
+          windowsHide: true,
+          shell: false,
+          env: env ? { ...process.env, ...env } : process.env,
+        });
       } catch (error) {
         finish({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
         return;
       }
-      child.stdout?.on("data", (chunk) => { stdout += String(chunk || ""); });
-      child.stderr?.on("data", (chunk) => { stderr += String(chunk || ""); });
+      child.stdout?.on("data", (chunk) => {
+        stdout += String(chunk || "");
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr += String(chunk || "");
+      });
       child.on("error", (error) => {
         finish({ ok: false, code: -1, stdout, stderr, error: error?.message || String(error) });
       });
@@ -50,7 +65,9 @@ export function createDependencyProcessTools({ appendEarlyLog = () => {} } = {})
     try {
       return Boolean(filePath) && fs.existsSync(filePath);
     } catch (error) {
-      appendEarlyLog(`[fs:exists:error] path=${filePath || ""}; error=${error?.message || String(error)}`);
+      appendEarlyLog(
+        `[fs:exists:error] path=${filePath || ""}; error=${error?.message || String(error)}`,
+      );
       return false;
     }
   }
@@ -77,7 +94,10 @@ export function withTimeout(promise, timeoutMs, label, { appendEarlyLog = () => 
   });
 }
 
-export function createDependencyError(message, { failureKind = "local", retryable = false, cause } = {}) {
+export function createDependencyError(
+  message,
+  { failureKind = "local", retryable = false, cause } = {},
+) {
   const error = new Error(message);
   error.failureKind = failureKind;
   error.retryable = retryable === true;

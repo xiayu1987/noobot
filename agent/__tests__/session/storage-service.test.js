@@ -12,6 +12,41 @@ test.afterEach(() => {
   resetFsAdapter();
 });
 
+test("readJson returns fallback only when the persisted file is missing", async () => {
+  setFsAdapter({
+    readFile: async () => {
+      const error = new Error("missing");
+      error.code = "ENOENT";
+      throw error;
+    },
+  });
+  const storage = new StorageService();
+  assert.deepEqual(await storage.readJson("/tmp/missing.json", { empty: true }), {
+    empty: true,
+  });
+});
+
+test("readJson preserves corrupted and permission-denied persistence failures", async () => {
+  const storage = new StorageService();
+  setFsAdapter({ readFile: async () => "{broken" });
+  await assert.rejects(storage.readJson("/tmp/broken.json", {}), {
+    code: "PERSISTED_JSON_CORRUPTED",
+    persistencePath: "/tmp/broken.json",
+  });
+
+  setFsAdapter({
+    readFile: async () => {
+      const error = new Error("denied");
+      error.code = "EACCES";
+      throw error;
+    },
+  });
+  await assert.rejects(storage.readJson("/tmp/private.json", {}), {
+    code: "PERSISTENCE_PERMISSION_DENIED",
+    persistencePath: "/tmp/private.json",
+  });
+});
+
 test("writeJsonAtomic retries transient Windows rename EPERM errors", async () => {
   const writes = new Map();
   const renames = [];

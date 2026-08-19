@@ -103,6 +103,15 @@ export async function syncJsonFileIncremental({
   return false;
 }
 
+async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
+  try {
+    return await readdir(workspaceRootAbsolutePath, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return [];
+    throw error;
+  }
+}
+
 export async function collectWorkspaceUserIds({
   workspaceRootAbsolutePath,
   superAdminUserId = "",
@@ -110,15 +119,13 @@ export async function collectWorkspaceUserIds({
   const userIds = new Set();
   const workspaceDirUserIds = new Set();
 
-  try {
-    const entries = await readdir(workspaceRootAbsolutePath, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const userId = String(entry.name || "").trim();
-      if (!userId) continue;
-      workspaceDirUserIds.add(userId);
-    }
-  } catch {}
+  const entries = await readWorkspaceDirectoryEntries(workspaceRootAbsolutePath);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const userId = String(entry.name || "").trim();
+    if (!userId) continue;
+    workspaceDirUserIds.add(userId);
+  }
 
   for (const userId of workspaceDirUserIds) {
     userIds.add(userId);

@@ -267,7 +267,9 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       abortSignal?.removeEventListener?.("abort", onAbort);
       try {
         await Promise.all([stdoutFinished, stderrFinished]);
-      } catch {}
+      } catch (error) {
+        spawnError ||= error;
+      }
       if (spawnError || timedOut || aborted) {
         const fallbackMessage =
           spawnError?.message ||

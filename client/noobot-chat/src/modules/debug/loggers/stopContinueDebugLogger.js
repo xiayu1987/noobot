@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { acceptsDebugSink, emitLazyDebug, isDebugTypeEnabled } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely, isDebugTypeEnabled } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -33,12 +33,14 @@ export function summarizeStopContinueRunState(state = {}) {
 }
 
 export function logStopContinueDebug(event, payload = {}) {
-  try {
-    return emitLazyDebug(sessionLogSink, "stop-continue", event, payload);
-  } catch {}
+  return emitLazyDebugSafely(sessionLogSink, "stop-continue", event, payload);
 }
 
-export function logContinueResumeIdentitySelection({ runState = {}, selected = {}, options = {} } = {}) {
+export function logContinueResumeIdentitySelection({
+  runState = {},
+  selected = {},
+  options = {},
+} = {}) {
   if (!isDebugTypeEnabled(sessionLogSink, "stop-continue")) return false;
   const currentDialog = String(runState?.dialogProcessId || "");
   const currentTurn = String(runState?.turnScopeId || "");
@@ -52,12 +54,20 @@ export function logContinueResumeIdentitySelection({ runState = {}, selected = {
     runState: summarizeStopContinueRunState(runState),
     resumeDialogProcessId,
     resumeTurnScopeId,
-    resumeIdentitySource: explicitSource || (resumeDialogProcessId && resumeTurnScopeId ? "turn_status" : "missing_turn_status_identity"),
+    resumeIdentitySource:
+      explicitSource ||
+      (resumeDialogProcessId && resumeTurnScopeId ? "turn_status" : "missing_turn_status_identity"),
     hasOptionResumeIdentity: Boolean(options?.resumeDialogProcessId || options?.resumeTurnScopeId),
   }));
 }
 
-export function logStopButtonEvaluation({ previousState = {}, nextState = {}, event = {}, evaluation = {}, changed = false } = {}) {
+export function logStopButtonEvaluation({
+  previousState = {},
+  nextState = {},
+  event = {},
+  evaluation = {},
+  changed = false,
+} = {}) {
   if (!isDebugTypeEnabled(sessionLogSink, "stop-continue")) return false;
   logStopContinueDebug("frontend.stopContinue.stopButtonEvaluated", () => ({
     sessionId: nextState?.sessionId || previousState?.sessionId || event?.sessionId || "",
@@ -71,7 +81,9 @@ export function logStopButtonEvaluation({ previousState = {}, nextState = {}, ev
     backendCanStop: Boolean(evaluation?.backendCanStop),
     sending: Boolean(evaluation?.sending),
     stopInFlight: Boolean(evaluation?.stopInFlight),
-    stopButtonHiddenReason: evaluation?.canStop ? "" : "backend_not_stoppable_and_no_pending_request",
+    stopButtonHiddenReason: evaluation?.canStop
+      ? ""
+      : "backend_not_stoppable_and_no_pending_request",
     changed: Boolean(changed),
   }));
 }

@@ -6,6 +6,7 @@
 import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
+import { closeWebSocket } from "./closeWebSocket.js";
 import { logWorkflowDiagnostics } from "../../modules/debug/loggers/workflowDiagnosticsLogger.js";
 import {
   createTurnLifecycleReceipt,
@@ -87,25 +88,20 @@ export function createChatWebSocketClient({
     getActiveSocket: () => getActiveSocket(),
     timeoutMs: RECONNECT_TIMEOUT_MS,
     translateText,
-    onCommandSending: (command) => logAgentTransportCommand(
-      "frontend.agentTransport.commandSending",
-      command,
-      { transport: "websocket" },
-    ),
-    onCommandSent: (command) => logAgentTransportCommand(
-      "frontend.agentTransport.commandSent",
-      command,
-      { transport: "websocket" },
-    ),
-    onCommandSendFailed: (command, error) => logAgentTransportCommand(
-      "frontend.agentTransport.commandSendFailed",
-      command,
-      {
+    onCommandSending: (command) =>
+      logAgentTransportCommand("frontend.agentTransport.commandSending", command, {
+        transport: "websocket",
+      }),
+    onCommandSent: (command) =>
+      logAgentTransportCommand("frontend.agentTransport.commandSent", command, {
+        transport: "websocket",
+      }),
+    onCommandSendFailed: (command, error) =>
+      logAgentTransportCommand("frontend.agentTransport.commandSendFailed", command, {
         transport: "websocket",
         errorType: String(error?.name || "Error"),
         errorCode: String(error?.code || ""),
-      },
-    ),
+      }),
   });
   const { register: registerSocketHandlers } = createSocketHandlerRegistry();
 
@@ -135,7 +131,7 @@ export function createChatWebSocketClient({
 
   function closeFailedSocket(ws, reason = "transport_error") {
     cleanupSocketRef(ws);
-    try { ws?.close?.(1011, reason); } catch {}
+    closeWebSocket(ws, 1011, reason);
   }
 
   function getActiveSocket() {
@@ -218,12 +214,13 @@ export function createChatWebSocketClient({
         try {
           const parsed = JSON.parse(String(messageEvent?.data || "{}"));
           const receivedTransportEvent = createAgentTransportEvent(parsed);
-          const lifecyclePayload = receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
-            ? readProtocolEventPayload(receivedTransportEvent.data, {
-                wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
-                family: EVENT_FAMILY.TURN_LIFECYCLE,
-              })
-            : null;
+          const lifecyclePayload =
+            receivedTransportEvent.event === TURN_LIFECYCLE_WIRE_EVENT
+              ? readProtocolEventPayload(receivedTransportEvent.data, {
+                  wireEvent: TURN_LIFECYCLE_WIRE_EVENT,
+                  family: EVENT_FAMILY.TURN_LIFECYCLE,
+                })
+              : null;
           const transportEvent = receivedTransportEvent;
           const { event, data } = transportEvent;
           const lifecycleData = lifecyclePayload?.valid ? lifecyclePayload.payload : data;
@@ -255,15 +252,16 @@ export function createChatWebSocketClient({
           const reconnectControlEvent =
             event === StreamEventEnum.RECONNECT_DATA ||
             event === StreamEventEnum.RECONNECT_COMPLETE;
-          const owner = reconnecting && activeReconnectContext && reconnectControlEvent
-            ? "reconnect_handler"
-            : activeStreamContext?.handleProtocolEvent
-              ? "stream_handler"
-              : reconnecting && activeReconnectContext
-                ? "reconnect_handler"
-                : hasLiveSubscriber
-                  ? "transport_live_subscriber"
-                : "unowned";
+          const owner =
+            reconnecting && activeReconnectContext && reconnectControlEvent
+              ? "reconnect_handler"
+              : activeStreamContext?.handleProtocolEvent
+                ? "stream_handler"
+                : reconnecting && activeReconnectContext
+                  ? "reconnect_handler"
+                  : hasLiveSubscriber
+                    ? "transport_live_subscriber"
+                    : "unowned";
           const dispatchEligible = owner !== "unowned";
           if (owner === "unowned" && event === "message_event") {
             pendingMessageEvents.push(transportEvent);
@@ -353,9 +351,14 @@ export function createChatWebSocketClient({
     const context = activeStreamContext;
     if (!context) return false;
     const scope = context.scope || {};
-    const sameSession = !sessionId || !scope.sessionId || String(sessionId) === String(scope.sessionId);
-    const sameTurn = !turnScopeId || !scope.turnScopeId || String(turnScopeId) === String(scope.turnScopeId);
-    const sameDialog = !dialogProcessId || !scope.dialogProcessId || String(dialogProcessId) === String(scope.dialogProcessId);
+    const sameSession =
+      !sessionId || !scope.sessionId || String(sessionId) === String(scope.sessionId);
+    const sameTurn =
+      !turnScopeId || !scope.turnScopeId || String(turnScopeId) === String(scope.turnScopeId);
+    const sameDialog =
+      !dialogProcessId ||
+      !scope.dialogProcessId ||
+      String(dialogProcessId) === String(scope.dialogProcessId);
     if (!sameSession || !sameTurn || !sameDialog) return false;
     const pending = resolveCurrentStream;
     if (pending?.serial === context.serial && typeof pending.fn === "function") {
@@ -425,7 +428,7 @@ export function createChatWebSocketClient({
           handshakeTimeout = null;
         }
         transport.noteFailure(failedSocket);
-        try { failedSocket?.close?.(1000, "authentication_retry"); } catch {}
+        closeWebSocket(failedSocket, 1000, "authentication_retry");
         const refreshed = await transport.refreshCredentials();
         if (settled) return;
         if (refreshed !== true) {
@@ -437,13 +440,17 @@ export function createChatWebSocketClient({
 
       function bindHandshakeHandlers(candidate) {
         unregisterHandshakeHandlers();
-        unregisterHandshakeHandlers = registerSocketHandlers(candidate, `handshake:${currentStreamSerial}`, {
-          open: () => {
-            if (!settled && candidate === getActiveSocket()) onSocketReady();
+        unregisterHandshakeHandlers = registerSocketHandlers(
+          candidate,
+          `handshake:${currentStreamSerial}`,
+          {
+            open: () => {
+              if (!settled && candidate === getActiveSocket()) onSocketReady();
+            },
+            error: () => void recoverHandshakeAuthentication(candidate),
+            close: () => void recoverHandshakeAuthentication(candidate),
           },
-          error: () => void recoverHandshakeAuthentication(candidate),
-          close: () => void recoverHandshakeAuthentication(candidate),
-        });
+        );
       }
 
       function beginHandshake() {
@@ -477,9 +484,7 @@ export function createChatWebSocketClient({
         }
         ws = getActiveSocket();
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-          finalize(() =>
-            reject(new Error(translateText("infra.websocketStreamError"))),
-          );
+          finalize(() => reject(new Error(translateText("infra.websocketStreamError"))));
           return;
         }
         transport.markOpen(ws);
@@ -497,31 +502,25 @@ export function createChatWebSocketClient({
         bindStreamSocketHandlers(ws);
 
         try {
-          logAgentTransportCommand(
-            "frontend.agentTransport.commandSending",
-            payload,
-            { transport: "websocket", stream: true },
-          );
+          logAgentTransportCommand("frontend.agentTransport.commandSending", payload, {
+            transport: "websocket",
+            stream: true,
+          });
           ws.send(JSON.stringify(payload || {}));
-          logAgentTransportCommand(
-            "frontend.agentTransport.commandSent",
-            payload,
-            { transport: "websocket", stream: true },
-          );
+          logAgentTransportCommand("frontend.agentTransport.commandSent", payload, {
+            transport: "websocket",
+            stream: true,
+          });
         } catch (error) {
-          logAgentTransportCommand(
-            "frontend.agentTransport.commandSendFailed",
-            payload,
-            {
-              transport: "websocket",
-              stream: true,
-              errorType: String(error?.name || "Error"),
-              errorCode: String(error?.code || ""),
-            },
-          );
+          logAgentTransportCommand("frontend.agentTransport.commandSendFailed", payload, {
+            transport: "websocket",
+            stream: true,
+            errorType: String(error?.name || "Error"),
+            errorCode: String(error?.code || ""),
+          });
           cleanupSocketRef(ws);
           finalize(() => reject(error));
-          try { ws.close?.(1011, "stream_send_failed"); } catch {}
+          closeWebSocket(ws, 1011, "stream_send_failed");
           return;
         }
         if (typeof options?.onPayloadSent === "function") {
@@ -560,21 +559,23 @@ export function createChatWebSocketClient({
             streamSocket.close(1011, "invalid_event");
           }
         };
-        unregisterStreamHandlers = registerSocketHandlers(streamSocket, `stream:${currentStreamSerial}`, {
-          error: () => cleanupSocketRef(streamSocket),
-          close: () => {
-          if (doneReceived) {
-            finalize(() => resolve());
-            return;
-          }
-          cleanupSocketRef(streamSocket);
-          if (!settled) {
-            finalize(() =>
-              reject(new Error(translateText("infra.websocketStreamError"))),
-            );
-          }
+        unregisterStreamHandlers = registerSocketHandlers(
+          streamSocket,
+          `stream:${currentStreamSerial}`,
+          {
+            error: () => cleanupSocketRef(streamSocket),
+            close: () => {
+              if (doneReceived) {
+                finalize(() => resolve());
+                return;
+              }
+              cleanupSocketRef(streamSocket);
+              if (!settled) {
+                finalize(() => reject(new Error(translateText("infra.websocketStreamError"))));
+              }
+            },
           },
-        });
+        );
         if (activeStreamContext?.serial === currentStreamSerial) {
           activeStreamContext = {
             ...activeStreamContext,
@@ -586,8 +587,7 @@ export function createChatWebSocketClient({
           for (const packet of pending) {
             if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
               handleProtocolEvent(packet);
-            }
-            else pendingMessageEvents.push(packet);
+            } else pendingMessageEvents.push(packet);
           }
         }
       }
@@ -611,10 +611,10 @@ export function createChatWebSocketClient({
       const requestId = nextRequestId("reconnect");
 
       const currentSocket = getActiveSocket();
-      const reusableSocket = currentSocket &&
-        [WebSocket.OPEN, WebSocket.CONNECTING].includes(currentSocket.readyState)
-        ? currentSocket
-        : null;
+      const reusableSocket =
+        currentSocket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(currentSocket.readyState)
+          ? currentSocket
+          : null;
       const replacement = reusableSocket ? null : transport.replace();
       const previousSocket = reusableSocket ? null : replacement?.previousSocket;
       const ws = reusableSocket || replacement?.socket;
@@ -631,9 +631,7 @@ export function createChatWebSocketClient({
       }
       const retirePreviousSocket = () => {
         if (!previousSocket || previousSocket === ws) return;
-        try {
-          previousSocket.close(1000, "replaced_by_reconnect");
-        } catch {}
+        closeWebSocket(previousSocket, 1000, "replaced_by_reconnect");
       };
       let unregisterReconnectHandlers = () => {};
       const failReconnect = (error, { closeSocket = false, rejectRequests = true } = {}) => {
@@ -648,7 +646,7 @@ export function createChatWebSocketClient({
         reconnectResolve = null;
         if (rejectRequests) commandRequests.rejectAll(error);
         if (closeSocket) {
-          try { ws.close(1011, "reconnect_failed"); } catch {}
+          closeWebSocket(ws, 1011, "reconnect_failed");
         }
         rejectFn?.(error);
       };
@@ -660,16 +658,18 @@ export function createChatWebSocketClient({
       const sendReconnectCommand = () => {
         try {
           transport.markOpen(ws);
-          ws.send(JSON.stringify({
-            action: "reconnect",
-            requestId,
-            currentSessionId: String(currentSessionId || "").trim(),
-            userId: String(userId || "").trim(),
-            knownLifecycleSequenceMap:
-              knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
-                ? knownLifecycleSequenceMap
-                : {},
-          }));
+          ws.send(
+            JSON.stringify({
+              action: "reconnect",
+              requestId,
+              currentSessionId: String(currentSessionId || "").trim(),
+              userId: String(userId || "").trim(),
+              knownLifecycleSequenceMap:
+                knownLifecycleSequenceMap && typeof knownLifecycleSequenceMap === "object"
+                  ? knownLifecycleSequenceMap
+                  : {},
+            }),
+          );
         } catch (error) {
           failReconnect(error, { closeSocket: true });
         }
@@ -722,15 +722,15 @@ export function createChatWebSocketClient({
       };
       activeReconnectContext = { requestId, handleProtocolEvent: handleReconnectProtocolEvent };
       unregisterReconnectHandlers = registerSocketHandlers(ws, "reconnect", {
-      open: sendReconnectCommand,
+        open: sendReconnectCommand,
 
-      error: () => {
-        failReconnect(new Error(translateText("infra.reconnectConnectFailed")));
-      },
+        error: () => {
+          failReconnect(new Error(translateText("infra.reconnectConnectFailed")));
+        },
 
-      close: () => {
-        failReconnect(new Error(translateText("infra.reconnectClosed")));
-      },
+        close: () => {
+          failReconnect(new Error(translateText("infra.reconnectClosed")));
+        },
       });
       if (reusableSocket && ws.readyState === WebSocket.OPEN) {
         sendReconnectCommand();
@@ -739,10 +739,9 @@ export function createChatWebSocketClient({
   }
 
   function requestStop(stopPayload = {}) {
-    return requestJson(
-      stopPayload,
-      { expectedEvents: [StreamEventEnum.TURN_LIFECYCLE] },
-    ).then(() => true);
+    return requestJson(stopPayload, { expectedEvents: [StreamEventEnum.TURN_LIFECYCLE] }).then(
+      () => true,
+    );
   }
 
   const sendJson = commandRequests.sendJson;

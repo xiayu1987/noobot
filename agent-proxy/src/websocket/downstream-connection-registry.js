@@ -47,12 +47,10 @@ export class DownstreamConnectionRegistry {
     return true;
   }
 
-  close(socketOrId, {
-    code = 1000,
-    reason = "closed",
-    terminate = false,
-    finalizeReason = reason,
-  } = {}) {
+  close(
+    socketOrId,
+    { code = 1000, reason = "closed", terminate = false, finalizeReason = reason } = {},
+  ) {
     const record = this.resolve(socketOrId);
     if (!record || record.finalized) return false;
     try {
@@ -62,7 +60,11 @@ export class DownstreamConnectionRegistry {
         record.socket?.close?.(code, reason);
       }
     } catch {
-      try { record.socket?.terminate?.(); } catch {}
+      try {
+        record.socket?.terminate?.();
+      } catch (error) {
+        console.warn("[agent-proxy] socket terminate failed", error);
+      }
     }
     this.finalize(record.connectionId, finalizeReason);
     return true;
@@ -84,7 +86,11 @@ export class DownstreamConnectionRegistry {
         continue;
       }
       record.awaitingPong = true;
-      try { record.socket?.ping?.(); } catch { onTimeout?.(record); }
+      try {
+        record.socket?.ping?.();
+      } catch {
+        onTimeout?.(record);
+      }
     }
   }
 

@@ -5,7 +5,11 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { HARNESS_FILES, HARNESS_FLUSH_REASONS, HARNESS_TERMINAL_RUN_STATUSES } from "../core/constants.js";
+import {
+  HARNESS_FILES,
+  HARNESS_FLUSH_REASONS,
+  HARNESS_TERMINAL_RUN_STATUSES,
+} from "../core/constants.js";
 import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
@@ -63,13 +67,7 @@ export async function updateManifestCached(
   const key = paths.manifest;
   manifestLastAccessed.set(key, Date.now());
   let current = manifestCache.get(key);
-  if (!current) {
-    try {
-      current = await readJson(key, {});
-    } catch {
-      current = {};
-    }
-  }
+  if (!current) current = await readJson(key, {});
 
   const next = mergeFn(current, ctx, patch, options, capabilityRuntime);
   manifestCache.set(key, next);
@@ -142,6 +140,10 @@ const runWriteLockRefCounts = new Map();
 const TMP_FILE_MAX_AGE_MS = TIME_THRESHOLDS.harness.tmpFileMaxAgeMs;
 const TMP_CLEANUP_MIN_INTERVAL_MS = TIME_THRESHOLDS.harness.tmpCleanupMinIntervalMs;
 
+function isMissingPathError(error) {
+  return error?.code === "ENOENT" || error?.code === "ENOTDIR";
+}
+
 function resolveRunWriteLockPath(targetPath = "") {
   const dir = path.dirname(String(targetPath || "").trim());
   if (!dir || dir === ".") return "";
@@ -182,13 +184,16 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
     const maxFileBytes = Number(input?.maxFileBytes);
     const maxFiles = Number(input?.maxFiles);
     return {
-      maxSize: Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
-      maxTime: Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
+      maxSize:
+        Number.isFinite(maxSize) && maxSize > 0 ? maxSize : DEFAULT_JSONL_FLUSH_STRATEGY.maxSize,
+      maxTime:
+        Number.isFinite(maxTime) && maxTime >= 0 ? maxTime : DEFAULT_JSONL_FLUSH_STRATEGY.maxTime,
       onTerminal:
         typeof input?.onTerminal === "boolean"
           ? input.onTerminal
           : DEFAULT_JSONL_FLUSH_STRATEGY.onTerminal,
-      onError: typeof input?.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
+      onError:
+        typeof input?.onError === "boolean" ? input.onError : DEFAULT_JSONL_FLUSH_STRATEGY.onError,
       maxRetry:
         Number.isFinite(maxRetry) && maxRetry >= 0
           ? Math.trunc(maxRetry)
@@ -214,7 +219,10 @@ function normalizeFlushStrategy(batchSize, flushIntervalMs) {
   const resolvedBatch = Number(batchSize);
   const resolvedInterval = Number(flushIntervalMs);
   return {
-    maxSize: Number.isFinite(resolvedBatch) && resolvedBatch > 0 ? resolvedBatch : DEFAULT_JSONL_BATCH_SIZE,
+    maxSize:
+      Number.isFinite(resolvedBatch) && resolvedBatch > 0
+        ? resolvedBatch
+        : DEFAULT_JSONL_BATCH_SIZE,
     maxTime:
       Number.isFinite(resolvedInterval) && resolvedInterval >= 0
         ? resolvedInterval
@@ -252,7 +260,10 @@ function scheduleJsonlFlush(
 
 function computeJsonlRetryDelayMs(retries = 1) {
   const cappedRetries = Math.max(1, Number(retries) || 1);
-  const backoff = Math.min(JSONL_RETRY_MAX_DELAY_MS, JSONL_RETRY_BASE_DELAY_MS * 2 ** (cappedRetries - 1));
+  const backoff = Math.min(
+    JSONL_RETRY_MAX_DELAY_MS,
+    JSONL_RETRY_BASE_DELAY_MS * 2 ** (cappedRetries - 1),
+  );
   const jitterFactor = 0.5 + Math.random();
   return Math.max(50, Math.round(backoff * jitterFactor));
 }
@@ -321,7 +332,10 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
   let entries = [];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      console.warn(`[harness] Failed to inspect temporary files near ${targetPath}:`, error);
+    }
     return 0;
   }
   let removed = 0;
@@ -333,7 +347,10 @@ async function cleanupStaleTmpFilesForTarget(filePath = "", { force = false } = 
       if (now - Number(stat?.mtimeMs || 0) <= TMP_FILE_MAX_AGE_MS) continue;
       await fs.unlink(tmpPath);
       removed += 1;
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        console.warn(`[harness] Failed to clean temporary file ${tmpPath}:`, error);
+      }
     }
   }
   if (removed > 0) {
@@ -362,7 +379,9 @@ export async function appendJsonlBuffered(
   buffer.push(JSON.stringify(record));
   trimJsonlBuffer(filePath, buffer, strategy);
 
-  const reason = String(flushHint?.reason || "").trim().toLowerCase();
+  const reason = String(flushHint?.reason || "")
+    .trim()
+    .toLowerCase();
   const shouldFlushByReason =
     (reason === HARNESS_FLUSH_REASONS.TERMINAL && strategy.onTerminal) ||
     (reason === HARNESS_FLUSH_REASONS.ERROR && strategy.onError);
@@ -417,7 +436,10 @@ export async function flushAllJsonlBuffers() {
   const filePaths = Array.from(jsonlBuffers.keys());
   for (const filePath of filePaths) {
     clearJsonlFlushTimer(filePath);
-    await flushJsonlBuffer(filePath, jsonlFlushStrategies.get(filePath) || DEFAULT_JSONL_FLUSH_STRATEGY);
+    await flushJsonlBuffer(
+      filePath,
+      jsonlFlushStrategies.get(filePath) || DEFAULT_JSONL_FLUSH_STRATEGY,
+    );
   }
 }
 
@@ -425,8 +447,9 @@ export async function readJson(filePath, fallback = null) {
   try {
     const content = await fs.readFile(filePath, "utf-8");
     return JSON.parse(content);
-  } catch {
-    return fallback;
+  } catch (error) {
+    if (isMissingPathError(error)) return fallback;
+    throw error;
   }
 }
 
@@ -473,7 +496,9 @@ function buildRotatedJsonlPath(filePath = "") {
 function isRotatedJsonlForFile(entryName = "", filePath = "") {
   const parsed = path.parse(filePath);
   const ext = parsed.ext || ".jsonl";
-  return String(entryName || "").startsWith(`${parsed.name}.`) && String(entryName || "").endsWith(ext);
+  return (
+    String(entryName || "").startsWith(`${parsed.name}.`) && String(entryName || "").endsWith(ext)
+  );
 }
 
 async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
@@ -483,7 +508,10 @@ async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
   let entries = [];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (!isMissingPathError(error)) {
+      console.warn(`[harness] Failed to inspect rotated JSONL files near ${filePath}:`, error);
+    }
     return;
   }
   const rotated = [];
@@ -493,7 +521,10 @@ async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
     try {
       const stat = await fs.stat(rotatedPath);
       rotated.push({ path: rotatedPath, mtimeMs: Number(stat?.mtimeMs || 0) });
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        console.warn(`[harness] Failed to inspect rotated JSONL file ${rotatedPath}:`, error);
+      }
     }
   }
   if (rotated.length <= keep) return;
@@ -503,15 +534,20 @@ async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
   }
 }
 
-async function rotateJsonlIfNeeded(filePath = "", content = "", strategy = DEFAULT_JSONL_FLUSH_STRATEGY) {
+async function rotateJsonlIfNeeded(
+  filePath = "",
+  content = "",
+  strategy = DEFAULT_JSONL_FLUSH_STRATEGY,
+) {
   const maxFileBytes = Number(strategy?.maxFileBytes);
   if (!Number.isFinite(maxFileBytes) || maxFileBytes <= 0) return;
   let currentSize = 0;
   try {
     const stat = await fs.stat(filePath);
     currentSize = Number(stat?.size || 0);
-  } catch {
-    return;
+  } catch (error) {
+    if (isMissingPathError(error)) return;
+    throw error;
   }
   if (currentSize <= 0 || currentSize + estimateUtf8Bytes(content) <= maxFileBytes) return;
   await fs.rename(filePath, buildRotatedJsonlPath(filePath));

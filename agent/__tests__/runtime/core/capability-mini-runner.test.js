@@ -9,18 +9,24 @@ import assert from "node:assert/strict";
 import { createAgentCapabilityModelInvoker } from "../../../src/runtime/capability-runner/index.js";
 import { createModelResponse, MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
+import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 
 test("capability mini-runner requires and uses the host ModelPort", async () => {
   const calls = [];
+  let resolvedConfig = null;
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
-    resolveModelSpecByNameFn: ({ modelName }) => ({
-      alias: modelName,
-      model: "glm-5.1",
-      format: "openai_compatible",
-      providerId: "zhipu",
-      adapterId: "openai-compatible",
-    }),
+    configSnapshot: createConfigSnapshot({ config: { selectedModel: "GLM_5_1" } }),
+    resolveModelSpecByNameFn: ({ modelName, globalConfig, userConfig }) => {
+      resolvedConfig = { globalConfig, userConfig };
+      return {
+        alias: modelName,
+        model: "glm-5.1",
+        format: "openai_compatible",
+        providerId: "zhipu",
+        adapterId: "openai-compatible",
+      };
+    },
   });
 
   const runtime = {
@@ -90,5 +96,24 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
   assert.equal(result.output.text, "ok");
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.model?.alias, "GLM_5_1");
+  assert.deepEqual(resolvedConfig, {
+    globalConfig: { selectedModel: "GLM_5_1" },
+    userConfig: {},
+  });
   assert.equal(calls[0]?.invocation?.purpose, "workflow_semantic");
+});
+
+test("capability mini-runner fails closed without a versioned config snapshot", () => {
+  assert.throws(
+    () => createAgentCapabilityModelInvoker({ enableToolBinding: false }),
+    /agent config snapshot must be an object/,
+  );
+  assert.throws(
+    () =>
+      createAgentCapabilityModelInvoker({
+        enableToolBinding: false,
+        configSnapshot: { protocol: "noobot.agent-config", version: 2 },
+      }),
+    /unsupported agent config protocol version/,
+  );
 });

@@ -9,14 +9,13 @@ import {
   HARNESS_I18N_KEYSET,
   LOCALE,
   appendCapabilityLog,
-  canAttemptPlanUpdate,
   ensureHarnessBucket,
   clearPendingPlanRefinement,
   getDefaultTaskOwner,
-  setPendingPlanUpdate,
   syncPlanRefinementPolicyFlag,
   translateI18nText,
 } from "./deps.js";
+import { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
 import {
   parseMainPlansFromPlanText,
   parsePlanDocumentFromText,
@@ -42,10 +41,12 @@ const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const MAX_PLANNING_CAPTURE_ATTEMPTS = WORKFLOW_PARAMS.planning.capture.maxAttempts;
 const DEFAULT_PLAN_REASON_I18N_KEY = Object.freeze({
   planning_empty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_EMPTY_RESPONSE,
-  planning_invalid_nonempty_response: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_INVALID_NONEMPTY,
+  planning_invalid_nonempty_response:
+    HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_INVALID_NONEMPTY,
   planning_retry_exhausted: HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_REASON_RETRY_EXHAUSTED,
 });
-const CURRENT_TASK_GOAL_BLOCK_RE = /\[CURRENT_TASK_GOAL\]([\s\S]*?)(?=\[PLAN\]|\[PLAN_PATCH\]|\[CURRENT_PLAN\]|$)/i;
+const CURRENT_TASK_GOAL_BLOCK_RE =
+  /\[CURRENT_TASK_GOAL\]([\s\S]*?)(?=\[PLAN\]|\[PLAN_PATCH\]|\[CURRENT_PLAN\]|$)/i;
 const PLAN_BLOCK_MARKER_RE = /^\s*\[(?:PLAN|PLAN_PATCH|CURRENT_PLAN)\]\s*$/gim;
 const CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE = "planning_current_task_goal";
 
@@ -107,26 +108,33 @@ function buildCurrentTaskGoalSystemContent(currentTaskGoal = "") {
     "<!-- noobot-harness-current-task-goal -->",
     "[CURRENT_TASK_GOAL]",
     String(currentTaskGoal || "").trim(),
-  ].filter(Boolean).join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function injectCurrentTaskGoalSystemMessage(ctx = {}, currentTaskGoal = "") {
   const normalizedGoal = String(currentTaskGoal || "").trim();
   if (!normalizedGoal) return false;
   removeCurrentTaskGoalInjectedMessages(ctx);
-  const message = buildHarnessInjectedMessage(
-    buildCurrentTaskGoalSystemContent(normalizedGoal),
-    {
-      role: "system",
-      dialogProcessId: resolveDialogProcessIdFromContext(ctx),
-      injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
-    },
-  );
+  const message = buildHarnessInjectedMessage(buildCurrentTaskGoalSystemContent(normalizedGoal), {
+    role: "system",
+    dialogProcessId: resolveDialogProcessIdFromContext(ctx),
+    injectedMessageType: CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE,
+  });
   appendMessage(ctx, message, { block: "system" });
   return true;
 }
 
-function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source = "unknown", summary = "", meta = {}) {
+function applyPlanText(
+  ctx = {},
+  bucket = {},
+  state = {},
+  rawText = "",
+  source = "unknown",
+  summary = "",
+  meta = {},
+) {
   const parsedProtocol = parsePlanningTextProtocol(rawText);
   const normalized = String(parsedProtocol.planText || "").trim();
   if (!normalized) return false;
@@ -150,12 +158,20 @@ function applyPlanText(ctx = {}, bucket = {}, state = {}, rawText = "", source =
     bucket.currentTaskGoal = parsedProtocol.currentTaskGoal;
     injectCurrentTaskGoalSystemMessage(ctx, parsedProtocol.currentTaskGoal);
   }
-  resetPlanAcceptanceStatusForPlanChange(bucket, String(renderPlanDocument(previousDocument) || "").trim(), bucket.planText, {
-    stage: "planning_capture",
-    reason: "planning_capture_replaced_plan",
-  });
+  resetPlanAcceptanceStatusForPlanChange(
+    bucket,
+    String(renderPlanDocument(previousDocument) || "").trim(),
+    bucket.planText,
+    {
+      stage: "planning_capture",
+      reason: "planning_capture_replaced_plan",
+    },
+  );
   bucket.operationDirectory = resolveOperationDirectoryContext(ctx);
-  bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(previousDocument, bucket.planDocument);
+  bucket.lastRevisionChangedMainStepIndexes = extractChangedMainStepIndexes(
+    previousDocument,
+    bucket.planDocument,
+  );
   bucket.taskChecklist = [];
   bucket.taskChecklistSource = "plan_text";
   bucket.taskOwner = bucket.taskOwner || getDefaultTaskOwner(state?.locale || LOCALE.ZH_CN);
@@ -211,7 +227,10 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) return false;
   const { bucket, state } = holder;
-  const fallbackText = translateI18nText(locale, HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_PLAN_TEXT);
+  const fallbackText = translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.PLANNING_RESULT.DEFAULT_PLAN_TEXT,
+  );
   const applied = applyPlanText(ctx, bucket, state, fallbackText, "default_plan_text", "", {});
   if (!applied) return false;
   appendCapabilityLog(ctx, {
@@ -228,11 +247,7 @@ function applyDefaultPlanText(ctx = {}, locale = LOCALE.ZH_CN, reason = "") {
 export async function processPlanningResult(
   ctx = {},
   meta = {},
-  {
-    source = "unknown",
-    rawText = "",
-    locale = LOCALE.ZH_CN,
-  } = {},
+  { source = "unknown", rawText = "", locale = LOCALE.ZH_CN } = {},
 ) {
   const holder = ensureHarnessBucket(ctx);
   if (!holder) {

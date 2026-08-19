@@ -112,7 +112,12 @@ export class UpstreamTransportSupervisor {
   }
 
   isCurrent(socket, generation = this.generation) {
-    return Boolean(socket && socket === this.socket && generation === this.generation && this.phase !== UPSTREAM_TRANSPORT_PHASE.DISPOSED);
+    return Boolean(
+      socket &&
+      socket === this.socket &&
+      generation === this.generation &&
+      this.phase !== UPSTREAM_TRANSPORT_PHASE.DISPOSED,
+    );
   }
 
   invokeHandler(handlers, handlerName, event) {
@@ -126,7 +131,9 @@ export class UpstreamTransportSupervisor {
           handlerName,
           error,
         });
-      } catch {}
+      } catch (handlerError) {
+        console.warn("[agent-proxy] upstream handlerError callback failed", handlerError);
+      }
       return false;
     }
   }
@@ -150,7 +157,11 @@ export class UpstreamTransportSupervisor {
       return false;
     }
     this.awaitingPong = true;
-    try { socket.ping?.(); } catch { onTimeout?.({ socket, generation: this.generation }); }
+    try {
+      socket.ping?.();
+    } catch {
+      onTimeout?.({ socket, generation: this.generation });
+    }
     return true;
   }
 
@@ -164,7 +175,13 @@ export class UpstreamTransportSupervisor {
     this.purpose = "";
     this.phase = UPSTREAM_TRANSPORT_PHASE.IDLE;
     this._retireSocket(socket, code, reason);
-    this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
+    this.invokeHandler(handlers, "close", {
+      socket,
+      generation: this.generation,
+      code,
+      reason,
+      locallyInitiated: true,
+    });
     return true;
   }
 
@@ -178,19 +195,30 @@ export class UpstreamTransportSupervisor {
     this.purpose = "";
     this.phase = UPSTREAM_TRANSPORT_PHASE.DISPOSED;
     this._retireSocket(socket, code, reason);
-    if (socket) this.invokeHandler(handlers, "close", { socket, generation: this.generation, code, reason, locallyInitiated: true });
+    if (socket)
+      this.invokeHandler(handlers, "close", {
+        socket,
+        generation: this.generation,
+        code,
+        reason,
+        locallyInitiated: true,
+      });
   }
 
   _retireSocket(socket, code = 1000, reason = "closed") {
     if (!socket || this.retiredSockets.has(socket)) return false;
-    const isClosed = () => Number.isInteger(this.WebSocket.CLOSED)
-      && socket.readyState === this.WebSocket.CLOSED;
+    const isClosed = () =>
+      Number.isInteger(this.WebSocket.CLOSED) && socket.readyState === this.WebSocket.CLOSED;
     if (isClosed()) return false;
     this.retiredSockets.set(socket, null);
     try {
       socket.close?.(code, reason);
     } catch {
-      try { socket.terminate?.(); } catch {}
+      try {
+        socket.terminate?.();
+      } catch (error) {
+        console.warn("[agent-proxy] retired socket terminate failed", error);
+      }
       this._releaseRetiredSocket(socket);
       return true;
     }
@@ -199,7 +227,11 @@ export class UpstreamTransportSupervisor {
       return true;
     }
     const timer = setTimeout(() => {
-      try { socket.terminate?.(); } catch {}
+      try {
+        socket.terminate?.();
+      } catch (error) {
+        console.warn("[agent-proxy] retired socket timeout terminate failed", error);
+      }
       this._releaseRetiredSocket(socket);
     }, this.closeGraceMs);
     timer.unref?.();

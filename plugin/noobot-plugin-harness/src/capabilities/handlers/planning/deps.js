@@ -41,8 +41,6 @@ export { extractRawTextContent } from "../shared/message/utils.js";
 export { buildCapabilityProtocolModelMessages } from "../shared/model/message-factory.js";
 export { invokeCapabilityModel } from "../shared/model/invocation-utils.js";
 export { injectMessageWithPolicy } from "../shared/message/injection-utils.js";
-export { canAttemptPlanUpdate, setPendingPlanUpdate } from "./plan-update-engine.js";
-
 export { disableBlockedToolsInRegistry, resolveSceneToolNames } from "../shared/tool-utils.js";
 
 export {

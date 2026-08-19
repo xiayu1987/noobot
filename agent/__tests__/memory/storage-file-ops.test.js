@@ -6,14 +6,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdtemp, readdir } from "node:fs/promises";
+import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-const FILE_OPS_MODULE_URL = new URL(
-  "../../src/memory/storage/file-ops.js",
-  import.meta.url,
-);
+const FILE_OPS_MODULE_URL = new URL("../../src/memory/storage/file-ops.js", import.meta.url);
 
 function buildFreshModuleUrl() {
   const url = new URL(FILE_OPS_MODULE_URL);
@@ -25,6 +22,20 @@ test("splitTextIntoChunks splits by max chars", async () => {
   const { splitTextIntoChunks } = await import(buildFreshModuleUrl());
   const chunks = splitTextIntoChunks("abcdefghij", 4);
   assert.deepEqual(chunks, ["abcd", "efgh", "ij"]);
+});
+
+test("readJson distinguishes a missing file from corrupted persisted JSON", async () => {
+  const { readJson } = await import(buildFreshModuleUrl());
+  const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-json-"));
+  const missingPath = path.join(root, "missing.json");
+  assert.deepEqual(await readJson(missingPath, { empty: true }), { empty: true });
+
+  const corruptedPath = path.join(root, "corrupted.json");
+  await writeFile(corruptedPath, "{broken", "utf8");
+  await assert.rejects(readJson(corruptedPath, {}), {
+    code: "PERSISTED_JSON_CORRUPTED",
+    persistencePath: corruptedPath,
+  });
 });
 
 test("writeText/readText/appendText supports split part files", async () => {
@@ -42,10 +53,6 @@ test("writeText/readText/appendText supports split part files", async () => {
 
   await appendText(filePath, appendedText);
   const filesAfterAppend = (await readdir(root)).sort();
-  assert.deepEqual(filesAfterAppend, [
-    "memory.md",
-    "memory.md.part1",
-    "memory.md.part2",
-  ]);
+  assert.deepEqual(filesAfterAppend, ["memory.md", "memory.md.part1", "memory.md.part2"]);
   assert.equal(await readText(filePath, ""), initialText + appendedText);
 });

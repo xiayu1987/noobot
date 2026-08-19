@@ -37,7 +37,8 @@ export function compactStdout(input = "") {
     if (Array.isArray(parsed) || (parsed && typeof parsed === "object")) {
       return JSON.stringify(parsed);
     }
-  } catch {
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
   }
   return normalizeText(text);
 }
@@ -68,8 +69,7 @@ export function cleanTerminalOutputForLLM(
   output = {},
   { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
 ) {
-  const source =
-    output && typeof output === "object" && !Array.isArray(output) ? output : {};
+  const source = output && typeof output === "object" && !Array.isArray(output) ? output : {};
   const stdout = tailClip(normalizeTerminalText(source?.stdout || ""), maxChars);
   const stderr = tailClip(normalizeTerminalText(source?.stderr || ""), maxChars);
   return {
@@ -83,8 +83,7 @@ export function cleanTerminalOutputForLLM(
     ),
     stdout_truncated_chars: Number(stdout.truncatedChars || 0),
     stderr_truncated_chars: Number(stderr.truncatedChars || 0),
-    truncated_chars_total:
-      Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
+    truncated_chars_total: Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
     stdout_original_length: stdout.originalLength,
     stderr_original_length: stderr.originalLength,
   };
@@ -94,8 +93,7 @@ export function cleanDatabaseOutputForLLM(
   output = {},
   { maxChars = LENGTH_THRESHOLDS.toolIO.connectorOutputChars } = {},
 ) {
-  const source =
-    output && typeof output === "object" && !Array.isArray(output) ? output : {};
+  const source = output && typeof output === "object" && !Array.isArray(output) ? output : {};
   const stdout = tailClip(compactStdout(source?.stdout || ""), maxChars);
   const stderr = tailClip(normalizeText(source?.stderr || ""), maxChars);
   return {
@@ -109,8 +107,7 @@ export function cleanDatabaseOutputForLLM(
     ),
     stdout_truncated_chars: Number(stdout.truncatedChars || 0),
     stderr_truncated_chars: Number(stderr.truncatedChars || 0),
-    truncated_chars_total:
-      Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
+    truncated_chars_total: Number(stdout.truncatedChars || 0) + Number(stderr.truncatedChars || 0),
     stdout_original_length: stdout.originalLength,
     stderr_original_length: stderr.originalLength,
   };

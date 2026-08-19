@@ -24,6 +24,7 @@ import {
   hasToolPolicyPatchContent,
   mergeToolPolicyPatch,
   createPluginConfigPlan,
+  createConfigSnapshot,
 } from "@noobot/agent-config-protocol";
 import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runner/index.js";
 import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
@@ -133,12 +134,17 @@ export class RunConfigPluginPreparer {
 
   resolveOptions({ entry, userId = "", runConfig = {}, userConfig = {} }) {
     const effectiveConfig = mergeConfig(this.globalConfig || {}, plainObject(userConfig));
+    const configSnapshot = createConfigSnapshot({
+      config: effectiveConfig,
+      scope: { kind: "agent_turn", userId: String(userId || "").trim() },
+    });
     const plan = createPluginConfigPlan({
       runConfig,
       effectiveConfig,
       manifests: [{ pluginId: entry.pluginId, defaults: entry.manifest.configuration?.defaults }],
     });
-    const options = plan.plugins.find((plugin) => plugin.pluginId === entry.pluginId)?.options || {};
+    const options =
+      plan.plugins.find((plugin) => plugin.pluginId === entry.pluginId)?.options || {};
     const basePath =
       String(options.basePath || "").trim() ||
       (this.workspaceService && userId ? this.workspaceService.getWorkspacePath(userId) : "");
@@ -169,6 +175,7 @@ export class RunConfigPluginPreparer {
           next.capabilityModelInvoker = createAgentCapabilityModelInvoker({
             maxTurns: next.miniRunnerMaxTurns,
             enableToolBinding: false,
+            configSnapshot,
           });
         }
       }
@@ -189,8 +196,7 @@ export class RunConfigPluginPreparer {
           enableToolBinding: false,
           headerNamespace: "plugin",
           flowPrefix: entry.pluginId,
-          fallbackGlobalConfig: this.globalConfig || {},
-          fallbackUserConfig: plainObject(userConfig),
+          configSnapshot,
         });
       }
       if (typeof next.subSessionRunner !== "function")
@@ -238,55 +244,61 @@ export class RunConfigPluginPreparer {
       entries,
       lifecycleSink: (record) => pluginLifecycleEvents.push(record),
       configFactory: (entry) => configuredPlugins[entry.pluginId],
-      transactionFactory: () => createContributionTransaction({
-        commit: () => undefined,
-        rollback: (staged) => {
-          for (const item of [...staged].reverse()) item.unregister?.();
-        },
-      }),
-      hostFactory: (entry, transaction) => createPluginHostFacade({
-        entry,
-        capabilityAdapters: {
-          [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
-            path: ["hooks", "register"],
-            value(point, handler, registrationOptions = {}) {
-              const declaration = requireDeclaredPluginHook(
-                entry.manifest,
-                PLUGIN_SURFACE.AGENT,
-                point,
-                registrationOptions?.id,
-              );
-              const manager = managerForPoint(point, agentHooks, orchestrationHooks);
-              const unregister = manager.on(point, handler, {
-                ...registrationOptions,
-                id: serializePluginContributionIdentity({
-                  pluginId: entry.pluginId,
-                  surface: entry.surface,
-                  localId: registrationOptions?.id,
-                }),
-              });
-              transaction.stage({
-                type: "hook",
-                point: declaration.point,
-                registrationId: declaration.id,
-                unregister,
-              });
-              return unregister;
+      transactionFactory: () =>
+        createContributionTransaction({
+          commit: () => undefined,
+          rollback: (staged) => {
+            for (const item of [...staged].reverse()) item.unregister?.();
+          },
+        }),
+      hostFactory: (entry, transaction) =>
+        createPluginHostFacade({
+          entry,
+          capabilityAdapters: {
+            [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
+              path: ["hooks", "register"],
+              value(point, handler, registrationOptions = {}) {
+                const declaration = requireDeclaredPluginHook(
+                  entry.manifest,
+                  PLUGIN_SURFACE.AGENT,
+                  point,
+                  registrationOptions?.id,
+                );
+                const manager = managerForPoint(point, agentHooks, orchestrationHooks);
+                const unregister = manager.on(point, handler, {
+                  ...registrationOptions,
+                  id: serializePluginContributionIdentity({
+                    pluginId: entry.pluginId,
+                    surface: entry.surface,
+                    localId: registrationOptions?.id,
+                  }),
+                });
+                transaction.stage({
+                  type: "hook",
+                  point: declaration.point,
+                  registrationId: declaration.id,
+                  unregister,
+                });
+                return unregister;
+              },
+            },
+            [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
+              path: ["hooks", "emit"],
+              value(point, payload, emitOptions) {
+                requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.AGENT, point);
+                return managerForPoint(point, agentHooks, orchestrationHooks).emit(
+                  point,
+                  payload,
+                  emitOptions,
+                );
+              },
+            },
+            [PLUGIN_HOST_PORT.POLICY_PATCH]: {
+              path: ["policy", "patch"],
+              value: (patch) => policy.patch(patch),
             },
           },
-          [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
-            path: ["hooks", "emit"],
-            value(point, payload, emitOptions) {
-              requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.AGENT, point);
-              return managerForPoint(point, agentHooks, orchestrationHooks).emit(point, payload, emitOptions);
-            },
-          },
-          [PLUGIN_HOST_PORT.POLICY_PATCH]: {
-            path: ["policy", "patch"],
-            value: (patch) => policy.patch(patch),
-          },
-        },
-      }),
+        }),
     });
 
     const toolPolicyPatch = policy.snapshot();

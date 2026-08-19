@@ -26,10 +26,8 @@ export async function deleteScopedAttachmentsBySessionIds(
 
   const deleted = [];
   for (const sid of normalizedIds) {
-    try {
-      await fsRm(path.join(scopedRoot, sid), { recursive: true, force: true });
-      deleted.push(sid);
-    } catch {}
+    await fsRm(path.join(scopedRoot, sid), { recursive: true, force: true });
+    deleted.push(sid);
   }
   return { deletedSessionIds: deleted, deletedCount: deleted.length };
 }
@@ -54,8 +52,11 @@ export async function pruneOrphanScopedAttachments(
   let sessionEntries = [];
   try {
     sessionEntries = await readdir(scopedRoot, { withFileTypes: true });
-  } catch {
-    return { deletedSessionIds: [], deletedCount: 0 };
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return { deletedSessionIds: [], deletedCount: 0 };
+    }
+    throw error;
   }
 
   const deletedSessionIds = [];
@@ -63,33 +64,34 @@ export async function pruneOrphanScopedAttachments(
     if (!entry?.isDirectory?.()) continue;
     const sessionId = safeStr(entry?.name);
     if (!sessionId || keepSet.has(sessionId)) continue;
-    try {
-      const sessionPath = path.join(scopedRoot, sessionId);
-      if (!sourceSet.size) {
-        await fsRm(sessionPath, { recursive: true, force: true });
-        deletedSessionIds.push(sessionId);
-        continue;
-      }
+    const sessionPath = path.join(scopedRoot, sessionId);
+    if (!sourceSet.size) {
+      await fsRm(sessionPath, { recursive: true, force: true });
+      deletedSessionIds.push(sessionId);
+      continue;
+    }
 
-      let sourceEntries = [];
-      try {
-        sourceEntries = await readdir(sessionPath, { withFileTypes: true });
-      } catch {
+    let sourceEntries = [];
+    try {
+      sourceEntries = await readdir(sessionPath, { withFileTypes: true });
+    } catch (error) {
+      if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
         continue;
       }
-      let deletedAnySource = false;
-      for (const sourceEntry of sourceEntries) {
-        if (!sourceEntry?.isDirectory?.()) continue;
-        const sourceName = safeStr(sourceEntry?.name).toLowerCase();
-        if (!sourceName || !sourceSet.has(sourceName)) continue;
-        await fsRm(path.join(sessionPath, sourceEntry.name), { recursive: true, force: true });
-        deletedAnySource = true;
-      }
-      if (deletedAnySource) {
-        await fsRm(sessionPath, { recursive: false, force: true });
-        deletedSessionIds.push(sessionId);
-      }
-    } catch {}
+      throw error;
+    }
+    let deletedAnySource = false;
+    for (const sourceEntry of sourceEntries) {
+      if (!sourceEntry?.isDirectory?.()) continue;
+      const sourceName = safeStr(sourceEntry?.name).toLowerCase();
+      if (!sourceName || !sourceSet.has(sourceName)) continue;
+      await fsRm(path.join(sessionPath, sourceEntry.name), { recursive: true, force: true });
+      deletedAnySource = true;
+    }
+    if (deletedAnySource) {
+      await fsRm(sessionPath, { recursive: false, force: true });
+      deletedSessionIds.push(sessionId);
+    }
   }
 
   return { deletedSessionIds, deletedCount: deletedSessionIds.length };

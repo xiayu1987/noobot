@@ -45,7 +45,7 @@ export function buildWorkflowInputAttachmentSystemMessage({
   const lines = normalizedAttachments
     .map((item = {}, index) => {
       const label = String(
-          item?.name ||
+        item?.name ||
           item?.fileName ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
@@ -54,7 +54,9 @@ export function buildWorkflowInputAttachmentSystemMessage({
     .filter(Boolean);
   if (!lines.length) return "";
   const nodeName = String(
-    semanticNode?.name || semanticNode?.id || tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
+    semanticNode?.name ||
+      semanticNode?.id ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
   return [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.USER_RAW_TITLE),
@@ -72,45 +74,45 @@ export function buildWorkflowUpstreamAttachmentResults({
   completedStepResults = new Map(),
 } = {}) {
   return (Array.isArray(upstreamActionSteps) ? upstreamActionSteps : [])
-    .map((upstreamStep = {}) => {
-      const upstreamNodeId = String(upstreamStep?.nodeId || "").trim();
-      if (!upstreamNodeId) return null;
-      const upstreamStepId = String(upstreamStep?.stepId || "").trim();
-      const completed = completedStepResults.get(upstreamStepId) || {};
-      const transferPayload = getWorkflowTransferPayloadFromResult(completed);
-      const transferEnvelopes = transferPayload.transferEnvelopes;
-      const status = String(completed?.status || upstreamStep?.status || "").trim();
-      const stepFailure =
-        completed?.stepFailure && typeof completed.stepFailure === "object"
-          ? completed.stepFailure
-          : upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object"
-            ? upstreamStep.stepFailure
-            : null;
-      const transferFiles = resolveWorkflowTransferAttachmentReferences(
-        { transferEnvelopes },
-        {},
-      );
-      if (!transferFiles.length && status !== "failed" && !stepFailure) return null;
-      return {
-        nodeId: upstreamNodeId,
-        nodeName: String(completed?.nodeName || upstreamStep?.nodeName || upstreamNodeId).trim(),
-        nodeTask: String(completed?.nodeTask || upstreamStep?.nodeTask || upstreamStep?.task || "").trim(),
-        actionNodeStateId: String(
-          completed?.actionNodeStateId || upstreamStep?.actionNodeStateId || "",
-        ).trim(),
-        stepId: upstreamStepId,
-        stepIndex: Number.isFinite(Number(completed?.stepIndex ?? upstreamStep?.stepIndex))
-          ? Number(completed?.stepIndex ?? upstreamStep?.stepIndex)
-          : -1,
-        transition: Number(completed?.transition || 0),
-        nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
-        nodeSessionId: String(completed?.nodeSessionId || "").trim(),
-        status,
-        stepFailure,
-        transferEnvelopes,
-      };
-    })
+    .map((upstreamStep) => projectWorkflowUpstreamResult(upstreamStep, completedStepResults))
     .filter(Boolean);
+}
+
+function projectWorkflowUpstreamResult(upstreamStep = {}, completedStepResults = new Map()) {
+  const nodeId = String(upstreamStep.nodeId || "").trim();
+  if (!nodeId) return null;
+  const stepId = String(upstreamStep.stepId || "").trim();
+  const completed = completedStepResults.get(stepId) || {};
+  const transferEnvelopes = getWorkflowTransferPayloadFromResult(completed).transferEnvelopes;
+  const status = firstText(completed.status, upstreamStep.status);
+  const stepFailure = resolveWorkflowStepFailure(completed, upstreamStep);
+  const transferFiles = resolveWorkflowTransferAttachmentReferences({ transferEnvelopes }, {});
+  if (!transferFiles.length && status !== "failed" && !stepFailure) return null;
+  const stepIndex = Number(completed.stepIndex ?? upstreamStep.stepIndex);
+  return {
+    nodeId,
+    nodeName: firstText(completed.nodeName, upstreamStep.nodeName, nodeId),
+    nodeTask: firstText(completed.nodeTask, upstreamStep.nodeTask, upstreamStep.task),
+    actionNodeStateId: firstText(completed.actionNodeStateId, upstreamStep.actionNodeStateId),
+    stepId,
+    stepIndex: Number.isFinite(stepIndex) ? stepIndex : -1,
+    transition: Number(completed.transition ?? 0),
+    nodeDialogProcessId: resolveWorkflowNodeDialogProcessId(completed),
+    nodeSessionId: String(completed.nodeSessionId || "").trim(),
+    status,
+    stepFailure,
+    transferEnvelopes,
+  };
+}
+
+function resolveWorkflowStepFailure(completed, upstreamStep) {
+  if (completed?.stepFailure && typeof completed.stepFailure === "object") {
+    return completed.stepFailure;
+  }
+  if (upstreamStep?.stepFailure && typeof upstreamStep.stepFailure === "object") {
+    return upstreamStep.stepFailure;
+  }
+  return null;
 }
 
 export async function buildWorkflowUpstreamAttachmentSystemMessage({
@@ -121,109 +123,133 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
 } = {}) {
   const locale = resolveWorkflowLocaleFromContext(ctx);
   const normalizedResults = Array.isArray(upstreamNodeResults) ? upstreamNodeResults : [];
-  const failedResults = normalizedResults.filter((item = {}) => {
-    const status = String(item?.status || "").trim();
-    return status === "failed" || (item?.stepFailure && typeof item.stepFailure === "object");
-  });
-  const hasTransferFiles = normalizedResults.some((item = {}) =>
-    resolveWorkflowTransferAttachmentReferences(
-      {
-        transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
-      },
-      ctx,
-    ).length > 0,
-  );
-  if (!hasTransferFiles && !failedResults.length) return "";
-  let customUpstreamMessage = "";
-  if (typeof options?.workflowNodeSystemMessageBuilder === "function") {
-    try {
-      const customMessage = String(
-        options.workflowNodeSystemMessageBuilder({
-          ctx,
-          pendingStep,
-          upstreamNodeResults: normalizedResults,
-          attachments: [],
-        }) || "",
-      ).trim();
-      if (customMessage) customUpstreamMessage = customMessage;
-    } catch {
-    }
-  }
-
-  const lines = [];
-  const failureLines = [];
-  for (const result of normalizedResults) {
-    const nodeLabel = String(
-      result?.nodeName ||
-      result?.nodeId ||
-      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_NODE_FALLBACK),
-    ).trim();
-    const nodeTask = String(result?.nodeTask || result?.task || "").trim();
-    if (
-      String(result?.status || "").trim() === "failed" ||
-      (result?.stepFailure && typeof result.stepFailure === "object")
-    ) {
-      const failureMessage = String(
-        result?.stepFailure?.message ||
-        tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),
-      ).trim();
-      failureLines.push(
-        nodeTask
-          ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITH_TASK, {
-              nodeLabel,
-              task: nodeTask,
-              message: failureMessage,
-            })
-          : tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITHOUT_TASK, {
-              nodeLabel,
-              message: failureMessage,
-            }),
-      );
-    }
-    const transferFiles = resolveWorkflowTransferAttachmentReferences(
-      {
-        transferEnvelopes: Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : [],
-      },
-      ctx,
-    );
-    for (const [index, file] of transferFiles.entries()) {
-      const attachmentLabel = String(
-        file?.name ||
-          tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
-      ).trim();
-      const identityJson = formatAttachmentIdentityJson(file?.identity);
-      lines.push(`- ${nodeLabel} / ${attachmentLabel}: ${identityJson}`);
-    }
-  }
+  const { lines, failureLines } = collectUpstreamEvidence(normalizedResults, ctx, locale);
   if (!lines.length && !failureLines.length) return "";
+  const customUpstreamMessage = buildCustomUpstreamMessage(
+    options,
+    ctx,
+    pendingStep,
+    normalizedResults,
+  );
   const pendingName = String(
     pendingStep?.nodeName ||
-    pendingStep?.nodeId ||
-    tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
+      pendingStep?.nodeId ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_FALLBACK),
   ).trim();
-  const message = customUpstreamMessage || [
+  const message =
+    customUpstreamMessage || buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines);
+  return transferUpstreamSemanticContent({
+    ctx,
+    pendingStep,
+    pendingName,
+    normalizedResults,
+    lines,
+    failureLines,
+    message,
+  });
+}
+
+function collectUpstreamEvidence(results, ctx, locale) {
+  const lines = [];
+  const failureLines = [];
+  for (const result of results) {
+    const nodeLabel = resolveUpstreamNodeLabel(result, locale);
+    const failureLine = buildUpstreamFailureLine(result, nodeLabel, locale);
+    if (failureLine) failureLines.push(failureLine);
+    appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale);
+  }
+  return { lines, failureLines };
+}
+
+function resolveUpstreamNodeLabel(result, locale) {
+  return String(
+    result?.nodeName ||
+      result?.nodeId ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_NODE_FALLBACK),
+  ).trim();
+}
+
+function buildUpstreamFailureLine(result, nodeLabel, locale) {
+  const failed =
+    String(result?.status || "").trim() === "failed" ||
+    (result?.stepFailure && typeof result.stepFailure === "object");
+  if (!failed) return "";
+  const task = String(result?.nodeTask || result?.task || "").trim();
+  const message = String(
+    result?.stepFailure?.message ||
+      tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.SUB_AGENT_FAILURE_FALLBACK),
+  ).trim();
+  const key = task
+    ? WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITH_TASK
+    : WORKFLOW_I18N_KEYSET.NODE_AGENT.FAILURE_LINE_WITHOUT_TASK;
+  return tWorkflow(locale, key, { nodeLabel, task, message });
+}
+
+function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
+  const transferFiles = resolveWorkflowTransferAttachmentReferences(
+    { transferEnvelopes: Array.isArray(result?.transferEnvelopes) ? result.transferEnvelopes : [] },
+    ctx,
+  );
+  for (const [index, file] of transferFiles.entries()) {
+    const label = String(
+      file?.name ||
+        tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
+    ).trim();
+    lines.push(`- ${nodeLabel} / ${label}: ${formatAttachmentIdentityJson(file?.identity)}`);
+  }
+}
+
+function buildCustomUpstreamMessage(options, ctx, pendingStep, upstreamNodeResults) {
+  if (typeof options?.workflowNodeSystemMessageBuilder !== "function") return "";
+  try {
+    return String(
+      options.workflowNodeSystemMessageBuilder({
+        ctx,
+        pendingStep,
+        upstreamNodeResults,
+        attachments: [],
+      }) || "",
+    ).trim();
+  } catch (error) {
+    console.warn("[workflow] workflowNodeSystemMessageBuilder failed:", error);
+    return "";
+  }
+}
+
+function buildDefaultUpstreamMessage(locale, pendingName, lines, failureLines) {
+  return [
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_ATTACHMENTS_TITLE),
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.COMMON.CURRENT_NODE_LINE, { name: pendingName }),
     "",
     tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_HINT),
     "",
-    failureLines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_FAILURE_TITLE) : "",
+    failureLines.length
+      ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_FAILURE_TITLE)
+      : "",
     ...failureLines,
     failureLines.length && lines.length ? "" : "",
     lines.length ? tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.UPSTREAM_RESULT_TITLE) : "",
     ...lines,
   ].join("\n");
+}
+
+async function transferUpstreamSemanticContent({
+  ctx,
+  pendingStep,
+  pendingName,
+  normalizedResults,
+  lines,
+  failureLines,
+  message,
+}) {
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const transferSemanticContent = runtime?.sharedTools?.semanticTransfer?.transferSemanticContent;
   if (typeof transferSemanticContent !== "function") return message;
   try {
-    const strategy = failureLines.length
-      ? "workflow_subagent"
-      : "workflow_subagent";
     const transferred = await transferSemanticContent({
       scenario: "workflow",
-      strategy,
+      strategy: "workflow_subagent",
       content: message,
       producer: { type: "plugin", id: `workflow-upstream:${pendingName}` },
       meta: {
@@ -235,28 +261,29 @@ export async function buildWorkflowUpstreamAttachmentSystemMessage({
       },
     });
     return String(transferred?.injectionMessage || message).trim() || message;
-  } catch {
+  } catch (error) {
+    console.warn("[workflow] upstream semantic transfer failed:", error);
     return message;
   }
-
 }
 
 export function buildWorkflowNodeInstruction(step = {}) {
   const locale = String(step?.locale || "").trim();
   const taskText = String(
-    step?.nodeTask ||
-      step?.task ||
-      step?.instruction ||
-      step?.mission ||
-      "",
+    step?.nodeTask || step?.task || step?.instruction || step?.mission || "",
   ).trim();
   if (taskText) return taskText;
   const nodeName = String(step?.nodeName || "").trim();
   if (nodeName) {
-    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, { name: nodeName });
+    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_NAME, {
+      name: nodeName,
+    });
   }
   const nodeId = String(step?.nodeId || "").trim();
-  if (nodeId) return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_ID, { id: nodeId });
+  if (nodeId)
+    return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_BY_ID, {
+      id: nodeId,
+    });
   return tWorkflow(locale, WORKFLOW_I18N_KEYSET.NODE_AGENT.NODE_INSTRUCTION_DEFAULT);
 }
 
@@ -298,9 +325,7 @@ export function resolveSemanticNodeForPendingStep({ semantic = {}, pendingStep =
 
 export function resolveWorkflowInstanceId(ctx = {}) {
   const provided = String(
-    ctx?.workflowInstanceId ||
-      ctx?.runConfig?.workflowInstanceId ||
-      "",
+    ctx?.workflowInstanceId || ctx?.runConfig?.workflowInstanceId || "",
   ).trim();
   if (provided) return provided;
   const base = String(ctx?.dialogProcessId || ctx?.sessionId || "session").trim() || "session";
@@ -319,54 +344,128 @@ export async function runNodeAgent({
   upstreamNodeResults = [],
 } = {}) {
   throwIfWorkflowAborted(ctx);
-  const identity = nodeIdentity && typeof nodeIdentity === "object" ? nodeIdentity : null;
-  if (!identity) throw new TypeError("workflow node identity is required");
-  const nodeDialogProcessId = String(identity.dialogProcessId || "").trim();
-  const nodeTurnScopeId = String(identity.turnScopeId || "").trim();
-  if (!nodeDialogProcessId || !nodeTurnScopeId) {
-    throw new TypeError("workflow node identity requires dialogProcessId and turnScopeId");
-  }
-  const nodeCommandId = String(identity?.commandId || "").trim();
-  const nodeExecutionId = String(identity?.nodeExecutionId || "").trim();
-  const workflowRunId = String(identity?.workflowRunId || instanceId || "").trim();
-  const childExecutionId = String(identity?.childExecutionId || `agent:${nodeTurnScopeId}`).trim();
-  const childSessionId = String(identity?.sessionId || "").trim();
-  const workflowExecutionId = String(
-    identity?.workflowExecutionId ||
-      ctx?.workflowExecutionId ||
-      ctx?.executionId ||
-      ctx?.runConfig?.executionId ||
-      `workflow:${workflowRunId}`,
-  ).trim();
-  const resolvedNodeIdentity = {
-    ...(identity || {}),
-    workflowRunId,
-    nodeExecutionId,
-    commandId: nodeCommandId,
-    dialogProcessId: nodeDialogProcessId,
-    turnScopeId: nodeTurnScopeId,
-    childExecutionId,
-    sessionId: childSessionId,
-    workflowExecutionId,
-    nodeId: String(identity?.nodeId || pendingStep?.nodeId || "").trim(),
-    nodeName: String(identity?.nodeName || pendingStep?.nodeName || "").trim(),
-  };
+  const resolvedNodeIdentity = resolveNodeAgentIdentity({
+    nodeIdentity,
+    instanceId,
+    pendingStep,
+    ctx,
+  });
   const semanticNode = resolveSemanticNodeForPendingStep({ semantic, pendingStep }) || {};
   const nodeInputAttachments = resolveNodeInputAttachments({
     ctx,
     semanticNode,
     semantic,
   });
-  const hookPayload = {
+  const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
+    options,
+    ctx,
+    pendingStep,
+    upstreamNodeResults,
+  });
+  const hookPayload = buildNodeAgentHookPayload({
+    ctx,
+    instanceId,
+    pendingStep,
+    transition,
+    semantic,
+    semanticNode,
+    resolvedNodeIdentity,
+    upstreamNodeResults,
+    nodeInputAttachments,
+    upstreamAttachmentSystemMessage,
+  });
+  const { subSession, failure } = await runWorkflowNodeSubSession({
+    options,
+    ctx,
+    instanceId,
+    pendingStep,
+    transition,
+    semanticNode,
+    resolvedNodeIdentity,
+    upstreamNodeResults,
+    nodeInputAttachments,
+    upstreamAttachmentSystemMessage,
+    agentInstruction: hookPayload.agentInstruction,
+  });
+  throwIfWorkflowAborted(ctx);
+  return resolveNodeAgentResult({
+    hookManager,
+    options,
+    ctx,
+    pendingStep,
+    hookPayload,
+    subSession,
+    failure,
+    resolvedNodeIdentity,
+  });
+}
+
+function resolveNodeAgentIdentity({ nodeIdentity, instanceId, pendingStep, ctx }) {
+  if (!nodeIdentity || typeof nodeIdentity !== "object") {
+    throw new TypeError("workflow node identity is required");
+  }
+  const dialogProcessId = String(nodeIdentity.dialogProcessId || "").trim();
+  const turnScopeId = String(nodeIdentity.turnScopeId || "").trim();
+  if (!dialogProcessId || !turnScopeId) {
+    throw new TypeError("workflow node identity requires dialogProcessId and turnScopeId");
+  }
+  const workflowRunId = firstText(nodeIdentity.workflowRunId, instanceId);
+  const workflowExecutionId = firstText(
+    nodeIdentity.workflowExecutionId,
+    ctx?.workflowExecutionId,
+    ctx?.executionId,
+    ctx?.runConfig?.executionId,
+    `workflow:${workflowRunId}`,
+  );
+  return {
+    ...nodeIdentity,
+    workflowRunId,
+    workflowExecutionId,
+    nodeExecutionId: firstText(nodeIdentity.nodeExecutionId),
+    commandId: firstText(nodeIdentity.commandId),
+    dialogProcessId,
+    turnScopeId,
+    childExecutionId: firstText(nodeIdentity.childExecutionId, `agent:${turnScopeId}`),
+    sessionId: firstText(nodeIdentity.sessionId),
+    nodeId: firstText(nodeIdentity.nodeId, pendingStep?.nodeId),
+    nodeName: firstText(nodeIdentity.nodeName, pendingStep?.nodeName),
+  };
+}
+
+function firstText(...values) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function buildNodeAgentHookPayload({
+  ctx,
+  instanceId,
+  pendingStep,
+  transition,
+  semantic,
+  semanticNode,
+  resolvedNodeIdentity,
+  upstreamNodeResults,
+  nodeInputAttachments,
+  upstreamAttachmentSystemMessage,
+}) {
+  return {
     ...ctx,
     workflow: {
       instanceId,
-      workflowRunId,
+      workflowRunId: resolvedNodeIdentity.workflowRunId,
       nodeIdentity: resolvedNodeIdentity,
       pendingStep,
       transition,
       semantic,
       semanticNode,
+      upstreamNodeResults,
+      upstreamAttachments: collectUpstreamAttachmentReferences(upstreamNodeResults, ctx),
+      inputAttachments: nodeInputAttachments,
+      upstreamAttachmentSystemMessage,
     },
     agentInstruction: buildWorkflowNodeInstruction({
       ...pendingStep,
@@ -375,231 +474,247 @@ export async function runNodeAgent({
     }),
     proposedAction: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
   };
-  const upstreamAttachmentSystemMessage = await buildWorkflowUpstreamAttachmentSystemMessage({
-    options,
-    ctx,
-    pendingStep,
-    upstreamNodeResults,
-  });
-  hookPayload.workflow.upstreamNodeResults = upstreamNodeResults;
-  hookPayload.workflow.upstreamAttachments = upstreamNodeResults.reduce((acc, item = {}) => {
+}
+
+function collectUpstreamAttachmentReferences(upstreamNodeResults, ctx) {
+  return upstreamNodeResults.reduce((acc, item = {}) => {
     const transferPayload = normalizeWorkflowTransferPayload({
-      transferEnvelopes: Array.isArray(item?.transferEnvelopes) ? item.transferEnvelopes : [],
+      transferEnvelopes: Array.isArray(item.transferEnvelopes) ? item.transferEnvelopes : [],
     });
-    const attachments = resolveWorkflowTransferAttachmentReferences(transferPayload, ctx);
-    return mergeAttachmentReferences(acc, attachments);
+    return mergeAttachmentReferences(
+      acc,
+      resolveWorkflowTransferAttachmentReferences(transferPayload, ctx),
+    );
   }, []);
-  hookPayload.workflow.inputAttachments = nodeInputAttachments;
-  hookPayload.workflow.upstreamAttachmentSystemMessage = upstreamAttachmentSystemMessage;
+}
+
+async function runWorkflowNodeSubSession(params) {
+  if (typeof params.options?.subSessionRunner !== "function") {
+    return { subSession: null, failure: null };
+  }
   let subSession = null;
-  let subSessionFailure = null;
-  if (typeof options?.subSessionRunner === "function") {
-    const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
-    const parentSelectedPlugins = Array.isArray(parentRunConfig?.selectedPlugins)
-      ? parentRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
-      : [];
-    const parentHarness =
-      parentRunConfig?.plugins?.harness && typeof parentRunConfig.plugins.harness === "object"
-        ? parentRunConfig.plugins.harness
-        : {};
-    const parentHarnessMode = String(parentHarness?.mode || "").trim().toLowerCase();
-    const parentHarnessEnabled =
-      parentSelectedPlugins.includes("harness") ||
-      parentHarness?.enabled === true ||
-      parentHarnessMode === "on";
-    const streamingPatch = hasOwnObjectKey(parentRunConfig, "streaming")
-      ? { streaming: parentRunConfig.streaming }
-      : {};
-    const turnScopePatch = { turnScopeId: nodeTurnScopeId };
-    const workflowIdentityRunConfigPatch = {
-      workflowRunId,
-      workflowNodeExecutionId: nodeExecutionId,
-      workflowNodeCommandId: nodeCommandId,
-    };
-    const subSessionRunConfigPatch = parentHarnessEnabled
-      ? {
-          ...streamingPatch,
-          ...turnScopePatch,
-          ...workflowIdentityRunConfigPatch,
-          selectedPlugins: Array.from(new Set([...parentSelectedPlugins, "harness"])),
-          plugins: {
-            harness: {
-              ...(parentHarness && typeof parentHarness === "object" ? parentHarness : {}),
-              enabled: true,
-              mode: "on",
-            },
-          },
-        }
-      : {
-          ...streamingPatch,
-          ...turnScopePatch,
-          ...workflowIdentityRunConfigPatch,
-        };
-    const relativeDir = buildWorkflowDialogRelativeDir({
-      ctx,
-      dialogProcessId: nodeDialogProcessId,
-      scope: "node",
-    });
-    try {
-      throwIfWorkflowAborted(ctx);
-      const nodeAgentTimeoutMs = Number.isFinite(Number(options?.nodeAgentTimeoutMs))
-        ? Math.max(1000, Math.floor(Number(options.nodeAgentTimeoutMs)))
-        : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
-      const subSessionRunPromise = Promise.resolve(options.subSessionRunner({
-          parentExecutionScope: ctx?.agentContext || null,
-          parentContext: ctx,
-          abortSignal: resolveWorkflowAbortSignal(ctx),
-          message: hookPayload.agentInstruction,
-          attachments: nodeInputAttachments,
-          runConfigPatch: subSessionRunConfigPatch,
-          systemMessageFactory: ({ attachments: childAttachments = [] } = {}) => {
-            const inputAttachmentSystemMessage = buildWorkflowInputAttachmentSystemMessage({
-              ctx,
-              attachments: childAttachments,
-              semanticNode,
-            });
-            return [inputAttachmentSystemMessage, upstreamAttachmentSystemMessage].filter(Boolean);
-          },
-          eventListener:
-            ctx?.eventListener && typeof ctx.eventListener?.onEvent === "function"
-              ? ctx.eventListener
-              : null,
-          strategy: {
-            sessionId: childSessionId,
-            parentSessionId: String(ctx?.sessionId || "").trim(),
-            parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
-            dialogProcessId: nodeDialogProcessId,
-            turnScopeId: nodeTurnScopeId,
-            commandId: nodeCommandId,
-            executionId: childExecutionId,
-            parentExecutionId: workflowExecutionId,
-            rootExecutionId: String(ctx?.rootExecutionId || workflowExecutionId).trim(),
-            disabledPlugins: ["workflow"],
-            relativeDir,
-            allowedRoot: "runtime/workflow/session",
-          },
-          metadata: {
-            scope: "workflow_node",
-            instanceId: String(instanceId || "").trim(),
-            workflowRunId,
-            executionId: childExecutionId,
-            parentExecutionId: workflowExecutionId,
-            rootExecutionId: String(ctx?.rootExecutionId || workflowExecutionId).trim(),
-            origin: {
-              type: "workflow_node",
-              workflowRunId,
-              workflowNodeExecutionId: nodeExecutionId,
-            },
-            nodeExecutionId,
-            commandId: nodeCommandId,
-            dialogProcessId: nodeDialogProcessId,
-            nodeId: resolvedNodeIdentity.nodeId,
-            nodeName: resolvedNodeIdentity.nodeName,
-            transition: Number(transition || 0),
-            turnScopeId: nodeTurnScopeId,
-            workflowSessionId: String(ctx?.sessionId || "").trim(),
-            workflowDialogProcessId: nodeDialogProcessId,
-            upstreamWorkflowNodeResults: upstreamNodeResults,
-          },
-        }));
-      try {
-        subSession = await withTimeout(
-          subSessionRunPromise,
-          nodeAgentTimeoutMs,
-          `workflow node sub-session timeout (${nodeAgentTimeoutMs}ms)`,
-          { signal: resolveWorkflowAbortSignal(ctx) },
-        );
-      } catch (error) {
-        if (isWorkflowAbortError(error, ctx)) {
-          await Promise.allSettled([subSessionRunPromise]);
-        }
-        throw error;
-      }
-      throwIfWorkflowAborted(ctx);
-    } catch (error) {
-      if (isWorkflowAbortError(error, ctx)) {
-        throw error;
-      }
-      const failureMessage = String(error?.message || error || "workflow node sub-session failed").trim();
-      subSessionFailure = {
-        source: "workflow_node_agent",
-        code: String(error?.code || "WORKFLOW_NODE_SUBSESSION_FAILED").trim(),
-        message: failureMessage,
-      };
-      if (error?.lifecycle && typeof error.lifecycle === "object") {
-        subSession = { lifecycle: error.lifecycle };
-      }
-      if (!subSession) subSession = null;
-    }
-    if (subSession) {
-      throwIfWorkflowAborted(ctx);
-      await persistWorkflowNodeResultAttachment({
-        options,
-        ctx,
-        subSession,
-        pendingStep,
-        transition,
-        nodeIdentity: {
-          ...resolvedNodeIdentity,
-          sessionId: String(subSession?.sessionId || "").trim(),
-        },
-      });
+  let failure = null;
+  try {
+    subSession = await executeWorkflowNodeSubSession(params);
+  } catch (error) {
+    if (isWorkflowAbortError(error, params.ctx)) throw error;
+    failure = createWorkflowNodeFailure(error);
+    if (error?.lifecycle && typeof error.lifecycle === "object") {
+      subSession = { lifecycle: error.lifecycle };
     }
   }
-  throwIfWorkflowAborted(ctx);
-  if (subSessionFailure) {
-    return {
-      action: {
-        type: WORKFLOW_ACTION.SUBMIT,
-        stepIndex: Number(pendingStep?.index || 0),
-        stepFailure: subSessionFailure,
-      },
-      subSession,
-      nodeDialogProcessId,
-      nodeIdentity: resolvedNodeIdentity,
-      status: "failed",
-      stepFailure: subSessionFailure,
-    };
+  if (subSession) await persistWorkflowNodeSubSession(params, subSession);
+  return { subSession, failure };
+}
+
+async function executeWorkflowNodeSubSession(params) {
+  const request = createWorkflowNodeSubSessionRequest(params);
+  throwIfWorkflowAborted(params.ctx);
+  const timeoutMs = resolveNodeAgentTimeout(params.options);
+  const runPromise = Promise.resolve(params.options.subSessionRunner(request));
+  try {
+    const result = await withTimeout(
+      runPromise,
+      timeoutMs,
+      `workflow node sub-session timeout (${timeoutMs}ms)`,
+      { signal: resolveWorkflowAbortSignal(params.ctx) },
+    );
+    throwIfWorkflowAborted(params.ctx);
+    return result;
+  } catch (error) {
+    if (isWorkflowAbortError(error, params.ctx)) await Promise.allSettled([runPromise]);
+    throw error;
   }
-  if (typeof options?.nodeAgentExecutor === "function") {
-    const directAction = await options.nodeAgentExecutor(hookPayload);
-    throwIfWorkflowAborted(ctx);
-    if (directAction && typeof directAction === "object") {
-      return {
-        action: directAction,
-        subSession,
-        nodeDialogProcessId,
-        nodeIdentity: {
-          ...resolvedNodeIdentity,
-          sessionId: String(subSession?.sessionId || "").trim(),
-        },
-      };
-    }
-  }
-  const emitResult = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
-  throwIfWorkflowAborted(ctx);
-  for (const outcome of emitResult.outcomes) {
-    const action = outcome?.value?.action;
-    if (action && typeof action === "object") {
-      return {
-        action,
-        subSession,
-        nodeDialogProcessId,
-        nodeIdentity: {
-          ...resolvedNodeIdentity,
-          sessionId: String(subSession?.sessionId || "").trim(),
-        },
-      };
-    }
-  }
+}
+
+function createWorkflowNodeSubSessionRequest(params) {
+  const { ctx, resolvedNodeIdentity: identity } = params;
+  const relativeDir = buildWorkflowDialogRelativeDir({
+    ctx,
+    dialogProcessId: identity.dialogProcessId,
+    scope: "node",
+  });
   return {
-    action: { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
-    subSession,
-    nodeDialogProcessId,
-    nodeIdentity: {
-      ...resolvedNodeIdentity,
-      sessionId: String(subSession?.sessionId || "").trim(),
+    parentExecutionScope: ctx?.agentContext || null,
+    parentContext: ctx,
+    abortSignal: resolveWorkflowAbortSignal(ctx),
+    message: params.agentInstruction,
+    attachments: params.nodeInputAttachments,
+    runConfigPatch: buildWorkflowNodeRunConfigPatch(ctx, identity),
+    systemMessageFactory: ({ attachments = [] } = {}) =>
+      [
+        buildWorkflowInputAttachmentSystemMessage({
+          ctx,
+          attachments,
+          semanticNode: params.semanticNode,
+        }),
+        params.upstreamAttachmentSystemMessage,
+      ].filter(Boolean),
+    eventListener: typeof ctx?.eventListener?.onEvent === "function" ? ctx.eventListener : null,
+    strategy: buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir),
+    metadata: buildWorkflowNodeSubSessionMetadata(params),
+  };
+}
+
+function buildWorkflowNodeRunConfigPatch(ctx, identity) {
+  const parentRunConfig = resolveWorkflowParentRunConfig(ctx);
+  const selectedPlugins = Array.isArray(parentRunConfig.selectedPlugins)
+    ? parentRunConfig.selectedPlugins.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const harness =
+    parentRunConfig.plugins?.harness && typeof parentRunConfig.plugins.harness === "object"
+      ? parentRunConfig.plugins.harness
+      : {};
+  const harnessEnabled =
+    selectedPlugins.includes("harness") ||
+    harness.enabled === true ||
+    String(harness.mode || "")
+      .trim()
+      .toLowerCase() === "on";
+  const patch = {
+    ...(hasOwnObjectKey(parentRunConfig, "streaming")
+      ? { streaming: parentRunConfig.streaming }
+      : {}),
+    turnScopeId: identity.turnScopeId,
+    workflowRunId: identity.workflowRunId,
+    workflowNodeExecutionId: identity.nodeExecutionId,
+    workflowNodeCommandId: identity.commandId,
+  };
+  if (!harnessEnabled) return patch;
+  return {
+    ...patch,
+    selectedPlugins: Array.from(new Set([...selectedPlugins, "harness"])),
+    plugins: { harness: { ...harness, enabled: true, mode: "on" } },
+  };
+}
+
+function buildWorkflowNodeSubSessionStrategy(ctx, identity, relativeDir) {
+  return {
+    sessionId: identity.sessionId,
+    parentSessionId: String(ctx?.sessionId || "").trim(),
+    parentDialogProcessId: String(ctx?.dialogProcessId || "").trim(),
+    dialogProcessId: identity.dialogProcessId,
+    turnScopeId: identity.turnScopeId,
+    commandId: identity.commandId,
+    executionId: identity.childExecutionId,
+    parentExecutionId: identity.workflowExecutionId,
+    rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
+    disabledPlugins: ["workflow"],
+    relativeDir,
+    allowedRoot: "runtime/workflow/session",
+  };
+}
+
+function buildWorkflowNodeSubSessionMetadata(params) {
+  const { ctx, resolvedNodeIdentity: identity } = params;
+  return {
+    scope: "workflow_node",
+    instanceId: String(params.instanceId || "").trim(),
+    workflowRunId: identity.workflowRunId,
+    executionId: identity.childExecutionId,
+    parentExecutionId: identity.workflowExecutionId,
+    rootExecutionId: String(ctx?.rootExecutionId || identity.workflowExecutionId).trim(),
+    origin: {
+      type: "workflow_node",
+      workflowRunId: identity.workflowRunId,
+      workflowNodeExecutionId: identity.nodeExecutionId,
     },
+    nodeExecutionId: identity.nodeExecutionId,
+    commandId: identity.commandId,
+    dialogProcessId: identity.dialogProcessId,
+    nodeId: identity.nodeId,
+    nodeName: identity.nodeName,
+    transition: Number(params.transition || 0),
+    turnScopeId: identity.turnScopeId,
+    workflowSessionId: String(ctx?.sessionId || "").trim(),
+    workflowDialogProcessId: identity.dialogProcessId,
+    upstreamWorkflowNodeResults: params.upstreamNodeResults,
+  };
+}
+
+function resolveNodeAgentTimeout(options) {
+  const configured = Number(options?.nodeAgentTimeoutMs);
+  return Number.isFinite(configured)
+    ? Math.max(1000, Math.floor(configured))
+    : WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_NODE_AGENT_TIMEOUT_MS;
+}
+
+function createWorkflowNodeFailure(error) {
+  return {
+    source: "workflow_node_agent",
+    code: String(error?.code || "WORKFLOW_NODE_SUBSESSION_FAILED").trim(),
+    message: String(error?.message || error || "workflow node sub-session failed").trim(),
+  };
+}
+
+async function persistWorkflowNodeSubSession(params, subSession) {
+  throwIfWorkflowAborted(params.ctx);
+  await persistWorkflowNodeResultAttachment({
+    options: params.options,
+    ctx: params.ctx,
+    subSession,
+    pendingStep: params.pendingStep,
+    transition: params.transition,
+    nodeIdentity: {
+      ...params.resolvedNodeIdentity,
+      sessionId: String(subSession.sessionId || "").trim(),
+    },
+  });
+}
+
+async function resolveNodeAgentResult({
+  hookManager,
+  options,
+  ctx,
+  pendingStep,
+  hookPayload,
+  subSession,
+  failure,
+  resolvedNodeIdentity,
+}) {
+  if (failure)
+    return createFailedNodeAgentResult(pendingStep, subSession, failure, resolvedNodeIdentity);
+  const directAction =
+    typeof options?.nodeAgentExecutor === "function"
+      ? await options.nodeAgentExecutor(hookPayload)
+      : null;
+  throwIfWorkflowAborted(ctx);
+  if (directAction && typeof directAction === "object") {
+    return createNodeAgentResult(directAction, subSession, resolvedNodeIdentity);
+  }
+  const emitted = await hookManager.emit(HOOK_POINT.WORKFLOW.NODE_AGENT_EXECUTE, hookPayload);
+  throwIfWorkflowAborted(ctx);
+  const action = emitted.outcomes
+    .map((outcome) => outcome?.value?.action)
+    .find((value) => value && typeof value === "object");
+  return createNodeAgentResult(
+    action || { type: WORKFLOW_ACTION.SUBMIT, stepIndex: Number(pendingStep?.index || 0) },
+    subSession,
+    resolvedNodeIdentity,
+  );
+}
+
+function createNodeAgentResult(action, subSession, identity) {
+  return {
+    action,
+    subSession,
+    nodeDialogProcessId: identity.dialogProcessId,
+    nodeIdentity: { ...identity, sessionId: String(subSession?.sessionId || "").trim() },
+  };
+}
+
+function createFailedNodeAgentResult(pendingStep, subSession, failure, identity) {
+  return {
+    action: {
+      type: WORKFLOW_ACTION.SUBMIT,
+      stepIndex: Number(pendingStep?.index || 0),
+      stepFailure: failure,
+    },
+    subSession,
+    nodeDialogProcessId: identity.dialogProcessId,
+    nodeIdentity: identity,
+    status: "failed",
+    stepFailure: failure,
   };
 }
 
@@ -617,6 +732,8 @@ export function resolveStepIndexForAction({
   const key = buildPendingStepKey(pendingStep);
   const matchedIndex = pendingSteps.findIndex((item) => buildPendingStepKey(item) === key);
   if (matchedIndex >= 0) return matchedIndex;
-  const index = Number.isFinite(Number(preferredIndex)) ? Math.max(0, Math.floor(Number(preferredIndex))) : 0;
+  const index = Number.isFinite(Number(preferredIndex))
+    ? Math.max(0, Math.floor(Number(preferredIndex)))
+    : 0;
   return Math.min(index, Math.max(0, pendingSteps.length - 1));
 }

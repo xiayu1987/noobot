@@ -45,23 +45,37 @@ async function rotateDesktopLog(filePath, retain) {
   }
 }
 
-export function appendDesktopLogLine(filePath, line, {
-  maxBytes = resolvePositiveInteger(process.env.NOOBOT_DESKTOP_LOG_MAX_BYTES, DEFAULT_DESKTOP_LOG_MAX_BYTES),
-  retain = resolvePositiveInteger(process.env.NOOBOT_DESKTOP_LOG_RETAIN, DEFAULT_DESKTOP_LOG_RETAIN),
-} = {}) {
+export function appendDesktopLogLine(
+  filePath,
+  line,
+  {
+    maxBytes = resolvePositiveInteger(
+      process.env.NOOBOT_DESKTOP_LOG_MAX_BYTES,
+      DEFAULT_DESKTOP_LOG_MAX_BYTES,
+    ),
+    retain = resolvePositiveInteger(
+      process.env.NOOBOT_DESKTOP_LOG_RETAIN,
+      DEFAULT_DESKTOP_LOG_RETAIN,
+    ),
+  } = {},
+) {
   const previous = desktopLogQueues.get(filePath) || Promise.resolve();
-  const operation = previous.catch(() => {}).then(async () => {
-    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    const lineBytes = Buffer.byteLength(line, "utf8");
-    const stat = await fs.promises.stat(filePath).catch((error) => {
-      if (error?.code === "ENOENT") return null;
-      throw error;
+  const operation = previous
+    .catch((error) => {
+      console.warn("[desktop-log] previous queued write failed", error);
+    })
+    .then(async () => {
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+      const lineBytes = Buffer.byteLength(line, "utf8");
+      const stat = await fs.promises.stat(filePath).catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+      if (stat?.isFile() && stat.size > 0 && stat.size + lineBytes > maxBytes) {
+        await rotateDesktopLog(filePath, retain);
+      }
+      await fs.promises.appendFile(filePath, line, "utf8");
     });
-    if (stat?.isFile() && stat.size > 0 && stat.size + lineBytes > maxBytes) {
-      await rotateDesktopLog(filePath, retain);
-    }
-    await fs.promises.appendFile(filePath, line, "utf8");
-  });
   desktopLogQueues.set(filePath, operation);
   return operation.finally(() => {
     if (desktopLogQueues.get(filePath) === operation) desktopLogQueues.delete(filePath);
@@ -69,9 +83,10 @@ export function appendDesktopLogLine(filePath, line, {
 }
 
 export function getEarlyLogFilePath() {
-  const base = process.platform === "win32"
-    ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
-    : process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.TMPDIR || process.cwd();
+  const base =
+    process.platform === "win32"
+      ? process.env.APPDATA || process.env.LOCALAPPDATA || process.env.TEMP || process.cwd()
+      : process.env.XDG_CONFIG_HOME || process.env.HOME || process.env.TMPDIR || process.cwd();
   return path.join(base, desktopAppName, "logs", DESKTOP_LOG_FILES.STARTUP);
 }
 
@@ -79,8 +94,11 @@ export function appendEarlyLog(message) {
   const line = `[${new Date().toISOString()}] ${message}\n`;
   try {
     const logFile = getEarlyLogFilePath();
-    appendDesktopLogLine(logFile, line).catch(() => {});
-  } catch {
+    appendDesktopLogLine(logFile, line).catch((error) => {
+      console.warn("[desktop-log] early log write failed", error);
+    });
+  } catch (error) {
+    console.warn("[desktop-log] early log path resolution failed", error);
   }
 }
 
@@ -92,8 +110,11 @@ export function appendFallbackDebugLog(message) {
   ];
   for (const filePath of candidates) {
     try {
-      appendDesktopLogLine(filePath, line).catch(() => {});
-    } catch {
+      appendDesktopLogLine(filePath, line).catch((error) => {
+        console.warn("[desktop-log] startup trace write failed", { filePath, error });
+      });
+    } catch (error) {
+      console.warn("[desktop-log] startup trace scheduling failed", { filePath, error });
     }
   }
 }
@@ -107,7 +128,11 @@ export function formatLogValue(value) {
   if (value === undefined || value === null) return "";
   if (value instanceof Error) return value.stack || value.message || String(value);
   if (typeof value === "object") {
-    try { return JSON.stringify(value); } catch { return String(value); }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
   }
   return String(value);
 }
@@ -134,12 +159,11 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const line = `[${new Date().toISOString()}] ${message}\n`;
     try {
       const logFile = getLogFilePath(fileName);
-      appendDesktopLogLine(logFile, line)
-        .catch((error) => {
-          if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
-            writeStartupLog("desktop-log", "error", { fileName, message, error }, { debug: true });
-          }
-        });
+      appendDesktopLogLine(logFile, line).catch((error) => {
+        if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
+          writeStartupLog("desktop-log", "error", { fileName, message, error }, { debug: true });
+        }
+      });
     } catch {
       if (fileName !== DESKTOP_LOG_FILES.STARTUP) {
         writeStartupLog("desktop-log", "fallback", { fileName, message }, { debug: true });
@@ -147,12 +171,26 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     }
   }
 
-  function writeStartupLog(scope, event, fields = {}, { debug = false, mirrorToEarly = true } = {}) {
+  function writeStartupLog(
+    scope,
+    event,
+    fields = {},
+    { debug = false, mirrorToEarly = true } = {},
+  ) {
     if (debug && !startupDebugEnabled) return;
     const detail = formatLogFields(fields);
     const message = `[${scope}:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.STARTUP, message);
-    runtimeEvents.write({ scope: "startup", category: scope === "frontend" ? "frontend-lifecycle" : "backend-lifecycle", event: `desktop.${scope}.${event}` }, fields).catch(() => {});
+    runtimeEvents
+      .write(
+        {
+          scope: "startup",
+          category: scope === "frontend" ? "frontend-lifecycle" : "backend-lifecycle",
+          event: `desktop.${scope}.${event}`,
+        },
+        fields,
+      )
+      .catch((error) => console.warn("[desktop-log] runtime event write failed", error));
     if (mirrorToEarly) appendStartupTrace(message);
   }
 
@@ -161,7 +199,12 @@ export function createStartupLogger({ app, startupDebugEnabled = false } = {}) {
     const detail = formatLogFields(fields);
     const message = `[dependency:${event}]${detail ? ` ${detail}` : ""}`;
     appendLogFile(DESKTOP_LOG_FILES.DEPENDENCY, message);
-    runtimeEvents.write({ scope: "startup", category: "frontend-lifecycle", event: `desktop.dependency.${event}` }, fields).catch(() => {});
+    runtimeEvents
+      .write(
+        { scope: "startup", category: "frontend-lifecycle", event: `desktop.dependency.${event}` },
+        fields,
+      )
+      .catch((error) => console.warn("[desktop-log] dependency runtime event write failed", error));
     writeStartupLog("dependency", event, fields, { ...options, mirrorToEarly: false });
   }
 
@@ -207,25 +250,37 @@ export function installEarlyDiagnostics({ app, moduleUrl, filename, dirname } = 
   appendFallbackDebugLog(loadMessage);
 
   process.on("uncaughtException", (error) => {
-    appendEarlyLog(`[process:uncaughtException] ${error?.stack || error?.message || String(error)}`);
+    appendEarlyLog(
+      `[process:uncaughtException] ${error?.stack || error?.message || String(error)}`,
+    );
   });
 
   process.on("unhandledRejection", (reason) => {
-    appendEarlyLog(`[process:unhandledRejection] ${reason?.stack || reason?.message || String(reason)}`);
+    appendEarlyLog(
+      `[process:unhandledRejection] ${reason?.stack || reason?.message || String(reason)}`,
+    );
   });
 
   app.on("will-finish-launching", () => appendEarlyLog("[app:event] will-finish-launching"));
   app.on("ready", () => appendEarlyLog("[app:event] ready"));
   app.on("browser-window-created", () => appendEarlyLog("[app:event] browser-window-created"));
   app.on("render-process-gone", (_event, _webContents, details) => {
-    appendEarlyLog(`[app:event] render-process-gone reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`);
+    appendEarlyLog(
+      `[app:event] render-process-gone reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`,
+    );
   });
   app.on("child-process-gone", (_event, details) => {
-    appendEarlyLog(`[app:event] child-process-gone type=${details?.type || ""} reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`);
+    appendEarlyLog(
+      `[app:event] child-process-gone type=${details?.type || ""} reason=${details?.reason || ""} exitCode=${details?.exitCode ?? ""}`,
+    );
   });
-  app.on("gpu-process-crashed", (_event, killed) => appendEarlyLog(`[app:event] gpu-process-crashed killed=${killed}`));
+  app.on("gpu-process-crashed", (_event, killed) =>
+    appendEarlyLog(`[app:event] gpu-process-crashed killed=${killed}`),
+  );
 
   setTimeout(() => {
-    appendEarlyLog(`[main:timer] 3000ms after module load; isReady=${app.isReady()}; whenReadyState=pending-or-resolved`);
+    appendEarlyLog(
+      `[main:timer] 3000ms after module load; isReady=${app.isReady()}; whenReadyState=pending-or-resolved`,
+    );
   }, 3000);
 }

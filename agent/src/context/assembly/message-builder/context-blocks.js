@@ -94,13 +94,11 @@ export function buildContextMessageBlocks(agentContext, { currentUserMessage = n
     effectiveHistoryMessages: resolvedMainBlocks.history,
     runtime,
     fallbackUserMeta,
-    includeUserMeta: false,
   });
   const incremental = buildHistoryMessages({
     effectiveHistoryMessages: resolvedMainBlocks.incremental,
     runtime,
     fallbackUserMeta,
-    includeUserMeta: false,
     allowMessageAttachments: true,
   });
   const projectedIds = incremental.map(canonicalMessageId).filter(Boolean);

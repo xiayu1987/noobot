@@ -5,7 +5,6 @@
  */
 import { readAttachIndex } from "../../artifacts/index.js";
 import { findAttachmentByIdentity } from "@noobot/attachment-protocol";
-import { filePath as path } from "@noobot/path-resolver";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 export async function resolveExistingUserMessageAttachments(
@@ -19,12 +18,7 @@ export async function resolveExistingUserMessageAttachments(
   } = {},
 ) {
   if (!userId || !sessionId || !engine.session?.findById) return [];
-  let sessionDoc = null;
-  try {
-    sessionDoc = await engine.session.findById(userId, sessionId, parentSessionId);
-  } catch {
-    return [];
-  }
+  const sessionDoc = await engine.session.findById(userId, sessionId, parentSessionId);
   const messages = Array.isArray(sessionDoc?.messages) ? sessionDoc.messages : [];
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const messageItem = messages[index];
@@ -49,14 +43,10 @@ export async function enrichUserInputAttachmentsFromIndex(
   const basePath = await resolveAttachmentIndexBasePath(engine, userId);
   let index = null;
   if (basePath && normalizedSessionId) {
-    try {
-      index = await readAttachIndex(basePath, {
-        sessionId: normalizedSessionId,
-        attachmentSource: "user",
-      });
-    } catch {
-      index = null;
-    }
+    index = await readAttachIndex(basePath, {
+      sessionId: normalizedSessionId,
+      attachmentSource: "user",
+    });
   }
   const indexedAttachments = Object.values(index?.attachments || {}).filter(
     (item) => item && typeof item === "object" && !Array.isArray(item),
@@ -79,12 +69,11 @@ export async function enrichUserInputAttachmentsFromIndex(
 export async function resolveAttachmentIndexBasePath(engine, userId = "") {
   const normalizedUserId = String(userId || "").trim();
   if (!normalizedUserId) return "";
-  if (engine.workspaceService?.ensureUserWorkspace) {
-    try {
-      const basePath = await engine.workspaceService.ensureUserWorkspace(normalizedUserId);
-      if (basePath) return String(basePath || "").trim();
-    } catch {}
+  if (typeof engine.workspaceService?.ensureUserWorkspace !== "function") {
+    throw new TypeError("attachment enrichment requires WorkspaceService");
   }
-  const workspaceRoot = String(engine.globalConfig?.workspaceRoot || "").trim();
-  return workspaceRoot ? path.resolve(workspaceRoot, normalizedUserId) : "";
+  const basePath = await engine.workspaceService.ensureUserWorkspace(normalizedUserId);
+  const normalizedBasePath = String(basePath || "").trim();
+  if (!normalizedBasePath) throw new Error("WorkspaceService returned an empty workspace path");
+  return normalizedBasePath;
 }

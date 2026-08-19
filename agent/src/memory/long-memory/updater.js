@@ -120,9 +120,7 @@ function applyLongMemoryPatch(existingText = "", patchText = "") {
 }
 
 function applyLongMemoryMetadataPatch(existingItems = [], patchText = "") {
-  const map = new Map(
-    normalizeMetadataItems(existingItems).map((item) => [Number(item.id), item]),
-  );
+  const map = new Map(normalizeMetadataItems(existingItems).map((item) => [Number(item.id), item]));
   const commands = parseIdPatchCommands(patchText, { idPrefix: "M" });
   if (!commands.length) return { changed: false, items: normalizeMetadataItems(existingItems) };
 
@@ -151,30 +149,14 @@ export async function updateLongMemory(storage, basePath, patchText) {
   if (isBlankLongMemoryContent(patchText)) return false;
   const longPath = storage.longPath(basePath);
   const metadataPath = storage.longMemoryMetadataPath(basePath);
-  const existingLongMemoryText = String(await storage.readText(longPath, "") || "").trim();
-  const existingMetadataText = String(await storage.readText(metadataPath, "") || "").trim();
+  const existingLongMemoryText = String((await storage.readText(longPath, "")) || "").trim();
+  const existingMetadataText = String((await storage.readText(metadataPath, "")) || "").trim();
 
-  const legacyLongJsonPath = longPath.replace(/\.md$/i, ".json");
-  const legacyMetadataJsonPath = metadataPath.replace(/\.md$/i, ".json");
-  const legacyLong = existingLongMemoryText
-    ? {}
-    : await storage.readJson(legacyLongJsonPath, {});
-  const legacyMetadata = existingMetadataText
-    ? {}
-    : await storage.readJson(legacyMetadataJsonPath, {});
-
-  const existingLongMemory =
-    existingLongMemoryText ||
-    (typeof legacyLong?.staticMemory === "string"
-      ? legacyLong.staticMemory
-      : typeof legacyLong?.memory === "string"
-        ? legacyLong.memory
-        : "");
+  const existingLongMemory = existingLongMemoryText;
   const existingMetadataItems = existingMetadataText
     ? parseMetadataItemsFromText(existingMetadataText)
-    : normalizeMetadataItems(legacyMetadata?.items);
-  const hasLongMemoryPatchCommands =
-    parseIdPatchCommands(patchText, { idPrefix: "L" }).length > 0;
+    : [];
+  const hasLongMemoryPatchCommands = parseIdPatchCommands(patchText, { idPrefix: "L" }).length > 0;
   const memoryPatchResult = applyLongMemoryPatch(existingLongMemory, patchText);
   const metadataPatchResult = applyLongMemoryMetadataPatch(existingMetadataItems, patchText);
   if (!memoryPatchResult.changed && !metadataPatchResult.changed) return false;
@@ -189,9 +171,6 @@ export async function updateLongMemory(storage, basePath, patchText) {
 
   await storage.ensureDir(path.dirname(metadataPath));
   const nextMetadataText = renderMetadataItems(metadataPatchResult.items);
-  await storage.writeText(
-    metadataPath,
-    `${nextMetadataText}${nextMetadataText ? "\n" : ""}`,
-  );
+  await storage.writeText(metadataPath, `${nextMetadataText}${nextMetadataText ? "\n" : ""}`);
   return true;
 }

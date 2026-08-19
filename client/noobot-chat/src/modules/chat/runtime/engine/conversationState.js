@@ -27,18 +27,12 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
-import {
-  normalizeTimePair,
-  nowIso,
-  nowMs,
-  parseTimeMs,
-} from "../../model/timeFields.js";
+import { normalizeTimePair, nowIso, nowMs, parseTimeMs } from "../../model/timeFields.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 
 function parseThinkingTimingMs(value) {
   return parseTimeMs(value);
 }
-
 
 export function createChatEngineConversationState({
   activeSession,
@@ -80,8 +74,8 @@ export function createChatEngineConversationState({
         refreshSessionConnectorsAsync(activeSession.value?.sessionId || "");
       }
     }
-    try {
-      if (request?.requestId) {
+    if (request?.requestId) {
+      try {
         submitInteractionResponse(
           {
             confirmed: true,
@@ -95,8 +89,11 @@ export function createChatEngineConversationState({
             sessionId: String(request.sessionId || ""),
           },
         );
+      } catch (error) {
+        notify?.({ type: "error", message: error?.message || translate?.("common.error") });
+        return false;
       }
-    } catch {}
+    }
     if (requestId) connectorConnectedAckedRequestIds.add(requestId);
     clearPendingInteraction(request);
     return true;
@@ -123,10 +120,7 @@ export function createChatEngineConversationState({
     return `${String(sessionId || "").trim()}::${normalizeTrimmedString(dialogProcessId)}`;
   }
 
-  function clearMissingInteractionPayloadTimer({
-    sessionId = "",
-    dialogProcessId = "",
-  } = {}) {
+  function clearMissingInteractionPayloadTimer({ sessionId = "", dialogProcessId = "" } = {}) {
     const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
     const timer = missingInteractionPayloadTimers.get(key);
     if (!timer) return;
@@ -143,10 +137,7 @@ export function createChatEngineConversationState({
     return isBlankCompatibleSameId(pendingRequest?.dialogProcessId, dialogProcessId);
   }
 
-  function scheduleMissingInteractionPayloadFailure({
-    sessionId = "",
-    dialogProcessId = "",
-  } = {}) {
+  function scheduleMissingInteractionPayloadFailure({ sessionId = "", dialogProcessId = "" } = {}) {
     if (hasPendingInteractionForDialog(dialogProcessId)) return;
     const key = getInteractionPayloadWaitKey({ sessionId, dialogProcessId });
     if (missingInteractionPayloadTimers.has(key)) return;
@@ -168,7 +159,10 @@ export function createChatEngineConversationState({
     );
   }
 
-  function markUserMessageDialogProcessId({ targetAssistantMessage = null, dialogProcessId = "" } = {}) {
+  function markUserMessageDialogProcessId({
+    targetAssistantMessage = null,
+    dialogProcessId = "",
+  } = {}) {
     const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
     const messages = Array.isArray(activeSession?.value?.messages)
       ? activeSession.value.messages
@@ -200,7 +194,8 @@ export function createChatEngineConversationState({
 
   function findTargetAssistantMessage({ botMessage = null, turnScopeId = "" } = {}) {
     const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
-    if (canApplyStateToBotMessage({ botMessage, explicitTurnScopeId: normalizedTurnScopeId })) return botMessage;
+    if (canApplyStateToBotMessage({ botMessage, explicitTurnScopeId: normalizedTurnScopeId }))
+      return botMessage;
     const messageList = Array.isArray(activeSession.value?.messages)
       ? activeSession.value.messages
       : [];
@@ -213,10 +208,17 @@ export function createChatEngineConversationState({
     return null;
   }
 
-  function findTargetAssistantMessageByIdentity({ botMessage = null, turnScopeId = "", dialogProcessId = "" } = {}) {
+  function findTargetAssistantMessageByIdentity({
+    botMessage = null,
+    turnScopeId = "",
+    dialogProcessId = "",
+  } = {}) {
     const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
     const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
-    const directTarget = findTargetAssistantMessage({ botMessage, turnScopeId: normalizedTurnScopeId });
+    const directTarget = findTargetAssistantMessage({
+      botMessage,
+      turnScopeId: normalizedTurnScopeId,
+    });
     if (directTarget) return directTarget;
     if (!normalizedDialogProcessId) return null;
     const messageList = Array.isArray(activeSession.value?.messages)
@@ -235,19 +237,12 @@ export function createChatEngineConversationState({
     const runtimeState = normalizeTrimmedString(
       getMessageRuntimeChannelState(messageItem)?.state || messageItem?.channelState,
     );
-    return (
-      messageItem.pending === false &&
-      isTerminalConversationState(runtimeState)
-    );
+    return messageItem.pending === false && isTerminalConversationState(runtimeState);
   }
 
   function applyConversationState(
     statePayload = {},
-    {
-      botMessage = null,
-      fallbackDialogProcessId = "",
-      fallbackTurnScopeId = "",
-    } = {},
+    { botMessage = null, fallbackDialogProcessId = "", fallbackTurnScopeId = "" } = {},
   ) {
     const state = String(statePayload?.state || "").trim();
     if (!state) return;
@@ -265,7 +260,9 @@ export function createChatEngineConversationState({
     const turnMeta = normalizeTurnMeta(statePayload);
     const explicitDialogProcessId = String(statePayload?.dialogProcessId || "").trim();
     const fallbackDialogProcessIdValue = String(fallbackDialogProcessId || "").trim();
-    const canUseFallbackTurnScopeId = Boolean(explicitDialogProcessId || fallbackDialogProcessIdValue);
+    const canUseFallbackTurnScopeId = Boolean(
+      explicitDialogProcessId || fallbackDialogProcessIdValue,
+    );
     const turnScopeId = String(
       turnMeta.turnScopeId || (canUseFallbackTurnScopeId ? fallbackTurnScopeId : "") || "",
     ).trim();
@@ -340,13 +337,12 @@ export function createChatEngineConversationState({
       }
       if (
         state === BackendChannelState.SENDING &&
-        String(statePayload?.sourceEvent || "").trim().toLowerCase() === "interaction_response" &&
+        String(statePayload?.sourceEvent || "")
+          .trim()
+          .toLowerCase() === "interaction_response" &&
         typeof clearPendingInteractionIfObsolete === "function"
       ) {
-        const responseRequestId = String(
-          statePayload?.requestId ||
-            "",
-        ).trim();
+        const responseRequestId = String(statePayload?.requestId || "").trim();
         if (responseRequestId) {
           clearPendingInteractionIfObsolete({ requestId: responseRequestId });
         }
@@ -368,7 +364,10 @@ export function createChatEngineConversationState({
       return;
     }
     logResendDebug("conversationState.terminal.dispatched", () => ({
-      state, sessionId, dialogProcessId, turnScopeId,
+      state,
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
       target: summarizeDebugMessage(targetAssistantMessage),
     }));
   }
@@ -376,11 +375,7 @@ export function createChatEngineConversationState({
   function applyConversationStateFromEvent(
     eventName = "",
     eventData = {},
-    {
-      botMessage = null,
-      fallbackDialogProcessId = "",
-      fallbackTurnScopeId = "",
-    } = {},
+    { botMessage = null, fallbackDialogProcessId = "", fallbackTurnScopeId = "" } = {},
   ) {
     const normalizedEvent = String(eventName || "").trim();
     if (normalizedEvent !== StreamEventEnum.CHANNEL_STATE) return;

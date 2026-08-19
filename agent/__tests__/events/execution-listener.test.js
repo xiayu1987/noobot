@@ -105,6 +105,28 @@ test("execution listener persists events in source order and exposes a durabilit
   assert.deepEqual(calls, [4, 5]);
 });
 
+test("execution listener exposes persistence failures at the durability barrier", async () => {
+  const listener = createExecutionEventListener({
+    sessionManager: {
+      appendExecutionLog: async () => {
+        throw new Error("storage unavailable");
+      },
+    },
+    userId: "user-a",
+    sessionId: "session-a",
+  });
+
+  listener.onEvent({
+    event: "agent_lifecycle_state_changed",
+    data: { state: "processing", revision: 1, sequence: 1 },
+  });
+
+  await assert.rejects(listener.flushPersistence(), {
+    code: "EXECUTION_LOG_PERSISTENCE_FAILED",
+    message: "execution log persistence failed: storage unavailable",
+  });
+});
+
 test("execution listener forwarding port delivers without taking persistence ownership", async () => {
   const persisted = [];
   const forwarded = [];

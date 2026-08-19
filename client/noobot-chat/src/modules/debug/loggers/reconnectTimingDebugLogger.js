@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { acceptsDebugSink, emitLazyDebug } from "./lazyDebugSink.js";
+import { acceptsDebugSink, emitLazyDebugSafely } from "./lazyDebugSink.js";
 
 let sessionLogSink = null;
 
@@ -13,7 +13,5 @@ export function setReconnectTimingDebugLogSink(sink = null) {
 }
 
 export function logReconnectTimingDebug(event, payload = {}) {
-  try {
-    return emitLazyDebug(sessionLogSink, "reconnect-timing", event, payload);
-  } catch {}
+  return emitLazyDebugSafely(sessionLogSink, "reconnect-timing", event, payload);
 }

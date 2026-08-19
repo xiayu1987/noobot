@@ -10,12 +10,23 @@ import { openSync } from "node:fs";
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import {
-  DEFAULT_CLEANUP_INTERVAL_MS, DEFAULT_HOST, DEFAULT_IDLE_TIMEOUT_MS,
-  DEFAULT_SHUTDOWN_GRACE_MS, DEFAULT_START_TIMEOUT_MS, DEFAULT_TOUCH_PERSIST_INTERVAL_MS,
-  IDE_PATH_PREFIX, IDE_TOKEN_QUERY_KEY, getOpenVSCodeConfig,
+  DEFAULT_CLEANUP_INTERVAL_MS,
+  DEFAULT_HOST,
+  DEFAULT_IDLE_TIMEOUT_MS,
+  DEFAULT_SHUTDOWN_GRACE_MS,
+  DEFAULT_START_TIMEOUT_MS,
+  DEFAULT_TOUCH_PERSIST_INTERVAL_MS,
+  IDE_PATH_PREFIX,
+  IDE_TOKEN_QUERY_KEY,
+  getOpenVSCodeConfig,
 } from "./openvscode/config.js";
 import { normalizeBasePath, normalizeUserId, readJsonFileSafe, sleep } from "./openvscode/utils.js";
-import { allocatePort, isPortOpen, isProcessAlive, stopInstanceBestEffort } from "./openvscode/process.js";
+import {
+  allocatePort,
+  isPortOpen,
+  isProcessAlive,
+  stopInstanceBestEffort,
+} from "./openvscode/process.js";
 import { createOpenVSCodeProxy } from "./openvscode/proxy.js";
 
 export function createOpenVSCodeService({
@@ -53,10 +64,7 @@ export function createOpenVSCodeService({
 
   async function removePersistedInstance(instance = {}) {
     if (!instance?.workspacePath) return;
-    try {
-      await rm(getMetaPath(instance.workspacePath), { force: true });
-    } catch {
-    }
+    await rm(getMetaPath(instance.workspacePath), { force: true });
   }
 
   function touchInstance(instance = {}, { persist = false } = {}) {
@@ -87,7 +95,11 @@ export function createOpenVSCodeService({
       port,
       pid: Number(parsed.pid || 0),
       lastAccessAt: String(parsed.lastAccessAt || parsed.startedAt || new Date().toISOString()),
-      lastAccessAtMs: Number(parsed.lastAccessAtMs || Date.parse(parsed.lastAccessAt || parsed.startedAt || "") || Date.now()),
+      lastAccessAtMs: Number(
+        parsed.lastAccessAtMs ||
+          Date.parse(parsed.lastAccessAt || parsed.startedAt || "") ||
+          Date.now(),
+      ),
       lastAccessPersistedAtMs: Number(parsed.lastAccessPersistedAtMs || 0),
     };
   }
@@ -124,7 +136,7 @@ export function createOpenVSCodeService({
       const instance = await loadPersistedInstance(userId, workspacePath);
       if (!instance) continue;
       if (
-        await isInstanceReachable(instance) &&
+        (await isInstanceReachable(instance)) &&
         isInstanceForWorkspace(instance, workspacePath) &&
         isInstanceTokenCompatible(instance)
       ) {
@@ -163,28 +175,35 @@ export function createOpenVSCodeService({
     const normalizedWorkspacePath = path.resolve(String(workspacePath || ""));
     const defaultFolder = String(instance?.defaultFolder || "").trim();
     if (defaultFolder && path.resolve(defaultFolder) === normalizedWorkspacePath) return true;
-    const args = Array.isArray(instance?.args) ? instance.args.map((item) => String(item || "")) : [];
+    const args = Array.isArray(instance?.args)
+      ? instance.args.map((item) => String(item || ""))
+      : [];
     const defaultFolderIndex = args.indexOf("--default-folder");
-    return defaultFolderIndex >= 0 && path.resolve(args[defaultFolderIndex + 1] || "") === normalizedWorkspacePath;
+    return (
+      defaultFolderIndex >= 0 &&
+      path.resolve(args[defaultFolderIndex + 1] || "") === normalizedWorkspacePath
+    );
   }
 
   async function resolveExistingInstance(userId = "", workspacePath = "") {
     const normalizedUserId = normalizeUserId(userId);
     const memoryInstance = instancesByUser.get(normalizedUserId);
-    if (memoryInstance && await isInstanceReachable(memoryInstance)) {
+    if (memoryInstance && (await isInstanceReachable(memoryInstance))) {
       if (
         isInstanceForWorkspace(memoryInstance, workspacePath) &&
         isInstanceTokenCompatible(memoryInstance)
       ) {
         return memoryInstance;
       }
-      stopInstanceBestEffort(memoryInstance, { forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs });
+      stopInstanceBestEffort(memoryInstance, {
+        forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
+      });
       removePersistedInstance(memoryInstance).catch(() => {});
     }
     if (memoryInstance) forgetInstance(memoryInstance);
 
     const persistedInstance = await loadPersistedInstance(normalizedUserId, workspacePath);
-    if (persistedInstance && await isInstanceReachable(persistedInstance)) {
+    if (persistedInstance && (await isInstanceReachable(persistedInstance))) {
       if (
         isInstanceForWorkspace(persistedInstance, workspacePath) &&
         isInstanceTokenCompatible(persistedInstance)
@@ -192,22 +211,31 @@ export function createOpenVSCodeService({
         rememberInstance(persistedInstance);
         return persistedInstance;
       }
-      stopInstanceBestEffort(persistedInstance, { forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs });
+      stopInstanceBestEffort(persistedInstance, {
+        forceAfterMs: getOpenVSCodeConfig(getGlobalConfig()).shutdownGraceMs,
+      });
       removePersistedInstance(persistedInstance).catch(() => {});
     }
     return null;
   }
 
-  async function waitForInstance(instance = {}, timeoutMs = DEFAULT_START_TIMEOUT_MS, getSpawnError = () => null) {
+  async function waitForInstance(
+    instance = {},
+    timeoutMs = DEFAULT_START_TIMEOUT_MS,
+    getSpawnError = () => null,
+  ) {
     const deadline = Date.now() + Number(timeoutMs || DEFAULT_START_TIMEOUT_MS);
     while (Date.now() < deadline) {
       const spawnError = typeof getSpawnError === "function" ? getSpawnError() : null;
       if (spawnError) throw spawnError;
-      if (await isPortOpen({
-        host: instance.host || DEFAULT_HOST,
-        port: instance.port,
-        timeoutMs: TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs,
-      })) return true;
+      if (
+        await isPortOpen({
+          host: instance.host || DEFAULT_HOST,
+          port: instance.port,
+          timeoutMs: TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs,
+        })
+      )
+        return true;
       if (instance.pid && !isProcessAlive(instance.pid)) return false;
       await sleep(TIME_THRESHOLDS.openvscode.waitProbeTimeoutMs);
     }
@@ -284,15 +312,20 @@ export function createOpenVSCodeService({
     rememberInstance(instance);
     await persistInstance(instance);
     try {
-      const ready = await waitForInstance(instance, openVSCodeConfig.startTimeoutMs, () => spawnError);
+      const ready = await waitForInstance(
+        instance,
+        openVSCodeConfig.startTimeoutMs,
+        () => spawnError,
+      );
       if (!ready) {
         throw new Error("OpenVSCode Server start timeout or exited early");
       }
     } catch (error) {
       forgetInstance(instance);
-      const message = error?.code === "ENOENT"
-        ? `OpenVSCode Server binary not found: ${openVSCodeConfig.command}. Run "npm --prefix service run install:openvscode-server" or set OPENVSCODE_SERVER_COMMAND.`
-        : error?.message || "OpenVSCode Server start failed";
+      const message =
+        error?.code === "ENOENT"
+          ? `OpenVSCode Server binary not found: ${openVSCodeConfig.command}. Run "npm --prefix service run install:openvscode-server" or set OPENVSCODE_SERVER_COMMAND.`
+          : error?.message || "OpenVSCode Server start failed";
       throw new Error(message);
     }
     return instance;

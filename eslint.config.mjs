@@ -55,6 +55,7 @@ export default [
       "no-func-assign": "warn",
       "no-invalid-regexp": "warn",
       "no-irregular-whitespace": "warn",
+      "no-empty": ["error", { allowEmptyCatch: false }],
       "no-obj-calls": "warn",
       "no-self-assign": "warn",
       "no-self-compare": "warn",
