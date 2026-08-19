@@ -25,11 +25,15 @@ import {
   validateInteractionResponsePayload,
 } from "./interaction.js";
 import {
+  MESSAGE_EVENT_TYPE,
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
   validateMessageEventPayload,
 } from "./message-event.js";
-import { validateWorkflowRuntimeEnvelope, WORKFLOW_RUNTIME_EVENT } from "./workflow-runtime-event.js";
+import {
+  validateWorkflowRuntimeEnvelope,
+  WORKFLOW_RUNTIME_EVENT,
+} from "./workflow-runtime-event.js";
 import { validateTurnSnapshotEnvelope } from "./turn-snapshot.js";
 
 export const EVENT_AUTHORITY = Object.freeze({ AUTHORITATIVE: "authoritative" });
@@ -62,11 +66,12 @@ export const EVENT_FAMILY = Object.freeze({
 
 const domainResult = (result, fallback = "invalid_domain_payload") => {
   if (result?.valid === true) return { valid: true, errors: [] };
-  const errors = Array.isArray(result?.errors) && result.errors.length
-    ? result.errors
-    : Array.isArray(result?.missing) && result.missing.length
-      ? result.missing
-      : [result?.reason || fallback];
+  const errors =
+    Array.isArray(result?.errors) && result.errors.length
+      ? result.errors
+      : Array.isArray(result?.missing) && result.missing.length
+        ? result.missing
+        : [result?.reason || fallback];
   return { valid: false, errors };
 };
 const validateAttachment = (payload) => {
@@ -82,8 +87,10 @@ const validateInteractionEnvelope = (envelope) => {
   const errors = [];
   const requestId = String(envelope?.payload?.requestId || "").trim();
   if (!String(envelope?.identity?.turnScopeId || "").trim()) errors.push("missing_turn_scope_id");
-  if (envelope?.ordering?.domain !== INTERACTION_SEQUENCE_DOMAIN) errors.push("sequence_domain_mismatch");
-  if (requestId && envelope?.ordering?.scopeId !== requestId) errors.push("sequence_scope_mismatch");
+  if (envelope?.ordering?.domain !== INTERACTION_SEQUENCE_DOMAIN)
+    errors.push("sequence_domain_mismatch");
+  if (requestId && envelope?.ordering?.scopeId !== requestId)
+    errors.push("sequence_scope_mismatch");
   return { valid: errors.length === 0, errors };
 };
 const validateMessageEnvelope = (envelope) => {
@@ -95,6 +102,23 @@ const validateMessageEnvelope = (envelope) => {
   }
   if (messageId && envelope?.ordering?.scopeId !== messageId) {
     errors.push("sequence_scope_mismatch");
+  }
+  if (envelope?.payload?.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    for (const role of ["user", "assistant"]) {
+      const message = envelope?.payload?.presentation?.[`${role}Message`];
+      if (
+        String(message?.sessionId || "").trim() !==
+        String(envelope?.identity?.sessionId || "").trim()
+      ) {
+        errors.push(`${role}_session_identity_mismatch`);
+      }
+      if (
+        String(message?.turnScopeId || "").trim() !==
+        String(envelope?.identity?.turnScopeId || "").trim()
+      ) {
+        errors.push(`${role}_turn_identity_mismatch`);
+      }
+    }
   }
   return { valid: errors.length === 0, errors };
 };
@@ -183,7 +207,9 @@ const descriptors = Object.freeze(
 );
 const byFamily = new Map(descriptors.map((descriptor) => [descriptor.family, descriptor]));
 const byWireEvent = new Map(
-  descriptors.flatMap((descriptor) => descriptor.wireEvents.map((wireEvent) => [wireEvent, descriptor])),
+  descriptors.flatMap((descriptor) =>
+    descriptor.wireEvents.map((wireEvent) => [wireEvent, descriptor]),
+  ),
 );
 
 export function getEventFamily(family = "") {
@@ -249,13 +275,13 @@ export function validateProtocolEvent(envelope = {}) {
   const envelopeValidation = validateEventEnvelope(envelope);
   if (!envelopeValidation.valid) return { ...envelopeValidation, descriptor: null };
   const descriptor = getEventFamily(envelope.protocol.family);
-  if (!descriptor)
-    return { valid: false, errors: ["unsupported_event_family"], descriptor: null };
+  if (!descriptor) return { valid: false, errors: ["unsupported_event_family"], descriptor: null };
   if (!descriptor.wireEvents.includes(envelope.identity.eventType))
     return { valid: false, errors: ["event_type_family_mismatch"], descriptor };
-  const orderingValidation = Number(envelope.ordering.sequence) < descriptor.minimumSequence
-    ? { valid: false, errors: ["sequence_below_family_minimum"] }
-    : { valid: true, errors: [] };
+  const orderingValidation =
+    Number(envelope.ordering.sequence) < descriptor.minimumSequence
+      ? { valid: false, errors: ["sequence_below_family_minimum"] }
+      : { valid: true, errors: [] };
   const familyEnvelopeValidation = descriptor.validateEnvelope?.(envelope) || {
     valid: true,
     errors: [],

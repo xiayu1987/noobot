@@ -155,7 +155,8 @@ describe("workflow runtime architecture guard", () => {
     expect(batchReplay).toMatch(
       /findCanonicalMessageById\?\.\(targetSessionId, presentationMessageId\)/,
     );
-    expect(batchReplay).toMatch(/if\s*\(!canonicalTarget[\s\S]*return false/);
+    expect(batchReplay).toMatch(/materializeTurnPresentation\?\.\(envelope\)/);
+    expect(batchReplay).toMatch(/!canonicalTarget\s*\|\|[\s\S]*return false/);
     expect(batchReplay).not.toMatch(
       /find.*(?:ByRole|LastAssistant|ByDialogProcessId|ByTurnScopeId)/,
     );

@@ -1,5 +1,10 @@
 # Noobot 浏览器协议闭环自动化测试方案
 
+[English](./browser-protocol-e2e-test-plan.en.md) | [中文](./browser-protocol-e2e-test-plan.zh-CN.md)
+
+> 语言说明：本文与英文版描述同一套测试。PBE 编号、协议实现、测试 spec 和
+> `model-observation-policy.js` 是唯一事实源；翻译不得创建不同的验收规则。
+
 ## 1. 目标与原则
 
 本文定义一套基于 Playwright 的真实浏览器自动化验收方案，覆盖：
@@ -453,6 +458,12 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：停止轮恰好存在四个调用和四个按 `toolCallId` 配对的结果；已完成调用保留真实成功结果，被停止调用形成 `status=aborted`、`stopType=user_stop` 的规范结果。版本 2 快照不得出现未配对 assistant tool call；正式恢复投影必须成为 Continue 首次 `agent.main` provider 输入的精确前缀，Continue 轮不得再次产生工具调用。
 
+### PBE-046：多浏览器 Workflow 消息与卡片实时一致性
+
+步骤：在浏览器 A 完成一轮基线消息后，浏览器 B 打开同一 Session；A 启用 Workflow 与 Harness 并发起 Workflow Turn，在运行中观察 B 的实时展示，再由 B 停止该 Turn。
+
+断言：B 必须先收到该 Turn 的用户消息与 assistant 展示实体，再收到 Workflow runtime 并渲染与 A 一致的 Workflow 卡片；DSL 在两端始终提供展开/收起且默认收起；两端停止按钮和最终 `turn.stop_completed` 状态一致。禁止通过 Turn lifecycle 推导消息、收到状态后 REST 刷新 Session 或由 Workflow runtime 另建卡片宿主消息。
+
 ### 模型调用唯一观测边界
 
 模型输入观测发生在模型 factory 返回的 observed model 端口，并紧邻底层 provider `invoke()`。
@@ -528,7 +539,7 @@ npm run test:e2e:protocol:full
 | --------- | ----------------------------------------------- |
 | Smoke     | PBE-002、006                                    |
 | Core      | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036、044、045      |
+| Full-only | PBE-015、023～026、028、031～036、044～046      |
 
 ## 8. CI 失败产物要求
 

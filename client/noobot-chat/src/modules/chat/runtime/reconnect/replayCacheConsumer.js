@@ -3,16 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  takeReplayCacheGroupsForSession,
-} from "./replayCache.js";
-import {
-  applyReconnectReplayBatchToActiveSession,
-} from "./messageReplay.js";
-import {
-  _trimStr,
-  normalizeExecutionLogForRealtime,
-} from "./utils.js";
+import { takeReplayCacheGroupsForSession } from "./replayCache.js";
+import { applyReconnectReplayBatchToActiveSession } from "./messageReplay.js";
+import { _trimStr, normalizeExecutionLogForRealtime } from "./utils.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 export async function consumeReconnectReplayCacheForSession({
@@ -25,8 +18,11 @@ export async function consumeReconnectReplayCacheForSession({
   for (const { dialogProcessId, turnScopeId, replayMessages } of replayGroups) {
     const isWorkflowNodeReplay = replayMessages.some((envelope) => {
       const result = validateProtocolEvent(envelope);
-      return result.valid && result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
-        Boolean(envelope.payload?.workflowRunId && envelope.payload?.nodeExecutionId);
+      return (
+        result.valid &&
+        result.descriptor?.family === EVENT_FAMILY.MESSAGE_TIMELINE &&
+        Boolean(envelope.payload?.workflowRunId && envelope.payload?.nodeExecutionId)
+      );
     });
     if (isWorkflowNodeReplay) {
       await applySubSessionReplayMessages?.(replayMessages, {
@@ -46,6 +42,8 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   activeSession,
   activeSessionId,
   findCanonicalMessageById,
+  findCanonicalMessagesById,
+  materializeTurnPresentation,
   chatList,
   messages,
   dialogProcessId,
@@ -59,6 +57,8 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     activeSession,
     activeSessionId,
     findCanonicalMessageById,
+    findCanonicalMessagesById,
+    materializeTurnPresentation,
     chatList,
     messages,
     dialogProcessId,

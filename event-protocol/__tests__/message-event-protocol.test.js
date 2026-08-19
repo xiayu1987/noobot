@@ -19,6 +19,7 @@ import {
   isAuthoritativeFinalContentEvent,
   projectMessageEventContent,
   projectMessageEventToolFacets,
+  projectTurnPresentation,
   resolveMessageEventPresentationId,
   validateMessageEventPayload,
 } from "@noobot/event-protocol/message-event";
@@ -41,6 +42,7 @@ function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
       eventId: "event-1",
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "child-1",
+      turnScopeId: "turn-1",
       messageId: "message-1",
       ...(envelopeOverrides.identity || {}),
     },
@@ -59,10 +61,9 @@ function envelope(payloadOverrides = {}, envelopeOverrides = {}) {
 
 test("message family validates canonical v3 identity, ordering, and domain payload", () => {
   assert.deepEqual(validateProtocolEvent(envelope()).valid, true);
-  assert.deepEqual(
-    validateProtocolEvent(envelope({}, { ordering: { sequence: 0 } })).errors,
-    ["sequence_below_family_minimum"],
-  );
+  assert.deepEqual(validateProtocolEvent(envelope({}, { ordering: { sequence: 0 } })).errors, [
+    "sequence_below_family_minimum",
+  ]);
   assert.deepEqual(validateProtocolEvent(envelope({}, { identity: { messageId: "" } })).errors, [
     "missing_message_id",
   ]);
@@ -98,7 +99,10 @@ test("message payload validation is total for non-object input", () => {
 test("message payload owns presentation identity and content semantics", () => {
   const current = payload();
   assert.equal(resolveMessageEventPresentationId(current), "presentation-1");
-  assert.equal(isAuthoritativeFinalContentEvent(payload({ eventType: "main_model_content" })), false);
+  assert.equal(
+    isAuthoritativeFinalContentEvent(payload({ eventType: "main_model_content" })),
+    false,
+  );
   assert.equal(
     isAuthoritativeFinalContentEvent(payload({ eventType: "authoritative_final_content" })),
     true,
@@ -106,20 +110,78 @@ test("message payload owns presentation identity and content semantics", () => {
   assert.deepEqual(validateMessageEventPayload(payload({ presentationMessageId: "" })).errors, [
     "missing_presentation_message_id",
   ]);
-  assert.deepEqual(
-    projectMessageEventContent(payload({ eventType: "llm_delta", text: "token" })),
-    { effect: MESSAGE_CONTENT_EFFECT.APPEND, content: "token" },
-  );
+  assert.deepEqual(projectMessageEventContent(payload({ eventType: "llm_delta", text: "token" })), {
+    effect: MESSAGE_CONTENT_EFFECT.APPEND,
+    content: "token",
+  });
   assert.deepEqual(projectMessageEventContent(payload()), {
     effect: MESSAGE_CONTENT_EFFECT.NONE,
     content: "",
   });
 });
 
+test("turn presentation atomically declares canonical user and assistant entities", () => {
+  const presentation = {
+    userMessage: {
+      id: "user-1",
+      messageId: "user-1",
+      role: "user",
+      sessionId: "child-1",
+      turnScopeId: "turn-1",
+      content: "question",
+      attachments: [],
+    },
+    assistantMessage: {
+      id: "presentation-1",
+      messageId: "presentation-1",
+      presentationMessageId: "presentation-1",
+      role: "assistant",
+      sessionId: "child-1",
+      turnScopeId: "turn-1",
+      content: "",
+      attachments: [],
+    },
+  };
+  const committed = payload({
+    eventType: MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED,
+    presentation,
+    tool: undefined,
+    toolCallId: undefined,
+  });
+
+  assert.deepEqual(validateMessageEventPayload(committed), { valid: true, errors: [] });
+  assert.deepEqual(projectTurnPresentation(committed), presentation);
+  assert.deepEqual(validateProtocolEvent(envelope(committed)).valid, true);
+  assert.deepEqual(
+    validateProtocolEvent(
+      envelope({
+        ...committed,
+        presentation: {
+          ...presentation,
+          userMessage: { ...presentation.userMessage, sessionId: "another-session" },
+        },
+      }),
+    ).errors,
+    ["user_session_identity_mismatch"],
+  );
+  assert.deepEqual(
+    validateMessageEventPayload({
+      ...committed,
+      presentation: {
+        ...presentation,
+        assistantMessage: { ...presentation.assistantMessage, messageId: "split-id" },
+      },
+    }).errors,
+    ["assistant_message_id_mismatch"],
+  );
+});
+
 test("message payload validates and projects tool facts", () => {
   assert.deepEqual(validateMessageEventPayload(payload({ args: {} })), { valid: true, errors: [] });
   assert.deepEqual(
-    validateMessageEventPayload(payload({ eventType: MESSAGE_EVENT_TYPE.LLM_DELTA, text: "token" })),
+    validateMessageEventPayload(
+      payload({ eventType: MESSAGE_EVENT_TYPE.LLM_DELTA, text: "token" }),
+    ),
     { valid: true, errors: [] },
   );
   const started = projectMessageEventToolFacets(
@@ -153,10 +215,9 @@ test("message payload rejects nested and aliased tool facts", () => {
     toolResult: { tool_call_id: "call-1", output: { ok: true }, success: true },
   });
   assert.deepEqual(validateMessageEventPayload(noncanonical).errors, ["noncanonical_toolResult"]);
-  assert.deepEqual(
-    validateMessageEventPayload(payload({ tool_call_id: "call-1" })).errors,
-    ["noncanonical_tool_call_id"],
-  );
+  assert.deepEqual(validateMessageEventPayload(payload({ tool_call_id: "call-1" })).errors, [
+    "noncanonical_tool_call_id",
+  ]);
 });
 
 test("message payload validates and projects canonical tool risk", () => {

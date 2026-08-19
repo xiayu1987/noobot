@@ -90,7 +90,14 @@ export function createRunner({
 } = {}) {
   let authorityEventSequence = 0;
   const sessionManager = {
-    async commitMessageEvent({ sessionId, turnScopeId, messageId, commandId, correlationId, payload }) {
+    async commitMessageEvent({
+      sessionId,
+      turnScopeId,
+      messageId,
+      commandId,
+      correlationId,
+      payload,
+    }) {
       authorityEventSequence += 1;
       return {
         committed: true,
@@ -238,6 +245,7 @@ export function createRunner({
       ...result,
       userMessage: result.userMessage || {
         messageUid: `sm_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
+        messageId: `msg_user_test_${String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_")}`,
         role: "user",
         type: "message",
         content: "edited",

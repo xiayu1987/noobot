@@ -5,6 +5,8 @@
  */
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
+  MESSAGE_EVENT_TYPE,
+  projectTurnPresentation,
   resolveMessageEventPresentationId,
 } from "@noobot/event-protocol/message-event";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
@@ -309,31 +311,41 @@ export function createSubSessionStore({
     ) {
       return { applied: false, reason: "duplicate_sequence", current: currentSession };
     }
+    if (
+      incomingSequenceIdentity.sequenceKey &&
+      incomingSequenceIdentity.sequence > 0 &&
+      incomingSequenceIdentity.sequence < appliedSequence
+    ) {
+      return { applied: false, reason: "stale", current: currentSession };
+    }
     const messages = Array.isArray(currentSession.messages) ? [...currentSession.messages] : [];
     const incoming = eventData;
     const messageKey = authoritativeSubSessionMessageId(incoming);
+    const turnPresentation = projectTurnPresentation(payload);
+    if (projectionEventName === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+      for (const source of [turnPresentation?.userMessage, turnPresentation?.assistantMessage]) {
+        if (!source) continue;
+        const sourceId = text(source.messageId || source.id);
+        const sourceIndex = messages.findIndex(
+          (message = {}) => text(message?.messageId || message?.id) === sourceId,
+        );
+        const materialized = {
+          ...source,
+          id: sourceId,
+          messageId: sourceId,
+          sessionId,
+          createdAt: source.createdAt || source.ts || eventTime(eventData),
+        };
+        if (sourceIndex >= 0) messages[sourceIndex] = { ...messages[sourceIndex], ...materialized };
+        else messages.push(materialized);
+      }
+    }
     const existingIndex = messageKey
       ? messages.findIndex((message = {}) => text(message?.messageId || message?.id) === messageKey)
       : -1;
     const currentMessage = existingIndex >= 0 ? messages[existingIndex] : null;
-    const nextMessage = currentMessage || {
-      id: messageKey,
-      messageId: messageKey,
-      presentationMessageId: messageKey,
-      sourceMessageId: text(identity.messageId),
-      role: "assistant",
-      content: "",
-      sessionId,
-      parentSessionId: text(payload.parentSessionId),
-      dialogProcessId: text(payload.dialogProcessId),
-      turnScopeId: text(identity.turnScopeId),
-      workflowRunId: text(payload.workflowRunId),
-      nodeExecutionId: text(payload.nodeExecutionId),
-      pending: true,
-      createdAt: eventTime(eventData),
-      toolTimeline: [],
-      activityTimeline: [],
-    };
+    if (!currentMessage) return { applied: false, reason: "presentation_target_missing" };
+    const nextMessage = currentMessage;
     nextMessage.sessionId = text(nextMessage.sessionId || identity.sessionId);
     nextMessage.parentSessionId = text(nextMessage.parentSessionId || payload.parentSessionId);
     nextMessage.dialogProcessId = text(nextMessage.dialogProcessId || payload.dialogProcessId);

@@ -1,4 +1,61 @@
-# 场景落地索引
+# Scenario Implementation Index / 场景落地索引
+
+[English](#english) | [中文](#中文)
+
+## English
+
+Scenario IDs and acceptance conditions are defined by the shared protocol plan and the executable
+specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-plan.en.md) and the
+[Chinese plan](../../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md).
+
+- `002`-`008`: connection, send, attachments, stop, snapshots, and repeated continuation.
+- `009`-`012`: merged into the single-Session resend chain in PBE-029.
+- `013`-`015`: reconnect, concurrent reconnect, and multi-page consistency.
+- `016`-`017`: Harness completion, Hook interruption, and Model Context.
+- `021`-`032`: Session recovery/conflicts, stop idempotency, offline recovery, negative protocol,
+  plugin/runtime identity, and Workflow lifecycle.
+- `033`-`036`: full Harness injections, main-Agent summary checkpoints, periodic task checks, tools,
+  live thinking, and interaction closure.
+- `044`: two stop/continue cycles during an eight-step tool chain, including snapshot restoration.
+- `045`: parallel tool calls stopped mid-batch, with complete call/result pairing after restoration.
+- `046`: real-time user, assistant, Workflow card, DSL collapse, and stop-state consistency across
+  two browser contexts.
+
+PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-099 was
+removed as duplicate coverage. All current scenarios are implemented; permanent skips and
+placeholder scenarios without business assertions are forbidden.
+
+### PBE-033: Low-turn complete Harness flow
+
+Enable planning and acceptance and configure guidance analysis through the Harness UI. Use the
+formal `update:pluginModelConfig` boundary to lower E2E-only thresholds, then execute a five-step
+dependent tool chain with explicit plan refinement and task acceptance. Assert planning, guidance,
+summary, revision/refinement, phase acceptance, semantic validation, and review facts; capability
+relays, checkpoint identities, cache prefixes, and all tool results must close.
+
+### PBE-034: Low-turn main-Agent phase summary
+
+Without Harness, set `preferences.summaryPolicy.phaseSummaryLoopTurns=2` through the Composer and
+run a three-step dependent chain. Assert the main flow independently emits the summary requirement
+and checkpoint, preserves tool call/result pairs, removes summarized UIDs from later provider
+input, and performs exactly three `execute_script` calls plus one `task_summary`.
+
+### PBE-035: Periodic task check
+
+Lower `taskCheckLoopTurns` and `phaseSummaryLoopTurns` through the formal Composer boundary, run a
+five-step chain, then send a dependent follow-up. Assert one marker per requirement, no marker leak,
+`NOOBOT_TASK_CHECK/1` input, receipt-only output, latest check evidence retained before checkpoint,
+and the result visible in both thinking details and later model history.
+
+### PBE-036: Tools, live thinking, and interaction closure
+
+Enable real Harness guidance analysis and execute the declared safe tool set in order. Continuously
+sample the live thinking UI and complete the interaction card. Assert the authoritative tool set is
+exact, every `toolCallId` closes with arguments and a successful result, live content changes over
+time, all seven call/result pairs remain expandable in details, and tool/interaction results reach
+the final answer.
+
+## 中文
 
 场景编号和验收条件以项目根目录 `docs/browser-protocol-e2e-test-plan.zh-CN.md` 为唯一事实源。
 

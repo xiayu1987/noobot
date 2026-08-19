@@ -13,16 +13,18 @@ export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
   const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
   const workflowRunId = text(
     source?.workflowRunId ||
-    source?.execution?.workflowRunId ||
-    source?.execution?.instanceId ||
-    messageItem?.workflowRunId ||
-    messageItem?.turnScopeId,
+      source?.execution?.workflowRunId ||
+      source?.execution?.instanceId ||
+      messageItem?.workflowRunId ||
+      messageItem?.turnScopeId,
   );
   const sessionId = text(
     source?.planningDialog?.sessionId || source?.runMeta?.sessionId || messageItem?.sessionId,
   );
   const dialogProcessId = text(
-    source?.planningDialog?.dialogProcessId || source?.runMeta?.dialogProcessId || messageItem?.dialogProcessId,
+    source?.planningDialog?.dialogProcessId ||
+      source?.runMeta?.dialogProcessId ||
+      messageItem?.dialogProcessId,
   );
   return {
     ...source,
@@ -32,7 +34,9 @@ export function projectWorkflowMessageIdentity(payload = {}, messageItem = {}) {
       ...(workflowRunId ? { workflowRunId, instanceId: workflowRunId } : {}),
     },
     planningDialog: {
-      ...(source?.planningDialog && typeof source.planningDialog === "object" ? source.planningDialog : {}),
+      ...(source?.planningDialog && typeof source.planningDialog === "object"
+        ? source.planningDialog
+        : {}),
       ...(sessionId ? { sessionId } : {}),
       ...(dialogProcessId ? { dialogProcessId } : {}),
     },
@@ -69,21 +73,16 @@ export function useWorkflowMeta(props) {
       : [],
   );
 
-  const semanticPreview = computed(
-    () =>
-      String(
-        workflowMeta.value?.semanticTextPreview ||
-          workflowPayload.value?.interaction?.semanticTextPreview ||
-          "",
-      ).trim(),
+  const semanticPreview = computed(() =>
+    String(
+      workflowMeta.value?.semanticTextPreview ||
+        workflowPayload.value?.interaction?.semanticTextPreview ||
+        "",
+    ).trim(),
   );
 
-  const semanticPreviewLineCount = computed(() =>
-    String(semanticPreview.value || "").split(/\r?\n/).length,
-  );
-
-  const semanticPreviewCollapsible = computed(
-    () => semanticPreviewLineCount.value > 8 || String(semanticPreview.value || "").length > 900,
+  const semanticPreviewLineCount = computed(
+    () => String(semanticPreview.value || "").split(/\r?\n/).length,
   );
 
   return {
@@ -92,6 +91,5 @@ export function useWorkflowMeta(props) {
     semanticFlowtos,
     semanticPreview,
     semanticPreviewLineCount,
-    semanticPreviewCollapsible,
   };
 }

@@ -5,13 +5,24 @@
  */
 import { dispatchTurnEnvelope, TURN_PROJECTION_SOURCE } from "./turnProjectionStore.js";
 import { shouldProjectMainSessionEvent, shouldProjectSubSessionEvent } from "./sendFlowSupport.js";
-import { resolveMessageEventPresentationId } from "@noobot/event-protocol/message-event";
+import {
+  MESSAGE_EVENT_TYPE,
+  resolveMessageEventPresentationId,
+} from "@noobot/event-protocol/message-event";
 
 export function routeMessageProjectionEvent(event, data, context) {
   const {
-    botMessage, classifyRealtimeLog, locateSendingStartedMessageOnce,
-    findCanonicalMessageById, findCanonicalMessagesById, logSessionEvent, navigateOnFirstResponseOnce, sessionId, turnScopeId,
+    botMessage,
+    classifyRealtimeLog,
+    locateSendingStartedMessageOnce,
+    findCanonicalMessageById,
+    findCanonicalMessagesById,
+    logSessionEvent,
+    navigateOnFirstResponseOnce,
+    sessionId,
+    turnScopeId,
     reduceSubSessionMessageEvent,
+    materializeTurnPresentation,
   } = context;
   if (shouldProjectSubSessionEvent(event, data)) {
     reduceSubSessionMessageEvent?.(data);
@@ -23,35 +34,57 @@ export function routeMessageProjectionEvent(event, data, context) {
   const ordering = messageEvent?.ordering || {};
   const shouldProjectMain = shouldProjectMainSessionEvent(event, data || {});
   logSessionEvent({
-    category: "transport", level: "debug",
+    category: "transport",
+    level: "debug",
     event: "frontend.messageEvent.routeEvaluated",
     sessionId: identity.sessionId || sessionId,
     dialogProcessId: payload.dialogProcessId || "",
     turnScopeId: identity.turnScopeId || turnScopeId,
     data: {
-      channelEvent: String(event || ""), shouldProjectMain,
-      eventId: identity.eventId || "", eventType: payload.eventType || "",
+      channelEvent: String(event || ""),
+      shouldProjectMain,
+      eventId: identity.eventId || "",
+      eventType: payload.eventType || "",
       messageId: identity.messageId || "",
       presentationMessageId: resolveMessageEventPresentationId(payload),
     },
   });
   if (shouldProjectMain) {
+    if (payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+      const materialized = materializeTurnPresentation?.(messageEvent) || {
+        applied: false,
+        reason: "presentation_materializer_unavailable",
+      };
+      logSessionEvent({
+        category: "transport",
+        level: materialized.applied ? "debug" : "warn",
+        event: "frontend.messageEvent.presentationMaterialized",
+        sessionId: identity.sessionId || sessionId,
+        dialogProcessId: payload.dialogProcessId || "",
+        turnScopeId: identity.turnScopeId || turnScopeId,
+        data: materialized,
+      });
+      if (!materialized.applied) return true;
+    }
     const presentationMessageId = resolveMessageEventPresentationId(payload);
     const targetSessionId = String(identity.sessionId || sessionId || "").trim();
-    const targetMessages = findCanonicalMessagesById?.(targetSessionId, presentationMessageId)
-      || [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
+    const targetMessages =
+      findCanonicalMessagesById?.(targetSessionId, presentationMessageId) ||
+      [findCanonicalMessageById?.(targetSessionId, presentationMessageId)].filter(Boolean);
     // The send flow creates the visible assistant projection before replay
     // can materialize hidden tool records. Always include that canonical bot
     // object for the same presentation identity so live artifacts cannot land
     // exclusively on a non-rendered record.
     if (
       botMessage &&
-      String(botMessage?.sessionId || botMessage?.session_id || targetSessionId).trim() === targetSessionId &&
+      String(botMessage?.sessionId || botMessage?.session_id || targetSessionId).trim() ===
+        targetSessionId &&
       String(botMessage?.turnScopeId || botMessage?.turn_scope_id || turnScopeId).trim() ===
         String(identity.turnScopeId || turnScopeId).trim() &&
       String(botMessage?.role || "assistant").trim() === "assistant" &&
       !targetMessages.includes(botMessage)
-    ) targetMessages.push(botMessage);
+    )
+      targetMessages.push(botMessage);
     const targetMessage = targetMessages[targetMessages.length - 1] || null;
     const targetBefore = {
       found: Boolean(targetMessage),
@@ -63,32 +96,47 @@ export function routeMessageProjectionEvent(event, data, context) {
       contentLength: String(targetMessage?.content || "").length,
     };
     logSessionEvent({
-      category: "transport", level: targetMessage ? "debug" : "warn",
+      category: "transport",
+      level: targetMessage ? "debug" : "warn",
       event: "frontend.messageEvent.targetResolved",
-      sessionId: targetSessionId, dialogProcessId: payload.dialogProcessId || "",
+      sessionId: targetSessionId,
+      dialogProcessId: payload.dialogProcessId || "",
       turnScopeId: identity.turnScopeId || turnScopeId,
       data: {
-        eventId: identity.eventId || "", eventType: payload.eventType || "",
-        messageId: identity.messageId || "", presentationMessageId,
-        targetSessionId, target: targetBefore,
+        eventId: identity.eventId || "",
+        eventType: payload.eventType || "",
+        messageId: identity.messageId || "",
+        presentationMessageId,
+        targetSessionId,
+        target: targetBefore,
       },
     });
-    const reductions = targetMessages.map((message) => dispatchTurnEnvelope({
-      targetMessage: message,
-      envelope: messageEvent,
-      classifyRealtimeLog,
-      source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
-    }));
-    const reduction = reductions.find((item) => item.applied) || reductions[0] || { result: "target_missing", applied: false };
+    const reductions = targetMessages.map((message) =>
+      dispatchTurnEnvelope({
+        targetMessage: message,
+        envelope: messageEvent,
+        classifyRealtimeLog,
+        source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
+      }),
+    );
+    const reduction = reductions.find((item) => item.applied) ||
+      reductions[0] || { result: "target_missing", applied: false };
     logSessionEvent({
-      category: "transport", level: reduction.applied ? "debug" : "warn", event: "frontend.messageEvent.reduced",
-      sessionId: identity.sessionId || sessionId, dialogProcessId: payload.dialogProcessId || "",
+      category: "transport",
+      level: reduction.applied ? "debug" : "warn",
+      event: "frontend.messageEvent.reduced",
+      sessionId: identity.sessionId || sessionId,
+      dialogProcessId: payload.dialogProcessId || "",
       turnScopeId: identity.turnScopeId || turnScopeId,
       data: {
-        source: "normal_live", eventId: identity.eventId || "", eventType: payload.eventType || "",
-        messageId: identity.messageId || "", presentationMessageId,
+        source: "normal_live",
+        eventId: identity.eventId || "",
+        eventType: payload.eventType || "",
+        messageId: identity.messageId || "",
+        presentationMessageId,
         sequence: ordering.sequence ?? null,
-        result: reduction.result, errors: reduction.errors || [],
+        result: reduction.result,
+        errors: reduction.errors || [],
         targetBefore,
         targetAfter: {
           contentLength: String(targetMessage?.content || "").length,

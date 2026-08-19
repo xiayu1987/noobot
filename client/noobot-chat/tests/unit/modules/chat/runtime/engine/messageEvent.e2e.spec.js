@@ -17,30 +17,33 @@ import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
 
 function applyMessageEvent(store, eventName, data) {
-  return store.reduceSubSessionMessageEvent(canonicalMessageEvent({
-    ...data,
-    eventType: data?.eventType || eventName,
-    eventId: data?.eventId,
-    sequence: data?.sequence,
-  }), { source: "test" });
+  return store.reduceSubSessionMessageEvent(
+    canonicalMessageEvent({
+      ...data,
+      eventType: data?.eventType || eventName,
+      eventId: data?.eventId,
+      sequence: data?.sequence,
+    }),
+    { source: "test" },
+  );
 }
 
 function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent(canonicalWorkflowSessionSnapshot({
+  return store.applyWorkflowRuntimeEvent(
+    canonicalWorkflowSessionSnapshot({
       aggregateVersion: 1,
       authoritySessionId: "parent-session",
       workflowRunId: "workflow-run-1",
       nodeExecutionId: "node-execution-1",
       ...sessionDoc,
-  }), { source: "test_snapshot" });
+    }),
+    { source: "test_snapshot" },
+  );
 }
 
 function deliverPacketToStore(store, envelope) {
   const wireEnvelope = JSON.parse(JSON.stringify(envelope));
-  expect(shouldProjectSubSessionEvent(
-    wireEnvelope.identity.eventType,
-    wireEnvelope,
-  )).toBe(true);
+  expect(shouldProjectSubSessionEvent(wireEnvelope.identity.eventType, wireEnvelope)).toBe(true);
   return store.reduceSubSessionMessageEvent(wireEnvelope, { source: "test" });
 }
 
@@ -94,29 +97,59 @@ describe("authoritative message event end-to-end fidelity", () => {
     });
     const modelMessageId = beginAssistantMessageEventStream(runtime, { turn: 1 });
     expect(modelMessageId).not.toBe(messageId);
-    produced.push(await emitMessageEvent(listener, runtime, "main_model_content", {
-      sessionId: "child-session",
-      parentSessionId: "parent-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "child-turn",
-      workflowRunId: "workflow-run-1",
-      nodeExecutionId: "node-execution-1",
-      text: "```mermaid\ngraph TD; A-->B\n```",
-      thinking: "```mermaid\ngraph TD; A-->B\n```",
-    }));
-    produced.push(await emitMessageEvent(listener, runtime, "tool_call_end", {
-      sessionId: "child-session",
-      parentSessionId: "parent-session",
-      dialogProcessId: "child-dialog",
-      turnScopeId: "child-turn",
-      workflowRunId: "workflow-run-1",
-      nodeExecutionId: "node-execution-1",
-      toolCallId: "call-1",
-      result: "ok",
-      success: true,
-    }));
+    produced.push(
+      await emitMessageEvent(listener, runtime, "turn_presentation_committed", {
+        presentation: {
+          userMessage: {
+            id: "child-turn-user",
+            messageId: "child-turn-user",
+            role: "user",
+            sessionId: "child-session",
+            turnScopeId: "child-turn",
+            content: "run the workflow node",
+            attachments: [],
+          },
+          assistantMessage: {
+            id: presentationMessageId,
+            messageId: presentationMessageId,
+            presentationMessageId,
+            role: "assistant",
+            sessionId: "child-session",
+            turnScopeId: "child-turn",
+            content: "",
+            attachments: [],
+            pending: true,
+          },
+        },
+      }),
+    );
+    produced.push(
+      await emitMessageEvent(listener, runtime, "main_model_content", {
+        sessionId: "child-session",
+        parentSessionId: "parent-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-execution-1",
+        text: "```mermaid\ngraph TD; A-->B\n```",
+        thinking: "```mermaid\ngraph TD; A-->B\n```",
+      }),
+    );
+    produced.push(
+      await emitMessageEvent(listener, runtime, "tool_call_end", {
+        sessionId: "child-session",
+        parentSessionId: "parent-session",
+        dialogProcessId: "child-dialog",
+        turnScopeId: "child-turn",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-execution-1",
+        toolCallId: "call-1",
+        result: "ok",
+        success: true,
+      }),
+    );
 
-    expect(frames).toHaveLength(2);
+    expect(frames).toHaveLength(3);
     frames.forEach((frame, index) => {
       expect(frame).toEqual(produced[index]);
       expect(frame.identity.eventType).toBe("message_event");
@@ -125,52 +158,56 @@ describe("authoritative message event end-to-end fidelity", () => {
     });
 
     let session = store.selectSubSessionMessages("child-session");
-    expect(session.messages).toHaveLength(1);
-    expect(session.messages[0]).toMatchObject({
+    expect(session.messages).toHaveLength(2);
+    let assistantMessage = session.messages.find((message) => message.role === "assistant");
+    expect(assistantMessage).toMatchObject({
       id: presentationMessageId,
       messageId: presentationMessageId,
       role: "assistant",
     });
-    expect(session.messages[0].activityTimeline).toEqual([
+    expect(assistantMessage.activityTimeline).toEqual([
       expect.objectContaining({
         event: "main_model_content",
         text: "```mermaid\ngraph TD; A-->B\n```",
       }),
     ]);
-    expect(session.messages[0].toolTimeline).toEqual([
+    expect(assistantMessage.toolTimeline).toEqual([
       expect.objectContaining({
         key: "call:call-1",
         status: "completed",
         result: "ok",
       }),
     ]);
-    expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
+    expect(assistantMessage.messageEventState.consumedEventIds).toEqual(
       produced.map((event) => event.identity.eventId),
     );
 
     applySessionSnapshot(store, {
       sessionId: "child-session",
-      messages: [{
-        id: presentationMessageId,
-      messageId: presentationMessageId,
-      presentationMessageId,
-        role: "assistant",
-        content: "final answer",
-      }],
+      messages: [
+        {
+          id: presentationMessageId,
+          messageId: presentationMessageId,
+          presentationMessageId,
+          role: "assistant",
+          content: "final answer",
+        },
+      ],
     });
     session = store.selectSubSessionMessages("child-session");
-    expect(session.messages).toHaveLength(1);
-    expect(session.messages[0]).toMatchObject({
+    expect(session.messages).toHaveLength(2);
+    assistantMessage = session.messages.find((message) => message.role === "assistant");
+    expect(assistantMessage).toMatchObject({
       id: presentationMessageId,
       content: "final answer",
     });
-    expect(session.messages[0].activityTimeline).toHaveLength(1);
-    expect(session.messages[0].toolTimeline).toHaveLength(1);
-    expect(session.messages[0].messageEventState.consumedEventIds).toEqual(
+    expect(assistantMessage.activityTimeline).toHaveLength(1);
+    expect(assistantMessage.toolTimeline).toHaveLength(1);
+    expect(assistantMessage.messageEventState.consumedEventIds).toEqual(
       produced.map((event) => event.identity.eventId),
     );
-    expect(session.messages[0]).not.toHaveProperty("thinking");
-    expect(session.messages[0]).not.toHaveProperty("toolResult");
-    expect(session.messages[0]).not.toHaveProperty("rawEvents");
+    expect(assistantMessage).not.toHaveProperty("thinking");
+    expect(assistantMessage).not.toHaveProperty("toolResult");
+    expect(assistantMessage).not.toHaveProperty("rawEvents");
   });
 });
