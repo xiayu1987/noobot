@@ -262,32 +262,7 @@ export class SessionExecutionFinalizer {
       executionLogs = [];
     }
     const executionSummary = summarizeExecutionLogs(executionLogs, { dialogProcessId });
-    this.upsertParentAsyncTask({
-      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
-      sessionId,
-      parentSessionId,
-      patch: {
-        status: SESSION_ASYNC_STATUS.COMPLETED,
-        endedAt: this.now(),
-        error: "",
-        result: {
-          sessionId,
-          parentSessionId: normalizeParentSessionId(parentSessionId),
-          parentDialogProcessId: parentDialogProcessId || "",
-          caller: String(caller || CALLER_ROLE.USER),
-          answer: agentResult.output,
-          traces: agentResult.traces,
-          messages: turnMessages,
-          turnTasks: agentResult?.turnTasks || [],
-          executionLogs,
-          executionSummary,
-          dialogProcessId,
-          turnScopeId: String(turnScopeId || "").trim(),
-        },
-      },
-    });
-
-    return {
+    const completionResult = {
       sessionId,
       parentSessionId: normalizeParentSessionId(parentSessionId),
       parentDialogProcessId: parentDialogProcessId || "",
@@ -300,6 +275,21 @@ export class SessionExecutionFinalizer {
       executionSummary,
       dialogProcessId,
       turnScopeId: String(turnScopeId || "").trim(),
+    };
+    this.upsertParentAsyncTask({
+      parentAsyncResultContainer: resolvedParentAsyncResultContainer,
+      sessionId,
+      parentSessionId,
+      patch: {
+        status: SESSION_ASYNC_STATUS.COMPLETED,
+        endedAt: this.now(),
+        error: "",
+        result: completionResult,
+      },
+    });
+
+    return {
+      ...completionResult,
       lifecycle: lifecycle?.snapshot || null,
       ...(resolvedParentAsyncResultContainer
         ? { parentAsyncResultContainer: resolvedParentAsyncResultContainer }

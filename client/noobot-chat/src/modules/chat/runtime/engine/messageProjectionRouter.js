@@ -28,11 +28,9 @@ export function routeMessageProjectionEvent(event, data, context) {
     reduceSubSessionMessageEvent?.(data);
     return true;
   }
-  const messageEvent = data;
-  const identity = messageEvent?.identity || {};
-  const payload = messageEvent?.payload || {};
-  const ordering = messageEvent?.ordering || {};
-  const shouldProjectMain = shouldProjectMainSessionEvent(event, data || {});
+  const messageEvent = data ?? {};
+  const { identity = {}, payload = {}, ordering = {} } = messageEvent;
+  const shouldProjectMain = shouldProjectMainSessionEvent(event, messageEvent);
   logSessionEvent({
     category: "transport",
     level: "debug",
