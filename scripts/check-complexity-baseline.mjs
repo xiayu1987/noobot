@@ -9,9 +9,9 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 611,
-  longFunctionCount: 131,
-  maxComplexity: 106,
+  complexityCount: 606,
+  longFunctionCount: 128,
+  maxComplexity: 96,
   hotspots: Object.freeze({
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
@@ -42,6 +42,10 @@ const baseline = Object.freeze({
     ],
     "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnLifecycleSnapshotProjection.js":
       [0, 0, 0],
+    "agent/src/session/services/session-message-service/append-turn.js": [0, 0, 0],
+    "agent/src/session/services/session-message-service/turn-upsert.js": [0, 0, 0],
+    "agent/src/bot/execution/turn-persister.js": [0, 0, 0],
+    "agent/src/runtime/tool-execution/tool-runner.js": [2, 32, 0],
   }),
 });
 

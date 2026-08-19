@@ -51,17 +51,17 @@ function resolveMessageAttachments(message = {}) {
 }
 
 function resolveAuthoritativeMessageId(message = {}) {
-  return String(
-    message?.messageId ||
-      message?.id ||
-      message?.additional_kwargs?.noobotMessageId ||
-      message?.additional_kwargs?.messageId ||
-      message?.lc_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.messageId ||
-      message?.lc_kwargs?.additional_kwargs?.noobotMessageId ||
-      message?.lc_kwargs?.additional_kwargs?.messageId ||
-      "",
-  ).trim();
+  const candidates = [
+    message?.messageId,
+    message?.id,
+    message?.additional_kwargs?.noobotMessageId,
+    message?.additional_kwargs?.messageId,
+    message?.lc_kwargs?.noobotMessageId,
+    message?.lc_kwargs?.messageId,
+    message?.lc_kwargs?.additional_kwargs?.noobotMessageId,
+    message?.lc_kwargs?.additional_kwargs?.messageId,
+  ];
+  return String(candidates.find(Boolean) || "").trim();
 }
 
 function previewString(value = "", maxChars = SESSION_TURN_FULL_CONTENT_PREVIEW_CHARS) {
@@ -154,6 +154,307 @@ function summarizeSessionTurnPayload(fullTurnPayload = {}) {
   };
 }
 
+function valueOrDefault(value, defaultValue) {
+  return value === undefined ? defaultValue : value;
+}
+
+function normalizedOptionalObject(value) {
+  return isPlainObject(value) ? value : null;
+}
+
+function stringValue(value) {
+  return String(value || "");
+}
+
+function optionalValueField(name, value) {
+  return value ? { [name]: value } : {};
+}
+
+function optionalListField(name, value) {
+  return Array.isArray(value) && value.length ? { [name]: value } : {};
+}
+
+function assistantPresentationField(input) {
+  return input.role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: input.chatPresentation } : {};
+}
+
+function normalizedRawModelContent(value) {
+  return typeof value === "string" || Array.isArray(value) ? value : null;
+}
+
+function arrayValue(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function firstTruthyValue(values, fallback = "") {
+  return values.find(Boolean) || fallback;
+}
+
+function normalizeSessionTurnInput(input = {}) {
+  const thinkingStartedAt = valueOrDefault(input.thinkingStartedAt, "");
+  const thinkingFinishedAt = valueOrDefault(input.thinkingFinishedAt, "");
+  const dialogProcessId = normalizeDialogProcessId(valueOrDefault(input.dialogProcessId, ""));
+  return {
+    ...input,
+    userName: valueOrDefault(input.userName, input.userId),
+    messageUid: String(valueOrDefault(input.messageUid, "") || "").trim(),
+    messageId: String(valueOrDefault(input.messageId, "") || "").trim(),
+    presentationMessageId: String(valueOrDefault(input.presentationMessageId, "") || "").trim(),
+    chatPresentation: input.chatPresentation === true,
+    type: valueOrDefault(input.type, ""),
+    taskId: valueOrDefault(input.taskId, null),
+    taskStatus: valueOrDefault(input.taskStatus, null),
+    tool_calls: valueOrDefault(input.tool_calls, null),
+    tool_call_id: valueOrDefault(input.tool_call_id, ""),
+    attachments: filterSessionAttachments(valueOrDefault(input.attachments, [])),
+    modelAlias: valueOrDefault(input.modelAlias, ""),
+    modelName: valueOrDefault(input.modelName, ""),
+    summarized: input.summarized === true,
+    toolName: valueOrDefault(input.toolName, ""),
+    rawModelContent: valueOrDefault(input.rawModelContent, null),
+    modelAdditionalKwargs: valueOrDefault(input.modelAdditionalKwargs, null),
+    modelResponseMetadata: valueOrDefault(input.modelResponseMetadata, null),
+    activityTimeline: valueOrDefault(input.activityTimeline, []),
+    toolTimeline: valueOrDefault(input.toolTimeline, []),
+    dialogProcessId,
+    parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
+    parentSessionId: normalizeParentSessionId(valueOrDefault(input.parentSessionId, "")),
+    turnScopeId: String(valueOrDefault(input.turnScopeId, "") || "").trim(),
+    injectedMessage: input.injectedMessage === true,
+    noobotInternalMessageType: valueOrDefault(input.noobotInternalMessageType, ""),
+    injectedBy: valueOrDefault(input.injectedBy, ""),
+    injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
+    frontendUserMessage: input.frontendUserMessage === true,
+    pluginMessage: input.pluginMessage === true,
+    pluginMeta: valueOrDefault(input.pluginMeta, null),
+    transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
+    thinkingStartedAt: normalizeIsoTime(thinkingStartedAt),
+    thinkingFinishedAt: normalizeIsoTime(thinkingFinishedAt),
+    turnTimingThinkingStartedAt: normalizeIsoTime(
+      valueOrDefault(input.turnTimingThinkingStartedAt, thinkingStartedAt),
+    ),
+    turnTimingThinkingFinishedAt: normalizeIsoTime(
+      valueOrDefault(input.turnTimingThinkingFinishedAt, thinkingFinishedAt),
+    ),
+    persistenceContext: valueOrDefault(input.persistenceContext, null),
+    deferTurnPersistence: input.deferTurnPersistence === true,
+  };
+}
+
+function buildFullTurnPayload(input) {
+  return {
+    role: input.role,
+    ...optionalValueField("messageUid", input.messageUid),
+    ...optionalValueField("messageId", input.messageId),
+    ...optionalValueField("presentationMessageId", input.presentationMessageId),
+    ...assistantPresentationField(input),
+    content: stringValue(input.content),
+    type: stringValue(input.type),
+    userName: stringValue(input.userName).trim(),
+    sessionId: stringValue(input.sessionId).trim(),
+    parentSessionId: input.parentSessionId,
+    taskId: valueOrDefault(input.taskId, ""),
+    taskStatus: valueOrDefault(input.taskStatus, ""),
+    dialogProcessId: input.dialogProcessId,
+    parentDialogProcessId: stringValue(input.parentDialogProcessId),
+    turnScopeId: input.turnScopeId,
+    tool_calls: Array.isArray(input.tool_calls) ? input.tool_calls : [],
+    tool_call_id: stringValue(input.tool_call_id),
+    ...optionalListField("attachments", input.attachments),
+    modelAlias: stringValue(input.modelAlias).trim(),
+    modelName: stringValue(input.modelName).trim(),
+    summarized: input.summarized,
+    toolName: stringValue(input.toolName).trim(),
+    rawModelContent: normalizedRawModelContent(input.rawModelContent),
+    modelAdditionalKwargs: normalizedOptionalObject(input.modelAdditionalKwargs),
+    injectedMessage: input.injectedMessage,
+    noobotInternalMessageType: stringValue(input.noobotInternalMessageType).trim(),
+    injectedBy: stringValue(input.injectedBy).trim(),
+    injectedMessageType: stringValue(input.injectedMessageType).trim(),
+    frontendUserMessage: input.frontendUserMessage,
+    pluginMessage: input.pluginMessage,
+    pluginMeta: normalizedOptionalObject(input.pluginMeta),
+    ...optionalListField("transferEnvelopes", input.transferEnvelopes),
+    ...optionalValueField("thinkingStartedAt", input.thinkingStartedAt),
+    ...optionalValueField("thinkingFinishedAt", input.thinkingFinishedAt),
+    modelResponseMetadata: normalizedOptionalObject(input.modelResponseMetadata),
+    ...optionalListField("activityTimeline", input.activityTimeline),
+    ...optionalListField("toolTimeline", input.toolTimeline),
+  };
+}
+
+function hasTurnTiming(input) {
+  return Boolean(input.turnTimingThinkingStartedAt || input.turnTimingThinkingFinishedAt);
+}
+
+function buildTurnTimingDiagnostic(input) {
+  return {
+    sessionId: input.sessionId,
+    role: input.role,
+    turnScopeId: input.turnScopeId,
+    dialogProcessId: input.dialogProcessId,
+    messageThinkingStartedAt: input.thinkingStartedAt,
+    messageThinkingFinishedAt: input.thinkingFinishedAt,
+    turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
+    turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
+  };
+}
+
+async function appendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload) {
+  await messagePersister.appendExecutionLog({
+    userId: input.userId,
+    sessionId: input.sessionId,
+    parentSessionId: input.parentSessionId,
+    dialogProcessId: input.dialogProcessId,
+    event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
+    category: MESSAGE_ROLE.SYSTEM,
+    type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
+    data: summarizeSessionTurnPayload(fullTurnPayload),
+    persistenceContext: input.persistenceContext,
+  });
+  if (!hasTurnTiming(input)) return;
+  await messagePersister.appendExecutionLog({
+    userId: input.userId,
+    sessionId: input.sessionId,
+    parentSessionId: input.parentSessionId,
+    dialogProcessId: input.dialogProcessId,
+    event: "debug_turn_timing_append",
+    category: MESSAGE_ROLE.SYSTEM,
+    type: "system",
+    data: buildTurnTimingDiagnostic(input),
+    persistenceContext: input.persistenceContext,
+  });
+}
+
+async function tryAppendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload) {
+  try {
+    await appendSessionTurnDiagnostics(messagePersister, input, fullTurnPayload);
+  } catch (error) {
+    emitEvent(input.eventListener, "session_turn_diagnostic_persistence_failed", {
+      sessionId: input.sessionId,
+      parentSessionId: input.parentSessionId,
+      dialogProcessId: input.dialogProcessId,
+      turnScopeId: input.turnScopeId,
+      error: error?.message || String(error || ""),
+    });
+  }
+}
+
+function buildTurnPayload(input) {
+  return {
+    userId: input.userId,
+    sessionId: input.sessionId,
+    parentSessionId: input.parentSessionId,
+    role: input.role,
+    messageUid: input.messageUid,
+    messageId: input.messageId,
+    presentationMessageId: input.presentationMessageId,
+    chatPresentation: input.chatPresentation,
+    content: String(input.content || ""),
+    type: input.type,
+    userName: input.userName,
+    taskId: input.taskId,
+    taskStatus: input.taskStatus,
+    dialogProcessId: input.dialogProcessId,
+    parentDialogProcessId: input.parentDialogProcessId,
+    turnScopeId: input.turnScopeId,
+    tool_calls: input.tool_calls,
+    tool_call_id: input.tool_call_id,
+    ...(input.attachments.length ? { attachments: input.attachments } : {}),
+    modelAlias: input.modelAlias,
+    modelName: input.modelName,
+    summarized: input.summarized,
+    toolName: input.toolName,
+    rawModelContent: input.rawModelContent,
+    modelAdditionalKwargs: input.modelAdditionalKwargs,
+    modelResponseMetadata: input.modelResponseMetadata,
+    activityTimeline: Array.isArray(input.activityTimeline) ? input.activityTimeline : [],
+    toolTimeline: Array.isArray(input.toolTimeline) ? input.toolTimeline : [],
+    injectedMessage: input.injectedMessage,
+    noobotInternalMessageType: input.noobotInternalMessageType,
+    injectedBy: input.injectedBy,
+    injectedMessageType: input.injectedMessageType,
+    frontendUserMessage: input.frontendUserMessage,
+    pluginMessage: input.pluginMessage,
+    pluginMeta: input.pluginMeta,
+    ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
+    thinkingStartedAt: input.thinkingStartedAt,
+    thinkingFinishedAt: input.thinkingFinishedAt,
+    turnTimingThinkingStartedAt: input.turnTimingThinkingStartedAt,
+    turnTimingThinkingFinishedAt: input.turnTimingThinkingFinishedAt,
+    persistenceContext: input.persistenceContext,
+  };
+}
+
+function normalizeAgentMessagesInput(input = {}) {
+  return {
+    userId: input.userId,
+    sessionId: input.sessionId,
+    parentSessionId: valueOrDefault(input.parentSessionId, ""),
+    messages: valueOrDefault(input.messages, []),
+    dialogProcessId: valueOrDefault(input.dialogProcessId, ""),
+    parentDialogProcessId: valueOrDefault(input.parentDialogProcessId, ""),
+    turnScopeId: valueOrDefault(input.turnScopeId, ""),
+    eventListener: input.eventListener,
+    thinkingStartedAt: normalizeIsoTime(valueOrDefault(input.thinkingStartedAt, "")),
+    thinkingFinishedAt: normalizeIsoTime(valueOrDefault(input.thinkingFinishedAt, "")),
+    persistenceContext: valueOrDefault(input.persistenceContext, null),
+  };
+}
+
+function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
+  return {
+    userId: input.userId,
+    sessionId: input.sessionId,
+    role: firstTruthyValue([messageItem.role], MESSAGE_ROLE.ASSISTANT),
+    messageUid: stringValue(messageItem?.messageUid).trim(),
+    messageId: resolveAuthoritativeMessageId(messageItem),
+    presentationMessageId: stringValue(messageItem.presentationMessageId).trim(),
+    chatPresentation: messageItem.chatPresentation === true,
+    content: stringValue(messageItem.content),
+    type: stringValue(messageItem.type),
+    parentSessionId: input.parentSessionId,
+    dialogProcessId: firstTruthyValue([
+      resolveContextMessageDialogProcessId(messageItem),
+      normalizeDialogProcessId(input.dialogProcessId),
+    ]),
+    parentDialogProcessId: firstTruthyValue([
+      messageItem.parentDialogProcessId,
+      input.parentDialogProcessId,
+    ]),
+    taskId: firstTruthyValue([messageItem.taskId], null),
+    taskStatus: firstTruthyValue([messageItem.taskStatus], null),
+    tool_calls: arrayValue(messageItem.tool_calls, null),
+    tool_call_id: stringValue(messageItem.tool_call_id),
+    attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
+    modelAlias: String(messageItem.modelAlias ?? "").trim(),
+    modelName: String(messageItem.modelName ?? "").trim(),
+    summarized: messageItem.summarized === true,
+    toolName: String(messageItem.toolName ?? "").trim(),
+    rawModelContent: normalizedRawModelContent(messageItem.rawModelContent),
+    modelAdditionalKwargs: normalizedOptionalObject(messageItem.modelAdditionalKwargs),
+    injectedMessage: messageItem.injectedMessage === true,
+    noobotInternalMessageType: stringValue(messageItem.noobotInternalMessageType).trim(),
+    injectedBy: stringValue(messageItem.injectedBy).trim(),
+    injectedMessageType: stringValue(messageItem.injectedMessageType).trim(),
+    frontendUserMessage: messageItem.frontendUserMessage === true,
+    pluginMessage: messageItem.pluginMessage === true,
+    pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
+    transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
+    modelResponseMetadata: normalizedOptionalObject(messageItem.modelResponseMetadata),
+    activityTimeline: arrayValue(messageItem.activityTimeline),
+    toolTimeline: arrayValue(messageItem.toolTimeline),
+    turnScopeId: stringValue(firstTruthyValue([messageItem.turnScopeId, input.turnScopeId])).trim(),
+    thinkingStartedAt: "",
+    thinkingFinishedAt: "",
+    turnTimingThinkingStartedAt: includeTurnTiming ? input.thinkingStartedAt : "",
+    turnTimingThinkingFinishedAt: includeTurnTiming ? input.thinkingFinishedAt : "",
+    eventListener: input.eventListener,
+    persistenceContext: input.persistenceContext,
+    deferTurnPersistence: true,
+  };
+}
+
 export class SessionTurnPersister {
   constructor({ session = null } = {}) {
     this.session = session;
@@ -169,309 +470,38 @@ export class SessionTurnPersister {
     };
   }
 
-  async appendSessionTurn({
-    userId,
-    sessionId,
-    userName = userId,
-    role,
-    messageUid = "",
-    messageId = "",
-    presentationMessageId = "",
-    chatPresentation = false,
-    content,
-    type = "",
-    taskId = null,
-    taskStatus = null,
-    tool_calls = null,
-    tool_call_id = "",
-    attachments = [],
-    modelAlias = "",
-    modelName = "",
-    summarized = false,
-    toolName = "",
-    rawModelContent = null,
-    modelAdditionalKwargs = null,
-    modelResponseMetadata = null,
-    activityTimeline = [],
-    toolTimeline = [],
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    parentSessionId = "",
-    turnScopeId = "",
-    eventListener,
-    injectedMessage = false,
-    noobotInternalMessageType = "",
-    injectedBy = "",
-    injectedMessageType = "",
-    frontendUserMessage = false,
-    pluginMessage = false,
-    pluginMeta = null,
-    transferEnvelopes = [],
-    thinkingStartedAt = "",
-    thinkingFinishedAt = "",
-    turnTimingThinkingStartedAt = thinkingStartedAt,
-    turnTimingThinkingFinishedAt = thinkingFinishedAt,
-    persistenceContext = null,
-    deferTurnPersistence = false,
-  }) {
-    const sessionAttachments = filterSessionAttachments(attachments);
-    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
-    const normalizedTurnScopeId = String(turnScopeId || "").trim();
-    const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
-    const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
-    const normalizedTurnTimingThinkingStartedAt = normalizeIsoTime(turnTimingThinkingStartedAt);
-    const normalizedTurnTimingThinkingFinishedAt = normalizeIsoTime(turnTimingThinkingFinishedAt);
-    const sessionContent = String(content || "");
-    const sessionTransferEnvelopes = filterSessionTransferEnvelopes(transferEnvelopes);
-    const fullTurnPayload = {
-      role,
-      ...(String(messageUid || "").trim() ? { messageUid: String(messageUid || "").trim() } : {}),
-      ...(String(messageId || "").trim() ? { messageId: String(messageId || "").trim() } : {}),
-      ...(String(presentationMessageId || "").trim()
-        ? { presentationMessageId: String(presentationMessageId || "").trim() }
-        : {}),
-      ...(role === MESSAGE_ROLE.ASSISTANT ? { chatPresentation: chatPresentation === true } : {}),
-      content: sessionContent,
-      type: type || "",
-      userName: String(userName || "").trim(),
-      sessionId: String(sessionId || "").trim(),
-      parentSessionId: normalizedParentSessionId,
-      taskId: taskId ?? "",
-      taskStatus: taskStatus ?? "",
-      dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-      parentDialogProcessId: parentDialogProcessId || "",
-      turnScopeId: normalizedTurnScopeId,
-      tool_calls: Array.isArray(tool_calls) ? tool_calls : [],
-      tool_call_id: tool_call_id || "",
-      ...(sessionAttachments.length ? { attachments: sessionAttachments } : {}),
-      modelAlias: String(modelAlias || "").trim(),
-      modelName: String(modelName || "").trim(),
-      summarized: summarized === true,
-      toolName: String(toolName || "").trim(),
-      rawModelContent:
-        typeof rawModelContent === "string" || Array.isArray(rawModelContent)
-          ? rawModelContent
-          : null,
-      modelAdditionalKwargs:
-        modelAdditionalKwargs &&
-        typeof modelAdditionalKwargs === "object" &&
-        !Array.isArray(modelAdditionalKwargs)
-          ? modelAdditionalKwargs
-          : null,
-      injectedMessage: injectedMessage === true,
-      noobotInternalMessageType: String(noobotInternalMessageType || "").trim(),
-      injectedBy: String(injectedBy || "").trim(),
-      injectedMessageType: String(injectedMessageType || "").trim(),
-      frontendUserMessage: frontendUserMessage === true,
-      pluginMessage: pluginMessage === true,
-      pluginMeta:
-        pluginMeta && typeof pluginMeta === "object" && !Array.isArray(pluginMeta)
-          ? pluginMeta
-          : null,
-      ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
-      ...(normalizedThinkingStartedAt ? { thinkingStartedAt: normalizedThinkingStartedAt } : {}),
-      ...(normalizedThinkingFinishedAt ? { thinkingFinishedAt: normalizedThinkingFinishedAt } : {}),
-      modelResponseMetadata:
-        modelResponseMetadata &&
-        typeof modelResponseMetadata === "object" &&
-        !Array.isArray(modelResponseMetadata)
-          ? modelResponseMetadata
-          : null,
-      ...(Array.isArray(activityTimeline) && activityTimeline.length ? { activityTimeline } : {}),
-      ...(Array.isArray(toolTimeline) && toolTimeline.length ? { toolTimeline } : {}),
-    };
-    try {
-      await this.messagePersister.appendExecutionLog({
-        userId,
-        sessionId,
-        parentSessionId: normalizedParentSessionId,
-        dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-        event: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
-        category: MESSAGE_ROLE.SYSTEM,
-        type: EXECUTION_LOG_EVENT.SESSION_TURN_FULL,
-        data: summarizeSessionTurnPayload(fullTurnPayload),
-        persistenceContext,
-      });
-      if (normalizedTurnTimingThinkingStartedAt || normalizedTurnTimingThinkingFinishedAt) {
-        await this.messagePersister.appendExecutionLog({
-          userId,
-          sessionId,
-          parentSessionId: normalizedParentSessionId,
-          dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-          event: "debug_turn_timing_append",
-          category: MESSAGE_ROLE.SYSTEM,
-          type: "system",
-          data: {
-            sessionId,
-            role,
-            turnScopeId: normalizedTurnScopeId,
-            dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-            messageThinkingStartedAt: normalizedThinkingStartedAt,
-            messageThinkingFinishedAt: normalizedThinkingFinishedAt,
-            turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
-            turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
-          },
-          persistenceContext,
-        });
-      }
-    } catch (error) {
-      emitEvent(eventListener, "session_turn_diagnostic_persistence_failed", {
-        sessionId,
-        parentSessionId: normalizedParentSessionId,
-        dialogProcessId: normalizeDialogProcessId(dialogProcessId),
-        turnScopeId: normalizedTurnScopeId,
-        error: error?.message || String(error || ""),
-      });
-    }
-    const turnPayload = {
-      userId,
-      sessionId,
-      parentSessionId: normalizedParentSessionId,
-      role,
-      messageUid: String(messageUid || "").trim(),
-      messageId: String(messageId || "").trim(),
-      presentationMessageId: String(presentationMessageId || "").trim(),
-      chatPresentation: chatPresentation === true,
-      content: sessionContent,
-      type,
-      userName,
-      taskId,
-      taskStatus,
-      dialogProcessId,
-      parentDialogProcessId,
-      turnScopeId: normalizedTurnScopeId,
-      tool_calls,
-      tool_call_id,
-      ...(sessionAttachments.length ? { attachments: sessionAttachments } : {}),
-      modelAlias,
-      modelName,
-      summarized,
-      toolName,
-      rawModelContent,
-      modelAdditionalKwargs,
-      modelResponseMetadata,
-      activityTimeline: Array.isArray(activityTimeline) ? activityTimeline : [],
-      toolTimeline: Array.isArray(toolTimeline) ? toolTimeline : [],
-      injectedMessage,
-      noobotInternalMessageType,
-      injectedBy,
-      injectedMessageType,
-      frontendUserMessage,
-      pluginMessage,
-      pluginMeta,
-      ...(sessionTransferEnvelopes.length ? { transferEnvelopes: sessionTransferEnvelopes } : {}),
-      thinkingStartedAt: normalizedThinkingStartedAt,
-      thinkingFinishedAt: normalizedThinkingFinishedAt,
-      turnTimingThinkingStartedAt: normalizedTurnTimingThinkingStartedAt,
-      turnTimingThinkingFinishedAt: normalizedTurnTimingThinkingFinishedAt,
-      persistenceContext,
-    };
-    if (deferTurnPersistence) return turnPayload;
+  async appendSessionTurn(payload = {}) {
+    const input = normalizeSessionTurnInput(payload);
+    const fullTurnPayload = buildFullTurnPayload(input);
+    await tryAppendSessionTurnDiagnostics(this.messagePersister, input, fullTurnPayload);
+    const turnPayload = buildTurnPayload(input);
+    if (input.deferTurnPersistence) return turnPayload;
     await this.messagePersister.appendTurn(turnPayload);
-    emitEvent(eventListener, `${role}_message_saved`, { sessionId });
+    emitEvent(input.eventListener, `${input.role}_message_saved`, { sessionId: input.sessionId });
     return turnPayload;
   }
 
-  async appendAgentMessages({
-    userId,
-    sessionId,
-    parentSessionId = "",
-    messages = [],
-    dialogProcessId = "",
-    parentDialogProcessId = "",
-    turnScopeId = "",
-    eventListener,
-    thinkingStartedAt = "",
-    thinkingFinishedAt = "",
-    persistenceContext = null,
-  }) {
-    const normalizedThinkingStartedAt = normalizeIsoTime(thinkingStartedAt);
-    const normalizedThinkingFinishedAt = normalizeIsoTime(thinkingFinishedAt);
-    let turnTimingWritten = false;
+  async appendAgentMessages(payload = {}) {
+    const input = normalizeAgentMessagesInput(payload);
     const turnPayloads = [];
-    for (const messageItem of messages) {
-      const turnPayload = await this.appendSessionTurn({
-        userId,
-        sessionId,
-        role: messageItem.role || MESSAGE_ROLE.ASSISTANT,
-        messageUid: String(messageItem?.messageUid || "").trim(),
-        messageId: resolveAuthoritativeMessageId(messageItem),
-        presentationMessageId: String(messageItem.presentationMessageId || "").trim(),
-        chatPresentation: messageItem.chatPresentation === true,
-        content: messageItem.content || "",
-        type: messageItem.type || "",
-        parentSessionId,
-        dialogProcessId:
-          resolveContextMessageDialogProcessId(messageItem) ||
-          normalizeDialogProcessId(dialogProcessId),
-        parentDialogProcessId: messageItem.parentDialogProcessId || parentDialogProcessId || "",
-        taskId: messageItem.taskId || null,
-        taskStatus: messageItem.taskStatus || null,
-        tool_calls: Array.isArray(messageItem.tool_calls) ? messageItem.tool_calls : null,
-        tool_call_id: messageItem.tool_call_id || "",
-        attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
-        modelAlias: (messageItem.modelAlias ?? "").trim(),
-        modelName: (messageItem.modelName ?? "").trim(),
-        summarized: messageItem.summarized === true,
-        toolName: (messageItem.toolName ?? "").trim(),
-        rawModelContent:
-          typeof messageItem.rawModelContent === "string" ||
-          Array.isArray(messageItem.rawModelContent)
-            ? messageItem.rawModelContent
-            : null,
-        modelAdditionalKwargs:
-          messageItem.modelAdditionalKwargs &&
-          typeof messageItem.modelAdditionalKwargs === "object" &&
-          !Array.isArray(messageItem.modelAdditionalKwargs)
-            ? messageItem.modelAdditionalKwargs
-            : null,
-        injectedMessage: messageItem.injectedMessage === true,
-        noobotInternalMessageType: String(messageItem.noobotInternalMessageType || "").trim(),
-        injectedBy: String(messageItem.injectedBy || "").trim(),
-        injectedMessageType: String(messageItem.injectedMessageType || "").trim(),
-        frontendUserMessage: messageItem.frontendUserMessage === true,
-        pluginMessage: messageItem.pluginMessage === true,
-        pluginMeta:
-          messageItem.pluginMeta &&
-          typeof messageItem.pluginMeta === "object" &&
-          !Array.isArray(messageItem.pluginMeta)
-            ? messageItem.pluginMeta
-            : null,
-        transferEnvelopes: Array.isArray(messageItem.transferEnvelopes)
-          ? messageItem.transferEnvelopes
-          : [],
-        modelResponseMetadata:
-          messageItem.modelResponseMetadata &&
-          typeof messageItem.modelResponseMetadata === "object" &&
-          !Array.isArray(messageItem.modelResponseMetadata)
-            ? messageItem.modelResponseMetadata
-            : null,
-        activityTimeline: Array.isArray(messageItem.activityTimeline)
-          ? messageItem.activityTimeline
-          : [],
-        toolTimeline: Array.isArray(messageItem.toolTimeline) ? messageItem.toolTimeline : [],
-        turnScopeId: String(messageItem.turnScopeId || turnScopeId || "").trim(),
-        thinkingStartedAt: "",
-        thinkingFinishedAt: "",
-        turnTimingThinkingStartedAt: !turnTimingWritten ? normalizedThinkingStartedAt : "",
-        turnTimingThinkingFinishedAt: !turnTimingWritten ? normalizedThinkingFinishedAt : "",
-        eventListener,
-        persistenceContext,
-        deferTurnPersistence: true,
-      });
+    for (const messageItem of input.messages) {
+      const turnPayload = await this.appendSessionTurn(
+        buildAgentMessageTurnInput(messageItem, input, turnPayloads.length === 0),
+      );
       turnPayloads.push(turnPayload);
-      turnTimingWritten = true;
     }
     if (!turnPayloads.length) return [];
     const persistedTurns = await this.messagePersister.appendTurns({
-      userId,
-      sessionId,
-      parentSessionId: normalizeParentSessionId(parentSessionId),
+      userId: input.userId,
+      sessionId: input.sessionId,
+      parentSessionId: normalizeParentSessionId(input.parentSessionId),
       turns: turnPayloads,
-      persistenceContext,
+      persistenceContext: input.persistenceContext,
     });
     for (const turnPayload of turnPayloads) {
-      emitEvent(eventListener, `${turnPayload.role}_message_saved`, { sessionId });
+      emitEvent(input.eventListener, `${turnPayload.role}_message_saved`, {
+        sessionId: input.sessionId,
+      });
     }
     return Array.isArray(persistedTurns) ? persistedTurns : [];
   }

@@ -41,7 +41,9 @@ async function readRootWorkspacePaths(repositoryRoot) {
   const workspaceEntries = Array.isArray(rootPackage?.workspaces) ? rootPackage.workspaces : [];
   const unsupported = workspaceEntries.filter((entry) => /[*?{}[\]]/.test(String(entry || "")));
   if (unsupported.length) {
-    throw new Error(`quality source inventory requires explicit workspace paths: ${unsupported.join(", ")}`);
+    throw new Error(
+      `quality source inventory requires explicit workspace paths: ${unsupported.join(", ")}`,
+    );
   }
   return workspaceEntries.map((entry) => String(entry || "").trim()).filter(Boolean);
 }
@@ -71,7 +73,12 @@ async function collectDirectoryFiles({ repositoryRoot, relativeDirectory, extens
     if (entry.isDirectory() && ignoredDirectorySet.has(entry.name)) continue;
     const relativePath = path.join(relativeDirectory, entry.name);
     if (entry.isDirectory()) {
-      await collectDirectoryFiles({ repositoryRoot, relativeDirectory: relativePath, extensions, output });
+      await collectDirectoryFiles({
+        repositoryRoot,
+        relativeDirectory: relativePath,
+        extensions,
+        output,
+      });
       continue;
     }
     if (!entry.isFile() || !isFirstPartyProductionPath(relativePath)) continue;

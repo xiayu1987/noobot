@@ -25,7 +25,10 @@ test("source inventory is derived from root workspaces and includes protocol pac
 test("source inventory excludes tests, generated sources, dependencies, vendor, and runtime data", () => {
   assert.equal(isFirstPartyProductionPath("agent/src/runtime/turn/orchestrator.js"), true);
   assert.equal(isFirstPartyProductionPath("agent/__tests__/orchestrator.test.js"), false);
-  assert.equal(isFirstPartyProductionPath("client/noobot-chat/src/plugins/generated/entries.js"), false);
+  assert.equal(
+    isFirstPartyProductionPath("client/noobot-chat/src/plugins/generated/entries.js"),
+    false,
+  );
   assert.equal(isFirstPartyProductionPath("service/vendor/runtime.js"), false);
   assert.equal(isFirstPartyProductionPath("agent/node_modules/package/index.js"), false);
   assert.equal(isFirstPartyProductionPath("workspace/admin/runtime.js"), false);
@@ -34,6 +37,12 @@ test("source inventory excludes tests, generated sources, dependencies, vendor, 
 test("production file collection includes authoritative state and excludes its tests", async () => {
   const files = await getFirstPartyProductionFiles({ repositoryRoot, extensions: [".js"] });
   assert.ok(files.includes("authoritative-state/src/domain/turn-lifecycle-entity.js"));
-  assert.equal(files.some((file) => file.includes("/__tests__/")), false);
-  assert.equal(files.some((file) => file.includes("/node_modules/")), false);
+  assert.equal(
+    files.some((file) => file.includes("/__tests__/")),
+    false,
+  );
+  assert.equal(
+    files.some((file) => file.includes("/node_modules/")),
+    false,
+  );
 });

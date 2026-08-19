@@ -220,357 +220,384 @@ function detectToolCallFailure({ rawResult, toolResultText = "", invokeError = n
   return { success: true, reason: "" };
 }
 
-export async function executeToolCall({
-  call = {},
-  tool = null,
-  abortSignal = null,
-  eventListener = null,
-  turn = 1,
-  executionScope = "primary",
-  errorLogger = null,
-  userId = "",
-  sessionId = "",
-  parentSessionId = "",
-  runtime = {},
-  agentContext = null,
-} = {}) {
+function optionValue(value, fallback) {
+  return value === undefined ? fallback : value;
+}
+
+function createToolCallExecutionState(options = {}) {
   const toolStartedAtMs = Date.now();
-  const toolStartedAt = new Date(toolStartedAtMs).toISOString();
-  const riskAssessment = createToolRiskAssessment(call);
-  let toolResultText = "";
-  let invokeError = null;
-  if (!tool) {
-    toolResultText = toToolJsonResult(call?.name, {
-      ok: false,
-      status: "failed",
-      code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
-      error: `tool not found: ${call?.name}`,
-    });
-    await runAgentRuntimeHook({
-      runtime,
-      point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
-      context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
-        phase: "tool_call",
-        executionScope,
-        turn,
-        status: "error",
-        startedAt: toolStartedAt,
-        endedAt: new Date(Date.now()).toISOString(),
-        durationMs: Date.now() - toolStartedAtMs,
-        call,
-        toolName: call?.name || "",
-        success: false,
-        failureReason: "tool_not_found",
-        toolResultText,
-        agentContext,
-      }),
-    });
-    return {
-      call,
-      toolResultText,
-      transferEnvelopes: [],
-      success: false,
-      failureReason: "tool_not_found",
-      riskLevel: getToolRiskLevel(riskAssessment),
-      securityAssessment: riskAssessment.current,
-    };
-  }
-  let rawResult = null;
-  let rawToolResultText = "";
-  let inputTransfer = null;
-  let outputArtifactTransferEnvelopes = [];
+  const call = optionValue(options.call, {});
+  return {
+    call,
+    tool: optionValue(options.tool, null),
+    abortSignal: optionValue(options.abortSignal, null),
+    eventListener: optionValue(options.eventListener, null),
+    turn: optionValue(options.turn, 1),
+    executionScope: optionValue(options.executionScope, "primary"),
+    errorLogger: optionValue(options.errorLogger, null),
+    userId: optionValue(options.userId, ""),
+    sessionId: optionValue(options.sessionId, ""),
+    parentSessionId: optionValue(options.parentSessionId, ""),
+    runtime: optionValue(options.runtime, {}),
+    agentContext: optionValue(options.agentContext, null),
+    toolStartedAtMs,
+    toolStartedAt: new Date(toolStartedAtMs).toISOString(),
+    riskAssessment: createToolRiskAssessment(call),
+    toolResultText: "",
+    rawResult: null,
+    rawToolResultText: "",
+    inputTransfer: null,
+    toolInputTransferPayload: {},
+    outputArtifactTransferEnvelopes: [],
+    invokeError: null,
+  };
+}
+
+function toolHookContext(state, point, fields = {}) {
+  return buildHookContext(point, state.runtime, {
+    phase: "tool_call",
+    executionScope: state.executionScope,
+    turn: state.turn,
+    startedAt: state.toolStartedAt,
+    call: state.call,
+    toolName: state.call?.name || "",
+    agentContext: state.agentContext,
+    ...fields,
+  });
+}
+
+async function runToolHook(state, point, fields = {}) {
   await runAgentRuntimeHook({
-    runtime,
-    point: HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
-    context: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
-      phase: "tool_call",
-      executionScope,
-      turn,
-      status: "start",
-      startedAt: toolStartedAt,
-      call,
-      toolName: call?.name || "",
-      args: call?.args || {},
-      agentContext,
+    runtime: state.runtime,
+    point,
+    context: toolHookContext(state, point, fields),
+  });
+}
+
+function completedToolTiming(state) {
+  return {
+    endedAt: new Date(Date.now()).toISOString(),
+    durationMs: Date.now() - state.toolStartedAtMs,
+  };
+}
+
+function projectToolExecutionResult(state, fields = {}) {
+  return {
+    call: state.call,
+    toolResultText: state.toolResultText,
+    riskLevel: getToolRiskLevel(state.riskAssessment),
+    securityAssessment: state.riskAssessment.current,
+    ...fields,
+  };
+}
+
+async function completeMissingTool(state) {
+  state.toolResultText = toToolJsonResult(state.call?.name, {
+    ok: false,
+    status: "failed",
+    code: ERROR_CODE.RECOVERABLE_TOOL_NOT_FOUND,
+    error: `tool not found: ${state.call?.name}`,
+  });
+  await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
+    status: "error",
+    ...completedToolTiming(state),
+    success: false,
+    failureReason: "tool_not_found",
+    toolResultText: state.toolResultText,
+  });
+  return projectToolExecutionResult(state, {
+    transferEnvelopes: [],
+    success: false,
+    failureReason: "tool_not_found",
+  });
+}
+
+function hasDeclaredToolInputOverflow(meta = {}) {
+  return (
+    meta.exceeded === true &&
+    meta.toolInputOverflow &&
+    typeof meta.toolInputOverflow === "object" &&
+    !Array.isArray(meta.toolInputOverflow)
+  );
+}
+
+async function completeToolInputOverflow(state, meta) {
+  state.toolResultText = compactToolResultTextForModel(
+    toToolJsonResult(state.call?.name, {
+      ok: false,
+      message: meta.message || "tool input is too long",
+      toolInputOverflow: meta.toolInputOverflow,
+      ...state.toolInputTransferPayload,
+    }),
+  );
+  await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
+    status: "success",
+    ...completedToolTiming(state),
+    args: state.call?.args || {},
+    success: true,
+    failureReason: "",
+    toolResultText: state.toolResultText,
+  });
+  return projectToolExecutionResult(state, {
+    transferEnvelopes: state.inputTransfer.transferEnvelopes || [],
+    success: true,
+    failureReason: "",
+  });
+}
+
+async function prepareToolInputTransfer(state) {
+  if (!shouldTransferToolInput(state.call)) return null;
+  const producer = toolProducer(state.call);
+  state.inputTransfer = await transferSemanticContent({
+    scenario: "tool",
+    strategy: "tool_input",
+    call: state.call,
+    runtime: state.runtime,
+    agentContext: state.agentContext,
+    sessionId: state.sessionId,
+    producer,
+    identity: resolveRuntimeTransferIdentity({
+      runtime: state.runtime,
+      agentContext: state.agentContext,
+      sessionId: state.sessionId,
+      producer,
+      direction: "input",
+      strategy: "tool_input",
     }),
   });
-  let toolInputTransferPayload = {};
-  if (shouldTransferToolInput(call)) {
-    try {
-      inputTransfer = await transferSemanticContent({
-        scenario: "tool",
-        strategy: "tool_input",
-        call,
-        runtime,
-        agentContext,
-        sessionId,
-        producer: toolProducer(call),
-        identity: resolveRuntimeTransferIdentity({
-          runtime,
-          agentContext,
-          sessionId,
-          producer: toolProducer(call),
-          direction: "input",
-          strategy: "tool_input",
-        }),
-      });
-      const inputTransferMeta = deriveToolInputTransferMeta(inputTransfer);
-      toolInputTransferPayload = compactSemanticTransferProtocolPayload(inputTransfer);
-      if (
-        inputTransferMeta.exceeded === true &&
-        inputTransferMeta.toolInputOverflow &&
-        typeof inputTransferMeta.toolInputOverflow === "object" &&
-        !Array.isArray(inputTransferMeta.toolInputOverflow)
-      ) {
-        toolResultText = toToolJsonResult(call?.name, {
-          ok: false,
-          message: inputTransferMeta.message || "tool input is too long",
-          toolInputOverflow: inputTransferMeta.toolInputOverflow,
-          ...toolInputTransferPayload,
-        });
-        toolResultText = compactToolResultTextForModel(toolResultText);
-        await runAgentRuntimeHook({
-          runtime,
-          point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
-          context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
-            phase: "tool_call",
-            executionScope,
-            turn,
-            status: "success",
-            startedAt: toolStartedAt,
-            endedAt: new Date(Date.now()).toISOString(),
-            durationMs: Date.now() - toolStartedAtMs,
-            call,
-            toolName: call?.name || "",
-            args: call?.args || {},
-            success: true,
-            failureReason: "",
-            toolResultText,
-            agentContext,
-          }),
-        });
-        return {
-          call,
-          toolResultText,
-          transferEnvelopes: inputTransfer.transferEnvelopes || [],
-          success: true,
-          failureReason: "",
-          riskLevel: getToolRiskLevel(riskAssessment),
-          securityAssessment: riskAssessment.current,
-        };
-      }
-    } catch (error) {
-      throw error;
-    }
-  }
-  try {
-    rawResult = await runWithToolRiskAssessment(riskAssessment, () =>
-      tool.invoke(call?.args || {}, {
-        signal: abortSignal,
-        configurable: {
-          transferIdentity: resolveRuntimeTransferIdentity({
-            runtime,
-            agentContext,
-            sessionId,
-            producer: toolProducer(call),
-            direction: "output",
-            strategy: String(call?.name || "tool_output").trim() || "tool_output",
-          }),
-          noobotHookContext: buildHookContext(HOOK_POINT.AGENT.BEFORE_TOOL_CALL, runtime, {
-            phase: "tool_call",
-            executionScope,
-            turn,
-            status: "running",
-            startedAt: toolStartedAt,
-            call,
-            toolName: call?.name || "",
-            args: call?.args || {},
-            agentContext,
-          }),
-          noobotHookMeta: resolveToolHookMeta(runtime),
-        },
-      }),
-    );
-    toolResultText = typeof rawResult === "string" ? rawResult : JSON.stringify(rawResult);
-    toolResultText = mergeToolResultWithInputTransferPayload(
-      toolResultText,
-      toolInputTransferPayload,
-      call?.name,
-    );
-    const materializedOutput = await materializeToolOutputArtifacts({
-      rawResult,
-      toolResultText,
-      call,
-      runtime,
-      agentContext,
-      identity: resolveRuntimeTransferIdentity({
-        runtime,
-        agentContext,
-        sessionId,
-        producer: toolProducer(call),
+  const meta = deriveToolInputTransferMeta(state.inputTransfer);
+  state.toolInputTransferPayload = compactSemanticTransferProtocolPayload(state.inputTransfer);
+  return hasDeclaredToolInputOverflow(meta) ? completeToolInputOverflow(state, meta) : null;
+}
+
+function toolInvocationConfig(state) {
+  const producer = toolProducer(state.call);
+  return {
+    signal: state.abortSignal,
+    configurable: {
+      transferIdentity: resolveRuntimeTransferIdentity({
+        runtime: state.runtime,
+        agentContext: state.agentContext,
+        sessionId: state.sessionId,
+        producer,
         direction: "output",
-        strategy: "tool_output_artifact",
+        strategy: String(state.call?.name || "tool_output").trim() || "tool_output",
       }),
-    });
-    toolResultText = materializedOutput.toolResultText;
-    outputArtifactTransferEnvelopes = materializedOutput.transferEnvelopes;
-    if (outputArtifactTransferEnvelopes.length) {
-      toolResultText = mergeToolInputTransferPayload(toolResultText, {
-        transferEnvelopes: outputArtifactTransferEnvelopes,
-      });
-    }
-    rawToolResultText = toolResultText;
-    if (runtime?.systemRuntime?.config?.sanitizeOutput !== false) {
-      toolResultText = await sanitizeToolResultText(toolResultText);
-    }
-  } catch (error) {
-    const isAbort = isAbortError(error);
-    const isFatal = isFatalError(error);
-    handleEngineError({
-      error,
-      abortSignal: runtime?.abortSignal || null,
-      eventListener,
-      event: "tool_call_error",
-      metadata: {
-        source: "tool-runner",
-        turn,
-        tool: String(call?.name || "").trim(),
-        toolCallId: call?.id || call?.tool_call_id || call?.toolCallId || "",
-        sessionId: String(sessionId || "").trim(),
-        parentSessionId: normalizeParentSessionId(parentSessionId),
-      },
-    });
-    if (isAbort || isFatal) throw error;
-    await runAgentRuntimeHook({
-      runtime,
-      point: HOOK_POINT.AGENT.TOOL_CALL_ERROR,
-      context: buildHookContext(HOOK_POINT.AGENT.TOOL_CALL_ERROR, runtime, {
-        phase: "tool_call",
-        executionScope,
-        turn,
-        status: "error",
-        startedAt: toolStartedAt,
-        endedAt: new Date(Date.now()).toISOString(),
-        durationMs: Date.now() - toolStartedAtMs,
-        call,
-        toolName: call?.name || "",
-        args: call?.args || {},
-        error,
-        agentContext,
+      noobotHookContext: toolHookContext(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
+        status: "running",
+        args: state.call?.args || {},
       }),
-    });
-    invokeError = error;
-    const errorDetails = error?.details && typeof error.details === "object" ? error.details : null;
-    toolResultText = toToolJsonResult(call?.name, {
-      ok: false,
-      status: "failed",
-      code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
-      error: error?.message || String(error),
-      ...(errorDetails ? { details: errorDetails } : {}),
-    });
-    rawToolResultText = toolResultText;
-    if (runtime?.systemRuntime?.config?.sanitizeOutput !== false) {
-      toolResultText = await sanitizeToolResultText(toolResultText);
-    }
-    if (errorLogger && typeof errorLogger.log === "function") {
-      const normalizedCause =
-        typeof error?.cause === "string" ? error.cause : error?.cause?.message || "";
-      void errorLogger.log({
-        userId,
-        sessionId,
-        parentSessionId,
-        source: "tool-runner",
-        event: "tool_invoke_error",
-        error,
-        extra: {
-          toolName: call?.name || "",
-          ...(normalizedCause ? { cause: normalizedCause } : {}),
-        },
-      });
-    }
-  }
-  const failureState = detectToolCallFailure({
-    rawResult,
-    toolResultText: rawToolResultText || toolResultText,
-    invokeError,
+      noobotHookMeta: resolveToolHookMeta(state.runtime),
+    },
+  };
+}
+
+async function sanitizeToolOutput(state) {
+  if (state.runtime?.systemRuntime?.config?.sanitizeOutput === false) return;
+  state.toolResultText = await sanitizeToolResultText(state.toolResultText);
+}
+
+async function materializeToolInvocationResult(state) {
+  state.toolResultText =
+    typeof state.rawResult === "string" ? state.rawResult : JSON.stringify(state.rawResult);
+  state.toolResultText = mergeToolResultWithInputTransferPayload(
+    state.toolResultText,
+    state.toolInputTransferPayload,
+    state.call?.name,
+  );
+  const producer = toolProducer(state.call);
+  const materializedOutput = await materializeToolOutputArtifacts({
+    rawResult: state.rawResult,
+    toolResultText: state.toolResultText,
+    call: state.call,
+    runtime: state.runtime,
+    agentContext: state.agentContext,
+    identity: resolveRuntimeTransferIdentity({
+      runtime: state.runtime,
+      agentContext: state.agentContext,
+      sessionId: state.sessionId,
+      producer,
+      direction: "output",
+      strategy: "tool_output_artifact",
+    }),
   });
-  const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(rawResult);
+  state.toolResultText = materializedOutput.toolResultText;
+  state.outputArtifactTransferEnvelopes = materializedOutput.transferEnvelopes;
+  if (state.outputArtifactTransferEnvelopes.length) {
+    state.toolResultText = mergeToolInputTransferPayload(state.toolResultText, {
+      transferEnvelopes: state.outputArtifactTransferEnvelopes,
+    });
+  }
+  state.rawToolResultText = state.toolResultText;
+  await sanitizeToolOutput(state);
+}
+
+function logRecoverableToolError(state, error) {
+  if (!state.errorLogger || typeof state.errorLogger.log !== "function") return;
+  const normalizedCause =
+    typeof error?.cause === "string" ? error.cause : error?.cause?.message || "";
+  void state.errorLogger.log({
+    userId: state.userId,
+    sessionId: state.sessionId,
+    parentSessionId: state.parentSessionId,
+    source: "tool-runner",
+    event: "tool_invoke_error",
+    error,
+    extra: {
+      toolName: state.call?.name || "",
+      ...(normalizedCause ? { cause: normalizedCause } : {}),
+    },
+  });
+}
+
+function resolveToolCallId(call = {}) {
+  return [call?.id, call?.tool_call_id, call?.toolCallId].find(Boolean) || "";
+}
+
+function reportToolInvocationError(state, error) {
+  handleEngineError({
+    error,
+    abortSignal: state.runtime?.abortSignal || null,
+    eventListener: state.eventListener,
+    event: "tool_call_error",
+    metadata: {
+      source: "tool-runner",
+      turn: state.turn,
+      tool: String(state.call?.name || "").trim(),
+      toolCallId: resolveToolCallId(state.call),
+      sessionId: String(state.sessionId || "").trim(),
+      parentSessionId: normalizeParentSessionId(state.parentSessionId),
+    },
+  });
+}
+
+function recoverableToolErrorResult(call, error) {
+  const details = error?.details && typeof error.details === "object" ? error.details : null;
+  return toToolJsonResult(call?.name, {
+    ok: false,
+    status: "failed",
+    code: String(error?.code || ERROR_CODE.RECOVERABLE_TOOL_INVOKE_ERROR),
+    error: error?.message || String(error),
+    ...(details ? { details } : {}),
+  });
+}
+
+async function handleToolInvocationError(state, error) {
+  const isAbort = isAbortError(error);
+  const isFatal = isFatalError(error);
+  reportToolInvocationError(state, error);
+  if (isAbort || isFatal) throw error;
+  await runToolHook(state, HOOK_POINT.AGENT.TOOL_CALL_ERROR, {
+    status: "error",
+    ...completedToolTiming(state),
+    args: state.call?.args || {},
+    error,
+  });
+  state.invokeError = error;
+  state.toolResultText = recoverableToolErrorResult(state.call, error);
+  state.rawToolResultText = state.toolResultText;
+  await sanitizeToolOutput(state);
+  logRecoverableToolError(state, error);
+}
+
+async function invokeConfiguredTool(state) {
+  try {
+    state.rawResult = await runWithToolRiskAssessment(state.riskAssessment, () =>
+      state.tool.invoke(state.call?.args || {}, toolInvocationConfig(state)),
+    );
+    await materializeToolInvocationResult(state);
+  } catch (error) {
+    await handleToolInvocationError(state, error);
+  }
+}
+
+function uniqueByField(items, field) {
+  return Array.from(new Map(items.map((item) => [item[field], item])).values());
+}
+
+async function finalizeToolExecution(state) {
+  const failureState = detectToolCallFailure({
+    rawResult: state.rawResult,
+    toolResultText: state.rawToolResultText || state.toolResultText,
+    invokeError: state.invokeError,
+  });
+  const structuredTransferEnvelopes = transferEnvelopesFromStructuredResult(state.rawResult);
+  const producer = toolProducer(state.call);
   const overflowNormalized = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_result_text",
-    call,
-    toolResultText,
-    runtime,
-    agentContext,
-    sessionId,
-    producer: toolProducer(call),
+    call: state.call,
+    toolResultText: state.toolResultText,
+    runtime: state.runtime,
+    agentContext: state.agentContext,
+    sessionId: state.sessionId,
+    producer,
     identity: resolveRuntimeTransferIdentity({
-      runtime,
-      agentContext,
-      sessionId,
-      producer: toolProducer(call),
+      runtime: state.runtime,
+      agentContext: state.agentContext,
+      sessionId: state.sessionId,
+      producer,
       direction: "output",
       strategy: "tool_result_text",
     }),
   });
-  toolResultText = overflowNormalized.toolResultText;
-  if (String(call?.name || "").trim() === "task_summary") {
-    toolResultText = mergeTaskSummaryTransferPayload(toolResultText, toolInputTransferPayload);
+  state.toolResultText = overflowNormalized.toolResultText;
+  if (String(state.call?.name || "").trim() === "task_summary") {
+    state.toolResultText = mergeTaskSummaryTransferPayload(
+      state.toolResultText,
+      state.toolInputTransferPayload,
+    );
   }
-  const transferEnvelopes = [
-    ...(toolInputTransferPayload.transferEnvelopes || []),
-    ...structuredTransferEnvelopes,
-    ...outputArtifactTransferEnvelopes,
-    ...(overflowNormalized.transferEnvelopes || []),
-  ];
-  const uniqueTransferEnvelopes = Array.from(
-    new Map(transferEnvelopes.map((envelope) => [envelope.transferId, envelope])).values(),
+  const transferEnvelopes = uniqueByField(
+    [
+      ...(state.toolInputTransferPayload.transferEnvelopes || []),
+      ...structuredTransferEnvelopes,
+      ...state.outputArtifactTransferEnvelopes,
+      ...(overflowNormalized.transferEnvelopes || []),
+    ],
+    "transferId",
   );
-  const internalResources = Array.from(
-    new Map(
-      [
-        ...resourceRefsFromResult(rawToolResultText || toolResultText),
-        ...registerTransferAttachmentResources({
-          agentContext,
-          runtime,
-          owner: userId,
-          transferEnvelopes: uniqueTransferEnvelopes,
-        }),
-      ].map((resource) => [resource.resourceId, resource]),
-    ).values(),
+  const internalResources = uniqueByField(
+    [
+      ...resourceRefsFromResult(state.rawToolResultText || state.toolResultText),
+      ...registerTransferAttachmentResources({
+        agentContext: state.agentContext,
+        runtime: state.runtime,
+        owner: state.userId,
+        transferEnvelopes,
+      }),
+    ],
+    "resourceId",
   );
-  toolResultText = stripInternalResourceFields(toolResultText);
-  await runAgentRuntimeHook({
-    runtime,
-    point: HOOK_POINT.AGENT.AFTER_TOOL_CALL,
-    context: buildHookContext(HOOK_POINT.AGENT.AFTER_TOOL_CALL, runtime, {
-      phase: "tool_call",
-      executionScope,
-      turn,
-      status: failureState.success ? "success" : "error",
-      startedAt: toolStartedAt,
-      endedAt: new Date(Date.now()).toISOString(),
-      durationMs: Date.now() - toolStartedAtMs,
-      call,
-      toolName: call?.name || "",
-      args: call?.args || {},
-      success: failureState.success,
-      failureReason: failureState.reason || "",
-      toolResultText: rawToolResultText || toolResultText,
-      internalResources,
-      agentContext,
-    }),
-  });
-  return {
-    call,
-    toolResultText,
+  state.toolResultText = stripInternalResourceFields(state.toolResultText);
+  await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
+    status: failureState.success ? "success" : "error",
+    ...completedToolTiming(state),
+    args: state.call?.args || {},
+    success: failureState.success,
+    failureReason: failureState.reason || "",
+    toolResultText: state.rawToolResultText || state.toolResultText,
     internalResources,
-    transferEnvelopes: uniqueTransferEnvelopes,
+  });
+  return projectToolExecutionResult(state, {
+    internalResources,
+    transferEnvelopes,
     success: failureState.success,
     failureReason: failureState.reason,
-    riskLevel: getToolRiskLevel(riskAssessment),
-    securityAssessment: riskAssessment.current,
-  };
+  });
+}
+
+export async function executeToolCall(options = {}) {
+  const state = createToolCallExecutionState(options);
+  if (!state.tool) return completeMissingTool(state);
+  await runToolHook(state, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, {
+    status: "start",
+    args: state.call?.args || {},
+  });
+  const terminalInputResult = await prepareToolInputTransfer(state);
+  if (terminalInputResult) return terminalInputResult;
+  await invokeConfiguredTool(state);
+  return finalizeToolExecution(state);
 }
 
 export async function executeToolCallInTurn(options = {}) {

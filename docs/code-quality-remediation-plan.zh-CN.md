@@ -113,6 +113,15 @@
 - CQ-016：`npm audit --omit=dev` 仍报告 5 个高危项。当前链路为 `mailparser@3.9.15 -> html-to-text@10.0.0 -> deepmerge-ts@7.1.6` 和 `pm2@7.0.3 -> js-yaml@4.3.0`；上游直接依赖精确锁定了存在公告的版本，而已修复版本分别为 `deepmerge-ts@8.0.1`、`js-yaml@5.3.0`。审计器仅建议强制降级直接依赖，仓内 override 不能形成受上游支持的解析图，因此未采用降级、忽略或虚假 override。
 - 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过。Harness 354 项、Workflow 98 项、前端 170 个测试文件 / 1161 项测试全部通过。生产构建唯一警告仍是 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块。
 
+### 2026-08-19 第六批基线收紧
+
+- Session Turn 写入按职责拆分：`append-turn.js` 只负责编排作用域、仓储读取、批量写入与保存；新增 `turn-upsert.js` 唯一负责消息实体构造、附件选择、身份冲突校验、已有 Turn 合并和时序元数据更新。身份冲突错误码、附件优先级和单次批量保存语义保持不变，两个模块均锁定零复杂度与零长函数违规。
+- `SessionTurnPersister` 将输入规范化、审计载荷、审计写入、Session Turn 载荷和批次消息投影拆成独立职责。公开类与调用顺序保持不变，诊断写入失败仍不阻断权威 Session Turn 写入；整个文件从 3 个复杂度违规和 1 个长函数违规降为零。
+- 工具调用主链路按缺失工具终结、调用前 Hook、输入语义转移、风险约束调用、错误归约和输出资源发布六个阶段执行。`executeToolCall` 不再直接组合六类职责；风险评估、Hook 顺序、输出清洗、Semantic Transfer 与 ResourceBroker 注册顺序均由原有定向测试验证。文件级门禁锁定为最多 2 个存量复杂度违规、最高 32、零长函数，禁止主执行函数回退。
+- 复杂度基线从第五批的 `611 / 131 / 106` 收紧为 `606 / 128 / 96`，分别表示复杂度违规数、长函数数和最高复杂度；三个指标只允许继续下降。重复度基线从 `168 / 4425 / 1.8317%` 收紧为 `167 / 4415 / 1.8268%`。
+- 定向验证：Session Turn 身份、附件、时序、删除墓碑和并发边界 27 项通过；Session Turn Persister 批量写入与作用域隔离 16 项通过；工具运行器风险、错误、清洗、语义转移、资源注册和并行结算 27 项通过。
+- 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；Harness 354 项、Workflow 98 项、前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
+
 ## 定向验证记录
 
 - Session Protocol：35 项通过。

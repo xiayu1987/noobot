@@ -45,7 +45,11 @@ function migratePlanUpdateState(state = {}) {
       pending.planUpdateContext && typeof pending.planUpdateContext === "object"
         ? pending.planUpdateContext
         : null;
-    if (String(pending.planUpdateStage || "").trim().toLowerCase() === "refinement") {
+    if (
+      String(pending.planUpdateStage || "")
+        .trim()
+        .toLowerCase() === "refinement"
+    ) {
       pending.planRefinement = true;
       pending.planRefinementContext = context;
     } else {
@@ -60,9 +64,7 @@ function migratePlanUpdateState(state = {}) {
   ]) {
     if (pending[activeKey] !== true) continue;
     const context =
-      pending[contextKey] && typeof pending[contextKey] === "object"
-        ? pending[contextKey]
-        : {};
+      pending[contextKey] && typeof pending[contextKey] === "object" ? pending[contextKey] : {};
     pending[contextKey] = {
       targetMainStepIndexes: Array.isArray(context.targetMainStepIndexes)
         ? context.targetMainStepIndexes
