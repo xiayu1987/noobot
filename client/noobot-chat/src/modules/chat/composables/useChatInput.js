@@ -3,16 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureId } from "../../../shared/identity/secureIdentity.js";
 import { storeToRefs } from "pinia";
 import { useChatStore } from "../stores/useChatStore.js";
-import { resolveRawAttachmentFile, serializeAttachments } from "../runtime/engine/attachmentSerialization.js";
+import {
+  resolveRawAttachmentFile,
+  serializeAttachments,
+} from "../runtime/engine/attachmentSerialization.js";
 
 export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   const chatStore = useChatStore();
   const { input, uploadFiles } = storeToRefs(chatStore);
 
   function createDraftAttachmentId() {
-    return globalThis?.crypto?.randomUUID?.() || `draft-attachment:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    return createSecureId("draft-attachment");
   }
 
   function createUploadEntry(rawFile) {
@@ -67,10 +71,14 @@ export function useChatInput({ isImageMime, clearUploadSelection = () => {} }) {
   function removeUpload(draftAttachmentId = "") {
     const normalizedId = String(draftAttachmentId || "").trim();
     if (!normalizedId) return;
-    const removedFile = uploadFiles.value.find((fileItem) => fileItem?.draftAttachmentId === normalizedId);
+    const removedFile = uploadFiles.value.find(
+      (fileItem) => fileItem?.draftAttachmentId === normalizedId,
+    );
     if (!removedFile) return;
     revokePreviewUrls([removedFile]);
-    uploadFiles.value = uploadFiles.value.filter((fileItem) => fileItem?.draftAttachmentId !== normalizedId);
+    uploadFiles.value = uploadFiles.value.filter(
+      (fileItem) => fileItem?.draftAttachmentId !== normalizedId,
+    );
   }
 
   return {

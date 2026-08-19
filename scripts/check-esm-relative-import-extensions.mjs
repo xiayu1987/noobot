@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
+import { vueScriptRegions } from "./lib/vue-script-regions.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const defaultSourceRoots = [
@@ -80,22 +81,14 @@ function resolveCandidates(importer, specifier) {
       const file = path.join(basePath, `index${extension}`);
       if (fs.statSync(file, { throwIfNoEntry: false })?.isFile()) {
         const separator = relativePath.endsWith("/") ? "" : "/";
-        candidates.push({ file, replacement: `${relativePath}${separator}index${extension}${suffix}` });
+        candidates.push({
+          file,
+          replacement: `${relativePath}${separator}index${extension}${suffix}`,
+        });
       }
     }
   }
   return candidates;
-}
-
-function scriptRegions(file, source) {
-  if (!file.endsWith(".vue")) return [{ source, offset: 0 }];
-  const regions = [];
-  const pattern = /<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi;
-  for (const match of source.matchAll(pattern)) {
-    const script = match[1];
-    regions.push({ source: script, offset: match.index + match[0].indexOf(script) });
-  }
-  return regions;
 }
 
 function lineAt(source, index) {
@@ -129,7 +122,23 @@ function inspectComputedRelativeImport(moduleImport, region, file, fullSource) {
 export async function inspectSourceFile(file, source = fs.readFileSync(file, "utf8")) {
   await init;
   const violations = [];
-  for (const region of scriptRegions(file, source)) {
+  let regions;
+  try {
+    regions = vueScriptRegions(file, source);
+  } catch (error) {
+    return [
+      {
+        file,
+        line: 1,
+        specifier: "",
+        reason: error.message,
+        replacement: null,
+        start: null,
+        end: null,
+      },
+    ];
+  }
+  for (const region of regions) {
     let imports;
     try {
       [imports] = parse(region.source, file);
@@ -161,11 +170,12 @@ export async function inspectSourceFile(file, source = fs.readFileSync(file, "ut
         file,
         line: lineAt(source, range.start),
         specifier,
-        reason: candidates.length === 0
-          ? "target not found"
-          : candidates.length > 1
-            ? `ambiguous target (${candidates.map(({ file: candidate }) => path.basename(candidate)).join(", ")})`
-            : "missing explicit extension",
+        reason:
+          candidates.length === 0
+            ? "target not found"
+            : candidates.length > 1
+              ? `ambiguous target (${candidates.map(({ file: candidate }) => path.basename(candidate)).join(", ")})`
+              : "missing explicit extension",
         replacement: candidates.length === 1 ? candidates[0].replacement : null,
         start: range.start,
         end: range.end,
@@ -192,15 +202,23 @@ function collectSourceFiles(root, sourceRoots) {
 
 function applyFixes(file, source, violations) {
   const fixes = violations
-    .filter(({ replacement, start, end }) => replacement && Number.isInteger(start) && Number.isInteger(end))
+    .filter(
+      ({ replacement, start, end }) =>
+        replacement && Number.isInteger(start) && Number.isInteger(end),
+    )
     .sort((left, right) => right.start - left.start);
   let result = source;
-  for (const fix of fixes) result = `${result.slice(0, fix.start)}${fix.replacement}${result.slice(fix.end)}`;
+  for (const fix of fixes)
+    result = `${result.slice(0, fix.start)}${fix.replacement}${result.slice(fix.end)}`;
   if (result !== source) fs.writeFileSync(file, result);
   return fixes.length;
 }
 
-export async function checkRepository({ root = repositoryRoot, fix = false, sourceRoots = defaultSourceRoots } = {}) {
+export async function checkRepository({
+  root = repositoryRoot,
+  fix = false,
+  sourceRoots = defaultSourceRoots,
+} = {}) {
   const files = collectSourceFiles(root, sourceRoots);
   const violations = [];
   let fixed = 0;
@@ -226,15 +244,20 @@ async function main() {
   const fix = process.argv.includes("--fix");
   const result = await checkRepository({ fix });
   if (result.violations.length) {
-    console.error([
-      "Relative ESM imports must include their real file extension.",
-      ...result.violations.map((violation) => formatViolation(repositoryRoot, violation)),
-    ].join("\n"));
+    console.error(
+      [
+        "Relative ESM imports must include their real file extension.",
+        ...result.violations.map((violation) => formatViolation(repositoryRoot, violation)),
+      ].join("\n"),
+    );
     process.exitCode = 1;
     return;
   }
   const fixSummary = fix ? `; fixed ${result.fixed} import(s)` : "";
-  console.log(`ESM relative import extension guard passed (${result.files.length} source files${fixSummary}).`);
+  console.log(
+    `ESM relative import extension guard passed (${result.files.length} source files${fixSummary}).`,
+  );
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) await main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href)
+  await main();

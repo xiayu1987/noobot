@@ -13,6 +13,7 @@ import {
 } from "./constants.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+import { randomUUID } from "node:crypto";
 
 function normalizeMetaValue(value = "") {
   return String(value || "").trim();
@@ -25,9 +26,7 @@ function createInteractionId(ctx = {}) {
   if (provided) return provided;
   const userId = normalizeMetaValue(ctx?.userId || "anonymous");
   const sessionId = normalizeMetaValue(ctx?.sessionId || "session");
-  const ts = Date.now();
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `wf_${userId}_${sessionId}_${ts}_${rand}`;
+  return `wf_${userId}_${sessionId}_${randomUUID()}`;
 }
 
 function resolveRunMeta(ctx = {}, options = {}) {
@@ -41,7 +40,10 @@ function resolveRunMeta(ctx = {}, options = {}) {
   };
 }
 
-function previewText(text = "", maxChars = LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars) {
+function previewText(
+  text = "",
+  maxChars = LENGTH_THRESHOLDS.contextPreview.workflowPayloadPreviewChars,
+) {
   const raw = String(text || "");
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, maxChars)}...(truncated)`;

@@ -3,15 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureUuid } from "../../../shared/identity/secureIdentity.js";
 import { CONNECTOR_TYPES } from "../../chat/model/chatConstants.js";
 import { messages } from "noobot-i18n/client/messages";
 import { getConnectorTimestamp, nowIso, parseTimeMs } from "../../chat/model/timeFields.js";
 
 export function normalizeSelectedConnectors(selectedConnectors = {}) {
   const source =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
+    selectedConnectors && typeof selectedConnectors === "object" ? selectedConnectors : {};
   return {
     database: String(source?.database || "").trim(),
     terminal: String(source?.terminal || "").trim(),
@@ -26,15 +25,9 @@ export function createConnectorPanelState(overrides = {}) {
   return {
     rootSessionId: String(overrides?.rootSessionId || "").trim(),
     groups: {
-      database: Array.isArray(overrides?.groups?.database)
-        ? overrides.groups.database
-        : [],
-      terminal: Array.isArray(overrides?.groups?.terminal)
-        ? overrides.groups.terminal
-        : [],
-      email: Array.isArray(overrides?.groups?.email)
-        ? overrides.groups.email
-        : [],
+      database: Array.isArray(overrides?.groups?.database) ? overrides.groups.database : [],
+      terminal: Array.isArray(overrides?.groups?.terminal) ? overrides.groups.terminal : [],
+      email: Array.isArray(overrides?.groups?.email) ? overrides.groups.email : [],
     },
     selectedConnectors: normalizedSelectedConnectors,
     updatedAt: nowIso(),
@@ -44,50 +37,40 @@ export function createConnectorPanelState(overrides = {}) {
 function resolveDefaultSessionTitle() {
   const savedLocale = String(localStorage.getItem("noobot_locale") || "").trim();
   const locale = savedLocale || "zh-CN";
-  return messages?.[locale]?.chat?.newSession || messages?.["zh-CN"]?.chat?.newSession || "New Session";
+  return (
+    messages?.[locale]?.chat?.newSession || messages?.["zh-CN"]?.chat?.newSession || "New Session"
+  );
 }
 
 export function sessionTitleFromMessages(messages = [], fallback = resolveDefaultSessionTitle()) {
   const firstUser = (Array.isArray(messages) ? messages : []).find(
     (messageItem) =>
       messageItem?.injectedMessage !== true &&
-      String(messageItem?.role || "").trim().toLowerCase() === "user" &&
+      String(messageItem?.role || "")
+        .trim()
+        .toLowerCase() === "user" &&
       String(messageItem?.content || "").trim(),
   );
   return firstUser ? String(firstUser.content || "").slice(0, 20) : fallback;
 }
 
 export function generateSessionId() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
-    /[xy]/g,
-    (placeholder) => {
-      const randomValue = Math.floor(Math.random() * 16);
-      const resolvedValue =
-        placeholder === "x" ? randomValue : (randomValue & 0x3) | 0x8;
-      return resolvedValue.toString(16);
-    },
-  );
+  return createSecureUuid();
 }
 
 export function resolveSelectedConnectorsWithDefaults({
   groups = {},
   selectedConnectors = {},
 } = {}) {
-  const normalizedGroups =
-    groups && typeof groups === "object" ? groups : {};
+  const normalizedGroups = groups && typeof groups === "object" ? groups : {};
   const selectedSource =
-    selectedConnectors && typeof selectedConnectors === "object"
-      ? selectedConnectors
-      : {};
+    selectedConnectors && typeof selectedConnectors === "object" ? selectedConnectors : {};
   const output = normalizeSelectedConnectors({});
   for (const connectorType of CONNECTOR_TYPES) {
     const groupItems = Array.isArray(normalizedGroups?.[connectorType])
       ? normalizedGroups[connectorType]
       : [];
-    const selectedConnectorName = String(
-      selectedSource?.[connectorType] || "",
-    ).trim();
+    const selectedConnectorName = String(selectedSource?.[connectorType] || "").trim();
     output[connectorType] = selectedConnectorName || pickDefaultConnectorName(groupItems);
   }
   return output;
@@ -99,7 +82,9 @@ function pickDefaultConnectorName(groupItems = []) {
   const parseTime = (connectorItem = {}) => parseTimeMs(getConnectorTimestamp(connectorItem));
   const connectedItems = sourceItems.filter(
     (connectorItem) =>
-      String(connectorItem?.status || "").trim().toLowerCase() === "connected",
+      String(connectorItem?.status || "")
+        .trim()
+        .toLowerCase() === "connected",
   );
   const sortByRecent = (leftConnector, rightConnector) =>
     parseTime(rightConnector) - parseTime(leftConnector);

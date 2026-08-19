@@ -7,16 +7,12 @@ import { computed, ref, watch } from "vue";
 import { connectApi } from "../../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 
-export function useApiConnection({
-  userId,
-  onConnected = async () => {},
-  notify = () => {},
-}) {
+export function useApiConnection({ userId, onConnected = async () => {}, notify = () => {} }) {
   const { translate, locale } = useLocale();
-  const connectCode = ref(localStorage.getItem("noobot_connect_code") || "");
-  const apiKey = ref(localStorage.getItem("noobot_api_key") || "");
-  const apiKeyUserId = ref(localStorage.getItem("noobot_api_user_id") || "");
-  const apiRole = ref(localStorage.getItem("noobot_api_role") || "");
+  const connectCode = ref("");
+  const apiKey = ref("");
+  const apiKeyUserId = ref("");
+  const apiRole = ref("");
   const scenarioConfig = ref({
     default: "",
     definitions: {},
@@ -36,8 +32,7 @@ export function useApiConnection({
   const connected = computed(
     () =>
       Boolean(apiKey.value) &&
-      String(apiKeyUserId.value || "").trim() ===
-        String(userId.value || "").trim(),
+      String(apiKeyUserId.value || "").trim() === String(userId.value || "").trim(),
   );
   const isSuperAdmin = computed(
     () => connected.value && String(apiRole.value || "") === "super_admin",
@@ -46,30 +41,19 @@ export function useApiConnection({
     () => connected.value && (isSuperAdmin.value || permissions.value.canUseIDE === true),
   );
 
-  function persistApiAuth() {
-    if (apiKey.value && apiKeyUserId.value) {
-      localStorage.setItem("noobot_api_key", apiKey.value);
-      localStorage.setItem("noobot_api_user_id", apiKeyUserId.value);
-      localStorage.setItem("noobot_api_role", String(apiRole.value || ""));
-      return;
-    }
+  function removePersistedCredentials() {
     localStorage.removeItem("noobot_api_key");
     localStorage.removeItem("noobot_api_user_id");
     localStorage.removeItem("noobot_api_role");
+    localStorage.removeItem("noobot_connect_code");
   }
 
   function persistConnectProfile() {
     const normalizedUserId = String(userId.value || "").trim();
-    const normalizedCode = String(connectCode.value || "").trim();
     if (normalizedUserId) {
       localStorage.setItem("noobot_user_id", normalizedUserId);
     } else {
       localStorage.removeItem("noobot_user_id");
-    }
-    if (normalizedCode) {
-      localStorage.setItem("noobot_connect_code", normalizedCode);
-    } else {
-      localStorage.removeItem("noobot_connect_code");
     }
   }
 
@@ -88,7 +72,6 @@ export function useApiConnection({
     permissions.value = {
       canUseIDE: false,
     };
-    persistApiAuth();
   }
 
   function snapshotCredentials() {
@@ -102,17 +85,11 @@ export function useApiConnection({
     };
   }
 
-  if (
-    apiKey.value &&
-    String(apiKeyUserId.value || "").trim() !== String(userId.value || "").trim()
-  ) {
-    clearApiAuth();
-  }
+  removePersistedCredentials();
 
   function isPlainObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
   }
-
 
   function normalizeEnabledModels(input = []) {
     const optionMap = new Map();
@@ -123,15 +100,20 @@ export function useApiConnection({
           : rawItem?.value || rawItem?.alias || rawItem?.key || rawItem?.model || "",
       ).trim();
       if (!value || optionMap.has(value)) return;
-      const label = String(
-        typeof rawItem === "string"
-          ? rawItem
-          : rawItem?.label || rawItem?.name || rawItem?.alias || rawItem?.model || value,
-      ).trim() || value;
+      const label =
+        String(
+          typeof rawItem === "string"
+            ? rawItem
+            : rawItem?.label || rawItem?.name || rawItem?.alias || rawItem?.model || value,
+        ).trim() || value;
       optionMap.set(value, {
         value,
-        alias: String(typeof rawItem === "string" ? rawItem : rawItem?.alias || value).trim() || value,
-        key: String(typeof rawItem === "string" ? rawItem : rawItem?.key || rawItem?.alias || value).trim() || value,
+        alias:
+          String(typeof rawItem === "string" ? rawItem : rawItem?.alias || value).trim() || value,
+        key:
+          String(
+            typeof rawItem === "string" ? rawItem : rawItem?.key || rawItem?.alias || value,
+          ).trim() || value,
         label,
         name: String(typeof rawItem === "string" ? label : rawItem?.name || label).trim() || label,
         model: String(typeof rawItem === "string" ? "" : rawItem?.model || "").trim(),
@@ -144,9 +126,7 @@ export function useApiConnection({
 
   function normalizeScenarioConfig(input = {}) {
     const source = isPlainObject(input) ? input : {};
-    const definitionsSource = isPlainObject(source?.definitions)
-      ? source.definitions
-      : {};
+    const definitionsSource = isPlainObject(source?.definitions) ? source.definitions : {};
     const normalizedDefinitions = {};
     for (const [scenarioKey, definitionItem] of Object.entries(definitionsSource)) {
       const normalizedScenarioKey = String(scenarioKey || "").trim();
@@ -158,9 +138,7 @@ export function useApiConnection({
         description: String(sourceDefinition?.description || "").trim(),
         model: String(sourceDefinition?.model || "").trim(),
         tools: Array.isArray(sourceDefinition?.tools)
-          ? sourceDefinition.tools
-              .map((toolName) => String(toolName || "").trim())
-              .filter(Boolean)
+          ? sourceDefinition.tools.map((toolName) => String(toolName || "").trim()).filter(Boolean)
           : [],
         context: Array.isArray(sourceDefinition?.context)
           ? sourceDefinition.context
@@ -207,7 +185,12 @@ export function useApiConnection({
       plugins: normalizedPlugins,
       enabledModels: normalizeEnabledModels(source?.enabledModels || source?.models || []),
       defaultModel: normalizeEnabledModels([source?.defaultModel]).at(0) || null,
-      defaultModelAlias: String(source?.defaultModelAlias || source?.defaultModel?.alias || source?.defaultModel?.value || "").trim(),
+      defaultModelAlias: String(
+        source?.defaultModelAlias ||
+          source?.defaultModel?.alias ||
+          source?.defaultModel?.value ||
+          "",
+      ).trim(),
     };
   }
 
@@ -219,21 +202,21 @@ export function useApiConnection({
 
   async function authFetch(url, options = {}) {
     const requestApiKey = String(apiKey.value || "");
-    const runFetch = () => fetch(url, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
-        ...(String(locale.value || "").trim()
-          ? { "x-noobot-locale": String(locale.value || "").trim() }
-          : {}),
-      },
-    });
+    const runFetch = () =>
+      fetch(url, {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          ...(apiKey.value ? { "x-api-key": apiKey.value } : {}),
+          ...(String(locale.value || "").trim()
+            ? { "x-noobot-locale": String(locale.value || "").trim() }
+            : {}),
+        },
+      });
     const res = await runFetch();
     if (res.status !== 401) return res;
-    const refreshed = apiKey.value && apiKey.value !== requestApiKey
-      ? true
-      : await refreshAuthentication();
+    const refreshed =
+      apiKey.value && apiKey.value !== requestApiKey ? true : await refreshAuthentication();
     if (refreshed && apiKey.value && apiKey.value !== requestApiKey) {
       const retryResponse = await runFetch();
       if (retryResponse.status === 401) clearApiAuth();
@@ -270,10 +253,8 @@ export function useApiConnection({
     });
     permissions.value = {
       canUseIDE:
-        String(data?.role || "").trim() === "super_admin" ||
-        data?.permissions?.canUseIDE === true,
+        String(data?.role || "").trim() === "super_admin" || data?.permissions?.canUseIDE === true,
     };
-    persistApiAuth();
     persistConnectProfile();
     return true;
   }
@@ -345,7 +326,8 @@ export function useApiConnection({
       );
     } catch (error) {
       if (runConnected && snapshotCredentials().key === credentials.key) clearApiAuth();
-      if (!silent) notify({ type: "error", message: error.message || translate("infra.connectFailed") });
+      if (!silent)
+        notify({ type: "error", message: error.message || translate("infra.connectFailed") });
       return false;
     } finally {
       activeConnectCallCount = Math.max(0, activeConnectCallCount - 1);

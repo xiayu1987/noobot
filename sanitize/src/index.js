@@ -21,15 +21,29 @@ const SENSITIVE_FIELD_PATTERNS = [
 const REDACTED_SENSITIVE_FIELD_VALUE = "[Redacted]";
 
 function normalizeSensitiveFieldText(input = "") {
-  return String(input || "")
+  const source = String(input || "")
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .toLowerCase();
+  let output = "";
+  let separatorPending = false;
+  for (const character of source) {
+    const code = character.codePointAt(0);
+    const allowed =
+      (code >= 48 && code <= 57) ||
+      (code >= 97 && code <= 122) ||
+      (code >= 0x4e00 && code <= 0x9fa5);
+    if (allowed) {
+      if (separatorPending && output) output += "_";
+      output += character;
+      separatorPending = false;
+    } else {
+      separatorPending = true;
+    }
+  }
+  return output;
 }
 function canonicalSensitiveFieldText(input = "") {
-  return normalizeSensitiveFieldText(input).replace(/[_-]+/g, "");
+  return normalizeSensitiveFieldText(input).replaceAll("_", "").replaceAll("-", "");
 }
 const normalizedPatterns = SENSITIVE_FIELD_PATTERNS.map(normalizeSensitiveFieldText);
 const canonicalPatterns = SENSITIVE_FIELD_PATTERNS.map(canonicalSensitiveFieldText);
@@ -163,12 +177,48 @@ function collectPiiRanges(text) {
   );
   addMatches(/(?<![A-F0-9])(?:[A-F0-9]{2}[:-]){5}[A-F0-9]{2}(?![A-F0-9])/gi);
 
-  const passport =
-    /(?:passport(?:\s+(?:no|number))?|passport[_-]?(?:no|number)|护照(?:号|号码)?|旅券番号)\s*[:=#]?\s*([A-Z0-9][A-Z0-9 -]{5,18}[A-Z0-9])/gi;
-  for (const match of text.matchAll(passport)) {
-    const candidate = match[1];
-    const start = match.index + match[0].lastIndexOf(candidate);
-    ranges.push([start, start + candidate.length]);
+  ranges.push(...collectPassportRanges(text));
+  return ranges;
+}
+
+function collectPassportRanges(text) {
+  const source = String(text || "");
+  const searchable = source.toLowerCase();
+  const labels = [
+    "passport number",
+    "passport_number",
+    "passport-number",
+    "passport no",
+    "passport_no",
+    "passport-no",
+    "护照号码",
+    "passport",
+    "旅券番号",
+    "护照号",
+    "护照",
+  ];
+  const ranges = [];
+  for (let index = 0; index < source.length; index += 1) {
+    const label = labels.find((candidate) => searchable.startsWith(candidate, index));
+    if (!label) continue;
+    let cursor = index + label.length;
+    while (/\s/.test(source[cursor] || "")) cursor += 1;
+    if (":=#".includes(source[cursor] || "")) cursor += 1;
+    while (/\s/.test(source[cursor] || "")) cursor += 1;
+    const start = cursor;
+    while (cursor < source.length && cursor - start < 20 && /[A-Z0-9 -]/i.test(source[cursor])) {
+      cursor += 1;
+    }
+    while (cursor > start && (source[cursor - 1] === " " || source[cursor - 1] === "-")) {
+      cursor -= 1;
+    }
+    if (
+      cursor - start >= 7 &&
+      /[A-Z0-9]/i.test(source[start]) &&
+      /[A-Z0-9]/i.test(source[cursor - 1])
+    ) {
+      ranges.push([start, cursor]);
+    }
   }
   return ranges;
 }
@@ -194,7 +244,6 @@ const SECRET_RULES = [
   /\bnpm_[A-Za-z0-9]{36}\b/g,
   /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g,
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
-  /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
 ];
 const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
 const SECRET_ASSIGNMENT =
@@ -206,6 +255,7 @@ function collectSecretRanges(text) {
     for (const match of value.matchAll(pattern))
       ranges.push([match.index, match.index + match[0].length]);
   }
+  ranges.push(...collectPrivateKeyRanges(value));
   for (const match of value.matchAll(BEARER_SECRET)) {
     const start = match.index + match[0].lastIndexOf(match[1]);
     ranges.push([start, start + match[1].length]);
@@ -215,6 +265,31 @@ function collectSecretRanges(text) {
     if (secret.length < 20 && shannonEntropy(secret) < 3) continue;
     const start = match.index + match[0].lastIndexOf(secret);
     ranges.push([start, start + secret.length]);
+  }
+  return ranges;
+}
+
+function collectPrivateKeyRanges(value) {
+  const beginPrefix = "-----BEGIN ";
+  const headerSuffix = "PRIVATE KEY-----";
+  const ranges = [];
+  let cursor = 0;
+  while ((cursor = value.indexOf(beginPrefix, cursor)) >= 0) {
+    const headerEnd = value.indexOf(headerSuffix, cursor + beginPrefix.length);
+    if (headerEnd < 0) break;
+    const type = value.slice(cursor + beginPrefix.length, headerEnd);
+    if ([...type].some((character) => !/[A-Z0-9 ]/.test(character))) {
+      cursor += beginPrefix.length;
+      continue;
+    }
+    const endMarker = `-----END ${type}${headerSuffix}`;
+    const end = value.indexOf(endMarker, headerEnd + headerSuffix.length);
+    if (end < 0) {
+      cursor = headerEnd + headerSuffix.length;
+      continue;
+    }
+    ranges.push([cursor, end + endMarker.length]);
+    cursor = end + endMarker.length;
   }
   return ranges;
 }

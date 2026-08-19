@@ -22,6 +22,20 @@ export function createDependencyInstaller({
   installManagedDependencyMac,
   getDependencyProxyUrl = () => "",
 } = {}) {
+  function containsDocumentFoundationDownloadOrigin(value = "") {
+    const expectedHostname = "download.documentfoundation.org";
+    for (const rawToken of String(value || "").split(/\s+/)) {
+      const token = rawToken.replace(/^[('"<]+|[)'">,;:.]+$/g, "");
+      if (token.toLowerCase() === expectedHostname) return true;
+      try {
+        if (new URL(token).hostname.toLowerCase() === expectedHostname) return true;
+      } catch {
+        // Process output commonly contains non-URL tokens.
+      }
+    }
+    return false;
+  }
+
   function getPlaywrightInstallCommand() {
     const nodeCommand = process.execPath;
     const cliPath = joinClientPath(backendRoot, "node_modules", "playwright", "cli.js");
@@ -36,7 +50,11 @@ export function createDependencyInstaller({
 
   function getProxyRunOptions() {
     const proxyUrl = String(getDependencyProxyUrl() || "").trim();
-    return { env: getDependencyProxyEnv(proxyUrl), masked: maskDependencyProxyUrl(proxyUrl), enabled: Boolean(proxyUrl) };
+    return {
+      env: getDependencyProxyEnv(proxyUrl),
+      masked: maskDependencyProxyUrl(proxyUrl),
+      enabled: Boolean(proxyUrl),
+    };
   }
 
   function buildWindowsWingetInstallArgs(packageId) {
@@ -70,7 +88,12 @@ export function createDependencyInstaller({
         message: `Failed to install ${label}. The installer timed out. Please retry, or install ${label} manually before restarting Noobot.${detail ? ` ${detail}` : ""}`,
       };
     }
-    if (result?.code === 1602 || text.includes("你已取消安装") || text.includes("cancelled") || text.includes("canceled")) {
+    if (
+      result?.code === 1602 ||
+      text.includes("你已取消安装") ||
+      text.includes("cancelled") ||
+      text.includes("canceled")
+    ) {
       return {
         detail,
         failureKind: "user-cancelled",
@@ -78,7 +101,12 @@ export function createDependencyInstaller({
         message: `Failed to install ${label}. The installer was cancelled. Please retry and accept the installer prompts, or install ${label} manually before restarting Noobot.${detail ? ` ${detail}` : ""}`,
       };
     }
-    if (text.includes("msstore") || text.includes("source agreement") || text.includes("source agreements") || text.includes("协议")) {
+    if (
+      text.includes("msstore") ||
+      text.includes("source agreement") ||
+      text.includes("source agreements") ||
+      text.includes("协议")
+    ) {
       return {
         detail,
         failureKind: "source-agreement",
@@ -86,7 +114,13 @@ export function createDependencyInstaller({
         message: `Failed to install ${label}. The Windows package source requires an agreement or region confirmation. Please retry, or run winget once manually to accept the source agreement.${detail ? ` ${detail}` : ""}`,
       };
     }
-    if (text.includes("downloading") || text.includes("download failed") || text.includes("正在下载") || text.includes("下载失败") || text.includes("download.documentfoundation.org")) {
+    if (
+      text.includes("downloading") ||
+      text.includes("download failed") ||
+      text.includes("正在下载") ||
+      text.includes("下载失败") ||
+      containsDocumentFoundationDownloadOrigin(detail)
+    ) {
       return {
         detail,
         failureKind: "download",
@@ -103,166 +137,299 @@ export function createDependencyInstaller({
   }
 
   async function buildDependencyInstallCommand(spec) {
-    writeDependencyLog("install-command:build:start", { label: spec.label, platform: process.platform }, { debug: true });
+    writeDependencyLog(
+      "install-command:build:start",
+      { label: spec.label, platform: process.platform },
+      { debug: true },
+    );
     if (spec.managedInstaller === "playwright") return getPlaywrightInstallCommand();
     const packages = spec.packages?.[process.platform] || {};
     if (process.platform === "win32") {
-      if (packages.winget && await findAvailableCommand(["winget"])) return { command: "winget", args: buildWindowsWingetInstallArgs(packages.winget) };
-      if (packages.choco && await findAvailableCommand(["choco"])) return { command: "choco", args: ["install", packages.choco, "-y"] };
+      if (packages.winget && (await findAvailableCommand(["winget"])))
+        return { command: "winget", args: buildWindowsWingetInstallArgs(packages.winget) };
+      if (packages.choco && (await findAvailableCommand(["choco"])))
+        return { command: "choco", args: ["install", packages.choco, "-y"] };
     }
     if (process.platform === "darwin") {
-      if (packages.brew && await findAvailableCommand(["brew"])) return { command: "brew", args: ["install", "--cask", packages.brew] };
+      if (packages.brew && (await findAvailableCommand(["brew"])))
+        return { command: "brew", args: ["install", "--cask", packages.brew] };
     }
     if (process.platform === "linux") {
-      if (packages.apt && await findAvailableCommand(["apt-get"])) {
+      if (packages.apt && (await findAvailableCommand(["apt-get"]))) {
         const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
-        return isRoot ? { command: "apt-get", args: ["install", "-y", packages.apt] } : { command: "sudo", args: ["-n", "apt-get", "install", "-y", packages.apt] };
+        return isRoot
+          ? { command: "apt-get", args: ["install", "-y", packages.apt] }
+          : { command: "sudo", args: ["-n", "apt-get", "install", "-y", packages.apt] };
       }
       const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
-      if (packages.dnf && await findAvailableCommand(["dnf"])) return isRoot ? { command: "dnf", args: ["install", "-y", packages.dnf] } : { command: "sudo", args: ["-n", "dnf", "install", "-y", packages.dnf] };
-      if (packages.yum && await findAvailableCommand(["yum"])) return isRoot ? { command: "yum", args: ["install", "-y", packages.yum] } : { command: "sudo", args: ["-n", "yum", "install", "-y", packages.yum] };
-      if (packages.pacman && await findAvailableCommand(["pacman"])) return isRoot ? { command: "pacman", args: ["-S", "--noconfirm", packages.pacman] } : { command: "sudo", args: ["-n", "pacman", "-S", "--noconfirm", packages.pacman] };
+      if (packages.dnf && (await findAvailableCommand(["dnf"])))
+        return isRoot
+          ? { command: "dnf", args: ["install", "-y", packages.dnf] }
+          : { command: "sudo", args: ["-n", "dnf", "install", "-y", packages.dnf] };
+      if (packages.yum && (await findAvailableCommand(["yum"])))
+        return isRoot
+          ? { command: "yum", args: ["install", "-y", packages.yum] }
+          : { command: "sudo", args: ["-n", "yum", "install", "-y", packages.yum] };
+      if (packages.pacman && (await findAvailableCommand(["pacman"])))
+        return isRoot
+          ? { command: "pacman", args: ["-S", "--noconfirm", packages.pacman] }
+          : { command: "sudo", args: ["-n", "pacman", "-S", "--noconfirm", packages.pacman] };
     }
-    writeDependencyLog("install-command:build:missing", { label: spec.label, platform: process.platform });
+    writeDependencyLog("install-command:build:missing", {
+      label: spec.label,
+      platform: process.platform,
+    });
     return null;
   }
 
-  async function ensureSelectedDependencies(dependencies = {}) {
-    const selected = Object.entries(dependencySpecs).filter(([key]) => dependencies?.[key] === true);
-    const results = [];
-    for (const [key, spec] of selected) {
-      writeDependencyLog("ensure:start", { key, label: spec.label });
-      sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
-      let installed = false;
-      try {
-        writeDependencyLog("check:start", { key, label: spec.label, timeoutMs: desktopDependencyTimeouts.checkMs });
-        installed = await withTimeout(
-          isDependencyInstalled(spec),
-          desktopDependencyTimeouts.checkMs,
-          `dependency check ${spec.label}`,
-          { appendEarlyLog },
+  async function installLibreOfficeWithoutManager(key, spec) {
+    writeDependencyLog("dmg:install:start", { key, label: spec.label });
+    try {
+      await installLibreOfficeFromDmg(spec);
+      writeDependencyLog("dmg:install:finish", { key, label: spec.label });
+      sendStatus({
+        phase: "dependency",
+        message: `${spec.label} DMG installer finished. Verifying availability...`,
+      });
+      if (!(await waitForDependencyInstalled(spec))) {
+        throw createDependencyError(
+          `${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`,
+          { failureKind: "verification" },
         );
-        writeDependencyLog("check:finish", { key, label: spec.label, installed });
-      } catch (error) {
-        writeDependencyLog("check:error", { key, label: spec.label, error });
-        sendStatus({ phase: "dependency", message: `${spec.label} check timed out or failed. Continuing with installer lookup...` });
       }
-      if (installed) {
-        writeDependencyLog("ensure:installed", { key, label: spec.label });
-        sendStatus({ phase: "dependency", message: `${spec.label} is already installed. Skipping.` });
-        results.push({ key, ok: true, skipped: true });
-        continue;
+      writeDependencyLog("verify:finish", { key, label: spec.label, method: "dmg" });
+      sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+      return { key, ok: true, installed: true, method: "dmg" };
+    } catch (error) {
+      const meta = getDependencyErrorMeta(error);
+      const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)}`;
+      writeDependencyLog("dmg:install:error", { key, label: spec.label, error });
+      sendStatus({
+        phase: "dependency-missing",
+        message,
+        dependency: key,
+        retryable: meta.retryable,
+        failureKind: meta.failureKind,
+      });
+      throw createDependencyError(message, meta);
+    }
+  }
+
+  async function installManagedMacWithoutManager(key, spec) {
+    writeDependencyLog("managed:install:start", { key, label: spec.label });
+    try {
+      const result = await installManagedDependencyMac(key, spec);
+      writeDependencyLog("managed:install:finish", {
+        key,
+        label: spec.label,
+        ok: result?.ok === true,
+        method: result?.method || "managed",
+        path: result?.path || "",
+      });
+      if (result?.ok !== true && !(await waitForDependencyInstalled(spec))) {
+        throw createDependencyError(
+          `${spec.label} managed installation finished, but it is not available yet. Please restart Noobot or install it manually.`,
+          { failureKind: "verification" },
+        );
       }
-      writeDependencyLog("missing:start", { key, label: spec.label, platform: process.platform });
-      sendStatus({ phase: "dependency", message: `${spec.label} is not installed. Looking for an installer...` });
-      writeDependencyLog("install-command:start", { key, label: spec.label, timeoutMs: desktopDependencyTimeouts.installCommandMs });
-      const installCommand = await withTimeout(
-        buildDependencyInstallCommand(spec),
-        desktopDependencyTimeouts.installCommandMs,
-        `dependency installer lookup ${spec.label}`,
+      sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+      return {
+        key,
+        ok: true,
+        installed: true,
+        method: result?.method || "managed",
+        path: result?.path || "",
+      };
+    } catch (error) {
+      const meta = getDependencyErrorMeta(error);
+      const envHint =
+        key === "ffmpeg"
+          ? "NOOBOT_FFMPEG_MAC_URL"
+          : "NOOBOT_NODEJS_MAC_URL / NOOBOT_NODEJS_MAC_VERSION";
+      const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)} You can override the download with ${envHint}.`;
+      writeDependencyLog("managed:install:error", { key, label: spec.label, error });
+      sendStatus({
+        phase: "dependency-missing",
+        message,
+        dependency: key,
+        retryable: meta.retryable,
+        failureKind: meta.failureKind,
+      });
+      throw createDependencyError(message, meta);
+    }
+  }
+
+  function installerUnavailable(key, spec) {
+    const message =
+      process.platform === "darwin"
+        ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || spec.label}`
+        : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
+    writeDependencyLog("missing:no-installer", { key, label: spec.label, message });
+    sendStatus({
+      phase: "dependency-missing",
+      message,
+      dependency: key,
+      retryable: false,
+      failureKind: "installer-unavailable",
+    });
+    throw createDependencyError(message, { failureKind: "installer-unavailable" });
+  }
+
+  function installWithoutPackageManager(key, spec) {
+    if (process.platform === "darwin" && key === "libreoffice")
+      return installLibreOfficeWithoutManager(key, spec);
+    if (process.platform === "darwin" && (key === "ffmpeg" || key === "nodejs"))
+      return installManagedMacWithoutManager(key, spec);
+    return installerUnavailable(key, spec);
+  }
+
+  async function runInstallCommand(key, spec, installCommand) {
+    writeDependencyLog("install:start", {
+      key,
+      label: spec.label,
+      command: [installCommand.command, ...(installCommand.args || [])].join(" "),
+      timeoutMs: desktopDependencyTimeouts.installMs,
+    });
+    const proxy = getProxyRunOptions();
+    writeDependencyLog("proxy:install-command", {
+      key,
+      label: spec.label,
+      enabled: proxy.enabled,
+      proxy: proxy.masked,
+    });
+    sendStatus({
+      phase: "dependency",
+      message: `Installing ${spec.label}... This may take several minutes. Please accept any Windows installer prompts if they appear.`,
+    });
+    const installStartedAt = Date.now();
+    const heartbeat = setInterval(() => {
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - installStartedAt) / 1000));
+      sendStatus({
+        phase: "dependency",
+        message: `Installing ${spec.label}... still running after ${elapsedSeconds}s. Please leave Noobot open and accept any Windows installer prompts if they appear.`,
+      });
+    }, 30000);
+    let result;
+    try {
+      result = await runProcess(installCommand.command, installCommand.args, {
+        timeoutMs: desktopDependencyTimeouts.installMs,
+        env: { ...proxy.env, ...(installCommand.env || {}) },
+      });
+    } finally {
+      clearInterval(heartbeat);
+    }
+    writeDependencyLog("install:finish", {
+      key,
+      label: spec.label,
+      ok: result.ok,
+      code: result.code,
+      error: result.error,
+    });
+    if (!result.ok) {
+      const failure = classifyInstallFailure({ result, label: spec.label });
+      writeDependencyLog("install:error:classified", {
+        key,
+        label: spec.label,
+        code: result.code,
+        failureKind: failure.failureKind,
+        retryable: failure.retryable,
+        detail: failure.detail,
+      });
+      sendStatus({
+        phase: "dependency-missing",
+        message: failure.message,
+        dependency: key,
+        retryable: failure.retryable,
+        failureKind: failure.failureKind,
+      });
+      throw createDependencyError(failure.message, {
+        failureKind: failure.failureKind,
+        retryable: failure.retryable,
+      });
+    }
+    sendStatus({
+      phase: "dependency",
+      message: `${spec.label} installer finished. Verifying availability...`,
+    });
+    writeDependencyLog("verify:start", { key, label: spec.label });
+    if (!(await waitForDependencyInstalled(spec))) {
+      writeDependencyLog("verify:failed", { key, label: spec.label });
+      throw createDependencyError(
+        `${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`,
+        { failureKind: "verification" },
+      );
+    }
+    writeDependencyLog("verify:finish", { key, label: spec.label });
+    sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
+    return { key, ok: true, installed: true };
+  }
+
+  async function ensureDependency(key, spec) {
+    writeDependencyLog("ensure:start", { key, label: spec.label });
+    sendStatus({ phase: "dependency", message: `Checking ${spec.label}...` });
+    let installed = false;
+    try {
+      writeDependencyLog("check:start", {
+        key,
+        label: spec.label,
+        timeoutMs: desktopDependencyTimeouts.checkMs,
+      });
+      installed = await withTimeout(
+        isDependencyInstalled(spec),
+        desktopDependencyTimeouts.checkMs,
+        `dependency check ${spec.label}`,
         { appendEarlyLog },
       );
-      writeDependencyLog("install-command:finish", { key, label: spec.label, command: installCommand ? [installCommand.command, ...(installCommand.args || [])].join(" ") : "" });
-      if (!installCommand) {
-        if (process.platform === "darwin" && key === "libreoffice") {
-          writeDependencyLog("dmg:install:start", { key, label: spec.label });
-          try {
-            await installLibreOfficeFromDmg(spec);
-            writeDependencyLog("dmg:install:finish", { key, label: spec.label });
-            sendStatus({ phase: "dependency", message: `${spec.label} DMG installer finished. Verifying availability...` });
-            writeDependencyLog("verify:start", { key, label: spec.label, method: "dmg" });
-            if (!(await waitForDependencyInstalled(spec))) {
-              writeDependencyLog("verify:failed", { key, label: spec.label, method: "dmg" });
-              throw createDependencyError(`${spec.label} DMG installation finished, but it is not available yet. Please restart Noobot or install it manually if /Applications/LibreOffice.app is still missing.`, { failureKind: "verification" });
-            }
-            writeDependencyLog("verify:finish", { key, label: spec.label, method: "dmg" });
-            sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
-            results.push({ key, ok: true, installed: true, method: "dmg" });
-            continue;
-          } catch (error) {
-            const meta = getDependencyErrorMeta(error);
-            const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)}`;
-            writeDependencyLog("dmg:install:error", { key, label: spec.label, error });
-            sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: meta.retryable, failureKind: meta.failureKind });
-            throw createDependencyError(message, meta);
-          }
-        }
-        if (process.platform === "darwin" && (key === "ffmpeg" || key === "nodejs")) {
-          writeDependencyLog("managed:install:start", { key, label: spec.label });
-          try {
-            const managedInstallResult = await installManagedDependencyMac(key, spec);
-            writeDependencyLog("managed:install:finish", {
-              key,
-              label: spec.label,
-              ok: managedInstallResult?.ok === true,
-              method: managedInstallResult?.method || "managed",
-              path: managedInstallResult?.path || "",
-            });
-            if (managedInstallResult?.ok === true) {
-              sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
-              results.push({ key, ok: true, installed: true, method: managedInstallResult.method || "managed", path: managedInstallResult.path || "" });
-              continue;
-            }
-            sendStatus({ phase: "dependency", message: `${spec.label} managed installer finished. Verifying availability...` });
-            writeDependencyLog("verify:start", { key, label: spec.label, method: "managed" });
-            if (!(await waitForDependencyInstalled(spec))) {
-              writeDependencyLog("verify:failed", { key, label: spec.label, method: "managed" });
-              throw createDependencyError(`${spec.label} managed installation finished, but it is not available yet. Please restart Noobot or install it manually.`, { failureKind: "verification" });
-            }
-            writeDependencyLog("verify:finish", { key, label: spec.label, method: "managed" });
-            sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
-            results.push({ key, ok: true, installed: true, method: "managed" });
-            continue;
-          } catch (error) {
-            const meta = getDependencyErrorMeta(error);
-            const envHint = key === "ffmpeg" ? "NOOBOT_FFMPEG_MAC_URL" : "NOOBOT_NODEJS_MAC_URL / NOOBOT_NODEJS_MAC_VERSION";
-            const message = `Failed to auto-install ${spec.label} without Homebrew. ${error?.message || String(error)} You can override the download with ${envHint}.`;
-            writeDependencyLog("managed:install:error", { key, label: spec.label, error });
-            sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: meta.retryable, failureKind: meta.failureKind });
-            throw createDependencyError(message, meta);
-          }
-        }
-        const message = process.platform === "darwin"
-          ? `Cannot auto-install ${spec.label}: Homebrew was not found. Please install ${spec.label} manually or install Homebrew and run: brew install --cask ${spec.packages?.darwin?.brew || spec.packages?.darwin?.brew || spec.label}`
-          : `Cannot auto-install ${spec.label}: no supported package manager was found.`;
-        writeDependencyLog("missing:no-installer", { key, label: spec.label, message });
-        sendStatus({ phase: "dependency-missing", message, dependency: key, retryable: false, failureKind: "installer-unavailable" });
-        throw createDependencyError(message, { failureKind: "installer-unavailable" });
-      }
-      writeDependencyLog("install:start", { key, label: spec.label, command: [installCommand.command, ...(installCommand.args || [])].join(" "), timeoutMs: desktopDependencyTimeouts.installMs });
-      const proxy = getProxyRunOptions();
-      writeDependencyLog("proxy:install-command", { key, label: spec.label, enabled: proxy.enabled, proxy: proxy.masked });
-      sendStatus({ phase: "dependency", message: `Installing ${spec.label}... This may take several minutes. Please accept any Windows installer prompts if they appear.` });
-      const installStartedAt = Date.now();
-      const heartbeat = setInterval(() => {
-        const elapsedSeconds = Math.max(1, Math.round((Date.now() - installStartedAt) / 1000));
-        sendStatus({ phase: "dependency", message: `Installing ${spec.label}... still running after ${elapsedSeconds}s. Please leave Noobot open and accept any Windows installer prompts if they appear.` });
-      }, 30000);
-      let result;
-      try {
-        result = await runProcess(installCommand.command, installCommand.args, {
-          timeoutMs: desktopDependencyTimeouts.installMs,
-          env: { ...proxy.env, ...(installCommand.env || {}) },
-        });
-      } finally {
-        clearInterval(heartbeat);
-      }
-      writeDependencyLog("install:finish", { key, label: spec.label, ok: result.ok, code: result.code, error: result.error });
-      if (!result.ok) {
-        const failure = classifyInstallFailure({ result, label: spec.label });
-        writeDependencyLog("install:error:classified", { key, label: spec.label, code: result.code, failureKind: failure.failureKind, retryable: failure.retryable, detail: failure.detail });
-        sendStatus({ phase: "dependency-missing", message: failure.message, dependency: key, retryable: failure.retryable, failureKind: failure.failureKind });
-        throw createDependencyError(failure.message, { failureKind: failure.failureKind, retryable: failure.retryable });
-      }
-      sendStatus({ phase: "dependency", message: `${spec.label} installer finished. Verifying availability...` });
-      writeDependencyLog("verify:start", { key, label: spec.label });
-      if (!(await waitForDependencyInstalled(spec))) {
-        writeDependencyLog("verify:failed", { key, label: spec.label });
-        throw createDependencyError(`${spec.label} installation finished, but it is not available yet. Please restart Noobot or install it manually if the command is still missing from PATH.`, { failureKind: "verification" });
-      }
-      writeDependencyLog("verify:finish", { key, label: spec.label });
-      sendStatus({ phase: "dependency", message: `${spec.label} installed.` });
-      results.push({ key, ok: true, installed: true });
+      writeDependencyLog("check:finish", { key, label: spec.label, installed });
+    } catch (error) {
+      writeDependencyLog("check:error", { key, label: spec.label, error });
+      sendStatus({
+        phase: "dependency",
+        message: `${spec.label} check timed out or failed. Continuing with installer lookup...`,
+      });
+    }
+    if (installed) {
+      writeDependencyLog("ensure:installed", { key, label: spec.label });
+      sendStatus({
+        phase: "dependency",
+        message: `${spec.label} is already installed. Skipping.`,
+      });
+      return { key, ok: true, skipped: true };
+    }
+    writeDependencyLog("missing:start", { key, label: spec.label, platform: process.platform });
+    sendStatus({
+      phase: "dependency",
+      message: `${spec.label} is not installed. Looking for an installer...`,
+    });
+    writeDependencyLog("install-command:start", {
+      key,
+      label: spec.label,
+      timeoutMs: desktopDependencyTimeouts.installCommandMs,
+    });
+    const installCommand = await withTimeout(
+      buildDependencyInstallCommand(spec),
+      desktopDependencyTimeouts.installCommandMs,
+      `dependency installer lookup ${spec.label}`,
+      { appendEarlyLog },
+    );
+    writeDependencyLog("install-command:finish", {
+      key,
+      label: spec.label,
+      command: installCommand
+        ? [installCommand.command, ...(installCommand.args || [])].join(" ")
+        : "",
+    });
+    if (!installCommand) return installWithoutPackageManager(key, spec);
+    return runInstallCommand(key, spec, installCommand);
+  }
+
+  async function ensureSelectedDependencies(dependencies = {}) {
+    const selected = Object.entries(dependencySpecs).filter(
+      ([key]) => dependencies?.[key] === true,
+    );
+    const results = [];
+    for (const [key, spec] of selected) {
+      results.push(await ensureDependency(key, spec));
     }
     return results;
   }

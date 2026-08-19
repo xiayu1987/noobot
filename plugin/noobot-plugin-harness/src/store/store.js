@@ -14,6 +14,7 @@ import {
 import { DEFAULT_OPTIONS } from "../core/options.js";
 import { ensureIntervalCleanupTask } from "../utils/cleanup-scheduler.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { randomUUID } from "node:crypto";
 
 const manifestCache = new Map();
 const manifestWriteTimers = new Map();
@@ -472,7 +473,7 @@ export async function writeJson(filePath, data) {
 async function writeJsonValidated(filePath, data, devMode = false) {
   const content = JSON.stringify(data, null, 2);
   const dir = path.dirname(filePath);
-  const tmpPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+  const tmpPath = `${filePath}.tmp.${randomUUID()}`;
 
   await withRunWriteLock(filePath, async () => {
     await fs.mkdir(dir, { recursive: true });
@@ -501,7 +502,7 @@ export async function appendJsonl(filePath, record) {
 function buildRotatedJsonlPath(filePath = "") {
   const parsed = path.parse(filePath);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const suffix = Math.random().toString(36).slice(2, 6);
+  const suffix = randomUUID();
   return path.join(parsed.dir, `${parsed.name}.${stamp}.${suffix}${parsed.ext || ".jsonl"}`);
 }
 

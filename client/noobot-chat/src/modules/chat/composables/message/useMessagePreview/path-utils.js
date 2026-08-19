@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureId } from "../../../../../shared/identity/secureIdentity.js";
 
 export function parseContentDisposition(contentDisposition = "") {
   if (!contentDisposition) return "";
@@ -89,7 +90,7 @@ export function resolveFileItemName(fileItem = {}, relativePath = "") {
 }
 
 export function createFileAccessTraceId(prefix = "preview") {
-  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return createSecureId(prefix, "-");
 }
 
 export function maskWorkspacePath(pathValue = "") {

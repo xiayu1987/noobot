@@ -6,6 +6,7 @@
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeTimeMs, resolveTimeMs } from "@noobot/agent-config-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { randomUUID } from "node:crypto";
 
 function resolveSshConnection(connectionInfo = {}) {
   const source = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
@@ -167,7 +168,7 @@ function runSshShellCommand(
       reject(new Error("ssh shell not ready"));
       return;
     }
-    const marker = `__NOOBOT_DONE_${Date.now()}_${Math.random().toString(16).slice(2)}__`;
+    const marker = `__NOOBOT_DONE_${randomUUID()}__`;
     let stdout = "";
     let stderr = "";
     const stream = state.stream;

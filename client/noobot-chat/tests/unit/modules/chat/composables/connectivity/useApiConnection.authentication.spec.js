@@ -23,13 +23,21 @@ describe("useApiConnection authentication recovery", () => {
       clear: () => values.clear(),
     });
     localStorage.clear();
-    localStorage.setItem("noobot_connect_code", "connect-code");
+    localStorage.setItem("noobot_connect_code", "legacy-connect-code");
     localStorage.setItem("noobot_api_key", "stale-key");
     localStorage.setItem("noobot_api_user_id", "admin");
     vi.clearAllMocks();
   });
 
   it("single-flights credential refresh and retries concurrent 401 requests once", async () => {
+    connectApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, userId: "admin", apiKey: "initial-key", role: "super_admin" }),
+    });
+    const connection = useApiConnection({ userId: ref("admin") });
+    connection.connectCode.value = "connect-code";
+    await expect(connection.connectBackend({ silent: true })).resolves.toBe(true);
+    connectApi.mockClear();
     connectApi.mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true, userId: "admin", apiKey: "fresh-key", role: "super_admin" }),
@@ -38,8 +46,6 @@ describe("useApiConnection authentication recovery", () => {
       status: options.headers?.["x-api-key"] === "fresh-key" ? 200 : 401,
     }));
     vi.stubGlobal("fetch", fetchMock);
-    const connection = useApiConnection({ userId: ref("admin") });
-
     const [first, second] = await Promise.all([
       connection.authFetch("/api/first"),
       connection.authFetch("/api/second"),
@@ -53,24 +59,41 @@ describe("useApiConnection authentication recovery", () => {
   });
 
   it("preserves the current credential when background recovery races service downtime", async () => {
-    connectApi.mockRejectedValue(new Error("service unavailable"));
+    connectApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, userId: "admin", apiKey: "current-key", role: "super_admin" }),
+    });
     const connection = useApiConnection({ userId: ref("admin") });
+    connection.connectCode.value = "connect-code";
+    await connection.connectBackend({ silent: true });
+    connectApi.mockRejectedValue(new Error("service unavailable"));
 
     await expect(connection.refreshAuthentication()).resolves.toBe(false);
 
-    expect(connection.apiKey.value).toBe("stale-key");
+    expect(connection.apiKey.value).toBe("current-key");
     expect(connection.connected.value).toBe(true);
   });
 
   it("clears authentication when the retried request still returns 401", async () => {
+    connectApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, userId: "admin", apiKey: "initial-key", role: "super_admin" }),
+    });
+    const connection = useApiConnection({ userId: ref("admin") });
+    connection.connectCode.value = "connect-code";
+    await connection.connectBackend({ silent: true });
+    connectApi.mockClear();
     connectApi.mockResolvedValue({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "rejected-fresh-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "rejected-fresh-key",
+        role: "super_admin",
+      }),
     });
     const fetchMock = vi.fn(async () => ({ status: 401 }));
     vi.stubGlobal("fetch", fetchMock);
-    const connection = useApiConnection({ userId: ref("admin") });
-
     const response = await connection.authFetch("/api/still-unauthorized");
 
     expect(response.status).toBe(401);
@@ -83,11 +106,15 @@ describe("useApiConnection authentication recovery", () => {
 
   it("keeps foreground initialization when it joins a background credential refresh", async () => {
     let resolveConnect;
-    connectApi.mockImplementation(() => new Promise((resolve) => {
-      resolveConnect = resolve;
-    }));
+    connectApi.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveConnect = resolve;
+        }),
+    );
     const onConnected = vi.fn(async () => {});
     const connection = useApiConnection({ userId: ref("admin"), onConnected });
+    connection.connectCode.value = "connect-code";
 
     const backgroundRefresh = connection.refreshAuthentication();
     const foregroundConnect = connection.connectBackend({ silent: true, runConnected: true });
@@ -96,7 +123,12 @@ describe("useApiConnection authentication recovery", () => {
 
     resolveConnect({
       ok: true,
-      json: async () => ({ ok: true, userId: "admin", apiKey: "shared-fresh-key", role: "super_admin" }),
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "shared-fresh-key",
+        role: "super_admin",
+      }),
     });
 
     await expect(backgroundRefresh).resolves.toBe(true);
@@ -112,10 +144,14 @@ describe("useApiConnection authentication recovery", () => {
       json: async () => ({ ok: true, userId: "admin", apiKey: "fresh-key", role: "super_admin" }),
     });
     let releaseConnected;
-    const onConnected = vi.fn(() => new Promise((resolve) => {
-      releaseConnected = resolve;
-    }));
+    const onConnected = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseConnected = resolve;
+        }),
+    );
     const connection = useApiConnection({ userId: ref("admin"), onConnected });
+    connection.connectCode.value = "connect-code";
 
     const first = connection.connectBackend({ silent: true });
     const second = connection.connectBackend({ silent: true });
@@ -142,6 +178,7 @@ describe("useApiConnection authentication recovery", () => {
     });
     const selectedUserId = ref("admin");
     const connection = useApiConnection({ userId: selectedUserId });
+    connection.connectCode.value = "connect-code";
 
     const adminConnect = connection.connectBackend({ silent: true });
     selectedUserId.value = "xiayu";
@@ -157,7 +194,7 @@ describe("useApiConnection authentication recovery", () => {
     expect(connection.apiKey.value).toBe("xiayu-key");
     expect(connection.apiRole.value).toBe("user");
     expect(connection.connected.value).toBe(true);
-    expect(localStorage.getItem("noobot_api_user_id")).toBe("xiayu");
+    expect(localStorage.getItem("noobot_api_user_id")).toBe(null);
   });
 
   it("rejects a server credential whose canonical owner differs from the requested user", async () => {
@@ -166,6 +203,7 @@ describe("useApiConnection authentication recovery", () => {
       json: async () => ({ ok: true, userId: "admin", apiKey: "admin-key", role: "super_admin" }),
     });
     const connection = useApiConnection({ userId: ref("xiayu") });
+    connection.connectCode.value = "connect-code";
 
     await expect(connection.connectBackend({ silent: true })).resolves.toBe(false);
 
@@ -174,25 +212,28 @@ describe("useApiConnection authentication recovery", () => {
     expect(localStorage.getItem("noobot_api_key")).toBe(null);
   });
 
-  it("drops a persisted credential owned by a different selected user", () => {
+  it("removes all persisted legacy credentials without importing them into memory", () => {
     const connection = useApiConnection({ userId: ref("xiayu") });
 
     expect(connection.apiKey.value).toBe("");
     expect(connection.connected.value).toBe(false);
     expect(localStorage.getItem("noobot_api_key")).toBe(null);
     expect(localStorage.getItem("noobot_api_user_id")).toBe(null);
+    expect(localStorage.getItem("noobot_connect_code")).toBe(null);
   });
 
   it("runs connection initialization once for each canonical owner during an account switch", async () => {
-    connectApi.mockImplementation(({ userId }) => Promise.resolve({
-      ok: true,
-      json: async () => ({
+    connectApi.mockImplementation(({ userId }) =>
+      Promise.resolve({
         ok: true,
-        userId,
-        apiKey: `${userId}-key`,
-        role: userId === "admin" ? "super_admin" : "user",
+        json: async () => ({
+          ok: true,
+          userId,
+          apiKey: `${userId}-key`,
+          role: userId === "admin" ? "super_admin" : "user",
+        }),
       }),
-    }));
+    );
     const selectedUserId = ref("admin");
     const callbackUsers = [];
     let releaseAdminInitialization;
@@ -206,6 +247,7 @@ describe("useApiConnection authentication recovery", () => {
       return Promise.resolve();
     });
     const connection = useApiConnection({ userId: selectedUserId, onConnected });
+    connection.connectCode.value = "connect-code";
 
     const adminConnect = connection.connectBackend({ silent: true });
     await vi.waitFor(() => expect(onConnected).toHaveBeenCalledTimes(1));

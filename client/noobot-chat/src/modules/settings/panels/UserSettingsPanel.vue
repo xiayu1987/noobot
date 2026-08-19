@@ -4,6 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
+import { createSecureUuid } from "../../../shared/identity/secureIdentity.js";
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { Plus, Refresh } from "@element-plus/icons-vue";
@@ -87,12 +88,7 @@ function normalizeUsers(list = []) {
 }
 
 function generateUuid() {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (placeholderChar) => {
-    const randomNibble = Math.floor(Math.random() * 16);
-    const uuidNibble = placeholderChar === "x" ? randomNibble : (randomNibble & 0x3) | 0x8;
-    return uuidNibble.toString(16);
-  });
+  return createSecureUuid();
 }
 
 function buildUsersJsonText(list = users.value) {

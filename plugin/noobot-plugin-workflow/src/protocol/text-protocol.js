@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  DSL_DEFAULTS,
-  DSL_PROTOCOL,
-  DSL_TYPES,
-} from "./constants.js";
+import { DSL_DEFAULTS, DSL_PROTOCOL, DSL_TYPES } from "./constants.js";
 import {
   DSL_ERROR_MESSAGE,
   dslMessage,
@@ -21,35 +17,91 @@ import { getWorkflowDslDefaultNodeNames } from "../core/i18n.js";
 
 function stripCodeFence(text = "") {
   const trimmed = String(text || "").trim();
-  const match = trimmed.match(/^```(?:text|plain|workflow)?\s*([\s\S]*?)\s*```$/i);
-  return match ? String(match[1] || "").trim() : trimmed;
+  if (!trimmed.startsWith("```") || !trimmed.endsWith("```") || trimmed.length < 6) {
+    return trimmed;
+  }
+  let contentStart = 3;
+  const headerEnd = trimmed.indexOf("\n", contentStart);
+  if (headerEnd >= 0) {
+    const language = trimmed.slice(contentStart, headerEnd).trim().toLowerCase();
+    if (["", "text", "plain", "workflow"].includes(language)) contentStart = headerEnd + 1;
+  }
+  return trimmed.slice(contentStart, -3).trim();
 }
 
 function tokenize(line = "") {
-  return String(line || "").match(/"[^"]*"|'[^']*'|\S+/g) || [];
+  const source = String(line || "");
+  const tokens = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    while (cursor < source.length && /\s/.test(source[cursor])) cursor += 1;
+    if (cursor >= source.length) break;
+    const start = cursor;
+    const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor++] : "";
+    if (quote) {
+      while (cursor < source.length && source[cursor] !== quote) cursor += 1;
+      if (cursor < source.length) cursor += 1;
+    } else {
+      while (cursor < source.length && !/\s/.test(source[cursor])) cursor += 1;
+    }
+    tokens.push(source.slice(start, cursor));
+  }
+  return tokens;
 }
 
 function unquote(value = "") {
   const raw = String(value || "").trim();
-  if (
-    (raw.startsWith("\"") && raw.endsWith("\"")) ||
-    (raw.startsWith("'") && raw.endsWith("'"))
-  ) {
+  if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
     return raw.slice(1, -1);
   }
   return raw;
 }
 
+function isAttributeKeyStart(character = "") {
+  const code = character.charCodeAt(0);
+  return character === "_" || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isAttributeKeyPart(character = "") {
+  const code = character.charCodeAt(0);
+  return isAttributeKeyStart(character) || character === "-" || (code >= 48 && code <= 57);
+}
+
+function skipWhitespace(source, cursor) {
+  while (cursor < source.length && /\s/.test(source[cursor])) cursor += 1;
+  return cursor;
+}
+
+function readAttributeValue(source, cursor) {
+  const start = cursor;
+  const quote = source[cursor] === '"' || source[cursor] === "'" ? source[cursor++] : "";
+  if (quote) {
+    while (cursor < source.length && source[cursor] !== quote) cursor += 1;
+    if (cursor < source.length) cursor += 1;
+  } else {
+    while (cursor < source.length && !/\s/.test(source[cursor])) cursor += 1;
+  }
+  return { cursor, value: unquote(source.slice(start, cursor)) };
+}
+
 function parseAttrs(input = "") {
   const source = Array.isArray(input) ? String(input.join(" ") || "") : String(input || "");
   const attrs = {};
-  const matcher = /([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*("[^"]*"|'[^']*'|[^\s]+)/g;
-  let match = null;
-  while ((match = matcher.exec(source))) {
-    const key = String(match[1] || "").trim();
-    const value = unquote(String(match[2] || "").trim());
-    if (!key) continue;
-    attrs[key] = value;
+  let cursor = 0;
+  while (cursor < source.length) {
+    cursor = skipWhitespace(source, cursor);
+    if (!isAttributeKeyStart(source[cursor])) {
+      cursor += 1;
+      continue;
+    }
+    const keyStart = cursor;
+    while (isAttributeKeyPart(source[cursor])) cursor += 1;
+    const key = source.slice(keyStart, cursor);
+    cursor = skipWhitespace(source, cursor);
+    if (source[cursor] !== "=") continue;
+    const value = readAttributeValue(source, skipWhitespace(source, cursor + 1));
+    cursor = value.cursor;
+    attrs[key] = value.value;
   }
   return attrs;
 }
@@ -65,7 +117,9 @@ function parseNodeAttachmentRefs(value = "") {
 }
 
 function toStateType(value = "") {
-  const key = String(value || "").trim().toLowerCase();
+  const key = String(value || "")
+    .trim()
+    .toLowerCase();
   if (key === "start") return 0;
   if (key === "end") return 1;
   if (key === "branch") return 2;
@@ -115,7 +169,9 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     const { lineNo, text: line } = item;
     const tokens = tokenize(line);
     if (!tokens.length) continue;
-    const head = String(tokens[0] || "").trim().toUpperCase();
+    const head = String(tokens[0] || "")
+      .trim()
+      .toUpperCase();
 
     if (head === DSL_PROTOCOL.HEADER) {
       headerSeen = true;
@@ -126,7 +182,9 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     if (head === DSL_PROTOCOL.CMD_NODE) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
       const id = String(attrs.id || "").trim();
-      const type = String(attrs.type || DSL_TYPES.NODE_STATE).trim().toLowerCase();
+      const type = String(attrs.type || DSL_TYPES.NODE_STATE)
+        .trim()
+        .toLowerCase();
       const name = String(attrs.name || id).trim();
       if (!id) failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.NODE_ID_REQUIRED, { locale }));
       if (nodeSet.has(id)) {
@@ -165,7 +223,10 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
         failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_FROM_TO_REQUIRED, { locale }));
       }
       if (String(attrs.when || attrs.condition || "").trim()) {
-        failWithLocale(lineNo, dslMessage(DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED, { locale }));
+        failWithLocale(
+          lineNo,
+          dslMessage(DSL_ERROR_MESSAGE.EDGE_CONDITION_UNSUPPORTED, { locale }),
+        );
       }
       edgeIndex += 1;
       semantic.flowtos.push({
@@ -178,8 +239,17 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
     if (head === DSL_PROTOCOL.CMD_AUTO) {
       const attrs = parseAttrs(line.slice(tokens[0].length).trim());
-      const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT).trim().toLowerCase();
-      if (![DSL_TYPES.AUTO_SUBMIT, DSL_TYPES.AUTO_AUDIT, DSL_TYPES.AUTO_BACK, DSL_TYPES.AUTO_STOP].includes(type)) {
+      const type = String(attrs.type || DSL_TYPES.AUTO_SUBMIT)
+        .trim()
+        .toLowerCase();
+      if (
+        ![
+          DSL_TYPES.AUTO_SUBMIT,
+          DSL_TYPES.AUTO_AUDIT,
+          DSL_TYPES.AUTO_BACK,
+          DSL_TYPES.AUTO_STOP,
+        ].includes(type)
+      ) {
         failWithLocale(
           lineNo,
           dslMessage(DSL_ERROR_MESSAGE.AUTO_TYPE_INVALID, { locale, params: { type } }),
@@ -198,9 +268,7 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
   }
 
   if (!headerSeen) {
-    throw new Error(
-      dslError(dslMessage(DSL_ERROR_MESSAGE.MISSING_HEADER, { locale }), { locale }),
-    );
+    throw new Error(dslError(dslMessage(DSL_ERROR_MESSAGE.MISSING_HEADER, { locale }), { locale }));
   }
 
   if (!semantic.nodes.length) {
@@ -212,9 +280,7 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
 
   for (const edge of semantic.flowtos) {
     if (!nodeSet.has(edge.from) || !nodeSet.has(edge.to)) {
-      throw new Error(
-        dslError(dslEdgeUndefinedNode(edge.from, edge.to, { locale }), { locale }),
-      );
+      throw new Error(dslError(dslEdgeUndefinedNode(edge.from, edge.to, { locale }), { locale }));
     }
   }
 
@@ -225,7 +291,11 @@ export function parseWorkflowDslTextWithOptions(text = "", options = {}) {
     incomingCount.set(edge.to, Number(incomingCount.get(edge.to) || 0) + 1);
   }
   for (const node of semantic.nodes) {
-    if (String(node?.type || DSL_TYPES.NODE_STATE).trim().toLowerCase() !== DSL_TYPES.NODE_STATE) {
+    if (
+      String(node?.type || DSL_TYPES.NODE_STATE)
+        .trim()
+        .toLowerCase() !== DSL_TYPES.NODE_STATE
+    ) {
       continue;
     }
     const id = String(node?.id || "").trim();

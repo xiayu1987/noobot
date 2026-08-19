@@ -4,18 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import Business from '../engine/bizinst/business.js';
-import BizinstTreeControlCenter from '../engine/bizinstcontrolcenter/bizinst-tree-control-center.js';
-import SubmitAction from '../engine/bizinst/action/submit-action.js';
-import AuditAction from '../engine/bizinst/action/audit-action.js';
-import BackAction from '../engine/bizinst/action/back-action.js';
-import StopAction from '../engine/bizinst/action/stop-action.js';
-import { compileWorkflowSemantic } from './compiler.js';
+import Business from "../engine/bizinst/business.js";
+import BizinstTreeControlCenter from "../engine/bizinstcontrolcenter/bizinst-tree-control-center.js";
+import SubmitAction from "../engine/bizinst/action/submit-action.js";
+import AuditAction from "../engine/bizinst/action/audit-action.js";
+import BackAction from "../engine/bizinst/action/back-action.js";
+import StopAction from "../engine/bizinst/action/stop-action.js";
+import { compileWorkflowSemantic } from "./compiler.js";
+import { randomUUID } from "node:crypto";
 const WORKFLOW_INSTANCE_STORE = new Map();
 let WORKFLOW_RUNTIME_ID_COUNTER = 0;
 
 function createActionByType(type = "") {
-  const key = String(type || "submit").trim().toLowerCase();
+  const key = String(type || "submit")
+    .trim()
+    .toLowerCase();
   if (key === "audit") return new AuditAction();
   if (key === "back") return new BackAction();
   if (key === "stop") return new StopAction();
@@ -29,7 +32,9 @@ function snapshotCurrentSteps(bizinst = null) {
 }
 
 function summarizeActionRecords(treeRecord = null) {
-  const records = Array.isArray(treeRecord?.getActionRecords?.()) ? treeRecord.getActionRecords() : [];
+  const records = Array.isArray(treeRecord?.getActionRecords?.())
+    ? treeRecord.getActionRecords()
+    : [];
   return records.map((record) => {
     const action = record?.getAction?.();
     return {
@@ -156,11 +161,12 @@ export function advanceWorkflowInstance({
   semantic = {},
   options = {},
 } = {}) {
-  const actionPlan = Array.isArray(semantic?.autoActions) && semantic.autoActions.length
-    ? semantic.autoActions
-    : options?.autoSubmit === false
-      ? []
-      : [{ type: "submit", stepIndex: 0 }];
+  const actionPlan =
+    Array.isArray(semantic?.autoActions) && semantic.autoActions.length
+      ? semantic.autoActions
+      : options?.autoSubmit === false
+        ? []
+        : [{ type: "submit", stepIndex: 0 }];
 
   const maxAutoTransitions = Number.isFinite(Number(options?.maxAutoTransitions))
     ? Math.max(1, Math.floor(Number(options.maxAutoTransitions)))
@@ -183,7 +189,9 @@ export function advanceWorkflowInstance({
     controlCenter.execAction(action, bizinst, steps[safeIndex], treeRecord);
     transitions += 1;
     executedActions.push({
-      type: String(directive?.type || "submit").trim().toLowerCase(),
+      type: String(directive?.type || "submit")
+        .trim()
+        .toLowerCase(),
       stepIndex: safeIndex,
       remainingSteps: snapshotCurrentSteps(bizinst).length,
     });
@@ -220,7 +228,7 @@ export function executeWorkflowSemantic({ semantic = {}, options = {} } = {}) {
 function resolveInstanceId(input = "") {
   const normalized = String(input || "").trim();
   if (normalized) return normalized;
-  return `wf_inst_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `wf_inst_${randomUUID()}`;
 }
 
 function describePendingSteps(bizinst = null) {
@@ -243,9 +251,10 @@ function describePendingSteps(bizinst = null) {
       stepId,
       stepIndex: stepStates.indexOf(stepState),
       stepStatus: String(workflowRuntime?.status || "").trim(),
-      stepFailure: workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
-        ? workflowRuntime.failure
-        : null,
+      stepFailure:
+        workflowRuntime?.failure && typeof workflowRuntime.failure === "object"
+          ? workflowRuntime.failure
+          : null,
     };
   });
 }
@@ -276,7 +285,9 @@ function findCurrentStepState({ record = null, pendingStep = {}, stepId = "" } =
   const steps = snapshotCurrentSteps(record?.bizinst || null);
   const normalizedStepId = String(stepId || pendingStep?.stepId || "").trim();
   if (normalizedStepId) {
-    const matchedById = steps.find((stepState) => ensureStepStateRuntimeId(stepState) === normalizedStepId);
+    const matchedById = steps.find(
+      (stepState) => ensureStepStateRuntimeId(stepState) === normalizedStepId,
+    );
     if (matchedById) return matchedById;
   }
   const index = Number(pendingStep?.index);
@@ -370,7 +381,8 @@ export function resolveWorkflowUpstreamActionSteps({
   const currentStepState = findCurrentStepState({ record, pendingStep, stepId });
   const currentActionNodeState = currentStepState?.getActionNodeState?.() || null;
   if (!currentActionNodeState) return [];
-  const upstreamActionNodeStates = resolveUpstreamActionNodeStatesFromRuntime(currentActionNodeState);
+  const upstreamActionNodeStates =
+    resolveUpstreamActionNodeStatesFromRuntime(currentActionNodeState);
   return upstreamActionNodeStates.flatMap((actionNodeState) => {
     const stepStates = Array.isArray(actionNodeState?.getStepStates?.())
       ? actionNodeState.getStepStates()
@@ -385,12 +397,20 @@ function normalizeSemanticNodeId(input = "") {
 
 function isSemanticActionNode(node = null) {
   if (!node || typeof node !== "object") return false;
-  return String(node?.type || "").trim().toLowerCase() === "action";
+  return (
+    String(node?.type || "")
+      .trim()
+      .toLowerCase() === "action"
+  );
 }
 
 function isSemanticStateNode(node = null) {
   if (!node || typeof node !== "object") return false;
-  return String(node?.type || "").trim().toLowerCase() === "state";
+  return (
+    String(node?.type || "")
+      .trim()
+      .toLowerCase() === "state"
+  );
 }
 
 function buildSemanticRelationIndex(semantic = {}) {
@@ -482,7 +502,12 @@ export function resolveWorkflowUpstreamActionNodes({
   return collected;
 }
 
-export function startWorkflowInstanceById({ instanceId = "", semantic = {}, options = {}, meta = {} } = {}) {
+export function startWorkflowInstanceById({
+  instanceId = "",
+  semantic = {},
+  options = {},
+  meta = {},
+} = {}) {
   const id = resolveInstanceId(instanceId);
   const model = compileWorkflowSemantic(semantic);
   const conditionContext =
@@ -555,7 +580,12 @@ export function advanceWorkflowInstanceById({
     markStepStateFailure(steps[safeIndex], action.stepFailure);
   }
   const runtimeAction = createActionByType(action?.type);
-  record.controlCenter.execAction(runtimeAction, record.bizinst, steps[safeIndex], record.treeRecord);
+  record.controlCenter.execAction(
+    runtimeAction,
+    record.bizinst,
+    steps[safeIndex],
+    record.treeRecord,
+  );
   record.transitions += 1;
   return getWorkflowInstanceSnapshot({ instanceId: record.instanceId });
 }

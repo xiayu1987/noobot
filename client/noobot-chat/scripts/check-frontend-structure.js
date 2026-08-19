@@ -7,6 +7,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { init, parse } from "es-module-lexer";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { vueScriptRegions } from "../../../scripts/lib/vue-script-regions.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(projectRoot, "../..");
@@ -71,14 +72,6 @@ function inspectDirectory(directory) {
   }
 }
 
-function scriptRegions(filePath, content) {
-  if (!filePath.endsWith(".vue")) return [content];
-  return Array.from(
-    content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi),
-    (match) => match[1],
-  );
-}
-
 function dependencyViolation(importer, target) {
   if (
     isInside(sharedRoot, importer) &&
@@ -108,7 +101,14 @@ async function inspectDependencies(directory) {
     }
     if (!entry.isFile() || !inspectedExtensions.has(path.extname(entry.name).toLowerCase()))
       continue;
-    for (const script of scriptRegions(filePath, fs.readFileSync(filePath, "utf8"))) {
+    let regions;
+    try {
+      regions = vueScriptRegions(filePath, fs.readFileSync(filePath, "utf8"));
+    } catch (error) {
+      violations.push(`${path.relative(repoRoot, filePath)} cannot be parsed: ${error.message}`);
+      continue;
+    }
+    for (const { source: script } of regions) {
       let imports;
       try {
         [imports] = parse(script, filePath);

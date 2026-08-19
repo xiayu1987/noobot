@@ -218,7 +218,7 @@ async function appendRollingJsonlArtifactLogUnlocked({
         !Number.isInteger(Number(active.records)) ||
         Number(active.records) < 0
       ) {
-        const raw = await readFile(activePath, "utf8");
+        const raw = await handle.readFile("utf8");
         const records = raw ? raw.split("\n").filter(Boolean) : [];
         try {
           for (const record of records) JSON.parse(record);

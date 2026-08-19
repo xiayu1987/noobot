@@ -3,26 +3,39 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 
 function safeId(value = "") {
-  return String(value || "").trim().replaceAll(/[^a-zA-Z0-9_-]/g, "_");
+  return String(value || "")
+    .trim()
+    .replaceAll(/[^a-zA-Z0-9_-]/g, "_");
 }
 
 export function resolveWorkflowRunId(ctx = {}) {
   const provided = String(
-    ctx?.workflowRunId || ctx?.workflowInstanceId ||
-    ctx?.runConfig?.workflowRunId || ctx?.runConfig?.workflowInstanceId ||
-    ctx?.executionId || ctx?.turnScopeId || ctx?.runConfig?.executionId ||
-    ctx?.runConfig?.turnScopeId || "",
+    ctx?.workflowRunId ||
+      ctx?.workflowInstanceId ||
+      ctx?.runConfig?.workflowRunId ||
+      ctx?.runConfig?.workflowInstanceId ||
+      ctx?.executionId ||
+      ctx?.turnScopeId ||
+      ctx?.runConfig?.executionId ||
+      ctx?.runConfig?.turnScopeId ||
+      "",
   ).trim();
   if (provided) return provided;
   const dialog = safeId(ctx?.dialogProcessId || ctx?.turnScopeId || ctx?.sessionId || "session");
-  const generated = `wf_run_${dialog}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  const generated = `wf_run_${dialog}_${randomUUID()}`;
   if (ctx && typeof ctx === "object") ctx.workflowRunId = generated;
   return generated;
 }
 
-export function createWorkflowNodeIdentity({ workflowRunId = "", node = {}, index = 0, attempt = 1 } = {}) {
+export function createWorkflowNodeIdentity({
+  workflowRunId = "",
+  node = {},
+  index = 0,
+  attempt = 1,
+} = {}) {
   const nodeId = String(node?.id || node?.nodeId || node?.stepId || `node_${index}`).trim();
   const nodeExecutionId = `${safeId(workflowRunId || "workflow")}_${safeId(nodeId)}_${Math.max(1, Number(attempt) || 1)}`;
   const dialogProcessId = `wf_node_${nodeExecutionId}`;
@@ -46,7 +59,9 @@ export function buildWorkflowPlanningNodeSessions({ workflowRunId = "", semantic
   const now = new Date().toISOString();
   return nodes.map((node = {}, index) => {
     const identity = createWorkflowNodeIdentity({ workflowRunId, node, index });
-    const nodeType = String(node?.type || "").trim().toLowerCase();
+    const nodeType = String(node?.type || "")
+      .trim()
+      .toLowerCase();
     const executable = nodeType === "action";
     const dependencies = flowtos
       .filter((edge = {}) => String(edge?.to || "").trim() === identity.nodeId)

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
@@ -15,7 +16,6 @@ import {
 } from "../../../debug/loggers/resendDebugLogger.js";
 import { createSessionAggregateVersionManager } from "./sessionAggregateVersionManager.js";
 import { serializeAttachments } from "./attachmentSerialization.js";
-import { nowMs } from "../../model/timeFields.js";
 import {
   logStateMachineDebug,
   summarizeStateMachineMessage,
@@ -136,9 +136,7 @@ function findReplacementUserMessageById({ session, messageId }) {
 }
 
 function createTurnScopeId() {
-  const randomUuid = globalThis?.crypto?.randomUUID?.();
-  if (randomUuid) return `client-turn:${randomUuid}`;
-  return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+  return createSecureId("client-turn");
 }
 
 export function createResendMessageTransaction({

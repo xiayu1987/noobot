@@ -55,18 +55,23 @@ export function createAuthService({
           new URL(req.url, "http://localhost").searchParams.get("apikey") || "",
         ).trim();
       } catch (error) {
-        void writeRoutedRuntimeEvent({
-          source: "service",
-          channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-          category: RUNTIME_EVENT_CATEGORIES.SECURITY,
-          level: "warn",
-          event: "service.auth.extractApiKey.urlParse.failed",
-          data: {
-            urlPathPreview: String(req?.url || "").split("?")[0].slice(0, 200),
-            urlLength: String(req?.url || "").length,
+        void writeRoutedRuntimeEvent(
+          {
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+            category: RUNTIME_EVENT_CATEGORIES.SECURITY,
+            level: "warn",
+            event: "service.auth.extractApiKey.urlParse.failed",
+            data: {
+              urlPathPreview: String(req?.url || "")
+                .split("?")[0]
+                .slice(0, 200),
+              urlLength: String(req?.url || "").length,
+            },
+            error,
           },
-          error,
-        }, runtimeEventsConfig);
+          runtimeEventsConfig,
+        );
         queryApiKey = "";
       }
     }
@@ -90,7 +95,7 @@ export function createAuthService({
   }
 
   function requireApiKey(req, res, next) {
-    const authInfo = resolveAuthByApiKey(req);
+    const authInfo = req.auth || resolveAuthByApiKey(req);
     if (!authInfo) {
       res
         .status(HTTP_STATUS.UNAUTHORIZED)

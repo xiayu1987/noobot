@@ -6,7 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { createHash } from "node:crypto";
-import { mkdir, open, readFile, rename, stat, truncate, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, writeFile } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES, readJsonArtifactFile } from "../session-artifact-files.js";
 
 export const TURN_JOURNAL_SCHEMA_VERSION = TURN_THRESHOLDS.session.turnJournalSchemaVersion;
@@ -206,24 +206,19 @@ export function materializeTurnJournal(records, order, summarySnapshots) {
 
 export async function appendJournal(file, records, committedBytes = 0) {
   await mkdir(path.dirname(file), { recursive: true });
-  let currentSize = 0;
+  const handle = await open(file, "a+");
   try {
-    currentSize = (await stat(file)).size;
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-  const committed = Math.max(0, Math.min(currentSize, Number(committedBytes) || 0));
-  if (currentSize !== committed) await truncate(file, committed);
-  if (!records.length) return committed;
-  const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
-  const handle = await open(file, "a");
-  try {
+    const currentSize = (await handle.stat()).size;
+    const committed = Math.max(0, Math.min(currentSize, Number(committedBytes) || 0));
+    if (currentSize !== committed) await handle.truncate(committed);
+    if (!records.length) return committed;
+    const payload = records.map((record) => `${JSON.stringify(record)}\n`).join("");
     await handle.writeFile(payload, "utf8");
     await handle.sync();
+    return committed + Buffer.byteLength(payload, "utf8");
   } finally {
     await handle.close();
   }
-  return committed + Buffer.byteLength(payload, "utf8");
 }
 
 export async function replaceJournalRecords(file, records) {

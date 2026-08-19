@@ -34,11 +34,14 @@ test("finds parser-recognized extensionless imports without matching comments or
     "src/lazy.js": "export default 2;\n",
   });
   const result = await checkRepository({ root, sourceRoots: ["src"] });
-  assert.deepEqual(result.violations.map(({ specifier, replacement }) => [specifier, replacement]), [
-    ["./value", "./value.js"],
-    ["./helpers", "./helpers/index.js"],
-    ["./lazy?raw", "./lazy.js?raw"],
-  ]);
+  assert.deepEqual(
+    result.violations.map(({ specifier, replacement }) => [specifier, replacement]),
+    [
+      ["./value", "./value.js"],
+      ["./helpers", "./helpers/index.js"],
+      ["./lazy?raw", "./lazy.js?raw"],
+    ],
+  );
 });
 
 test("fixes only uniquely resolved imports and preserves quote style", async () => {
@@ -71,6 +74,22 @@ test("parses Vue script blocks and resolves Vue components by their real extensi
   assert.match(fs.readFileSync(path.join(root, "src/App.vue"), "utf8"), /from "\.\/Widget\.vue"/);
 });
 
+test("parses both classic and setup Vue script blocks through the SFC compiler", async () => {
+  const root = fixture({
+    "src/App.vue": [
+      '<script>import classic from "./classic";</script>',
+      '<script setup>import setup from "./setup";</script>',
+    ].join("\n"),
+    "src/classic.js": "export default 1;\n",
+    "src/setup.js": "export default 2;\n",
+  });
+  const result = await checkRepository({ root, fix: true, sourceRoots: ["src"] });
+  assert.equal(result.fixed, 2);
+  const output = fs.readFileSync(path.join(root, "src/App.vue"), "utf8");
+  assert.match(output, /from "\.\/classic\.js"/);
+  assert.match(output, /from "\.\/setup\.js"/);
+});
+
 test("reports ambiguous, missing, and computed relative targets without guessing", async () => {
   const root = fixture({
     "src/main.js": [
@@ -83,11 +102,14 @@ test("reports ambiguous, missing, and computed relative targets without guessing
   });
   const file = path.join(root, "src/main.js");
   const violations = await inspectSourceFile(file);
-  assert.deepEqual(violations.map(({ reason, replacement }) => [reason, replacement]), [
-    ["ambiguous target (value.js, value.vue)", null],
-    ["target not found", null],
-    ["computed relative import has no explicit extension", null],
-  ]);
+  assert.deepEqual(
+    violations.map(({ reason, replacement }) => [reason, replacement]),
+    [
+      ["ambiguous target (value.js, value.vue)", null],
+      ["target not found", null],
+      ["computed relative import has no explicit extension", null],
+    ],
+  );
 });
 
 test("accepts explicit extensions including dynamic template suffixes", async () => {

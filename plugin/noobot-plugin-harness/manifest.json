@@ -24,22 +24,10 @@
             "id": "noobot-plugin-harness.trace.agent.context_build_error",
             "point": "agent.context_build_error"
           },
-          {
-            "id": "noobot-plugin-harness.trace.agent.before_turn",
-            "point": "agent.before_turn"
-          },
-          {
-            "id": "noobot-plugin-harness.trace.agent.after_turn",
-            "point": "agent.after_turn"
-          },
-          {
-            "id": "noobot-plugin-harness.trace.agent.on_abort",
-            "point": "agent.on_abort"
-          },
-          {
-            "id": "noobot-plugin-harness.trace.agent.on_error",
-            "point": "agent.on_error"
-          },
+          { "id": "noobot-plugin-harness.trace.agent.before_turn", "point": "agent.before_turn" },
+          { "id": "noobot-plugin-harness.trace.agent.after_turn", "point": "agent.after_turn" },
+          { "id": "noobot-plugin-harness.trace.agent.on_abort", "point": "agent.on_abort" },
+          { "id": "noobot-plugin-harness.trace.agent.on_error", "point": "agent.on_error" },
           {
             "id": "noobot-plugin-harness.trace.agent.before_llm_call",
             "point": "agent.before_llm_call"
@@ -84,18 +72,9 @@
             "id": "noobot-plugin-harness.trace.agent.before_final_output",
             "point": "agent.before_final_output"
           },
-          {
-            "id": "noobot-plugin-harness.flush.agent.after_turn",
-            "point": "agent.after_turn"
-          },
-          {
-            "id": "noobot-plugin-harness.flush.agent.on_abort",
-            "point": "agent.on_abort"
-          },
-          {
-            "id": "noobot-plugin-harness.flush.agent.on_error",
-            "point": "agent.on_error"
-          },
+          { "id": "noobot-plugin-harness.flush.agent.after_turn", "point": "agent.after_turn" },
+          { "id": "noobot-plugin-harness.flush.agent.on_abort", "point": "agent.on_abort" },
+          { "id": "noobot-plugin-harness.flush.agent.on_error", "point": "agent.on_error" },
           {
             "id": "noobot-plugin-harness.flush.agent.context_build_error",
             "point": "agent.context_build_error"
@@ -117,35 +96,16 @@
     },
     "frontend": {
       "extensions": [
-        {
-          "id": "harness-legacy-collapse-marker",
-          "point": "markdown.collapse.markers"
-        },
-        {
-          "id": "harness-model-extension",
-          "point": "composer.options.model"
-        },
-        {
-          "id": "thinking-panel",
-          "point": "message.card.pre"
-        }
+        { "id": "harness-legacy-collapse-marker", "point": "markdown.collapse.markers" },
+        { "id": "harness-model-extension", "point": "composer.options.model" },
+        { "id": "thinking-panel", "point": "message.card.pre" }
       ]
     }
   },
   "requires": {
-    "ports": [
-      "hooks.register",
-      "policy.patch",
-      "authenticated_request",
-      "frontend.contribute"
-    ],
-    "permissions": [
-      "session.delete.observe",
-      "http.authenticated"
-    ],
-    "authenticatedRoutes": [
-      "/api/internal/session/:userId/:sessionId/thinking-detail"
-    ]
+    "ports": ["hooks.register", "policy.patch", "authenticated_request", "frontend.contribute"],
+    "permissions": ["session.delete.observe", "http.authenticated"],
+    "authenticatedRoutes": ["/api/internal/session/:userId/:sessionId/thinking-detail"]
   },
   "enabledByDefault": true
 }

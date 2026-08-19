@@ -4,15 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import express from "express";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
-export function registerGlobalMiddlewares(
-  app,
-  {
-    resolveRequestLocale,
-    defaultLocale,
-  } = {},
-) {
-  app.use(express.json({ limit: "20mb" }));
+export function registerGlobalMiddlewares(app, { resolveRequestLocale, defaultLocale } = {}) {
+  app.use(express.json({ limit: LENGTH_THRESHOLDS.serviceHttp.jsonBodyBytes }));
   app.use((req, _res, next) => {
     req.locale = resolveRequestLocale(req, defaultLocale);
     next();

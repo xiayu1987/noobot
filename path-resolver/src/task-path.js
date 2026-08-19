@@ -93,7 +93,12 @@ export function projectTaskPathText(value = "", mappings = []) {
   let text = String(value ?? "");
   const normalizedMappings = (Array.isArray(mappings) ? mappings : [])
     .map((item = {}) => {
-      const hostRoot = String(item.hostRoot || "").replace(/[\\/]+$/, "");
+      const sourceRoot = String(item.hostRoot || "");
+      let end = sourceRoot.length;
+      while (end > 0 && (sourceRoot[end - 1] === "/" || sourceRoot[end - 1] === "\\")) {
+        end -= 1;
+      }
+      const hostRoot = sourceRoot.slice(0, end);
       const parsedTaskRoot = parseTaskPath(item.taskRoot, { allowRoot: true });
       if (parsedTaskRoot.relative) throw new Error("task projection target must be a task root");
       return { hostRoot, taskRoot: parsedTaskRoot.token };
@@ -101,10 +106,17 @@ export function projectTaskPathText(value = "", mappings = []) {
     .filter((item) => item.hostRoot && item.taskRoot)
     .sort((a, b) => b.hostRoot.length - a.hostRoot.length);
   for (const { hostRoot, taskRoot } of normalizedMappings) {
-    const escapedHostRoot = hostRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    text = text
-      .replace(new RegExp(`${escapedHostRoot}[\\\\/]`, "g"), taskRoot)
-      .replace(new RegExp(`${escapedHostRoot}(?=$|[\\s\"'\x60\\]\\[),;])`, "g"), taskRoot);
+    text = text.replaceAll(`${hostRoot}/`, taskRoot).replaceAll(`${hostRoot}\\`, taskRoot);
+    let cursor = 0;
+    while ((cursor = text.indexOf(hostRoot, cursor)) >= 0) {
+      const next = text[cursor + hostRoot.length];
+      if (next === undefined || /[\s"'`\][),;]/.test(next)) {
+        text = `${text.slice(0, cursor)}${taskRoot}${text.slice(cursor + hostRoot.length)}`;
+        cursor += taskRoot.length;
+      } else {
+        cursor += hostRoot.length;
+      }
+    }
   }
   return text;
 }

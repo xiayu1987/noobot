@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { StreamEventEnum } from "../../model/chatConstants.js";
 import { logThinkingReplayDebug } from "../../../debug/loggers/thinkingReplayDebugLogger.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
@@ -198,7 +199,7 @@ export function createReconnectCoordinator({
         const execution = turnRuntimeRegistry.value?.executions?.[executionId] || {};
         const rootExecutionId = String(execution?.rootExecutionId || executionId).trim();
         const requestExecution = async (action, payload, expectedEvent) => {
-          const commandId = `reconnect:${action}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+          const commandId = createSecureId(`reconnect:${action}`);
           directExecutionRestoreCommandIds.add(commandId);
           logStateMachineDebug("stateMachine.reconnect.executionQuery.before", () => ({
             sessionId: reconnectSessionId,

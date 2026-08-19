@@ -12,14 +12,9 @@
     "agent": {
       "hooks": {
         "registers": [
-          {
-            "id": "workflow_after_agent_dispatch",
-            "point": "bot.before_agent_dispatch"
-          }
+          { "id": "workflow_after_agent_dispatch", "point": "bot.before_agent_dispatch" }
         ],
-        "emits": [
-          "workflow.node_agent_execute"
-        ]
+        "emits": ["workflow.node_agent_execute"]
       },
       "executionIntent": {
         "kind": "workflow",
@@ -32,10 +27,7 @@
     "service": {
       "hooks": {
         "registers": [
-          {
-            "id": "workflow_after_session_delete",
-            "point": "service.after_session_delete"
-          }
+          { "id": "workflow_after_session_delete", "point": "service.after_session_delete" }
         ],
         "emits": []
       },
@@ -62,18 +54,9 @@
     },
     "frontend": {
       "extensions": [
-        {
-          "id": "workflow-model-extension",
-          "point": "composer.options.model"
-        },
-        {
-          "id": "workflow-card",
-          "point": "message.card.pre"
-        },
-        {
-          "id": "workflow-runtime-projector",
-          "point": "runtime.stream.route"
-        }
+        { "id": "workflow-model-extension", "point": "composer.options.model" },
+        { "id": "workflow-card", "point": "message.card.pre" },
+        { "id": "workflow-runtime-projector", "point": "runtime.stream.route" }
       ]
     }
   },
