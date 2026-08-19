@@ -14,6 +14,7 @@ import {
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   getTransferAttachments,
   materializeTextForToolResult,
@@ -107,8 +108,10 @@ export async function backwriteParsedAttachment({
     runId: String(runtime?.systemRuntime?.runId || "").trim() || undefined,
     relation,
   });
-  const sessionId = String(runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId || "").trim();
-  const parentSessionId = String(runtime?.systemRuntime?.parentSessionId || runtime?.runConfig?.parentSessionId || "").trim();
+  const sessionId = String(
+    runtime?.systemRuntime?.sessionId || runtime?.runConfig?.sessionId || "",
+  ).trim();
+  const parentSessionId = normalizeParentSessionId(runtime?.systemRuntime?.parentSessionId);
   const committed = await runtime?.sessionManager?.commitAuthorityEvent?.({
     userId,
     sessionId,

@@ -347,10 +347,14 @@ test("captureSessionToShortMemory skips injected messages", async () => {
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "noobot-memory-"));
   const userId = "primary-user";
   const userRoot = path.join(workspaceRoot, userId);
-  await mkdir(path.join(userRoot, "runtime/session/s1"), { recursive: true });
+  const parentSessionId = ` ${"p".repeat(220)} `;
+  const normalizedParentSessionId = "p".repeat(200);
+  await mkdir(path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"), {
+    recursive: true,
+  });
   await mkdir(path.join(userRoot, "memory"), { recursive: true });
   await writeSessionArtifact({
-    sessionDir: path.join(userRoot, "runtime/session/s1"),
+    sessionDir: path.join(userRoot, "runtime/session", normalizedParentSessionId, "s1"),
     sessionPayload: {
       sessionId: "s1",
       messages: [
@@ -378,6 +382,7 @@ test("captureSessionToShortMemory skips injected messages", async () => {
   const ok = await service.captureSessionToShortMemory({
     userId,
     sessionId: "s1",
+    parentSessionId,
   });
   assert.equal(ok, true);
   const shortDoc = JSON.parse(
@@ -385,7 +390,7 @@ test("captureSessionToShortMemory skips injected messages", async () => {
   );
   const records = shortDoc?.items?.[0]?.records || [];
   assert.equal(shortDoc?.items?.[0]?.sessionId, "s1");
-  assert.equal(shortDoc?.items?.[0]?.parentSessionId, "");
+  assert.equal(shortDoc?.items?.[0]?.parentSessionId, normalizedParentSessionId);
   assert.equal(records.length, 1);
   assert.equal(records[0]?.content, "真实用户消息");
 });
