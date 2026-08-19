@@ -12,6 +12,7 @@ export const MESSAGE_EVENT_WIRE_EVENT = "message_event";
 export const MESSAGE_EVENT_SEQUENCE_DOMAIN = "message-event";
 
 export const MESSAGE_EVENT_TYPE = Object.freeze({
+  TURN_PRESENTATION_COMMITTED: "turn_presentation_committed",
   LLM_DELTA: "llm_delta",
   MAIN_MODEL_CONTENT: "main_model_content",
   AUTHORITATIVE_FINAL_CONTENT: "authoritative_final_content",
@@ -37,6 +38,42 @@ export const MESSAGE_CONTENT_EFFECT = Object.freeze({
 });
 
 const text = (value) => String(value || "").trim();
+
+function validatePresentationMessage(message, expectedRole, value) {
+  const errors = [];
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return [`invalid_${expectedRole}_presentation`];
+  }
+  const messageId = text(message.messageId || message.id);
+  if (!messageId) errors.push(`missing_${expectedRole}_message_id`);
+  if (text(message.role) !== expectedRole) errors.push(`invalid_${expectedRole}_role`);
+  if (!text(message.sessionId)) errors.push(`missing_${expectedRole}_session_id`);
+  if (!text(message.turnScopeId)) errors.push(`missing_${expectedRole}_turn_scope_id`);
+  if (typeof message.content !== "string") errors.push(`invalid_${expectedRole}_content`);
+  if (message.attachments !== undefined && !Array.isArray(message.attachments)) {
+    errors.push(`invalid_${expectedRole}_attachments`);
+  }
+  if (expectedRole === "assistant") {
+    if (text(message.presentationMessageId) !== text(value.presentationMessageId)) {
+      errors.push("assistant_presentation_id_mismatch");
+    }
+    if (messageId !== text(value.presentationMessageId)) {
+      errors.push("assistant_message_id_mismatch");
+    }
+  }
+  return errors;
+}
+
+function validateTurnPresentation(value) {
+  const presentation = value?.presentation;
+  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+    return ["missing_turn_presentation"];
+  }
+  return [
+    ...validatePresentationMessage(presentation.userMessage, "user", value),
+    ...validatePresentationMessage(presentation.assistantMessage, "assistant", value),
+  ];
+}
 
 function validateToolSecurityAssessment(value = {}) {
   const errors = [];
@@ -70,7 +107,15 @@ export function validateMessageEventPayload(value) {
     });
   }
   const errors = [];
-  for (const field of ["tool_call_id", "tool_call", "tool_result", "toolCall", "toolResult", "model", "output"]) {
+  for (const field of [
+    "tool_call_id",
+    "tool_call",
+    "tool_result",
+    "toolCall",
+    "toolResult",
+    "model",
+    "output",
+  ]) {
     if (Object.hasOwn(value, field)) errors.push(`noncanonical_${field}`);
   }
   if (!text(value?.presentationMessageId)) errors.push("missing_presentation_message_id");
@@ -84,13 +129,13 @@ export function validateMessageEventPayload(value) {
   }
   const eventType = text(value?.eventType);
   if (!MESSAGE_EVENT_TYPES.has(eventType)) errors.push("unsupported_event_type");
+  if (eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    errors.push(...validateTurnPresentation(value));
+  }
   if (eventType === MESSAGE_EVENT_TYPE.LLM_DELTA && typeof value?.text !== "string") {
     errors.push("missing_text");
   }
-  if (
-    REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) &&
-    typeof value?.text !== "string"
-  )
+  if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType) && typeof value?.text !== "string")
     errors.push("missing_content");
   if (eventType === MESSAGE_EVENT_TYPE.AUTHORITATIVE_FINAL_CONTENT) {
     if (value?.attachments !== undefined && !Array.isArray(value.attachments)) {
@@ -125,12 +170,24 @@ export function validateMessageEventPayload(value) {
   return Object.freeze({ valid: errors.length === 0, errors: Object.freeze(errors) });
 }
 
+export function projectTurnPresentation(event = {}) {
+  if (text(event?.eventType) !== MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    return null;
+  }
+  const presentation = event?.presentation;
+  if (!presentation || typeof presentation !== "object" || Array.isArray(presentation)) {
+    return null;
+  }
+  return Object.freeze({
+    userMessage: Object.freeze({ ...presentation.userMessage }),
+    assistantMessage: Object.freeze({ ...presentation.assistantMessage }),
+  });
+}
+
 export function assertMessageEventPayload(value = {}) {
   const validation = validateMessageEventPayload(value);
   if (!validation.valid) {
-    throw new TypeError(
-      `invalid message event payload: ${validation.errors.join(",")}`,
-    );
+    throw new TypeError(`invalid message event payload: ${validation.errors.join(",")}`);
   }
   return value;
 }
@@ -146,10 +203,7 @@ export function projectMessageEventContent(event = {}) {
   if (REPLACE_MESSAGE_CONTENT_EVENT_TYPES.has(eventType)) {
     return Object.freeze({
       effect: MESSAGE_CONTENT_EFFECT.REPLACE,
-      content:
-        typeof event?.text === "string"
-          ? event.text
-          : "",
+      content: typeof event?.text === "string" ? event.text : "",
     });
   }
   return Object.freeze({ effect: MESSAGE_CONTENT_EFFECT.NONE, content: "" });
@@ -167,10 +221,7 @@ export function projectMessageEventMetadata(event = {}) {
 export function projectAuthoritativeFinalMessage(event = {}) {
   if (!isAuthoritativeFinalContentEvent(event)) return Object.freeze({});
   const projection = {
-    content:
-      typeof event?.text === "string"
-        ? event.text
-        : "",
+    content: typeof event?.text === "string" ? event.text : "",
   };
   if (Array.isArray(event?.attachments) && event.attachments.length > 0) {
     projection.attachments = Object.freeze([...event.attachments]);
@@ -192,7 +243,8 @@ export function projectMessageEventToolFacets(event = {}) {
   const assessedRiskLevel = normalizeSecurityRiskLevel(
     event?.securityAssessment?.effectiveRiskLevel,
   );
-  const toolCall = eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START && text(event?.tool)
+  const toolCall =
+    eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START && text(event?.tool)
       ? {
           id: toolCallId,
           name: text(event.tool),

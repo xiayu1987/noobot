@@ -10,7 +10,6 @@ import WorkflowCanvasGraph from "../workflow-graph/WorkflowCanvasGraph.vue";
 defineProps({
   translate: { type: Function, required: true },
   semanticPreviewLineCount: { type: Number, default: 0 },
-  semanticPreviewCollapsible: { type: Boolean, default: false },
   semanticPreviewExpanded: { type: Boolean, default: false },
   semanticPreview: { type: String, default: "" },
   flowNodes: { type: Array, default: () => [] },
@@ -36,7 +35,6 @@ defineEmits([
         </div>
       </div>
       <button
-        v-if="semanticPreviewCollapsible"
         type="button"
         class="workflow-preview-toggle"
         @click="$emit('update:semantic-preview-expanded', !semanticPreviewExpanded)"
@@ -44,10 +42,7 @@ defineEmits([
         {{ translate(semanticPreviewExpanded ? "workflow.collapse" : "workflow.expand") }}
       </button>
     </div>
-    <div
-      v-if="!semanticPreviewCollapsible || semanticPreviewExpanded"
-      class="workflow-card-preview-shell"
-    >
+    <div v-if="semanticPreviewExpanded" class="workflow-card-preview-shell">
       <pre class="workflow-card-preview">{{ semanticPreview || translate("workflow.empty") }}</pre>
     </div>
 
@@ -67,7 +62,6 @@ defineEmits([
       class="workflow-node-empty"
       :text="translate('workflow.noWorkflowNodes')"
     />
-
   </div>
 </template>
 
@@ -152,5 +146,4 @@ defineEmits([
   color: var(--noobot-text-secondary);
   font-size: 13px;
 }
-
 </style>

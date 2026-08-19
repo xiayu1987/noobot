@@ -1,7 +1,94 @@
-# Noobot 浏览器协议 E2E
+# Noobot Browser Protocol E2E / Noobot 浏览器协议 E2E
+
+[English](#english) | [中文](#中文)
+
+## English
+
+This directory is the single implementation entry point for Noobot browser protocol E2E tests.
+See the complete acceptance plan in
+[`../../../../../docs/browser-protocol-e2e-test-plan.en.md`](../../../../../docs/browser-protocol-e2e-test-plan.en.md),
+with the corresponding Chinese view in
+[`../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md`](../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md).
+
+Directory responsibilities:
+
+- `fixtures/`: browser, authentication, Session, protocol capture, and evidence lifecycles.
+- `helpers/`: browser actions and protocol-domain assertions; helpers do not create business facts.
+- `specs/`: deduplicated PBE browser scenarios, including Manifest V2 activation, runtime-event
+  identity, Workflow stop/continue, same-page resend after stop, low-turn Harness flows, main-flow
+  summary checkpoints, tools, live thinking, and interaction closure.
+- `playwright.protocol.config.js`: the only Playwright configuration for protocol tests.
+
+Required environment:
+
+```bash
+export NOOBOT_E2E_USER_ID='...'
+export NOOBOT_E2E_CONNECT_CODE='...'
+export NOOBOT_E2E_BASE_URL='http://127.0.0.1:10060'
+export NOOBOT_WORKSPACE_ROOT='/absolute/path/to/noobot/workspace'
+export NOOBOT_E2E_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
+export NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT="$NOOBOT_WORKSPACE_ROOT"
+export NOOBOT_PLUGIN_DEBUG='1'
+```
+
+`NOOBOT_WORKSPACE_ROOT` is the single workspace-root fact. The E2E and runtime-event variables
+declare reader responsibilities only and must derive from that root. Explicit roots must be
+absolute. Using different roots for the proxy and the audit process makes the configuration
+invalid because the evidence chain cannot close.
+
+Services must be started outside the tests. Tests do not use a mock backend or create business
+facts through files or internal APIs. Protocol scenarios run serially with one worker. Concurrency
+required by PBE-014, PBE-015, PBE-023, PBE-024, and PBE-045 is created inside each scenario.
+
+```bash
+npx playwright install chromium
+npm run test:e2e:protocol:smoke
+npm run test:e2e:protocol:core
+npm run test:e2e:protocol:full
+```
+
+Evidence is written to `test-results/protocol/`. Credentials must never enter logs, traces,
+screenshots, or reports.
+
+### Model invocation observation
+
+All production models are created by `agent/src/models/factory/chat-model.js`. Provider attempts
+are observed only at `model-runtime/src/executor/model-request-executor.js` through this authority:
+
+```text
+event = model_context_trace
+data.stage = llm_invoke_messages
+data.authority = model_invoke_port
+data.protocolVersion = 1
+```
+
+Business branches must not emit duplicate observation events. Every provider call owns one
+`invocationId`; derived tool-bound instances share `modelInstanceId` and increment
+`invocationSequence`. `helpers/model-observation-policy.js` is the sole required/forbidden policy
+for every PBE. The shared fixture audits the complete root execution-event tree and writes:
+
+- `protocol-evidence/model-invocations.jsonl`
+- `protocol-evidence/model-observation-audit.json`
+- `protocol-evidence/session-summary-artifact-audit.json`
+
+The fixture also validates lightweight Session summaries, detail references, hashes, timeline
+counts, orphan detail files, and the `sessions.json` availability contract. A missing required
+invocation, a forbidden invocation, an unregistered/duplicate PBE, or an obsolete policy entry is
+a hard failure.
+
+### Implementation status
+
+All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-046 are implemented. PBE-001,
+PBE-004, and PBE-018 are covered by strict supersets PBE-002, PBE-006, and PBE-016/017. Every spec
+must import `test` and `expect` from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and
+placeholder scenarios without business assertions are forbidden.
+
+## 中文
 
 本目录是 Noobot 浏览器协议闭环测试的唯一实现入口。完整验收定义见
 [`../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md`](../../../../../docs/browser-protocol-e2e-test-plan.zh-CN.md)。
+英文版见
+[`../../../../../docs/browser-protocol-e2e-test-plan.en.md`](../../../../../docs/browser-protocol-e2e-test-plan.en.md)。
 
 目录职责：
 
@@ -89,6 +176,6 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 
 基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-002～003、PBE-006～017、PBE-021～045 中已登记场景均已落地；PBE-001、PBE-004 和 PBE-018
+PBE-002～003、PBE-006～017、PBE-021～046 中已登记场景均已落地；PBE-001、PBE-004 和 PBE-018
 分别按严格包含关系合并到 PBE-002、PBE-006 和 PBE-016/017。所有场景从统一 fixture 运行，
 禁止用 `test.skip` 或无业务断言的占位测试伪装覆盖率。

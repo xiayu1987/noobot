@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import WorkflowCardPreview from "../components/workflow-message-card/WorkflowCardPreview.vue";
 
 describe("WorkflowCardPreview", () => {
-  it("renders planning content and graph only", () => {
+  it("keeps short planning DSL collapsed by default and always exposes its toggle", async () => {
     const wrapper = mount(WorkflowCardPreview, {
       props: {
         translate: (key) => key,
@@ -18,7 +18,10 @@ describe("WorkflowCardPreview", () => {
       global: { stubs: { WorkflowCanvasGraph: true } },
     });
 
-    expect(wrapper.text()).toContain("planning content");
+    expect(wrapper.find(".workflow-card-preview-shell").exists()).toBe(false);
+    expect(wrapper.find(".workflow-preview-toggle").exists()).toBe(true);
+    await wrapper.find(".workflow-preview-toggle").trigger("click");
+    expect(wrapper.emitted("update:semantic-preview-expanded")).toEqual([[true]]);
     expect(wrapper.find("[data-testid=workflow-completed-content]").exists()).toBe(false);
     expect(wrapper.find("[data-testid=workflow-node-results]").exists()).toBe(false);
   });
@@ -28,7 +31,6 @@ describe("WorkflowCardPreview", () => {
       props: {
         translate: (key) => key,
         semanticPreview: "WORKFLOW_DSL/1\nNODE first\nEND",
-        semanticPreviewCollapsible: true,
         semanticPreviewExpanded: false,
         flowNodes: [{ id: "first" }],
       },

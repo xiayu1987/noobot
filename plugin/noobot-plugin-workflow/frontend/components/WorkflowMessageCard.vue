@@ -112,7 +112,6 @@ const {
   flowNodes,
   semanticPreview,
   semanticPreviewLineCount,
-  semanticPreviewCollapsible,
   selectedNodeSessionDocs,
   displayNodeMessages,
   nodeSessionAllMessages,
@@ -135,7 +134,6 @@ const {
     v-model:semantic-preview-expanded="semanticPreviewExpanded"
     :translate="translate"
     :semantic-preview-line-count="semanticPreviewLineCount"
-    :semantic-preview-collapsible="semanticPreviewCollapsible"
     :semantic-preview="semanticPreview"
     :flow-nodes="flowNodes"
     :semantic-flowtos="semanticFlowtos"

@@ -95,10 +95,13 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
 }
 
 export function canonicalWorkflowSessionSnapshot(sessionDoc = {}) {
-  const sessionId = String(sessionDoc.sessionId || "sub-session-1").trim();
+  const sessionId = String(
+    sessionDoc.sessionId || sessionDoc.nodeSessionId || "sub-session-1",
+  ).trim();
   const aggregateVersion = Number(sessionDoc.aggregateVersion || 1);
   return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT, {
     ...sessionDoc,
+    turnTimings: Array.isArray(sessionDoc.turnTimings) ? sessionDoc.turnTimings : [],
     turnLifecycleSnapshot:
       sessionDoc.turnLifecycleSnapshot ||
       createTurnLifecycleSnapshot({

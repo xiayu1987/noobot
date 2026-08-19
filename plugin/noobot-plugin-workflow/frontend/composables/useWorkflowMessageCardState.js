@@ -32,7 +32,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     semanticFlowtos,
     semanticPreview,
     semanticPreviewLineCount,
-    semanticPreviewCollapsible,
   } = useWorkflowMeta(props);
 
   const {
@@ -130,7 +129,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     flowNodes,
     semanticPreview,
     semanticPreviewLineCount,
-    semanticPreviewCollapsible,
     selectedNodeSessionDocs,
     rawNodeSessionMessages,
     selectedNodeToolSessionDocs,

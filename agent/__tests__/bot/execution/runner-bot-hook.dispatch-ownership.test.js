@@ -119,7 +119,7 @@ test("before-dispatch capability events use the bound Turn message domain", asyn
   const envelope = committedEvent?.data?.envelope;
   assert.equal(envelope?.identity?.messageId, "message-workflow-semantic");
   assert.equal(envelope?.payload?.presentationMessageId, "presentation-workflow-semantic");
-  assert.equal(envelope?.ordering?.sequence, 1);
+  assert.equal(envelope?.ordering?.sequence, 2);
   assert.equal(envelope?.protocol?.version, 3);
   assert.equal(envelope?.ordering?.domain, "message-event");
 });

@@ -7,10 +7,7 @@ import { StreamEventEnum } from "../../model/chatConstants.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
 import { normalizeTurnTransportEnvelope } from "./turnTransportEnvelope.js";
-import {
-  hasDialogProcessConflictForTurn,
-  isEventForCurrentTurn,
-} from "./sendFlowSupport.js";
+import { hasDialogProcessConflictForTurn, isEventForCurrentTurn } from "./sendFlowSupport.js";
 import { handleBasicStreamEvent, handleInteractionRequestStreamEvent } from "./streamHandlers.js";
 import { routeRuntimeStreamEvent } from "../../../../extensions/runtime-stream-router.js";
 import {
@@ -136,6 +133,7 @@ export function createSendStreamEventHandler(context) {
     turnScopeId,
     findCanonicalMessageById,
     findCanonicalMessagesById,
+    materializeTurnPresentation,
     reduceSubSessionMessageEvent,
     upsertConnectedConnectorInPanelState,
   } = context;
@@ -222,7 +220,8 @@ export function createSendStreamEventHandler(context) {
     )
       return;
     if (
-      data?.identity?.eventType === event && routeRuntimeStreamEvent(data, {
+      data?.identity?.eventType === event &&
+      routeRuntimeStreamEvent(data, {
         source: "live",
         logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
         applyWorkflowRuntimeEvent,
@@ -239,6 +238,7 @@ export function createSendStreamEventHandler(context) {
         classifyRealtimeLog,
         findCanonicalMessageById,
         findCanonicalMessagesById,
+        materializeTurnPresentation,
         locateSendingStartedMessageOnce,
         logSessionEvent,
         navigateOnFirstResponseOnce,

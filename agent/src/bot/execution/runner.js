@@ -23,8 +23,6 @@ import { initializeSessionRun } from "./runner/run-initialization.js";
 import { finalizeAgentTurn } from "./runner/result-finalizer.js";
 import { commitAuthoritativeFinalResult } from "../../runtime/engine.js";
 
-
-
 export class SessionExecutionRunner {
   constructor({
     agentRunner,
@@ -69,7 +67,6 @@ export class SessionExecutionRunner {
     this.upsertParentAsyncTask = upsertParentAsyncTask;
     this.now = now;
   }
-
 
   async runSession({
     userId,
@@ -205,9 +202,10 @@ export class SessionExecutionRunner {
         abortSignal,
         persistenceContext,
       });
-      const { runtimeAgentContext, userMessageAttachments } =
-        normalizePreparedAgentTurnExecution(preparedAgentTurnExecution);
-      const dispatchRuntime = bindAgentDispatchRuntime({
+      const { runtimeAgentContext, userMessageAttachments } = normalizePreparedAgentTurnExecution(
+        preparedAgentTurnExecution,
+      );
+      const dispatchRuntime = await bindAgentDispatchRuntime({
         runtimeAgentContext,
         botHookRuntime,
         lifecycle,

@@ -32,7 +32,10 @@ import {
   summarizeToolLogWindow,
   summarizeToolLogWindowItem,
 } from "../../../debug/loggers/toolLogWindowDebugLogger.js";
-import { getMessageTransferEnvelopes, mergeTransferEnvelopes } from "../../model/transferEnvelopes.js";
+import {
+  getMessageTransferEnvelopes,
+  mergeTransferEnvelopes,
+} from "../../model/transferEnvelopes.js";
 import { getMessageAttachments } from "../../model/messageModel.js";
 
 export { initializeMessageEventState } from "../../model/messageEventState.js";
@@ -58,7 +61,8 @@ function conflicts(message, event) {
   const messageId = text(message.messageId || message.id);
   const presentationId = text(message.presentationMessageId);
   const eventPresentationId = resolveMessageEventPresentationId(event.payload);
-  if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId) return true;
+  if (messageId && messageId !== eventPresentationId && presentationId !== eventPresentationId)
+    return true;
   const messageTurn = text(message.turnScopeId || message.turn_scope_id);
   const eventTurn = text(event.identity.turnScopeId);
   return Boolean(eventTurn && messageTurn !== eventTurn);
@@ -70,7 +74,8 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
   }
   if (!targetMessage) return { result: MESSAGE_EVENT_REDUCE_RESULT.TARGET_MISSING };
-  if (conflicts(targetMessage, event)) return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
+  if (conflicts(targetMessage, event))
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.MESSAGE_IDENTITY_CONFLICT };
 
   const aggregateState = initializeMessageEventState(targetMessage).messageEventState;
   if (hasConsumedMessageEvent(aggregateState, event.identity.eventId)) {
@@ -83,8 +88,19 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
   const sequence = Number(event.ordering.sequence);
   const sequenceScopeId = text(event.ordering.scopeId);
   const lastSequence = Number(state.lastSequence || 0);
-  if (lastSequence && sequence <= lastSequence) return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
+  if (lastSequence && sequence <= lastSequence)
+    return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
   const gap = Boolean(lastSequence && sequence > lastSequence + 1);
+
+  if (event.payload.eventType === MESSAGE_EVENT_TYPE.TURN_PRESENTATION_COMMITTED) {
+    state.lastSequence = sequence;
+    appendConsumedMessageEvent(state, event.identity.eventId);
+    syncMessageEventAggregateState(targetMessage, event.identity.eventId);
+    return {
+      result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
+      applied: true,
+    };
+  }
 
   const contentProjection = projectMessageEventContent(event.payload);
   if (
@@ -134,7 +150,11 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       sequenceScopeId,
       timestamp: event.occurredAt,
     });
-    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.payload.eventType)) {
+    if (
+      [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
+        event.payload.eventType,
+      )
+    ) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventClassified", () => ({
         sessionId: text(event.identity.sessionId || targetMessage.sessionId),
         dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
@@ -179,7 +199,11 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
             sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
           },
     );
-    if ([MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(event.payload.eventType)) {
+    if (
+      [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
+        event.payload.eventType,
+      )
+    ) {
       logToolLogWindowDebug("frontend.toolLogWindow.messageEventTimelineReduced", () => ({
         sessionId: text(event.identity.sessionId || targetMessage.sessionId),
         dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
@@ -190,11 +214,15 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       }));
     }
   }
-  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId) targetMessage.dialogProcessId = event.payload.dialogProcessId;
+  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId)
+    targetMessage.dialogProcessId = event.payload.dialogProcessId;
   Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
   targetMessage.hasFirstStreamEvent = true;
   state.lastSequence = sequence;
   appendConsumedMessageEvent(state, event.identity.eventId);
   syncMessageEventAggregateState(targetMessage, event.identity.eventId);
-  return { result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED, applied: true };
+  return {
+    result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
+    applied: true,
+  };
 }

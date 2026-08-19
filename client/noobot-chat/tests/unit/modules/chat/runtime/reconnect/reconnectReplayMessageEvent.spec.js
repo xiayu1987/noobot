@@ -19,30 +19,33 @@ import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 
 const classify = (event) => ({
   ...event,
-  type: event.eventType === "tool_call_start"
-    ? "tool_call"
-    : event.eventType === "tool_call_end"
-      ? "tool_result"
-      : event.type || event.eventType,
-  text: event.eventType === "tool_call_start"
-    ? `[tool] ${event.tool}`
-    : event.eventType === "tool_call_end"
-      ? "[tool] result"
-      : event.text || event.output || "",
+  type:
+    event.eventType === "tool_call_start"
+      ? "tool_call"
+      : event.eventType === "tool_call_end"
+        ? "tool_result"
+        : event.type || event.eventType,
+  text:
+    event.eventType === "tool_call_start"
+      ? `[tool] ${event.tool}`
+      : event.eventType === "tool_call_end"
+        ? "[tool] result"
+        : event.text || event.output || "",
 });
 
-const authoritative = (eventType, sequence, extra = {}) => canonicalMessageEvent({
-  eventId: `event-${sequence}`,
-  eventType,
-  sessionId: "session-1",
-  messageId: "message-1",
-  presentationMessageId: "message-1",
-  dialogProcessId: "dialog-1",
-  turnScopeId: "turn-1",
-  sequence,
-  occurredAt: `2026-07-22T05:00:0${sequence}.000Z`,
-  ...extra,
-});
+const authoritative = (eventType, sequence, extra = {}) =>
+  canonicalMessageEvent({
+    eventId: `event-${sequence}`,
+    eventType,
+    sessionId: "session-1",
+    messageId: "message-1",
+    presentationMessageId: "message-1",
+    dialogProcessId: "dialog-1",
+    turnScopeId: "turn-1",
+    sequence,
+    occurredAt: `2026-07-22T05:00:0${sequence}.000Z`,
+    ...extra,
+  });
 
 const canonicalFindFor = (targetMessage) => (sessionId, messageId) => {
   if (sessionId !== targetMessage.sessionId) return null;
@@ -51,14 +54,84 @@ const canonicalFindFor = (targetMessage) => (sessionId, messageId) => {
 };
 
 describe("reconnect authoritative message event replay", () => {
+  it("materializes the atomic Turn presentation before applying its event tail", () => {
+    const messages = [];
+    const presentation = authoritative("turn_presentation_committed", 1, {
+      messageId: "stream-1",
+      presentationMessageId: "assistant-1",
+      presentation: {
+        userMessage: {
+          id: "user-1",
+          messageId: "user-1",
+          role: "user",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          content: "question",
+          attachments: [],
+        },
+        assistantMessage: {
+          id: "assistant-1",
+          messageId: "assistant-1",
+          presentationMessageId: "assistant-1",
+          role: "assistant",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          content: "",
+          attachments: [],
+        },
+      },
+    });
+    const delta = authoritative("llm_delta", 2, {
+      messageId: "stream-1",
+      presentationMessageId: "assistant-1",
+      text: "answer",
+    });
+    const findCanonicalMessageById = (_sessionId, messageId) =>
+      messages.find((message) => message.messageId === messageId) || null;
+    const materializeTurnPresentation = (envelope) => {
+      for (const message of Object.values(envelope.payload.presentation))
+        messages.push({ ...message });
+      return { applied: true };
+    };
+
+    expect(
+      applyReconnectEnvelopeBatchToTargetMessage({
+        messages: [presentation, delta],
+        findCanonicalMessageById,
+        materializeTurnPresentation,
+        classifyRealtimeLog: classify,
+      }),
+    ).toBe(2);
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ role: "user", content: "question" });
+    expect(messages[1]).toMatchObject({ role: "assistant", content: "answer" });
+  });
+
   it("restores multiple assistant messages in one turn by each authoritative messageId", () => {
     const canonicalMessages = new Map([
-      ["message-1", { id: "message-1", messageId: "message-1", sessionId: "session-1", turnScopeId: "turn-1", content: "" }],
-      ["message-2", { id: "message-2", messageId: "message-2", sessionId: "session-1", turnScopeId: "turn-1", content: "" }],
+      [
+        "message-1",
+        {
+          id: "message-1",
+          messageId: "message-1",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          content: "",
+        },
+      ],
+      [
+        "message-2",
+        {
+          id: "message-2",
+          messageId: "message-2",
+          sessionId: "session-1",
+          turnScopeId: "turn-1",
+          content: "",
+        },
+      ],
     ]);
-    const findCanonicalMessageById = (sessionId, messageId) => sessionId === "session-1"
-      ? canonicalMessages.get(messageId) || null
-      : null;
+    const findCanonicalMessageById = (sessionId, messageId) =>
+      sessionId === "session-1" ? canonicalMessages.get(messageId) || null : null;
     const first = authoritative("llm_delta", 1, { messageId: "message-1", text: "first" });
     const second = authoritative("llm_delta", 1, {
       messageId: "message-2",
@@ -75,8 +148,14 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     expect([...canonicalMessages.keys()]).toEqual(["message-1", "message-2"]);
-    expect(canonicalMessages.get("message-1")).toMatchObject({ content: "first", turnScopeId: "turn-1" });
-    expect(canonicalMessages.get("message-2")).toMatchObject({ content: "second", turnScopeId: "turn-1" });
+    expect(canonicalMessages.get("message-1")).toMatchObject({
+      content: "first",
+      turnScopeId: "turn-1",
+    });
+    expect(canonicalMessages.get("message-2")).toMatchObject({
+      content: "second",
+      turnScopeId: "turn-1",
+    });
     expect(canonicalMessages.get("message-1").messageEventState.lastSequence).toBe(1);
     expect(canonicalMessages.get("message-2").messageEventState.lastSequence).toBe(1);
   });
@@ -118,9 +197,21 @@ describe("reconnect authoritative message event replay", () => {
     });
 
     const findCanonicalMessageById = canonicalFindFor(targetMessage);
-    applyReconnectEnvelopeToTargetMessage({ envelope: start, findCanonicalMessageById, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: start, findCanonicalMessageById, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: end, findCanonicalMessageById, classifyRealtimeLog: classify });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: start,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: start,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: end,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
 
     expect(selectToolTimelineLogs(targetMessage)).toEqual([
       expect.objectContaining({ type: "tool_call", toolCallId: "call-1" }),
@@ -145,19 +236,20 @@ describe("reconnect authoritative message event replay", () => {
       turnScopeId: "turn-1",
       content: "",
     };
-    const guidance = (sequence, output) => authoritative("thinking", sequence, {
-      eventId: `guidance-analysis-${sequence}`,
-      messageId: "model-message-1",
-      presentationMessageId: "message-1",
-      sequenceDomain: "message-event",
-      sequenceScopeId: "model-message-1",
-      event: "guidance_analysis_response",
-      type: "guidance_analysis",
-      purpose: "guidance",
-      pluginFlow: "analysis",
-      chain: "auxiliary",
-      text: output,
-    });
+    const guidance = (sequence, output) =>
+      authoritative("thinking", sequence, {
+        eventId: `guidance-analysis-${sequence}`,
+        messageId: "model-message-1",
+        presentationMessageId: "message-1",
+        sequenceDomain: "message-event",
+        sequenceScopeId: "model-message-1",
+        event: "guidance_analysis_response",
+        type: "guidance_analysis",
+        purpose: "guidance",
+        pluginFlow: "analysis",
+        chain: "auxiliary",
+        text: output,
+      });
     const findCanonicalMessageById = canonicalFindFor(targetMessage);
 
     applyReconnectEnvelopeToTargetMessage({
@@ -193,14 +285,23 @@ describe("reconnect authoritative message event replay", () => {
     const events = [
       authoritative("llm_delta", 1, { text: "hello " }),
       authoritative("tool_call_start", 2, {
-        tool: "read_file", toolCallId: "call-1", args: { filePath: "notes.txt" },
+        tool: "read_file",
+        toolCallId: "call-1",
+        args: { filePath: "notes.txt" },
       }),
       authoritative("tool_call_end", 3, {
-        tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
+        tool: "read_file",
+        toolCallId: "call-1",
+        result: { ok: true },
+        success: true,
       }),
       authoritative("llm_delta", 4, { text: "world" }),
     ];
-    const createTarget = () => ({ sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" });
+    const createTarget = () => ({
+      sessionId: "session-1",
+      messageId: "message-1",
+      turnScopeId: "turn-1",
+    });
     const normalLive = createTarget();
     const reconnectLive = createTarget();
     const historyReplay = createTarget();
@@ -226,7 +327,10 @@ describe("reconnect authoritative message event replay", () => {
     }
 
     const observableState = ({ content, toolTimeline, activityTimeline, messageEventState }) => ({
-      content, toolTimeline, activityTimeline, messageEventState,
+      content,
+      toolTimeline,
+      activityTimeline,
+      messageEventState,
     });
     expect(observableState(reconnectLive)).toEqual(observableState(normalLive));
     expect(observableState(historyReplay)).toEqual(observableState(normalLive));
@@ -272,16 +376,22 @@ describe("reconnect authoritative message event replay", () => {
       authoritative("llm_delta", 1, { text: "A" }),
       authoritative("tool_call_start", 2, { tool: "read_file", toolCallId: "call-1", args: {} }),
       authoritative("tool_call_end", 3, {
-        tool: "read_file", toolCallId: "call-1", result: { ok: true }, success: true,
+        tool: "read_file",
+        toolCallId: "call-1",
+        result: { ok: true },
+        success: true,
       }),
       authoritative("llm_delta", 4, { text: "B" }),
     ];
-    for (const envelope of events) dispatchTurnEnvelope({ targetMessage: ordered, envelope, classifyRealtimeLog: classify });
+    for (const envelope of events)
+      dispatchTurnEnvelope({ targetMessage: ordered, envelope, classifyRealtimeLog: classify });
     for (const envelope of [events[0], events[2], events[1], events[3], events[2]]) {
       dispatchTurnEnvelope({ targetMessage: reordered, envelope, classifyRealtimeLog: classify });
     }
     const observable = ({ content, toolTimeline, activityTimeline, messageEventState }) => ({
-      content, toolTimeline, activityTimeline,
+      content,
+      toolTimeline,
+      activityTimeline,
       messageEventState: {
         lastSequence: messageEventState.lastSequence,
         consumedEventIds: messageEventState.consumedEventIds,
@@ -291,13 +401,29 @@ describe("reconnect authoritative message event replay", () => {
   });
 
   it("keeps stopped and continuation turns isolated across refresh replay", () => {
-    const stopped = { sessionId: "session-1", messageId: "stopped", turnScopeId: "turn-stopped", content: "old" };
+    const stopped = {
+      sessionId: "session-1",
+      messageId: "stopped",
+      turnScopeId: "turn-stopped",
+      content: "old",
+    };
     const continuation = { sessionId: "session-1", messageId: "message-1", turnScopeId: "turn-1" };
     const toolCall = authoritative("tool_call_start", 1, {
-      tool: "read_file", toolCallId: "call-continue", args: {}, dialogProcessId: "shared-dialog",
+      tool: "read_file",
+      toolCallId: "call-continue",
+      args: {},
+      dialogProcessId: "shared-dialog",
     });
-    const conflict = dispatchTurnEnvelope({ targetMessage: stopped, envelope: toolCall, classifyRealtimeLog: classify });
-    dispatchTurnEnvelope({ targetMessage: continuation, envelope: toolCall, classifyRealtimeLog: classify });
+    const conflict = dispatchTurnEnvelope({
+      targetMessage: stopped,
+      envelope: toolCall,
+      classifyRealtimeLog: classify,
+    });
+    dispatchTurnEnvelope({
+      targetMessage: continuation,
+      envelope: toolCall,
+      classifyRealtimeLog: classify,
+    });
     const staleSnapshot = hydrateTurnSnapshot({
       targetMessage: continuation,
       snapshot: { sessionId: "session-1", turnScopeId: "turn-1", throughSequence: 0 },
@@ -316,11 +442,21 @@ describe("reconnect authoritative message event replay", () => {
     };
     const authoritativeDelta = authoritative("llm_delta", 1, { text: "canonical" });
     const authoritativeTool = authoritative("tool_call_start", 2, {
-      tool: "read_file", toolCallId: "call-1", args: {},
+      tool: "read_file",
+      toolCallId: "call-1",
+      args: {},
     });
     const findCanonicalMessageById = canonicalFindFor(targetMessage);
-    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeDelta, findCanonicalMessageById, classifyRealtimeLog: classify });
-    applyReconnectEnvelopeToTargetMessage({ envelope: authoritativeTool, findCanonicalMessageById, classifyRealtimeLog: classify });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: authoritativeDelta,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
+    applyReconnectEnvelopeToTargetMessage({
+      envelope: authoritativeTool,
+      findCanonicalMessageById,
+      classifyRealtimeLog: classify,
+    });
     applyReconnectEnvelopeToTargetMessage({
       envelope: { event: "delta", sequence: 1, data: { seq: 1, text: " duplicate" } },
       findCanonicalMessageById,
