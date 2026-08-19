@@ -3,7 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowIso, nowMs } from "../../model/timeFields.js";
+import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
+import { nowIso } from "../../model/timeFields.js";
 
 function normalizeOperationId(value = "") {
   return String(value || "").trim();
@@ -14,8 +15,7 @@ function normalizeSessionId(value = "") {
 }
 
 function createOperationId(type = "op") {
-  const randomPart = Math.random().toString(36).slice(2, 10);
-  return `${type}-${nowMs().toString(36)}-${randomPart}`;
+  return createSecureId(type, "-");
 }
 
 export function createPendingMessageOperationStore() {
@@ -78,7 +78,9 @@ export function createPendingMessageOperationStore() {
     const normalizedType = normalizeOperationId(type);
     const operations = [...operationsById.values()]
       .filter((operation) => !normalizedType || operation.type === normalizedType)
-      .sort((left, right) => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
+      .sort((left, right) =>
+        String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")),
+      );
     return operations[0] || null;
   }
 

@@ -2,8 +2,34 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-const THINK = /<think>[\s\S]*?<\/think>/gi;
-const CAPTURE = /<think>([\s\S]*?)<\/think>/gi;
+const THINK_OPEN = "<think>";
+const THINK_CLOSE = "</think>";
+
+function splitThinkContent(value = "") {
+  const source = String(value || "");
+  const searchable = source.toLowerCase();
+  const visible = [];
+  const reasoning = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const open = searchable.indexOf(THINK_OPEN, cursor);
+    if (open < 0) {
+      visible.push(source.slice(cursor));
+      break;
+    }
+    visible.push(source.slice(cursor, open));
+    const contentStart = open + THINK_OPEN.length;
+    const close = searchable.indexOf(THINK_CLOSE, contentStart);
+    if (close < 0) {
+      visible.push(source.slice(open));
+      break;
+    }
+    const content = source.slice(contentStart, close).trim();
+    if (content) reasoning.push(content);
+    cursor = close + THINK_CLOSE.length;
+  }
+  return { visible: visible.join(""), reasoning };
+}
 
 function text(value) {
   if (typeof value === "string") return value;
@@ -16,9 +42,8 @@ function text(value) {
 }
 
 export function extractResponseText(response = {}) {
-  return String(text(response.content) || response.text || response.output || "")
-    .replace(THINK, "")
-    .trim();
+  const raw = text(response.content) || response.text || response.output || "";
+  return splitThinkContent(raw).visible.trim();
 }
 
 export function extractReasoningText(response = {}) {
@@ -35,12 +60,7 @@ export function extractReasoningText(response = {}) {
     if (output) return output;
   }
   const raw = text(response.content) || response.text || response.output || "";
-  const chunks = [];
-  let match;
-  const expression = new RegExp(CAPTURE);
-  while ((match = expression.exec(raw)))
-    if (String(match[1] || "").trim()) chunks.push(String(match[1]).trim());
-  return chunks.join("\n");
+  return splitThinkContent(raw).reasoning.join("\n");
 }
 
 export function resolveFinishReason(response = {}) {

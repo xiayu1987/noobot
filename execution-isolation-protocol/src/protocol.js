@@ -102,11 +102,14 @@ function requiredString(value, field) {
 }
 
 export function sanitizeExecutionIdentity(input = "") {
-  return String(input || "")
+  const normalized = String(input || "")
     .toLowerCase()
-    .replace(/[^a-z0-9_.-]/g, "-")
-    .replace(/^-+/, "")
-    .replace(/-+$/, "");
+    .replace(/[^a-z0-9_.-]/g, "-");
+  let start = 0;
+  let end = normalized.length;
+  while (normalized[start] === "-") start += 1;
+  while (end > start && normalized[end - 1] === "-") end -= 1;
+  return normalized.slice(start, end);
 }
 
 function normalizeContainerName(value) {

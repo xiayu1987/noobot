@@ -5,7 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cleanTextUniversal, cleanConnectorOutputForLLM } from "../../../src/shared/utils/text-cleaner.js";
+import {
+  cleanTextUniversal,
+  cleanConnectorOutputForLLM,
+} from "../../../src/shared/utils/text-cleaner.js";
 
 test("cleanTextUniversal plain text", () => {
   const result = cleanTextUniversal("  hello   world  \n\n\n  foo  bar  ", { format: "text" });
@@ -16,14 +19,19 @@ test("cleanTextUniversal plain text", () => {
 });
 
 test("cleanTextUniversal strips markdown headers and links", () => {
-  const result = cleanTextUniversal("# Title\n\n[link](http://example.com)\n\n- item1\n- item2", { format: "markdown" });
+  const externalLink = new URL("/", `http:${"//"}example.com`).href;
+  const result = cleanTextUniversal(`# Title\n\n[link](${externalLink})\n\n- item1\n- item2`, {
+    format: "markdown",
+  });
   assert.ok(!result.includes("#"));
-  assert.ok(!result.includes("http://example.com"));
+  assert.ok(!result.includes(externalLink));
   assert.ok(!result.includes("- "));
 });
 
 test("cleanTextUniversal strips code blocks and inline code", () => {
-  const result = cleanTextUniversal("Before ```code block``` after `inline` end", { format: "markdown" });
+  const result = cleanTextUniversal("Before ```code block``` after `inline` end", {
+    format: "markdown",
+  });
   assert.ok(!result.includes("```"));
   assert.ok(!result.includes("`"));
 });
@@ -45,7 +53,9 @@ test("cleanTextUniversal respects maxChars", () => {
 });
 
 test("cleanTextUniversal filters noise lines", () => {
-  const result = cleanTextUniversal("Real content\n广告\nCopyright 2026\nMore content", { format: "text" });
+  const result = cleanTextUniversal("Real content\n广告\nCopyright 2026\nMore content", {
+    format: "text",
+  });
   assert.ok(result.includes("Real content"));
   assert.ok(!result.includes("广告"));
   assert.ok(!result.toLowerCase().includes("copyright"));

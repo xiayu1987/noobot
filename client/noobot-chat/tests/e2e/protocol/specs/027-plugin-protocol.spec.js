@@ -278,6 +278,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
 
   for (const attachment of generatedAttachments) {
     await assertAttachmentHttpAccess(noobot.page, {
+      apiKey: noobot.connectConfig.apiKey,
       userId: noobot.userId,
       sessionId: noobot.sessionId,
       attachmentSource: "model",
@@ -365,6 +366,7 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
     attachmentSource: "model",
   });
   await assertAttachmentHttpAccess(noobot.page, {
+    apiKey: noobot.connectConfig.apiKey,
     userId: noobot.userId,
     sessionId: parsedResult.sessionId,
     attachmentSource: parsedResult.attachmentSource,

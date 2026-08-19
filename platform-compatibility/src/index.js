@@ -5,4 +5,5 @@
  */
 export * from "./platform.js";
 export * from "./file-system.js";
+export * from "./atomic-file-write.js";
 export * from "./process.js";

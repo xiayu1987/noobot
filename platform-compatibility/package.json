@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./platform": "./src/platform.js",
     "./file-system": "./src/file-system.js",
+    "./atomic-file-write": "./src/atomic-file-write.js",
     "./process": "./src/process.js",
     "./package.json": "./package.json"
   },

@@ -33,17 +33,27 @@ test("runtime loads only Manifest V2 activate entries", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-plugin-runtime-"));
   const pluginDir = path.join(root, "example");
   await mkdir(pluginDir);
-  await writeFile(path.join(pluginDir, "manifest.json"), JSON.stringify({
-    protocolVersion: 2,
-    id: "example",
-    name: "example",
-    version: "1.0.0",
-    entries: { agent: "agent.mjs" },
-    contributes: { agent: { hooks: { registers: [{ id: "before-turn", point: "agent.before_turn" }], emits: [] } } },
-    requires: { ports: ["hooks.register"], permissions: [], authenticatedRoutes: [] },
-    enabledByDefault: true,
-  }));
-  await writeFile(path.join(pluginDir, "agent.mjs"), `export function activate(){return {protocolVersion:2,pluginId:"example",surface:"agent",dispose(){}}}`);
+  await writeFile(
+    path.join(pluginDir, "manifest.json"),
+    JSON.stringify({
+      protocolVersion: 2,
+      id: "example",
+      name: "example",
+      version: "1.0.0",
+      entries: { agent: "agent.mjs" },
+      contributes: {
+        agent: {
+          hooks: { registers: [{ id: "before-turn", point: "agent.before_turn" }], emits: [] },
+        },
+      },
+      requires: { ports: ["hooks.register"], permissions: [], authenticatedRoutes: [] },
+      enabledByDefault: true,
+    }),
+  );
+  await writeFile(
+    path.join(pluginDir, "agent.mjs"),
+    `export function activate(){return {protocolVersion:2,pluginId:"example",surface:"agent",dispose(){}}}`,
+  );
   const runtime = await loadNoobotPlugins({ pluginRootDir: root, surface: "agent" });
   assert.equal(runtime.loadedCount, 1);
   assert.equal(runtime.errors.length, 0);
@@ -106,13 +116,34 @@ test("capability facade rejects paths that would mutate public context", () => {
     surface: "service",
     manifest: { requires: { ports: ["service.sessions.read"] } },
   };
-  assert.throws(() => createPluginHostFacade({
+  assert.throws(
+    () =>
+      createPluginHostFacade({
+        entry,
+        publicContext: { services: {} },
+        capabilityAdapters: {
+          "service.sessions.read": { path: ["services", "sessions"], value: {} },
+        },
+      }),
+    /conflicts with public context/,
+  );
+});
+
+test("capability facade defines dynamic path segments without invoking object prototype setters", () => {
+  const entry = {
+    pluginId: "example",
+    surface: "service",
+    manifest: { requires: { ports: ["service.sessions.read"] } },
+  };
+  const host = createPluginHostFacade({
     entry,
-    publicContext: { services: {} },
     capabilityAdapters: {
-      "service.sessions.read": { path: ["services", "sessions"], value: {} },
+      "service.sessions.read": { path: ["__proto__", "polluted"], value: "owned" },
     },
-  }), /conflicts with public context/);
+  });
+  assert.equal(Object.prototype.polluted, undefined);
+  assert.equal(Object.hasOwn(host, "__proto__"), true);
+  assert.equal(host.__proto__.polluted, "owned");
 });
 
 test("activation scope rolls back committed contributions and disposes in reverse order", async () => {
@@ -124,18 +155,25 @@ test("activation scope rolls back committed contributions and disposes in revers
     activate() {
       calls.push(`activate:${pluginId}`);
       if (fail) throw new Error(`failed:${pluginId}`);
-      return { protocolVersion: 2, pluginId, surface: "service", dispose: () => calls.push(`dispose:${pluginId}`) };
+      return {
+        protocolVersion: 2,
+        pluginId,
+        surface: "service",
+        dispose: () => calls.push(`dispose:${pluginId}`),
+      };
     },
   });
   await assert.rejects(
-    () => createPluginActivationScope({
-      entries: [entry("one"), entry("two", true)],
-      hostFactory: () => Object.freeze({}),
-      transactionFactory: (item) => createContributionTransaction({
-        commit: () => calls.push(`commit:${item.pluginId}`),
-        rollback: () => calls.push(`rollback:${item.pluginId}`),
+    () =>
+      createPluginActivationScope({
+        entries: [entry("one"), entry("two", true)],
+        hostFactory: () => Object.freeze({}),
+        transactionFactory: (item) =>
+          createContributionTransaction({
+            commit: () => calls.push(`commit:${item.pluginId}`),
+            rollback: () => calls.push(`rollback:${item.pluginId}`),
+          }),
       }),
-    }),
     /failed:two/,
   );
   assert.deepEqual(calls, [
@@ -173,13 +211,14 @@ test("activation rollback attempts every plugin once and preserves the activatio
     await createPluginActivationScope({
       entries: [entry("one"), entry("two"), entry("three", true)],
       hostFactory: () => Object.freeze({}),
-      transactionFactory: (item) => createContributionTransaction({
-        commit() {},
-        rollback() {
-          calls.push(`rollback:${item.pluginId}`);
-          if (item.pluginId === "one") throw new Error("rollback failed");
-        },
-      }),
+      transactionFactory: (item) =>
+        createContributionTransaction({
+          commit() {},
+          rollback() {
+            calls.push(`rollback:${item.pluginId}`);
+            if (item.pluginId === "one") throw new Error("rollback failed");
+          },
+        }),
     });
   } catch (caught) {
     error = caught;
@@ -217,10 +256,13 @@ test("scope disposal is failure-isolated, terminal, and records deactivation", a
   const scope = await createPluginActivationScope({
     entries,
     hostFactory: () => Object.freeze({}),
-    transactionFactory: (entry) => createContributionTransaction({
-      commit() {},
-      rollback() { calls.push(`rollback:${entry.pluginId}`); },
-    }),
+    transactionFactory: (entry) =>
+      createContributionTransaction({
+        commit() {},
+        rollback() {
+          calls.push(`rollback:${entry.pluginId}`);
+        },
+      }),
   });
 
   await assert.rejects(() => scope.dispose(), /dispose failed/);
@@ -228,7 +270,10 @@ test("scope disposal is failure-isolated, terminal, and records deactivation", a
   assert.equal(scope.disposed, true);
   assert.deepEqual(calls, ["rollback:two", "dispose:two", "rollback:one", "dispose:one"]);
   assert.equal(scope.getActivation("one"), undefined);
-  assert.equal(scope.lifecycleEvents.filter((event) => event.event === "plugin.deactivated").length, 1);
+  assert.equal(
+    scope.lifecycleEvents.filter((event) => event.event === "plugin.deactivated").length,
+    1,
+  );
   assert.equal(scope.lifecycleEvents.filter((event) => event.event === "plugin.failed").length, 1);
 });
 
@@ -267,7 +312,9 @@ test("lifecycle reporting failures do not interrupt scope cleanup", async () => 
         protocolVersion: 2,
         pluginId,
         surface: "service",
-        dispose() { calls.push(pluginId); },
+        dispose() {
+          calls.push(pluginId);
+        },
       };
     },
   }));
@@ -301,12 +348,17 @@ test("concurrent asynchronous disposal shares one completion and one failure", a
         surface: "service",
         dispose() {
           disposalCalls += 1;
-          return new Promise((_, reject) => { release = () => reject(new Error("cleanup failed")); });
+          return new Promise((_, reject) => {
+            release = () => reject(new Error("cleanup failed"));
+          });
         },
       };
     },
   };
-  const scope = await createPluginActivationScope({ entries: [entry], hostFactory: () => Object.freeze({}) });
+  const scope = await createPluginActivationScope({
+    entries: [entry],
+    hostFactory: () => Object.freeze({}),
+  });
   const first = scope.dispose();
   const second = scope.dispose();
   assert.equal(first, second);
@@ -327,11 +379,16 @@ test("scope disposal preserves a primary failure when cleanup also fails", async
         protocolVersion: 2,
         pluginId: "one",
         surface: "service",
-        dispose() { throw new Error("cleanup failed"); },
+        dispose() {
+          throw new Error("cleanup failed");
+        },
       };
     },
   };
-  const scope = await createPluginActivationScope({ entries: [entry], hostFactory: () => Object.freeze({}) });
+  const scope = await createPluginActivationScope({
+    entries: [entry],
+    hostFactory: () => Object.freeze({}),
+  });
   const primary = new Error("publication failed");
   let error;
   try {
@@ -341,22 +398,28 @@ test("scope disposal preserves a primary failure when cleanup also fails", async
   }
   assert.equal(error instanceof AggregateError, true);
   assert.equal(error.cause, primary);
-  assert.deepEqual(error.errors.map((item) => item.message), ["publication failed", "cleanup failed"]);
+  assert.deepEqual(
+    error.errors.map((item) => item.message),
+    ["publication failed", "cleanup failed"],
+  );
 });
 
 test("runtime rejects legacy manifests instead of translating them", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "noobot-plugin-runtime-legacy-"));
   const pluginDir = path.join(root, "legacy");
   await mkdir(pluginDir);
-  await writeFile(path.join(pluginDir, "manifest.json"), JSON.stringify({
-    id: "legacy",
-    name: "legacy",
-    version: "1.0.0",
-    apiVersion: "1",
-    capabilities: ["agent.register"],
-    entries: { agent: "agent.mjs" },
-    enabledByDefault: true,
-  }));
+  await writeFile(
+    path.join(pluginDir, "manifest.json"),
+    JSON.stringify({
+      id: "legacy",
+      name: "legacy",
+      version: "1.0.0",
+      apiVersion: "1",
+      capabilities: ["agent.register"],
+      entries: { agent: "agent.mjs" },
+      enabledByDefault: true,
+    }),
+  );
   await writeFile(path.join(pluginDir, "agent.mjs"), "export function registerNoobotPlugin(){}\n");
   const runtime = await loadNoobotPlugins({ pluginRootDir: root, surface: "agent" });
   assert.equal(runtime.loadedCount, 0);

@@ -67,14 +67,19 @@ export function appendDesktopLogLine(
     .then(async () => {
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       const lineBytes = Buffer.byteLength(line, "utf8");
-      const stat = await fs.promises.stat(filePath).catch((error) => {
-        if (error?.code === "ENOENT") return null;
-        throw error;
-      });
-      if (stat?.isFile() && stat.size > 0 && stat.size + lineBytes > maxBytes) {
-        await rotateDesktopLog(filePath, retain);
+      let handle = await fs.promises.open(filePath, "a+");
+      try {
+        const fileStat = await handle.stat();
+        if (fileStat.isFile() && fileStat.size > 0 && fileStat.size + lineBytes > maxBytes) {
+          await handle.close();
+          handle = null;
+          await rotateDesktopLog(filePath, retain);
+          handle = await fs.promises.open(filePath, "a");
+        }
+        await handle.writeFile(line, "utf8");
+      } finally {
+        await handle?.close();
       }
-      await fs.promises.appendFile(filePath, line, "utf8");
     });
   desktopLogQueues.set(filePath, operation);
   return operation.finally(() => {

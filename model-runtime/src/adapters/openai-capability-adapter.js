@@ -57,17 +57,20 @@ const IMAGES_ASYNC_FALLBACKS = Object.freeze({
 });
 
 function normalizeBaseUrl(baseUrl = "") {
-  const normalized = String(baseUrl || "")
-    .trim()
-    .replace(/\/+$/, "");
+  const withoutTrailingSlashes = (value) => {
+    let end = value.length;
+    while (end > 0 && value[end - 1] === "/") end -= 1;
+    return value.slice(0, end);
+  };
+  const normalized = withoutTrailingSlashes(String(baseUrl || "").trim());
   if (!normalized) return "";
   try {
     const url = new URL(normalized);
-    const pathname = url.pathname.replace(/\/+$/, "");
+    const pathname = withoutTrailingSlashes(url.pathname);
     if (/\/chatgpt\/v1$/i.test(pathname)) url.pathname = pathname.replace(/\/chatgpt\/v1$/i, "/v1");
     url.search = "";
     url.hash = "";
-    return url.toString().replace(/\/+$/, "");
+    return withoutTrailingSlashes(url.toString());
   } catch {
     return normalized.replace(/\/chatgpt\/v1$/i, "/v1");
   }

@@ -9,7 +9,7 @@ import {
   normalizeLocale,
   resolveLocaleFromAcceptLanguage,
   pickLocaleText,
-  DEFAULT_LOCALE
+  DEFAULT_LOCALE,
 } from "noobot-i18n/service";
 import { BACKEND_I18N } from "noobot-i18n/service/backend-messages";
 import { createAuthService } from "../services/auth-service.js";
@@ -43,8 +43,7 @@ export async function createAppDependencies({
     globalConfigBuilder && typeof globalConfigBuilder?.build === "function"
       ? globalConfigBuilder
       : createGlobalConfigBuilder();
-  const initialRawConfig =
-    (await configBuilder?.loadRawConfig?.({ reload: false })) || {};
+  const initialRawConfig = (await configBuilder?.loadRawConfig?.({ reload: false })) || {};
   let globalConfigRaw = initialRawConfig;
   let globalConfig = globalConfigRaw;
   let bot = null;
@@ -114,11 +113,7 @@ export async function createAppDependencies({
     translateText,
     sessionLogConfig: { workspaceRoot: workspaceRootPath() },
   });
-  const {
-    normalizeSelectedConnectors,
-    mapAgentRunCommand,
-    handleChat,
-  } = chatRunService;
+  const { normalizeSelectedConnectors, mapAgentRunCommand, handleChat } = chatRunService;
 
   const configScopeService = createConfigScopeService({
     readWorkspaceConfigParams,
@@ -173,10 +168,14 @@ export async function createAppDependencies({
     const superAdminUserId = String(
       globalConfigRaw?.super_admin?.user_id || globalConfigRaw?.superAdmin?.userId || "",
     ).trim();
-    return [...new Set([
-      ...workspaceUsers.map((user) => String(user?.userId || "").trim()),
-      superAdminUserId,
-    ].filter(Boolean))];
+    return [
+      ...new Set(
+        [
+          ...workspaceUsers.map((user) => String(user?.userId || "").trim()),
+          superAdminUserId,
+        ].filter(Boolean),
+      ),
+    ];
   }
 
   return {
@@ -203,6 +202,7 @@ export async function createAppDependencies({
       normalizeWorkspaceUsersConfig,
       requireSuperAdmin,
       requireApiKey,
+      resolveAuthByApiKey,
       resolveConfigParamScope,
       readScopedConfigParams,
       writeScopedConfigParams,

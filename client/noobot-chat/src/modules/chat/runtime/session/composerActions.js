@@ -3,20 +3,24 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { nowMs } from "../../model/timeFields.js";
+import { createSecureId } from "../../../../shared/identity/secureIdentity.js";
 import { SESSION_RUN_EVENT } from "../sessionRunStateMachine.js";
 import { resolveSessionTurnRuntime } from "../run-state-machine/turnRuntimeRegistry.js";
 import { logStateMachineDebug } from "../../../debug/loggers/stateMachineLogger.js";
 
 export function createComposerActions({
-  composerActionState, turnRuntimeRegistry, resolveActiveSessionIdentity,
-  resolveActiveTurnScopeIdentity, submitTurnRuntimeEvent, send, stopSending,
-  notify, translate,
+  composerActionState,
+  turnRuntimeRegistry,
+  resolveActiveSessionIdentity,
+  resolveActiveTurnScopeIdentity,
+  submitTurnRuntimeEvent,
+  send,
+  stopSending,
+  notify,
+  translate,
 }) {
   function createTurnScopeId() {
-    const randomUuid = globalThis?.crypto?.randomUUID?.();
-    if (randomUuid) return `client-turn:${randomUuid}`;
-    return `client-turn:${nowMs().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    return createSecureId("client-turn");
   }
 
   async function sendWithComposerActionState(...args) {
@@ -30,16 +34,16 @@ export function createComposerActions({
     const resumeDialogProcessId = String(stoppedTurn?.dialogProcessId || "").trim();
     const resumeTurnScopeId = String(stoppedTurn?.turnScopeId || "").trim();
     const resumeSessionId = resolveActiveSessionIdentity();
-    const isContinueFromUserStopped = Boolean(stoppedTurn && resumeDialogProcessId && resumeTurnScopeId);
+    const isContinueFromUserStopped = Boolean(
+      stoppedTurn && resumeDialogProcessId && resumeTurnScopeId,
+    );
     logStateMachineDebug("stateMachine.continue.source.selected", () => ({
       sessionId: resumeSessionId,
       selectedTurnScopeId: resumeTurnScopeId,
       selectedDialogProcessId: resumeDialogProcessId,
       selectedSequence: Number(stoppedTurn?.lifecycleSeq || stoppedTurn?.seq || 0),
       selectedContinuedByTurnScopeId: String(stoppedTurn?.continuedByTurnScopeId || "").trim(),
-      candidates: Object.values(
-        turnRuntimeRegistry.value?.sessions?.[resumeSessionId]?.turns || {},
-      )
+      candidates: Object.values(turnRuntimeRegistry.value?.sessions?.[resumeSessionId]?.turns || {})
         .filter((turn) => turn?.terminal === "user_stopped")
         .map((turn) => ({
           turnScopeId: String(turn?.turnScopeId || "").trim(),
@@ -52,7 +56,9 @@ export function createComposerActions({
     if (currentTurn?.terminal === "user_stopped" && !isContinueFromUserStopped) {
       notify?.({
         type: "warning",
-        message: translate("chat.sessionStateOutOfSync") || "Session state is out of sync. Refresh and try again.",
+        message:
+          translate("chat.sessionStateOutOfSync") ||
+          "Session state is out of sync. Refresh and try again.",
       });
       return false;
     }
@@ -67,10 +73,12 @@ export function createComposerActions({
       type: composerEventType,
       sessionId: isContinueFromUserStopped ? resumeSessionId : undefined,
       turnScopeId: continuingTurnScopeId || undefined,
-      continuationSource: isContinueFromUserStopped ? {
-        dialogProcessId: resumeDialogProcessId,
-        turnScopeId: resumeTurnScopeId,
-      } : null,
+      continuationSource: isContinueFromUserStopped
+        ? {
+            dialogProcessId: resumeDialogProcessId,
+            turnScopeId: resumeTurnScopeId,
+          }
+        : null,
       source: "use_chat_session",
     });
     try {

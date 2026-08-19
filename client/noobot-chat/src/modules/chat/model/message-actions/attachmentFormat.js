@@ -3,17 +3,19 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  attachmentIdentityKey,
-  projectAttachmentIdentity,
-} from "@noobot/attachment-protocol";
+import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import { createSecureUuid } from "../../../../shared/identity/secureIdentity.js";
 
 export function isImageMime(mimeType = "") {
-  return String(mimeType || "").toLowerCase().startsWith("image/");
+  return String(mimeType || "")
+    .toLowerCase()
+    .startsWith("image/");
 }
 
 export function attachmentName(item = {}) {
-  return String(item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath || "附件").trim();
+  return String(
+    item?.name || item?.filename || item?.fileName || item?.path || item?.relativePath || "附件",
+  ).trim();
 }
 
 export function attachmentMime(item = {}) {
@@ -68,5 +70,5 @@ export function rawFileKey(file = {}) {
 }
 
 export function createClientAttachmentId() {
-  return globalThis?.crypto?.randomUUID?.() || `client-attachment:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+  return createSecureUuid();
 }

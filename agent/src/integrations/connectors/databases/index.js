@@ -9,14 +9,48 @@ import { executeSqliteCommand } from "./sqlite-connector-channel.js";
 import { normalizeDatabaseType } from "../../../config/index.js";
 
 function stripSqlCommentsAndStrings(sql = "") {
-  return String(sql || "")
-    .replace(/'([^'\\]|\\.|'')*'/g, "''")
-    .replace(/"([^"\\]|\\.|"")*"/g, "\"\"")
-    .replace(/`([^`\\]|\\.)*`/g, "``")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .replace(/--[^\n\r]*/g, " ")
-    .replace(/#[^\n\r]*/g, " ")
-    .trim();
+  const source = String(sql || "");
+  let output = "";
+  for (let index = 0; index < source.length;) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (character === "'" || character === '"' || character === "`") {
+      const quote = character;
+      output += quote + quote;
+      index += 1;
+      while (index < source.length) {
+        if (source[index] === "\\") {
+          index += Math.min(2, source.length - index);
+          continue;
+        }
+        if (source[index] === quote) {
+          if (source[index + 1] === quote) {
+            index += 2;
+            continue;
+          }
+          index += 1;
+          break;
+        }
+        index += 1;
+      }
+      continue;
+    }
+    if (character === "/" && next === "*") {
+      const close = source.indexOf("*/", index + 2);
+      index = close < 0 ? source.length : close + 2;
+      output += " ";
+      continue;
+    }
+    if ((character === "-" && next === "-") || character === "#") {
+      const newline = source.indexOf("\n", index + 1);
+      index = newline < 0 ? source.length : newline;
+      output += " ";
+      continue;
+    }
+    output += character;
+    index += 1;
+  }
+  return output.trim();
 }
 
 function shouldBlockUnsafeSql(command = "") {
@@ -25,23 +59,18 @@ function shouldBlockUnsafeSql(command = "") {
   const compactSql = normalizedSql.replace(/\s+/g, " ");
   const isUpdate = compactSql.startsWith("update ");
   const isDelete = compactSql.startsWith("delete ");
-  const isSelectQuery =
-    compactSql.startsWith("select ") && /\bfrom\b/.test(compactSql);
+  const isSelectQuery = compactSql.startsWith("select ") && /\bfrom\b/.test(compactSql);
   if (!isUpdate && !isDelete && !isSelectQuery) return false;
   return !/\bwhere\b/.test(compactSql);
 }
 
-export async function executeDatabaseCommand({
-  command = "",
-  connectionInfo = {},
-} = {}) {
+export async function executeDatabaseCommand({ command = "", connectionInfo = {} } = {}) {
   if (shouldBlockUnsafeSql(command)) {
     return {
       ok: false,
       code: 400,
       stdout: "",
-      stderr:
-        "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
+      stderr: "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
     };
   }
   const databaseType = normalizeDatabaseType(connectionInfo?.database_type || "");
@@ -58,7 +87,6 @@ export async function executeDatabaseCommand({
     ok: false,
     code: 400,
     stdout: "",
-    stderr:
-      "unknown database type, set connection_info.database_type as postgres/mysql/sqlite",
+    stderr: "unknown database type, set connection_info.database_type as postgres/mysql/sqlite",
   };
 }

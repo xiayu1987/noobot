@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { init, parse } from "es-module-lexer";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { vueScriptRegions } from "../../../scripts/lib/vue-script-regions.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDir, "..");
@@ -52,18 +53,16 @@ export function classifyFrontendImport(importer, specifier) {
   return null;
 }
 
-function scriptRegions(filePath, content) {
-  if (!filePath.endsWith(".vue")) return [content];
-  const scripts = [];
-  for (const match of content.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/gi))
-    scripts.push(match[1]);
-  return scripts;
-}
-
 export async function inspectFrontendSource(filePath, content) {
   await init;
   const violations = [];
-  for (const script of scriptRegions(filePath, content)) {
+  let regions;
+  try {
+    regions = vueScriptRegions(filePath, content);
+  } catch (error) {
+    return [{ specifier: "", reason: error.message }];
+  }
+  for (const { source: script } of regions) {
     let imports;
     try {
       [imports] = parse(script, filePath);

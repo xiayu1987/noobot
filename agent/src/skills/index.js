@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, readFile, readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
@@ -38,19 +38,20 @@ export class SkillService {
       .filter((entryItem) => entryItem.isDirectory())
       .map((entryItem) => entryItem.name);
 
-    return Promise.all(names.map(async (name) => {
-      const configPath = path.join(skillRoot, name, "config.json");
-      try {
-        await access(configPath);
-        const cfg = JSON.parse(await readFile(configPath, "utf8"));
-        return {
-          name,
-          description: cfg.description || "",
-          model: cfg.model || null,
-        };
-      } catch {
-        return { name, description: "", model: null };
-      }
-    }));
+    return Promise.all(
+      names.map(async (name) => {
+        const configPath = path.join(skillRoot, name, "config.json");
+        try {
+          const cfg = JSON.parse(await readFile(configPath, "utf8"));
+          return {
+            name,
+            description: cfg.description || "",
+            model: cfg.model || null,
+          };
+        } catch {
+          return { name, description: "", model: null };
+        }
+      }),
+    );
   }
 }

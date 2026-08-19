@@ -11,6 +11,7 @@ import { registerWorkspaceRoutes } from "../routes/workspace-routes.js";
 import { registerIdeRoutes } from "../routes/ide-routes.js";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../services/plugin-service-ports.js";
+import { createHttpAdmission } from "../security/http-admission.js";
 
 export async function registerHttpModules(
   app,
@@ -25,6 +26,7 @@ export async function registerHttpModules(
     normalizeWorkspaceUsersConfig,
     requireSuperAdmin,
     requireApiKey,
+    resolveAuthByApiKey,
     resolveConfigParamScope,
     readScopedConfigParams,
     writeScopedConfigParams,
@@ -47,6 +49,9 @@ export async function registerHttpModules(
     pluginRootDir,
   } = {},
 ) {
+  const httpAdmission = createHttpAdmission({ resolveAuthByApiKey });
+  app.use(httpAdmission.middleware);
+
   const workspaceService = {
     ensureUserWorkspace: (...args) => bot?.ensureUserWorkspace?.(...args),
     resetUserWorkspace: (...args) => bot?.resetUserWorkspace?.(...args),
@@ -78,7 +83,12 @@ export async function registerHttpModules(
   });
 
   app.use((req, res, next) => {
-    if (req.path === "/health" || req.path === "/internal/connect" || req.path === "/ide" || req.path.startsWith("/ide/")) {
+    if (
+      req.path === "/health" ||
+      req.path === "/internal/connect" ||
+      req.path === "/ide" ||
+      req.path.startsWith("/ide/")
+    ) {
       next();
       return;
     }
@@ -141,5 +151,4 @@ export async function registerHttpModules(
     translateText,
     pluginHost: servicePluginHost,
   });
-
 }

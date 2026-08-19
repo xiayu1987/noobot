@@ -4,13 +4,17 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createWriteStream, existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { chmod, mkdir, open, rm, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_API = "https://api.github.com/repos/gitpod-io/openvscode-server";
+const MAX_ARCHIVE_BYTES = LENGTH_THRESHOLDS.installers.openVscodeArchiveBytes;
+const DOWNLOAD_HOSTS = new Set(["github.com", "release-assets.githubusercontent.com"]);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const serviceRoot = path.resolve(currentDir, "..");
 const installDir = path.resolve(
@@ -93,35 +97,90 @@ function pickAsset(release) {
       `No OpenVSCode Server asset matched *${suffix} in ${release?.tag_name || "release"}`,
     );
   }
-  return asset;
+  const tagName = String(release?.tag_name || "").trim();
+  const assetName = String(asset.name || "").trim();
+  if (
+    !tagName ||
+    tagName.length > 100 ||
+    ![...tagName].every((character) => /[A-Za-z0-9._-]/.test(character))
+  ) {
+    throw new Error("OpenVSCode Server release tag is invalid");
+  }
+  if (assetName !== `${tagName}-${suffix}` || path.basename(assetName) !== assetName) {
+    throw new Error("OpenVSCode Server release asset name is invalid");
+  }
+  const size = Number(asset.size);
+  if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_ARCHIVE_BYTES) {
+    throw new Error("OpenVSCode Server release asset size is invalid");
+  }
+  const digest = String(asset.digest || "")
+    .trim()
+    .toLowerCase();
+  if (!/^sha256:[a-f0-9]{64}$/.test(digest)) {
+    throw new Error("OpenVSCode Server release asset has no valid SHA-256 digest");
+  }
+  const downloadUrl = new URL(String(asset.browser_download_url));
+  const expectedPath = `/gitpod-io/openvscode-server/releases/download/${tagName}/${assetName}`;
+  if (
+    downloadUrl.protocol !== "https:" ||
+    downloadUrl.hostname !== "github.com" ||
+    downloadUrl.port ||
+    downloadUrl.username ||
+    downloadUrl.password ||
+    downloadUrl.pathname !== expectedPath ||
+    downloadUrl.search ||
+    downloadUrl.hash
+  ) {
+    throw new Error("OpenVSCode Server release asset URL is outside the trusted repository");
+  }
+  return Object.freeze({
+    name: assetName,
+    browser_download_url: downloadUrl.href,
+    digest,
+    size,
+  });
 }
 
-async function downloadFile(url, destination) {
+async function downloadFile(url, destination, { digest, size } = {}) {
   const response = await fetch(url, {
     headers: { "user-agent": "noobot-openvscode-installer" },
   });
   if (!response.ok || !response.body) {
     throw new Error(`Download failed: HTTP ${response.status}`);
   }
-  await new Promise((resolve, reject) => {
-    const file = createWriteStream(destination);
-    response.body
-      .pipeTo(
-        new WritableStream({
-          write(chunk) {
-            file.write(Buffer.from(chunk));
-          },
-          close() {
-            file.end(resolve);
-          },
-          abort(error) {
-            file.destroy(error);
-            reject(error);
-          },
-        }),
-      )
-      .catch(reject);
-  });
+  const resolvedUrl = new URL(response.url);
+  if (resolvedUrl.protocol !== "https:" || !DOWNLOAD_HOSTS.has(resolvedUrl.hostname)) {
+    throw new Error("Download redirect left the trusted GitHub asset hosts");
+  }
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > 0 && declaredLength !== size) {
+    throw new Error("Download size does not match GitHub release metadata");
+  }
+  const expectedDigest = String(digest || "").slice("sha256:".length);
+  const hash = createHash("sha256");
+  const handle = await open(destination, "wx", 0o600);
+  let downloadedBytes = 0;
+  try {
+    for await (const chunk of response.body) {
+      const buffer = Buffer.from(chunk);
+      downloadedBytes += buffer.length;
+      if (downloadedBytes > size || downloadedBytes > MAX_ARCHIVE_BYTES) {
+        throw new Error("Download exceeds the declared release asset size");
+      }
+      hash.update(buffer);
+      await handle.write(buffer);
+    }
+    await handle.sync();
+  } catch (error) {
+    await handle.close();
+    await rm(destination, { force: true });
+    throw error;
+  }
+  await handle.close();
+  if (downloadedBytes !== size || hash.digest("hex") !== expectedDigest) {
+    await rm(destination, { force: true });
+    throw new Error("Downloaded OpenVSCode Server archive failed integrity verification");
+  }
 }
 
 function run(command, args = []) {
@@ -269,7 +328,7 @@ async function main() {
   await rm(tmpDir, { recursive: true, force: true });
   await mkdir(tmpDir, { recursive: true });
   console.log(`[openvscode] downloading ${asset.name}`);
-  await downloadFile(asset.browser_download_url, archivePath);
+  await downloadFile(asset.browser_download_url, archivePath, asset);
 
   await rm(installDir, { recursive: true, force: true });
   await mkdir(installDir, { recursive: true });
