@@ -12,6 +12,82 @@ import { assertTurnCommittedEventData } from "@noobot/session-protocol/turn-comm
 import { createTurnCommand, toCommitTurnPayload } from "../turn-command.js";
 import { summarizeDebugAttachments } from "./debug-utils.js";
 
+function emitPreparedTurnDebug({
+  eventListener,
+  sessionId,
+  dialogProcessId,
+  turnScopeId,
+  requestRunConfig,
+  scenarioResolvedRunConfig,
+  resolvedRunConfig,
+  attachments,
+  userMessageAttachments,
+}) {
+  emitEvent(eventListener, "debug_resend_runner_received", {
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    requestThinkingStartedAt: String(requestRunConfig?.thinkingStartedAt || "").trim(),
+    scenarioThinkingStartedAt: String(scenarioResolvedRunConfig?.thinkingStartedAt || "").trim(),
+    resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
+    reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
+    attachments: summarizeDebugAttachments(attachments),
+    userMessageAttachments: summarizeDebugAttachments(userMessageAttachments),
+  });
+}
+
+function projectPreparedCurrentUserTurn({
+  buildContextPayload,
+  canonicalAttachments,
+  currentUserMessage,
+  turnCommand,
+  committedTurnResult,
+}) {
+  return {
+    buildContextPayload,
+    canonicalAttachments,
+    currentUserMessage,
+    turnCommand,
+    committedTurnResult,
+  };
+}
+
+function emitCurrentUserIdentityDebug({
+  eventListener,
+  resolvedRunConfig,
+  userId,
+  sessionId,
+  parentSessionId,
+  dialogProcessId,
+  turnScopeId,
+  persistedMessageUid,
+  currentUserMessage,
+  reusedTurnResult,
+  committedTurnResult,
+}) {
+  emitContextIdentityDebug(
+    eventListener,
+    resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
+    { userId, sessionId, parentSessionId, dialogProcessId, turnScopeId },
+    {
+      messageUid: persistedMessageUid,
+      persistedMessageId: String(
+        currentUserMessage?.messageId || currentUserMessage?.id || "",
+      ).trim(),
+      canonicalMessageId: canonicalMessageId(currentUserMessage),
+      role: String(currentUserMessage?.role || "").trim(),
+      frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
+      messageOrigin: String(currentUserMessage?.messageOrigin || "").trim(),
+      contentLength: String(currentUserMessage?.content || "").length,
+      attachmentCount: Array.isArray(currentUserMessage?.attachments)
+        ? currentUserMessage.attachments.length
+        : 0,
+      ...(reusedTurnResult ? { asserted: reusedTurnResult?.asserted === true } : {}),
+      ...(committedTurnResult ? { deduplicated: committedTurnResult?.deduplicated === true } : {}),
+    },
+  );
+}
+
 export async function prepareCurrentUserTurn({
   prepareTurnInput,
   assertReusedUserTurnIdentity,
@@ -54,20 +130,16 @@ export async function prepareCurrentUserTurn({
     parentAsyncResultContainer,
     persistenceContext,
   };
-  emitEvent(eventListener, "debug_resend_runner_received", {
+  emitPreparedTurnDebug({
+    eventListener,
     sessionId,
     dialogProcessId,
     turnScopeId,
-    requestThinkingStartedAt: String(requestRunConfig?.thinkingStartedAt || "").trim(),
-    scenarioThinkingStartedAt: String(
-      scenarioResolvedRunConfig?.thinkingStartedAt || "",
-    ).trim(),
-    resolvedThinkingStartedAt: String(resolvedRunConfig?.thinkingStartedAt || "").trim(),
-    reuseExistingUserTurn: resolvedRunConfig?.reuseExistingUserTurn === true,
-    attachments: summarizeDebugAttachments(attachments),
-    userMessageAttachments: summarizeDebugAttachments(
-      buildContextPayload.userMessageAttachments,
-    ),
+    requestRunConfig,
+    scenarioResolvedRunConfig,
+    resolvedRunConfig,
+    attachments,
+    userMessageAttachments: buildContextPayload.userMessageAttachments,
   });
   const preparedTurnInput =
     typeof prepareTurnInput === "function"
@@ -139,35 +211,25 @@ export async function prepareCurrentUserTurn({
       "persisted current user message identity is required before Context construction",
     );
   }
-  emitContextIdentityDebug(
+  emitCurrentUserIdentityDebug({
     eventListener,
-    resolvedRunConfig?.reuseExistingUserTurn === true ? "reusedTurnResolved" : "turnCommitted",
-    { userId, sessionId, parentSessionId, dialogProcessId, turnScopeId },
-    {
-      messageUid: persistedMessageUid,
-      persistedMessageId: String(
-        currentUserMessage?.messageId || currentUserMessage?.id || "",
-      ).trim(),
-      canonicalMessageId: canonicalMessageId(currentUserMessage),
-      role: String(currentUserMessage?.role || "").trim(),
-      frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
-      messageOrigin: String(currentUserMessage?.messageOrigin || "").trim(),
-      contentLength: String(currentUserMessage?.content || "").length,
-      attachmentCount: Array.isArray(currentUserMessage?.attachments)
-        ? currentUserMessage.attachments.length
-        : 0,
-      ...(reusedTurnResult ? { asserted: reusedTurnResult?.asserted === true } : {}),
-      ...(committedTurnResult
-        ? { deduplicated: committedTurnResult?.deduplicated === true }
-        : {}),
-    },
-  );
+    resolvedRunConfig,
+    userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    persistedMessageUid,
+    currentUserMessage,
+    reusedTurnResult,
+    committedTurnResult,
+  });
   buildContextPayload.currentUserMessage = currentUserMessage;
-  return {
+  return projectPreparedCurrentUserTurn({
     buildContextPayload,
     canonicalAttachments,
     currentUserMessage,
     turnCommand,
     committedTurnResult,
-  };
+  });
 }

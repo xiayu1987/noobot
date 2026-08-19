@@ -68,6 +68,20 @@ function conflicts(message, event) {
   return Boolean(eventTurn && messageTurn !== eventTurn);
 }
 
+function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap }) {
+  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId)
+    targetMessage.dialogProcessId = event.payload.dialogProcessId;
+  Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
+  targetMessage.hasFirstStreamEvent = true;
+  state.lastSequence = sequence;
+  appendConsumedMessageEvent(state, event.identity.eventId);
+  syncMessageEventAggregateState(targetMessage, event.identity.eventId);
+  return {
+    result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
+    applied: true,
+  };
+}
+
 export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog } = {}) {
   const validation = validateProtocolEvent(event);
   if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
@@ -214,15 +228,5 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       }));
     }
   }
-  if (event.payload.dialogProcessId && !targetMessage.dialogProcessId)
-    targetMessage.dialogProcessId = event.payload.dialogProcessId;
-  Object.assign(targetMessage, projectMessageEventMetadata(event.payload));
-  targetMessage.hasFirstStreamEvent = true;
-  state.lastSequence = sequence;
-  appendConsumedMessageEvent(state, event.identity.eventId);
-  syncMessageEventAggregateState(targetMessage, event.identity.eventId);
-  return {
-    result: gap ? MESSAGE_EVENT_REDUCE_RESULT.SEQUENCE_GAP : MESSAGE_EVENT_REDUCE_RESULT.APPLIED,
-    applied: true,
-  };
+  return finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, gap });
 }

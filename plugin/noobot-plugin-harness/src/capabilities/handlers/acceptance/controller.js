@@ -33,11 +33,11 @@ import {
 } from "./output-finalizer.js";
 import { synchronizeTaskAcceptanceTool } from "./tool-injector.js";
 import { shouldUseSeparateModel } from "../shared/model/utils.js";
+import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import {
-  resolveWorkflowMode,
-  runWorkflowLifecycle,
-} from "../shared/workflow/pattern.js";
-import { ACCEPTANCE_PHASE_BLOCKER_KEYS, hasAcceptancePhaseBlockers } from "../shared/workflow/policy.js";
+  ACCEPTANCE_PHASE_BLOCKER_KEYS,
+  hasAcceptancePhaseBlockers,
+} from "../shared/workflow/policy.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { hasFinalNoToolsMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
@@ -163,7 +163,10 @@ function resolveAcceptanceDecision({
         }
       }
     }
-  } else if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS || point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL) {
+  } else if (
+    point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS ||
+    point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL
+  ) {
     category = ACCEPTANCE_DECISION.category.guard;
     if (forceAcceptanceDueToOverflow) {
       candidateActions.push(ACCEPTANCE_DECISION.action.forcedAcceptance);
@@ -208,9 +211,12 @@ function resolveAcceptanceDecision({
     pending: {
       summary: {
         active: pending.summary === true,
-        reason: pending.summary === true
-          ? (state?.flags?.summaryByCharsPrompted === true ? "summary_overflow" : "summary_turns")
-          : "",
+        reason:
+          pending.summary === true
+            ? state?.flags?.summaryByCharsPrompted === true
+              ? "summary_overflow"
+              : "summary_turns"
+            : "",
       },
       guidance: {
         active: Boolean(pending.guidance),
@@ -246,7 +252,8 @@ function resolveAcceptanceRequestedAction({
   chosenReason = ACCEPTANCE_DECISION.reason.idle,
   forceAcceptanceDueToOverflow = false,
 } = {}) {
-  const normalizedMode = String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
+  const normalizedMode =
+    String(mode || "").trim() === "separate_model" ? "separate_model" : "inject";
   const hook = String(point || "").trim();
   if (hook === HOOK_POINT.AGENT.BEFORE_TURN) {
     return ACCEPTANCE_REQUESTED_ACTION.acceptanceToolGuardBeforeTurn;
@@ -286,8 +293,70 @@ function resolveAcceptanceRequestedAction({
   return ACCEPTANCE_REQUESTED_ACTION.none;
 }
 
+function projectAcceptanceDecision(decision) {
+  return {
+    category: decision.category,
+    chosenAction: decision.chosenAction,
+    chosenReason: decision.chosenReason,
+    chosenReasonLabel: decision.chosenReasonLabel,
+    candidateActions: decision.candidateActions,
+    deferredActions: decision.deferredActions,
+    blockedActions: decision.blockedActions,
+    blockedReasons: decision.blockedReasons,
+    blockedReasonLabels: decision.blockedReasonLabels,
+    pending: decision.pending,
+  };
+}
+
+function applyAcceptanceToolGuardStage({ point, ctx, meta, holder, decision }) {
+  let changed = false;
+  let executedPrimary = false;
+  let executedFollowup = false;
+  if (
+    point === HOOK_POINT.AGENT.BEFORE_TURN &&
+    decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard
+  ) {
+    if (holder?.state?.flags) {
+      holder.state.flags.acceptanceReportAppendedToFinalOutput = false;
+      holder.state.flags.phaseAcceptanceTriggeredThisTurn = false;
+    }
+    const registryChanged = disableBlockedToolsInRegistry(ctx);
+    const toolChanged = synchronizeTaskAcceptanceTool(ctx, meta);
+    const stageChanged = [registryChanged, toolChanged].includes(true);
+    changed = stageChanged;
+    executedPrimary = stageChanged;
+  }
+  if (
+    point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS &&
+    decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance
+  ) {
+    if (Array.isArray(ctx?.calls) && ctx.calls.length) {
+      const firstCall = ctx.calls[0] || {};
+      firstCall.name = TASK_ACCEPTANCE_TOOL_NAME;
+      firstCall.args = { mode: ACCEPTANCE_MODE.FORCED };
+      ctx.calls.length = 1;
+      ctx.calls[0] = firstCall;
+      changed = true;
+      executedPrimary = true;
+    }
+    const toolChanged = synchronizeTaskAcceptanceTool(ctx, meta);
+    changed = toolChanged || changed;
+    executedFollowup = toolChanged === true;
+  } else if (
+    point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS &&
+    decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard
+  ) {
+    const callsChanged = disableBlockedCalls(ctx?.calls || []);
+    const toolChanged = synchronizeTaskAcceptanceTool(ctx, meta);
+    changed = callsChanged || toolChanged;
+    executedPrimary = callsChanged === true || toolChanged === true;
+  }
+  return { changed, executedPrimary, executedFollowup };
+}
+
 async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
-  const invariantChanged = enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.ACCEPTANCE }) === true;
+  const invariantChanged =
+    enforceWorkflowInvariants(ctx, { domain: CAPABILITY_DOMAIN.ACCEPTANCE }) === true;
   const holder = ensureHarnessBucket(ctx);
   const mode = resolveWorkflowMode(meta);
   const blockedByMainFlowFinalNoTools = hasFinalNoToolsMainFlowInstruction(ctx);
@@ -311,52 +380,16 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
     domain: CAPABILITY_DOMAIN.ACCEPTANCE,
     point,
     mode,
-    resolveDecision: () => ({
-      category: decision.category,
-      chosenAction: decision.chosenAction,
-      chosenReason: decision.chosenReason,
-      chosenReasonLabel: decision.chosenReasonLabel,
-      candidateActions: decision.candidateActions,
-      deferredActions: decision.deferredActions,
-      blockedActions: decision.blockedActions,
-      blockedReasons: decision.blockedReasons,
-      blockedReasonLabels: decision.blockedReasonLabels,
-      pending: decision.pending,
-    }),
+    resolveDecision: () => projectAcceptanceDecision(decision),
     execute: async () => {
-      let changed = invariantChanged;
-      let executedPrimary = false;
-      let executedFollowup = false;
-      if (point === HOOK_POINT.AGENT.BEFORE_TURN && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
-        if (holder?.state?.flags) {
-          holder.state.flags.acceptanceReportAppendedToFinalOutput = false;
-          holder.state.flags.phaseAcceptanceTriggeredThisTurn = false;
-        }
-        const step1 = disableBlockedToolsInRegistry(ctx);
-        const step2 = synchronizeTaskAcceptanceTool(ctx, meta);
-        changed = step1 || step2 || changed;
-        executedPrimary = step1 === true || step2 === true;
-      }
-      if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
-        if (Array.isArray(ctx?.calls) && ctx.calls.length) {
-          const firstCall = ctx.calls[0] || {};
-          firstCall.name = TASK_ACCEPTANCE_TOOL_NAME;
-          firstCall.args = { mode: ACCEPTANCE_MODE.FORCED };
-          ctx.calls.length = 1;
-          ctx.calls[0] = firstCall;
-          changed = true;
-          executedPrimary = true;
-        }
-        const step = synchronizeTaskAcceptanceTool(ctx, meta);
-        changed = step || changed;
-        executedFollowup = step === true || executedFollowup;
-      } else if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALLS && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceToolGuard) {
-        const step1 = disableBlockedCalls(ctx?.calls || []);
-        const step2 = synchronizeTaskAcceptanceTool(ctx, meta);
-        changed = step1 || step2 || changed;
-        executedPrimary = step1 === true || step2 === true;
-      }
-      if (point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
+      const toolGuardStage = applyAcceptanceToolGuardStage({ point, ctx, meta, holder, decision });
+      let changed = toolGuardStage.changed || invariantChanged;
+      let executedPrimary = toolGuardStage.executedPrimary;
+      let executedFollowup = toolGuardStage.executedFollowup;
+      if (
+        point === HOOK_POINT.AGENT.BEFORE_TOOL_CALL &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance
+      ) {
         ctx.call.name = TASK_ACCEPTANCE_TOOL_NAME;
         ctx.call.args = { mode: ACCEPTANCE_MODE.FORCED };
         changed = true;
@@ -371,11 +404,16 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         changed = true;
         executedPrimary = true;
       }
-      if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL && decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance) {
+      if (
+        point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.forcedAcceptance
+      ) {
         const overflowPromptTemplate =
           WORKFLOW_PARAMS.acceptance.guards.overflowForcedAcceptanceSystemPrompt;
-        const overflowPrompt = String(overflowPromptTemplate || "")
-          .replaceAll("{tool}", TASK_ACCEPTANCE_TOOL_NAME);
+        const overflowPrompt = String(overflowPromptTemplate || "").replaceAll(
+          "{tool}",
+          TASK_ACCEPTANCE_TOOL_NAME,
+        );
         appendMessage(
           ctx,
           buildHarnessInjectedMessage(overflowPrompt, {
@@ -387,11 +425,15 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         changed = true;
         executedPrimary = true;
       }
-      if (point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && decision.chosenAction === ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard) {
+      if (
+        point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.finalOutputAcceptanceGuard
+      ) {
         const step1 = (await ensurePhaseAcceptanceBeforeFinalAcceptance(ctx, meta)) || false;
-        const step2 = (await maybeRefreshAcceptanceReportBeforeFinalOutput(ctx, meta, {
-          phaseAcceptanceChanged: step1 === true,
-        })) || false;
+        const step2 =
+          (await maybeRefreshAcceptanceReportBeforeFinalOutput(ctx, meta, {
+            phaseAcceptanceChanged: step1 === true,
+          })) || false;
         const step3 = (await maybeForceAcceptanceAtFinalOutput(ctx, meta)) || false;
         const step4 = (await maybeAttachChecklistArtifactsAtFinalOutput(ctx)) || false;
         const step5 = (await maybeAppendAcceptanceReportAtFinalOutput(ctx)) || false;
@@ -403,7 +445,10 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
           changed = true;
         }
       }
-      if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL && decision.chosenAction === ACCEPTANCE_DECISION.action.phaseAcceptance) {
+      if (
+        point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.phaseAcceptance
+      ) {
         if (shouldUseSeparateModel(meta)) {
           const result = (await runPhaseAcceptanceBySeparateModel(ctx, meta)) || false;
           changed = result || changed;
@@ -421,7 +466,10 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
         changed = result || changed;
         executedPrimary = result === true || executedPrimary;
       }
-      if (point === HOOK_POINT.AGENT.AFTER_LLM_CALL && decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceCapture) {
+      if (
+        point === HOOK_POINT.AGENT.AFTER_LLM_CALL &&
+        decision.chosenAction === ACCEPTANCE_DECISION.action.acceptanceCapture
+      ) {
         const step1 = (await maybeCapturePhaseAcceptanceByInject(ctx)) || false;
         const step2 = (await maybeCaptureAcceptanceSemanticValidationByInject(ctx)) || false;
         changed = step1 || step2 || changed;
@@ -442,9 +490,12 @@ async function handleAcceptanceLifecycle(point = "", ctx = {}, meta = {}) {
 export function createAcceptanceHandler({ shouldProcessPrimaryToolHooks }) {
   return async ({ capability, point = "", ctx = {}, meta = {} } = {}) => {
     if (
-      [HOOK_POINT.AGENT.BEFORE_TOOL_CALLS, HOOK_POINT.AGENT.BEFORE_TOOL_CALL, HOOK_POINT.AGENT.AFTER_TOOL_CALL, HOOK_POINT.AGENT.TOOL_CALL_ERROR].includes(
-        String(point || "").trim(),
-      ) &&
+      [
+        HOOK_POINT.AGENT.BEFORE_TOOL_CALLS,
+        HOOK_POINT.AGENT.BEFORE_TOOL_CALL,
+        HOOK_POINT.AGENT.AFTER_TOOL_CALL,
+        HOOK_POINT.AGENT.TOOL_CALL_ERROR,
+      ].includes(String(point || "").trim()) &&
       !shouldProcessPrimaryToolHooks(ctx)
     ) {
       return { capability, point, status: "active", changed: false };

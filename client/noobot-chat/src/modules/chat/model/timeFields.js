@@ -23,7 +23,8 @@ export function nowIso() {
 
 export function parseTimeMs(value) {
   if (value === null || value === undefined || value === "") return 0;
-  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? normalizeEpochMs(value) : 0;
+  if (typeof value === "number")
+    return Number.isFinite(value) && value > 0 ? normalizeEpochMs(value) : 0;
   const text = trim(value);
   if (!text) return 0;
   const asNumber = Number(text);
@@ -69,16 +70,28 @@ export function resolveTimeIso(...values) {
   return "";
 }
 
+function resolveFallbackMs(fallbackMs, nowFallback) {
+  const configured = Number(fallbackMs);
+  if (configured > 0) return configured;
+  return nowFallback ? nowMs() : 0;
+}
+
 export function normalizeTimePair(source = {}, { fallbackMs = 0, nowFallback = false } = {}) {
-  const fallback = Number(fallbackMs || 0) > 0 ? Number(fallbackMs) : nowFallback ? nowMs() : 0;
-  const createdAtMs = resolveTimeMs(source?.createdAtMs, source?.createdAt, source?.createdAtIso) || fallback;
+  const fallback = resolveFallbackMs(fallbackMs, nowFallback);
+  const createdAtMs = resolveTimeMs(
+    source?.createdAtMs,
+    source?.createdAt,
+    source?.createdAtIso,
+    fallback,
+  );
   const updatedAtMs = resolveTimeMs(
     source?.updatedAtMs,
     source?.updatedAt,
     source?.updatedAtIso,
     source?.timestamp,
     createdAtMs,
-  ) || fallback;
+    fallback,
+  );
   const createdAt = resolveTimeIso(source?.createdAt, source?.createdAtIso, createdAtMs);
   const updatedAt = resolveTimeIso(source?.updatedAt, source?.updatedAtIso, updatedAtMs);
   return { createdAtMs, updatedAtMs, createdAt, updatedAt };
@@ -170,6 +183,8 @@ export function resolveThinkingDurationMs({
 export function preserveThinkingTimes(targetMessage = {}, sourceMessage = {}) {
   const startedAt = getThinkingStartedAt(targetMessage);
   const finishedAt = getThinkingFinishedAt(targetMessage);
-  if (startedAt && !getThinkingStartedAt(sourceMessage)) setThinkingStartedAt(targetMessage, startedAt);
-  if (finishedAt && !getThinkingFinishedAt(sourceMessage)) setThinkingFinishedAt(targetMessage, finishedAt);
+  if (startedAt && !getThinkingStartedAt(sourceMessage))
+    setThinkingStartedAt(targetMessage, startedAt);
+  if (finishedAt && !getThinkingFinishedAt(sourceMessage))
+    setThinkingFinishedAt(targetMessage, finishedAt);
 }
