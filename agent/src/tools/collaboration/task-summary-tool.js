@@ -68,9 +68,7 @@ export function createTaskSummaryTool(ctx = {}) {
       summaryContent: z.string().describe(tTool(runtime, "tools.task_summary.fieldSummaryContent")),
     }),
     metadata: {
-      contextPolicy: createFlowControlContextPolicy(
-        FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
-      ),
+      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY),
     },
     func: async ({ summaryContent }) => {
       const summaryText = String(summaryContent || "").trim();

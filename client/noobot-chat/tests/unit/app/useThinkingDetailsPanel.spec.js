@@ -10,7 +10,9 @@ import { __resetThinkingDetailCacheForTests } from "../../../src/modules/chat/mo
 
 function deferred() {
   let resolve;
-  const promise = new Promise((res) => { resolve = res; });
+  const promise = new Promise((res) => {
+    resolve = res;
+  });
   return { promise, resolve };
 }
 
@@ -24,8 +26,22 @@ function createPanel(fetchThinkingDetail = vi.fn(), activeSession = ref({ messag
   });
 }
 
-const workflowMessage = { role: "assistant", presentationMessageId: "workflow-presentation", dialogProcessId: "workflow-node", turnScopeId: "workflow-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
-const normalMessage = { role: "assistant", presentationMessageId: "normal-presentation", dialogProcessId: "normal-message", turnScopeId: "normal-turn", hasThinkingDetails: true, thinkingDetailCount: 1 };
+const workflowMessage = {
+  role: "assistant",
+  presentationMessageId: "workflow-presentation",
+  dialogProcessId: "workflow-node",
+  turnScopeId: "workflow-turn",
+  hasThinkingDetails: true,
+  thinkingDetailCount: 1,
+};
+const normalMessage = {
+  role: "assistant",
+  presentationMessageId: "normal-presentation",
+  dialogProcessId: "normal-message",
+  turnScopeId: "normal-turn",
+  hasThinkingDetails: true,
+  thinkingDetailCount: 1,
+};
 
 function detailFor(message) {
   return { messageItem: { ...message, loaded: true } };
@@ -124,8 +140,13 @@ describe("useThinkingDetailsPanel request isolation", () => {
       ...firstMessage,
       thinkingDetailRef: { contentHash: "sha256:second-detail" },
     };
-    const activeSession = ref({ sessionId: "session-1", aggregateVersion: 1, messages: [firstMessage] });
-    const fetcher = vi.fn()
+    const activeSession = ref({
+      sessionId: "session-1",
+      aggregateVersion: 1,
+      messages: [firstMessage],
+    });
+    const fetcher = vi
+      .fn()
       .mockResolvedValueOnce({
         revision: "sha256:first-detail",
         messageItem: { ...firstMessage, detailGeneration: 1 },
@@ -138,7 +159,11 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     await panel.openThinkingDetailsPanel({ messageItem: firstMessage });
     panel.closeThinkingDetailsPanel();
-    activeSession.value = { sessionId: "session-1", aggregateVersion: 1, messages: [secondMessage] };
+    activeSession.value = {
+      sessionId: "session-1",
+      aggregateVersion: 1,
+      messages: [secondMessage],
+    };
     await panel.openThinkingDetailsPanel({ messageItem: secondMessage });
 
     expect(fetcher).toHaveBeenCalledTimes(2);
@@ -157,12 +182,14 @@ describe("useThinkingDetailsPanel request isolation", () => {
     const canonicalMessage = {
       ...staleSummary,
       pending: true,
-      toolTimeline: [{
-        key: "call:one",
-        toolCallId: "one",
-        status: "running",
-        call: { eventId: "call:one", sequence: 1, log: { event: "tool_call", text: "first" } },
-      }],
+      toolTimeline: [
+        {
+          key: "call:one",
+          toolCallId: "one",
+          status: "running",
+          call: { eventId: "call:one", sequence: 1, log: { event: "tool_call", text: "first" } },
+        },
+      ],
     };
     const activeSession = ref({ messages: [canonicalMessage] });
     const fetcher = vi.fn();
@@ -176,11 +203,17 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     const updatedCanonicalMessage = {
       ...canonicalMessage,
-      toolTimeline: [{
-        ...canonicalMessage.toolTimeline[0],
-        status: "completed",
-        resultEvent: { eventId: "result:one", sequence: 2, log: { event: "tool_result", text: "done" } },
-      }],
+      toolTimeline: [
+        {
+          ...canonicalMessage.toolTimeline[0],
+          status: "completed",
+          resultEvent: {
+            eventId: "result:one",
+            sequence: 2,
+            log: { event: "tool_result", text: "done" },
+          },
+        },
+      ],
     };
     activeSession.value = { messages: [updatedCanonicalMessage] };
     await nextTick();
@@ -250,11 +283,18 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsAllMessages.value).toHaveLength(0);
 
     activeSession.value = {
-      messages: [{ ...summaryMessage, toolTimeline: [{
-        key: "summary:updated",
-        toolCallId: "summary-updated",
-        status: "completed",
-      }] }],
+      messages: [
+        {
+          ...summaryMessage,
+          toolTimeline: [
+            {
+              key: "summary:updated",
+              toolCallId: "summary-updated",
+              status: "completed",
+            },
+          ],
+        },
+      ],
     };
     await nextTick();
     await nextTick();
@@ -287,8 +327,9 @@ describe("useThinkingDetailsPanel request isolation", () => {
 
     await panel.openThinkingDetailsPanel({ messageItem: clickedMessage });
 
-    expect(panel.thinkingDetailsMessageItem.value.presentationMessageId)
-      .toBe("presentation-clicked");
+    expect(panel.thinkingDetailsMessageItem.value.presentationMessageId).toBe(
+      "presentation-clicked",
+    );
     expect(panel.thinkingDetailsMessageItem.value).not.toBe(canonicalMessage);
   });
 
@@ -301,7 +342,8 @@ describe("useThinkingDetailsPanel request isolation", () => {
         toolTimeline: [{ key: "call:done", toolCallId: "done", status: "completed" }],
       },
     };
-    const fetcher = vi.fn()
+    const fetcher = vi
+      .fn()
       .mockResolvedValueOnce(emptyDetail)
       .mockResolvedValueOnce(completeDetail);
     const panel = createPanel(fetcher);

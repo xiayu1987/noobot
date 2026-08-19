@@ -14,10 +14,7 @@ import {
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
 import { CONTEXT_INJECTED_MESSAGE_TYPE } from "../src/message/injected-types.js";
-import {
-  FLOW_CONTROL_ROLE,
-  createFlowControlContextPolicy,
-} from "../src/tool/context-policy.js";
+import { FLOW_CONTROL_ROLE, createFlowControlContextPolicy } from "../src/tool/context-policy.js";
 
 const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
 const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
@@ -50,7 +47,9 @@ test("checkpoint evidence selection retains the latest closed batch per canonica
   ];
 
   assert.deepEqual(
-    [...collectLatestCheckpointEvidenceMessageIndexes(messages)].sort((left, right) => left - right),
+    [...collectLatestCheckpointEvidenceMessageIndexes(messages)].sort(
+      (left, right) => left - right,
+    ),
     [2, 3, 6, 7, 8],
   );
 });
@@ -227,7 +226,10 @@ test("summary selection keeps a parallel tool-call batch atomic when task_check 
   const marked = markCurrentTurnArraySummarized(messages);
 
   assert.deepEqual(selected, []);
-  assert.deepEqual(marked.map((message) => message.summarized === true), [false, false, false, false]);
+  assert.deepEqual(
+    marked.map((message) => message.summarized === true),
+    [false, false, false, false],
+  );
 });
 
 test("summary selection does not select an incomplete parallel tool-call batch", () => {

@@ -154,7 +154,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
 
   const chainStatePath = `runtime/ops_workdir/pbe033-chain-${Date.now()}-${testInfo.workerIndex}.json`;
   const chainCommand = [
-    "node -e \"",
+    'node -e "',
     "const fs=require('fs'),crypto=require('crypto');",
     `const p='${chainStatePath}';`,
     "const s=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{step:0,values:[]};",
@@ -170,7 +170,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     "s.values.push(v);s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
     "fs.writeFileSync(p,JSON.stringify(s));",
     "console.log(JSON.stringify({step:s.step,value:v}));",
-    "\"",
+    '"',
   ].join("");
 
   await sendMessage(
@@ -310,8 +310,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   const chainCalls = messages.flatMap((message) =>
     (message.tool_calls || []).filter(
       (call) =>
-        toolCallName(call) === "execute_script" &&
-        toolCallArgs(call).command === chainCommand,
+        toolCallName(call) === "execute_script" && toolCallArgs(call).command === chainCommand,
     ),
   );
   const chainCallIds = new Set(chainCalls.map(toolCallId));

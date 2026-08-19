@@ -127,9 +127,7 @@ test("state-committer emits before/after hooks for tool result commit", async ()
     runtime,
   });
 
-  const contextPolicy = createFlowControlContextPolicy(
-    FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-  );
+  const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   await committer.pushToolResult({
     call: { id: "call_1", name: "demo_tool", args: { x: 1 }, contextPolicy },
     toolResultText: "original_tool_result",

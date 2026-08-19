@@ -15,7 +15,7 @@ import { MESSAGE_ROLE } from "../../../bot/config/constants.js";
 import { compactToolResultTextForModel } from "../../../transfer-adapter/core/compact.js";
 import { toLangChainToolCalls } from "../../../models/adapters/langchain/context-message-adapter.js";
 import {
-  isTaskSummaryToolResultMessage,
+  isCheckpointBoundaryToolResultMessage,
   buildTaskSummaryFallbackHumanMessage,
   shouldSkipSummarizedHistoryMessage,
 } from "./task-summary.js";
@@ -92,7 +92,7 @@ export function buildHistoryMessages({
     if (role === MESSAGE_ROLE.TOOL) {
       const toolCallId = resolveContextToolCallId(msg);
       if (toolCallId && !knownHistoryToolCallIds.has(toolCallId)) {
-        if (isTaskSummaryToolResultMessage(msg)) {
+        if (isCheckpointBoundaryToolResultMessage(msg)) {
           const fallbackSummaryMessage = buildTaskSummaryFallbackHumanMessage(msg);
           if (fallbackSummaryMessage) history.push(fallbackSummaryMessage);
         }

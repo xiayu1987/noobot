@@ -43,9 +43,7 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
         ),
     }),
     metadata: {
-      contextPolicy: createFlowControlContextPolicy(
-        FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-      ),
+      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
     },
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -55,7 +53,10 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
           ok: false,
           status: "not_ready",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.NOT_READY_REASON),
+          reason: translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.NOT_READY_REASON,
+          ),
         };
       }
       if (syncPlanRefinementPolicyFlag(toolCtx, state, toolMeta) !== true) {
@@ -72,22 +73,21 @@ function createPlanRefinementTool({ state = {}, ctx = {}, meta = {} } = {}) {
       }
       state.flags.planRefinementRequested = true;
       synchronizePlanRefinementTool(toolCtx, toolMeta);
-      const refinementResult = await runPlanningRefinementBySeparateModel(
-        toolCtx,
-        toolMeta,
-        {
-          source: "planning_refinement_tool",
-          targetMainStepIndexes: Array.isArray(args?.targetMainStepIndexes)
-            ? args.targetMainStepIndexes
-            : [],
-        },
-      );
+      const refinementResult = await runPlanningRefinementBySeparateModel(toolCtx, toolMeta, {
+        source: "planning_refinement_tool",
+        targetMainStepIndexes: Array.isArray(args?.targetMainStepIndexes)
+          ? args.targetMainStepIndexes
+          : [],
+      });
       if (refinementResult?.status === "converged") {
         return {
           ok: false,
           status: "converged",
           tool: PLAN_REFINEMENT_TOOL_NAME,
-          reason: translateI18nText(locale, HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.CONVERGED_REASON),
+          reason: translateI18nText(
+            locale,
+            HARNESS_I18N_KEYSET.PLAN_REFINEMENT_TOOL.CONVERGED_REASON,
+          ),
         };
       }
       if (refinementResult?.applied !== true) {

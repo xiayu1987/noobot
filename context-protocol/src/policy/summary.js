@@ -17,10 +17,7 @@ import {
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
 import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
-import {
-  FLOW_CONTROL_ROLE,
-  hasFlowControlRole,
-} from "../tool/context-policy.js";
+import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 
 const summaryCheckpointControlTypes = new Set(SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES);
 
@@ -73,41 +70,76 @@ export function isCheckpointBoundaryToolMessage(message = {}) {
 }
 
 function isFlowControlRoleMessage(message = {}, role = "") {
-  return hasToolCallWithFlowControlRole(message, role) || isToolResultWithFlowControlRole(message, role);
+  return (
+    hasToolCallWithFlowControlRole(message, role) || isToolResultWithFlowControlRole(message, role)
+  );
 }
 
-function collectLatestFlowControlMessageIndexesByTool(messages = [], role = "") {
+function createToolCallBatchIndex(messages = []) {
   const source = Array.isArray(messages) ? messages : [];
-  const indexes = new Set();
-  const latestAssistantIndexByTool = new Map();
+  const toolResultIndexesByCallId = new Map();
+  for (const [index, message] of source.entries()) {
+    if (resolveMessageRole(message) !== "tool") continue;
+    const callId = resolveToolCallId(message);
+    if (!callId) continue;
+    const resultIndexes = toolResultIndexesByCallId.get(callId) || [];
+    resultIndexes.push(index);
+    toolResultIndexesByCallId.set(callId, resultIndexes);
+  }
+
+  const assistantBatches = [];
   for (const [index, message] of source.entries()) {
     if (resolveMessageRole(message) !== "assistant") continue;
-    for (const call of getMessageToolCalls(message)) {
+    const calls = getMessageToolCalls(message);
+    if (!calls.length) continue;
+    const callIds = calls.map(resolveToolCallId).filter(Boolean);
+    const resultIndexes = [
+      ...new Set(callIds.flatMap((callId) => toolResultIndexesByCallId.get(callId) || [])),
+    ].sort((left, right) => left - right);
+    const batch = {
+      assistantIndex: index,
+      calls,
+      callIds,
+      resultIndexes,
+      complete:
+        callIds.length === calls.length &&
+        callIds.every((callId) => toolResultIndexesByCallId.has(callId)),
+    };
+    assistantBatches.push(batch);
+  }
+  return { assistantBatches };
+}
+
+function collectLatestFlowControlMessageIndexesByToolIdentity(
+  messages = [],
+  role = "",
+  toolBatchIndex = createToolCallBatchIndex(messages),
+) {
+  const indexes = new Set();
+  const latestBatchByTool = new Map();
+  for (const batch of toolBatchIndex.assistantBatches) {
+    for (const call of batch.calls) {
       if (!hasFlowControlRole(call, role)) continue;
       const toolName = resolveToolCallName(call);
-      if (toolName) latestAssistantIndexByTool.set(toolName, index);
+      if (toolName) latestBatchByTool.set(toolName, batch);
     }
   }
-  for (const assistantIndex of latestAssistantIndexByTool.values()) {
-    indexes.add(assistantIndex);
-    const callIds = getMessageToolCalls(source[assistantIndex]).map(resolveToolCallId).filter(Boolean);
-    for (const [index, message] of source.entries()) {
-      if (resolveMessageRole(message) !== "tool") continue;
-      if (callIds.includes(resolveToolCallId(message))) indexes.add(index);
-    }
+  for (const batch of latestBatchByTool.values()) {
+    indexes.add(batch.assistantIndex);
+    batch.resultIndexes.forEach((index) => indexes.add(index));
   }
   return indexes;
 }
 
 export function collectLatestCheckpointBoundaryMessageIndexes(messages = []) {
-  return collectLatestFlowControlMessageIndexesByTool(
+  return collectLatestFlowControlMessageIndexesByToolIdentity(
     messages,
     FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
   );
 }
 
 export function collectLatestCheckpointEvidenceMessageIndexes(messages = []) {
-  return collectLatestFlowControlMessageIndexesByTool(
+  return collectLatestFlowControlMessageIndexesByToolIdentity(
     messages,
     FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
   );
@@ -140,12 +172,14 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
       : collectLatestInjectedMessageIndexes(source, policyOptions);
   if (injected && latestInjected.has(index)) return false;
   if (injected) return true;
-  const latestBoundary = latestCheckpointBoundaryIndexes instanceof Set
-    ? latestCheckpointBoundaryIndexes
-    : collectLatestCheckpointBoundaryMessageIndexes(source);
-  const latestEvidence = latestCheckpointEvidenceIndexes instanceof Set
-    ? latestCheckpointEvidenceIndexes
-    : collectLatestCheckpointEvidenceMessageIndexes(source);
+  const latestBoundary =
+    latestCheckpointBoundaryIndexes instanceof Set
+      ? latestCheckpointBoundaryIndexes
+      : collectLatestCheckpointBoundaryMessageIndexes(source);
+  const latestEvidence =
+    latestCheckpointEvidenceIndexes instanceof Set
+      ? latestCheckpointEvidenceIndexes
+      : collectLatestCheckpointEvidenceMessageIndexes(source);
   if (latestBoundary.has(index) || latestEvidence.has(index)) return false;
   if (isFlowControlRoleMessage(message, FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY)) {
     return shouldMarkCurrentTurnSummarizedByPolicy(message);
@@ -158,11 +192,21 @@ export function shouldMarkCurrentTurnSummarizedMessageInScope(
 
 function summaryScope(messages, { policyOptions }) {
   const source = Array.isArray(messages) ? messages : [];
+  const toolBatchIndex = createToolCallBatchIndex(source);
   return {
     source,
     latestInjectedIndexes: collectLatestInjectedMessageIndexes(source, policyOptions),
-    latestCheckpointBoundaryIndexes: collectLatestCheckpointBoundaryMessageIndexes(source),
-    latestCheckpointEvidenceIndexes: collectLatestCheckpointEvidenceMessageIndexes(source),
+    latestCheckpointBoundaryIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
+      source,
+      FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
+      toolBatchIndex,
+    ),
+    latestCheckpointEvidenceIndexes: collectLatestFlowControlMessageIndexesByToolIdentity(
+      source,
+      FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
+      toolBatchIndex,
+    ),
+    toolBatchIndex,
   };
 }
 
@@ -187,7 +231,12 @@ function isPreservedMessage(message = {}, preserved = null) {
   return Boolean(id && preserved.ids instanceof Set && preserved.ids.has(id));
 }
 
-function enforceToolCallBatchClosure(selectedMessages = [], source = [], retentionSource = []) {
+function enforceToolCallBatchClosure(
+  selectedMessages = [],
+  source = [],
+  retentionSource = [],
+  toolBatchIndex = createToolCallBatchIndex(retentionSource),
+) {
   const selected = Array.isArray(selectedMessages) ? selectedMessages : [];
   const sourceMessages = Array.isArray(source) ? source : [];
   const retainedMessages = Array.isArray(retentionSource) ? retentionSource : sourceMessages;
@@ -209,25 +258,15 @@ function enforceToolCallBatchClosure(selectedMessages = [], source = [], retenti
     if (id) blockedIds.add(id);
   };
 
-  const assistantBatches = [];
   const claimedToolResultIds = new Set();
-  for (const message of retainedMessages) {
-    if (resolveMessageRole(message) !== "assistant") continue;
-    const calls = getMessageToolCalls(message);
-    const callIds = calls.map(resolveToolCallId).filter(Boolean);
-    if (!calls.length) continue;
-    const resultMembers = retainedMessages.filter(
-      (candidate) =>
-        resolveMessageRole(candidate) === "tool" && callIds.includes(resolveToolCallId(candidate)),
-    );
+  const assistantBatches = toolBatchIndex.assistantBatches.map((batch) => {
+    const resultMembers = batch.resultIndexes.map((index) => retainedMessages[index]);
     for (const result of resultMembers) claimedToolResultIds.add(resolveToolCallId(result));
-    assistantBatches.push({
-      members: [message, ...resultMembers],
-      complete:
-        callIds.length === calls.length &&
-        callIds.every((id) => resultMembers.some((result) => resolveToolCallId(result) === id)),
-    });
-  }
+    return {
+      members: [retainedMessages[batch.assistantIndex], ...resultMembers],
+      complete: batch.complete,
+    };
+  });
 
   for (const batch of assistantBatches) {
     const allInSource = batch.members.every((message) => has(sourceObjects, sourceIds, message));
@@ -254,15 +293,18 @@ export function collectClosedToolCallBatchMessages(
   { retentionMessages = messages } = {},
 ) {
   const source = Array.isArray(messages) ? messages : [];
-  return enforceToolCallBatchClosure(source, source, retentionMessages);
+  const retainedMessages = Array.isArray(retentionMessages) ? retentionMessages : source;
+  return enforceToolCallBatchClosure(
+    source,
+    source,
+    retainedMessages,
+    createToolCallBatchIndex(retainedMessages),
+  );
 }
 
 export function markCurrentTurnStoreSummarized(
   store = null,
-  {
-    policyOptions = {},
-    onMarked = null,
-  } = {},
+  { policyOptions = {}, onMarked = null } = {},
 ) {
   if (!store || typeof store.updateWhere !== "function") return 0;
   const scoped = typeof store.toArray === "function" ? store.toArray() : [];
@@ -290,12 +332,7 @@ export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set
   }
 }
 
-export function markCurrentTurnArraySummarized(
-  messages = [],
-  {
-    policyOptions = {},
-  } = {},
-) {
+export function markCurrentTurnArraySummarized(messages = [], { policyOptions = {} } = {}) {
   const dimensions = summaryScope(messages, { policyOptions });
   return dimensions.source.map((message, index) =>
     shouldMarkCurrentTurnSummarizedMessageInScope(message, {
@@ -309,12 +346,7 @@ export function markCurrentTurnArraySummarized(
   );
 }
 
-export function markCurrentTurnModelMessagesSummarized(
-  messages = [],
-  {
-    policyOptions = {},
-  } = {},
-) {
+export function markCurrentTurnModelMessagesSummarized(messages = [], { policyOptions = {} } = {}) {
   const dimensions = summaryScope(messages, { policyOptions });
   for (const [index, message] of dimensions.source.entries()) {
     if (
@@ -394,7 +426,12 @@ export function collectScopedMessagesToSummarize(
     selectedMessages.push(message);
   }
   return {
-    messages: enforceToolCallBatchClosure(selectedMessages, source, retentionSource),
+    messages: enforceToolCallBatchClosure(
+      selectedMessages,
+      source,
+      retentionSource,
+      retentionDimensions.toolBatchIndex,
+    ),
     limitToProvidedMessagesOnly: limitToProvidedMessagesOnly === true,
   };
 }

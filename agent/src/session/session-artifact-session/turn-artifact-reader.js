@@ -3,10 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  buildSessionArtifactFileMap,
-  readJsonArtifactFile,
-} from "../session-artifact-files.js";
+import { buildSessionArtifactFileMap, readJsonArtifactFile } from "../session-artifact-files.js";
 import {
   TURN_JOURNAL_SCHEMA_VERSION,
   journalPath,

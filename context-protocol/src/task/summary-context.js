@@ -7,9 +7,12 @@
 import {
   CONTEXT_MESSAGE_ROLE,
   resolveContextMessageContent,
+  resolveContextMessageDialogProcessId,
   resolveContextMessageId,
   resolveContextMessageRole,
+  resolveContextMessageTurnScopeId,
   resolveContextToolCallId,
+  readContextMessageField,
 } from "../message/codec.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 import { TASK_SUMMARY_PROTOCOL_VERSION, parseTaskSummaryReceipt } from "./summary.js";
@@ -34,21 +37,17 @@ export function recoverContextTaskSummaryToolResult(message = {}) {
   if (!summary) return null;
   const sourceMessageId = resolveContextMessageId(message);
   const toolCallId = resolveContextToolCallId(message);
-  const {
-    tool_call_id: omittedToolCallId,
-    toolCallId: omittedToolCallIdCamel,
-    toolName: omittedToolName,
-    tool_name: omittedToolNameSnake,
-    tool_calls: omittedToolCalls,
-    ...rest
-  } = message;
-  void omittedToolCallId;
-  void omittedToolCallIdCamel;
-  void omittedToolName;
-  void omittedToolNameSnake;
-  void omittedToolCalls;
+  const dialogProcessId = resolveContextMessageDialogProcessId(message);
+  const parentDialogProcessId = readContextMessageField(message, "parentDialogProcessId");
+  const turnScopeId = resolveContextMessageTurnScopeId(message);
+  const identity = {
+    ...(sourceMessageId ? { noobotMessageId: sourceMessageId } : {}),
+    ...(dialogProcessId ? { dialogProcessId } : {}),
+    ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
+    ...(turnScopeId ? { turnScopeId } : {}),
+  };
   return {
-    ...rest,
+    ...(sourceMessageId ? { messageUid: sourceMessageId } : {}),
     role: CONTEXT_MESSAGE_ROLE.USER,
     content: summary,
     summarized: false,
@@ -56,9 +55,7 @@ export function recoverContextTaskSummaryToolResult(message = {}) {
     recoveredFromUnpairedTaskSummary: true,
     ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),
     additional_kwargs: {
-      ...(message?.additional_kwargs && typeof message.additional_kwargs === "object"
-        ? message.additional_kwargs
-        : {}),
+      ...identity,
       noobotInternalMessageType: "phase_summary_memory",
       recoveredFromUnpairedTaskSummary: true,
       ...(toolCallId ? { original_tool_call_id: toolCallId } : {}),

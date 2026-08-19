@@ -477,7 +477,8 @@ assertFileContains("context-protocol/src/tool/context-policy.js", [
   },
   {
     name: "owns checkpoint boundary and evidence roles",
-    pattern: /CHECKPOINT_BOUNDARY:\s*"checkpoint_boundary"[\s\S]*?CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/,
+    pattern:
+      /CHECKPOINT_BOUNDARY:\s*"checkpoint_boundary"[\s\S]*?CHECKPOINT_EVIDENCE:\s*"checkpoint_evidence"/,
   },
 ]);
 assertFileContains("context-protocol/src/message/codec.js", [

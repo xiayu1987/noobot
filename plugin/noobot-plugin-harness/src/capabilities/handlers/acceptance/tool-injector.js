@@ -22,7 +22,10 @@ import {
   translateI18nText,
 } from "./deps.js";
 import { buildAcceptanceReport } from "./report-builder.js";
-import { runAcceptanceBySeparateModel, runPhaseAcceptanceBySeparateModel } from "./validation-runner.js";
+import {
+  runAcceptanceBySeparateModel,
+  runPhaseAcceptanceBySeparateModel,
+} from "./validation-runner.js";
 import { resolveToolHookMeta } from "../shared/tool-hook-meta.js";
 import { clearPendingSummaryState } from "../../pending-cleanup.js";
 
@@ -70,9 +73,7 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         .describe(translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.MODE_DESCRIPTION)),
     }),
     metadata: {
-      contextPolicy: createFlowControlContextPolicy(
-        FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-      ),
+      contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
     },
     async func(args = {}, _runManager = null, config = {}) {
       const toolCtx = config?.configurable?.noobotHookContext || ctx;
@@ -80,8 +81,11 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         ? toolCtx.harnessCapabilityLogs.length
         : 0;
       const toolMeta = resolveToolHookMeta(config?.configurable?.noobotHookMeta, meta);
-      const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE).trim().toLowerCase();
-      const mode = requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
+      const requestedMode = String(args?.mode || ACCEPTANCE_MODE.ACTIVE)
+        .trim()
+        .toLowerCase();
+      const mode =
+        requestedMode === ACCEPTANCE_MODE.FORCED ? ACCEPTANCE_MODE.FORCED : ACCEPTANCE_MODE.ACTIVE;
       if (state.flags.acceptanceRequested === true) {
         throw new Error("request_task_acceptance may be called only once per agent turn");
       }
@@ -94,13 +98,29 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
           mode === ACCEPTANCE_MODE.FORCED
             ? state?.flags?.overflowForceAcceptancePending === true
               ? [
-                translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW),
-                translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW),
-              ].filter(Boolean).join(" | ")
+                  translateI18nText(
+                    locale,
+                    HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW,
+                  ),
+                  translateI18nText(
+                    LOCALE.EN_US,
+                    HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_OVERFLOW_IN_FLOW,
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" | ")
               : [
-                translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED),
-                translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED),
-              ].filter(Boolean).join(" | ")
+                  translateI18nText(
+                    locale,
+                    HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED,
+                  ),
+                  translateI18nText(
+                    LOCALE.EN_US,
+                    HARNESS_I18N_KEYSET.ACCEPTANCE_TOOL.FORCED_REASON_TOOL_REQUESTED,
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" | ")
             : "";
         const phaseAcceptanceTriggered = await runPhaseAcceptanceBySeparateModel(
           toolCtx,
@@ -112,18 +132,22 @@ function createRequestTaskAcceptanceTool({ bucket = {}, state = {}, ctx = {}, me
         bucket.acceptanceReports.push(report);
         await runAcceptanceBySeparateModel(toolCtx, toolMeta, report);
         const summary = report?.summary && typeof report.summary === "object" ? report.summary : {};
-        const semanticValidation = report?.semanticValidation && typeof report.semanticValidation === "object"
-          ? report.semanticValidation
-          : {};
+        const semanticValidation =
+          report?.semanticValidation && typeof report.semanticValidation === "object"
+            ? report.semanticValidation
+            : {};
         state.flags.acceptanceCompleted =
           Number(summary.pending || 0) === 0 &&
           Number(summary.inProgress || 0) === 0 &&
-          String(semanticValidation.status || "").trim().toLowerCase() !== "fail" &&
+          String(semanticValidation.status || "")
+            .trim()
+            .toLowerCase() !== "fail" &&
           semanticValidation.consistent !== false;
         deferCapabilityLogs(
           toolCtx,
-          (Array.isArray(toolCtx.harnessCapabilityLogs) ? toolCtx.harnessCapabilityLogs : [])
-            .slice(capabilityLogStartIndex),
+          (Array.isArray(toolCtx.harnessCapabilityLogs) ? toolCtx.harnessCapabilityLogs : []).slice(
+            capabilityLogStartIndex,
+          ),
         );
         return {
           ok: true,

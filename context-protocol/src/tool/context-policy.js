@@ -27,9 +27,7 @@ export function createFlowControlContextPolicy(flowControlRole) {
 }
 
 export function normalizeToolContextPolicy(value = null) {
-  const candidate = value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : null;
+  const candidate = value && typeof value === "object" && !Array.isArray(value) ? value : null;
   if (!candidate) return null;
   const semanticClass = String(candidate.semanticClass || "").trim();
   const flowControlRole = String(candidate.flowControlRole || "").trim();

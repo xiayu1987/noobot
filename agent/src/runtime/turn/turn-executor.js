@@ -427,8 +427,11 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     }
   }
 
-  const { rawCalls, calls: normalizedCalls, aiContentText: normalizedAiContentText } =
-    normalizeToolTurnAi(ai);
+  const {
+    rawCalls,
+    calls: normalizedCalls,
+    aiContentText: normalizedAiContentText,
+  } = normalizeToolTurnAi(ai);
   const calls = normalizedCalls.map((call) =>
     projectToolCallContextPolicy(call, toolMap.get(call.name)),
   );

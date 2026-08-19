@@ -124,8 +124,8 @@ test("authoritative final event owns generated attachment envelopes before persi
 
   assert.equal(await commitAuthoritativeFinalResult({ result, runtime }), true);
 
-  const finalEnvelope = events.find((event) => event?.event === "authority_event_committed")
-    ?.data?.envelope;
+  const finalEnvelope = events.find((event) => event?.event === "authority_event_committed")?.data
+    ?.envelope;
   assert.deepEqual(finalEnvelope?.payload?.transferEnvelopes, [transferEnvelope]);
   assert.deepEqual(
     runtime.currentTurnMessages
@@ -145,13 +145,8 @@ test("authoritative final event owns generated attachment envelopes before persi
 });
 
 test("authoritative final completion retains classified checkpoint call-result pairs", async () => {
-  const events = [];
-  const evidencePolicy = createFlowControlContextPolicy(
-    FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-  );
-  const boundaryPolicy = createFlowControlContextPolicy(
-    FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY,
-  );
+  const evidencePolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+  const boundaryPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
   const toolCallMessage = (messageUid, callId, name, contextPolicy = null) => ({
     messageUid,
     id: `provider-${messageUid}`,
@@ -178,7 +173,7 @@ test("authoritative final completion retains classified checkpoint call-result p
     content: `${name} result`,
   });
   const runtime = {
-    eventListener: { onEvent: (event = {}) => events.push(event) },
+    eventListener: { onEvent: () => {} },
     sessionManager: createCanonicalMessageEventSessionManager(),
     userId: "user-checkpoint",
     runConfig: { commandId: "command-checkpoint", turnScopeId: "turn-checkpoint" },

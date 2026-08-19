@@ -13,7 +13,7 @@ import {
   isCheckpointBoundaryToolMessage,
 } from "@noobot/context-protocol/policy/summary";
 
-export function isTaskSummaryToolResultMessage(msg = {}) {
+export function isCheckpointBoundaryToolResultMessage(msg = {}) {
   return isCheckpointBoundaryToolMessage(msg);
 }
 
@@ -32,7 +32,7 @@ ${summaryText}`,
 
 export function shouldSkipSummarizedHistoryMessage(msg = {}) {
   if (msg?.summarized !== true) return false;
-  return !hasCheckpointBoundaryToolCall(msg) && !isTaskSummaryToolResultMessage(msg);
+  return !hasCheckpointBoundaryToolCall(msg) && !isCheckpointBoundaryToolResultMessage(msg);
 }
 
 export { normalizeUnpairedTaskSummaryToolResults };

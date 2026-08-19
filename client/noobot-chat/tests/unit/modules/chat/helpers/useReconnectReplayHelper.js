@@ -22,15 +22,13 @@ import { activate as activateWorkflowFrontend } from "../../../../../../../plugi
 import {
   createEventEnvelope,
   EVENT_FAMILY,
+  INTERACTION_EVENT_TYPE,
+  INTERACTION_SEQUENCE_DOMAIN,
 } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
-import {
-  INTERACTION_EVENT_TYPE,
-  INTERACTION_SEQUENCE_DOMAIN,
-} from "@noobot/event-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
   workflowSequenceDomainForEvent,
@@ -64,7 +62,10 @@ export function createCanonicalAssistant({
   ...extra
 } = {}) {
   const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  const normalizedMessageId = normalizeIdentityPart(messageId, `message-${normalizedDialogProcessId}`);
+  const normalizedMessageId = normalizeIdentityPart(
+    messageId,
+    `message-${normalizedDialogProcessId}`,
+  );
   return {
     id: normalizedMessageId,
     messageId: normalizedMessageId,
@@ -81,19 +82,28 @@ export function createCanonicalAssistant({
   };
 }
 
-export function createAuthoritativeMessageEnvelope(eventType, {
-  messageId,
-  presentationMessageId,
-  sessionId = "s-1",
-  dialogProcessId,
-  turnScopeId,
-  seq = 1,
-  eventId,
-  ...eventData
-} = {}) {
+export function createAuthoritativeMessageEnvelope(
+  eventType,
+  {
+    messageId,
+    presentationMessageId,
+    sessionId = "s-1",
+    dialogProcessId,
+    turnScopeId,
+    seq = 1,
+    eventId,
+    ...eventData
+  } = {},
+) {
   const normalizedDialogProcessId = normalizeIdentityPart(dialogProcessId, "dp-1");
-  const normalizedMessageId = normalizeIdentityPart(messageId, `message-${normalizedDialogProcessId}`);
-  const normalizedTurnScopeId = normalizeIdentityPart(turnScopeId, `turn-${normalizedDialogProcessId}`);
+  const normalizedMessageId = normalizeIdentityPart(
+    messageId,
+    `message-${normalizedDialogProcessId}`,
+  );
+  const normalizedTurnScopeId = normalizeIdentityPart(
+    turnScopeId,
+    `turn-${normalizedDialogProcessId}`,
+  );
   const sequence = Number(seq || 0);
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
@@ -125,12 +135,10 @@ export function createAuthoritativeMessageEnvelope(eventType, {
   };
 }
 
-export function createInteractionEnvelope(payload = {}, {
-  sessionId = "s-1",
-  turnScopeId = "turn-interaction",
-  sequence = 1,
-  eventId,
-} = {}) {
+export function createInteractionEnvelope(
+  payload = {},
+  { sessionId = "s-1", turnScopeId = "turn-interaction", sequence = 1, eventId } = {},
+) {
   const requestId = normalizeIdentityPart(payload.requestId, "request-1");
   return createEventEnvelope({
     family: EVENT_FAMILY.INTERACTION_REQUEST,
@@ -148,13 +156,17 @@ export function createInteractionEnvelope(payload = {}, {
   });
 }
 
-export function createWorkflowEnvelope(eventType, payload = {}, {
-  sessionId = "s-1",
-  turnScopeId = "turn-workflow",
-  messageId = "workflow-message-1",
-  sequence = 1,
-  eventId,
-} = {}) {
+export function createWorkflowEnvelope(
+  eventType,
+  payload = {},
+  {
+    sessionId = "s-1",
+    turnScopeId = "turn-workflow",
+    messageId = "workflow-message-1",
+    sequence = 1,
+    eventId,
+  } = {},
+) {
   const workflowRunId = normalizeIdentityPart(payload.workflowRunId, "workflow-1");
   return createEventEnvelope({
     family: EVENT_FAMILY.WORKFLOW_RUNTIME,
@@ -214,7 +226,9 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
   const activeSessionId = ref(activeId);
   const activeSession = ref(sessions.value.find((s) => s.id === activeId));
   const turnRuntimeRegistry = ref(createTurnRuntimeRegistryState());
-  const runtimeView = computed(() => selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value));
+  const runtimeView = computed(() =>
+    selectSessionTurnRuntime(turnRuntimeRegistry.value, activeSessionId.value),
+  );
   const interactionSubmitting = ref(true);
   const pendingInteractionRequest = ref(null);
 
@@ -248,11 +262,13 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     reason: "terminal_unresolved",
   }));
   const dispatchAuthoritativeRunStateEvent = vi.fn((event = {}) => {
-    const lifecycleTerminal = event?.type === "backend_turn_lifecycle" && [
-      "turn.completed",
-      "turn.stop_completed",
-      "turn.failed",
-    ].includes(String(event?.eventType || "").trim().toLowerCase());
+    const lifecycleTerminal =
+      event?.type === "backend_turn_lifecycle" &&
+      ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
+        String(event?.eventType || "")
+          .trim()
+          .toLowerCase(),
+      );
     if (lifecycleTerminal) {
       return resolveTurnTerminalState(event?.sessionId, event?.turnScopeId, {
         commandId: String(event?.commandId || ""),
@@ -293,7 +309,10 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
       );
       if (index >= 0) {
         sessions.value[index] = { ...sessions.value[index], ...nextSession };
-        if (activeSessionId.value === sessions.value[index].id || activeSessionId.value === nextId) {
+        if (
+          activeSessionId.value === sessions.value[index].id ||
+          activeSessionId.value === nextId
+        ) {
           activeSession.value = sessions.value[index];
         }
       }
@@ -322,22 +341,24 @@ export function createFixture({ activeId = "s-1", processStore = null, currentRu
     const normalizedSessionId = String(sessionId || "").trim();
     const normalizedMessageId = String(messageId || "").trim();
     if (!normalizedSessionId || !normalizedMessageId) return null;
-    const targetSession = sessions.value.find((sessionItem) => [
-      sessionItem?.id,
-      sessionItem?.sessionId,
-      sessionItem?.sessionId,
-    ].some((candidate) => String(candidate || "").trim() === normalizedSessionId));
+    const targetSession = sessions.value.find((sessionItem) =>
+      [sessionItem?.id, sessionItem?.sessionId, sessionItem?.sessionId].some(
+        (candidate) => String(candidate || "").trim() === normalizedSessionId,
+      ),
+    );
     if (!targetSession) return null;
-    return targetSession.messages.find((message) =>
-      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
-    ) || null;
+    return (
+      targetSession.messages.find(
+        (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
+      ) || null
+    );
   });
 
   const upsertCanonicalAssistantMessage = vi.fn((messageId, identity = {}) => {
     const normalizedMessageId = String(messageId || "").trim();
     if (!normalizedMessageId || !activeSession.value) return null;
-    const existing = activeSession.value.messages.find((message) =>
-      String(message?.messageId || message?.id || "").trim() === normalizedMessageId
+    const existing = activeSession.value.messages.find(
+      (message) => String(message?.messageId || message?.id || "").trim() === normalizedMessageId,
     );
     if (existing) return existing;
     const message = createCanonicalAssistant({

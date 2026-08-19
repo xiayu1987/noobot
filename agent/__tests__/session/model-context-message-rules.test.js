@@ -270,11 +270,13 @@ test("model-context rules 2 note: agent-side summary marking policy remains unch
     {
       role: "assistant",
       content: "",
-      tool_calls: [{
-        id: "call-summary",
-        function: { name: "task_summary", arguments: "{}" },
-        contextPolicy: boundaryPolicy,
-      }],
+      tool_calls: [
+        {
+          id: "call-summary",
+          function: { name: "task_summary", arguments: "{}" },
+          contextPolicy: boundaryPolicy,
+        },
+      ],
     },
     {
       role: "tool",
