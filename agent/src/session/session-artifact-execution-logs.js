@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { createReadStream } from "node:fs";
 import { appendFile, mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -32,15 +33,19 @@ async function* iterateJsonlLines(filePath = "", { signal = null } = {}) {
   }
 }
 
-export async function* iterateExecutionLogs(filePath = "", {
-  limit = Infinity,
-  skip = 0,
-  signal = null,
-} = {}) {
-  const segmentDir = path.join(path.dirname(filePath), SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
+export async function* iterateExecutionLogs(
+  filePath = "",
+  { limit = Infinity, skip = 0, signal = null } = {},
+) {
+  const segmentDir = path.join(
+    path.dirname(filePath),
+    SESSION_ARTIFACT_FILE_NAMES.executionEventsDir,
+  );
   let yielded = 0;
   let skipped = 0;
-  const maximum = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : Infinity;
+  const maximum = Number.isFinite(Number(limit))
+    ? Math.max(0, Math.floor(Number(limit)))
+    : Infinity;
   const offset = Math.max(0, Math.floor(Number(skip) || 0));
   try {
     let index;
@@ -140,15 +145,22 @@ export async function appendRollingJsonlArtifactLog({
   alreadyLocked = false,
 } = {}) {
   if (!alreadyLocked && mutationCoordinator?.run) {
-    return mutationCoordinator.run(path.join(sessionDir, ".mutation-lock"), () => appendRollingJsonlArtifactLog({
-      sessionDir, log, reset, maxSegmentBytes, mutationCoordinator, alreadyLocked: true,
-    }));
+    return mutationCoordinator.run(path.join(sessionDir, ".mutation-lock"), () =>
+      appendRollingJsonlArtifactLog({
+        sessionDir,
+        log,
+        reset,
+        maxSegmentBytes,
+        mutationCoordinator,
+        alreadyLocked: true,
+      }),
+    );
   }
   const queueKey = path.resolve(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
   const previous = rollingLogQueues.get(queueKey) || Promise.resolve();
-  const operation = previous.catch(() => {}).then(() => appendRollingJsonlArtifactLogUnlocked({
-    sessionDir, log, reset, maxSegmentBytes,
-  }));
+  const append = () =>
+    appendRollingJsonlArtifactLogUnlocked({ sessionDir, log, reset, maxSegmentBytes });
+  const operation = previous.then(append, append);
   rollingLogQueues.set(queueKey, operation);
   try {
     return await operation;
@@ -158,7 +170,9 @@ export async function appendRollingJsonlArtifactLog({
 }
 
 async function appendRollingJsonlArtifactLogUnlocked({
-  sessionDir = "", log = {}, reset = false,
+  sessionDir = "",
+  log = {},
+  reset = false,
   maxSegmentBytes = LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
 } = {}) {
   const directory = path.join(sessionDir, SESSION_ARTIFACT_FILE_NAMES.executionEventsDir);
@@ -222,10 +236,18 @@ async function appendRollingJsonlArtifactLogUnlocked({
       active.bytes = 0;
       active.records = 0;
     } finally {
-      await handle?.close().catch(() => {});
+      if (handle) {
+        await runBestEffort(() => handle.close(), {
+          operationName: "sessionArtifactExecutionLog.closeActiveSegment",
+          context: { activePath },
+        });
+      }
     }
   }
-  const limit = Math.max(1, Number(maxSegmentBytes) || LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes);
+  const limit = Math.max(
+    1,
+    Number(maxSegmentBytes) || LENGTH_THRESHOLDS.artifact.executionEventSegmentBytes,
+  );
   if (!active || (Number(active.bytes || 0) > 0 && Number(active.bytes || 0) + lineBytes > limit)) {
     const sequence = Number(active?.sequence || index.activeSequence || 0) + 1;
     if (active) active.sealed = true;

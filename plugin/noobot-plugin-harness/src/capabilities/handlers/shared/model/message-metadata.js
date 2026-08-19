@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { readContextMessageField } from "@noobot/context-protocol/message/codec";
 
 export const HARNESS_MESSAGE_ORIGIN_FIELD = "harnessMessageOrigin";
 
@@ -11,20 +12,10 @@ export const MESSAGE_ORIGIN_KIND = Object.freeze({
   PROTOCOL: "protocol",
 });
 
-export const INTERNAL_MESSAGE_FIELDS = [
-  HARNESS_MESSAGE_ORIGIN_FIELD,
-];
+export const INTERNAL_MESSAGE_FIELDS = [HARNESS_MESSAGE_ORIGIN_FIELD];
 
 export function readMessageField(message = {}, field = "") {
-  const key = String(field || "").trim();
-  if (!key) return "";
-  return String(
-    message?.[key] ||
-      message?.additional_kwargs?.[key] ||
-      message?.lc_kwargs?.[key] ||
-      message?.lc_kwargs?.additional_kwargs?.[key] ||
-      "",
-  ).trim();
+  return readContextMessageField(message, field);
 }
 
 export function assignInternalMessageField(message = {}, field = "", value = null) {
@@ -87,7 +78,9 @@ export function markMessageAsProtocol(message = {}, protocolKey = "") {
 export function buildContentOriginKey({ role = "", content = "", prefix = "" } = {}) {
   return [
     String(prefix || "content").trim() || "content",
-    String(role || "").trim().toLowerCase(),
+    String(role || "")
+      .trim()
+      .toLowerCase(),
     String(content || ""),
   ].join("::");
 }

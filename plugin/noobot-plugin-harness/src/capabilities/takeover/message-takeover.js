@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { isMessageInjected } from "./shared.js";
+import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
 import {
   HARNESS_INJECTED_MESSAGE_BY_FIELD,
   HARNESS_INJECTED_MESSAGE_BY_VALUE,
@@ -27,26 +28,11 @@ function resolveInternalMessageType(message = {}) {
   ).trim();
 }
 
-function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
-    .trim()
-    .toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
   while (
     index < messages.length &&
-    isSystemLikeRole(resolveMessageRole(messages[index])) &&
+    isSystemLikeRole(resolveContextMessageRole(messages[index])) &&
     messages[index]?.[HARNESS_INJECTED_MESSAGE_FLAG_FIELD] !== HARNESS_INJECTED_MESSAGE_FLAG_VALUE
   ) {
     index += 1;
@@ -75,9 +61,7 @@ function filterInternalForcedMessages(messages = [], directive = {}) {
 
 function buildTakeoverMessage(directive = {}) {
   const id = String(directive?.id || "").trim();
-  const content = String(
-    directive?.content ?? directive?.text ?? directive?.message ?? "",
-  ).trim();
+  const content = String(directive?.content ?? directive?.text ?? directive?.message ?? "").trim();
   if (!content) return null;
   const messageContent = id ? `<!-- ${id} -->\n${content}` : content;
   return {
@@ -93,12 +77,14 @@ function buildTakeoverMessage(directive = {}) {
 }
 
 function isSystemLikeRole(role = "") {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return normalized === "system" || normalized === "developer";
 }
 
 function resolveBlockForMessage(message = {}) {
-  return isSystemLikeRole(resolveMessageRole(message)) ? "system" : "incremental";
+  return isSystemLikeRole(resolveContextMessageRole(message)) ? "system" : "incremental";
 }
 
 function cloneBlocks(blocks = {}) {
@@ -122,11 +108,11 @@ function removeInternalForcedMessagesFromBlocks(blocks = {}, directive = {}, blo
 function applyCtxMessagesTakeover(ctx = {}, directive = {}) {
   const currentMessages = resolveModelMessages(ctx);
   const blocks = cloneBlocks(resolveModelMessageBlocks(ctx));
-  const removed = removeInternalForcedMessagesFromBlocks(
-    blocks,
-    directive,
-    ["system", "history", "incremental"],
-  );
+  const removed = removeInternalForcedMessagesFromBlocks(blocks, directive, [
+    "system",
+    "history",
+    "incremental",
+  ]);
   const takeoverMessage = buildTakeoverMessage(directive);
   if (!takeoverMessage) {
     if (removed) writeMessageBlocks(ctx, blocks);

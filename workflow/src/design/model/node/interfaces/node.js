@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../interfaces/can-persistence.js';
-import IModel from '../../interfaces/model.js';
-
 class INode {
   setModel(model) {}
   getModel() {}
@@ -16,4 +13,4 @@ class INode {
   getName() {}
 }
 
-export default  INode;
+export default INode;

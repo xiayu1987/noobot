@@ -11,6 +11,15 @@ import {
   isCanonicalTurnScopeId,
   turnScopeIdentityKey,
 } from "@noobot/session-protocol/turn-scope-identity";
+import {
+  canonicalizeTurnScopeId as canonicalizeInternalTurnScopeId,
+  turnScopeIdentityKey as internalTurnScopeIdentityKey,
+} from "../src/identity/turn-scope-identity.js";
+
+test("public subpath re-exports the canonical identity implementation", () => {
+  assert.equal(canonicalizeTurnScopeId, canonicalizeInternalTurnScopeId);
+  assert.equal(turnScopeIdentityKey, internalTurnScopeIdentityKey);
+});
 
 test("canonicalizes workflow node transport identities at the protocol boundary", () => {
   assert.equal(canonicalizeTurnScopeId("workflow-node_node-1"), "workflow-node:node-1");

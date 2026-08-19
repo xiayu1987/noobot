@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { filePath as path } from "@noobot/path-resolver";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { isTransientAtomicRenameError } from "@noobot/platform-compatibility/file-system";
 
 export const ATOMIC_RENAME_RETRY_DELAYS_MS = Object.freeze([25, 75, 150, 300, 600]);
@@ -48,7 +49,10 @@ export async function writeFileAtomic({
       }
     }
   } catch (error) {
-    await remove(temporary, { force: true }).catch(() => {});
+    await runBestEffort(() => remove(temporary, { force: true }), {
+      operationName: "atomicFileWrite.removeTemporaryFile",
+      context: { temporary },
+    });
     throw error;
   }
 }

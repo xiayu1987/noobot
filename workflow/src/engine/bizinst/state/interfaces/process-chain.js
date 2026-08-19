@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../interfaces/can-persistence.js';
-import IBizinst from '../../interfaces/bizinst.js';
-
 class IProcessChain {
   setBizinst(bizinst) {}
   getBizinst() {}
@@ -14,4 +11,4 @@ class IProcessChain {
   getProcesses() {}
 }
 
-export default  IProcessChain;
+export default IProcessChain;

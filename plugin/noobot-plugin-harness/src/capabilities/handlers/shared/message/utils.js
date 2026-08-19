@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "../constants.js";
+import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
@@ -42,38 +43,17 @@ function resolveMessageToolCalls(message = {}) {
   return [];
 }
 
-function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
-  if (role === "ai") return "assistant";
-  if (role === "human") return "user";
-  if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
-    .trim()
-    .toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
 export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
   const items = Array.isArray(messages) ? messages : [];
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const message = items[index];
     if (!message || typeof message !== "object") continue;
     if (isHarnessInjectedMessage(message)) continue;
-    const role = resolveMessageRole(message);
+    const role = resolveContextMessageRole(message);
     if (role !== "assistant") continue;
     const toolCalls = resolveMessageToolCalls(message);
     if (!toolCalls.length) return false;
-    const content = extractRawTextContent(
-      message?.content ?? message?.lc_kwargs?.content ?? "",
-    );
+    const content = extractRawTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
     return Boolean(String(content || "").trim());
   }
   return false;
@@ -112,10 +92,11 @@ export function isMessageSummarized(messageItem = {}) {
   return false;
 }
 
-
 function normalizePromptMessageItem(message = {}) {
   if (isHarnessInjectedMessage(message)) return null;
-  const role = String(message?.role || "").trim().toLowerCase();
+  const role = String(message?.role || "")
+    .trim()
+    .toLowerCase();
   if (!role) return null;
   const content = extractRawTextContent(message?.content ?? message);
   const text = String(content || "").trim();
@@ -169,10 +150,19 @@ export function isStructuredEnvelopeMessages(messages = []) {
   const list = Array.isArray(messages) ? messages : [];
   if (!list.length) return false;
   const first = list[0];
-  if (String(first?.role || "").trim().toLowerCase() !== "system") return false;
+  if (
+    String(first?.role || "")
+      .trim()
+      .toLowerCase() !== "system"
+  )
+    return false;
   const text = String(first?.content || "").trim();
   return (
-    text.startsWith(translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER)) ||
-    text.startsWith(translateI18nText(LOCALE.ZH_CN, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER))
+    text.startsWith(
+      translateI18nText(LOCALE.EN_US, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
+    ) ||
+    text.startsWith(
+      translateI18nText(LOCALE.ZH_CN, HARNESS_I18N_KEYSET.STRUCTURED_ENVELOPE.AGENT_HEADER),
+    )
   );
 }

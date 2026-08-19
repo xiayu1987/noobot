@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../interfaces/can-persistence.js';
-import IBizinst from '../../interfaces/bizinst.js';
-import ICurrentState from '../currentstate/interfaces/current-state.js';
-import IBizinstModel from '../modelstate/interfaces/bizinst-model.js';
-
 class IState {
   setBizinst(bizinst) {}
   getBizinst() {}
@@ -18,4 +13,4 @@ class IState {
   getCurrentState() {}
 }
 
-export default  IState;
+export default IState;

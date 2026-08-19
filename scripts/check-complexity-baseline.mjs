@@ -5,43 +5,45 @@
  */
 import path from "node:path";
 import { ESLint } from "eslint";
+import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
-const productionRoots = [
-  "agent/src",
-  "service",
-  "client/noobot-chat/src",
-  "agent-proxy",
-  "model-proxy",
-  "plugin/noobot-plugin-harness/src",
-  "plugin/noobot-plugin-workflow/src",
-  "plugin/noobot-plugin-workflow/frontend",
-];
 const baseline = Object.freeze({
-  complexityCount: 515,
-  longFunctionCount: 119,
+  complexityCount: 611,
+  longFunctionCount: 131,
   maxComplexity: 106,
   hotspots: Object.freeze({
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
     "plugin/noobot-plugin-workflow/src/core/hooks/node-agent.js": [0, 0, 0],
     "plugin/noobot-plugin-workflow/frontend/composables/useWorkflowNodeSessionViewer.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/live-projection-controller.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/node-session-opening.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/runtime-rebound.js": [0, 0, 0],
-    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/snapshot-controller.js": [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/live-projection-controller.js":
+      [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/node-session-opening.js":
+      [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/runtime-rebound.js":
+      [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/composables/workflow-node-session-viewer/snapshot-controller.js":
+      [0, 0, 0],
     "client/noobot-chat/src/modules/chat/composables/message/useMessagePreview.js": [0, 0, 0],
     "service/ws/chat-websocket/message-run-handler.js": [0, 0, 0],
     "service/ws/chat-websocket/message-run/active-run-stage.js": [0, 0, 0],
     "service/ws/chat-websocket/message-run/command-stage.js": [0, 0, 0],
     "service/ws/chat-websocket/message-run/event-listener-stage.js": [0, 0, 0],
     "service/ws/chat-websocket/message-run/terminal-stage.js": [0, 0, 0],
+    "authoritative-state/src/domain/turn-lifecycle-entity.js": [0, 0, 0],
+    "authoritative-state/src/domain/turn-lifecycle-transition.js": [0, 0, 0],
+    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnReducer.js": [0, 0, 0],
+    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnRuntimeEventReducer.js": [
+      0, 0, 0,
+    ],
+    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/authoritativeTurnRuntime.js": [
+      0, 0, 0,
+    ],
+    "client/noobot-chat/src/modules/chat/runtime/run-state-machine/turnLifecycleSnapshotProjection.js":
+      [0, 0, 0],
   }),
 });
-
-function isProductionFile(filePath) {
-  return !/(?:^|\/)(?:__tests__|tests)(?:\/|$)|\.(?:test|spec)\.[^.]+$/.test(filePath);
-}
 
 function summarize(messages = []) {
   let complexityCount = 0;
@@ -74,9 +76,8 @@ const lint = new ESLint({
     },
   ],
 });
-const results = (await lint.lintFiles(productionRoots)).filter(({ filePath }) =>
-  isProductionFile(filePath),
-);
+const productionFiles = await getFirstPartyProductionFiles({ repositoryRoot: root });
+const results = await lint.lintFiles(productionFiles);
 const totals = summarize(results.flatMap(({ messages }) => messages));
 const violations = [];
 assertAtMost(violations, "complexity violations", totals.complexityCount, baseline.complexityCount);

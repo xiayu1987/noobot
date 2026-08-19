@@ -498,7 +498,6 @@ function toggleAssistantContent() {
     <el-dialog
       v-model="attachmentPreviewVisible"
       :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
-      fullscreen
       :teleported="false"
       modal-class="noobot-file-preview-overlay"
       :class="attachmentPreviewDialogClass"
@@ -523,7 +522,6 @@ function toggleAssistantContent() {
     <el-dialog
       v-model="previewVisible"
       :title="translate('message.filePreviewTitle', { name: previewFileName || '' })"
-      fullscreen
       :teleported="false"
       modal-class="noobot-file-preview-overlay"
       :class="filePreviewDialogClass"

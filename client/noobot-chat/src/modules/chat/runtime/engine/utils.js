@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { nowIso } from "../../model/timeFields.js";
-import { RoleEnum } from "../../model/chatConstants.js";
 import { messages } from "noobot-i18n/client/messages";
 import { foldConversationMessages } from "../../model/messageModel.js";
-import { getMessageDialogProcessId, getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
-import { BackendChannelState, BackendTerminalStates, FrontendRunState } from "../sessionRunStateMachine.js";
+import { getMessageDialogProcessId } from "../../model/messageIdentity.js";
+import {
+  BackendChannelState,
+  BackendTerminalStates,
+  FrontendRunState,
+} from "../sessionRunStateMachine.js";
 
 export function normalizeTrimmedString(value) {
   return String(value || "").trim();
@@ -18,7 +21,9 @@ const LOCALE_STORAGE_KEY = "noobot_locale";
 const FALLBACK_LOCALE = "zh-CN";
 
 function translateClientMessage(key = "", params = {}) {
-  const locale = String(globalThis?.localStorage?.getItem?.(LOCALE_STORAGE_KEY) || FALLBACK_LOCALE).trim();
+  const locale = String(
+    globalThis?.localStorage?.getItem?.(LOCALE_STORAGE_KEY) || FALLBACK_LOCALE,
+  ).trim();
   const table = messages[locale] || messages[FALLBACK_LOCALE] || {};
   const fallbackTable = messages[FALLBACK_LOCALE] || {};
   const raw = String(key || "")
@@ -29,10 +34,13 @@ function translateClientMessage(key = "", params = {}) {
     .split(".")
     .filter(Boolean)
     .reduce((acc, part) => (acc && typeof acc === "object" ? acc[part] : undefined), fallbackTable);
-  return String(raw ?? fallbackRaw ?? key).replaceAll(/\{(\w+)\}/g, (_, paramKey) => String(params?.[paramKey] ?? ""));
+  return String(raw ?? fallbackRaw ?? key).replaceAll(/\{(\w+)\}/g, (_, paramKey) =>
+    String(params?.[paramKey] ?? ""),
+  );
 }
 
-const INTERNAL_EVENT_PLACEHOLDER_LINE_RE = /^\[(tool_call|tool_result|session_turn_full|assistant_message_saved|system)\]$/;
+const INTERNAL_EVENT_PLACEHOLDER_LINE_RE =
+  /^\[(tool_call|tool_result|session_turn_full|assistant_message_saved|system)\]$/;
 
 export const INTERNAL_EXECUTION_EVENT_NAMES = new Set([
   "session_turn_full",
@@ -115,7 +123,8 @@ function pickExecutionToolResult(logItem = {}) {
 
 function stripExecutionCommandPrefix(value) {
   let text = normalizeTrimmedString(value);
-  const prefixRe = /^(?:开始|完成|调用|返回)：\s*(?:执行命令：\s*)?|^执行命令：\s*|^(?:Started|Completed|Call|Return):\s*(?:Command:\s*)?|^Command:\s*/i;
+  const prefixRe =
+    /^(?:开始|完成|调用|返回)：\s*(?:执行命令：\s*)?|^执行命令：\s*|^(?:Started|Completed|Call|Return):\s*(?:Command:\s*)?|^Command:\s*/i;
   while (prefixRe.test(text)) text = text.replace(prefixRe, "").trim();
   return text;
 }
@@ -192,10 +201,14 @@ export function buildExecutionLogDisplayText(logItem = {}) {
   const isToolResult = eventName === "tool_result" || typeName === "tool_result";
   if (isToolCall) {
     const commandText = pickExecutionCommandText(logItem);
-    return commandText ? buildExecutionCommandLabel("message.executionCommandStarted", commandText) : "";
+    return commandText
+      ? buildExecutionCommandLabel("message.executionCommandStarted", commandText)
+      : "";
   }
   if (isToolResult) {
-    const commandText = pickExecutionCommandText(logItem) || stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
+    const commandText =
+      pickExecutionCommandText(logItem) ||
+      stripExecutionCommandPrefix(pickExecutionToolResult(logItem));
     return commandText ? buildToolResultDisplayText(logItem, commandText, text) : text;
   }
   return text;
@@ -226,52 +239,6 @@ export function isBlankCompatibleSameId(left, right) {
   const normalizedLeft = normalizeTrimmedString(left);
   const normalizedRight = normalizeTrimmedString(right);
   return !normalizedLeft || !normalizedRight || normalizedLeft === normalizedRight;
-}
-
-export function pickAssistantMessagesForCurrentTurn({
-  foldedMessages = [],
-  dialogProcessId = "",
-  turnScopeId = "",
-}) {
-  const normalizedDialogProcessId = normalizeTrimmedString(dialogProcessId);
-  const normalizedTurnScopeId = normalizeTrimmedString(turnScopeId);
-  const messageList = Array.isArray(foldedMessages) ? foldedMessages : [];
-  const lastUserMessageIndex = (() => {
-    for (let messageIndex = messageList.length - 1; messageIndex >= 0; messageIndex -= 1) {
-      if (getMessageRole(messageList[messageIndex]) === RoleEnum.USER) {
-        return messageIndex;
-      }
-    }
-    return -1;
-  })();
-  const assistantMessagesAfterLastUser = messageList.filter(
-    (messageItem, messageIndex) =>
-      messageIndex > lastUserMessageIndex &&
-      getMessageRole(messageItem) === RoleEnum.ASSISTANT,
-  );
-  if (!assistantMessagesAfterLastUser.length) return [];
-  if (normalizedTurnScopeId) {
-    const matchedTurnMessages = assistantMessagesAfterLastUser.filter(
-      (messageItem) => getMessageTurnScopeId(messageItem) === normalizedTurnScopeId,
-    );
-    if (matchedTurnMessages.length) return matchedTurnMessages;
-    const hasAnyExplicitTurnScope = assistantMessagesAfterLastUser.some((messageItem) =>
-      Boolean(getMessageTurnScopeId(messageItem)),
-    );
-    if (!hasAnyExplicitTurnScope && normalizedDialogProcessId) {
-      const legacyDialogMessages = assistantMessagesAfterLastUser.filter(
-        (messageItem) => getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
-      );
-      if (legacyDialogMessages.length) return legacyDialogMessages;
-    }
-    return [];
-  }
-  if (!normalizedDialogProcessId) return assistantMessagesAfterLastUser;
-  const matchedMessages = assistantMessagesAfterLastUser.filter(
-    (messageItem) =>
-      getMessageDialogProcessId(messageItem) === normalizedDialogProcessId,
-  );
-  return matchedMessages.length ? matchedMessages : assistantMessagesAfterLastUser;
 }
 
 export function mergeAssistantContents(assistantMessages = []) {
@@ -320,8 +287,10 @@ export function patchAssistantFromWorkflowMessage(targetMessage = null, workflow
   targetMessage.pending = previousPending;
   targetMessage.statusLabel = previousStatusLabel;
   if (previousToolTimeline !== undefined) targetMessage.toolTimeline = previousToolTimeline;
-  if (previousActivityTimeline !== undefined) targetMessage.activityTimeline = previousActivityTimeline;
-  targetMessage.hasFirstStreamEvent = previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
+  if (previousActivityTimeline !== undefined)
+    targetMessage.activityTimeline = previousActivityTimeline;
+  targetMessage.hasFirstStreamEvent =
+    previousHasFirstStreamEvent || workflowMessageItem?.hasFirstStreamEvent === true;
   delete targetMessage.workflowMessage;
   delete targetMessage.workflowMeta;
   return true;
@@ -341,9 +310,12 @@ export function normalizeExecutionLogForRealtime(logItem = {}) {
   return {
     ...logItem,
     ...data,
-    event: normalizeTrimmedString(data?.event || rawEvent || logItem?.status || "execution_step") || "execution_step",
+    event:
+      normalizeTrimmedString(data?.event || rawEvent || logItem?.status || "execution_step") ||
+      "execution_step",
     type: normalizeTrimmedString(data?.type || logItem?.type || "execution") || "execution",
-    category: normalizeTrimmedString(data?.category || logItem?.category || "execution") || "execution",
+    category:
+      normalizeTrimmedString(data?.category || logItem?.category || "execution") || "execution",
     dialogProcessId: normalizeTrimmedString(data?.dialogProcessId || logItem?.dialogProcessId),
     ts: normalizeTrimmedString(data?.ts || logItem?.ts) || nowIso(),
     text,
@@ -360,8 +332,7 @@ export function isInFlightConversationState(state = "") {
 }
 
 export function isTerminalConversationState(state = "") {
-  return [
-    ...BackendTerminalStates,
-    FrontendRunState.CANCELLED,
-  ].includes(normalizeTrimmedString(state));
+  return [...BackendTerminalStates, FrontendRunState.CANCELLED].includes(
+    normalizeTrimmedString(state),
+  );
 }

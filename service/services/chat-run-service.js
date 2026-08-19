@@ -4,29 +4,13 @@
  * SPDX-License-Identifier: MIT
  */
 import { HTTP_STATUS } from "#agent/constants";
+import { summarizeDebugAttachments } from "@noobot/shared/debug-projection";
 import {
   AGENT_COMMAND,
   RUN_COMMAND_TYPES,
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
-
-function summarizeDebugAttachments(attachments) {
-  if (!Array.isArray(attachments)) {
-    return { kind: attachments === undefined ? "undefined" : "non-array", count: 0, items: [] };
-  }
-  return {
-    kind: "array",
-    count: attachments.length,
-    items: attachments.slice(0, 8).map((attachment = {}) => ({
-      id: String(attachment.id || attachment.fileId || attachment.attachmentId || ""),
-      name: String(attachment.name || attachment.fileName || attachment.filename || ""),
-      type: String(attachment.type || attachment.mimeType || attachment.mime || ""),
-      size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : undefined,
-      url: attachment.url ? "present" : "",
-    })),
-  };
-}
 
 export function createChatRunService({
   getBot,
@@ -68,7 +52,9 @@ export function createChatRunService({
       ...(preferences.scenario ? { scenario: preferences.scenario } : {}),
       ...(preferences.selectedModel ? { selectedModel: preferences.selectedModel } : {}),
       ...(preferences.memoryModel ? { memoryModel: preferences.memoryModel } : {}),
-      ...(preferences.pluginModelConfig ? { pluginModelConfig: preferences.pluginModelConfig } : {}),
+      ...(preferences.pluginModelConfig
+        ? { pluginModelConfig: preferences.pluginModelConfig }
+        : {}),
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
       selectedConnectors: normalizeSelectedConnectors(preferences.selectedConnectors),
       selectedPlugins,
@@ -83,11 +69,13 @@ export function createChatRunService({
         commandId: command.commandId,
       },
       ...(command.commandType === AGENT_COMMAND.RESEND ? { reuseExistingUserTurn: true } : {}),
-      ...(command.commandType === AGENT_COMMAND.CONTINUE ? {
-        resumeFromStoppedSnapshot: true,
-        resumeDialogProcessId: command.continuation.dialogProcessId,
-        resumeTurnScopeId: command.continuation.turnScopeId,
-      } : {}),
+      ...(command.commandType === AGENT_COMMAND.CONTINUE
+        ? {
+            resumeFromStoppedSnapshot: true,
+            resumeDialogProcessId: command.continuation.dialogProcessId,
+            resumeTurnScopeId: command.continuation.turnScopeId,
+          }
+        : {}),
     };
     return {
       userId: String(userId || "").trim(),

@@ -9,7 +9,8 @@ import { clientFilePath } from "@noobot/client-shared/path-resolver";
 import { TURN_EVENT } from "@noobot/session-protocol";
 
 const projectRoot = clientFilePath.resolve(import.meta.dirname, "../../../../../../");
-const source = (relativePath) => readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
+const source = (relativePath) =>
+  readFileSync(clientFilePath.resolve(projectRoot, relativePath), "utf8");
 
 const files = {
   messageMeta: "src/modules/chat/composables/message/useMessageMeta.js",
@@ -17,6 +18,8 @@ const files = {
   registry: "src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js",
   eventReducer: "src/modules/chat/runtime/run-state-machine/turnRuntimeEventReducer.js",
   authoritativeRuntime: "src/modules/chat/runtime/run-state-machine/authoritativeTurnRuntime.js",
+  snapshotProjection:
+    "src/modules/chat/runtime/run-state-machine/turnLifecycleSnapshotProjection.js",
   interaction: "src/modules/chat/composables/useAgentInteraction.js",
   messageList: "src/modules/chat/components/navigation/ChatMessageListPanel.vue",
   sendFinalize: "src/modules/chat/runtime/engine/sendFinalize.js",
@@ -27,6 +30,7 @@ const protocolWriters = new Set([
   files.reducer,
   files.eventReducer,
   files.authoritativeRuntime,
+  files.snapshotProjection,
 ]);
 
 const lifecycleTerminalLiterals = [
@@ -45,11 +49,15 @@ const lifecycleTerminalLiterals = [
 const forbiddenTurnWritePatterns = [
   /\b(?:turn|runtime|current)\.(?:state|terminal|authority)\s*=(?!=)/,
   /\b(?:turn|runtime|current)\[["'](?:state|terminal|authority)["']\]\s*=(?!=)/,
-  new RegExp(`\\b(?:state|terminal|authority)\\s*:\\s*["'](?:${lifecycleTerminalLiterals.join("|")})["']`),
+  new RegExp(
+    `\\b(?:state|terminal|authority)\\s*:\\s*["'](?:${lifecycleTerminalLiterals.join("|")})["']`,
+  ),
 ];
 
 function productionFiles(relativeDir = "src") {
-  const entries = readdirSync(clientFilePath.resolve(projectRoot, relativeDir), { withFileTypes: true });
+  const entries = readdirSync(clientFilePath.resolve(projectRoot, relativeDir), {
+    withFileTypes: true,
+  });
   return entries.flatMap((entry) => {
     const relativePath = `${relativeDir}/${entry.name}`;
     if (entry.isDirectory()) return productionFiles(relativePath);
@@ -90,10 +98,12 @@ describe("lifecycle architecture guard", () => {
   it("does not allow production code outside protocol writers to mutate Turn lifecycle fields", () => {
     const violations = productionFiles()
       .filter((relativePath) => !protocolWriters.has(relativePath))
-      .flatMap((relativePath) => lifecycleBypasses(source(relativePath)).map((pattern) => ({
-        relativePath,
-        pattern: String(pattern),
-      })));
+      .flatMap((relativePath) =>
+        lifecycleBypasses(source(relativePath)).map((pattern) => ({
+          relativePath,
+          pattern: String(pattern),
+        })),
+      );
     expect(violations).toEqual([]);
   });
 
@@ -120,7 +130,7 @@ describe("lifecycle architecture guard", () => {
     const forbidden = [
       'const state = message.persistedStatusStepState === "completed" ? "completed" : "completing";',
       'return { terminal: "completed" };',
-      'return { authority: true };',
+      "return { authority: true };",
       'turn.state = "frontend_action_requesting";',
       'runtime.terminal = "user_stopped";',
       'turn.terminal = "error";',
@@ -133,13 +143,17 @@ describe("lifecycle architecture guard", () => {
     ];
     expect(forbidden[0]).toMatch(guards[0]);
     for (const sample of forbidden.slice(1)) {
-      expect(sample).toSatisfy((code) => code.match(guards[1]) || lifecycleBypasses(code).length > 0);
+      expect(sample).toSatisfy(
+        (code) => code.match(guards[1]) || lifecycleBypasses(code).length > 0,
+      );
     }
   });
 
   it("allows reducer invocation only through the runtime event production gateway", () => {
-    const callers = productionFiles().filter((relativePath) =>
-      relativePath !== files.reducer && source(relativePath).includes("reduceTurnRuntimeEvent"));
+    const callers = productionFiles().filter(
+      (relativePath) =>
+        relativePath !== files.reducer && source(relativePath).includes("reduceTurnRuntimeEvent"),
+    );
     expect(callers).toEqual([files.eventReducer]);
   });
 
@@ -156,15 +170,22 @@ describe("lifecycle architecture guard", () => {
     ];
     for (const relativePath of renderConsumers) {
       expect(source(relativePath)).not.toMatch(/messageItem\?*\.completedToolLogs/);
-      expect(source(relativePath)).not.toMatch(/adaptLegacyMessageTimelines|pluginLogCompatibility/);
+      expect(source(relativePath)).not.toMatch(
+        /adaptLegacyMessageTimelines|pluginLogCompatibility/,
+      );
       expect(source(relativePath)).not.toContain("turnStatuses");
       expect(source(relativePath)).not.toContain("turnTimingsByTurnScopeId");
     }
-    expect(productionFiles().some((relativePath) =>
-      relativePath.endsWith("legacyTimelineAdapter.js") ||
-      relativePath.endsWith("pluginLogCompatibility.js"))).toBe(false);
-    expect(source("src/modules/chat/runtime/engine/streamHandlers.js"))
-      .not.toMatch(/handleThinkingStreamEvent|legacy-stream:|buildToolTimelineFromLegacyLogs/);
+    expect(
+      productionFiles().some(
+        (relativePath) =>
+          relativePath.endsWith("legacyTimelineAdapter.js") ||
+          relativePath.endsWith("pluginLogCompatibility.js"),
+      ),
+    ).toBe(false);
+    expect(source("src/modules/chat/runtime/engine/streamHandlers.js")).not.toMatch(
+      /handleThinkingStreamEvent|legacy-stream:|buildToolTimelineFromLegacyLogs/,
+    );
     const legacyPatterns = [
       /adaptLegacyMessageTimelines|legacyTimelineAdapter|pluginLogCompatibility|MESSAGE_LOG_COMPATIBILITY/,
       /handleThinkingStreamEvent|legacy-stream:|buildToolTimelineFromLegacyLogs/,
@@ -184,7 +205,10 @@ describe("lifecycle architecture guard", () => {
 
   it("keeps interaction requests pending until websocket send returns successfully", () => {
     const code = source(files.interaction);
-    const send = code.indexOf("sendJson(createInteractionResponseCommand({", code.indexOf("function submitInteractionResponse"));
+    const send = code.indexOf(
+      "sendJson(createInteractionResponseCommand({",
+      code.indexOf("function submitInteractionResponse"),
+    );
     const handled = code.indexOf("markInteractionRequestHandled(request)", send);
     const cleared = code.indexOf("clearPendingInteraction(request)", send);
     const catchBlock = code.slice(code.indexOf("} catch (error) {", send), handled);
@@ -197,7 +221,16 @@ describe("lifecycle architecture guard", () => {
   it("keeps the authority contracts, domain reducer and client projections as the lifecycle boundary", () => {
     const reducer = source(files.reducer);
     const eventReducer = source(files.eventReducer);
-    for (const eventType of ["ACTION_ACCEPTED", "PROCESSING_STARTED", "PROCESSING_COMPLETED", "STOP_ACCEPTED", "STOP_PROCESSING_COMPLETED", "COMPLETED", "STOP_COMPLETED", "FAILED"]) {
+    for (const eventType of [
+      "ACTION_ACCEPTED",
+      "PROCESSING_STARTED",
+      "PROCESSING_COMPLETED",
+      "STOP_ACCEPTED",
+      "STOP_PROCESSING_COMPLETED",
+      "COMPLETED",
+      "STOP_COMPLETED",
+      "FAILED",
+    ]) {
       expect(TURN_EVENT[eventType]).toBeTruthy();
     }
     expect(TURN_EVENT).not.toHaveProperty("CANCELLED");
@@ -210,7 +243,9 @@ describe("lifecycle architecture guard", () => {
     const registry = source(files.registry);
     const evaluation = source("src/modules/chat/runtime/run-state-machine/evaluation.js");
     expect(reducer).not.toContain("current.lifecycleObserved !== true");
-    expect(reducer).not.toMatch(/backendState\s*===\s*BackendChannelState\.SENDING\)\s*return\s+FrontendRunState\.PROCESSING/);
+    expect(reducer).not.toMatch(
+      /backendState\s*===\s*BackendChannelState\.SENDING\)\s*return\s+FrontendRunState\.PROCESSING/,
+    );
     expect(reducer).not.toMatch(/normalizedBackendState[\s\S]*canStop/);
     expect(reducer).toContain("commandPending");
     expect(reducer).toContain("transportState");

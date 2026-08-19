@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const DEFAULT_CLEANUP_INTERVAL_MS = 60 * 1000;
 const DEFAULT_BATCH_FLUSH_MS = 50;
@@ -35,7 +35,10 @@ function resolveNonNegativeInteger(value) {
 
 function archiveFileName(file, date = new Date()) {
   const parsed = path.parse(file);
-  const stamp = date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const stamp = date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
   return path.join(parsed.dir, `${parsed.name}.${stamp}${parsed.ext}`);
 }
 
@@ -71,13 +74,13 @@ async function rotateIfNeeded(file, line, options = {}) {
       bytes = Number(stat.size || 0);
       exists = true;
     } catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
+      if (error?.code !== "ENOENT") throw error;
     }
     state = { bytes, exists };
     cacheSet(activeFileStates, file, state);
   }
   if (!state.exists) return null;
-  if (state.bytes + Buffer.byteLength(line, 'utf8') <= maxFileBytes) return null;
+  if (state.bytes + Buffer.byteLength(line, "utf8") <= maxFileBytes) return null;
   const archive = await nextArchiveFile(file);
   await fs.rename(file, archive);
   state.bytes = 0;
@@ -105,7 +108,11 @@ function resolveCleanupIntervalMs(options = {}) {
 }
 
 function shouldCleanup(file, rotatedFile, options = {}) {
-  if (!resolveNonNegativeInteger(options.retentionDays) && !resolveNonNegativeInteger(options.maxArchives)) return false;
+  if (
+    !resolveNonNegativeInteger(options.retentionDays) &&
+    !resolveNonNegativeInteger(options.maxArchives)
+  )
+    return false;
   if (rotatedFile) return true;
   const interval = resolveCleanupIntervalMs(options);
   const last = cleanupTimes.get(file) || 0;
@@ -114,7 +121,7 @@ function shouldCleanup(file, rotatedFile, options = {}) {
 
 function enqueueAppend(file, operation) {
   const previous = appendQueues.get(file) || Promise.resolve();
-  const current = previous.catch(() => {}).then(operation);
+  const current = previous.then(operation, operation);
   appendQueues.set(file, current);
   return current.finally(() => {
     if (appendQueues.get(file) === current) appendQueues.delete(file);
@@ -122,26 +129,29 @@ function enqueueAppend(file, operation) {
 }
 
 function sameBatchOptions(left = {}, right = {}) {
-  return resolveMaxFileBytes(left) === resolveMaxFileBytes(right)
-    && resolveNonNegativeInteger(left.retentionDays) === resolveNonNegativeInteger(right.retentionDays)
-    && resolveNonNegativeInteger(left.maxArchives) === resolveNonNegativeInteger(right.maxArchives)
-    && resolveCleanupIntervalMs(left) === resolveCleanupIntervalMs(right);
+  return (
+    resolveMaxFileBytes(left) === resolveMaxFileBytes(right) &&
+    resolveNonNegativeInteger(left.retentionDays) ===
+      resolveNonNegativeInteger(right.retentionDays) &&
+    resolveNonNegativeInteger(left.maxArchives) === resolveNonNegativeInteger(right.maxArchives) &&
+    resolveCleanupIntervalMs(left) === resolveCleanupIntervalMs(right)
+  );
 }
 
 async function appendLineBatch(file, entries = []) {
   if (!entries.length) return;
   await ensureDirectory(path.dirname(file));
   const options = entries[0].options;
-  const payload = entries.map((entry) => entry.line).join('');
+  const payload = entries.map((entry) => entry.line).join("");
   let rotatedFile = null;
   try {
     // Rotation is deliberately evaluated at the batch boundary. This keeps a
     // batch in one file and avoids stat/rename checks for every record.
     rotatedFile = await rotateIfNeeded(file, payload, options);
-    await fs.appendFile(file, payload, 'utf8');
+    await fs.appendFile(file, payload, "utf8");
     const state = activeFileStates.get(file);
     if (state) {
-      state.bytes += Buffer.byteLength(payload, 'utf8');
+      state.bytes += Buffer.byteLength(payload, "utf8");
       state.exists = true;
     }
   } catch (error) {
@@ -178,9 +188,10 @@ function flushPendingBatch(file) {
     while (start < batch.entries.length) {
       let end = start + 1;
       while (
-        end < batch.entries.length
-        && sameBatchOptions(batch.entries[start].options, batch.entries[end].options)
-      ) end += 1;
+        end < batch.entries.length &&
+        sameBatchOptions(batch.entries[start].options, batch.entries[end].options)
+      )
+        end += 1;
       const group = batch.entries.slice(start, end);
       try {
         await appendLineBatch(file, group);
@@ -206,17 +217,19 @@ async function listArchiveFiles(file) {
   try {
     entries = await fs.readdir(path.dirname(file));
   } catch (error) {
-    if (error?.code === 'ENOENT') return [];
+    if (error?.code === "ENOENT") return [];
     throw error;
   }
   const archives = [];
-  await Promise.all(entries.map(async (entry) => {
-    const fullPath = path.join(path.dirname(file), entry);
-    if (!isArchiveForActiveFile(file, fullPath)) return;
-    const stat = await fs.stat(fullPath);
-    if (!stat.isFile()) return;
-    archives.push({ file: fullPath, mtimeMs: stat.mtimeMs });
-  }));
+  await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(path.dirname(file), entry);
+      if (!isArchiveForActiveFile(file, fullPath)) return;
+      const stat = await fs.stat(fullPath);
+      if (!stat.isFile()) return;
+      archives.push({ file: fullPath, mtimeMs: stat.mtimeMs });
+    }),
+  );
   return archives.sort((a, b) => a.mtimeMs - b.mtimeMs || a.file.localeCompare(b.file));
 }
 
@@ -243,7 +256,7 @@ async function cleanupArchives(file, options = {}) {
       await fs.unlink(archive);
       deletedFiles.push(archive);
     } catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
+      if (error?.code !== "ENOENT") throw error;
     }
   }
   return { deletedFiles };
@@ -266,5 +279,5 @@ export function appendJsonLine(file, record, options = {}) {
 
 export async function flushJsonLineBatches() {
   await Promise.all(Array.from(pendingBatches.keys(), (file) => flushPendingBatch(file)));
-  await Promise.all(Array.from(appendQueues.values(), (pending) => pending.catch(() => {})));
+  await Promise.all(Array.from(appendQueues.values()));
 }

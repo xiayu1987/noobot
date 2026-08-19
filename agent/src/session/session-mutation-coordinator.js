@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { filePath as path } from "@noobot/path-resolver";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { fsMkdir, fsReadFile, fsRm, fsStat, fsWriteFile } from "../shared/storage/fs-adapter.js";
 
 export class SessionMutationCoordinator {
@@ -22,7 +23,11 @@ export class SessionMutationCoordinator {
     const held = heldLocks?.get(key);
     if (held) {
       held.depth += 1;
-      try { return await operation(); } finally { held.depth -= 1; }
+      try {
+        return await operation();
+      } finally {
+        held.depth -= 1;
+      }
     }
     const deadline = Date.now() + this.timeoutMs;
     const ownerFile = path.join(key, "owner");
@@ -54,14 +59,21 @@ export class SessionMutationCoordinator {
         await new Promise((resolve) => setTimeout(resolve, this.pollMs));
       }
     }
-    const heartbeat = setInterval(() => {
-      void fsWriteFile(ownerFile, ownerToken, "utf8").catch(() => {});
-    }, Math.max(1000, Math.floor(this.staleMs / 3)));
+    const heartbeat = setInterval(
+      () => {
+        void runBestEffort(() => fsWriteFile(ownerFile, ownerToken, "utf8"), {
+          operationName: "sessionMutation.refreshLock",
+          context: { lockDir: key },
+        });
+      },
+      Math.max(1000, Math.floor(this.staleMs / 3)),
+    );
     heartbeat.unref?.();
     const nextHeldLocks = new Map(heldLocks || []);
     nextHeldLocks.set(key, { depth: 1 });
-    try { return await this.asyncHeldLocks.run(nextHeldLocks, operation); }
-    finally {
+    try {
+      return await this.asyncHeldLocks.run(nextHeldLocks, operation);
+    } finally {
       clearInterval(heartbeat);
       const currentOwner = await fsReadFile(ownerFile, "utf8").catch(() => "");
       if (currentOwner === ownerToken) await fsRm(key, { recursive: true, force: true });

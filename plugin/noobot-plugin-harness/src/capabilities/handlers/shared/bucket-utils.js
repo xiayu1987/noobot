@@ -55,98 +55,6 @@ function bindStateVersionAlias(bucket = {}, state = {}) {
   });
 }
 
-function migrateLegacyPlanUpdateState(state = {}) {
-  if (!state || typeof state !== "object") return;
-  const counters = state.counters && typeof state.counters === "object" ? state.counters : {};
-  const pending = state.pending && typeof state.pending === "object" ? state.pending : {};
-  const flags = state.flags && typeof state.flags === "object" ? state.flags : {};
-
-  if (pending.planRevision !== true && pending.planRefinement !== true) {
-    pending.planRevision = false;
-    pending.planRevisionContext = null;
-    pending.planRefinement = false;
-    pending.planRefinementContext = null;
-  }
-
-  const hasRevisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts));
-  const hasRefinementAttempts = Number.isFinite(Number(counters.planRefinementAttempts));
-  const normalizedRevisionAttempts = hasRevisionAttempts ? Number(counters.planRevisionAttempts) : 0;
-  const normalizedRefinementAttempts = hasRefinementAttempts ? Number(counters.planRefinementAttempts) : 0;
-
-  if (!hasRevisionAttempts) {
-    counters.planRevisionAttempts = 0;
-  }
-  if (!hasRefinementAttempts) {
-    counters.planRefinementAttempts = 0;
-  }
-
-  const revisionAttempts = Number.isFinite(Number(counters.planRevisionAttempts))
-    ? Number(counters.planRevisionAttempts)
-    : normalizedRevisionAttempts;
-  const refinementAttempts = Number.isFinite(Number(counters.planRefinementAttempts))
-    ? Number(counters.planRefinementAttempts)
-    : normalizedRefinementAttempts;
-  counters.planUpdateAttempts = revisionAttempts + refinementAttempts;
-
-  const legacyPlanUpdateActive = pending.planUpdate === true;
-  const legacyPlanUpdateStage = String(pending.planUpdateStage || "").trim().toLowerCase();
-  const legacyPlanUpdateContext =
-    pending.planUpdateContext && typeof pending.planUpdateContext === "object"
-      ? pending.planUpdateContext
-      : null;
-
-  if (
-    legacyPlanUpdateActive &&
-    pending.planRevision !== true &&
-    pending.planRefinement !== true
-  ) {
-    if (legacyPlanUpdateStage === "refinement") {
-      pending.planRefinement = true;
-      pending.planRefinementContext = legacyPlanUpdateContext;
-    } else {
-      pending.planRevision = true;
-      pending.planRevisionContext = legacyPlanUpdateContext;
-    }
-  }
-
-  if (pending.planRevision === true) {
-    const revisionContext =
-      pending.planRevisionContext && typeof pending.planRevisionContext === "object"
-        ? pending.planRevisionContext
-        : {};
-    const normalizedRevisionContext = {
-      targetMainStepIndexes: Array.isArray(revisionContext.targetMainStepIndexes)
-        ? revisionContext.targetMainStepIndexes
-        : [],
-    };
-    pending.planRevisionContext = normalizedRevisionContext;
-  } else if (pending.planRefinement === true) {
-    const refinementContext =
-      pending.planRefinementContext && typeof pending.planRefinementContext === "object"
-        ? pending.planRefinementContext
-        : {};
-    const normalizedRefinementContext = {
-      targetMainStepIndexes: Array.isArray(refinementContext.targetMainStepIndexes)
-        ? refinementContext.targetMainStepIndexes
-        : [],
-    };
-    pending.planRefinementContext = normalizedRefinementContext;
-  }
-
-  if ("planUpdate" in pending) delete pending.planUpdate;
-  if ("planUpdateStage" in pending) delete pending.planUpdateStage;
-  if ("planUpdateContext" in pending) delete pending.planUpdateContext;
-
-  if ("planRevisionStage" in pending) delete pending.planRevisionStage;
-  if ("planRevisionTargetMainStepIndexes" in pending) delete pending.planRevisionTargetMainStepIndexes;
-  if ("planRevisionCapturePending" in flags) delete flags.planRevisionCapturePending;
-  if ("planRevisionCaptureStage" in flags) delete flags.planRevisionCaptureStage;
-  if ("planRevisionCaptureTargetMainStepIndexes" in flags) {
-    delete flags.planRevisionCaptureTargetMainStepIndexes;
-  }
-  if (flags.planUpdateCapturePending !== true) flags.planUpdateCapturePending = false;
-}
-
 export function ensureHarnessBucket(ctx = {}) {
   const agentContext =
     ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
@@ -155,10 +63,18 @@ export function ensureHarnessBucket(ctx = {}) {
   const extensions = ensureObjectField(bindings, "extensions");
   const bucket = ensureObjectField(extensions, "harness");
   const state = ensureObjectField(bucket, "state");
-  const legacyStateVersion =
-    Number.isFinite(Number(state.__harnessBucketVersion))
-      ? Number(state.__harnessBucketVersion)
-      : null;
+  const existingVersion = Number(bucket.__harnessBucketVersion);
+  const hasExistingState = Object.keys(bucket).some(
+    (key) => key !== "state" && key !== "__harnessBucketVersion",
+  );
+  if (
+    (Number.isFinite(existingVersion) && existingVersion !== HARNESS_BUCKET_VERSION) ||
+    (!Number.isFinite(existingVersion) && hasExistingState)
+  ) {
+    throw new Error(
+      `harness_bucket_migration_required:${Number.isFinite(existingVersion) ? existingVersion : 0}`,
+    );
+  }
   bindStateVersionAlias(bucket, state);
 
   const isFastPathReady =
@@ -184,8 +100,6 @@ export function ensureHarnessBucket(ctx = {}) {
     fillMissingDefaults(flags, DEFAULT_HARNESS_FLAGS);
     fillMissingDefaults(signals, DEFAULT_HARNESS_SIGNALS);
     fillMissingDefaults(pending, DEFAULT_HARNESS_PENDING);
-    migrateLegacyPlanUpdateState(state);
-
     ensureArrayField(bucket, "taskChecklist");
     ensureArrayField(bucket, "acceptanceReports");
     ensureArrayField(bucket, "phaseAcceptanceReports");
@@ -210,12 +124,6 @@ export function ensureHarnessBucket(ctx = {}) {
     ensureArrayField(logs, "guidance");
     ensureArrayField(logs, "acceptance");
     ensureArrayField(logs, "review");
-    bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
-  } else if (
-    legacyStateVersion !== null &&
-    bucket.__harnessBucketVersion !== HARNESS_BUCKET_VERSION &&
-    legacyStateVersion === HARNESS_BUCKET_VERSION
-  ) {
     bucket.__harnessBucketVersion = HARNESS_BUCKET_VERSION;
   }
 

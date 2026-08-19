@@ -3,24 +3,20 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 
-function loadFileConfig() {
-  try {
-    const currentDir = path.dirname(fileURLToPath(import.meta.url));
-    const configPath = path.resolve(currentDir, "../../agent-proxy.config.json");
-    if (!existsSync(configPath)) return {};
-    const raw = readFileSync(configPath, "utf8");
-    const parsed = JSON.parse(String(raw || "{}"));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
+export function loadFileConfig(
+  configPath = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../agent-proxy.config.json",
+  ),
+) {
+  return readOptionalJsonObjectConfigSync({ filePath: configPath, defaultValue: {} });
 }
 
 const fileConfig = loadFileConfig();
@@ -37,12 +33,15 @@ function getRawConfigValue(envName, fileKey, defaultValue) {
 function normalizeNumber(value, defaultValue, { min = 0, max = Number.POSITIVE_INFINITY } = {}) {
   const fallback = Number(defaultValue);
   const parsed = Number(value);
-  const base = Number.isFinite(parsed) ? parsed : (Number.isFinite(fallback) ? fallback : 0);
+  const base = Number.isFinite(parsed) ? parsed : Number.isFinite(fallback) ? fallback : 0;
   return Math.min(max, Math.max(min, base));
 }
 
 function envNumber(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_INFINITY) {
-  return normalizeNumber(getRawConfigValue(name, fileKey, defaultValue), defaultValue, { min, max });
+  return normalizeNumber(getRawConfigValue(name, fileKey, defaultValue), defaultValue, {
+    min,
+    max,
+  });
 }
 
 function envTimeMs(name, fileKey, defaultValue, min = 0, max = Number.POSITIVE_INFINITY) {
@@ -59,7 +58,9 @@ function envString(name, fileKey, defaultValue) {
 }
 
 function envBoolean(name, fileKey, defaultValue = false) {
-  const value = String(getRawConfigValue(name, fileKey, "")).trim().toLowerCase();
+  const value = String(getRawConfigValue(name, fileKey, ""))
+    .trim()
+    .toLowerCase();
   if (!value) return Boolean(defaultValue);
   if (["1", "true", "yes", "on"].includes(value)) return true;
   if (["0", "false", "no", "off"].includes(value)) return false;
@@ -118,12 +119,7 @@ export const config = {
     60000,
   ),
   maxChannelEvents: envNumber("AGENT_PROXY_MAX_CHANNEL_EVENTS", "maxChannelEvents", 2000, 100),
-  cleanupIntervalMs: envTimeMs(
-    "AGENT_PROXY_CLEANUP_INTERVAL_MS",
-    "cleanupIntervalMs",
-    15000,
-    5000,
-  ),
+  cleanupIntervalMs: envTimeMs("AGENT_PROXY_CLEANUP_INTERVAL_MS", "cleanupIntervalMs", 15000, 5000),
   maxConnections: envNumber("AGENT_PROXY_MAX_CONNECTIONS", "maxConnections", 1000, 10),
   wsHeartbeatIntervalMs: envTimeMs(
     "AGENT_PROXY_WS_HEARTBEAT_INTERVAL_MS",
@@ -149,12 +145,7 @@ export const config = {
     LENGTH_THRESHOLDS.agentProxy.webSocketMaxBufferedBytes,
     1024,
   ),
-  maxBodySize: envNumber(
-    "AGENT_PROXY_MAX_BODY_SIZE",
-    "maxBodySize",
-    10 * 1024 * 1024,
-    1024 * 1024,
-  ),
+  maxBodySize: envNumber("AGENT_PROXY_MAX_BODY_SIZE", "maxBodySize", 10 * 1024 * 1024, 1024 * 1024),
   requestIdTtlMs: envTimeMs(
     "AGENT_PROXY_REQUEST_ID_TTL_MS",
     "requestIdTtlMs",
@@ -261,6 +252,13 @@ export const config = {
   upstreamHttpStripPrefix: normalizePathPrefix(
     envString("AGENT_PROXY_UPSTREAM_HTTP_STRIP_PREFIX", "upstreamHttpStripPrefix", "/api"),
   ),
-  wsPaths: ["/chat/ws", "/api/chat/ws", "/agent-proxy/ws", "/api/agent-proxy/ws", "/logs/ws", "/api/logs/ws"],
+  wsPaths: [
+    "/chat/ws",
+    "/api/chat/ws",
+    "/agent-proxy/ws",
+    "/api/agent-proxy/ws",
+    "/logs/ws",
+    "/api/logs/ws",
+  ],
   connectPaths: ["/internal/connect", "/api/internal/connect"],
 };

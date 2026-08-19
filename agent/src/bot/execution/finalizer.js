@@ -5,6 +5,7 @@
  */
 
 import { emitEvent } from "../../events/index.js";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { CALLER_ROLE, SESSION_ASYNC_STATUS } from "../config/constants.js";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { summarizeExecutionLogs } from "../../observability/execution-log/execution-log-summary.js";
@@ -205,8 +206,8 @@ export class SessionExecutionFinalizer {
         sessionId,
         mode: "async",
       });
-      Promise.resolve()
-        .then(() =>
+      void runBestEffort(
+        () =>
           this.runMemoryPostProcessFlow({
             userId,
             sessionId,
@@ -216,8 +217,8 @@ export class SessionExecutionFinalizer {
             mode: "async",
             persistenceContext,
           }),
-        )
-        .catch(() => {});
+        { operationName: "executionFinalizer.runAsyncMemoryPostProcess", context: { sessionId } },
+      );
     } else {
       await this.runMemoryPostProcessFlow({
         userId,

@@ -19,6 +19,7 @@ import {
   resolveModelMessages,
   writeMessageBlocks,
 } from "../core/message-store.js";
+import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
 const HARNESS_MARKERS = new Map();
 
 const injectedPromptCache = new WeakMap();
@@ -31,18 +32,23 @@ function isPlainObject(value) {
 function readMessageField(message = {}, field = "") {
   const key = String(field || "").trim();
   if (!key) return undefined;
-  return message?.[key] ??
+  return (
+    message?.[key] ??
     message?.lc_kwargs?.[key] ??
     message?.additional_kwargs?.[key] ??
-    message?.lc_kwargs?.additional_kwargs?.[key];
+    message?.lc_kwargs?.additional_kwargs?.[key]
+  );
 }
 
 function resolvePromptInjectionIdFromMetadata(message = {}) {
   const direct = String(readMessageField(message, HARNESS_PROMPT_INJECTION_ID_FIELD) || "").trim();
   if (direct) return direct;
-  const injectedMessageType = String(readMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD) || "").trim();
+  const injectedMessageType = String(
+    readMessageField(message, HARNESS_INJECTED_MESSAGE_TYPE_FIELD) || "",
+  ).trim();
   const prefix = "harness_prompt:";
-  if (injectedMessageType.startsWith(prefix)) return injectedMessageType.slice(prefix.length).trim();
+  if (injectedMessageType.startsWith(prefix))
+    return injectedMessageType.slice(prefix.length).trim();
   return "";
 }
 
@@ -131,7 +137,9 @@ function normalizePromptEntries(prompts = []) {
       id: String(item?.id || "").trim(),
       content: String(item?.content || ""),
       priority: Number.isFinite(Number(item?.priority)) ? Number(item.priority) : 50,
-      mode: String(item?.mode || "prepend").trim().toLowerCase(),
+      mode: String(item?.mode || "prepend")
+        .trim()
+        .toLowerCase(),
       messageBlockPolicy: isPlainObject(item?.messageBlockPolicy)
         ? { ...item.messageBlockPolicy }
         : null,
@@ -144,13 +152,14 @@ function readLegacyPromptEntries() {
     id: String(id || "").trim(),
     content: String(value?.content || ""),
     priority: Number.isFinite(Number(value?.priority)) ? Number(value.priority) : 50,
-    mode: String(value?.mode || "prepend").trim().toLowerCase(),
+    mode: String(value?.mode || "prepend")
+      .trim()
+      .toLowerCase(),
     messageBlockPolicy: isPlainObject(value?.messageBlockPolicy)
       ? { ...value.messageBlockPolicy }
       : null,
   }));
 }
-
 
 function isPromptMessage(message = {}, id = "") {
   const promptId = String(id || "").trim();
@@ -169,12 +178,14 @@ function isAnyPromptInjectionMessage(message = {}) {
 }
 
 function isSystemLikeRole(role = "") {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return normalized === "system" || normalized === "developer";
 }
 
 function isSystemRoleMessage(message = {}) {
-  return isSystemLikeRole(resolveMessageRole(message));
+  return isSystemLikeRole(resolveContextMessageRole(message));
 }
 
 function removePromptMessagesFromList(messages = [], id = "", { removeSystem = false } = {}) {
@@ -217,8 +228,9 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
     changed += removePromptMessagesFromList(nextBlocks.incremental, id, { removeSystem: true });
     const existingSystem = nextBlocks.system.find((message) => isPromptMessage(message, id));
     if (existingSystem) continue;
-    const source = (Array.isArray(promptMessages) ? promptMessages : [])
-      .find((message) => isPromptMessage(message, id) && isSystemRoleMessage(message));
+    const source = (Array.isArray(promptMessages) ? promptMessages : []).find(
+      (message) => isPromptMessage(message, id) && isSystemRoleMessage(message),
+    );
     if (!source) continue;
     nextBlocks.system = [...nextBlocks.system, source];
     changed += 1;
@@ -230,24 +242,9 @@ function syncSystemPromptMessagesToBlocks(ctx = {}, promptMessages = [], ids = n
   return changed;
 }
 
-function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
-  if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
-    .trim()
-    .toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
 function findAfterLeadingSystemIndex(messages = []) {
   let index = 0;
-  while (index < messages.length && isSystemLikeRole(resolveMessageRole(messages[index]))) {
+  while (index < messages.length && isSystemLikeRole(resolveContextMessageRole(messages[index]))) {
     index += 1;
   }
   return index;
@@ -270,9 +267,10 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   );
   if (!promptEntries.length) return false;
 
-  const systemBlockIds = options.systemBlockIds instanceof Set
-    ? options.systemBlockIds
-    : new Set(Array.isArray(options.systemBlockIds) ? options.systemBlockIds : []);
+  const systemBlockIds =
+    options.systemBlockIds instanceof Set
+      ? options.systemBlockIds
+      : new Set(Array.isArray(options.systemBlockIds) ? options.systemBlockIds : []);
   for (const id of systemBlockIds) {
     normalizeSystemPromptPlacement(ctx, id);
   }
@@ -355,9 +353,10 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   if (options.syncMessageBlocksSystem === true && systemBlockIds.size) {
     const syncSource = injected
       ? promptMessages
-      : updatedMessages.filter((message) =>
-          isSystemRoleMessage(message) &&
-          Array.from(systemBlockIds).some((id) => isPromptMessage(message, id)),
+      : updatedMessages.filter(
+          (message) =>
+            isSystemRoleMessage(message) &&
+            Array.from(systemBlockIds).some((id) => isPromptMessage(message, id)),
         );
     syncSystemPromptMessagesToBlocks(ctx, syncSource, systemBlockIds);
   }
@@ -365,7 +364,13 @@ export function injectSystemMessages(ctx = {}, options = {}) {
   return injected;
 }
 
-export function injectSystemMessage(ctx = {}, content = "", id = "noobot-harness", priority = 50, mode = "prepend") {
+export function injectSystemMessage(
+  ctx = {},
+  content = "",
+  id = "noobot-harness",
+  priority = 50,
+  mode = "prepend",
+) {
   if (!content) return false;
   return injectSystemMessages(ctx, {
     skipIds: new Set(),

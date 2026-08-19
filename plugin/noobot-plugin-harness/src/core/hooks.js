@@ -5,20 +5,13 @@
  */
 import { flushAllManifests, flushAllJsonlBuffers } from "../store/store.js";
 import { cleanupRunsBySessionIds } from "../utils/cleanup.js";
-import {
-  injectPrompt,
-  lockPolicyPromptForMainFlow,
-  traceHook,
-} from "../tracing/buffer-manager.js";
+import { injectPrompt, lockPolicyPromptForMainFlow, traceHook } from "../tracing/buffer-manager.js";
 import { safeError } from "../data/record-builders.js";
-import {
-  emitHarnessHookProgress,
-  extractBasePath,
-  isPrimaryExecutionScope,
-} from "./context.js";
+import { emitHarnessHookProgress, extractBasePath, isPrimaryExecutionScope } from "./context.js";
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
+import { migrateHarnessBucket } from "./bucket-migration.js";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
@@ -53,9 +46,7 @@ export const HARNESS_SESSION_CLEANUP_POINTS = Object.freeze([
 ]);
 
 export function shouldInjectPromptAtPoint(point = "", options = {}) {
-  return (
-    point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false
-  );
+  return point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT && options.finalResponseGuard !== false;
 }
 
 export function createRegisterHarnessHooks(deps = {}) {
@@ -83,6 +74,7 @@ export function createRegisterHarnessHooks(deps = {}) {
           point,
           async (ctx = {}) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
+            migrateHarnessBucket(ctx);
             const startedAt = Date.now();
             if (verboseHookRuntimeEvents) {
               emitHarnessHookProgressFn(ctx, "hook_start", { point });
@@ -116,13 +108,17 @@ export function createRegisterHarnessHooks(deps = {}) {
               applyAgentResolvedModelMessages(point, ctx, options);
 
               const traceResult = await traceHookFn(point, ctx, options, plugin);
-              emitHarnessHookProgressFn(ctx, verboseHookRuntimeEvents ? "hook_end" : "hook_summary", {
-                point,
-                status: traceResult?.fsmRejected === true ? "rejected" : "ok",
-                durationMs: Date.now() - startedAt,
-                fsmState: traceResult?.fsmState,
-                fsmRejected: traceResult?.fsmRejected === true,
-              });
+              emitHarnessHookProgressFn(
+                ctx,
+                verboseHookRuntimeEvents ? "hook_end" : "hook_summary",
+                {
+                  point,
+                  status: traceResult?.fsmRejected === true ? "rejected" : "ok",
+                  durationMs: Date.now() - startedAt,
+                  fsmState: traceResult?.fsmState,
+                  fsmRejected: traceResult?.fsmRejected === true,
+                },
+              );
               return traceResult;
             } catch (error) {
               emitHarnessHookProgressFn(ctx, "hook_error", { point, error: safeErrorFn(error) });

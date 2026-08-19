@@ -9,7 +9,7 @@ import { synchronizeConfigFileFromTemplate } from "@noobot/agent-config-protocol
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
-import { migrateLegacyLongMemoryFiles } from "../memory/long-memory/migration.js";
+import { migrateLegacyMemoryFiles } from "../memory/migration.js";
 
 const RESET_SECTION_PATHS = {
   memory: ["memory"],
@@ -113,13 +113,13 @@ export async function ensureUserWorkspaceInitialized({
         details: { base },
       });
     }
-    await migrateLegacyLongMemoryFiles(base);
+    await migrateLegacyMemoryFiles(base);
     await syncDirectoryIncremental(templateBase, base);
     return base;
   }
 
   await cp(templateBase, base, { recursive: true, force: false });
-  await migrateLegacyLongMemoryFiles(base);
+  await migrateLegacyMemoryFiles(base);
   return base;
 }
 
@@ -208,7 +208,7 @@ export async function syncUserWorkspaceFromTemplate({
     userId,
   });
   await mkdir(base, { recursive: true });
-  await migrateLegacyLongMemoryFiles(base);
+  await migrateLegacyMemoryFiles(base);
   await syncDirectoryIncremental(templateBase, base);
   return base;
 }

@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../interfaces/can-persistence.js';
-import IFlowto from '../flowto/interfaces/flowto.js';
-import INodeLineRLAT from '../flowto/interfaces/node-line-rlat.js';
-import INode from '../node/interfaces/node.js';
-
 class IModel {
   getNodes() {}
   setNodes(nodes) {}
@@ -18,4 +13,4 @@ class IModel {
   setNodeLineRLATs(nodeLineRLAT) {}
 }
 
-export default  IModel;
+export default IModel;

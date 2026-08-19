@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { randomUUID } from "node:crypto";
 import {
   fsMkdir,
@@ -162,7 +163,10 @@ class SessionLifecycleMethods {
     }
     const heartbeat = setInterval(
       () => {
-        void fsWriteFile(ownerFile, ownerToken, "utf8").catch(() => {});
+        void runBestEffort(() => fsWriteFile(ownerFile, ownerToken, "utf8"), {
+          operationName: "fileSystemSessionRepository.refreshMutationLock",
+          context: { lockDir },
+        });
       },
       Math.max(1000, Math.floor(this.mutationLockStaleMs / 3)),
     );

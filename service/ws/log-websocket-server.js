@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { WebSocketServer } from "ws";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   cleanupSessionChannelRecords,
   MAX_SESSION_CHANNEL_BATCH_SIZE,
@@ -19,7 +20,9 @@ const MAX_LOG_BATCH_SIZE = MAX_SESSION_CHANNEL_BATCH_SIZE;
 const DIAG_PREFIX = "[session-log-ws]";
 
 function envFlag(name, fallback = false) {
-  const raw = String(process.env[name] || "").trim().toLowerCase();
+  const raw = String(process.env[name] || "")
+    .trim()
+    .toLowerCase();
   if (!raw) return fallback;
   return ["1", "true", "yes", "on"].includes(raw);
 }
@@ -49,16 +52,29 @@ export function resolveSessionLogConfig(options = {}) {
 
 export async function writeSessionLogEvent(event = {}, config = resolveSessionLogConfig()) {
   const runtimeEventConfig = config.logRoot ? { ...config, root: config.logRoot } : config;
-  const result = await writeRoutedRuntimeEvent({
-      scope: "session", ...event, channel: event.channel || RUNTIME_EVENT_CHANNELS.WEB_SOCKET }, runtimeEventConfig);
-  if (!result.skipped) logDiagnostic("written", { file: result.file, category: event.category, sessionId: event.sessionId });
+  const result = await writeRoutedRuntimeEvent(
+    {
+      scope: "session",
+      ...event,
+      channel: event.channel || RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+    },
+    runtimeEventConfig,
+  );
+  if (!result.skipped)
+    logDiagnostic("written", {
+      file: result.file,
+      category: event.category,
+      sessionId: event.sessionId,
+    });
   return result;
 }
 
 function isBestEffortDebugEvent(event = {}) {
-  return event?.category === "debug"
-    || event?.level === "debug"
-    || Boolean(event?.debugType || event?.data?.debugType);
+  return (
+    event?.category === "debug" ||
+    event?.level === "debug" ||
+    Boolean(event?.debugType || event?.data?.debugType)
+  );
 }
 
 export async function cleanupSessionLogs(config = resolveSessionLogConfig(), now = Date.now()) {
@@ -67,15 +83,20 @@ export async function cleanupSessionLogs(config = resolveSessionLogConfig(), now
 
 function sendUpgradeError(socket, statusCode = HTTP_STATUS.UNAUTHORIZED, message = "Unauthorized") {
   if (!socket.writable) return;
-  socket.write(`HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`);
+  socket.write(
+    `HTTP/1.1 ${statusCode} ${message}\r\nConnection: close\r\nContent-Length: ${Buffer.byteLength(message)}\r\n\r\n${message}`,
+  );
   socket.destroy();
 }
 
-export function registerLogWebSocketServer(server, {
-  resolveAuthByApiKey,
-  logConfig = resolveSessionLogConfig(),
-  writeLogEvent = writeSessionLogEvent,
-} = {}) {
+export function registerLogWebSocketServer(
+  server,
+  {
+    resolveAuthByApiKey,
+    logConfig = resolveSessionLogConfig(),
+    writeLogEvent = writeSessionLogEvent,
+  } = {},
+) {
   const wss = new WebSocketServer({ noServer: true });
   logDiagnostic("registered", {
     path: "/logs/ws",
@@ -105,7 +126,12 @@ export function registerLogWebSocketServer(server, {
   wss.on("connection", (ws, request) => {
     logDiagnostic("connected", { userId: request.auth?.userId || "" });
     if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify({ event: "session_log_policy", policy: resolveSessionLogClientPolicy(logConfig) }));
+      ws.send(
+        JSON.stringify({
+          event: "session_log_policy",
+          policy: resolveSessionLogClientPolicy(logConfig),
+        }),
+      );
     }
     ws.on("message", async (raw) => {
       try {
@@ -127,37 +153,51 @@ export function registerLogWebSocketServer(server, {
             void writeLogEvent(event, logConfig)
               .then((result) => {
                 if (result?.ok === false) {
-                  logDiagnostic("debug write dropped", { errorType: result.error?.name || "Error" });
+                  logDiagnostic("debug write dropped", {
+                    errorType: result.error?.name || "Error",
+                  });
                 }
               })
               .catch((error) => {
                 logDiagnostic("debug write dropped", { errorType: error?.name || "Error" });
               });
           } else {
-            reliableWrites.push(Promise.resolve(writeLogEvent(event, logConfig)).then((result) => {
-              if (result?.ok === false) throw result.error || new Error("reliable log write failed");
-              return result;
-            }));
+            reliableWrites.push(
+              Promise.resolve(writeLogEvent(event, logConfig)).then((result) => {
+                if (result?.ok === false)
+                  throw result.error || new Error("reliable log write failed");
+                return result;
+              }),
+            );
           }
         }
         await Promise.all(reliableWrites);
-        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: "ack", count: events.length }));
+        if (ws.readyState === ws.OPEN)
+          ws.send(JSON.stringify({ event: "ack", count: events.length }));
       } catch (error) {
-        void writeRoutedRuntimeEvent({
-          source: "service",
-          channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
-          category: "transport",
-          level: "warn",
-          event: "service.logWebSocket.write.failed",
-          data: { userIdLength: String(request?.auth?.userId || "").length },
-          error,
-        }, logConfig);
-        if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
+        void writeRoutedRuntimeEvent(
+          {
+            source: "service",
+            channel: RUNTIME_EVENT_CHANNELS.WEB_SOCKET,
+            category: "transport",
+            level: "warn",
+            event: "service.logWebSocket.write.failed",
+            data: { userIdLength: String(request?.auth?.userId || "").length },
+            error,
+          },
+          logConfig,
+        );
+        if (ws.readyState === ws.OPEN)
+          ws.send(JSON.stringify({ event: "error", error: error?.message || "log write failed" }));
       }
     });
   });
-  const timer = setInterval(() => cleanupSessionLogs(logConfig).catch(() => {}), logConfig.cleanupIntervalMs);
+  const cleanup = () =>
+    runBestEffort(() => cleanupSessionLogs(logConfig), {
+      operationName: "logWebSocket.cleanupSessionLogs",
+    });
+  const timer = setInterval(cleanup, logConfig.cleanupIntervalMs);
   timer.unref?.();
-  cleanupSessionLogs(logConfig).catch(() => {});
+  void cleanup();
   return { webSocketServer: wss, cleanupTimer: timer, logConfig };
 }

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
 import {
@@ -166,20 +167,27 @@ export function createMcpTool({ agentContext }) {
       } catch (error) {
         if (isAbortError(error)) throw error;
         if (basePath) {
-          await appendMcpErrorLog({
-            basePath,
-            workspaceRoot,
-            userId,
-            sessionId,
-            parentSessionId,
-            mcpName: normalizedMcpName,
-            task: normalizedTask,
-            source: TOOL_NAME.CALL_MCP_TASK,
-            event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
-            message: error?.message || String(error),
-            stack: error?.stack || "",
-            details: error?.details && typeof error.details === "object" ? error.details : {},
-          }).catch(() => {});
+          await runBestEffort(
+            () =>
+              appendMcpErrorLog({
+                basePath,
+                workspaceRoot,
+                userId,
+                sessionId,
+                parentSessionId,
+                mcpName: normalizedMcpName,
+                task: normalizedTask,
+                source: TOOL_NAME.CALL_MCP_TASK,
+                event: TOOL_EVENT_NAME.CALL_MCP_TASK_FAILED,
+                message: error?.message || String(error),
+                stack: error?.stack || "",
+                details: error?.details && typeof error.details === "object" ? error.details : {},
+              }),
+            {
+              operationName: "mcpTool.appendFailureLog",
+              context: { mcpName: normalizedMcpName },
+            },
+          );
         }
         throw recoverableToolError(error?.message || String(error), {
           code: String(error?.code || ERROR_CODE.RECOVERABLE_CALL_MCP_TASK_FAILED),

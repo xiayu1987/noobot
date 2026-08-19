@@ -4,12 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path } from "@noobot/path-resolver";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { isSessionDisplaySummaryPayload } from "./session-summary-builders.js";
 import { sessionMutationCoordinator } from "./session-mutation-coordinator.js";
-import { buildSessionArtifactFileMap, readJsonArtifactFile, writeJsonArtifactFile } from "./session-artifact-files.js";
-import { appendRollingJsonlArtifactLog, readJsonlArtifactFile } from "./session-artifact-execution-logs.js";
-import { readSessionArtifact, writeExecutionArtifact, writeSessionArtifact, writeTaskArtifact } from "./session-artifact-session.js";
+import {
+  buildSessionArtifactFileMap,
+  readJsonArtifactFile,
+  writeJsonArtifactFile,
+} from "./session-artifact-files.js";
+import {
+  appendRollingJsonlArtifactLog,
+  readJsonlArtifactFile,
+} from "./session-artifact-execution-logs.js";
+import {
+  readSessionArtifact,
+  writeExecutionArtifact,
+  writeSessionArtifact,
+  writeTaskArtifact,
+} from "./session-artifact-session.js";
 
 function createSessionDeletedSnapshotError(sessionId = "") {
   const error = new Error(`session has been deleted: ${String(sessionId || "").trim()}`);
@@ -31,7 +44,8 @@ export async function persistSessionArtifactSnapshot({
   mutationLockDir = "",
   assertSessionWritable = null,
 } = {}) {
-  const normalizedSessionPayload = sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {};
+  const normalizedSessionPayload =
+    sessionPayload && typeof sessionPayload === "object" ? sessionPayload : {};
   const sessionId = String(normalizedSessionPayload?.sessionId || "").trim();
   const assertWritable = async () => {
     if (typeof assertSessionWritable !== "function") return true;
@@ -112,8 +126,16 @@ export async function persistSessionArtifactSnapshot({
         throw error;
       }
     } catch (error) {
-      await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
-      if (hadPrevious && backupDir) await rm(backupDir, { recursive: true, force: true }).catch(() => {});
+      await runBestEffort(() => rm(stagingDir, { recursive: true, force: true }), {
+        operationName: "sessionArtifactSnapshot.removeStagingDirectory",
+        context: { stagingDir },
+      });
+      if (hadPrevious && backupDir) {
+        await runBestEffort(() => rm(backupDir, { recursive: true, force: true }), {
+          operationName: "sessionArtifactSnapshot.removeBackupDirectory",
+          context: { backupDir },
+        });
+      }
       throw error;
     }
     const publishedFiles = buildSessionArtifactFileMap(outputDir);
@@ -122,7 +144,11 @@ export async function persistSessionArtifactSnapshot({
       files: publishedFiles,
       session: sessionArtifact?.session || null,
       sessionSummary: sessionArtifact?.sessionSummary || null,
-      aggregateVersion: Number(sessionArtifact?.session?.aggregateVersion || sessionArtifact?.sessionSummary?.aggregateVersion || 0),
+      aggregateVersion: Number(
+        sessionArtifact?.session?.aggregateVersion ||
+          sessionArtifact?.sessionSummary?.aggregateVersion ||
+          0,
+      ),
     };
   };
   const lockDir = String(mutationLockDir || "").trim();
@@ -139,8 +165,12 @@ export async function readSessionArtifactSnapshot({
   const snapshotManifestPath = path.join(outputDir, "snapshot-manifest.json");
   const snapshotManifest = await readJsonArtifactFile(snapshotManifestPath, null);
   let committed = false;
-  try { await readFile(committedPath, "utf8"); committed = true; }
-  catch (error) { if (error?.code !== "ENOENT") throw error; }
+  try {
+    await readFile(committedPath, "utf8");
+    committed = true;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
   if (snapshotManifest && !committed) {
     const error = new Error("snapshot is not committed");
     error.code = "SNAPSHOT_NOT_COMMITTED";
@@ -157,7 +187,9 @@ export async function readSessionArtifactSnapshot({
     readJsonArtifactFile(files.sessionSummary, null),
     readJsonArtifactFile(files.task, null),
     readJsonArtifactFile(files.execution, null),
-    includeExecutionLogs ? readJsonlArtifactFile(files.executionEvents, executionLogOptions) : Promise.resolve([]),
+    includeExecutionLogs
+      ? readJsonlArtifactFile(files.executionEvents, executionLogOptions)
+      : Promise.resolve([]),
     readJsonArtifactFile(files.meta, null),
   ]);
   const sessionSummary = isSessionDisplaySummaryPayload(
@@ -166,7 +198,10 @@ export async function readSessionArtifactSnapshot({
   )
     ? sessionSummaryRaw
     : null;
-  if (snapshotManifest && String(snapshotManifest.sessionId || "") !== String(session?.sessionId || "")) {
+  if (
+    snapshotManifest &&
+    String(snapshotManifest.sessionId || "") !== String(session?.sessionId || "")
+  ) {
     const error = new Error("snapshot manifest session does not match session artifact");
     error.code = "SNAPSHOT_MANIFEST_MISMATCH";
     throw error;

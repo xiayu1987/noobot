@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import path from "node:path";
 import {
   HARNESS_FILES,
@@ -144,6 +145,14 @@ function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
 }
 
+async function unlinkIfPresent(filePath) {
+  try {
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (!isMissingPathError(error)) throw error;
+  }
+}
+
 function resolveRunWriteLockPath(targetPath = "") {
   const dir = path.dirname(String(targetPath || "").trim());
   if (!dir || dir === ".") return "";
@@ -169,7 +178,10 @@ async function withRunWriteLock(targetPath = "", operation = async () => undefin
       return;
     }
     runWriteLockRefCounts.delete(runDir);
-    await fs.unlink(lockPath).catch(() => {});
+    await runBestEffort(() => unlinkIfPresent(lockPath), {
+      operationName: "harnessStore.removeRunWriteLock",
+      context: { lockPath },
+    });
   }
 }
 
@@ -530,7 +542,10 @@ async function pruneRotatedJsonlFiles(filePath = "", maxFiles = 0) {
   if (rotated.length <= keep) return;
   rotated.sort((a, b) => b.mtimeMs - a.mtimeMs);
   for (const item of rotated.slice(keep)) {
-    await fs.unlink(item.path).catch(() => {});
+    await runBestEffort(() => fs.unlink(item.path), {
+      operationName: "harnessStore.removeRotatedJsonlFile",
+      context: { filePath: item.path },
+    });
   }
 }
 

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { computed, onMounted, reactive, ref } from "vue";
+import { runBestEffort } from "@noobot/shared/best-effort";
 import {
   formatStartupMessage,
   normalizeStartupLanguage,
@@ -325,12 +326,13 @@ export function useStartupBridge() {
   }
 
   onMounted(() => {
-    desktop
-      ?.getStartupStatuses?.()
-      .then((statuses) => {
+    void runBestEffort(
+      async () => {
+        const statuses = await desktop?.getStartupStatuses?.();
         if (Array.isArray(statuses)) statuses.forEach(renderStatus);
-      })
-      .catch(() => {});
+      },
+      { operationName: "startup.loadStatuses" },
+    );
     desktop?.onStartupStatus?.((status) => renderStatus(status));
   });
 
