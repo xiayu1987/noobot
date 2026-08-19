@@ -14,9 +14,9 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 167,
-  duplicatedLines: 4415,
-  percentage: 1.8268,
+  clones: 166,
+  duplicatedLines: 4410,
+  percentage: 1.82310507,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));
@@ -69,7 +69,7 @@ try {
   }
   if (actual.percentage > baseline.percentage) {
     violations.push(
-      `duplicated percentage ${actual.percentage.toFixed(4)} exceeds baseline ${baseline.percentage.toFixed(4)}`,
+      `duplicated percentage ${actual.percentage.toFixed(8)} exceeds baseline ${baseline.percentage.toFixed(8)}`,
     );
   }
   if (violations.length) {
@@ -79,7 +79,7 @@ try {
     process.exitCode = 1;
   } else {
     console.log(
-      `Duplication baseline passed (${actual.sources} sources, ${actual.clones} clones, ${actual.duplicatedLines} duplicated lines, ${actual.percentage.toFixed(4)}%)`,
+      `Duplication baseline passed (${actual.sources} sources, ${actual.clones} clones, ${actual.duplicatedLines} duplicated lines, ${actual.percentage.toFixed(8)}%)`,
     );
   }
 } finally {

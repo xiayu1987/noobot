@@ -9,9 +9,9 @@ import { getFirstPartyProductionFiles } from "./quality/source-inventory.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  complexityCount: 606,
-  longFunctionCount: 128,
-  maxComplexity: 96,
+  complexityCount: 601,
+  longFunctionCount: 125,
+  maxComplexity: 91,
   hotspots: Object.freeze({
     "agent/src/bot/session/detached-subsession-runner.js": [0, 0, 0],
     "agent/src/session/entities/session-entity.js": [0, 0, 0],
@@ -46,6 +46,12 @@ const baseline = Object.freeze({
     "agent/src/session/services/session-message-service/turn-upsert.js": [0, 0, 0],
     "agent/src/bot/execution/turn-persister.js": [0, 0, 0],
     "agent/src/runtime/tool-execution/tool-runner.js": [2, 32, 0],
+    "agent/src/session/session-summary-builders/session-display-summary.js": [0, 0, 0],
+    "agent/src/session/session-summary-builders/display-message-list.js": [0, 0, 0],
+    "agent/src/session/session-summary-builders/display-tool-artifacts.js": [0, 0, 0],
+    "agent/src/session/session-summary-builders/display-summary-stats.js": [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/runtime/workflowNodeSessionDetail.js": [0, 0, 0],
+    "plugin/noobot-plugin-workflow/frontend/runtime/workflowUnifiedSessionDetail.js": [0, 0, 0],
   }),
 });
 
