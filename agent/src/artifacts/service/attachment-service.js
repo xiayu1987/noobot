@@ -17,6 +17,7 @@ import {
 } from "./attachment-service-cleanup.js";
 import {
   getAttachmentById,
+  openAttachmentStream,
   readAttachmentContent,
   readAttachmentMetas,
   resolveSourceAttachment,
@@ -49,6 +50,10 @@ export class AttachmentService {
 
   async getAttachmentById({ userId, attachmentId, sessionId = "", attachmentSource = "" }) {
     return getAttachmentById(this, { userId, attachmentId, sessionId, attachmentSource });
+  }
+
+  async openAttachmentStream(payload = {}) {
+    return openAttachmentStream(this, payload);
   }
 
   async readAttachmentMetas({ userId, sessionId = "", attachmentSource = "" } = {}) {

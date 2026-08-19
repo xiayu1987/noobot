@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import eslint from "@eslint/js";
+import security from "eslint-plugin-security";
 import globals from "globals";
 import vue from "eslint-plugin-vue";
 
@@ -35,6 +36,7 @@ export default [
     ],
   },
   ...vue.configs["flat/base"],
+  security.configs.recommended,
   {
     files: ["**/*.{js,mjs,cjs,vue}"],
     languageOptions: {
@@ -47,6 +49,20 @@ export default [
       },
     },
     rules: {
+      "security/detect-bidi-characters": "error",
+      "security/detect-buffer-noassert": "error",
+      "security/detect-disable-mustache-escape": "error",
+      "security/detect-eval-with-expression": "error",
+      "security/detect-new-buffer": "error",
+      "security/detect-no-csrf-before-method-override": "error",
+      "security/detect-pseudoRandomBytes": "error",
+      "security/detect-unsafe-regex": "off",
+      "security/detect-child-process": "off",
+      "security/detect-non-literal-fs-filename": "off",
+      "security/detect-non-literal-regexp": "off",
+      "security/detect-non-literal-require": "off",
+      "security/detect-object-injection": "off",
+      "security/detect-possible-timing-attacks": "off",
       eqeqeq: ["warn", "always", { null: "ignore" }],
       "no-constant-condition": "warn",
       "no-dupe-keys": "warn",

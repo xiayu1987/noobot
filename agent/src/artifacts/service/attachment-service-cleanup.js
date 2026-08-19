@@ -9,7 +9,8 @@ import { readdir } from "node:fs/promises";
 
 import { fsRm } from "../../shared/storage/fs-adapter.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
-import { attachScopedRoot, resolveBasePath } from "./attachment-scope-resolver.js";
+import { resolveBasePath } from "./attachment-scope-resolver.js";
+import { attachScopedRoot } from "./attachment-storage-layout.js";
 
 export async function deleteScopedAttachmentsBySessionIds(
   service,

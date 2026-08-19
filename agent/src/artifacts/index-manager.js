@@ -14,6 +14,7 @@ import {
   fromPersistedAttachmentRecord,
   toPersistedAttachmentRecord,
 } from "./service/persisted-record-adapter.js";
+import { attachmentScopeIndexPath } from "./service/attachment-storage-layout.js";
 
 // Index updates are read-modify-write transactions. Serialize them per canonical
 // attachment scope so concurrent producers cannot overwrite each other's records.
@@ -109,13 +110,7 @@ function emptyIndex(scope) {
 }
 
 function resolveIndexFile(basePath, scope) {
-  return path.join(
-    basePath,
-    "runtime/attach/scoped",
-    scope.sessionId,
-    scope.attachmentSource,
-    "attachments.json",
-  );
+  return attachmentScopeIndexPath(basePath, scope);
 }
 
 function isObject(val) {

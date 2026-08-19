@@ -4,13 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { fsAccess, fsReadFile, fsStat } from "../../shared/storage/fs-adapter.js";
+import { filePath as path, isPathWithinRoot } from "@noobot/path-resolver";
+import {
+  fsLstat,
+  fsOpen,
+  fsReadFile,
+  fsRealpath,
+  fsStat,
+} from "../../shared/storage/fs-adapter.js";
 import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
 import { readAttachIndex } from "../index-manager.js";
 import { resolveAttachmentScope, resolveBasePath } from "./attachment-scope-resolver.js";
+import { attachScopeRoot } from "./attachment-storage-layout.js";
 import { buildPublicRecord } from "./record-builder.js";
 
-export async function getAttachmentById(service, { userId, attachmentId, sessionId = "", attachmentSource = "" }) {
+export async function getAttachmentById(
+  service,
+  { userId, attachmentId, sessionId = "", attachmentSource = "" },
+) {
   const id = safeStr(attachmentId);
   const normalizedSessionId = safeStr(sessionId);
   const normalizedAttachmentSource = safeStr(attachmentSource);
@@ -25,16 +36,24 @@ export async function getAttachmentById(service, { userId, attachmentId, session
 
   if (!record) return null;
 
-  const resolvedPath = safeStr(record.path);
-  if (!resolvedPath) return null;
-
+  const storedPath = safeStr(record.path);
+  if (!storedPath) return null;
+  let resolvedPath;
   try {
-    await fsAccess(resolvedPath);
+    const [realScopeRoot, realStoredPath] = await Promise.all([
+      fsRealpath(attachScopeRoot(basePath, scope)),
+      fsRealpath(storedPath),
+    ]);
+    if (!isPathWithinRoot(realScopeRoot, realStoredPath)) {
+      throw new Error("attachment_real_path_scope_mismatch");
+    }
+    resolvedPath = path.resolve(realStoredPath);
   } catch {
     return null;
   }
 
   const fileStat = await fsStat(resolvedPath);
+  if (!fileStat?.isFile?.()) return null;
   return {
     ...buildPublicRecord(basePath, record),
     absolutePath: resolvedPath,
@@ -42,19 +61,22 @@ export async function getAttachmentById(service, { userId, attachmentId, session
   };
 }
 
-export async function readAttachmentMetas(service, { userId, sessionId = "", attachmentSource = "" } = {}) {
+export async function readAttachmentMetas(
+  service,
+  { userId, sessionId = "", attachmentSource = "" } = {},
+) {
   const basePath = resolveBasePath(service.globalConfig, userId);
   const scope = resolveAttachmentScope({ sessionId, attachmentSource });
   const index = await readAttachIndex(basePath, scope);
-  return Object.values(index?.attachments || {}).map((record) => buildPublicRecord(basePath, record));
+  return Object.values(index?.attachments || {}).map((record) =>
+    buildPublicRecord(basePath, record),
+  );
 }
 
-export async function resolveSourceAttachment(service, {
-  userId,
-  sessionId = "",
-  attachmentId = "",
-  attachmentSource = "user",
-} = {}) {
+export async function resolveSourceAttachment(
+  service,
+  { userId, sessionId = "", attachmentId = "", attachmentSource = "user" } = {},
+) {
   const normalizedSessionId = safeStr(sessionId);
   if (!normalizedSessionId) return null;
 
@@ -81,12 +103,10 @@ export async function resolveSourceAttachment(service, {
   return null;
 }
 
-export async function readAttachmentContent(service, {
-  userId,
-  attachmentId,
-  sessionId = "",
-  attachmentSource = "",
-}) {
+export async function readAttachmentContent(
+  service,
+  { userId, attachmentId, sessionId = "", attachmentSource = "" },
+) {
   const record = await getAttachmentById(service, {
     userId,
     attachmentId,
@@ -95,4 +115,43 @@ export async function readAttachmentContent(service, {
   });
   if (!record) return null;
   return { ...record, content: await fsReadFile(record.absolutePath) };
+}
+
+export async function openAttachmentStream(service, identity) {
+  const record = await getAttachmentById(service, identity);
+  if (!record) return null;
+
+  let handle;
+  try {
+    const pathStat = await fsLstat(record.absolutePath);
+    if (!pathStat?.isFile?.() || pathStat?.isSymbolicLink?.()) return null;
+    handle = await fsOpen(record.absolutePath, "r");
+    const openedStat = await handle.stat();
+    if (
+      !openedStat?.isFile?.() ||
+      openedStat.dev !== pathStat.dev ||
+      openedStat.ino !== pathStat.ino
+    ) {
+      await handle.close();
+      return null;
+    }
+    const {
+      absolutePath: _absolutePath,
+      path: _storagePath,
+      relativePath: _storageRef,
+      ...publicRecord
+    } = record;
+    return {
+      ...publicRecord,
+      size: safeNum(openedStat.size, record.size || 0),
+      stream: handle.createReadStream(),
+    };
+  } catch (error) {
+    try {
+      await handle?.close?.();
+    } catch (closeError) {
+      error.closeError = closeError;
+    }
+    return null;
+  }
 }

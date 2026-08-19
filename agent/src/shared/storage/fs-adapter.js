@@ -12,6 +12,9 @@ import {
   rm as nodeRm,
   stat as nodeStat,
   readdir as nodeReaddir,
+  realpath as nodeRealpath,
+  lstat as nodeLstat,
+  open as nodeOpen,
 } from "node:fs/promises";
 
 function createDefaultFsAdapter() {
@@ -24,6 +27,9 @@ function createDefaultFsAdapter() {
     rm: (...args) => nodeRm(...args),
     stat: (...args) => nodeStat(...args),
     readdir: (...args) => nodeReaddir(...args),
+    realpath: (...args) => nodeRealpath(...args),
+    lstat: (...args) => nodeLstat(...args),
+    open: (...args) => nodeOpen(...args),
   };
 }
 
@@ -36,11 +42,15 @@ function normalizeFsAdapter(adapter = null) {
     access: typeof source.access === "function" ? source.access : defaultFsAdapter.access,
     mkdir: typeof source.mkdir === "function" ? source.mkdir : defaultFsAdapter.mkdir,
     readFile: typeof source.readFile === "function" ? source.readFile : defaultFsAdapter.readFile,
-    writeFile: typeof source.writeFile === "function" ? source.writeFile : defaultFsAdapter.writeFile,
+    writeFile:
+      typeof source.writeFile === "function" ? source.writeFile : defaultFsAdapter.writeFile,
     rename: typeof source.rename === "function" ? source.rename : defaultFsAdapter.rename,
     rm: typeof source.rm === "function" ? source.rm : defaultFsAdapter.rm,
     stat: typeof source.stat === "function" ? source.stat : defaultFsAdapter.stat,
     readdir: typeof source.readdir === "function" ? source.readdir : defaultFsAdapter.readdir,
+    realpath: typeof source.realpath === "function" ? source.realpath : defaultFsAdapter.realpath,
+    lstat: typeof source.lstat === "function" ? source.lstat : defaultFsAdapter.lstat,
+    open: typeof source.open === "function" ? source.open : defaultFsAdapter.open,
   };
 }
 
@@ -90,3 +100,14 @@ export async function fsReaddir(...args) {
   return activeFsAdapter.readdir(...args);
 }
 
+export async function fsRealpath(...args) {
+  return activeFsAdapter.realpath(...args);
+}
+
+export async function fsLstat(...args) {
+  return activeFsAdapter.lstat(...args);
+}
+
+export async function fsOpen(...args) {
+  return activeFsAdapter.open(...args);
+}
