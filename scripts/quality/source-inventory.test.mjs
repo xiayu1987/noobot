@@ -7,8 +7,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import path from "node:path";
 import {
+  getFirstPartyCodeFiles,
   getFirstPartyProductionFiles,
   getFirstPartySourceRoots,
+  isFirstPartyCodePath,
   isFirstPartyProductionPath,
 } from "./source-inventory.mjs";
 
@@ -41,6 +43,19 @@ test("production file collection includes authoritative state and excludes its t
     files.some((file) => file.includes("/__tests__/")),
     false,
   );
+  assert.equal(
+    files.some((file) => file.includes("/node_modules/")),
+    false,
+  );
+});
+
+test("complete code inventory includes tests but still excludes generated and external files", async () => {
+  assert.equal(isFirstPartyCodePath("agent/__tests__/orchestrator.test.js"), true);
+  assert.equal(isFirstPartyCodePath("client/noobot-chat/tests/unit/example.spec.js"), true);
+  assert.equal(isFirstPartyCodePath("agent/node_modules/package/index.js"), false);
+  assert.equal(isFirstPartyCodePath("client/noobot-chat/src/plugins/generated/entries.js"), false);
+  const files = await getFirstPartyCodeFiles({ repositoryRoot, extensions: [".js"] });
+  assert.ok(files.includes("agent/__tests__/runtime/core/tool-runner.test.js"));
   assert.equal(
     files.some((file) => file.includes("/node_modules/")),
     false,

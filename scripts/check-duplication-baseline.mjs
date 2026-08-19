@@ -16,7 +16,7 @@ const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
   clones: 166,
   duplicatedLines: 4410,
-  percentage: 1.82065891,
+  percentage: 1.81962221,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));
@@ -55,7 +55,7 @@ try {
   const actual = {
     clones: Number(total.clones || 0),
     duplicatedLines: Number(total.duplicatedLines || 0),
-    percentage: Number(total.percentage || 0),
+    percentage: Number(Number(total.percentage || 0).toFixed(8)),
     sources: Number(total.sources || 0),
   };
   const violations = [];

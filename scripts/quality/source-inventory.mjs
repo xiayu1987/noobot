@@ -33,6 +33,7 @@ export const FIRST_PARTY_IGNORED_GLOBS = Object.freeze([
 ]);
 
 const ignoredDirectorySet = new Set(FIRST_PARTY_IGNORED_DIRECTORIES);
+const testDirectorySet = new Set(["__mocks__", "__tests__", "tests"]);
 const testFilePattern = /\.(?:test|spec)\.(?:[cm]?js|jsx|ts|tsx)$/i;
 
 async function readRootWorkspacePaths(repositoryRoot) {
@@ -55,12 +56,28 @@ export async function getFirstPartySourceRoots({ repositoryRoot } = {}) {
 }
 
 export function isFirstPartyProductionPath(relativePath = "") {
-  const normalized = String(relativePath || "").replaceAll("\\", "/");
-  if (!normalized || testFilePattern.test(normalized)) return false;
-  return !normalized.split("/").some((segment) => ignoredDirectorySet.has(segment));
+  return isFirstPartyCodePath(relativePath, { includeTests: false });
 }
 
-async function collectDirectoryFiles({ repositoryRoot, relativeDirectory, extensions, output }) {
+export function isFirstPartyCodePath(relativePath = "", { includeTests = true } = {}) {
+  const normalized = String(relativePath || "").replaceAll("\\", "/");
+  if (!normalized) return false;
+  if (!includeTests && testFilePattern.test(normalized)) return false;
+  return !normalized
+    .split("/")
+    .some(
+      (segment) =>
+        ignoredDirectorySet.has(segment) && (includeTests ? !testDirectorySet.has(segment) : true),
+    );
+}
+
+async function collectDirectoryFiles({
+  repositoryRoot,
+  relativeDirectory,
+  extensions,
+  output,
+  includeTests,
+}) {
   const absoluteDirectory = path.join(repositoryRoot, relativeDirectory);
   let entries;
   try {
@@ -70,7 +87,12 @@ async function collectDirectoryFiles({ repositoryRoot, relativeDirectory, extens
     throw error;
   }
   for (const entry of entries) {
-    if (entry.isDirectory() && ignoredDirectorySet.has(entry.name)) continue;
+    if (
+      entry.isDirectory() &&
+      ignoredDirectorySet.has(entry.name) &&
+      !(includeTests && testDirectorySet.has(entry.name))
+    )
+      continue;
     const relativePath = path.join(relativeDirectory, entry.name);
     if (entry.isDirectory()) {
       await collectDirectoryFiles({
@@ -78,10 +100,11 @@ async function collectDirectoryFiles({ repositoryRoot, relativeDirectory, extens
         relativeDirectory: relativePath,
         extensions,
         output,
+        includeTests,
       });
       continue;
     }
-    if (!entry.isFile() || !isFirstPartyProductionPath(relativePath)) continue;
+    if (!entry.isFile() || !isFirstPartyCodePath(relativePath, { includeTests })) continue;
     const extension = path.extname(entry.name).toLowerCase();
     if (extensions.has(extension)) output.add(path.normalize(relativePath));
   }
@@ -90,6 +113,14 @@ async function collectDirectoryFiles({ repositoryRoot, relativeDirectory, extens
 export async function getFirstPartyProductionFiles({
   repositoryRoot,
   extensions = [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+} = {}) {
+  return getFirstPartyCodeFiles({ repositoryRoot, extensions, includeTests: false });
+}
+
+export async function getFirstPartyCodeFiles({
+  repositoryRoot,
+  extensions = [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".vue"],
+  includeTests = true,
 } = {}) {
   const normalizedRoot = path.resolve(repositoryRoot || path.resolve(import.meta.dirname, "../.."));
   const sourceRoots = await getFirstPartySourceRoots({ repositoryRoot: normalizedRoot });
@@ -101,6 +132,7 @@ export async function getFirstPartyProductionFiles({
       relativeDirectory,
       extensions: extensionSet,
       output,
+      includeTests,
     });
   }
   return [...output].sort();
