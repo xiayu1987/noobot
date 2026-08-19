@@ -122,6 +122,15 @@
 - 定向验证：Session Turn 身份、附件、时序、删除墓碑和并发边界 27 项通过；Session Turn Persister 批量写入与作用域隔离 16 项通过；工具运行器风险、错误、清洗、语义转移、资源注册和并行结算 27 项通过。
 - 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；Harness 354 项、Workflow 98 项、前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
 
+### 2026-08-19 第七批基线收紧
+
+- Workflow Execution Session Detail 按请求上下文、传输、HTTP 接纳、载荷协议校验和 Session 投影拆分。尚未物化仍是显式 `pending`，服务失败不降级为 pending，聚合版本继续要求正整数；文件从最高复杂度 96 降为零违规。
+- Session Display Summary 按展示消息、生命周期呈现、思考时间线、工具产物归属和统计拆分。工具产物只有在路由与对话身份唯一匹配时才归入 assistant 展示消息，无法唯一归属的产物继续保留在 `unassignedToolArtifactCount`，不推导归属；主构建器及三个语义模块均为零违规。
+- Workflow Unified Session Detail 将权威 Execution 投影与独立 Session 投影分为两条职责链，共享节点身份、执行状态和运行中占位视图协议。Execution 不再覆盖不属于自己的隔离 Session，两个相关运行时文件均锁定零复杂度与零长函数违规。
+- 复杂度基线从第六批的 `606 / 128 / 96` 收紧为 `601 / 125 / 91`；重复度基线从 `167 / 4415 / 1.8268%` 收紧为 `166 / 4410 / 1.8231%`。所有指标只允许继续下降。
+- 定向验证：Workflow Unified Session Detail 27 项通过；Session 展示消息、思考明细、附件、工具呈现和生命周期 31 项通过。
+- 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；源码依赖图覆盖 1567 个模块且零循环，前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
+
 ## 定向验证记录
 
 - Session Protocol：35 项通过。
