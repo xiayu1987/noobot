@@ -20,11 +20,8 @@ import {
 } from "../policy/policy-validator.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
-import {
-  attachScopeRoot,
-  resolveBasePath,
-  resolveAttachmentScope,
-} from "./attachment-scope-resolver.js";
+import { resolveBasePath, resolveAttachmentScope } from "./attachment-scope-resolver.js";
+import { attachScopeRoot } from "./attachment-storage-layout.js";
 import { buildPublicRecord, normalizeExtension } from "./record-builder.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 

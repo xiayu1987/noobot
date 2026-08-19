@@ -13,6 +13,7 @@ import { fatalSystemError, recoverableToolError } from "../../shared/errors/inde
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { readAttachIndex } from "../index-manager.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import { attachScopedRoot, decodeAttachmentScopeSegment } from "./attachment-storage-layout.js";
 
 export function resolveBasePath(globalConfig, userId) {
   const uid = safeStr(userId);
@@ -52,14 +53,6 @@ export function resolveAttachmentScope({
   };
 }
 
-export function attachScopedRoot(basePath) {
-  return path.join(basePath, "runtime/attach/scoped");
-}
-
-export function attachScopeRoot(basePath, scope) {
-  return path.join(attachScopedRoot(basePath), scope.sessionId, scope.attachmentSource);
-}
-
 export async function findRecordAcrossScopedIndexes(basePath, attachmentId) {
   const id = safeStr(attachmentId);
   if (!id) return null;
@@ -84,10 +77,16 @@ export async function findRecordAcrossScopedIndexes(basePath, attachmentId) {
 
     for (const sourceEntry of sourceEntries) {
       if (!sourceEntry?.isDirectory?.()) continue;
-      const index = await readAttachIndex(basePath, {
-        sessionId: sessionEntry.name,
-        attachmentSource: sourceEntry.name,
-      });
+      let scope;
+      try {
+        scope = {
+          sessionId: decodeAttachmentScopeSegment(sessionEntry.name, "sessionId"),
+          attachmentSource: decodeAttachmentScopeSegment(sourceEntry.name, "attachmentSource"),
+        };
+      } catch {
+        continue;
+      }
+      const index = await readAttachIndex(basePath, scope);
       const hit = index?.attachments?.[id];
       if (hit) return hit;
     }

@@ -15,5 +15,7 @@ export {
   fsRm,
   fsStat,
   fsReaddir,
+  fsRealpath,
+  fsLstat,
+  fsOpen,
 } from "./fs-adapter.js";
-

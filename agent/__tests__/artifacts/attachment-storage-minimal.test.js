@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 
 import { AttachmentService } from "../../src/artifacts/service/attachment-service.js";
 import { resolveCanonicalSourceAttachment } from "../../src/artifacts/source-attachment-resolver.js";
@@ -69,6 +69,132 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
     assert.ok(
       String(loaded.absolutePath).includes(path.join("runtime", "attach", "scoped", "s1", "user")),
     );
+  });
+});
+
+test("attachment storage encodes logical scope identities before filesystem projection", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const sessionId = "session/../../outside";
+    const [saved] = await service.ingest({
+      userId: "u1",
+      sessionId,
+      attachmentSource: "user",
+      attachments: [
+        {
+          name: "safe.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("safe", "utf8").toString("base64"),
+        },
+      ],
+    });
+
+    const loaded = await service.getAttachmentById({
+      userId: "u1",
+      attachmentId: saved.attachmentId,
+      sessionId,
+      attachmentSource: "user",
+    });
+
+    assert.ok(loaded);
+    assert.equal(loaded.sessionId, sessionId);
+    assert.equal(loaded.relativePath.includes(encodeURIComponent(sessionId)), true);
+    assert.equal(loaded.absolutePath.startsWith(path.join(workspaceRoot, "u1")), true);
+  });
+});
+
+test("attachment index rejects storage references outside their declared scope", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const basePath = path.join(workspaceRoot, "u1");
+    const scope = { sessionId: "s1", attachmentSource: "user" };
+
+    await assert.rejects(
+      writeAttachIndex(
+        basePath,
+        {
+          attachments: {
+            a1: {
+              attachmentId: "a1",
+              sessionId: scope.sessionId,
+              attachmentSource: scope.attachmentSource,
+              name: "secret.txt",
+              mimeType: "text/plain",
+              relativePath: "../secret.txt",
+            },
+          },
+        },
+        scope,
+      ),
+      /attachment_storage_ref_scope_mismatch/,
+    );
+  });
+});
+
+test("attachment query rejects symbolic links that escape the canonical scope", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const [saved] = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [
+        {
+          name: "linked.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("original", "utf8").toString("base64"),
+        },
+      ],
+    });
+    const original = await service.getAttachmentById({
+      userId: "u1",
+      attachmentId: saved.attachmentId,
+      sessionId: "s1",
+      attachmentSource: "user",
+    });
+    const outsidePath = path.join(workspaceRoot, "outside-secret.txt");
+    await writeFile(outsidePath, "outside", "utf8");
+    await rm(original.absolutePath);
+    await symlink(outsidePath, original.absolutePath);
+
+    const escaped = await service.getAttachmentById({
+      userId: "u1",
+      attachmentId: saved.attachmentId,
+      sessionId: "s1",
+      attachmentSource: "user",
+    });
+    assert.equal(escaped, null);
+  });
+});
+
+test("attachment stream keeps execution paths inside the attachment service", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const [saved] = await service.ingest({
+      userId: "u1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      attachments: [
+        {
+          name: "stream.txt",
+          mimeType: "text/plain",
+          contentBase64: Buffer.from("streamed", "utf8").toString("base64"),
+        },
+      ],
+    });
+
+    const opened = await service.openAttachmentStream({
+      userId: "u1",
+      attachmentId: saved.attachmentId,
+      sessionId: "s1",
+      attachmentSource: "user",
+    });
+    assert.ok(opened?.stream);
+    assert.equal(opened.absolutePath, undefined);
+    assert.equal(opened.path, undefined);
+    assert.equal(opened.relativePath, undefined);
+    const chunks = [];
+    for await (const chunk of opened.stream) chunks.push(chunk);
+    assert.equal(Buffer.concat(chunks).toString("utf8"), "streamed");
   });
 });
 

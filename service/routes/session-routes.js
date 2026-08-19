@@ -5,9 +5,7 @@
  */
 import { createJsonRouteWrapper } from "./route-wrapper.js";
 import { HTTP_STATUS } from "#agent/constants";
-import {
-  normalizeSessionThinkingRouteText as normalizeRouteText,
-} from "noobot-agent/session";
+import { normalizeSessionThinkingRouteText as normalizeRouteText } from "noobot-agent/session";
 import crypto from "node:crypto";
 import {
   RUNTIME_EVENT_CATEGORIES,
@@ -16,6 +14,7 @@ import {
 } from "@noobot/runtime-events";
 import { assertSessionCommand, SESSION_COMMAND } from "@noobot/session-protocol";
 import { mergeSessionDeletionIds } from "@noobot/hook-protocol";
+import { pipeline } from "node:stream/promises";
 
 function decodeSessionCommand(body, { type, userId, sessionId }) {
   const command = assertSessionCommand(body);
@@ -498,10 +497,9 @@ export function registerSessionRoutes(
         const branchSessionIds = resolveDeletedSessionIds(result, normalizedSessionId);
         const hasRemainingSessionIdentityAuthority =
           typeof bot?.session?.listSessionIds === "function";
-        const listedRemainingSessionIds =
-          hasRemainingSessionIdentityAuthority
-            ? await bot.session.listSessionIds({ userId })
-            : [];
+        const listedRemainingSessionIds = hasRemainingSessionIdentityAuthority
+          ? await bot.session.listSessionIds({ userId })
+          : [];
         const remainingSessionIds = (
           Array.isArray(listedRemainingSessionIds) ? listedRemainingSessionIds : []
         )
@@ -600,7 +598,7 @@ export function registerSessionRoutes(
         if (!sessionId || !attachmentSource || !String(attachmentId || "").trim()) {
           throw new Error(translateText("common.attachmentNotFound", req.locale));
         }
-        const attachment = await bot.getAttachmentById({
+        const attachment = await bot.openAttachmentStream({
           userId,
           attachmentId,
           sessionId,
@@ -613,7 +611,7 @@ export function registerSessionRoutes(
           "Content-Disposition",
           `inline; filename="${encodeURIComponent(attachment.name || attachmentId)}"`,
         );
-        res.sendFile(attachment.absolutePath);
+        await pipeline(attachment.stream, res);
       },
       {
         statusCode: HTTP_STATUS.NOT_FOUND,

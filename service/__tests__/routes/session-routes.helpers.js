@@ -59,7 +59,7 @@ export function createSessionApp(options = {}) {
         listSessionIds: async () => [],
         ...(options.session || {}),
       },
-      getAttachmentById: async () => null,
+      openAttachmentStream: async () => null,
       ...(options.bot || {}),
     },
     handleChat: (_req, res) => res.json({ ok: true }),

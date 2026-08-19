@@ -9,9 +9,14 @@ import {
   ATTACHMENT_RECORD_VERSION,
   parsePersistedAttachmentRecord,
 } from "@noobot/attachment-protocol";
-import { filePath as path } from "@noobot/path-resolver";
+import {
+  filePath as path,
+  isAbsolutePathAnyPlatform,
+  isPathWithinRoot,
+} from "@noobot/path-resolver";
 import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
+import { attachScopeRoot } from "./attachment-storage-layout.js";
 
 function identityFor(record, scope) {
   return {
@@ -21,15 +26,38 @@ function identityFor(record, scope) {
   };
 }
 
-function storageRef(basePath, value) {
-  const absolute = safeStr(value);
-  if (!absolute) return "";
-  return path.relative(basePath, absolute).split(path.sep).join("/");
+function assertScopedStoragePath(basePath, identity, candidate) {
+  const scopeRoot = attachScopeRoot(basePath, identity);
+  if (!isPathWithinRoot(scopeRoot, candidate)) {
+    throw new Error("attachment_storage_ref_scope_mismatch");
+  }
+  return candidate;
 }
 
-function resolveStoragePath(basePath, ref) {
-  const normalized = safeStr(ref);
-  return normalized ? path.resolve(basePath, normalized) : "";
+function resolveRuntimeStoragePath(basePath, identity, value) {
+  const source = safeStr(value);
+  if (!source) throw new Error("attachment_storage_ref_required");
+  const candidate = path.isAbsolute(source) ? path.resolve(source) : path.resolve(basePath, source);
+  return assertScopedStoragePath(basePath, identity, candidate);
+}
+
+function resolvePersistedStorageRef(basePath, identity, value) {
+  const ref = safeStr(value);
+  if (!ref) throw new Error("attachment_storage_ref_required");
+  if (ref.includes("\\") || isAbsolutePathAnyPlatform(ref)) {
+    throw new Error("attachment_storage_ref_must_be_relative");
+  }
+  const candidate = path.resolve(basePath, ref);
+  const canonicalRef = path.relative(basePath, candidate).split(path.sep).join("/");
+  if (canonicalRef !== ref) throw new Error("attachment_storage_ref_not_canonical");
+  return assertScopedStoragePath(basePath, identity, candidate);
+}
+
+function storageRef(basePath, identity, value) {
+  return path
+    .relative(basePath, resolveRuntimeStoragePath(basePath, identity, value))
+    .split(path.sep)
+    .join("/");
 }
 
 export function toPersistedAttachmentRecord(basePath, record, scope) {
@@ -37,8 +65,9 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
   const now = new Date().toISOString();
   const createdAt = safeStr(record?.createdAt) || now;
   const updatedAt = safeStr(record?.updatedAt || record?.createdAt) || createdAt;
-  const ref = storageRef(basePath, record?.path || record?.relativePath);
-  if (!ref) return null;
+  const sourcePath = safeStr(record?.path || record?.relativePath);
+  if (!sourcePath) return null;
+  const ref = storageRef(basePath, identity, sourcePath);
   const persisted = {
     schema: ATTACHMENT_RECORD_SCHEMA,
     version: ATTACHMENT_RECORD_VERSION,
@@ -71,6 +100,7 @@ export function toPersistedAttachmentRecord(basePath, record, scope) {
 export function fromPersistedAttachmentRecord(basePath, persisted) {
   const record = parsePersistedAttachmentRecord(persisted);
   const { identity, descriptor } = record;
+  const storagePath = resolvePersistedStorageRef(basePath, identity, record.storageRef.ref);
   const output = {
     attachmentId: identity.attachmentId,
     ...(descriptor.clientAttachmentId ? { clientAttachmentId: descriptor.clientAttachmentId } : {}),
@@ -79,7 +109,7 @@ export function fromPersistedAttachmentRecord(basePath, persisted) {
     name: descriptor.name,
     mimeType: descriptor.mimeType,
     ...(descriptor.size === undefined ? {} : { size: descriptor.size }),
-    path: resolveStoragePath(basePath, record.storageRef.ref),
+    path: storagePath,
     relativePath: record.storageRef.ref,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,

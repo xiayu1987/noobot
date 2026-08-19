@@ -5,7 +5,40 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Readable } from "node:stream";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
+
+test("session-routes: streams an attachment opened by the canonical attachment service", async () => {
+  const app = express();
+  registerSessionRoutes(app, {
+    bot: {
+      session: {
+        getSessionData: async () => ({}),
+        getRootSessionId: async () => "",
+        deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
+        getAllSessionsData: async () => [],
+      },
+      openAttachmentStream: async () => ({
+        name: "report.txt",
+        mimeType: "text/plain",
+        stream: Readable.from(["canonical attachment"]),
+      }),
+    },
+    handleChat: (_req, res) => res.json({ ok: true }),
+    getConnectorChannelStore: () => ({}),
+    getConnectorHistoryStore: () => ({}),
+    translateText: (key) => key,
+  });
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(
+      `${baseUrl}/internal/attachment/u1/a1?sessionId=s1&attachmentSource=user`,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("content-type"), "text/plain");
+    assert.equal(await response.text(), "canonical attachment");
+  });
+});
 
 test("session-routes: 附件不存在返回 404 + 标准错误体", async () => {
   const app = express();
@@ -17,7 +50,7 @@ test("session-routes: 附件不存在返回 404 + 标准错误体", async () => 
         deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
         getAllSessionsData: async () => [],
       },
-      getAttachmentById: async () => null,
+      openAttachmentStream: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
     getConnectorChannelStore: () => ({}),
@@ -49,7 +82,7 @@ for (const [label, query] of [
           deleteSessionBranch: async () => ({ deletedSessionIds: [] }),
           getAllSessionsData: async () => [],
         },
-        getAttachmentById: async () => {
+        openAttachmentStream: async () => {
           called = true;
           return { absolutePath: "/tmp/should-not-be-read" };
         },
@@ -172,12 +205,14 @@ test("session-routes: terminal resolution uses only canonical Session identity",
     assert.equal(payload.resolved, true);
   });
 
-  assert.deepEqual(calls, [{
-    userId: "user-a",
-    sessionId: "child-session",
-    turnScopeId: "turn-a",
-    commandId: "terminal-command",
-  }]);
+  assert.deepEqual(calls, [
+    {
+      userId: "user-a",
+      sessionId: "child-session",
+      turnScopeId: "turn-a",
+      commandId: "terminal-command",
+    },
+  ]);
 });
 
 test("session-routes: terminal resolution rejects storage locator query fields", async () => {

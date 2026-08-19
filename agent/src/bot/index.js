@@ -107,6 +107,10 @@ export class BotManager {
     });
   }
 
+  openAttachmentStream(payload = {}) {
+    return this.attach.openAttachmentStream(payload);
+  }
+
   deleteScopedAttachmentsBySessionIds({ userId, sessionIds = [] } = {}) {
     return this.attach.deleteScopedAttachmentsBySessionIds({
       userId,
