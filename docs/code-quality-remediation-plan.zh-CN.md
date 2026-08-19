@@ -131,6 +131,14 @@
 - 定向验证：Workflow Unified Session Detail 27 项通过；Session 展示消息、思考明细、附件、工具呈现和生命周期 31 项通过。
 - 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；源码依赖图覆盖 1567 个模块且零循环，前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
 
+### 2026-08-19 第八批基线收紧
+
+- Agent Proxy 重连按 Session Replay、权威 Snapshot 事务和有序发布拆分。新事务仍原子取消旧事务；需要权威快照时必须等待成功后才发布 reconnect baseline，随后依次发布 channel state、缓冲实时事件和 complete。快照不可用继续失败关闭，不从缓存状态推导权威结果；相关四个模块均锁定零复杂度和零长函数违规。
+- Service WebSocket 将唯一出站发送协议提取到 `outbound-event-sender.js`，统一负责协议事件校验、传输序列、消息事件、工具帧、终态生命周期诊断和发送结果。连接装配与关闭清理由 `connection-handler.js` 负责，server 入口只创建 WebSocket Server 和注册 Upgrade；三个模块均锁定零违规。
+- 复杂度基线从第七批的 `601 / 125 / 91` 收紧为 `598 / 121 / 88`；重复度基线保持 `166 / 4410`，重复率从 `1.82310507%` 收紧为 `1.82065891%`。所有指标只允许继续下降。
+- 定向验证：Agent Proxy 重连、状态一致性、交互和生命周期 50 项通过；Service WebSocket 发送、继续、停止、恢复、执行查询和权威生命周期 54 项通过。
+- 全仓验收：`npm run check:quality`、`npm test`、`npm run build` 和 `git diff --check` 通过；源码依赖图覆盖 1572 个模块且零循环，前端 170 个测试文件 / 1161 项测试全部通过。生产构建仍只有 CQ-008 已记录的 Mermaid parser 662.09 kB 上游单模块警告。
+
 ## 定向验证记录
 
 - Session Protocol：35 项通过。
