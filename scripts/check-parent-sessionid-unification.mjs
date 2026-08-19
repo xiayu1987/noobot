@@ -10,14 +10,9 @@ import path from "node:path";
 const ROOT = process.cwd();
 const TARGET_ROOT = path.join(ROOT, "agent", "src");
 
-const ALLOW_PATH_PREFIXES = [
-  "agent/src/session/",
-];
+const ALLOW_PATH_PREFIXES = ["agent/src/session/"];
 
-const ALLOW_EXACT_FILES = new Set([
-  "agent/src/context/parent-session-id-resolver.js",
-  "agent/src/bot/session/session-execution-engine.js",
-]);
+const ALLOW_EXACT_FILES = new Set(["agent/src/bot/session/session-execution-engine.js"]);
 
 const RULES = [
   /String\(\s*parentSessionId\s*\|\|\s*""\s*\)\.trim\(\)/,

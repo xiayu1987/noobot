@@ -7,6 +7,7 @@ import { readShortMemory, flattenShortItems, getSortedShortItems } from "./reade
 import { writeShortMemory, assignShortItems } from "./writer.js";
 import { compactShortMemory } from "./compactor.js";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { filePath as path } from "@noobot/path-resolver";
 import { readSessionArtifact } from "../../session/session-artifact-store.js";
 
@@ -81,7 +82,8 @@ export class ShortMemoryManager {
   }
 
   async captureSessionToShortMemory({ basePath = "", sessionId = "", parentSessionId = "" } = {}) {
-    const sessionFile = this.storage.sessionFile(basePath, sessionId, parentSessionId);
+    const normalizedParentSessionId = normalizeParentSessionId(parentSessionId);
+    const sessionFile = this.storage.sessionFile(basePath, sessionId, normalizedParentSessionId);
     const sessionData = await readSessionArtifact({
       storageService: this.storage,
       sessionDir: path.dirname(sessionFile),
@@ -108,7 +110,7 @@ export class ShortMemoryManager {
     const items = this.flatten(short);
     items.push({
       sessionId: String(sessionId || "").trim(),
-      parentSessionId: String(parentSessionId || "").trim(),
+      parentSessionId: normalizedParentSessionId,
       records,
       createdAt: new Date().toISOString(),
     });

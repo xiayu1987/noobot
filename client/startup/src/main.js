@@ -4,13 +4,39 @@
  * SPDX-License-Identifier: MIT
  */
 import { createApp } from "vue";
-import ElementPlus from "element-plus";
+import {
+  ElAlert,
+  ElButton,
+  ElCard,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElForm,
+  ElFormItem,
+  ElIcon,
+  ElInput,
+  ElOption,
+  ElSelect,
+  ElTag,
+} from "element-plus";
 import "element-plus/dist/index.css";
-import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 import App from "./app/App.vue";
 import "./style.css";
 
 const app = createApp(App);
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) app.component(key, component);
-app.use(ElementPlus);
+for (const component of [
+  ElAlert,
+  ElButton,
+  ElCard,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElForm,
+  ElFormItem,
+  ElIcon,
+  ElInput,
+  ElOption,
+  ElSelect,
+  ElTag,
+]) {
+  app.use(component);
+}
 app.mount("#app");

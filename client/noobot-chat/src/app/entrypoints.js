@@ -4,49 +4,47 @@
  * SPDX-License-Identifier: MIT
  */
 import { defineAsyncComponent } from "vue";
-import * as ElementPlus from "element-plus";
+import {
+  ElAffix,
+  ElAnchor,
+  ElAnchorLink,
+  ElButton,
+  ElCheckbox,
+  ElCheckboxGroup,
+  ElCollapse,
+  ElCollapseItem,
+  ElCollapseTransition,
+  ElDialog,
+  ElDrawer,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+  ElEmpty,
+  ElForm,
+  ElFormItem,
+  ElIcon,
+  ElInput,
+  ElInputNumber,
+  ElOption,
+  ElPopover,
+  ElRadio,
+  ElRadioGroup,
+  ElScrollbar,
+  ElSelect,
+  ElSkeleton,
+  ElSlider,
+  ElStep,
+  ElSteps,
+  ElSwitch,
+  ElTabPane,
+  ElTabs,
+  ElTag,
+  ElTooltip,
+  ElTree,
+  ElUpload,
+} from "element-plus";
 import "element-plus/dist/index.css";
 import { registerExternalFrontendPlugins } from "../plugins/auto-register.js";
-
-const ELEMENT_PLUS_COMPONENT_NAMES = [
-  "ElAffix",
-  "ElAnchor",
-  "ElAnchorLink",
-  "ElButton",
-  "ElCheckbox",
-  "ElCheckboxGroup",
-  "ElCollapse",
-  "ElCollapseItem",
-  "ElCollapseTransition",
-  "ElDialog",
-  "ElDrawer",
-  "ElDropdown",
-  "ElDropdownItem",
-  "ElDropdownMenu",
-  "ElEmpty",
-  "ElForm",
-  "ElFormItem",
-  "ElIcon",
-  "ElInput",
-  "ElInputNumber",
-  "ElOption",
-  "ElPopover",
-  "ElRadio",
-  "ElRadioGroup",
-  "ElScrollbar",
-  "ElSelect",
-  "ElSkeleton",
-  "ElSlider",
-  "ElStep",
-  "ElSteps",
-  "ElSwitch",
-  "ElTabPane",
-  "ElTabs",
-  "ElTag",
-  "ElTree",
-  "ElTooltip",
-  "ElUpload",
-];
 
 const asyncVueComponent = (loader) => defineAsyncComponent(loader);
 
@@ -83,9 +81,43 @@ export const ConversationStateDebugPanel = asyncVueComponent(
 );
 
 export function installElementPlusComponents(app) {
-  for (const componentName of ELEMENT_PLUS_COMPONENT_NAMES) {
-    app.use(ElementPlus[componentName]);
-  }
+  app.use(ElAffix);
+  app.use(ElAnchor);
+  app.use(ElAnchorLink);
+  app.use(ElButton);
+  app.use(ElCheckbox);
+  app.use(ElCheckboxGroup);
+  app.use(ElCollapse);
+  app.use(ElCollapseItem);
+  app.use(ElCollapseTransition);
+  app.use(ElDialog);
+  app.use(ElDrawer);
+  app.use(ElDropdown);
+  app.use(ElDropdownItem);
+  app.use(ElDropdownMenu);
+  app.use(ElEmpty);
+  app.use(ElForm);
+  app.use(ElFormItem);
+  app.use(ElIcon);
+  app.use(ElInput);
+  app.use(ElInputNumber);
+  app.use(ElOption);
+  app.use(ElPopover);
+  app.use(ElRadio);
+  app.use(ElRadioGroup);
+  app.use(ElScrollbar);
+  app.use(ElSelect);
+  app.use(ElSkeleton);
+  app.use(ElSlider);
+  app.use(ElStep);
+  app.use(ElSteps);
+  app.use(ElSwitch);
+  app.use(ElTabPane);
+  app.use(ElTabs);
+  app.use(ElTag);
+  app.use(ElTooltip);
+  app.use(ElTree);
+  app.use(ElUpload);
 }
 
 export async function installFrontendPlugins() {

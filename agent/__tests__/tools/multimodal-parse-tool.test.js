@@ -52,6 +52,8 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   let modelRequest = null;
   let ingestRequest = null;
   const linkRequests = [];
+  const authorityRequests = [];
+  const parentSessionId = ` ${"p".repeat(220)} `;
   const runtime = {
     basePath,
     userId: "admin",
@@ -74,7 +76,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       },
     },
     userConfig: {},
-    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1" },
+    systemRuntime: { sessionId: "session-1", rootSessionId: "session-1", parentSessionId },
     userMessageAttachments: [
       {
         attachmentId: "source-1",
@@ -156,12 +158,18 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
       },
     },
     sessionManager: {
-      async commitAuthorityEvent({ family, identity, causality, ordering, producer, payload }) {
+      async commitAuthorityEvent(request) {
+        authorityRequests.push(request);
+        const { family, identity, causality, ordering, producer, payload } = request;
         return {
           committed: true,
           envelope: createEventEnvelope({
             family,
-            identity: { ...identity, eventId: `attachment-authority:${identity.messageId}`, sessionId: "session-1" },
+            identity: {
+              ...identity,
+              eventId: `attachment-authority:${identity.messageId}`,
+              sessionId: "session-1",
+            },
             causality,
             ordering: { ...ordering, sequence: 1 },
             producer,
@@ -215,6 +223,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     ["source-1", "source-2"],
   );
   assert.ok(linkRequests.every((request) => request.producerId === "multimodal_parse"));
+  assert.ok(authorityRequests.every((request) => request.parentSessionId === "p".repeat(200)));
   assert.equal(
     runtime.userMessageAttachments[0].relations[0].targetIdentity.attachmentId,
     "parsed-1",
