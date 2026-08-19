@@ -115,7 +115,6 @@ const {
   semanticPreviewCollapsible,
   selectedNodeSessionDocs,
   displayNodeMessages,
-  turnTimingsByTurnScopeId,
   nodeSessionAllMessages,
   selectedRuntimeBoxes,
   handleOpenThinkingDetails,
@@ -163,7 +162,6 @@ const {
     :selected-runtime-boxes="selectedRuntimeBoxes"
     :selected-graph-dialog-process-id="selectedGraphDialogProcessId"
     :display-node-messages="displayNodeMessages"
-    :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
     :node-session-all-messages="nodeSessionAllMessages"
     :selected-node-session-docs="selectedNodeSessionDocs"
     :user-id="userId"

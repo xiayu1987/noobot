@@ -16,12 +16,10 @@ import {
 import { resolveCanonicalWorkflowNodeItem } from "../../runtime/workflowNodeSessionIdentity.js";
 import {
   fetchExecutionSessionDetail,
-  fetchWorkflowNodeSessionDetail,
   hydrateExecutionSessionDetail,
 } from "../../runtime/workflowNodeSessionDetail.js";
 import {
   createRunningAssistantPlaceholderViewModel,
-  hasNewProtocolNodeIdentity,
   resolveIsolatedNodeSessionId,
   resolveNodeChildExecutionIds,
   resolveRuntimeNodeSession,
@@ -78,7 +76,6 @@ function prepareOpen(context, nodeItem, options) {
     canonicalRuntimeNode: resolveRuntimeNodeSession(canonicalNodeItem, runtimeNodeSessions),
     route,
     viewKey: createWorkflowNodeViewKey(canonicalNodeItem, workflowPayload.value),
-    isNewProtocolNode: hasNewProtocolNodeIdentity(canonicalNodeItem),
   };
 }
 
@@ -88,10 +85,7 @@ function beginOpen(context, prepared) {
   const { canonicalNodeItem, canonicalRuntimeNode, route, fromHistory, viewKey } = prepared;
   refs.selectedGraphDialogProcessId.value = resolveWorkflowDialogProcessId(canonicalNodeItem);
   logOpenStarted(context, prepared);
-  if (
-    !props.userId ||
-    (!prepared.isNewProtocolNode && (!route.rootSessionId || !route.dialogProcessId))
-  ) {
+  if (!props.userId || !route.rootSessionId || !route.dialogProcessId) {
     ElMessage.warning(translate("workflow.nodeSessionMissing"));
     return null;
   }
@@ -161,28 +155,13 @@ function applyRestSnapshot({
   });
 }
 
-function mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionIdHint, executionId) {
+function mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionIdHint) {
   const { props, applyWorkflowRuntimeEvent } = context;
   const { canonicalNodeItem, route } = prepared;
   const rawMessages = Array.isArray(hydratedDetail.rawMessages) ? hydratedDetail.rawMessages : [];
   const mergeResult =
     typeof applyWorkflowRuntimeEvent === "function"
-      ? applyWorkflowRuntimeEvent(
-          {
-            event: "workflow_session_snapshot_loaded",
-            data: {
-              ...(hydratedDetail.sessionSummary || {}),
-              sessionId: sessionIdHint,
-              parentSessionId: text(canonicalNodeItem.parentSessionId || route.rootSessionId),
-              workflowRunId: text(canonicalNodeItem.workflowRunId),
-              nodeExecutionId: text(canonicalNodeItem.nodeExecutionId || executionId),
-              messages: rawMessages,
-              rawMessages,
-              aggregateVersion: Number(hydratedDetail.aggregateVersion || 0),
-            },
-          },
-          { source: "rest_snapshot" },
-        )
+      ? applyWorkflowRuntimeEvent(hydratedDetail.snapshotEnvelope, { source: "rest_snapshot" })
       : null;
   const storedMessages = Array.isArray(mergeResult?.session?.messages)
     ? mergeResult.session.messages
@@ -247,23 +226,8 @@ async function loadMaterializedSession(context, prepared, opening, identity) {
     executionId,
     execution: localExecution,
   });
-  mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionIdHint, executionId);
+  mergeRestSnapshot(context, prepared, opening, hydratedDetail, sessionIdHint);
   refs.viewerState.value = detail?.state === "empty" ? "empty" : "ready";
-}
-
-async function loadExecutionByIdentity(context, opening, identity) {
-  const result = await context.loadExecutionSessionDetail(
-    identity.executionId,
-    opening.viewTicket,
-    {
-      sessionIdHint: identity.sessionIdHint,
-    },
-  );
-  if (!context.nodeViewTransaction.accepts(opening.viewTicket) || result.state === "stale") return;
-  context.refs.viewerState.value = result.state;
-  if (result.state === "failed") {
-    context.refs.viewerError.value = context.translate("workflow.readNodeSessionFailed");
-  }
 }
 
 function recordOpenFailure(context, prepared, opening, identity, error) {
@@ -298,53 +262,19 @@ async function openNewProtocolSession(context, prepared, opening) {
   );
   const identity = {
     executionId: text(refs.selectedExecutionId.value || childExecutionIds[0]),
-    sessionIdHint: resolveIsolatedNodeSessionId(
-      prepared.canonicalNodeItem,
-      prepared.canonicalRuntimeNode,
-    ),
+    sessionIdHint: "",
   };
+  identity.sessionIdHint = context.resolveExecutionSessionId(
+    identity.executionId,
+    resolveIsolatedNodeSessionId(prepared.canonicalNodeItem, prepared.canonicalRuntimeNode),
+  );
   refs.selectedExecutionId.value = identity.executionId;
   refs.attemptExecutionIds.value = childExecutionIds;
   try {
     if (identity.sessionIdHint) await loadMaterializedSession(context, prepared, opening, identity);
-    else if (identity.executionId) await loadExecutionByIdentity(context, opening, identity);
     else if (nodeViewTransaction.accepts(opening.viewTicket)) refs.viewerState.value = "pending";
   } catch (error) {
     recordOpenFailure(context, prepared, opening, identity, error);
-  } finally {
-    if (nodeViewTransaction.activate(opening.viewTicket)) {
-      applyUnifiedSessionDetailIfAvailable(prepared.canonicalNodeItem);
-    }
-  }
-}
-
-async function openLegacySession(context, prepared, opening) {
-  const { props, translate, nodeViewTransaction, refs, applyUnifiedSessionDetailIfAvailable } =
-    context;
-  const { rootSessionId, dialogProcessId } = prepared.route;
-  if (!rootSessionId || !dialogProcessId) {
-    nodeViewTransaction.activate(opening.viewTicket);
-    return;
-  }
-  try {
-    const detail = await fetchWorkflowNodeSessionDetail({
-      props,
-      translate,
-      rootSessionId,
-      dialogProcessId,
-    });
-    const targetSessionId = text(
-      prepared.canonicalNodeItem.sessionId || prepared.canonicalNodeItem.nodeSessionId,
-    );
-    if (!isCurrentRequest(nodeViewTransaction, opening.viewTicket, targetSessionId, detail)) return;
-    nodeViewTransaction.replace(opening.viewTicket, detail);
-    refs.viewerState.value = (detail.messages || []).length ? "ready" : "empty";
-  } catch (error) {
-    if (!nodeViewTransaction.accepts(opening.viewTicket)) return;
-    refs.viewerError.value = String(
-      error?.message || error || translate("workflow.readNodeSessionFailed"),
-    );
-    refs.viewerState.value = "failed";
   } finally {
     if (nodeViewTransaction.activate(opening.viewTicket)) {
       applyUnifiedSessionDetailIfAvailable(prepared.canonicalNodeItem);
@@ -357,7 +287,6 @@ export function createNodeSessionOpeningController(context) {
     const prepared = prepareOpen(context, nodeItem, options);
     const opening = beginOpen(context, prepared);
     if (!opening) return;
-    if (prepared.isNewProtocolNode) await openNewProtocolSession(context, prepared, opening);
-    else await openLegacySession(context, prepared, opening);
+    await openNewProtocolSession(context, prepared, opening);
   };
 }

@@ -7,11 +7,7 @@ import { ref, watch } from "vue";
 import { useWorkflowNodeSessionHistory } from "../runtime/workflowNodeSessionHistory.js";
 import { useWorkflowNodeSessionLabels } from "../runtime/workflowNodeSessionLabels.js";
 import { useWorkflowDrawerHistory } from "../services/workflowDrawerHistory.js";
-import {
-  fetchExecutionSessionDetail,
-  fetchWorkflowNodeThinkingDetail,
-  hydrateExecutionSessionDetail,
-} from "../runtime/workflowNodeSessionDetail.js";
+import { fetchWorkflowNodeThinkingDetail } from "../runtime/workflowNodeSessionDetail.js";
 import { resolveWorkflowDialogProcessId } from "../utils/workflowDialogProcessId.js";
 import { createWorkflowNodeViewTransaction } from "../runtime/workflowNodeViewTransaction.js";
 import {
@@ -40,13 +36,7 @@ function createViewerRefs(input) {
   };
 }
 
-function createExecutionController({
-  props,
-  translate,
-  refs,
-  nodeViewTransaction,
-  buildWorkflowDrawerRoute,
-}) {
+function createExecutionController({ props, refs, nodeViewTransaction }) {
   function resolveLocalExecution(executionId = "", sessionIdHint = "") {
     const detail =
       typeof props.selectExecutionDetail === "function"
@@ -81,36 +71,10 @@ function createExecutionController({
     return true;
   }
 
-  async function loadExecutionSessionDetail(
-    executionId = "",
-    viewTicket = nodeViewTransaction.ticket(),
-    { sessionIdHint = "" } = {},
-  ) {
+  function resolveExecutionSessionId(executionId = "", sessionIdHint = "") {
     const id = text(executionId);
-    if (!id) return { state: "failed", reason: "missing_execution_id" };
-    const local = resolveLocalExecution(id, sessionIdHint);
-    const sessionId = local.sessionId;
-    if (!sessionId) return { state: "pending", reason: "session_identity_pending" };
-    const route = buildWorkflowDrawerRoute(refs.selectedNode.value || {});
-    const detail = await fetchExecutionSessionDetail({
-      props,
-      translate,
-      sessionId,
-      rootSessionId: route.rootSessionId,
-      dialogProcessId: route.dialogProcessId,
-    });
-    if (!nodeViewTransaction.accepts(viewTicket)) return { state: "stale" };
-    if (detail?.sessionId && text(detail.sessionId) !== sessionId) return { state: "stale" };
-    if (detail?.state === "pending") return detail;
-    nodeViewTransaction.replace(
-      viewTicket,
-      hydrateExecutionSessionDetail(detail, {
-        executionId: id,
-        execution: local.detail?.execution || null,
-      }),
-    );
-    refs.selectedExecutionId.value = id;
-    return { state: detail?.state === "empty" ? "empty" : "ready" };
+    if (!id) return text(sessionIdHint);
+    return resolveLocalExecution(id, sessionIdHint).sessionId;
   }
 
   function selectExecution(executionId = "") {
@@ -120,7 +84,7 @@ function createExecutionController({
     return false;
   }
 
-  return { loadExecutionSessionDetail, selectExecution };
+  return { resolveExecutionSessionId, selectExecution };
 }
 
 function createViewerCommands(context) {
@@ -232,10 +196,8 @@ export function useWorkflowNodeSessionViewer(input) {
   watchRuntimeNodeRebound({ props, flowNodes, refs });
   const execution = createExecutionController({
     props,
-    translate,
     refs,
     nodeViewTransaction,
-    buildWorkflowDrawerRoute: history.buildWorkflowDrawerRoute,
   });
   const liveProjection = createLiveProjectionController({
     props,
@@ -256,7 +218,7 @@ export function useWorkflowNodeSessionViewer(input) {
     nodeViewTransaction,
     buildWorkflowDrawerRoute: history.buildWorkflowDrawerRoute,
     pushWorkflowDrawerHistory: history.pushWorkflowDrawerHistory,
-    loadExecutionSessionDetail: execution.loadExecutionSessionDetail,
+    resolveExecutionSessionId: execution.resolveExecutionSessionId,
     applyUnifiedSessionDetailIfAvailable: liveProjection.applyAvailable,
     stepHasSession: labels.stepHasSession,
   };

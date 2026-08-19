@@ -3,14 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  createEventEnvelope,
-  EVENT_FAMILY,
-} from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   WORKFLOW_RUNTIME_EVENT,
   workflowSequenceDomainForEvent,
 } from "@noobot/event-protocol/workflow-runtime-event";
+import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
 
 const ENVELOPE_FIELDS = new Set([
   "aggregateVersion",
@@ -41,7 +39,8 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
         : "sub-session-1",
   ).trim();
   const authoritySessionId = String(
-    data.authoritySessionId || data.parentSessionId ||
+    data.authoritySessionId ||
+      data.parentSessionId ||
       (eventType === WORKFLOW_RUNTIME_EVENT.PLANNING ? data.sessionId : "") ||
       "main-session-1",
   ).trim();
@@ -70,7 +69,11 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
           : `workflow-node:${data.nodeExecutionId || "node-1"}`,
       ).trim(),
       ...(eventType === WORKFLOW_RUNTIME_EVENT.PLANNING
-        ? { messageId: String(data.messageId || data.presentationMessageId || "workflow-message-1").trim() }
+        ? {
+            messageId: String(
+              data.messageId || data.presentationMessageId || "workflow-message-1",
+            ).trim(),
+          }
         : {}),
     },
     causality: {},
@@ -92,5 +95,17 @@ export function canonicalWorkflowRuntimeEvent(eventType, data = {}) {
 }
 
 export function canonicalWorkflowSessionSnapshot(sessionDoc = {}) {
-  return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT, sessionDoc);
+  const sessionId = String(sessionDoc.sessionId || "sub-session-1").trim();
+  const aggregateVersion = Number(sessionDoc.aggregateVersion || 1);
+  return canonicalWorkflowRuntimeEvent(WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT, {
+    ...sessionDoc,
+    turnLifecycleSnapshot:
+      sessionDoc.turnLifecycleSnapshot ||
+      createTurnLifecycleSnapshot({
+        commandId: `test-snapshot:${sessionId}:${aggregateVersion}`,
+        sessionId,
+        sequence: aggregateVersion,
+        generatedAt: String(sessionDoc.occurredAt || "2026-01-01T00:00:00.000Z"),
+      }),
+  });
 }

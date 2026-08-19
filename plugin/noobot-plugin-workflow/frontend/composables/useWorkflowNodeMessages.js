@@ -206,9 +206,6 @@ export function useWorkflowNodeMessages({
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
     displayNodeMessages,
-    turnTimingsByTurnScopeId: computed(
-      () => selectedNodeProjection.value.turnTimingsByTurnScopeId || {},
-    ),
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   };

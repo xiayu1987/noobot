@@ -37,9 +37,10 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     let releaseTerminalResolution;
     const terminalResolutionFetcher = vi.fn(async () => ({
       ok: true,
-      json: async () => new Promise((resolve) => {
-        releaseTerminalResolution = resolve;
-      }),
+      json: async () =>
+        new Promise((resolve) => {
+          releaseTerminalResolution = resolve;
+        }),
     }));
     const { engine, turnRuntimeRegistry } = createHarness({
       sessionId: parentSessionId,
@@ -63,26 +64,28 @@ describe("useChatEngine.interaction-stop: terminal", () => {
     ];
 
     const applyEvent = ([eventType, phase, state], sequence) =>
-      engine.applyTurnLifecycleEnvelope(createTurnLifecycleEnvelope({
-        ...identity,
-        eventId: `workflow-child-${sequence + 1}`,
-        commandId: `workflow-child-command-${sequence + 1}`,
-        eventType,
-        phase,
-        state,
-        executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
-        startedAt: thinkingStartedAt,
-        finishedAt: eventType === TURN_EVENT.COMPLETED ? thinkingFinishedAt : "",
-        revision: sequence + 1,
-        sequence: sequence + 1,
-        ...(eventType === TURN_EVENT.COMPLETED
-          ? {
-              completionCommitId: "workflow-child-completion",
-              summaryVersion: 1,
-              terminalStatus: { status: "completed", reason: "run_completed" },
-            }
-          : {}),
-      }));
+      engine.applyTurnLifecycleEnvelope(
+        createTurnLifecycleEnvelope({
+          ...identity,
+          eventId: `workflow-child-${sequence + 1}`,
+          commandId: `workflow-child-command-${sequence + 1}`,
+          eventType,
+          phase,
+          state,
+          executionState: eventType === TURN_EVENT.COMPLETED ? "completed" : "sending",
+          startedAt: thinkingStartedAt,
+          finishedAt: eventType === TURN_EVENT.COMPLETED ? thinkingFinishedAt : "",
+          revision: sequence + 1,
+          sequence: sequence + 1,
+          ...(eventType === TURN_EVENT.COMPLETED
+            ? {
+                completionCommitId: "workflow-child-completion",
+                summaryVersion: 1,
+                terminalStatus: { status: "completed", reason: "run_completed" },
+              }
+            : {}),
+        }),
+      );
     for (const [sequence, event] of events.slice(0, -1).entries()) {
       expect((await applyEvent(event, sequence)).applied).toBe(true);
     }

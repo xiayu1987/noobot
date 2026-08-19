@@ -19,8 +19,11 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
     const mainSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
     const parentSessionId = normalizeTrimmedString(data?.parentSessionId);
     const isChildLifecycle = Boolean(
-      eventSessionId && mainSessionId && eventSessionId !== mainSessionId &&
-      parentSessionId && parentSessionId === mainSessionId,
+      eventSessionId &&
+      mainSessionId &&
+      eventSessionId !== mainSessionId &&
+      parentSessionId &&
+      parentSessionId === mainSessionId,
     );
     logSessionEvent?.({
       category: "debug",
@@ -44,15 +47,16 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
     });
     if (isChildLifecycle) {
       const result = applyTurnLifecycleEnvelope?.(data);
-      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
-        .includes(normalizeTrimmedString(data?.eventType).toLowerCase());
+      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
+        normalizeTrimmedString(data?.eventType).toLowerCase(),
+      );
       const logReduction = (reduction = {}) => {
         const rejected = reduction?.applied !== true;
         const subSessionProjection = reduction?.subSessionEffect?.subSessionProjection || null;
         const projectedSession = subSessionProjection?.session || null;
         return logSessionEvent?.({
           category: terminalLifecycle || rejected ? "state" : "debug",
-          level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),
+          level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
           ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
           event: terminalLifecycle
             ? "frontend.authoritativeState.foreignTerminalReduced"
@@ -74,23 +78,27 @@ export function routeForeignTurnLifecycleEvent(event, data, context) {
             projectionApplied: subSessionProjection?.applied === true,
             projectionReason: subSessionProjection?.reason || "",
             projectedStatus: projectedSession?.status || "",
-            projectedMessages: (Array.isArray(projectedSession?.messages) ? projectedSession.messages : [])
-              .map((message = {}) => ({
-                messageId: normalizeTrimmedString(message?.messageId || message?.id),
-                role: normalizeTrimmedString(message?.role),
-                turnScopeId: normalizeTrimmedString(message?.turnScopeId),
-                pending: message?.pending,
-                channelState: normalizeTrimmedString(message?.channelState?.state),
-              })),
+            projectedMessages: (Array.isArray(projectedSession?.messages)
+              ? projectedSession.messages
+              : []
+            ).map((message = {}) => ({
+              messageId: normalizeTrimmedString(message?.messageId || message?.id),
+              role: normalizeTrimmedString(message?.role),
+              turnScopeId: normalizeTrimmedString(message?.turnScopeId),
+              pending: message?.pending,
+              channelState: normalizeTrimmedString(message?.channelState?.state),
+            })),
             terminalResolutionScheduled: terminalLifecycle,
           },
         });
       };
       if (result && typeof result.then === "function") {
-        void result.then(logReduction, (error) => logReduction({
-          applied: false,
-          reason: String(error?.message || "foreign_turn_reduction_failed"),
-        }));
+        void result.then(logReduction, (error) =>
+          logReduction({
+            applied: false,
+            reason: String(error?.message || "foreign_turn_reduction_failed"),
+          }),
+        );
       } else {
         logReduction(result);
       }
@@ -114,11 +122,12 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     const result = applyTurnLifecycleEnvelope?.(data);
     const logReduction = (reduction = {}) => {
       const rejected = reduction?.applied !== true;
-      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"]
-        .includes(lifecycleEventType);
+      const terminalLifecycle = ["turn.completed", "turn.stop_completed", "turn.failed"].includes(
+        lifecycleEventType,
+      );
       logSessionEvent?.({
         category: terminalLifecycle || rejected ? "state" : "debug",
-        level: rejected ? "warn" : (terminalLifecycle ? "info" : "debug"),
+        level: rejected ? "warn" : terminalLifecycle ? "info" : "debug",
         ...(terminalLifecycle || rejected ? {} : { debugType: "workflow-diagnostics" }),
         event: terminalLifecycle
           ? "frontend.authoritativeState.mainTerminalReduced"
@@ -142,10 +151,12 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
       });
     };
     if (result && typeof result.then === "function") {
-      void result.then(logReduction, (error) => logReduction({
-        applied: false,
-        reason: String(error?.message || "main_turn_reduction_failed"),
-      }));
+      void result.then(logReduction, (error) =>
+        logReduction({
+          applied: false,
+          reason: String(error?.message || "main_turn_reduction_failed"),
+        }),
+      );
     } else {
       logReduction(result);
     }
@@ -175,9 +186,10 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     if (!targetMessage) {
       reason = "committed_user_target_missing";
     } else {
-      const projectedMessage = typeof makeViewMessage === "function"
-        ? makeViewMessage(committedUserMessage)
-        : committedUserMessage;
+      const projectedMessage =
+        typeof makeViewMessage === "function"
+          ? makeViewMessage(committedUserMessage)
+          : committedUserMessage;
       Object.assign(targetMessage, projectedMessage);
       targetMessage.attachments = Array.isArray(projectedMessage?.attachments)
         ? projectedMessage.attachments.map((attachment) => ({ ...attachment }))

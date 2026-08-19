@@ -3,8 +3,64 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { RUNTIME_EVENT_CATEGORIES, RUNTIME_EVENT_CHANNELS, writeRoutedRuntimeEvent } from "@noobot/runtime-events";
+import {
+  RUNTIME_EVENT_CATEGORIES,
+  RUNTIME_EVENT_CHANNELS,
+  writeRoutedRuntimeEvent,
+} from "@noobot/runtime-events";
+import {
+  createWorkflowRuntimeEnvelope,
+  WORKFLOW_RUNTIME_EVENT,
+} from "@noobot/event-protocol/workflow-runtime-event";
 const normalizeRouteText = (value) => String(value ?? "").trim();
+
+function createSessionSnapshotEnvelope({
+  authoritySessionId,
+  dialogProcessId,
+  aggregateVersion,
+  session,
+  sessionSummary,
+  meta,
+  childSessionId,
+}) {
+  const workflowRunId = normalizeRouteText(meta?.workflowRunId);
+  const nodeExecutionId = normalizeRouteText(meta?.nodeExecutionId);
+  const turnScopeId = normalizeRouteText(meta?.turnScopeId);
+  const occurredAt = normalizeRouteText(sessionSummary?.updatedAt || session?.updatedAt);
+  if (!workflowRunId || !nodeExecutionId || !turnScopeId || !childSessionId || !occurredAt) {
+    throw new Error("workflow session snapshot is missing canonical runtime identity");
+  }
+  const {
+    sessionId: _sessionId,
+    parentSessionId: _parentSessionId,
+    ...snapshot
+  } = {
+    ...(session && typeof session === "object" ? session : {}),
+    ...(sessionSummary && typeof sessionSummary === "object" ? sessionSummary : {}),
+    messages: Array.isArray(session?.messages) ? session.messages : sessionSummary?.messages || [],
+  };
+  return createWorkflowRuntimeEnvelope({
+    eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    authoritySessionId,
+    turnScopeId,
+    executionId: normalizeRouteText(meta?.executionId),
+    eventId: `workflow-session-snapshot:${childSessionId}:${aggregateVersion}`,
+    workflowRunId,
+    sequence: aggregateVersion,
+    aggregateVersion,
+    occurredAt,
+    producer: { type: "service", id: "workflow-session-read-model" },
+    causality: { correlationId: workflowRunId },
+    payload: {
+      ...snapshot,
+      workflowRunId,
+      nodeExecutionId,
+      nodeSessionId: childSessionId,
+      dialogProcessId: normalizeRouteText(dialogProcessId),
+      turnScopeId,
+    },
+  });
+}
 
 function parseExecutionPage(query = {}) {
   const rawCursor = normalizeRouteText(query?.executionCursor);
@@ -12,7 +68,13 @@ function parseExecutionPage(query = {}) {
   if (!rawCursor && !rawLimit) return null;
   const cursor = rawCursor ? Number(rawCursor) : 0;
   const limit = rawLimit ? Number(rawLimit) : 500;
-  if (!Number.isSafeInteger(cursor) || cursor < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 5000) {
+  if (
+    !Number.isSafeInteger(cursor) ||
+    cursor < 0 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 5000
+  ) {
     const error = new Error("executionCursor and executionLimit must be valid integers");
     error.statusCode = 400;
     throw error;
@@ -23,16 +85,37 @@ function parseExecutionPage(query = {}) {
 export function createWorkflowServiceRouteHandlers(context = {}) {
   const sessions = context?.ports?.sessions;
   const badRequestStatus = context?.ports?.http?.status?.BAD_REQUEST || 400;
-  if (!sessions || typeof sessions.readWorkflowSnapshot !== "function" || typeof sessions.readWorkflowThinkingDetail !== "function") {
+  if (
+    !sessions ||
+    typeof sessions.readWorkflowSnapshot !== "function" ||
+    typeof sessions.readWorkflowThinkingDetail !== "function"
+  ) {
     throw new Error("workflow service session ports are required");
   }
-  const logDetail = ({ userId = "", sessionId = "", dialogProcessId = "", traceId = "", event = "", level = "debug", data = {} } = {}) =>
+  const logDetail = ({
+    userId = "",
+    sessionId = "",
+    dialogProcessId = "",
+    traceId = "",
+    event = "",
+    level = "debug",
+    data = {},
+  } = {}) =>
     writeRoutedRuntimeEvent({
-      scope: "session", source: "service", channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-      category: RUNTIME_EVENT_CATEGORIES.DEBUG, level, debugType: "workflow-diagnostics",
-      event, userId: String(userId || "").trim(), sessionId: String(sessionId || "").trim(),
+      scope: "session",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.DEBUG,
+      level,
+      debugType: "workflow-diagnostics",
+      event,
+      userId: String(userId || "").trim(),
+      sessionId: String(sessionId || "").trim(),
       dialogProcessId: String(dialogProcessId || "").trim(),
-      data: { traceId: String(traceId || "").trim(), ...(data && typeof data === "object" ? data : {}) },
+      data: {
+        traceId: String(traceId || "").trim(),
+        ...(data && typeof data === "object" ? data : {}),
+      },
     });
 
   const sessionDetailHandler = async (req, res) => {
@@ -41,34 +124,77 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
     const executionPage = parseExecutionPage(req.query);
     let snapshot;
     try {
-      snapshot = await sessions.readWorkflowSnapshot({ userId, sessionId, dialogProcessId, locale: req.locale, executionPage });
+      snapshot = await sessions.readWorkflowSnapshot({
+        userId,
+        sessionId,
+        dialogProcessId,
+        locale: req.locale,
+        executionPage,
+      });
     } catch (error) {
-      void logDetail({ userId, sessionId, dialogProcessId, traceId,
-        event: "service.workflowNodeDetail.snapshotFailed", level: "error", data: {
+      void logDetail({
+        userId,
+        sessionId,
+        dialogProcessId,
+        traceId,
+        event: "service.workflowNodeDetail.snapshotFailed",
+        level: "error",
+        data: {
           errorName: String(error?.name || "Error"),
-          errorMessage: String(error?.message || error || ""), errorCode: String(error?.code || ""),
-        } });
+          errorMessage: String(error?.message || error || ""),
+          errorCode: String(error?.code || ""),
+        },
+      });
       throw error;
     }
-    const { session, sessionSummary, task, execution, executionLogs = [], meta, childSessionId } = snapshot;
+    const {
+      session,
+      sessionSummary,
+      task,
+      execution,
+      executionLogs = [],
+      meta,
+      childSessionId,
+    } = snapshot;
     const aggregateVersion = Number(sessionSummary?.aggregateVersion || 0);
     if (!Number.isInteger(aggregateVersion) || aggregateVersion <= 0) {
       throw new Error("workflow session snapshot is missing an authoritative aggregateVersion");
     }
     const restoredExecutionLogs = executionLogs;
-    const hasMoreExecutionLogs = Boolean(executionPage && restoredExecutionLogs.length > executionPage.limit);
+    const hasMoreExecutionLogs = Boolean(
+      executionPage && restoredExecutionLogs.length > executionPage.limit,
+    );
     const responseExecutionLogs = executionPage
       ? restoredExecutionLogs.slice(0, executionPage.limit)
       : restoredExecutionLogs;
-    void logDetail({ userId, sessionId, dialogProcessId, traceId,
-      event: "service.workflowNodeDetail.snapshotLoaded", data: {
+    const snapshotEnvelope = createSessionSnapshotEnvelope({
+      authoritySessionId: sessionId,
+      dialogProcessId,
+      aggregateVersion,
+      session,
+      sessionSummary,
+      meta,
+      childSessionId,
+    });
+    void logDetail({
+      userId,
+      sessionId,
+      dialogProcessId,
+      traceId,
+      event: "service.workflowNodeDetail.snapshotLoaded",
+      data: {
         childSessionId,
         snapshotSessionId: String(session?.sessionId || ""),
         summarySessionId: String(sessionSummary?.sessionId || ""),
         executionSessionId: String(execution?.sessionId || ""),
-        messageCount: Array.isArray(sessionSummary?.messages) ? sessionSummary.messages.length : Array.isArray(session?.messages) ? session.messages.length : 0,
+        messageCount: Array.isArray(sessionSummary?.messages)
+          ? sessionSummary.messages.length
+          : Array.isArray(session?.messages)
+            ? session.messages.length
+            : 0,
         executionLogCount: responseExecutionLogs.length,
-      } });
+      },
+    });
     res.json({
       ok: true,
       userId: String(userId || "").trim(),
@@ -76,17 +202,22 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       dialogProcessId: String(dialogProcessId || "").trim(),
       workflowSession: {
         aggregateVersion,
+        snapshotEnvelope,
         session,
         sessionSummary,
         task,
         execution,
         executionLogs: responseExecutionLogs,
-        executionLogsPage: executionPage ? {
-          cursor: executionPage.cursor,
-          nextCursor: hasMoreExecutionLogs ? executionPage.cursor + responseExecutionLogs.length : null,
-          limit: executionPage.limit,
-          hasMore: hasMoreExecutionLogs,
-        } : null,
+        executionLogsPage: executionPage
+          ? {
+              cursor: executionPage.cursor,
+              nextCursor: hasMoreExecutionLogs
+                ? executionPage.cursor + responseExecutionLogs.length
+                : null,
+              limit: executionPage.limit,
+              hasMore: hasMoreExecutionLogs,
+            }
+          : null,
         meta,
       },
     });
@@ -101,7 +232,14 @@ export function createWorkflowServiceRouteHandlers(context = {}) {
       error.statusCode = badRequestStatus;
       throw error;
     }
-    const detail = await sessions.readWorkflowThinkingDetail({ userId, sessionId, routeDialogProcessId, dialogProcessId, turnScopeId, locale: req.locale });
+    const detail = await sessions.readWorkflowThinkingDetail({
+      userId,
+      sessionId,
+      routeDialogProcessId,
+      dialogProcessId,
+      turnScopeId,
+      locale: req.locale,
+    });
     res.json({
       ok: true,
       userId: String(userId || "").trim(),
