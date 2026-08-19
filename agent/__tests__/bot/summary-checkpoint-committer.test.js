@@ -352,11 +352,13 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
     {
       messageUid: "refinement-call",
       role: "assistant",
-      tool_calls: [{
-        id: "refinement",
-        name: "request_plan_refinement",
-        contextPolicy: evidencePolicy,
-      }],
+      tool_calls: [
+        {
+          id: "refinement",
+          name: "request_plan_refinement",
+          contextPolicy: evidencePolicy,
+        },
+      ],
     },
     {
       messageUid: "refinement-result",
@@ -391,10 +393,7 @@ test("summary checkpoint preserves classified control-tool evidence", async () =
   });
 
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["business"]);
-  assert.deepEqual(checkpointPayload.retainedMessageUids, [
-    "refinement-call",
-    "refinement-result",
-  ]);
+  assert.deepEqual(checkpointPayload.retainedMessageUids, ["refinement-call", "refinement-result"]);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),
     ["refinement-call", "refinement-result"],

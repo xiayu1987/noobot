@@ -12,13 +12,15 @@ import {
   createInteractionEnvelope,
   createWorkflowEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
-import { BackendChannelState, SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
+import {
+  BackendChannelState,
+  SESSION_RUN_EVENT,
+} from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 import { applyTurnRuntimeEvent } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { clearExtensionRegistry } from "../../../../../src/extensions/extension-registry.js";
-import { createReplayBatch } from "@noobot/event-protocol";
-import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
+import { INTERACTION_EVENT_TYPE, createReplayBatch } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { WORKFLOW_RUNTIME_EVENT } from "@noobot/event-protocol/workflow-runtime-event";
 import { createTurnLifecycleSnapshot, TURN_STATE } from "@noobot/session-protocol";
@@ -336,7 +338,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "old-q", ts: 1 },
-      { role: RoleEnum.ASSISTANT, dialogProcessId: "dp-old", content: "old-a", ts: 2, pending: false },
+      {
+        role: RoleEnum.ASSISTANT,
+        dialogProcessId: "dp-old",
+        content: "old-a",
+        ts: 2,
+        pending: false,
+      },
     ];
     refs.activeSession.value.rawMessages = [...refs.activeSession.value.messages];
 
@@ -386,27 +394,27 @@ describe("useReconnectReplay", () => {
       },
     });
     await api.applyReconnectData({
-      sessions: [{
-        sessionId: "s-1",
-        replayBatch: createReplayBatch({
+      sessions: [
+        {
           sessionId: "s-1",
-          streamId: "stream-s-1",
-          requestId: "reconnect-s-1",
-          orderingDomain: "turn-lifecycle",
-          orderingScopeId: "s-1",
-          snapshot,
-          snapshotSequence: 1,
-        }),
-      }],
+          replayBatch: createReplayBatch({
+            sessionId: "s-1",
+            streamId: "stream-s-1",
+            requestId: "reconnect-s-1",
+            orderingDomain: "turn-lifecycle",
+            orderingScopeId: "s-1",
+            snapshot,
+            snapshotSequence: 1,
+          }),
+        },
+      ],
     });
 
     const userIdx = refs.activeSession.value.messages.findIndex(
       (message) => message.role === RoleEnum.USER && message.content === "new-q",
     );
     const assistantIdx = refs.activeSession.value.messages.findIndex(
-      (message) =>
-        message.role === RoleEnum.ASSISTANT &&
-        message.dialogProcessId === "dp-new",
+      (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-new",
     );
     expect(mocks.chatList.fetchSessionDetail).toHaveBeenCalledWith("s-1", {
       source: "reconnectProtocolReconcile",

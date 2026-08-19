@@ -16,9 +16,7 @@ import {
 } from "@noobot/context-protocol/tool/context-policy";
 
 test("canonical tool-call projections retain declared context policy", () => {
-  const contextPolicy = createFlowControlContextPolicy(
-    FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-  );
+  const contextPolicy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
   const calls = [{ id: "call-1", name: "control", args: { value: 1 }, contextPolicy }];
 
   const stored = formatToolCallsForStorage(calls);

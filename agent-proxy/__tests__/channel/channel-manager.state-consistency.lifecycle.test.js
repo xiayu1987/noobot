@@ -16,7 +16,10 @@ import {
   listEvents,
   FakeUpstreamWebSocket,
 } from "./channel-manager.state-consistency.test-helpers.js";
-import { authoritativeSnapshot } from "./channel-manager.state-consistency.reconnect.fixtures.js";
+import {
+  authoritativeLifecycle,
+  authoritativeSnapshot,
+} from "./channel-manager.state-consistency.reconnect.fixtures.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_EVENT,
@@ -26,7 +29,6 @@ import {
 import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_TYPE, MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
-import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 test("channel transport preserves strict event payloads during broadcast and replay", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -59,12 +61,20 @@ test("channel transport preserves strict event payloads during broadcast and rep
       messageId: lifecycle.messageId,
     },
     causality: {},
-    ordering: { domain: "attachment-lifecycle", scopeId: "attachment-1:session-strict-payload:user", sequence: 1 },
+    ordering: {
+      domain: "attachment-lifecycle",
+      scopeId: "attachment-1:session-strict-payload:user",
+      sequence: 1,
+    },
     producer: { type: "test", id: "agent-proxy-test" },
     occurredAt: lifecycle.occurredAt,
     payload: lifecycle,
   });
-  const envelope = manager.pushChannelEvent(channel, ATTACHMENT_LIFECYCLE_WIRE_EVENT, attachmentEnvelope);
+  const envelope = manager.pushChannelEvent(
+    channel,
+    ATTACHMENT_LIFECYCLE_WIRE_EVENT,
+    attachmentEnvelope,
+  );
   manager.broadcastChannelEvent(channel, envelope);
 
   assert.deepEqual(getEvent(live, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);

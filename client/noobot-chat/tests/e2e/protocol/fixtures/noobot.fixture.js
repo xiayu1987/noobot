@@ -55,18 +55,12 @@ export async function installE2eModelPreferences(pageOrContext) {
       ]),
     );
     setInitialValue("noobot_selected_model", modelAlias);
-    setInitialValue(
-      "noobot_selected_model_by_scenario",
-      JSON.stringify(scenarioModels),
-    );
+    setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels));
     setInitialValue(
       "noobot_selected_model_selection_by_scenario_v2",
       JSON.stringify(scenarioSelections),
     );
-    setInitialValue(
-      "noobot_plugin_model_config_by_scenario_v2",
-      JSON.stringify(pluginModels),
-    );
+    setInitialValue("noobot_plugin_model_config_by_scenario_v2", JSON.stringify(pluginModels));
     setInitialValue("noobot_bot_scenario", "full");
     setInitialValue(
       "noobot_memory_model_by_scenario_v1",

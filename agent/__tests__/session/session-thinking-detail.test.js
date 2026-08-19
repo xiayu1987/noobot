@@ -13,27 +13,32 @@ import { buildSessionDisplaySummary } from "../../src/session/session-summary-bu
 import { readSessionTurn, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 
 test("thinking detail message carries its session identity without duplicating scoped messages", () => {
-  const payload = buildThinkingDetailPayload({
-    sessionId: "session-detail",
-    sessions: [{
+  const payload = buildThinkingDetailPayload(
+    {
       sessionId: "session-detail",
-      rawMessages: [
+      sessions: [
         {
-          role: "assistant",
-          type: "message",
-          turnScopeId: "turn-detail",
-          toolTimeline: [{ key: "call:one" }],
-        },
-        {
-          role: "assistant",
-          type: "message",
-          turnScopeId: "turn-detail",
-          injectedMessage: true,
-          content: "guidance",
+          sessionId: "session-detail",
+          rawMessages: [
+            {
+              role: "assistant",
+              type: "message",
+              turnScopeId: "turn-detail",
+              toolTimeline: [{ key: "call:one" }],
+            },
+            {
+              role: "assistant",
+              type: "message",
+              turnScopeId: "turn-detail",
+              injectedMessage: true,
+              content: "guidance",
+            },
+          ],
         },
       ],
-    }],
-  }, { turnScopeId: "turn-detail" });
+    },
+    { turnScopeId: "turn-detail" },
+  );
 
   assert.equal(payload.messageItem.sessionId, "session-detail");
   assert.equal(Object.hasOwn(payload, "allMessages"), false);
@@ -41,36 +46,45 @@ test("thinking detail message carries its session identity without duplicating s
 });
 
 test("thinking detail projects the complete turn timeline onto the final assistant message", () => {
-  const payload = buildThinkingDetailPayload({
-    sessionId: "child-session",
-    sessions: [{
+  const payload = buildThinkingDetailPayload(
+    {
       sessionId: "child-session",
-      rawMessages: [
+      sessions: [
         {
-          id: "tool-call-message",
-          role: "assistant",
-          type: "tool_call",
-          turnScopeId: "workflow-node:turn-1",
-          toolTimeline: [{ key: "call:one", status: "running", call: { eventId: "call-start" } }],
-        },
-        {
-          id: "tool-result-message",
-          role: "tool",
-          type: "tool_result",
-          turnScopeId: "workflow-node:turn-1",
-          toolTimeline: [{ key: "call:one", status: "completed", resultEvent: { eventId: "call-end" } }],
-        },
-        {
-          id: "final-assistant",
-          role: "assistant",
-          type: "message",
-          turnScopeId: "workflow-node:turn-1",
-          content: "done",
-          activityTimeline: [{ eventId: "analysis-1", eventType: "thinking" }],
+          sessionId: "child-session",
+          rawMessages: [
+            {
+              id: "tool-call-message",
+              role: "assistant",
+              type: "tool_call",
+              turnScopeId: "workflow-node:turn-1",
+              toolTimeline: [
+                { key: "call:one", status: "running", call: { eventId: "call-start" } },
+              ],
+            },
+            {
+              id: "tool-result-message",
+              role: "tool",
+              type: "tool_result",
+              turnScopeId: "workflow-node:turn-1",
+              toolTimeline: [
+                { key: "call:one", status: "completed", resultEvent: { eventId: "call-end" } },
+              ],
+            },
+            {
+              id: "final-assistant",
+              role: "assistant",
+              type: "message",
+              turnScopeId: "workflow-node:turn-1",
+              content: "done",
+              activityTimeline: [{ eventId: "analysis-1", eventType: "thinking" }],
+            },
+          ],
         },
       ],
-    }],
-  }, { turnScopeId: "workflow-node:turn-1" });
+    },
+    { turnScopeId: "workflow-node:turn-1" },
+  );
 
   assert.equal(payload.messageItem.id, "final-assistant");
   assert.equal(payload.messageItem.toolTimeline.length, 1);
@@ -83,45 +97,61 @@ test("thinking detail projects the complete turn timeline onto the final assista
 });
 
 test("thinking detail publishes its authoritative source revision", () => {
-  const payload = buildThinkingDetailPayload({
-    sessionId: "revision-session",
-    revision: "sha256:thinking-detail-content",
-    sessions: [{
+  const payload = buildThinkingDetailPayload(
+    {
       sessionId: "revision-session",
-      rawMessages: [{
-        role: "assistant",
-        type: "message",
-        turnScopeId: "revision-turn",
-      }],
-    }],
-  }, { turnScopeId: "revision-turn" });
+      revision: "sha256:thinking-detail-content",
+      sessions: [
+        {
+          sessionId: "revision-session",
+          rawMessages: [
+            {
+              role: "assistant",
+              type: "message",
+              turnScopeId: "revision-turn",
+            },
+          ],
+        },
+      ],
+    },
+    { turnScopeId: "revision-turn" },
+  );
 
   assert.equal(payload.revision, "sha256:thinking-detail-content");
 });
 
 test("stopped turn detail uses the persisted presentation identity without a final answer", () => {
-  const payload = buildThinkingDetailPayload({
-    sessionId: "stopped-session",
-    sessions: [{
+  const payload = buildThinkingDetailPayload(
+    {
       sessionId: "stopped-session",
-      rawMessages: [{
-        id: "tool-call-message",
-        role: "assistant",
-        type: "tool_call",
-        chatPresentation: false,
-        sessionId: "stopped-session",
-        dialogProcessId: "stopped-dialog",
-        turnScopeId: "stopped-turn",
-        presentationMessageId: "stopped-presentation",
-        toolTimeline: [{
-          key: "call:one",
-          toolCallId: "one",
-          call: { eventId: "call-one" },
-          resultEvent: { eventId: "result-one" },
-        }],
-      }],
-    }],
-  }, { turnScopeId: "stopped-turn" });
+      sessions: [
+        {
+          sessionId: "stopped-session",
+          rawMessages: [
+            {
+              id: "tool-call-message",
+              role: "assistant",
+              type: "tool_call",
+              chatPresentation: false,
+              sessionId: "stopped-session",
+              dialogProcessId: "stopped-dialog",
+              turnScopeId: "stopped-turn",
+              presentationMessageId: "stopped-presentation",
+              toolTimeline: [
+                {
+                  key: "call:one",
+                  toolCallId: "one",
+                  call: { eventId: "call-one" },
+                  resultEvent: { eventId: "result-one" },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    { turnScopeId: "stopped-turn" },
+  );
 
   assert.equal(payload.exists, true);
   assert.equal(payload.messageItem.role, "assistant");
@@ -139,26 +169,30 @@ test("session summary references canonical thinking detail without copying its t
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
-      toolTimeline: [{
-        key: "call:one",
-        toolCallId: "one",
-        status: "completed",
-        call: { eventId: "call-one" },
-        resultEvent: { eventId: "result-one" },
-      }],
+      toolTimeline: [
+        {
+          key: "call:one",
+          toolCallId: "one",
+          status: "completed",
+          call: { eventId: "call-one" },
+          resultEvent: { eventId: "result-one" },
+        },
+      ],
     },
     {
       id: "tool-call-two",
       role: "assistant",
       type: "tool_call",
       turnScopeId: "workflow-node:turn-2",
-      toolTimeline: [{
-        key: "call:two",
-        toolCallId: "two",
-        status: "completed",
-        call: { eventId: "call-two" },
-        resultEvent: { eventId: "result-two" },
-      }],
+      toolTimeline: [
+        {
+          key: "call:two",
+          toolCallId: "two",
+          status: "completed",
+          call: { eventId: "call-two" },
+          resultEvent: { eventId: "result-two" },
+        },
+      ],
     },
     {
       id: "final-assistant",
@@ -171,10 +205,13 @@ test("session summary references canonical thinking detail without copying its t
 
   const summary = buildSessionDisplaySummary({ sessionId: "child-session", messages });
   const summaryMessage = summary.messages.find((item) => item.id === "final-assistant");
-  const detail = buildThinkingDetailPayload({
-    sessionId: "child-session",
-    sessions: [{ sessionId: "child-session", rawMessages: messages }],
-  }, { turnScopeId: "workflow-node:turn-2" });
+  const detail = buildThinkingDetailPayload(
+    {
+      sessionId: "child-session",
+      sessions: [{ sessionId: "child-session", rawMessages: messages }],
+    },
+    { turnScopeId: "workflow-node:turn-2" },
+  );
 
   assert.equal(summaryMessage.thinkingDetailCount, 4);
   assert.equal(summaryMessage.hasThinkingDetails, true);
@@ -186,26 +223,33 @@ test("session summary references canonical thinking detail without copying its t
 
 test("session summary does not copy large tool payloads retained by thinking detail", () => {
   const largePayload = "x".repeat(512 * 1024);
-  const messages = [{
-    id: "final-assistant",
-    role: "assistant",
-    type: "message",
-    turnScopeId: "turn-large-detail",
-    content: "done",
-    toolTimeline: [{
-      key: "call:large",
-      toolCallId: "large",
-      status: "completed",
-      call: { arguments: largePayload },
-      resultEvent: { output: largePayload },
-    }],
-  }];
+  const messages = [
+    {
+      id: "final-assistant",
+      role: "assistant",
+      type: "message",
+      turnScopeId: "turn-large-detail",
+      content: "done",
+      toolTimeline: [
+        {
+          key: "call:large",
+          toolCallId: "large",
+          status: "completed",
+          call: { arguments: largePayload },
+          resultEvent: { output: largePayload },
+        },
+      ],
+    },
+  ];
 
   const summary = buildSessionDisplaySummary({ sessionId: "large-session", messages });
-  const detail = buildThinkingDetailPayload({
-    sessionId: "large-session",
-    sessions: [{ sessionId: "large-session", rawMessages: messages }],
-  }, { turnScopeId: "turn-large-detail" });
+  const detail = buildThinkingDetailPayload(
+    {
+      sessionId: "large-session",
+      sessions: [{ sessionId: "large-session", rawMessages: messages }],
+    },
+    { turnScopeId: "turn-large-detail" },
+  );
 
   assert.equal(JSON.stringify(summary).includes(largePayload), false);
   assert.equal(summary.messages[0].thinkingDetailCount, 2);
@@ -221,23 +265,26 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
       sessionDir,
       sessionPayload: {
         sessionId: "scoped-session",
-        messages: [{
-          messageUid: "sm-one",
-          role: "assistant",
-          type: "message",
-          turnScopeId: "turn-one",
-          dialogProcessId: "dialog-one",
-          content: "one",
-          toolTimeline: [{ key: "call:one", status: "completed" }],
-        }, {
-          messageUid: "sm-two",
-          role: "assistant",
-          type: "message",
-          turnScopeId: "turn-two",
-          dialogProcessId: "dialog-two",
-          content: "two",
-          toolTimeline: [{ key: "call:two", status: "completed" }],
-        }],
+        messages: [
+          {
+            messageUid: "sm-one",
+            role: "assistant",
+            type: "message",
+            turnScopeId: "turn-one",
+            dialogProcessId: "dialog-one",
+            content: "one",
+            toolTimeline: [{ key: "call:one", status: "completed" }],
+          },
+          {
+            messageUid: "sm-two",
+            role: "assistant",
+            type: "message",
+            turnScopeId: "turn-two",
+            dialogProcessId: "dialog-two",
+            content: "two",
+            toolTimeline: [{ key: "call:two", status: "completed" }],
+          },
+        ],
       },
     });
 
@@ -253,7 +300,10 @@ test("thinking detail storage lookup reads exactly one canonical Turn journal", 
     assert.equal(turn.turnScopeId, "turn-two");
     assert.ok(turn.committedBytes > 0);
     assert.equal(Object.hasOwn(turn, "aggregateVersion"), false);
-    assert.deepEqual(turn.messages.map((message) => message.messageUid), ["sm-two"]);
+    assert.deepEqual(
+      turn.messages.map((message) => message.messageUid),
+      ["sm-two"],
+    );
   } finally {
     await rm(sessionDir, { recursive: true, force: true });
   }

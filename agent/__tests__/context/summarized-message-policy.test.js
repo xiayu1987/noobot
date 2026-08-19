@@ -143,13 +143,15 @@ test("summarization includes every restored incremental tool call and result wit
   const latestSummaryCall = {
     type: "ai",
     content: "",
-    tool_calls: [{
-      id: "call_summary",
-      name: "task_summary",
-      args: {},
-      type: "tool_call",
-      contextPolicy: boundaryPolicy,
-    }],
+    tool_calls: [
+      {
+        id: "call_summary",
+        name: "task_summary",
+        args: {},
+        type: "tool_call",
+        contextPolicy: boundaryPolicy,
+      },
+    ],
     lc_kwargs: {},
   };
   const messages = [
@@ -341,13 +343,15 @@ test("markCurrentTurnModelMessagesSummarized includes restored old injections an
     {
       type: "ai",
       content: "",
-      tool_calls: [{
-        id: "call_summary",
-        name: "task_summary",
-        args: {},
-        type: "tool_call",
-        contextPolicy: boundaryPolicy,
-      }],
+      tool_calls: [
+        {
+          id: "call_summary",
+          name: "task_summary",
+          args: {},
+          type: "tool_call",
+          contextPolicy: boundaryPolicy,
+        },
+      ],
       lc_kwargs: {},
     },
   ];
@@ -395,11 +399,13 @@ test("model and store projections apply one summarization scope policy", () => {
     {
       role: "assistant",
       content: "",
-      tool_calls: [{
-        id: "call_summary",
-        function: { name: "task_summary", arguments: "{}" },
-        contextPolicy: boundaryPolicy,
-      }],
+      tool_calls: [
+        {
+          id: "call_summary",
+          function: { name: "task_summary", arguments: "{}" },
+          contextPolicy: boundaryPolicy,
+        },
+      ],
       lc_kwargs: {},
     },
     {

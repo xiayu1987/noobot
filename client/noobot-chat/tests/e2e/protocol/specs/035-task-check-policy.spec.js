@@ -229,9 +229,7 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   for (const messageUid of preservedCheckpointEvidenceMessageUids) {
     expect(
       postCheckpointInvocations.some((invocation) =>
-        invocation.data.messages.evidence.some(
-          (message) => message.messageId === messageUid,
-        ),
+        invocation.data.messages.evidence.some((message) => message.messageId === messageUid),
       ),
     ).toBe(true);
   }

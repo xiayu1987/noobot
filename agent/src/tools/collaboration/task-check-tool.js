@@ -36,9 +36,7 @@ export function createTaskCheckTool(ctx = {}) {
         checkContent: z.string().describe(tTool(runtime, "tools.task_check.fieldCheckContent")),
       }),
       metadata: {
-        contextPolicy: createFlowControlContextPolicy(
-          FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE,
-        ),
+        contextPolicy: createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE),
       },
       func: async ({ checkContent }) => {
         const content = String(checkContent || "").trim();

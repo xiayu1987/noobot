@@ -201,19 +201,20 @@ export class SessionCrudService {
       }),
       this.sessionRepo.readSessionDisplaySummary(userId, normalizedSessionId),
     ]);
-    const summaryMessage = (Array.isArray(displaySummary?.messages) ? displaySummary.messages : [])
-      .find((message = {}) => (
+    const summaryMessage = (
+      Array.isArray(displaySummary?.messages) ? displaySummary.messages : []
+    ).find(
+      (message = {}) =>
         String(message?.turnScopeId || "").trim() === String(turnScopeId || "").trim() &&
         (!dialogProcessId ||
-          String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim())
-      ));
+          String(message?.dialogProcessId || "").trim() === String(dialogProcessId).trim()),
+    );
     const detailContentHash = String(summaryMessage?.thinkingDetailRef?.contentHash || "").trim();
     return buildThinkingDetailPayload(
       {
         sessionId: normalizedSessionId,
-        revision: detailContentHash || (
-          turn ? `turn-journal:${turn.turnId}:${turn.committedBytes}` : ""
-        ),
+        revision:
+          detailContentHash || (turn ? `turn-journal:${turn.turnId}:${turn.committedBytes}` : ""),
         sessions: turn ? [{ sessionId: normalizedSessionId, rawMessages: turn.messages }] : [],
       },
       { turnScopeId, dialogProcessId },

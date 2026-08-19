@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { TRANSFER_REASON } from "../core/constants.js";
-import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
+import {
+  SEMANTIC_TRANSFER_REGISTRATION,
+  TRANSFER_SOURCE,
+  assertSemanticTransferRegistration,
+} from "@noobot/semantic-transfer-protocol";
 import { firstNormalizedString } from "../core/compact.js";
 import { createDirectTransferEnvelope } from "../storage/attachment-adapter.js";
 import { transferToolInput, transferToolOutput } from "./tool-transfer.js";
@@ -14,13 +18,8 @@ import {
   composeAgentPluginFinalMessage,
   transferAgentPluginStageMessage,
 } from "./plugin-stage-transfer.js";
-import {
-  SEMANTIC_TRANSFER_REGISTRATION,
-  assertSemanticTransferRegistration,
-} from "@noobot/semantic-transfer-protocol";
 
-export const SEMANTIC_TRANSFER_SCENARIO =
-  SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;
+export const SEMANTIC_TRANSFER_SCENARIO = SEMANTIC_TRANSFER_REGISTRATION.SCENARIOS;
 
 export const SEMANTIC_TRANSFER_STRATEGY = {
   TOOL_INPUT: "tool_input",
@@ -105,8 +104,7 @@ async function transferToolStrategy({
       runtime,
       agentContext,
       identity: options.identity,
-      toolResultText:
-        options.toolResultText ?? options.text ?? options.content ?? "",
+      toolResultText: options.toolResultText ?? options.text ?? options.content ?? "",
     });
   }
   if (strategy === SEMANTIC_TRANSFER_STRATEGY.TOOL_INPUT) {
@@ -117,8 +115,7 @@ async function transferToolStrategy({
   }
   return buildInvalidResult({
     code: "SEMANTIC_TRANSFER_INVALID_STRATEGY",
-    message:
-      "tool scenario requires strategy tool_input/tool_output/tool_result_text",
+    message: "tool scenario requires strategy tool_input/tool_output/tool_result_text",
   });
 }
 
@@ -139,11 +136,7 @@ async function transferBotPluginStrategy({
     });
   }
   if (strategy === SEMANTIC_TRANSFER_STRATEGY.WORKFLOW_SUBAGENT) {
-    const content = firstNormalizedString(
-      options?.content,
-      options?.message,
-      options?.text,
-    );
+    const content = firstNormalizedString(options?.content, options?.message, options?.text);
     if (!content) {
       return {
         transferEnvelopes: [],
@@ -161,8 +154,7 @@ async function transferBotPluginStrategy({
   }
   return buildInvalidResult({
     code: "SEMANTIC_TRANSFER_INVALID_STRATEGY",
-    message:
-      "workflow scenario requires workflow_subagent or workflow_final_plan strategy",
+    message: "workflow scenario requires workflow_subagent or workflow_final_plan strategy",
   });
 }
 
@@ -173,9 +165,8 @@ async function transferAgentPluginSummaryInjection({
   ...options
 } = {}) {
   const injectMode =
-    normalizeString(
-      options?.injectMode || options?.summaryInjectMode || "full",
-    ).toLowerCase() === "summary"
+    normalizeString(options?.injectMode || options?.summaryInjectMode || "full").toLowerCase() ===
+    "summary"
       ? "summary"
       : "full";
   const fullText = firstNormalizedString(
@@ -191,14 +182,9 @@ async function transferAgentPluginSummaryInjection({
     options?.overviewText,
     fullText,
   );
-  const detailText = firstNormalizedString(
-    options?.detail,
-    options?.detailText,
-  );
+  const detailText = firstNormalizedString(options?.detail, options?.detailText);
   const injectionMessage =
-    injectMode === "summary"
-      ? summaryText
-      : firstNormalizedString(fullText, summaryText);
+    injectMode === "summary" ? summaryText : firstNormalizedString(fullText, summaryText);
   let detailTransfer = null;
   if (detailText && options?.saveDetailToAttachment === true) {
     detailTransfer = await transferAgentPluginStageMessage({
@@ -209,8 +195,7 @@ async function transferAgentPluginSummaryInjection({
       name: options?.name || "agent-plugin-summary-detail.md",
       mimeType: options?.mimeType,
       attachmentSource: options?.attachmentSource,
-      generationSource:
-        options?.generationSource || "agent_plugin_summary_detail",
+      generationSource: options?.generationSource || "agent_plugin_summary_detail",
       source: options?.source || "plugin",
       reason: options?.reason || "harness_summary",
       meta: options?.meta || {},
@@ -242,7 +227,11 @@ async function transferAgentPluginStrategy({
   ...options
 } = {}) {
   if (
-    [SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY, SEMANTIC_TRANSFER_STRATEGY.HARNESS_PLANNING, SEMANTIC_TRANSFER_STRATEGY.HARNESS_ACCEPTANCE].includes(strategy) &&
+    [
+      SEMANTIC_TRANSFER_STRATEGY.HARNESS_SUMMARY,
+      SEMANTIC_TRANSFER_STRATEGY.HARNESS_PLANNING,
+      SEMANTIC_TRANSFER_STRATEGY.HARNESS_ACCEPTANCE,
+    ].includes(strategy) &&
     options.detail !== undefined &&
     options.fullText === undefined &&
     options.summaryText === undefined

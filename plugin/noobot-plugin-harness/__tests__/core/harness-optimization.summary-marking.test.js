@@ -481,11 +481,13 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
   const refinementCall = {
     role: "assistant",
     content: "",
-    tool_calls: [{
-      id: "refinement",
-      function: { name: "request_plan_refinement" },
-      contextPolicy: checkpointEvidencePolicy,
-    }],
+    tool_calls: [
+      {
+        id: "refinement",
+        function: { name: "request_plan_refinement" },
+        contextPolicy: checkpointEvidencePolicy,
+      },
+    ],
   };
   const refinementResult = {
     role: "tool",
@@ -532,16 +534,17 @@ test("guidance summary checkpoint retains classified Harness control-tool eviden
     },
   );
   const messageId = (message) => message.additional_kwargs.noobotMessageId;
-  ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds = messages.map(messageId);
+  ctx.agentContext.payload.harness.state.pending.summaryCheckpointMessageIds =
+    messages.map(messageId);
 
   await markGuidanceSummarizedMessages(ctx, {});
 
   const instruction =
     ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0];
-  assert.deepEqual(new Set(instruction.summarizedMessageIds), new Set([
-    messageId(businessCall),
-    messageId(businessResult),
-  ]));
+  assert.deepEqual(
+    new Set(instruction.summarizedMessageIds),
+    new Set([messageId(businessCall), messageId(businessResult)]),
+  );
   assert.equal(Object.hasOwn(instruction, "retainedMessageIds"), false);
 });
 

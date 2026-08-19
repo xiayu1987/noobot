@@ -111,11 +111,13 @@ test("task_summary pair is not marked summarized and remains in model context", 
     {
       role: "assistant",
       content: "",
-      tool_calls: [{
-        id: "call_summary",
-        function: { name: "task_summary", arguments: "{}" },
-        contextPolicy: boundaryPolicy,
-      }],
+      tool_calls: [
+        {
+          id: "call_summary",
+          function: { name: "task_summary", arguments: "{}" },
+          contextPolicy: boundaryPolicy,
+        },
+      ],
     },
     {
       role: "tool",

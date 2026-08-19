@@ -44,12 +44,7 @@ export function applyTurnCompletionPolicy({
   };
 }
 
-export function projectTurnCompletionMessages(
-  messages = [],
-  {
-    policyOptions = {},
-  } = {},
-) {
+export function projectTurnCompletionMessages(messages = [], { policyOptions = {} } = {}) {
   return markCurrentTurnArraySummarized(messages, {
     policyOptions,
   });
