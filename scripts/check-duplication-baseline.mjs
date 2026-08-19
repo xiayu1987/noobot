@@ -14,9 +14,9 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 168,
-  duplicatedLines: 4425,
-  percentage: 1.8319,
+  clones: 167,
+  duplicatedLines: 4415,
+  percentage: 1.8268,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));
