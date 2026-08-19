@@ -19,6 +19,7 @@ import {
   waitForModelInvocationTraces,
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
+import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import {
   assertContinuation,
   assertTurnLifecycle,
@@ -30,11 +31,19 @@ import {
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 async function assertCompletedWorkflowChildPresentation(page) {
+  const restoredDrawer = page.locator(".workflow-node-session-drawer:visible");
+  if (await restoredDrawer.count()) {
+    const closeButton = restoredDrawer.locator(".el-drawer__close-btn");
+    await closeButton.click();
+    await expect(restoredDrawer).toHaveCount(0);
+  }
   const actionNode = page.locator(".workflow-node:not(.is-state-node)").last();
   await expect(actionNode).toBeVisible();
   await actionNode.click();
 
-  const runtimeStep = page.locator(".workflow-node-session-drawer .workflow-runtime-step-box:not(:disabled)").last();
+  const runtimeStep = page
+    .locator(".workflow-node-session-drawer .workflow-runtime-step-box:not(:disabled)")
+    .last();
   await expect(runtimeStep).toBeVisible();
   await runtimeStep.click();
 
@@ -254,4 +263,7 @@ test("@full PBE-032 Workflow 完成后普通消息再切回 Workflow", async ({
   workflowChildTraces.forEach((record) =>
     assertWorkflowChildModelInvocation(record, noobot.sessionId),
   );
+
+  await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  await assertCompletedWorkflowChildPresentation(noobot.page);
 });

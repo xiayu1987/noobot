@@ -18,6 +18,39 @@ import {
   fetchExecutionSessionDetail,
   hydrateExecutionSessionDetail,
 } from "../../frontend/runtime/workflowNodeSessionDetail.js";
+import {
+  createWorkflowRuntimeEnvelope,
+  WORKFLOW_RUNTIME_EVENT,
+} from "@noobot/event-protocol/workflow-runtime-event";
+import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
+
+function snapshotEnvelope(sessionId, turnScopeId, messages = []) {
+  return createWorkflowRuntimeEnvelope({
+    eventType: WORKFLOW_RUNTIME_EVENT.SESSION_SNAPSHOT,
+    authoritySessionId: "root-session-a",
+    turnScopeId,
+    eventId: `snapshot:${sessionId}:1`,
+    workflowRunId: "workflow-run-a",
+    sequence: 1,
+    aggregateVersion: 1,
+    occurredAt: "2026-08-19T00:00:00.000Z",
+    producer: { type: "test", id: "workflow-detail" },
+    payload: {
+      workflowRunId: "workflow-run-a",
+      nodeExecutionId: "node-a",
+      nodeSessionId: sessionId,
+      turnScopeId,
+      messages,
+      turnLifecycleSnapshot: createTurnLifecycleSnapshot({
+        commandId: `snapshot:${sessionId}:1`,
+        sessionId,
+        sequence: 1,
+        generatedAt: "2026-08-19T00:00:00.000Z",
+      }),
+      turnTimings: [],
+    },
+  });
+}
 
 const runtimeNode = {
   workflowRunId: "run-1",
@@ -590,6 +623,23 @@ test("supports ref-like runtime node sessions without copying registry runtime",
 for (const state of ["processing", "completed"]) {
   test(`loads ${state} child Agent messages from the authoritative Execution session`, async () => {
     const calls = [];
+    const turnScopeId = `turn-${state}`;
+    const messages = [
+      {
+        id: `user-${state}`,
+        messageId: `user-${state}`,
+        role: "user",
+        content: `request-${state}`,
+        turnScopeId,
+      },
+      {
+        id: `message-${state}`,
+        messageId: `message-${state}`,
+        role: "assistant",
+        content: state,
+        turnScopeId,
+      },
+    ];
     const detail = await fetchExecutionSessionDetail({
       props: {
         userId: "user-1",
@@ -605,23 +655,11 @@ for (const state of ["processing", "completed"]) {
                   sessionId: "child-session-a",
                   workflowSession: {
                     aggregateVersion: 1,
+                    snapshotEnvelope: snapshotEnvelope("child-session-a", turnScopeId, messages),
                     session: {
                       sessionId: "child-session-a",
                       state,
-                      messages: [
-                        {
-                          id: `user-${state}`,
-                          role: "user",
-                          content: `request-${state}`,
-                          turnScopeId: `turn-${state}`,
-                        },
-                        {
-                          id: `message-${state}`,
-                          role: "assistant",
-                          content: state,
-                          turnScopeId: `turn-${state}`,
-                        },
-                      ],
+                      messages,
                       turnTimings: [
                         {
                           turnScopeId: `turn-${state}`,
@@ -632,20 +670,7 @@ for (const state of ["processing", "completed"]) {
                     sessionSummary: {
                       sessionId: "child-session-a",
                       state,
-                      messages: [
-                        {
-                          id: `user-${state}`,
-                          role: "user",
-                          content: `request-${state}`,
-                          turnScopeId: `turn-${state}`,
-                        },
-                        {
-                          id: `message-${state}`,
-                          role: "assistant",
-                          content: state,
-                          turnScopeId: `turn-${state}`,
-                        },
-                      ],
+                      messages,
                       turnTimings: [
                         {
                           turnScopeId: `turn-${state}`,
@@ -719,6 +744,7 @@ test("classifies a materialized Execution session without messages as empty", as
               ok: true,
               workflowSession: {
                 aggregateVersion: 1,
+                snapshotEnvelope: snapshotEnvelope("child-session-empty", "workflow-node:empty"),
                 session: { sessionId: "child-session-empty", messages: [] },
               },
             };

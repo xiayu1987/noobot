@@ -136,13 +136,16 @@ function requireWorkflowSession(payload) {
   return {
     workflowSession,
     aggregateVersion,
+    snapshotEnvelope: isRecord(workflowSession.snapshotEnvelope)
+      ? workflowSession.snapshotEnvelope
+      : null,
     session: isRecord(workflowSession.session) ? workflowSession.session : {},
     sessionSummary: isRecord(workflowSession.sessionSummary) ? workflowSession.sessionSummary : {},
   };
 }
 
 function projectExecutionSessionDetail(payload, requestedChildSessionId) {
-  const { workflowSession, aggregateVersion, session, sessionSummary } =
+  const { workflowSession, aggregateVersion, snapshotEnvelope, session, sessionSummary } =
     requireWorkflowSession(payload);
   if (!session.sessionId && !sessionSummary.sessionId) {
     return {
@@ -150,6 +153,9 @@ function projectExecutionSessionDetail(payload, requestedChildSessionId) {
       reason: "session_not_materialized",
       sessionId: requestedChildSessionId,
     };
+  }
+  if (!snapshotEnvelope) {
+    throw new TypeError("workflowSession.snapshotEnvelope must be an object");
   }
   const messages = Array.isArray(sessionSummary.messages) ? sessionSummary.messages : [];
   const rawMessages = Array.isArray(session.messages) ? session.messages : [];
@@ -162,6 +168,7 @@ function projectExecutionSessionDetail(payload, requestedChildSessionId) {
       sessionSummary.sessionId || session.sessionId || session.id || requestedChildSessionId,
     ).trim(),
     aggregateVersion,
+    snapshotEnvelope,
     sessionSummary: {
       ...sessionSummaryWithoutMutableRuntime(session),
       ...sessionSummaryWithoutMutableRuntime(sessionSummary),
@@ -243,43 +250,6 @@ export async function fetchExecutionSessionDetail({
   await requireAcceptedExecutionResponse(context, response);
   const payload = await parseExecutionDetailPayload(context, response);
   return normalizeExecutionDetail(context, payload);
-}
-
-export async function fetchWorkflowNodeSessionDetail({
-  props,
-  translate,
-  rootSessionId = "",
-  dialogProcessId = "",
-}) {
-  const routeDialogProcessId = String(dialogProcessId || "").trim();
-  const response = await requireSessionService(props).getDetail({
-    userId: props.userId,
-    sessionId: rootSessionId,
-    dialogProcessId: routeDialogProcessId,
-  });
-  const payload = await response.json();
-  if (!payload?.ok) {
-    throw new Error(String(payload?.error || translate("workflow.readNodeSessionFailed")));
-  }
-  return normalizeWorkflowNodeSessionDetail(payload);
-}
-
-export function normalizeWorkflowNodeSessionDetail(payload = {}) {
-  const workflowSession = isRecord(payload.workflowSession) ? payload.workflowSession : {};
-  const session = isRecord(workflowSession.session) ? workflowSession.session : {};
-  const sessionSummary = isRecord(workflowSession.sessionSummary)
-    ? workflowSession.sessionSummary
-    : null;
-  const summaryMessages = Array.isArray(sessionSummary?.messages) ? sessionSummary.messages : null;
-  const rawMessages = Array.isArray(session.messages) ? session.messages : [];
-  return {
-    aggregateVersion: Number(workflowSession.aggregateVersion || 0),
-    session,
-    sessionSummary,
-    sessionId: String(sessionSummary?.sessionId || session?.sessionId || "").trim(),
-    messages: summaryMessages || rawMessages,
-    rawMessages,
-  };
 }
 
 export async function fetchWorkflowNodeThinkingDetail({

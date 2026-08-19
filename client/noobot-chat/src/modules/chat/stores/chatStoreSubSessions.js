@@ -58,8 +58,14 @@ function eventTime(eventData = {}) {
 }
 
 function compareMessageEventOrder(left = {}, right = {}) {
-  const leftIdentity = { sequenceKey: left?.ordering?.scopeId, sequence: Number(left?.ordering?.sequence || 0) };
-  const rightIdentity = { sequenceKey: right?.ordering?.scopeId, sequence: Number(right?.ordering?.sequence || 0) };
+  const leftIdentity = {
+    sequenceKey: left?.ordering?.scopeId,
+    sequence: Number(left?.ordering?.sequence || 0),
+  };
+  const rightIdentity = {
+    sequenceKey: right?.ordering?.scopeId,
+    sequence: Number(right?.ordering?.sequence || 0),
+  };
   if (
     leftIdentity.sequenceKey &&
     leftIdentity.sequenceKey === rightIdentity.sequenceKey &&
@@ -183,6 +189,7 @@ export function createSubSessionStore({
   subSessionMessageRegistryVersion,
   turnRuntimeRegistry,
   selectWorkflowNodeState = null,
+  applyTurnLifecycleSnapshot = null,
   applyTurnTimingSnapshot = null,
 }) {
   function ensureSubSessionMessageContainer(eventData = {}) {
@@ -248,7 +255,10 @@ export function createSubSessionStore({
 
   function upsertSubSessionEvent(eventData = {}) {
     const envelopeValidation = validateProtocolEvent(eventData);
-    if (!envelopeValidation.valid || envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
+    if (
+      !envelopeValidation.valid ||
+      envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE
+    ) {
       return {
         applied: false,
         reason: "invalid_authoritative_message_event",
@@ -285,7 +295,10 @@ export function createSubSessionStore({
     if (eventId && currentSession.eventsById?.[eventId]) {
       return { applied: false, reason: "duplicate", current: currentSession };
     }
-    const incomingSequenceIdentity = { sequenceKey: ordering.scopeId, sequence: Number(ordering.sequence) };
+    const incomingSequenceIdentity = {
+      sequenceKey: ordering.scopeId,
+      sequence: Number(ordering.sequence),
+    };
     const appliedSequence = Number(
       currentSession.sequenceByScopeKey?.[incomingSequenceIdentity.sequenceKey] || 0,
     );
@@ -423,6 +436,17 @@ export function createSubSessionStore({
   function reduceSubSessionSnapshot(sessionDoc = {}, snapshotContext = {}) {
     const sessionId = text(sessionDoc?.sessionId);
     if (!sessionId) return { applied: false, reason: "missing_session" };
+    const lifecycleResult =
+      typeof applyTurnLifecycleSnapshot === "function"
+        ? applyTurnLifecycleSnapshot(sessionDoc?.turnLifecycleSnapshot)
+        : { applied: false, reason: "turn_runtime_unavailable" };
+    if (lifecycleResult?.applied === false && lifecycleResult?.deduplicated !== true) {
+      return {
+        applied: false,
+        reason: lifecycleResult?.reason || "invalid_lifecycle_snapshot",
+        lifecycleResult,
+      };
+    }
     const timingResult =
       typeof applyTurnTimingSnapshot === "function"
         ? applyTurnTimingSnapshot({
@@ -570,7 +594,12 @@ export function createSubSessionStore({
     };
     subSessionMessageRegistry.value = { ...registry, sessions: { ...registry.sessions } };
     if (subSessionMessageRegistryVersion) subSessionMessageRegistryVersion.value += 1;
-    return { applied: true, session: registry.sessions[sessionId], timingResult };
+    return {
+      applied: true,
+      session: registry.sessions[sessionId],
+      lifecycleResult,
+      timingResult,
+    };
   }
 
   function selectSubSessionMessages(sessionId = "") {

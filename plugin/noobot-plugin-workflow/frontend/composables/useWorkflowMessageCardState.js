@@ -56,7 +56,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
     displayNodeMessages,
-    turnTimingsByTurnScopeId,
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
   } = useWorkflowNodeMessages({
@@ -137,7 +136,6 @@ export function useWorkflowMessageCardState(props, emit, translate) {
     selectedNodeToolSessionDocs,
     normalizedNodeSessionMessages,
     displayNodeMessages,
-    turnTimingsByTurnScopeId,
     nodeSessionAllMessages,
     selectedRuntimeBoxes,
     handleOpenThinkingDetails,

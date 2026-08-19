@@ -48,10 +48,15 @@ test("workflow service reads persisted segmented child execution events after re
   });
   const ports = createPluginServicePorts({ bot: { getWorkspacePath: () => workspaceRoot } });
   const { executionLogs: logs } = await ports.sessions.readWorkflowSnapshot({
-    userId: "u1", sessionId: "root-s", dialogProcessId: "wf_node_1",
+    userId: "u1",
+    sessionId: "root-s",
+    dialogProcessId: "wf_node_1",
   });
 
-  assert.deepEqual(logs.map((item) => item.event), ["tool_call_start", "tool_call_end"]);
+  assert.deepEqual(
+    logs.map((item) => item.event),
+    ["tool_call_start", "tool_call_end"],
+  );
 });
 
 test("session-routes: workflow session returns summary and execution jsonl from scoped path", async () => {
@@ -62,17 +67,27 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     sessionPayload: {
       sessionId: "node-s",
       aggregateVersion: 1,
-      messages: [{
-        messageUid: "workflow-message-1",
-        role: "assistant",
-        content: "done",
-        dialogProcessId: "wf_node_1",
-        turnScopeId: "workflow-node:wf_node_1",
-      }],
+      updatedAt: "2026-08-19T00:00:00.000Z",
+      messages: [
+        {
+          messageUid: "workflow-message-1",
+          messageId: "workflow-message-1",
+          role: "assistant",
+          content: "done",
+          dialogProcessId: "wf_node_1",
+          turnScopeId: "workflow-node:wf_node_1",
+        },
+      ],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },
     executionPayload: { sessionId: "node-s", logs: [{ event: "x" }] },
-    metadata: { nodeId: "n1" },
+    metadata: {
+      nodeId: "n1",
+      workflowRunId: "workflow-run-1",
+      nodeExecutionId: "node-execution-1",
+      executionId: "agent:node-execution-1",
+      turnScopeId: "workflow-node:wf_node_1",
+    },
   });
 
   const app = express();
@@ -104,6 +119,12 @@ test("session-routes: workflow session returns summary and execution jsonl from 
     assert.equal(payload.workflowSession.session.sessionId, "node-s");
     assert.equal(payload.workflowSession.sessionSummary.sessionId, "node-s");
     assert.equal(payload.workflowSession.aggregateVersion, 1);
+    assert.equal(
+      payload.workflowSession.snapshotEnvelope.identity.eventType,
+      "workflow_session_snapshot_loaded",
+    );
+    assert.equal(payload.workflowSession.snapshotEnvelope.identity.sessionId, "root-s");
+    assert.equal(payload.workflowSession.snapshotEnvelope.payload.nodeSessionId, "node-s");
     assert.deepEqual(payload.workflowSession.executionLogs, [{ event: "x" }]);
     assert.equal("dir" in payload.workflowSession, false);
   });
@@ -143,10 +164,47 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
             },
           ],
         },
-        { messageUid: "i1", id: "i1", role: "system", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, injectedMessage: true, injectedBy: "harness-plugin", content: "injected" },
-        { messageUid: "t1", id: "t1", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool call" },
-        { messageUid: "t2", id: "t2", role: "tool", type: "tool_result", sessionId: "node-s", dialogProcessId: "dp-1", turnScopeId, content: "tool result" },
-        { messageUid: "other", id: "other", role: "assistant", type: "tool_call", sessionId: "node-s", dialogProcessId: "dp-2", turnScopeId: "workflow-node:other", content: "other" },
+        {
+          messageUid: "i1",
+          id: "i1",
+          role: "system",
+          sessionId: "node-s",
+          dialogProcessId: "dp-1",
+          turnScopeId,
+          injectedMessage: true,
+          injectedBy: "harness-plugin",
+          content: "injected",
+        },
+        {
+          messageUid: "t1",
+          id: "t1",
+          role: "assistant",
+          type: "tool_call",
+          sessionId: "node-s",
+          dialogProcessId: "dp-1",
+          turnScopeId,
+          content: "tool call",
+        },
+        {
+          messageUid: "t2",
+          id: "t2",
+          role: "tool",
+          type: "tool_result",
+          sessionId: "node-s",
+          dialogProcessId: "dp-1",
+          turnScopeId,
+          content: "tool result",
+        },
+        {
+          messageUid: "other",
+          id: "other",
+          role: "assistant",
+          type: "tool_call",
+          sessionId: "node-s",
+          dialogProcessId: "dp-2",
+          turnScopeId: "workflow-node:other",
+          content: "other",
+        },
       ],
     },
     taskPayload: { sessionId: "node-s", tasks: [] },

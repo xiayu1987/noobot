@@ -15,6 +15,7 @@
   "dependencies": {
     "@noobot/attachment-protocol": "file:../../attachment-protocol",
     "@noobot/context-protocol": "file:../../context-protocol",
+    "@noobot/event-protocol": "file:../../event-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",
     "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",

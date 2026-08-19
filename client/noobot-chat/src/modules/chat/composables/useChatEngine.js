@@ -199,9 +199,7 @@ export function useChatEngine({
     // coordinate. Commit first so materialization cannot block presentation,
     // while preserving completion semantics by awaiting it before returning.
     const terminalResolution = terminalResolutionCoordinator.observe(event);
-    return terminalResolution
-      ? terminalResolution.then(() => lifecycleResult)
-      : lifecycleResult;
+    return terminalResolution ? terminalResolution.then(() => lifecycleResult) : lifecycleResult;
   };
   const applyRunStateEvent = (event) => {
     const eventSummary = summarizeStateMachineEvent(event);

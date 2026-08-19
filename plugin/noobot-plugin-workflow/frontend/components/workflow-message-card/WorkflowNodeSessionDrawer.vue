@@ -32,7 +32,6 @@ const props = defineProps({
   logWorkflowDiagnostics: { type: Function, default: null },
   nodeSessionAllMessages: { type: Array, default: () => [] },
   selectedNodeSessionDocs: { type: Array, default: () => [] },
-  turnTimingsByTurnScopeId: { type: Object, default: () => ({}) },
   userId: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
   formatTime: { type: Function, required: true },
@@ -231,8 +230,6 @@ watch(
         count + (Array.isArray(session?.turnTimings) ? session.turnTimings.length : 0),
       0,
     ),
-    projectedTimingCount: Object.keys(props.turnTimingsByTurnScopeId || {}).length,
-    projectedTimingTurnScopeIds: Object.keys(props.turnTimingsByTurnScopeId || {}),
   }),
   (renderState) => {
     if (!renderState.visible) return;
@@ -404,7 +401,6 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             :messages="displayNodeMessages"
             :all-messages="nodeSessionAllMessages"
             :session-docs="selectedNodeSessionDocs"
-            :turn-timings-by-turn-scope-id="turnTimingsByTurnScopeId"
             :user-id="userId"
             :render-markdown="renderMarkdown"
             :format-time="formatTime"
