@@ -8,8 +8,10 @@ import test from "node:test";
 import {
   assertConnectorAccessPort,
   connectorField,
+  createConnectorSecretAad,
   createConnectorInstanceDefinition,
   normalizeConnectorParameters,
+  normalizeConnectorSecretEnvelope,
   normalizeSelectedConnectorIds,
   projectSelectedConnectorContext,
 } from "../src/index.js";
@@ -43,6 +45,44 @@ test("connector definitions validate one canonical instance shape", () => {
         operations: ["read"],
       }),
     /type/,
+  );
+});
+
+test("connector secret protocol defines one authenticated envelope and identity binding", () => {
+  assert.deepEqual(
+    normalizeConnectorSecretEnvelope({
+      version: 1,
+      algorithm: "aes-256-gcm",
+      iv: "iv",
+      tag: "tag",
+      ciphertext: "ciphertext",
+    }),
+    {
+      version: 1,
+      algorithm: "aes-256-gcm",
+      iv: "iv",
+      tag: "tag",
+      ciphertext: "ciphertext",
+    },
+  );
+  assert.equal(
+    createConnectorSecretAad({
+      userId: "alice",
+      connectorId: "con_1",
+      instanceType: "builtin.database.postgres",
+    }),
+    '{"protocol":"noobot.connector.parameters","version":1,"userId":"alice","connectorId":"con_1","instanceType":"builtin.database.postgres"}',
+  );
+  assert.throws(
+    () =>
+      normalizeConnectorSecretEnvelope({
+        version: 1,
+        algorithm: "aes-256-cbc",
+        iv: "iv",
+        tag: "tag",
+        ciphertext: "ciphertext",
+      }),
+    /algorithm/,
   );
 });
 

@@ -56,6 +56,7 @@ export const enUSMessages = {
     unselected: "Not selected",
     emptyChatHint: "Start a new conversation with Noobot",
     chatNavigator: "Conversation navigation",
+    noMessages: "No messages",
     showChatNavigator: "Show conversation navigation",
     hideChatNavigator: "Hide conversation navigation",
     sessionStatus: "Status",
@@ -296,6 +297,7 @@ export const enUSMessages = {
   },
   connectors: {
     management: "Connector management",
+    collapse: "Collapse",
     add: "Add connector",
     name: "Name",
     type: "Type",

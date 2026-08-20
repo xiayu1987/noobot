@@ -22,6 +22,8 @@ const props = defineProps({
   connected: { type: Boolean, default: false },
   fetcher: { type: Function, required: true },
   compact: { type: Boolean, default: false },
+  showHeader: { type: Boolean, default: true },
+  drawerSize: { type: [String, Number], default: "72%" },
 });
 const emit = defineEmits(["changed"]);
 const { translate } = useLocale();
@@ -178,7 +180,7 @@ watch(() => [props.connected, props.userId], refresh);
 
 <template>
   <section class="connector-manager" :class="{ compact }" v-loading="loading">
-    <header class="manager-header">
+    <header v-if="showHeader" class="manager-header">
       <span class="manager-title"
         ><el-icon><Connection /></el-icon>{{ translate("connectors.management") }}
         <el-tag size="small" type="success">{{ connectedConnectors.length }}</el-tag></span
@@ -238,11 +240,11 @@ watch(() => [props.connected, props.userId], refresh);
       v-model="dialogVisible"
       :title="translate('connectors.add')"
       direction="rtl"
-      size="min(520px, 92vw)"
+      :size="drawerSize"
       append-to-body
-      class="connector-add-drawer noobot-side-drawer"
+      class="connector-add-drawer workspace-drawer noobot-side-drawer"
     >
-      <el-form label-position="top" @submit.prevent="addConnector">
+      <el-form class="connector-add-form" label-position="top" @submit.prevent="addConnector">
         <el-form-item :label="translate('connectors.name')" required
           ><el-input v-model="form.name"
         /></el-form-item>
@@ -321,6 +323,20 @@ watch(() => [props.connected, props.userId], refresh);
 .manager-title .el-tag {
   margin-left: 2px;
 }
+.connector-manager.compact {
+  padding: 8px 0 0;
+  border-top: 0;
+}
+.connector-manager.compact .manager-header {
+  justify-content: flex-end;
+}
+.connector-manager.compact .manager-title {
+  display: none;
+}
+.connector-manager.compact .connector-list {
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+}
 .connector-list {
   display: grid;
   gap: 6px;
@@ -351,13 +367,37 @@ watch(() => [props.connected, props.userId], refresh);
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.connector-add-drawer :deep(.el-drawer__body) {
-  padding: 18px;
+
+.connector-add-form {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: 12px 20px 24px;
+  box-sizing: border-box;
 }
+
+.connector-add-form :deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+
+.connector-add-form :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
+}
+
+.connector-add-form :deep(.el-input),
+.connector-add-form :deep(.el-select),
+.connector-add-form :deep(.el-input-number) {
+  width: 100%;
+}
+
 @media (max-width: 600px) {
   .type-grid {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+
+  .connector-add-form {
+    width: 100%;
+    padding: 8px 16px 20px;
   }
 }
 </style>

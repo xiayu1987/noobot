@@ -501,6 +501,14 @@ export function createSessionFacade(runtime = {}) {
       return connectorInstanceRepository.delete({ userId, connectorId });
     },
 
+    async readLegacyConnectorInstances({ userId }) {
+      return connectorInstanceRepository.readLegacy(userId);
+    },
+
+    async migrateLegacyConnectorInstances(payload = {}) {
+      return connectorInstanceRepository.migrateLegacy(payload);
+    },
+
     async deleteSessionBranch({ userId, sessionId }) {
       return sessionTreeService.deleteSessionBranch({ userId, sessionId });
     },

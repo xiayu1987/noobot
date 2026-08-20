@@ -29,6 +29,7 @@ const text = (value) => String(value || "").trim();
 export async function mapRunCommand(context, command) {
   const mapped = await resolveAuthoritativeConnectorSelection({
     bot: context.resolveBot(),
+    connectorAccessPort: context.connectorAccessPort,
     request: context.mapAgentRunCommand(command, { userId: context.authInfo?.userId }),
   });
   context.state.currentTurnScopeId = text(mapped.turnScopeId) || context.state.currentTurnScopeId;
@@ -191,6 +192,16 @@ export async function acceptRunCommand(context, command, run) {
   Object.assign(run.normalizedRunConfig, executionIntent);
   const actionEvent = createActionEvent(context, command, run, executionIntent, startedAt);
   const accepted = await commitAction(context, actionEvent, run);
+  if (
+    run.createSessionIfAbsent === true &&
+    run.normalizedRunConfig.selectedConnectorIds.length > 0
+  ) {
+    await activeBot.session.setRootSessionSelectedConnectorIds({
+      userId: run.userId,
+      sessionId: run.sessionId,
+      selectedConnectorIds: run.normalizedRunConfig.selectedConnectorIds,
+    });
+  }
   context.lifecycle.pending = null;
   context.lifecycle.latestTurn = accepted.turn || null;
   void recordServiceAgentTransportDebug({

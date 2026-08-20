@@ -468,21 +468,20 @@ defineExpose({
 
 .more-panel {
   max-height: calc(100vh - 120px);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .more-actions-row {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  position: relative;
+  z-index: 2;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
+  background: var(--noobot-panel-bg);
 }
 
 .more-panel-title {
@@ -521,10 +520,13 @@ defineExpose({
 }
 
 .more-panel-content {
+  min-height: 0;
   padding: 14px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 @media (max-width: 768px) {

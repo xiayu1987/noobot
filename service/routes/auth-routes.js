@@ -141,6 +141,7 @@ export function registerAuthRoutes(
     requireApiKey,
     requireSuperAdmin,
     translateText,
+    connectorRuntime,
   } = {},
 ) {
   app.post(
@@ -183,6 +184,7 @@ export function registerAuthRoutes(
           connectCode === superAdminCode
         ) {
           await workspaceService.ensureUserWorkspace(userId);
+          await connectorRuntime.unlockUser({ userId, connectCode });
           const loadedSuperAdminConfig = await loadUserConfigSafe(userId);
           const superAdminScenarios = resolveLocalizedBuiltinScenarios(
             globalConfig?.scenarios,
@@ -230,6 +232,7 @@ export function registerAuthRoutes(
         if (!matchedUser) throw new Error(translateText("connect.codeVerifyFailed", req.locale));
 
         await workspaceService.ensureUserWorkspace(userId);
+        await connectorRuntime.unlockUser({ userId, connectCode });
         const loadedUserConfig = await loadUserConfigSafe(userId);
         const userScenarios =
           loadedUserConfig && typeof loadedUserConfig === "object"
@@ -302,7 +305,34 @@ export function registerAuthRoutes(
             }),
           );
         }
-        const payload = await writeWorkspaceUsersConfig(normalized);
+        const current = await readWorkspaceUsersConfig({ createIfMissing: true });
+        const currentByUserId = new Map(current.users.map((item) => [item.userId, item]));
+        const rotations = normalized.users.filter((item) => {
+          const previous = currentByUserId.get(item.userId);
+          return previous && previous.connectCode !== item.connectCode;
+        });
+        const completedRotations = [];
+        let payload;
+        try {
+          for (const item of rotations) {
+            await connectorRuntime.rotateUserConnectCode({
+              userId: item.userId,
+              oldConnectCode: currentByUserId.get(item.userId).connectCode,
+              newConnectCode: item.connectCode,
+            });
+            completedRotations.push(item);
+          }
+          payload = await writeWorkspaceUsersConfig(normalized);
+        } catch (error) {
+          for (const item of completedRotations.reverse()) {
+            await connectorRuntime.rotateUserConnectCode({
+              userId: item.userId,
+              oldConnectCode: item.connectCode,
+              newConnectCode: currentByUserId.get(item.userId).connectCode,
+            });
+          }
+          throw error;
+        }
         res.json({ ok: true, ...payload });
       },
       { fallbackErrorKey: "common.saveUsersFailed", translateText },

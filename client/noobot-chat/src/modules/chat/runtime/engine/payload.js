@@ -112,6 +112,10 @@ export function buildChatPayload({
     },
     session: {
       createIfAbsent: commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true,
+      selectedConnectorIds:
+        commandType === AGENT_COMMAND.SEND && activeSession?.value?.isLocal === true
+          ? activeSession.value.connectorPanelState?.selectedConnectorIds || []
+          : [],
     },
     continuation: {
       dialogProcessId: normalizedResumeDialogProcessId,

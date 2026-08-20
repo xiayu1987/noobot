@@ -10,7 +10,6 @@ import AppShellDrawers from "./AppShellDrawers.vue";
 import AppShellLayout from "./AppShellLayout.vue";
 import { buildAppShellDrawerPanels } from "../state/drawerPanelsState.js";
 import ThinkingPanel from "../../modules/chat/components/thinking/ThinkingPanel.vue";
-import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
 import { ConfigParamsPanel, UserSettingsPanel, WorkspacePanel } from "../entrypoints.js";
 import { useApiConnection } from "../../modules/chat/composables/connectivity/useApiConnection.js";
 import { useChatSession } from "../../modules/chat/composables/useChatSession.js";
@@ -342,6 +341,7 @@ const {
   composerMorePanelVisible,
   thinkingDetailsVisible,
   mobileChatNavigatorVisible,
+  chatNavigatorVisible,
   isSuperAdmin,
   closeAllDrawers,
   closeMobileSidebar,
@@ -382,7 +382,7 @@ appShellPanelActions = useAppShellPanelActions({
 
 const {
   openWorkspace,
-  openConnectors,
+  openConnectors: openConnectorsPanel,
   openUserSettings,
   openConfigParams,
   handleToggleSidebar,
@@ -469,11 +469,31 @@ function onConnectCodeUpdate(value = "") {
   connectCode.value = String(value || "");
 }
 
+function openConnectors() {
+  chatNavigatorVisible.value = false;
+  openConnectorsPanel();
+}
+
+function toggleConnectorOverview() {
+  if (connectorVisible.value) {
+    handleDrawerModelUpdate({ model: connectorVisible }, false);
+    return;
+  }
+  openConnectors();
+}
+
+function toggleChatNavigatorOverview() {
+  const nextVisible = !chatNavigatorVisible.value;
+  if (nextVisible && connectorVisible.value) {
+    handleDrawerModelUpdate({ model: connectorVisible }, false);
+  }
+  chatNavigatorVisible.value = nextVisible;
+}
+
 const drawerPanels = computed(() =>
   buildAppShellDrawerPanels({
     translate,
     workspaceVisible,
-    connectorVisible,
     userSettingsVisible,
     thinkingDetailsVisible,
     configParamsVisible,
@@ -481,10 +501,8 @@ const drawerPanels = computed(() =>
     UserSettingsPanel,
     ThinkingPanel,
     ConfigParamsPanel,
-    ConnectorManager,
     userId: userId.value,
     apiKey: apiKey.value,
-    authFetch,
     connected: connected.value,
     isSuperAdmin: isSuperAdmin.value,
     thinkingDetailsMessageItem: thinkingDetailsMessageItem.value || {},
@@ -493,7 +511,6 @@ const drawerPanels = computed(() =>
     thinkingDetailService,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
-    handleConnectorRegistryChanged: () => refreshSessionConnectorsAsync(activeSessionId.value),
   }),
 );
 </script>
@@ -531,6 +548,7 @@ const drawerPanels = computed(() =>
       :stop-execution="stopSending"
       :chat-message-nav-items="chatMessageNavItems"
       :chat-navigator-visible="chatNavigatorVisible"
+      :connector-visible="connectorVisible"
       :current-message-anchor-id="currentMessageAnchorId"
       :input="input"
       :composer-more-panel-visible="composerMorePanelVisible"
@@ -571,10 +589,11 @@ const drawerPanels = computed(() =>
       @open-openvscode="openOpenVSCode"
       @open-workspace="openWorkspace"
       @open-connectors="openConnectors"
+      @toggle-connectors-visible="toggleConnectorOverview"
       @open-user-settings="openUserSettings"
       @open-config-params="openConfigParams"
       @open-thinking-details="openThinkingDetailsPanel"
-      @toggle-chat-navigator-visible="chatNavigatorVisible = !chatNavigatorVisible"
+      @toggle-chat-navigator-visible="toggleChatNavigatorOverview"
       @select-chat-message-nav-item="handleSelectChatMessageNavItem"
       @mobile-chat-navigator-trigger-click="openChatMessageNavigator"
       @interaction-confirm="handleInteractionConfirm"

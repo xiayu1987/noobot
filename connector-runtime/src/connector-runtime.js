@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { filePath as path, isPathWithinRoot } from "@noobot/path-resolver";
+import { randomUUID } from "node:crypto";
 import {
   CONNECTOR_STATUS,
   createConnectorConnectionResult,
@@ -23,12 +24,15 @@ const requiredText = (value, label) => {
 export class ConnectorRuntime {
   constructor({
     repository,
+    secretStore,
     workspaceRoot = "",
     resolveUserWorkspacePath = null,
     now = () => new Date().toISOString(),
   } = {}) {
     if (!repository) throw new TypeError("connector repository is required");
+    if (!secretStore) throw new TypeError("connector secret store is required");
     this.repository = repository;
+    this.secretStore = secretStore;
     this.workspaceRoot = path.resolve(String(workspaceRoot || "."));
     this.resolveUserWorkspacePath = resolveUserWorkspacePath;
     this.now = now;
@@ -104,13 +108,26 @@ export class ConnectorRuntime {
   async createConnector({ userId = "", name = "", instanceType = "", parameters = {} } = {}) {
     const ownerUserId = requiredText(userId, "connector owner userId");
     const implementation = this.registry.require(instanceType);
-    return this.repository.create({
+    const connectorId = `con_${randomUUID()}`;
+    const normalizedParameters = this._normalizeParameters(
+      ownerUserId,
+      implementation.definition,
+      parameters,
+    );
+    const record = await this.repository.create({
       userId: ownerUserId,
+      connectorId,
       name: requiredText(name, "connector name"),
       instanceType: implementation.definition.instanceType,
-      parameters: this._normalizeParameters(ownerUserId, implementation.definition, parameters),
+      sealedParameters: this.secretStore.seal({
+        userId: ownerUserId,
+        connectorId,
+        instanceType: implementation.definition.instanceType,
+        parameters: normalizedParameters,
+      }),
       now: this.now(),
     });
+    return Object.freeze({ ...record, parameters: normalizedParameters });
   }
 
   async updateConnector({
@@ -131,7 +148,12 @@ export class ConnectorRuntime {
         connectorId: normalizedId,
         name: requiredText(name, "connector name"),
         instanceType: implementation.definition.instanceType,
-        parameters: this._normalizeParameters(ownerUserId, implementation.definition, parameters),
+        sealedParameters: this.secretStore.seal({
+          userId: ownerUserId,
+          connectorId: normalizedId,
+          instanceType: implementation.definition.instanceType,
+          parameters: this._normalizeParameters(ownerUserId, implementation.definition, parameters),
+        }),
         now: this.now(),
       });
     });
@@ -151,7 +173,15 @@ export class ConnectorRuntime {
     if (record.ownerUserId !== String(userId || "").trim()) {
       throw new TypeError("connector does not belong to current user");
     }
-    return record;
+    return Object.freeze({
+      ...record,
+      parameters: this.secretStore.unseal({
+        userId,
+        connectorId: record.connectorId,
+        instanceType: record.instanceType,
+        sealedParameters: record.sealedParameters,
+      }),
+    });
   }
 
   async connect({ userId = "", connectorId = "", context = {} } = {}) {
@@ -271,10 +301,35 @@ export class ConnectorRuntime {
   }
 
   async releaseUser(userId = "") {
-    const records = await this.repository.list(userId);
+    const ownerUserId = requiredText(userId, "connector owner userId");
+    const connectorIds = [...this.handles.keys()]
+      .filter((key) => key.startsWith(`${ownerUserId}::`))
+      .map((key) => key.slice(ownerUserId.length + 2));
     const released = await Promise.all(
-      records.map((record) => this.disconnect({ userId, connectorId: record.connectorId })),
+      connectorIds.map((connectorId) => this.disconnect({ userId: ownerUserId, connectorId })),
     );
-    return { userId, releasedCount: released.filter(Boolean).length };
+    this.secretStore.lockUser?.(ownerUserId);
+    return { userId: ownerUserId, releasedCount: released.filter(Boolean).length };
+  }
+
+  async unlockUser({ userId = "", connectCode = "" } = {}) {
+    const ownerUserId = requiredText(userId, "connector owner userId");
+    await this.secretStore.unlockUser({ userId: ownerUserId, connectCode });
+    const legacy = await this.repository.readLegacy?.(ownerUserId);
+    if (!legacy) return;
+    const connectors = legacy.connectors.map((record) => ({
+      ...record,
+      sealedParameters: this.secretStore.seal({
+        userId: ownerUserId,
+        connectorId: record.connectorId,
+        instanceType: record.instanceType,
+        parameters: record.parameters,
+      }),
+    }));
+    await this.repository.migrateLegacy({ userId: ownerUserId, connectors });
+  }
+
+  async rotateUserConnectCode(payload = {}) {
+    return this.secretStore.rotateUserKey(payload);
   }
 }

@@ -89,4 +89,33 @@ describe("connectorService", () => {
     );
     expect(activeSession.connectorPanelState.selectedConnectorIds).toEqual(["con_db", "con_mail"]);
   });
+
+  it("keeps a new Session selection as an explicit local creation draft", async () => {
+    const putSessionConnectorSelectionApi = vi.fn();
+    const activeSession = {
+      sessionId: "local-1",
+      isLocal: true,
+      connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
+    };
+    const service = createConnectorService({
+      ensureConnected: () => true,
+      getSessionConnectorsApi: vi.fn(),
+      putSessionConnectorSelectionApi,
+      userId: ref("alice"),
+      authFetch: vi.fn(),
+    });
+
+    await expect(
+      service.updateSessionSelectedConnectors({
+        activeSession,
+        selectedConnectorIds: ["con_db", "con_db"],
+      }),
+    ).resolves.toBe(true);
+
+    expect(putSessionConnectorSelectionApi).not.toHaveBeenCalled();
+    expect(activeSession.connectorPanelState).toMatchObject({
+      rootSessionId: "local-1",
+      selectedConnectorIds: ["con_db"],
+    });
+  });
 });
