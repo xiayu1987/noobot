@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { ipKeyGenerator } from "express-rate-limit";
 
 export const HTTP_ADMISSION_POLICY = Object.freeze({
   connection: Object.freeze({ limit: 10, windowMs: 60000 }),
@@ -18,52 +19,43 @@ function requestClass(req = {}) {
     : "mutation";
 }
 
-function networkIdentity(req = {}) {
-  return String(req.socket?.remoteAddress || req.ip || "unknown").trim() || "unknown";
-}
-
-export function createHttpAdmission({
+export function createHttpAdmissionOptions({
   resolveAuthByApiKey = () => null,
   policies = HTTP_ADMISSION_POLICY,
-  now = () => Date.now(),
 } = {}) {
-  const windows = new Map();
+  const windowDurations = new Set(Object.values(policies).map((policy) => policy.windowMs));
+  if (windowDurations.size !== 1) {
+    throw new Error("HTTP admission classes must use one shared fixed-window duration");
+  }
 
   function identityFor(req, category) {
-    if (category === "connection") return `network:${networkIdentity(req)}`;
+    const address = String(req.ip || req.socket?.remoteAddress || "unknown").trim();
+    const networkIdentity = address === "unknown" ? address : ipKeyGenerator(address);
+    if (category === "connection") return `network:${networkIdentity}`;
     const auth = resolveAuthByApiKey(req);
     if (auth) req.auth = auth;
     const userId = String(auth?.userId || "").trim();
-    return userId ? `user:${userId}` : `network:${networkIdentity(req)}`;
+    return userId ? `user:${userId}` : `network:${networkIdentity}`;
   }
 
-  function middleware(req, res, next) {
-    const category = requestClass(req);
-    if (category === "exempt") {
-      next();
-      return;
-    }
-    const policy = policies[category];
-    if (!policy) throw new Error(`HTTP admission policy is missing for ${category}`);
-    const timestamp = now();
-    const key = `${category}:${identityFor(req, category)}`;
-    let window = windows.get(key);
-    if (!window || timestamp - window.startedAt >= policy.windowMs) {
-      window = { count: 0, startedAt: timestamp };
-      windows.set(key, window);
-    }
-    window.count += 1;
-    if (window.count <= policy.limit) {
-      next();
-      return;
-    }
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((policy.windowMs - (timestamp - window.startedAt)) / 1000),
-    );
-    res.set("Retry-After", String(retryAfterSeconds));
-    res.status(429).json({ ok: false, error: "rate_limit_exceeded", retryAfterSeconds });
-  }
-
-  return Object.freeze({ middleware });
+  return Object.freeze({
+    windowMs: [...windowDurations][0],
+    limit(req) {
+      const category = requestClass(req);
+      const policy = policies[category];
+      if (!policy) throw new Error(`HTTP admission policy is missing for ${category}`);
+      return policy.limit;
+    },
+    keyGenerator(req) {
+      const category = requestClass(req);
+      return `${category}:${identityFor(req, category)}`;
+    },
+    skip: (req) => requestClass(req) === "exempt",
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    handler(req, res) {
+      const retryAfterSeconds = Number(res.getHeader("Retry-After") || 1);
+      res.status(429).json({ ok: false, error: "rate_limit_exceeded", retryAfterSeconds });
+    },
+  });
 }

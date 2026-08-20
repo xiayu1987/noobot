@@ -11,7 +11,8 @@ import { registerWorkspaceRoutes } from "../routes/workspace-routes.js";
 import { registerIdeRoutes } from "../routes/ide-routes.js";
 import { createServicePluginHost } from "../services/service-plugin-host.js";
 import { createPluginServicePorts } from "../services/plugin-service-ports.js";
-import { createHttpAdmission } from "../security/http-admission.js";
+import { rateLimit } from "express-rate-limit";
+import { createHttpAdmissionOptions } from "../security/http-admission.js";
 
 export async function registerHttpModules(
   app,
@@ -49,8 +50,7 @@ export async function registerHttpModules(
     pluginRootDir,
   } = {},
 ) {
-  const httpAdmission = createHttpAdmission({ resolveAuthByApiKey });
-  app.use(httpAdmission.middleware);
+  app.use(rateLimit(createHttpAdmissionOptions({ resolveAuthByApiKey })));
 
   const workspaceService = {
     ensureUserWorkspace: (...args) => bot?.ensureUserWorkspace?.(...args),

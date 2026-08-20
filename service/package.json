@@ -52,6 +52,7 @@
     "better-sqlite3": "^12.11.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
     "imapflow": "^1.7.0",
     "jscpd": "^5.0.14",
     "jsdom": "^30.0.1",

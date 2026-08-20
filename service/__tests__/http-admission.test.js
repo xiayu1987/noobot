@@ -5,15 +5,23 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createHttpAdmission } from "../security/http-admission.js";
+import { rateLimit } from "express-rate-limit";
+import { createHttpAdmissionOptions } from "../security/http-admission.js";
 
-function response() {
+function response(onComplete) {
   return {
     headers: {},
     statusCode: 0,
     body: null,
-    set(name, value) {
+    setHeader(name, value) {
       this.headers[name] = value;
+    },
+    append(name, value) {
+      const current = this.headers[name];
+      this.headers[name] = current === undefined ? value : `${current}, ${value}`;
+    },
+    getHeader(name) {
+      return this.headers[name];
     },
     status(code) {
       this.statusCode = code;
@@ -21,63 +29,75 @@ function response() {
     },
     json(body) {
       this.body = body;
+      onComplete?.();
       return this;
     },
   };
 }
 
-function invoke(admission, request) {
-  const res = response();
-  let admitted = false;
-  admission.middleware(request, res, () => {
-    admitted = true;
+async function invoke(admission, request) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let admitted = false;
+    const complete = (res) => {
+      if (settled) return;
+      settled = true;
+      resolve({ admitted, res });
+    };
+    const res = response(() => complete(res));
+    admission(request, res, (error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      admitted = true;
+      complete(res);
+    });
   });
-  return { admitted, res };
 }
 
-test("HTTP admission limits one authenticated identity without affecting another", () => {
-  const admission = createHttpAdmission({
-    resolveAuthByApiKey: (req) => ({ userId: req.headers.user }),
-    policies: {
-      read: { limit: 2, windowMs: 1000 },
-      mutation: { limit: 2, windowMs: 1000 },
-      connection: { limit: 2, windowMs: 1000 },
-    },
-    now: () => 100,
-  });
+test("HTTP admission limits one authenticated identity without affecting another", async () => {
+  const admission = rateLimit(
+    createHttpAdmissionOptions({
+      resolveAuthByApiKey: (req) => ({ userId: req.headers.user }),
+      policies: {
+        read: { limit: 2, windowMs: 1000 },
+        mutation: { limit: 2, windowMs: 1000 },
+        connection: { limit: 2, windowMs: 1000 },
+      },
+    }),
+  );
   const request = (user) => ({
     method: "GET",
     path: "/internal/workspace/u",
     headers: { user },
     socket: {},
   });
-  assert.equal(invoke(admission, request("one")).admitted, true);
-  assert.equal(invoke(admission, request("one")).admitted, true);
-  const rejected = invoke(admission, request("one"));
+  assert.equal((await invoke(admission, request("one"))).admitted, true);
+  assert.equal((await invoke(admission, request("one"))).admitted, true);
+  const rejected = await invoke(admission, request("one"));
   assert.equal(rejected.res.statusCode, 429);
   assert.equal(rejected.res.headers["Retry-After"], "1");
-  assert.equal(invoke(admission, request("two")).admitted, true);
+  assert.equal((await invoke(admission, request("two"))).admitted, true);
 });
 
-test("HTTP admission resets expired windows and exempts health checks", () => {
-  let timestamp = 0;
-  const admission = createHttpAdmission({
-    policies: {
-      read: { limit: 1, windowMs: 1000 },
-      mutation: { limit: 1, windowMs: 1000 },
-      connection: { limit: 1, windowMs: 1000 },
-    },
-    now: () => timestamp,
-  });
+test("HTTP admission classifies connection requests and exempts health checks", async () => {
+  const admission = rateLimit(
+    createHttpAdmissionOptions({
+      policies: {
+        read: { limit: 1, windowMs: 1000 },
+        mutation: { limit: 1, windowMs: 1000 },
+        connection: { limit: 1, windowMs: 1000 },
+      },
+    }),
+  );
   const request = {
     method: "POST",
     path: "/internal/connect",
     headers: {},
     socket: { remoteAddress: "127.0.0.1" },
   };
-  assert.equal(invoke(admission, request).admitted, true);
-  assert.equal(invoke(admission, request).res.statusCode, 429);
-  timestamp = 1000;
-  assert.equal(invoke(admission, request).admitted, true);
-  assert.equal(invoke(admission, { ...request, path: "/health" }).admitted, true);
+  assert.equal((await invoke(admission, request)).admitted, true);
+  assert.equal((await invoke(admission, request)).res.statusCode, 429);
+  assert.equal((await invoke(admission, { ...request, path: "/health" })).admitted, true);
 });
