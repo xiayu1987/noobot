@@ -267,11 +267,8 @@ function onStreamOutputChange(value) {
   emit("update:streamOutput", Boolean(value));
 }
 
-function onConnectorSelected(connectorType = "", connectorName = "") {
-  emit("connector-selected", {
-    connectorType: String(connectorType || "").trim(),
-    connectorName: String(connectorName || "").trim(),
-  });
+function onConnectorSelectionChange(selectedConnectorIds = []) {
+  emit("connector-selected", Array.isArray(selectedConnectorIds) ? selectedConnectorIds : []);
 }
 
 function toggleMorePanel() {
@@ -316,7 +313,7 @@ defineExpose({
               <ConnectorSelectorPanel
                 embedded
                 :connector-panel-state="connectorPanelState"
-                @connector-selected="onConnectorSelected"
+                @selection-change="onConnectorSelectionChange"
               />
 
               <ComposerMoreOptions

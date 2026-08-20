@@ -103,27 +103,11 @@ function toJsonSection(title, value, { allowEmpty = false, emptyValueText = "(no
 }
 
 function hasConnectorData(connectorStatusSection = {}) {
-  const currentConnectors =
-    connectorStatusSection && typeof connectorStatusSection === "object"
-      ? connectorStatusSection.current_connectors || {}
-      : {};
-  const hasSelectedConnector = Object.values(currentConnectors).some(
-    (connectorItem) =>
-      connectorItem &&
-      typeof connectorItem === "object" &&
-      hasValue(String(connectorItem.connector_name || "").trim()),
-  );
-  if (!hasSelectedConnector) return false;
   const connectors =
     connectorStatusSection && typeof connectorStatusSection === "object"
-      ? connectorStatusSection.connectors || {}
-      : {};
-  const hasConnectorList =
-    (Array.isArray(connectors?.databases) && connectors.databases.length > 0) ||
-    (Array.isArray(connectors?.terminals) && connectors.terminals.length > 0) ||
-    (Array.isArray(connectors?.emails) && connectors.emails.length > 0);
-  if (hasConnectorList) return true;
-  return hasSelectedConnector;
+      ? connectorStatusSection.connectors || []
+      : [];
+  return Array.isArray(connectors) && connectors.length > 0;
 }
 
 function normalizeDynamicInfoForSystem(dynamicInfo = {}) {

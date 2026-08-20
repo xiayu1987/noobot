@@ -95,21 +95,21 @@ export async function getSessionsApi({ userId = "" }, { fetcher } = {}) {
 export async function getSessionConnectorsApi({ userId = "", sessionId = "" }, { fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(
-    `/api/internal/connectors/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+    `/api/internal/connectors/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}`,
   );
 }
 
 export async function putSessionConnectorSelectionApi(
-  { userId = "", sessionId = "", selectedConnectors = {} },
+  { userId = "", sessionId = "", selectedConnectorIds = [] },
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch(
-    `/api/internal/connectors/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}/selection`,
+    `/api/internal/connectors/${encodeURIComponent(userId)}/sessions/${encodeURIComponent(sessionId)}/selection`,
     {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ selectedConnectors }),
+      body: JSON.stringify({ selectedConnectorIds }),
     },
   );
 }

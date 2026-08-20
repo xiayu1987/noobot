@@ -84,7 +84,7 @@ class SessionCrudMethods {
               currentTaskId: "",
               shortMemoryCheckpoint: 0,
               messages: [],
-              selectedConnectors: {},
+              selectedConnectorIds: [],
             },
             { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
           );
@@ -114,7 +114,7 @@ class SessionCrudMethods {
         currentTaskId: "",
         shortMemoryCheckpoint: 0,
         messages: [],
-        selectedConnectors: {},
+        selectedConnectorIds: [],
       },
       { now: this.now, sessionId, parentSessionId },
     );

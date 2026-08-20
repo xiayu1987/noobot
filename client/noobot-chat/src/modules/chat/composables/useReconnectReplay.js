@@ -10,8 +10,6 @@ import { getMessageRole } from "../model/messageIdentity.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
-  resolveConnectorConnectedPayload,
-  resolveConnectorStatusPayload,
 } from "../runtime/interactionPayload.js";
 import { mergeAttachments } from "../model/dialogProcessChain.js";
 import {
@@ -75,9 +73,6 @@ export function useReconnectReplay({
   clearPendingInteractionIfObsolete,
   setPendingInteractionRequest,
   isInteractionRequestHandled,
-  connectorTypeSet,
-  upsertConnectedConnectorInPanelState,
-  refreshSessionConnectorsAsync,
   classifyRealtimeLog,
   navigateToLastMessage,
   translate,
@@ -155,14 +150,9 @@ export function useReconnectReplay({
   function tryAutoResolveInteraction(rawRequest = {}) {
     return tryAutoResolveReconnectInteraction({
       rawRequest,
-      activeSession,
       interactionSubmitting,
-      connectorTypeSet,
       normalizeInteractionRequestPayload,
       isAutoResolvedInteraction,
-      resolveConnectorConnectedPayload,
-      upsertConnectedConnectorInPanelState,
-      refreshSessionConnectorsAsync,
       clearPendingInteraction,
     });
   }
@@ -175,11 +165,6 @@ export function useReconnectReplay({
       isInteractionRequestHandled,
       setPendingInteractionRequest,
       clearPendingInteraction,
-      activeSession,
-      connectorTypeSet,
-      resolveConnectorStatusPayload,
-      upsertConnectedConnectorInPanelState,
-      refreshSessionConnectorsAsync,
       onAttachments: mergeAssistantAttachments,
     });
   }

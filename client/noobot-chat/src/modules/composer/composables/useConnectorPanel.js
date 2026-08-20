@@ -9,6 +9,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 export function useConnectorPanel({
   ensureConnected,
   getSessionConnectorsApi,
+  putSessionConnectorSelectionApi,
   userId,
   authFetch,
   sessions,
@@ -18,6 +19,7 @@ export function useConnectorPanel({
   const connectorService = createConnectorService({
     ensureConnected,
     getSessionConnectorsApi,
+    putSessionConnectorSelectionApi,
     userId,
     authFetch,
     translateText: translate,
@@ -25,21 +27,6 @@ export function useConnectorPanel({
 
   function applySessionConnectorPayload(sessionItem, payload = {}) {
     return connectorService.applySessionConnectorPayload(sessionItem, payload);
-  }
-
-  function upsertConnectedConnectorInPanelState(
-    sessionItem,
-    {
-      connectorType = "",
-      connectorName = "",
-      status = "connected",
-    } = {},
-  ) {
-    return connectorService.upsertConnectedConnectorInPanelState(sessionItem, {
-      connectorType,
-      connectorName,
-      status,
-    });
   }
 
   async function refreshSessionConnectors(sessionId = "") {
@@ -56,23 +43,17 @@ export function useConnectorPanel({
     });
   }
 
-  async function updateSessionSelectedConnector({
-    connectorType = "",
-    connectorName = "",
-  } = {}) {
-    return connectorService.updateSessionSelectedConnector({
+  async function updateSessionSelectedConnectors(selectedConnectorIds = []) {
+    return connectorService.updateSessionSelectedConnectors({
       activeSession: activeSession?.value,
-      connectorType,
-      connectorName,
+      selectedConnectorIds,
     });
   }
 
   return {
-    connectorTypeSet: connectorService.connectorTypeSet,
     applySessionConnectorPayload,
-    upsertConnectedConnectorInPanelState,
     refreshSessionConnectors,
     refreshSessionConnectorsAsync,
-    updateSessionSelectedConnector,
+    updateSessionSelectedConnectors,
   };
 }

@@ -15,28 +15,14 @@ test("composeSystemInfoSections omits connector prompt blocks when no connector 
     dynamicInfo: {
       config: {
         allowUserInteraction: true,
-        selectedConnectors: {
-          database: "",
-          terminal: "",
-          email: "",
-        },
+        selectedConnectorIds: [],
       },
     },
     connectorStatusSection: {
-      connectors: {
-        databases: [{ connector_name: "db1" }],
-        terminals: [],
-        emails: [],
-      },
-      current_connectors: {
-        database: null,
-        terminal: null,
-        email: null,
-      },
+      connectors: [],
     },
   });
 
   const prompt = sections.join("\n\n");
-  assert.equal(prompt.includes("selectedConnectors"), false);
-  assert.equal(prompt.includes("current_connectors"), false);
+  assert.equal(prompt.includes("connector_name"), false);
 });

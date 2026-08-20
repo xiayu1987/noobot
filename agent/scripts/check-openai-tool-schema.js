@@ -125,7 +125,7 @@ function createMinimalAgentContext({ userId = "", globalConfig = {}, userConfig 
       dialogProcessId,
       config: {
         allowUserInteraction: true,
-        selectedConnectors: {},
+        selectedConnectorIds: [],
         maxToolLoopTurns: 4,
       },
     },

@@ -118,7 +118,7 @@ export function createProtocolTestCommand(payload = {}) {
       selectedModel: config.selectedModel,
       memoryModel: config.memoryModel,
       pluginModelConfig: config.pluginModelConfig,
-      selectedConnectors: config.selectedConnectors,
+      selectedConnectorIds: config.selectedConnectorIds,
       selectedPlugins: config.selectedPlugins,
     },
     presentation: {
@@ -157,6 +157,11 @@ export async function startServerWithWs({
   const terminalSummaryVersions = new Map();
   const testBot = {
     ...suppliedBot,
+    session: {
+      ...(suppliedBot.session || {}),
+      getRootSessionSelectedConnectorIds:
+        suppliedBot.session?.getRootSessionSelectedConnectorIds || (async () => []),
+    },
     resolveExecutionIntent:
       suppliedBot.resolveExecutionIntent ||
       (async ({ turnScopeId = "", runConfig = {} } = {}) => {
@@ -225,13 +230,7 @@ export async function startServerWithWs({
       }),
     acknowledgeAuthorityEvent:
       suppliedBot.acknowledgeAuthorityEvent ||
-      (async ({
-        eventId,
-        consumerId,
-        orderingDomain,
-        orderingScopeId,
-        sequence,
-      } = {}) => {
+      (async ({ eventId, consumerId, orderingDomain, orderingScopeId, sequence } = {}) => {
         const result = acknowledgeAuthorityEventDelivery(authorityEventOutbox, {
           eventId,
           consumerId,

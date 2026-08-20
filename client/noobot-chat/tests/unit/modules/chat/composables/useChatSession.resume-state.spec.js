@@ -287,7 +287,7 @@ describe("useChatSession summary and reconnect state", () => {
     store.sessions = [
       mapSummaryToSession(summary, {
         sessionTitleFromMessages: (_messages, fallback) => fallback,
-        createConnectorPanelState: () => ({ selectedConnectors: {} }),
+        createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
       }),
     ];
 

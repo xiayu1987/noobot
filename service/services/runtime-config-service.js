@@ -15,7 +15,7 @@ export function createRuntimeConfigService({
   setGlobalConfig,
   setBot,
   workspaceRootPath,
-  initConnectorHistoryStore,
+  initConnectorRegistry,
 } = {}) {
   async function rebuildRuntimeConfig() {
     if (!globalConfigBuilder || typeof globalConfigBuilder.build !== "function") {
@@ -37,7 +37,7 @@ export function createRuntimeConfigService({
     setGlobalConfigRaw(rawGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);
     setBot(bot);
-    initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
+    initConnectorRegistry({ workspaceRoot: workspaceRootPath() });
     return {
       bot,
       globalConfigRaw: rawGlobalConfig,

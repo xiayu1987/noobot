@@ -5,11 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
 import {
-  AGENT_COMMAND,
-  createTurnRunCommand,
-} from "@noobot/agent-transport-protocol";
-import { createChatRunService } from "../../services/chat-run-service.js";
+  createChatRunService,
+  resolveAuthoritativeConnectorSelection,
+} from "../../services/chat-run-service.js";
 
 function createService() {
   return createChatRunService({
@@ -26,7 +26,9 @@ function createCommand(overrides = {}) {
     commandId: "turn-1",
     identity: {
       sessionId: "session-1",
-      ...(overrides.commandType === AGENT_COMMAND.RESEND ? { dialogProcessId: "dialog-resend" } : {}),
+      ...(overrides.commandType === AGENT_COMMAND.RESEND
+        ? { dialogProcessId: "dialog-resend" }
+        : {}),
       turnScopeId: "turn-1",
     },
     input: { message: "hello", attachments: [] },
@@ -40,7 +42,6 @@ function createCommand(overrides = {}) {
       frontendThresholdsEnabled: true,
       summaryPolicy: { phaseSummaryLoopTurns: 1 },
       selectedPlugins: ["planning"],
-      selectedConnectors: { terminal: "local" },
     },
     presentation: { userMessageId: "user-1", assistantMessageId: "assistant-1" },
     concurrency: {
@@ -72,11 +73,7 @@ test("chat-run-service maps a validated transport command without a compat confi
     commandType: "turn.send",
     commandId: "turn-1",
   });
-  assert.deepEqual(request.runConfig.selectedConnectors, {
-    database: "",
-    terminal: "local",
-    email: "",
-  });
+  assert.equal("selectedConnectorIds" in request.runConfig, false);
   assert.deepEqual(request.runConfig.selectedPlugins, ["planning"]);
   assert.equal("plugins" in request.runConfig, false);
   assert.equal(request.runConfig.safeConfirm, true);
@@ -85,11 +82,32 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal("thinkingStartedAt" in request.runConfig, false);
 });
 
+test("chat-run-service obtains connector selection only from the root Session authority", async () => {
+  const calls = [];
+  const request = await resolveAuthoritativeConnectorSelection({
+    bot: {
+      session: {
+        getRootSessionSelectedConnectorIds: async (identity) => {
+          calls.push(identity);
+          return ["con_session", "con_session"];
+        },
+      },
+    },
+    request: {
+      userId: "user-1",
+      sessionId: "child-session",
+      runConfig: { selectedConnectorIds: ["con_untrusted_request"] },
+    },
+  });
+
+  assert.deepEqual(calls, [{ userId: "user-1", sessionId: "child-session" }]);
+  assert.deepEqual(request.runConfig.selectedConnectorIds, ["con_session"]);
+});
+
 test("chat-run-service consumes explicit session provision intent", () => {
-  const request = createService().mapAgentRunCommand(
-    createCommand({ createIfAbsent: true }),
-    { userId: "user-1" },
-  );
+  const request = createService().mapAgentRunCommand(createCommand({ createIfAbsent: true }), {
+    userId: "user-1",
+  });
   assert.equal(request.createSessionIfAbsent, true);
 });
 
@@ -103,11 +121,16 @@ test("chat-run-service preserves disabled safety confirmation from transport pre
 
 test("chat-run-service derives resend and continuation flags from commandType", () => {
   const service = createService();
-  const resend = service.mapAgentRunCommand(createCommand({ commandType: AGENT_COMMAND.RESEND }), { userId: "user-1" });
-  const continued = service.mapAgentRunCommand(createCommand({
-    commandType: AGENT_COMMAND.CONTINUE,
-    continuation: { dialogProcessId: "dialog-1", turnScopeId: "turn-old" },
-  }), { userId: "user-1" });
+  const resend = service.mapAgentRunCommand(createCommand({ commandType: AGENT_COMMAND.RESEND }), {
+    userId: "user-1",
+  });
+  const continued = service.mapAgentRunCommand(
+    createCommand({
+      commandType: AGENT_COMMAND.CONTINUE,
+      continuation: { dialogProcessId: "dialog-1", turnScopeId: "turn-old" },
+    }),
+    { userId: "user-1" },
+  );
 
   assert.equal(resend.runConfig.reuseExistingUserTurn, true);
   assert.equal(resend.dialogProcessId, "dialog-resend");

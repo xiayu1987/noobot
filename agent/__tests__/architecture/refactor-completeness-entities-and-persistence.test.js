@@ -9,7 +9,7 @@ import {
   normalizeMessageEntity,
   normalizeTaskEntity,
   normalizeSessionTreeEntity,
-  normalizeSelectedConnectors,
+  normalizeSelectedConnectorIds,
 } from "../../src/session/entities.js";
 import {
   FLOW_CONTROL_ROLE,
@@ -190,23 +190,20 @@ describe("2. 字段对齐测试", () => {
     });
   });
 
-  describe("normalizeSelectedConnectors 字段对齐", () => {
-    it("应保留传入的 connector 键值对", () => {
-      const raw = { database: "pg-1", terminal: "bash" };
-      const normalized = normalizeSelectedConnectors(raw);
-      assert.equal(normalized.database, "pg-1");
-      assert.equal(normalized.terminal, "bash");
+  describe("normalizeSelectedConnectorIds 字段对齐", () => {
+    it("应保留唯一且有序的连接器 ID", () => {
+      const normalized = normalizeSelectedConnectorIds(["con_1", "con_1", "con_2"]);
+      assert.deepEqual(normalized, ["con_1", "con_2"]);
     });
 
     it("空对象应返回空对象", () => {
-      const normalized = normalizeSelectedConnectors({});
-      assert.deepEqual(normalized, {});
+      assert.deepEqual(normalizeSelectedConnectorIds([]), []);
     });
 
     it("非对象输入应返回空对象", () => {
-      assert.deepEqual(normalizeSelectedConnectors(null), {});
-      assert.deepEqual(normalizeSelectedConnectors(undefined), {});
-      assert.deepEqual(normalizeSelectedConnectors("invalid"), {});
+      assert.deepEqual(normalizeSelectedConnectorIds(null), []);
+      assert.deepEqual(normalizeSelectedConnectorIds(undefined), []);
+      assert.deepEqual(normalizeSelectedConnectorIds("invalid"), []);
     });
   });
 });
@@ -303,7 +300,7 @@ describe("4. 落盘字段完整性测试", () => {
         config: {
           model: "openai:gpt-4",
           maxContextTurns: 50,
-          selectedConnectors: { database: "", terminal: "", email: "" },
+          selectedConnectorIds: [],
         },
         metadata: {
           totalTurns: 10,

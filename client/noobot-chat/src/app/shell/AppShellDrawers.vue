@@ -6,6 +6,7 @@
 <script setup>
 import { ref } from "vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
+import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
 
 defineProps({
   drawerPanels: { type: Array, default: () => [] },
@@ -15,6 +16,9 @@ defineProps({
   chatMessageNavItems: { type: Array, default: () => [] },
   currentMessageAnchorId: { type: String, default: "" },
   translate: { type: Function, default: (key) => key },
+  userId: { type: String, default: "" },
+  connected: { type: Boolean, default: false },
+  authFetch: { type: Function, required: true },
 });
 
 const emit = defineEmits([
@@ -22,6 +26,7 @@ const emit = defineEmits([
   "update:mobile-chat-navigator-visible",
   "mobile-chat-navigator-closed",
   "select-chat-message-nav-item",
+  "connector-registry-changed",
 ]);
 
 const mobileNavigatorOpened = ref(false);
@@ -71,6 +76,12 @@ function handleMobileNavigatorClose() {
       :is-mobile="isMobile"
       :sync-current-into-view="mobileNavigatorOpened"
       @select="emit('select-chat-message-nav-item', $event)"
+    />
+    <ConnectorManager
+      :user-id="userId"
+      :connected="connected"
+      :fetcher="authFetch"
+      @changed="emit('connector-registry-changed')"
     />
   </el-drawer>
 </template>

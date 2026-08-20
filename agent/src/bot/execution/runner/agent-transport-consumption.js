@@ -14,13 +14,6 @@ function selectedModelValue(value) {
   return clean(value.value || value.alias || value.key || value.model);
 }
 
-function connectorSelection(value = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return Object.fromEntries(
-    ["database", "terminal", "email"].map((key) => [key, Boolean(clean(source[key]))]),
-  );
-}
-
 export function buildAgentTransportConsumption({
   transportCommand = {},
   identity = {},
@@ -90,7 +83,7 @@ export function buildAgentTransportConsumption({
           ? resolvedRunConfig.pluginModelConfig
           : {},
       ).sort(),
-      selectedConnectors: connectorSelection(resolvedRunConfig?.selectedConnectors),
+      selectedConnectorIds: stringList(resolvedRunConfig?.selectedConnectorIds),
     },
     presentation: {
       requestedUserMessageId,

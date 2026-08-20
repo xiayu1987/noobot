@@ -11,8 +11,8 @@ import { createGlobalConfigBuilder } from "#agent/config";
 import {
   getConnectorChannelStore,
   initConnectorChannelStore,
-  getConnectorHistoryStore,
-  initConnectorHistoryStore,
+  getConnectorRegistry,
+  initConnectorRegistry,
 } from "#agent/connectors";
 import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
@@ -47,10 +47,12 @@ void writeRoutedRuntimeEvent({
 });
 
 const desktopFrontendRoot = String(
-  startupContext?.paths?.frontendRoot || process.env.NOOBOT_DESKTOP_FRONTEND_ROOT || path.resolve(process.cwd(), "../frontend"),
+  startupContext?.paths?.frontendRoot ||
+    process.env.NOOBOT_DESKTOP_FRONTEND_ROOT ||
+    path.resolve(process.cwd(), "../frontend"),
 ).trim();
-const shouldServeDesktopFrontend = process.env.NOOBOT_DESKTOP === "1"
-  && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
+const shouldServeDesktopFrontend =
+  process.env.NOOBOT_DESKTOP === "1" && fs.existsSync(path.join(desktopFrontendRoot, "index.html"));
 
 const globalConfigSource = createServiceGlobalConfigSource();
 const globalConfigBuilder = createGlobalConfigBuilder({
@@ -60,9 +62,9 @@ const globalConfigBuilder = createGlobalConfigBuilder({
 const appDependencies = await createAppDependencies({
   startupContext,
   globalConfigBuilder,
-  initConnectorHistoryStore,
+  initConnectorRegistry,
   getConnectorChannelStore,
-  getConnectorHistoryStore,
+  getConnectorRegistry,
   buildWorkspaceTree,
 });
 const {
@@ -89,7 +91,7 @@ if (shouldServeDesktopFrontend) {
 }
 
 initConnectorChannelStore();
-initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
+initConnectorRegistry({ workspaceRoot: workspaceRootPath() });
 
 await registerHttpModules(app, buildHttpModuleDependencies());
 

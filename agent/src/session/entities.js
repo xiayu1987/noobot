@@ -9,7 +9,7 @@ export {
   createSessionMessageUid,
   normalizeMessageEntity,
   normalizeMessagesEntity,
-  normalizeSelectedConnectors,
+  normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
   normalizeTaskEntity,
   normalizeExecutionLogEntity,

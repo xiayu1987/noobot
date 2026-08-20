@@ -11,6 +11,29 @@ import {
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+
+export async function resolveAuthoritativeConnectorSelection({ bot, request } = {}) {
+  const userId = String(request?.userId || "").trim();
+  const sessionId = String(request?.sessionId || "").trim();
+  if (
+    !userId ||
+    !sessionId ||
+    typeof bot?.session?.getRootSessionSelectedConnectorIds !== "function"
+  ) {
+    throw new Error("connector selection authority is unavailable");
+  }
+  const selectedConnectorIds = normalizeSelectedConnectorIds(
+    await bot.session.getRootSessionSelectedConnectorIds({ userId, sessionId }),
+  );
+  return {
+    ...request,
+    runConfig: {
+      ...(request.runConfig || {}),
+      selectedConnectorIds,
+    },
+  };
+}
 
 export function createChatRunService({
   getBot,
@@ -19,16 +42,6 @@ export function createChatRunService({
   translateText,
   sessionLogConfig,
 } = {}) {
-  function normalizeSelectedConnectors(input = {}) {
-    const source = input && typeof input === "object" ? input : {};
-    const normalizeConnectorName = (value = "") => String(value || "").trim();
-    return {
-      database: normalizeConnectorName(source?.database),
-      terminal: normalizeConnectorName(source?.terminal),
-      email: normalizeConnectorName(source?.email),
-    };
-  }
-
   function normalizeStringArray(input = []) {
     return Array.isArray(input)
       ? input.map((item) => String(item || "").trim()).filter(Boolean)
@@ -56,7 +69,6 @@ export function createChatRunService({
         ? { pluginModelConfig: preferences.pluginModelConfig }
         : {}),
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
-      selectedConnectors: normalizeSelectedConnectors(preferences.selectedConnectors),
       selectedPlugins,
       turnScopeId: identity.turnScopeId,
       userMessageId: String(command.presentation?.userMessageId || "").trim(),
@@ -106,8 +118,11 @@ export function createChatRunService({
         userId: req.auth?.userId,
         data: { accepted: true, transport: "http" },
       });
-      const request = mapAgentRunCommand(command, { userId: req.auth?.userId });
       const bot = getBot();
+      const request = await resolveAuthoritativeConnectorSelection({
+        bot,
+        request: mapAgentRunCommand(command, { userId: req.auth?.userId }),
+      });
       bot?.emitRuntimeEvent?.("debug_resend_http_received", {
         sessionId: request.sessionId,
         parentSessionId: request.parentSessionId,
@@ -142,7 +157,6 @@ export function createChatRunService({
   }
 
   return {
-    normalizeSelectedConnectors,
     mapAgentRunCommand,
     handleChat,
   };

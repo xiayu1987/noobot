@@ -6,11 +6,7 @@
 import { PathResolver } from "./path-resolver.js";
 import { SessionPathResolver } from "./session-path-resolver.js";
 import { StorageService } from "./storage-service.js";
-import {
-  normalizeMessagesEntity,
-  normalizeSelectedConnectors,
-  normalizeTaskEntity,
-} from "./entities/normalizers.js";
+import { normalizeMessagesEntity, normalizeTaskEntity } from "./entities/normalizers.js";
 import { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 import { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
@@ -80,7 +76,6 @@ export function createSessionServices(
     storageService,
     normalizeMessages: (messages, options = {}) =>
       normalizeMessagesEntity(messages, nowFn, options),
-    normalizeSelectedConnectors,
     now: nowFn,
   });
 
@@ -468,15 +463,15 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.renameSession({ userId, sessionId, title });
     },
 
-    async getRootSessionSelectedConnectors({ userId, sessionId }) {
-      return sessionCrudService.getRootSessionSelectedConnectors({ userId, sessionId });
+    async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
+      return sessionCrudService.getRootSessionSelectedConnectorIds({ userId, sessionId });
     },
 
-    async setRootSessionSelectedConnectors({ userId, sessionId, selectedConnectors = {} }) {
-      return sessionCrudService.setRootSessionSelectedConnectors({
+    async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
+      return sessionCrudService.setRootSessionSelectedConnectorIds({
         userId,
         sessionId,
-        selectedConnectors,
+        selectedConnectorIds,
       });
     },
 
@@ -538,7 +533,7 @@ export {
 export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
-  normalizeSelectedConnectors,
+  normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
   normalizeTaskEntity,
   normalizeExecutionLogEntity,

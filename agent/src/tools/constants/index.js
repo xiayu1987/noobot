@@ -8,28 +8,6 @@ export const TOOL_POLICY_MODE = Object.freeze({
   CUSTOM_ONLY: "custom_only",
 });
 
-export const CONNECTOR_TYPE = Object.freeze({
-  DATABASE: "database",
-  TERMINAL: "terminal",
-  EMAIL: "email",
-  DATABASE_ENGINE: Object.freeze({
-    SQLITE: "sqlite",
-  }),
-  TERMINAL_PROTOCOL: Object.freeze({
-    SSH: "ssh",
-  }),
-  CHANNEL_BUCKET: Object.freeze({
-    DATABASE: "databases",
-    TERMINAL: "terminals",
-    EMAIL: "emails",
-  }),
-  CONNECT_TOOL_NAME: Object.freeze({
-    DATABASE: "database_connect_connector",
-    TERMINAL: "terminal_connect_connector",
-    EMAIL: "email_connect_connector",
-  }),
-});
-
 export const TOOL_NAME = Object.freeze({
   READ_FILE: "read_file",
   WRITE_FILE: "write_file",
@@ -55,9 +33,6 @@ export const TOOL_NAME = Object.freeze({
   TASK_CHECK: "task_check",
   REQUEST_HELP: "request_help",
   FINAL_ANSWER: "final_answer",
-  DATABASE_CONNECT_CONNECTOR: "database_connect_connector",
-  TERMINAL_CONNECT_CONNECTOR: "terminal_connect_connector",
-  EMAIL_CONNECT_CONNECTOR: "email_connect_connector",
 });
 
 export const TOOL_CONFIG_ALIAS_KEY = Object.freeze({
@@ -81,8 +56,6 @@ export const TOOL_RESULT_STATUS = Object.freeze({
   FINALIZE: "finalize",
   OK: "ok",
   ERROR: "error",
-  NO_CONNECTORS: "no_connectors",
-  NEEDS_RECONNECT: "needs_reconnect",
 });
 
 export const TOOL_CALLER = Object.freeze({

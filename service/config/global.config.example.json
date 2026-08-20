@@ -76,31 +76,6 @@
         "allowed_roots": []
       }
     },
-    "database_connect_connector": {
-      "enabled": true,
-      "connectors": {
-        "example_database": {
-          "database_type": "mysql",
-          "host": "127.0.0.1",
-          "port": 3306,
-          "username": "readonly_user",
-          "password": "${EXAMPLE_DATABASE_PASSWORD}",
-          "database": "example_db"
-        }
-      }
-    },
-    "terminal_connect_connector": {
-      "enabled": true,
-      "connectors": {
-        "example_terminal": {
-          "terminal_type": "ssh",
-          "host": "10.0.0.8",
-          "port": 22,
-          "username": "ops",
-          "password": "${EXAMPLE_TERMINAL_PASSWORD}"
-        }
-      }
-    },
     "inspect_connectors": {
       "enabled": true
     },
@@ -126,21 +101,6 @@
     },
     "multimodal_generate": {
       "enabled": true
-    },
-    "email_connect_connector": {
-      "enabled": true,
-      "connectors": {
-        "example_email": {
-          "smtp_host": "${EMAIL_SMTP_HOST}",
-          "smtp_port": "${EMAIL_SMTP_PORT}",
-          "imap_host": "${EMAIL_IMAP_HOST}",
-          "imap_port": "${EMAIL_IMAP_PORT}",
-          "username": "${EMAIL_ACCOUNT}",
-          "password": "${EMAIL_AUTH_CODE}",
-          "from_email": "${EMAIL_FROM_ADDRESS}",
-          "to_email": "${EMAIL_TO_ADDRESS}"
-        }
-      }
     },
     "task_summary": {
       "enabled": true

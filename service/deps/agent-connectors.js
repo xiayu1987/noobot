@@ -7,6 +7,6 @@
 export {
   getConnectorChannelStore,
   initConnectorChannelStore,
-  getConnectorHistoryStore,
-  initConnectorHistoryStore,
+  getConnectorRegistry,
+  initConnectorRegistry,
 } from "noobot-agent/connectors";

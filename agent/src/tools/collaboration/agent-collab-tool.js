@@ -14,7 +14,7 @@ import {
   getSystemRuntimeFromRuntime,
 } from "../../context/agent-context-accessor.js";
 import { tTool } from "../core/tool-i18n.js";
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createCollabContainerStore } from "./agent-collab/collab-container-store.js";
 import { createCollabArtifactPersistor } from "./agent-collab/collab-artifact-persist.js";
 import { createDelegateTaskTool } from "./agent-collab/tool-delegate-task.js";
@@ -65,8 +65,8 @@ export function createAgentCollabTool({ agentContext }) {
     ...(hasParentStreamingConfig
       ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
       : {}),
-    selectedConnectors: normalizeSelectedConnectors(
-      systemRuntime?.config?.selectedConnectors || {},
+    selectedConnectorIds: normalizeSelectedConnectorIds(
+      systemRuntime?.config?.selectedConnectorIds,
     ),
     runtimeModel: String(runtime?.runtimeModel || "").trim(),
     sharedTools:

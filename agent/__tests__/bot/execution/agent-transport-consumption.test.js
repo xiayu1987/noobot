@@ -39,7 +39,7 @@ test("Agent transport consumption proves normalized fields reached their runtime
       memoryModel: "model-memory",
       selectedPlugins: ["harness"],
       pluginModelConfig: { harness: { enabled: true } },
-      selectedConnectors: { terminal: "local" },
+      selectedConnectorIds: ["con_terminal"],
       commandId: "turn-1",
       expectedAggregateVersion: 3,
     },
@@ -72,7 +72,7 @@ test("Agent transport consumption proves normalized fields reached their runtime
     memoryModel: "model-memory",
     selectedPlugins: ["harness"],
     pluginModelConfigKeys: ["harness"],
-    selectedConnectors: { database: false, terminal: true, email: false },
+    selectedConnectorIds: ["con_terminal"],
   });
   assert.equal(result.presentation.userMessageIdConsumed, true);
   assert.equal(result.presentation.assistantMessageIdConsumed, true);

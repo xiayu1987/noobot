@@ -162,11 +162,18 @@ test("createSessionFacade resolves authority outbox access from the protocol per
     sessionTreeService: {},
     sessionCrudService: {},
     sessionMessageService: Object.fromEntries(
-      ["getPendingAuthorityEvents", "recordAuthorityEventAttempt", "acknowledgeAuthorityEvent", "compactAuthorityEvents"]
-        .map((method) => [method, async (payload) => {
+      [
+        "getPendingAuthorityEvents",
+        "recordAuthorityEventAttempt",
+        "acknowledgeAuthorityEvent",
+        "compactAuthorityEvents",
+      ].map((method) => [
+        method,
+        async (payload) => {
           calls.push({ method, payload });
           return { ok: true };
-        }]),
+        },
+      ]),
     ),
     sessionContextService: {},
     taskService: {},
@@ -209,12 +216,13 @@ test("createSessionFacade resolves authority outbox access from the protocol per
 
 async function expectAuthorityScopeConflict(session, persistenceScope) {
   await assert.rejects(
-    () => session.getPendingAuthorityEvents({
-      userId: "u1",
-      sessionId: "child-session",
-      parentSessionId: "different-root",
-      persistenceScope,
-    }),
+    () =>
+      session.getPendingAuthorityEvents({
+        userId: "u1",
+        sessionId: "child-session",
+        parentSessionId: "different-root",
+        persistenceScope,
+      }),
     /parent does not match its authority protocol scope/,
   );
 }
@@ -232,9 +240,9 @@ test("createSessionFacade should delegate CRUD and connector methods to sessionC
         captured.push(["getSessionBundle", payload]);
         return { exists: true, session: { sessionId: "s1" }, task: { tasks: [] } };
       },
-      async setRootSessionSelectedConnectors(payload = {}) {
-        captured.push(["setRootSessionSelectedConnectors", payload]);
-        return { search: "google" };
+      async setRootSessionSelectedConnectorIds(payload = {}) {
+        captured.push(["setRootSessionSelectedConnectorIds", payload]);
+        return ["con_google"];
       },
       async renameSession(payload = {}) {
         captured.push(["renameSession", payload]);
@@ -249,21 +257,21 @@ test("createSessionFacade should delegate CRUD and connector methods to sessionC
 
   const created = await session.createSession({ userId: "u1", sessionId: "s1" });
   const bundle = await session.getSessionBundle({ userId: "u1", sessionId: "s1" });
-  const connectors = await session.setRootSessionSelectedConnectors({
+  const connectors = await session.setRootSessionSelectedConnectorIds({
     userId: "u1",
     sessionId: "s1",
-    selectedConnectors: { search: "google" },
+    selectedConnectorIds: ["con_google"],
   });
   const renamed = await session.renameSession({ userId: "u1", sessionId: "s1", title: "new name" });
 
   assert.equal(captured.length, 4);
   assert.equal(captured[0][0], "createSession");
   assert.equal(captured[1][0], "getSessionBundle");
-  assert.equal(captured[2][0], "setRootSessionSelectedConnectors");
+  assert.equal(captured[2][0], "setRootSessionSelectedConnectorIds");
   assert.equal(captured[3][0], "renameSession");
   assert.deepEqual(created, { exists: true });
   assert.equal(bundle.exists, true);
-  assert.deepEqual(connectors, { search: "google" });
+  assert.deepEqual(connectors, ["con_google"]);
   assert.deepEqual(renamed, { sessionId: "s1", customTitle: "new name" });
 });
 

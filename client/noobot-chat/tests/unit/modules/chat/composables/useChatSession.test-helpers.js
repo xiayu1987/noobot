@@ -8,8 +8,13 @@ import { vi } from "vitest";
 import { useChatSession } from "../../../../../src/modules/chat/composables/useChatSession.js";
 
 export const wsClientMock = {
-  connect: vi.fn(), dispose: vi.fn(), sendJson: vi.fn(), requestJson: vi.fn(), stream: vi.fn(),
-  requestStop: vi.fn(), clearLastReceivedSeqMap: vi.fn(),
+  connect: vi.fn(),
+  dispose: vi.fn(),
+  sendJson: vi.fn(),
+  requestJson: vi.fn(),
+  stream: vi.fn(),
+  requestStop: vi.fn(),
+  clearLastReceivedSeqMap: vi.fn(),
   reconnect: vi.fn(async () => {}),
 };
 
@@ -22,24 +27,51 @@ export const sessionLogClientMock = {
 
 export function createSessionFixture(overrides = {}) {
   return {
-    id: "s-action-state", sessionId: "s-action-state", title: "session",
-    isLocal: false, loaded: true, messages: [], rawMessages: [], sessionDocs: [],
-    connectorPanelState: { selectedConnectors: {} }, currentTaskId: "",
-    currentTaskStatus: "idle", messageCount: 0, lastMessage: null, createdAt: "", updatedAt: "",
+    id: "s-action-state",
+    sessionId: "s-action-state",
+    title: "session",
+    isLocal: false,
+    loaded: true,
+    messages: [],
+    rawMessages: [],
+    sessionDocs: [],
+    connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+    currentTaskId: "",
+    currentTaskStatus: "idle",
+    messageCount: 0,
+    lastMessage: null,
+    createdAt: "",
+    updatedAt: "",
     ...overrides,
   };
 }
 
 export function createChatSession(options = {}) {
   return useChatSession({
-    userId: ref("u-1"), apiKey: ref(""), allowUserInteraction: ref(true), safeConfirm: ref(true),
-    streamOutput: ref(true), botScenario: ref(""), connected: ref(true),
-    ensureConnected: vi.fn(() => true), authFetch: null, isImageMime: () => false,
-    classifyRealtimeLog: (item) => item, scrollBottom: vi.fn(), notify: vi.fn(),
-    clearUploadSelection: vi.fn(), ...options,
+    userId: ref("u-1"),
+    apiKey: ref(""),
+    allowUserInteraction: ref(true),
+    safeConfirm: ref(true),
+    streamOutput: ref(true),
+    botScenario: ref(""),
+    connected: ref(true),
+    ensureConnected: vi.fn(() => true),
+    authFetch: null,
+    isImageMime: () => false,
+    classifyRealtimeLog: (item) => item,
+    scrollBottom: vi.fn(),
+    notify: vi.fn(),
+    clearUploadSelection: vi.fn(),
+    ...options,
   });
 }
 
-vi.mock("../../../../../src/shared/i18n/useLocale", () => ({ useLocale: () => ({ translate: (key) => key }) }));
-vi.mock("../../../../../src/infrastructure/websocket/chatWebSocketClient", () => ({ createChatWebSocketClient: () => wsClientMock }));
-vi.mock("../../../../../src/infrastructure/websocket/sessionLogWebSocketClient", () => ({ createSessionLogWebSocketClient: () => sessionLogClientMock }));
+vi.mock("../../../../../src/shared/i18n/useLocale", () => ({
+  useLocale: () => ({ translate: (key) => key }),
+}));
+vi.mock("../../../../../src/infrastructure/websocket/chatWebSocketClient", () => ({
+  createChatWebSocketClient: () => wsClientMock,
+}));
+vi.mock("../../../../../src/infrastructure/websocket/sessionLogWebSocketClient", () => ({
+  createSessionLogWebSocketClient: () => sessionLogClientMock,
+}));

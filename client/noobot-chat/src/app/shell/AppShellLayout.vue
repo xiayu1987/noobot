@@ -8,6 +8,7 @@ import { ref } from "vue";
 import { Tickets } from "@element-plus/icons-vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
+import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
 import { sharedSidebarProps } from "../../modules/session/model/sidebarProps.js";
 import { sharedComposerOptionProps } from "../../modules/composer/model/composerOptionProps.js";
 import {
@@ -54,6 +55,7 @@ defineProps({
   conversationStateSnapshot: { type: Object, default: () => ({}) },
   conversationStateTimeline: { type: Array, default: () => [] },
   translate: { type: Function, required: true },
+  authFetch: { type: Function, required: true },
 });
 
 const emit = defineEmits([
@@ -62,6 +64,7 @@ const emit = defineEmits([
   "remove-upload",
   "connect",
   "connector-selected",
+  "connector-registry-changed",
   "delete-session",
   "rename-session",
   "mobile-chat-navigator-trigger-click",
@@ -160,7 +163,7 @@ defineExpose({
 
       <div
         class="chat-content-body"
-        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+        :class="{ 'chat-navigator-open': chatNavigatorVisible && !isMobile }"
       >
         <ChatMessageListPanel
           ref="messageListPanelRef"
@@ -181,7 +184,7 @@ defineExpose({
         />
 
         <aside
-          v-if="!isMobile && chatMessageNavItems.length"
+          v-if="!isMobile"
           class="chat-message-nav-panel noobot-panel-card"
           :class="{ 'is-collapsed': !chatNavigatorVisible }"
         >
@@ -223,12 +226,20 @@ defineExpose({
               @select="emit('select-chat-message-nav-item', $event)"
             />
           </el-affix>
+          <ConnectorManager
+            v-show="chatNavigatorVisible"
+            compact
+            :user-id="userId"
+            :connected="connected"
+            :fetcher="authFetch"
+            @changed="emit('connector-registry-changed')"
+          />
         </aside>
       </div>
 
       <Teleport to="body">
         <el-button
-          v-if="isMobile && chatMessageNavItems.length"
+          v-if="isMobile"
           class="mobile-chat-message-nav-trigger noobot-floating-action-btn"
           type="primary"
           circle
@@ -242,7 +253,7 @@ defineExpose({
 
       <div
         class="chat-composer-body"
-        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+        :class="{ 'chat-navigator-open': chatNavigatorVisible && !isMobile }"
       >
         <UserInteractionForm
           v-if="pendingInteractionRequest"

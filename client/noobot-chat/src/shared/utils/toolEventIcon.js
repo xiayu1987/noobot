@@ -11,7 +11,6 @@ import {
   Clock,
   Collection,
   Connection,
-  DataAnalysis,
   Document,
   EditPen,
   Finished,
@@ -55,13 +54,12 @@ const TOOL_CALL_ICONS = Object.freeze({
   task_check: Finished,
   request_help: Headset,
   final_answer: Message,
-  database_connect_connector: DataAnalysis,
-  terminal_connect_connector: Monitor,
-  email_connect_connector: Message,
 });
 
 function normalize(value = "") {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 export function resolveToolEventVisual({ event = "", toolName = "", tone = "" } = {}) {

@@ -42,8 +42,7 @@ export async function registerHttpModules(
     templateRootPath,
     buildWorkspaceTree,
     getConnectorChannelStore,
-    getConnectorHistoryStore,
-    normalizeSelectedConnectors,
+    getConnectorRegistry,
     workspaceRootPath,
     handleChat,
     translateText,
@@ -117,8 +116,7 @@ export async function registerHttpModules(
   registerConnectorRoutes(app, {
     bot,
     getConnectorChannelStore,
-    getConnectorHistoryStore,
-    normalizeSelectedConnectors,
+    getConnectorRegistry,
     translateText,
   });
 
@@ -146,8 +144,6 @@ export async function registerHttpModules(
   registerSessionRoutes(app, {
     bot,
     handleChat,
-    getConnectorChannelStore,
-    getConnectorHistoryStore,
     translateText,
     pluginHost: servicePluginHost,
   });

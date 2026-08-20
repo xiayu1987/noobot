@@ -13,7 +13,7 @@ import {
 const helpers = {
   sessionTitleFromMessages: (messages, fallback = "") =>
     messages?.[0]?.content || fallback || "title",
-  createConnectorPanelState: () => ({ selectedConnectors: {} }),
+  createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
 };
 
 function summaryWithTerminalSnapshot(overrides = {}) {

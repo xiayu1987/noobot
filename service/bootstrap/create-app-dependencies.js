@@ -34,9 +34,9 @@ const DEFAULT_WORKSPACE_USERS_CONFIG = {
 export async function createAppDependencies({
   startupContext = {},
   globalConfigBuilder,
-  initConnectorHistoryStore,
+  initConnectorRegistry,
   getConnectorChannelStore,
-  getConnectorHistoryStore,
+  getConnectorRegistry,
   buildWorkspaceTree,
 } = {}) {
   const configBuilder =
@@ -113,7 +113,7 @@ export async function createAppDependencies({
     translateText,
     sessionLogConfig: { workspaceRoot: workspaceRootPath() },
   });
-  const { normalizeSelectedConnectors, mapAgentRunCommand, handleChat } = chatRunService;
+  const { mapAgentRunCommand, handleChat } = chatRunService;
 
   const configScopeService = createConfigScopeService({
     readWorkspaceConfigParams,
@@ -157,7 +157,7 @@ export async function createAppDependencies({
       bot = nextBot;
     },
     workspaceRootPath,
-    initConnectorHistoryStore,
+    initConnectorRegistry,
   });
   const { rebuildRuntimeConfig } = runtimeConfigService;
 
@@ -217,8 +217,7 @@ export async function createAppDependencies({
       templateRootPath,
       buildWorkspaceTree,
       getConnectorChannelStore,
-      getConnectorHistoryStore,
-      normalizeSelectedConnectors,
+      getConnectorRegistry,
       workspaceRootPath,
       handleChat,
       translateText,

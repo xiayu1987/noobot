@@ -4,162 +4,91 @@
  * SPDX-License-Identifier: MIT
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import { normalizeSelectedConnectorIds, projectPublicConnector } from "@noobot/connector-protocol";
 import { z } from "zod";
-import {
-  normalizeDatabaseType,
-  normalizeTerminalType,
-  normalizeConnectorType,
-} from "../../config/index.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
-import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tToolDescription } from "../core/tool-schema-i18n.js";
-import { tTool } from "../core/tool-i18n.js";
-import {
-  pickObject,
-  parseOptionalObjectInput,
-  databaseFields,
-  terminalFields,
-  emailFields,
-  attachDefaultValuesToFields,
-  collectNonSensitiveDefaults,
-  normalizeProvidedDatabaseDefaults,
-  normalizeProvidedTerminalDefaults,
-  normalizeProvidedEmailDefaults,
-  getMissingFieldNames,
-  alignFieldsWithConnectionInfo,
-} from "./connector-toolkit/connector-fields.js";
-import {
-  mergeConnectionInfo,
-  resolveConfiguredConnectorInfo,
-} from "./connector-toolkit/connector-resolver.js";
-import {
-  tConnector,
-  maskConnectionInfo,
-  addRuntimeConnectorChannel,
-  findConnectedConnector,
-  isUserCancelledInteraction,
-  buildAlreadyConnectedResponse,
-  buildConnectionStatusPayload,
-  buildRuntimeConnectorStatus,
-  upsertRuntimeSelectedConnector,
-} from "./connector-toolkit/connector-runtime.js";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import {
-  createConnectorToolContext,
-  resolveRememberedConnectorInfo,
-  resolveRuntimeLocale,
-} from "./connector-toolkit/connector-context.js";
-import { buildAccessConnectorTool } from "./connector-toolkit/tool-access-connector.js";
-import { createDatabaseConnectorTools } from "./connector-toolkit/tool-connect-database.js";
-import { createTerminalConnectorTools } from "./connector-toolkit/tool-connect-terminal.js";
-import { createEmailConnectorTools } from "./connector-toolkit/tool-connect-email.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { toToolJsonResult } from "../core/tool-json-result.js";
+import { tToolDescription, tToolParamDescription } from "../core/tool-schema-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { buildAccessConnectorTool } from "./connector-toolkit/tool-access-connector.js";
+
+function createConnectorToolContext(agentContext = {}) {
+  const runtime = getRuntimeFromAgentContext(agentContext);
+  return {
+    agentContext,
+    runtime,
+    userId: String(runtime?.userId || agentContext?.userId || "").trim(),
+    selectedConnectorIds: normalizeSelectedConnectorIds(
+      runtime?.systemRuntime?.config?.selectedConnectorIds,
+    ),
+    channelStore: runtime?.sharedTools?.connectorChannelStore || null,
+    registry: runtime?.sharedTools?.connectorRegistry || null,
+  };
+}
+
+function assertConnectorRuntime(context = {}) {
+  if (!context.userId || !context.channelStore || !context.registry) {
+    throw recoverableToolError("connector runtime is unavailable", {
+      code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
+    });
+  }
+}
 
 function createConnectorTools({ agentContext } = {}) {
-  const connectorToolContext = createConnectorToolContext(agentContext);
-  const {
-    store,
-    rootSessionId,
-    runtime,
-    connectorEventListener,
-  } = connectorToolContext;
-
-  const accessConnectorDescriptor = buildAccessConnectorTool(connectorToolContext);
+  const context = createConnectorToolContext(agentContext);
+  const accessDescriptor = buildAccessConnectorTool(context);
   const accessConnectorTool = new DynamicStructuredTool({
-    name: accessConnectorDescriptor.name,
-    description: accessConnectorDescriptor.description,
+    name: TOOL_NAME.ACCESS_CONNECTOR,
+    description: tToolDescription(context.runtime, TOOL_NAME.ACCESS_CONNECTOR),
     schema: z.object({
-      connector_name: z.string().optional().describe(
-        accessConnectorDescriptor.schemaShape.connector_name.description,
-      ),
-      connector_type: z.string().describe(
-        accessConnectorDescriptor.schemaShape.connector_type.description,
-      ),
-      command: z.string().optional().describe(
-        accessConnectorDescriptor.schemaShape.command.description,
-      ),
-      command_file_path: z.string().optional().describe(
-        accessConnectorDescriptor.schemaShape.command_file_path.description,
-      ),
+      connector_id: z
+        .string()
+        .describe(
+          tToolParamDescription(context.runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_id"),
+        ),
+      command: z
+        .string()
+        .optional()
+        .describe(tToolParamDescription(context.runtime, TOOL_NAME.ACCESS_CONNECTOR, "command")),
+      command_file_path: z
+        .string()
+        .optional()
+        .describe(
+          tToolParamDescription(context.runtime, TOOL_NAME.ACCESS_CONNECTOR, "command_file_path"),
+        ),
     }),
-    func: accessConnectorDescriptor.func,
+    func: accessDescriptor.func,
   });
 
   const inspectConnectorsTool = new DynamicStructuredTool({
     name: TOOL_NAME.INSPECT_CONNECTORS,
-    description: tToolDescription(runtime, TOOL_NAME.INSPECT_CONNECTORS),
+    description: tToolDescription(context.runtime, TOOL_NAME.INSPECT_CONNECTORS),
     schema: z.object({}),
     func: async () => {
-      if (!store || typeof store.inspectSessionConnectors !== "function") {
-        throw recoverableToolError(tTool(runtime, "connectors.storeMissing"), {
-          code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
-        });
-      }
-      if (!rootSessionId) {
-        throw recoverableToolError(tTool(runtime, "connectors.rootSessionMissing"), {
-          code: ERROR_CODE.RECOVERABLE_ROOT_SESSION_MISSING,
-        });
-      }
-      const inspected = await store.inspectSessionConnectors({
-        sessionId: rootSessionId,
-        timeoutMs: TIME_THRESHOLDS.connectors.toolkitCommandTimeoutMs,
-      });
-      const databases = Array.isArray(inspected?.connectors?.databases)
-        ? inspected.connectors.databases
-        : [];
-      const terminals = Array.isArray(inspected?.connectors?.terminals)
-        ? inspected.connectors.terminals
-        : [];
-      const emails = Array.isArray(inspected?.connectors?.emails)
-        ? inspected.connectors.emails
-        : [];
-      const totalCount = Number(
-        inspected?.summary?.total_count ??
-          databases.length + terminals.length + emails.length,
+      assertConnectorRuntime(context);
+      const selected = new Set(context.selectedConnectorIds);
+      const records = (await context.registry.list(context.userId)).filter((item) =>
+        selected.has(item.connectorId),
       );
-      runtime.connectorChannels = store.getSessionConnectors(rootSessionId);
-      if (
-        connectorEventListener &&
-        typeof connectorEventListener.syncRuntimeConnectorChannels === "function"
-      ) {
-        connectorEventListener.syncRuntimeConnectorChannels();
-      }
-      if (totalCount <= 0) {
-        const noConnectorMessage = tConnector(runtime, "noConnectorsFound");
-        throw recoverableToolError(noConnectorMessage, {
-            code: ERROR_CODE.RECOVERABLE_NO_CONNECTORS_FOUND,
-            details: {
-              status: TOOL_RESULT_STATUS.NO_CONNECTORS,
-              connectors: {
-                databases,
-                terminals,
-              emails,
-            },
-            summary: {
-              database_count: 0,
-              terminal_count: 0,
-              email_count: 0,
-              total_count: 0,
-            },
-          },
-        });
-      }
+      const runtimeById = new Map(
+        context.channelStore
+          .getUserConnectors(context.userId)
+          .map((item) => [String(item.connectorId || "").trim(), item]),
+      );
+      const connectors = records.map((record) =>
+        projectPublicConnector(record, runtimeById.get(record.connectorId)),
+      );
       return toToolJsonResult(
         TOOL_NAME.INSPECT_CONNECTORS,
         {
           ok: true,
           status: TOOL_RESULT_STATUS.COMPLETED,
-          connectors: {
-            databases,
-            terminals,
-            emails,
-          },
+          connectors,
           summary: {
-            database_count: databases.length,
-            terminal_count: terminals.length,
-            email_count: emails.length,
-            total_count: totalCount,
+            selected_count: context.selectedConnectorIds.length,
+            connected_count: connectors.filter((item) => item.status === "connected").length,
           },
         },
         true,
@@ -167,45 +96,7 @@ function createConnectorTools({ agentContext } = {}) {
     },
   });
 
-  return [
-    ...createDatabaseConnectorTools(connectorToolContext),
-    ...createTerminalConnectorTools(connectorToolContext),
-    ...createEmailConnectorTools(connectorToolContext),
-    accessConnectorTool,
-    inspectConnectorsTool,
-  ];
+  return [accessConnectorTool, inspectConnectorsTool];
 }
 
-export {
-  createConnectorTools,
-  pickObject,
-  parseOptionalObjectInput,
-  normalizeDatabaseType,
-  normalizeTerminalType,
-  normalizeConnectorType,
-  databaseFields,
-  terminalFields,
-  emailFields,
-  attachDefaultValuesToFields,
-  collectNonSensitiveDefaults,
-  normalizeProvidedDatabaseDefaults,
-  normalizeProvidedTerminalDefaults,
-  normalizeProvidedEmailDefaults,
-  mergeConnectionInfo,
-  getMissingFieldNames,
-  resolveConfiguredConnectorInfo,
-  alignFieldsWithConnectionInfo,
-  maskConnectionInfo,
-  addRuntimeConnectorChannel,
-  findConnectedConnector,
-  isUserCancelledInteraction,
-  buildAlreadyConnectedResponse,
-  buildConnectionStatusPayload,
-  buildRuntimeConnectorStatus,
-  createConnectorToolContext,
-  resolveRememberedConnectorInfo,
-  buildAccessConnectorTool,
-  upsertRuntimeSelectedConnector,
-  resolveRuntimeLocale,
-  tConnector,
-};
+export { createConnectorTools };
