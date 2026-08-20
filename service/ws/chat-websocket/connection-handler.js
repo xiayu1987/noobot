@@ -211,6 +211,7 @@ function createConnectionMessageHandler(context, runtime) {
     translateText: context.translateText,
     normalizeLocale: context.normalizeLocale,
     mapAgentRunCommand: context.mapAgentRunCommand,
+    connectorAccessPort: context.connectorAccessPort,
     resolveBot: context.resolveBot,
     sessionLogConfig: context.sessionLogConfig,
     pendingInteractionRequests: context.pendingInteractionRequests,

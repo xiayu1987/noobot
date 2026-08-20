@@ -13,7 +13,11 @@ import {
 import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 
-export async function resolveAuthoritativeConnectorSelection({ bot, request } = {}) {
+export async function resolveAuthoritativeConnectorSelection({
+  bot,
+  connectorAccessPort,
+  request,
+} = {}) {
   const userId = String(request?.userId || "").trim();
   const sessionId = String(request?.sessionId || "").trim();
   if (
@@ -23,9 +27,27 @@ export async function resolveAuthoritativeConnectorSelection({ bot, request } = 
   ) {
     throw new Error("connector selection authority is unavailable");
   }
-  const selectedConnectorIds = normalizeSelectedConnectorIds(
-    await bot.session.getRootSessionSelectedConnectorIds({ userId, sessionId }),
-  );
+  let selectedConnectorIds;
+  if (request?.createSessionIfAbsent === true) {
+    selectedConnectorIds = normalizeSelectedConnectorIds(request?.initialSelectedConnectorIds);
+    const connectors = await connectorAccessPort?.listUserConnectors?.(userId);
+    const connectedConnectorIds = new Set(
+      (Array.isArray(connectors) ? connectors : [])
+        .filter((connector) => connector?.status === "connected")
+        .map((connector) => String(connector?.connectorId || "").trim())
+        .filter(Boolean),
+    );
+    const invalidIds = selectedConnectorIds.filter((id) => !connectedConnectorIds.has(id));
+    if (invalidIds.length) {
+      const error = new Error(`selected connector is unavailable: ${invalidIds.join(", ")}`);
+      error.errorCode = "connector_selection_invalid";
+      throw error;
+    }
+  } else {
+    selectedConnectorIds = normalizeSelectedConnectorIds(
+      await bot.session.getRootSessionSelectedConnectorIds({ userId, sessionId }),
+    );
+  }
   return {
     ...request,
     runConfig: {
@@ -41,6 +63,7 @@ export function createChatRunService({
   defaultLocale,
   translateText,
   sessionLogConfig,
+  connectorAccessPort,
 } = {}) {
   function normalizeStringArray(input = []) {
     return Array.isArray(input)
@@ -101,6 +124,9 @@ export function createChatRunService({
       attachments: command.input.attachments,
       expectedRevision: command.concurrency.expectedTurnRevision,
       createSessionIfAbsent: command.session?.createIfAbsent === true,
+      initialSelectedConnectorIds: normalizeSelectedConnectorIds(
+        command.session?.selectedConnectorIds,
+      ),
       runConfig,
     };
   }
@@ -121,6 +147,7 @@ export function createChatRunService({
       const bot = getBot();
       const request = await resolveAuthoritativeConnectorSelection({
         bot,
+        connectorAccessPort,
         request: mapAgentRunCommand(command, { userId: req.auth?.userId }),
       });
       bot?.emitRuntimeEvent?.("debug_resend_http_received", {

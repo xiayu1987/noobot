@@ -18,7 +18,7 @@ function repository() {
     create: async (input) => {
       const record = {
         ...input,
-        connectorId: `con_${records.length + 1}`,
+        connectorId: input.connectorId,
         ownerUserId: input.userId,
       };
       records.push(record);
@@ -29,8 +29,26 @@ function repository() {
   };
 }
 
+function secretStore() {
+  return {
+    seal: ({ parameters }) => ({
+      version: 1,
+      algorithm: "test",
+      parameters,
+    }),
+    unseal: ({ sealedParameters }) => sealedParameters.parameters,
+    unlockUser: async () => {},
+    lockUser: () => {},
+    rotateUserKey: async () => {},
+  };
+}
+
 test("runtime rejects unregistered instances and owns their lifecycle", async () => {
-  const runtime = new ConnectorRuntime({ repository: repository(), workspaceRoot: "/workspace" });
+  const runtime = new ConnectorRuntime({
+    repository: repository(),
+    secretStore: secretStore(),
+    workspaceRoot: "/workspace",
+  });
   await assert.rejects(
     runtime.createConnector({ userId: "u1", name: "x", instanceType: "missing" }),
     /not registered/,
@@ -77,7 +95,11 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
 });
 
 test("runtime resolves workspace fields inside the authoritative user workspace", async () => {
-  const runtime = new ConnectorRuntime({ repository: repository(), workspaceRoot: "/workspace" });
+  const runtime = new ConnectorRuntime({
+    repository: repository(),
+    secretStore: secretStore(),
+    workspaceRoot: "/workspace",
+  });
   runtime.register({
     definition: createConnectorInstanceDefinition({
       instanceType: "test.file",
@@ -110,7 +132,11 @@ test("runtime resolves workspace fields inside the authoritative user workspace"
 });
 
 test("runtime serializes access and disposal for one connector", async () => {
-  const runtime = new ConnectorRuntime({ repository: repository(), workspaceRoot: "/workspace" });
+  const runtime = new ConnectorRuntime({
+    repository: repository(),
+    secretStore: secretStore(),
+    workspaceRoot: "/workspace",
+  });
   const events = [];
   let markAccessStarted;
   let finishAccess;
@@ -155,4 +181,33 @@ test("runtime serializes access and disposal for one connector", async () => {
   finishAccess();
   await Promise.all([access, disconnect]);
   assert.deepEqual(events, ["access-start", "access-end", "dispose"]);
+});
+
+test("runtime migrates a legacy plaintext registry only after user key unlock", async () => {
+  const calls = [];
+  const legacyRecord = {
+    connectorId: "con_legacy",
+    ownerUserId: "u1",
+    name: "legacy",
+    instanceType: "test.echo",
+    parameters: { token: "plain-secret" },
+  };
+  const runtime = new ConnectorRuntime({
+    repository: {
+      ...repository(),
+      readLegacy: async () => ({ version: 2, connectors: [legacyRecord] }),
+      migrateLegacy: async (payload) => calls.push({ operation: "migrate", payload }),
+    },
+    secretStore: {
+      ...secretStore(),
+      unlockUser: async (payload) => calls.push({ operation: "unlock", payload }),
+    },
+    workspaceRoot: "/workspace",
+  });
+  await runtime.unlockUser({ userId: "u1", connectCode: "code" });
+  assert.deepEqual(
+    calls.map((item) => item.operation),
+    ["unlock", "migrate"],
+  );
+  assert.equal(calls[1].payload.connectors[0].sealedParameters.parameters.token, "plain-secret");
 });

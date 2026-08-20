@@ -15,6 +15,7 @@ import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewar
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
 import { startHttpServer } from "./bootstrap/start-http-server.js";
 import { createServiceGlobalConfigSource } from "./services/global-config-source.js";
+import { ConnectorSecretVault } from "./security/connector-secret-vault.js";
 import {
   applyStartupRuntimeEnv,
   loadStartupContext,
@@ -56,6 +57,7 @@ const globalConfigBuilder = createGlobalConfigBuilder({
   sourceName: globalConfigSource.name,
 });
 let connectorRuntime = null;
+const connectorSecretVault = new ConnectorSecretVault();
 const connectorAccessPort = Object.freeze({
   access: (payload) => connectorRuntime.access(payload),
   listUserConnectors: (userId) => connectorRuntime.listUserConnectors(userId),
@@ -96,10 +98,14 @@ connectorRuntime = new ConnectorRuntime({
     create: (payload) => getBot().session.createConnectorInstance(payload),
     update: (payload) => getBot().session.updateConnectorInstance(payload),
     delete: (payload) => getBot().session.deleteConnectorInstance(payload),
+    readLegacy: (userId) => getBot().session.readLegacyConnectorInstances({ userId }),
+    migrateLegacy: (payload) => getBot().session.migrateLegacyConnectorInstances(payload),
   },
+  secretStore: connectorSecretVault,
   workspaceRoot: workspaceRootPath(),
   resolveUserWorkspacePath: (userId) => getBot().getWorkspacePath(userId),
 });
+connectorSecretVault.setWorkspaceRoot(workspaceRootPath());
 registerBuiltinConnectorInstances(connectorRuntime);
 
 await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
@@ -150,6 +156,7 @@ try {
       resolveRequestLocale,
       resolveAuthByApiKey,
       mapAgentRunCommand,
+      connectorAccessPort,
       normalizeLocale,
       defaultLocale,
       translateText,

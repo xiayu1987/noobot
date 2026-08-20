@@ -110,6 +110,7 @@ export async function createAppDependencies({
     defaultLocale: DEFAULT_LOCALE,
     translateText,
     sessionLogConfig: { workspaceRoot: workspaceRootPath() },
+    connectorAccessPort,
   });
   const { mapAgentRunCommand, handleChat } = chatRunService;
 

@@ -29,6 +29,7 @@ export function useAppShellPseudoRoute({
   composerMorePanelVisible,
   thinkingDetailsVisible,
   mobileChatNavigatorVisible,
+  chatNavigatorVisible,
   isSuperAdmin,
   closeAllDrawers,
   closeMobileSidebar,
@@ -94,7 +95,10 @@ export function useAppShellPseudoRoute({
       });
     }
     if (targetPanel === PSEUDO_PANEL.WORKSPACE) openWorkspaceRaw?.();
-    if (targetPanel === PSEUDO_PANEL.CONNECTORS) openConnectorsRaw?.();
+    if (targetPanel === PSEUDO_PANEL.CONNECTORS) {
+      if (chatNavigatorVisible) chatNavigatorVisible.value = false;
+      openConnectorsRaw?.();
+    }
     if (targetPanel === PSEUDO_PANEL.USER_SETTINGS && isSuperAdmin?.value) openUserSettingsRaw?.();
     if (targetPanel === PSEUDO_PANEL.CONFIG_PARAMS) openConfigParamsRaw?.();
     if (targetPanel === PSEUDO_PANEL.SIDEBAR) openMobileSidebar?.();

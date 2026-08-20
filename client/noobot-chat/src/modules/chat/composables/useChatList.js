@@ -53,6 +53,7 @@ export function useChatList({
     });
     sessions.value.unshift(newSessionItem);
     activeSessionId.value = id;
+    refreshSessionConnectorsAsync(id);
   }
 
   function newSession() {
@@ -72,29 +73,21 @@ export function useChatList({
     onSessionDetailApplied,
   });
 
-  const {
-    fetchSessionDetail,
-    fetchSessionFullDetail,
-    fetchThinkingDetail,
-  } = createSessionDetailRequests({
-    sessions,
-    activeSessionId,
-    userId,
-    authFetch,
-    getSessionDetailApi,
-    getSessionFullDetailApi,
-    getSessionThinkingDetailApi,
-    applySessionDetail,
-    isSameSessionIdentity,
-    translate,
-  });
+  const { fetchSessionDetail, fetchSessionFullDetail, fetchThinkingDetail } =
+    createSessionDetailRequests({
+      sessions,
+      activeSessionId,
+      userId,
+      authFetch,
+      getSessionDetailApi,
+      getSessionFullDetailApi,
+      getSessionThinkingDetailApi,
+      applySessionDetail,
+      isSameSessionIdentity,
+      translate,
+    });
 
-  const {
-    fetchSessions,
-    selectSession,
-    deleteSession,
-    renameSession,
-  } = createSessionListActions({
+  const { fetchSessions, selectSession, deleteSession, renameSession } = createSessionListActions({
     sessions,
     activeSessionId,
     loadingSessions,

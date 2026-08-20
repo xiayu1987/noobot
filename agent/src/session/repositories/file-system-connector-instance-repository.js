@@ -3,13 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
+import { normalizeConnectorSecretEnvelope } from "@noobot/connector-protocol";
 import { writeFileAtomic } from "../../shared/storage/atomic-file-write.js";
 
 const REGISTRY_FILE_NAME = "connector-instances.json";
-const REGISTRY_VERSION = 2;
+const REGISTRY_VERSION = 3;
+const LEGACY_REGISTRY_VERSION = 2;
 
 const requiredText = (value, label) => {
   const normalized = String(value || "").trim();
@@ -22,17 +23,14 @@ function normalizeRecord(record = {}) {
   const ownerUserId = String(record.ownerUserId || "").trim();
   const name = String(record.name || "").trim();
   const instanceType = String(record.instanceType || "").trim();
-  const parameters =
-    record.parameters && typeof record.parameters === "object" && !Array.isArray(record.parameters)
-      ? Object.freeze({ ...record.parameters })
-      : Object.freeze({});
+  const sealedParameters = normalizeConnectorSecretEnvelope(record.sealedParameters);
   if (!connectorId || !ownerUserId || !name || !instanceType) return null;
   return Object.freeze({
     connectorId,
     ownerUserId,
     name,
     instanceType,
-    parameters,
+    sealedParameters,
     createdAt: String(record.createdAt || "").trim(),
     updatedAt: String(record.updatedAt || "").trim(),
   });
@@ -78,6 +76,28 @@ export class FileSystemConnectorInstanceRepository {
     }
   }
 
+  async _readLegacy(userId = "") {
+    const payload = JSON.parse(await readFile(this._registryPath(userId), "utf8"));
+    if (Number(payload?.version) !== LEGACY_REGISTRY_VERSION) return null;
+    return {
+      version: LEGACY_REGISTRY_VERSION,
+      connectors: (Array.isArray(payload.connectors) ? payload.connectors : []).map((record) => ({
+        connectorId: requiredText(record?.connectorId, "legacy connectorId"),
+        ownerUserId: requiredText(record?.ownerUserId, "legacy connector ownerUserId"),
+        name: requiredText(record?.name, "legacy connector name"),
+        instanceType: requiredText(record?.instanceType, "legacy connector instanceType"),
+        parameters:
+          record?.parameters &&
+          typeof record.parameters === "object" &&
+          !Array.isArray(record.parameters)
+            ? Object.freeze({ ...record.parameters })
+            : Object.freeze({}),
+        createdAt: String(record?.createdAt || "").trim(),
+        updatedAt: String(record?.updatedAt || "").trim(),
+      })),
+    };
+  }
+
   async _write(userId = "", payload = {}) {
     const registryPath = this._registryPath(userId);
     await mkdir(path.dirname(registryPath), { recursive: true });
@@ -114,7 +134,14 @@ export class FileSystemConnectorInstanceRepository {
     return (await this.list(userId)).find((item) => item.connectorId === normalizedId) || null;
   }
 
-  async create({ userId = "", name = "", instanceType = "", parameters = {}, now = "" } = {}) {
+  async create({
+    userId = "",
+    connectorId = "",
+    name = "",
+    instanceType = "",
+    sealedParameters,
+    now = "",
+  } = {}) {
     const ownerUserId = requiredText(userId, "connector owner userId");
     const normalizedName = requiredText(name, "connector name");
     return this._withUserLock(ownerUserId, async () => {
@@ -123,11 +150,11 @@ export class FileSystemConnectorInstanceRepository {
         throw new TypeError(`connector name already exists: ${normalizedName}`);
       }
       const record = normalizeRecord({
-        connectorId: `con_${randomUUID()}`,
+        connectorId: requiredText(connectorId, "connectorId"),
         ownerUserId,
         name: normalizedName,
         instanceType: requiredText(instanceType, "connector instanceType"),
-        parameters,
+        sealedParameters,
         createdAt: requiredText(now, "connector creation time"),
         updatedAt: now,
       });
@@ -141,7 +168,7 @@ export class FileSystemConnectorInstanceRepository {
     connectorId = "",
     name = "",
     instanceType = "",
-    parameters = {},
+    sealedParameters,
     now = "",
   } = {}) {
     const ownerUserId = requiredText(userId, "connector owner userId");
@@ -156,7 +183,7 @@ export class FileSystemConnectorInstanceRepository {
         ownerUserId,
         name: requiredText(name, "connector name"),
         instanceType: requiredText(instanceType, "connector instanceType"),
-        parameters,
+        sealedParameters,
         createdAt: previous.createdAt,
         updatedAt: requiredText(now, "connector update time"),
       });
@@ -183,6 +210,29 @@ export class FileSystemConnectorInstanceRepository {
       if (connectors.length === payload.connectors.length) return false;
       await this._write(ownerUserId, { connectors });
       return true;
+    });
+  }
+
+  async readLegacy(userId = "") {
+    try {
+      return await this._readLegacy(requiredText(userId, "connector owner userId"));
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  async migrateLegacy({ userId = "", connectors = [] } = {}) {
+    const ownerUserId = requiredText(userId, "connector owner userId");
+    return this._withUserLock(ownerUserId, async () => {
+      const legacy = await this._readLegacy(ownerUserId);
+      if (!legacy) throw new TypeError("connector registry is not a version 2 migration source");
+      const normalized = connectors.map(normalizeRecord);
+      if (normalized.some((record) => !record)) {
+        throw new TypeError("connector registry migration contains invalid records");
+      }
+      await this._write(ownerUserId, { connectors: normalized });
+      return normalized;
     });
   }
 }

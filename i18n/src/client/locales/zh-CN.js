@@ -56,6 +56,7 @@ export const zhCNMessages = {
     unselected: "未勾选",
     emptyChatHint: "开始与 Noobot 的全新对话",
     chatNavigator: "对话导航",
+    noMessages: "暂无消息",
     showChatNavigator: "显示对话导航",
     hideChatNavigator: "隐藏对话导航",
     sessionStatus: "状态",
@@ -295,6 +296,7 @@ export const zhCNMessages = {
   },
   connectors: {
     management: "连接器管理",
+    collapse: "收起",
     add: "添加连接器",
     name: "名称",
     type: "类型",

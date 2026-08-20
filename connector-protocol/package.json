@@ -10,7 +10,8 @@
     "./selection": "./src/selection.js",
     "./projection": "./src/projection.js",
     "./access": "./src/access.js",
-    "./lifecycle": "./src/lifecycle.js"
+    "./lifecycle": "./src/lifecycle.js",
+    "./secrets": "./src/secrets.js"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"

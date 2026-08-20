@@ -78,6 +78,7 @@ export async function registerHttpModules(
     requireApiKey,
     requireSuperAdmin,
     translateText,
+    connectorRuntime,
   });
 
   app.use((req, res, next) => {

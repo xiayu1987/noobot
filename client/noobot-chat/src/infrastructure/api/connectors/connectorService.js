@@ -56,6 +56,14 @@ export function createConnectorService({
   } = {}) {
     if (!activeSession?.sessionId) return false;
     const normalizedIds = normalizeSelectedConnectorIds(selectedConnectorIds);
+    if (activeSession.isLocal === true) {
+      activeSession.connectorPanelState = createConnectorPanelState({
+        ...activeSession.connectorPanelState,
+        rootSessionId: activeSession.sessionId,
+        selectedConnectorIds: normalizedIds,
+      });
+      return true;
+    }
     const response = await putSessionConnectorSelectionApi(
       {
         userId: userId?.value,

@@ -26,6 +26,10 @@ const appShellDrawersSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/shell/AppShellDrawers.vue"),
   "utf8",
 );
+const connectorManagerSource = readFileSync(
+  path.resolve(__dirname, "../../../src/modules/connectors/components/ConnectorManager.vue"),
+  "utf8",
+);
 const chatMessageNavigatorPanelSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/composables/useChatMessageNavigatorPanel.js"),
   "utf8",
@@ -251,13 +255,13 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavigatorStateSource).toContain("mobileChatNavigatorVisible.value = false;");
   });
 
-  it("reserves desktop navigator space only inside the chat content body", () => {
+  it("reserves equal desktop space for either expanded right tool panel", () => {
     expect(appShellLayoutSource).toContain('<main class="main-content">');
     expect(appShellLayoutSource).toContain("<ChatMainHeader");
     expect(appShellLayoutSource).toContain('class="chat-content-body"');
     expect(appShellLayoutSource).toContain('class="chat-composer-body"');
     expect(appShellLayoutSource).toContain(
-      "'chat-navigator-open': chatNavigatorVisible && !isMobile",
+      "'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile",
     );
     expect(appShellLayoutSource.indexOf("<ChatMainHeader")).toBeLessThan(
       appShellLayoutSource.indexOf('class="chat-content-body"'),
@@ -270,7 +274,7 @@ describe("AppShell chat message navigator", () => {
     );
     expect(appShellLayoutSource).toContain(".chat-content-body {\n  position: relative;");
     expect(appShellLayoutSource).toContain(
-      ".chat-content-body.chat-navigator-open,\n  .chat-composer-body.chat-navigator-open {\n    padding-right: 268px;",
+      ".chat-content-body.right-tool-panel-open,\n  .chat-composer-body.right-tool-panel-open {\n    padding-right: 268px;",
     );
     expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
     expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");
@@ -319,7 +323,22 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(
       'class="mobile-chat-message-nav-trigger noobot-floating-action-btn"',
     );
-    expect(appShellLayoutSource).toContain('class="connector-panel-trigger noobot-panel-card"');
+    expect(appShellLayoutSource).toContain('class="connector-overview-panel noobot-panel-card"');
+    expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !connectorVisible }\"");
+    expect(appShellLayoutSource).toContain("<ConnectorManager");
+    expect(appShellLayoutSource).toContain(':fetcher="authFetch"');
+    expect(appShellLayoutSource).toContain(":drawer-size=\"isMobile ? '100%' : '72%'\"");
+    expect(connectorManagerSource).toContain(':size="drawerSize"');
+    expect(connectorManagerSource).toContain(
+      'class="connector-add-drawer workspace-drawer noobot-side-drawer"',
+    );
+    expect(connectorManagerSource).not.toContain('size="min(520px, 92vw)"');
+    expect(appShellLayoutSource).toMatch(
+      /class="chat-message-nav-toggle"[\s\S]*?translate\("common\.hideChatNavigator"\)/,
+    );
+    expect(appShellLayoutSource).toMatch(
+      /class="connector-overview-header"[\s\S]*?translate\("connectors\.collapse"\)/,
+    );
     expect(appShellLayoutSource).toContain(
       'class="mobile-connector-trigger noobot-floating-action-btn"',
     );

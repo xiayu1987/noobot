@@ -48,7 +48,10 @@ function createCommand(overrides = {}) {
       expectedTurnRevision: 0,
       expectedAggregateVersion: 3,
     },
-    session: { createIfAbsent: overrides.createIfAbsent === true },
+    session: {
+      createIfAbsent: overrides.createIfAbsent === true,
+      selectedConnectorIds: overrides.selectedConnectorIds || [],
+    },
     continuation: overrides.continuation,
   });
 }
@@ -110,6 +113,27 @@ test("chat-run-service consumes explicit session provision intent", () => {
     userId: "user-1",
   });
   assert.equal(request.createSessionIfAbsent, true);
+});
+
+test("chat-run-service validates the initial connector selection for a new Session", async () => {
+  const command = createCommand({
+    createIfAbsent: true,
+    selectedConnectorIds: ["con_connected"],
+  });
+  const request = createService().mapAgentRunCommand(command, { userId: "user-1" });
+  const resolved = await resolveAuthoritativeConnectorSelection({
+    bot: { session: { getRootSessionSelectedConnectorIds: async () => [] } },
+    connectorAccessPort: {
+      listUserConnectors: async () => [
+        { connectorId: "con_connected", status: "connected" },
+        { connectorId: "con_offline", status: "disconnected" },
+      ],
+    },
+    request,
+  });
+
+  assert.deepEqual(resolved.runConfig.selectedConnectorIds, ["con_connected"]);
+  assert.deepEqual(resolved.initialSelectedConnectorIds, ["con_connected"]);
 });
 
 test("chat-run-service preserves disabled safety confirmation from transport preferences", () => {

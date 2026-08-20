@@ -9,25 +9,33 @@ import { buildChatPayload } from "../../../../../../src/modules/chat/runtime/eng
 
 describe("buildChatPayload model preferences", () => {
   it("grants session provision intent only to an initial send", () => {
-    expect(buildChatPayload({
-      activeSession: { value: { sessionId: "session-1", isLocal: true } },
-      message: "new",
-    }).session.createIfAbsent).toBe(true);
-    expect(buildChatPayload({
-      activeSession: { value: { sessionId: "session-1", isLocal: false } },
-      message: "existing",
-    }).session.createIfAbsent).toBe(false);
-    expect(buildChatPayload({
-      activeSession: { value: { sessionId: "session-1", isLocal: true } },
-      message: "continue",
-      continueFromStopped: true,
-    }).session.createIfAbsent).toBe(false);
-    expect(buildChatPayload({
-      activeSession: { value: { sessionId: "session-1", isLocal: true } },
-      message: "resend",
-      reuseExistingUserTurn: true,
-      dialogProcessId: "dialog-resend",
-    }).session.createIfAbsent).toBe(false);
+    expect(
+      buildChatPayload({
+        activeSession: { value: { sessionId: "session-1", isLocal: true } },
+        message: "new",
+      }).session.createIfAbsent,
+    ).toBe(true);
+    expect(
+      buildChatPayload({
+        activeSession: { value: { sessionId: "session-1", isLocal: false } },
+        message: "existing",
+      }).session.createIfAbsent,
+    ).toBe(false);
+    expect(
+      buildChatPayload({
+        activeSession: { value: { sessionId: "session-1", isLocal: true } },
+        message: "continue",
+        continueFromStopped: true,
+      }).session.createIfAbsent,
+    ).toBe(false);
+    expect(
+      buildChatPayload({
+        activeSession: { value: { sessionId: "session-1", isLocal: true } },
+        message: "resend",
+        reuseExistingUserTurn: true,
+        dialogProcessId: "dialog-resend",
+      }).session.createIfAbsent,
+    ).toBe(false);
   });
 
   it("disables text streaming by default", () => {
@@ -37,12 +45,19 @@ describe("buildChatPayload model preferences", () => {
 
   it("enables output sanitization by default and sends an explicit opt-out", () => {
     expect(buildChatPayload({ message: "x" }).preferences.sanitizeOutput).toBe(true);
-    expect(buildChatPayload({ message: "x", sanitizeOutput: false }).preferences.sanitizeOutput).toBe(false);
+    expect(
+      buildChatPayload({ message: "x", sanitizeOutput: false }).preferences.sanitizeOutput,
+    ).toBe(false);
   });
 
   it("normalizes and sends the safety confirmation level", () => {
-    expect(buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).preferences.confirmationLevel).toBe("high");
-    expect(buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).preferences.confirmationLevel).toBe("low");
+    expect(
+      buildChatPayload({ message: "x", safeConfirmLevel: { value: "HIGH" } }).preferences
+        .confirmationLevel,
+    ).toBe("high");
+    expect(
+      buildChatPayload({ message: "x", safeConfirmLevel: "invalid" }).preferences.confirmationLevel,
+    ).toBe("low");
   });
   it("writes selectedModel and current scenario pluginModelConfig to preferences", () => {
     const payload = buildChatPayload({
@@ -75,24 +90,24 @@ describe("buildChatPayload model preferences", () => {
       commandType: "turn.send",
       input: { message: "hello", attachments: [] },
       preferences: {
-      scenario: "programming",
-      selectedModel: "main-programming",
-      memoryModel: "memory-programming",
-      pluginModelConfig: {
-        harness: {
-          stepModels: { planning: "harness-programming" },
-          guidance: {
-            analysis: { turnsThreshold: 7 },
+        scenario: "programming",
+        selectedModel: "main-programming",
+        memoryModel: "memory-programming",
+        pluginModelConfig: {
+          harness: {
+            stepModels: { planning: "harness-programming" },
+            guidance: {
+              analysis: { turnsThreshold: 7 },
+            },
+            capabilityProfile: {
+              planning: { enabled: false },
+              guidance: { enabled: false },
+              acceptance: { enabled: false },
+            },
           },
-          capabilityProfile: {
-            planning: { enabled: false },
-            guidance: { enabled: false },
-            acceptance: { enabled: false },
-          },
+          workflow: { semanticModel: "workflow-programming" },
         },
-        workflow: { semanticModel: "workflow-programming" },
-      },
-      selectedPlugins: ["harness", "workflow"],
+        selectedPlugins: ["harness", "workflow"],
       },
     });
     expect(payload).not.toHaveProperty("userId");
@@ -154,6 +169,40 @@ describe("buildChatPayload model preferences", () => {
 
     expect(payload.concurrency.expectedTurnRevision).toBe(0);
     expect(payload.concurrency.expectedAggregateVersion).toBe(7);
+  });
+
+  it("carries connector selection only as initial state for a new Session", () => {
+    const localPayload = buildChatPayload({
+      activeSession: {
+        value: {
+          sessionId: "local-1",
+          isLocal: true,
+          connectorPanelState: { selectedConnectorIds: ["con_db"] },
+        },
+      },
+      message: "hello",
+      turnScopeId: "turn-1",
+    });
+    const persistedPayload = buildChatPayload({
+      activeSession: {
+        value: {
+          sessionId: "persisted-1",
+          isLocal: false,
+          connectorPanelState: { selectedConnectorIds: ["con_db"] },
+        },
+      },
+      message: "hello",
+      turnScopeId: "turn-2",
+    });
+
+    expect(localPayload.session).toEqual({
+      createIfAbsent: true,
+      selectedConnectorIds: ["con_db"],
+    });
+    expect(persistedPayload.session).toEqual({
+      createIfAbsent: false,
+      selectedConnectorIds: [],
+    });
   });
 
   it("carries the Session-committed resend dialog identity once in transport identity", () => {

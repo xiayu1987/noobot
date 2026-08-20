@@ -25,6 +25,7 @@ function createUseChatListFixture(overrides = {}) {
   const sending = ref(false);
   const notify = vi.fn();
   const scrollBottom = vi.fn();
+  const refreshSessionConnectorsAsync = vi.fn();
 
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
@@ -50,7 +51,7 @@ function createUseChatListFixture(overrides = {}) {
     makeViewMessage: (message) => ({ ...message }),
     foldMessagesForView: (messages) => [...messages],
     scrollBottom,
-    refreshSessionConnectorsAsync: vi.fn(),
+    refreshSessionConnectorsAsync,
     clearUploads: vi.fn(),
     notify,
   });
@@ -64,7 +65,13 @@ function createUseChatListFixture(overrides = {}) {
       loadingSessionDetail,
       sending,
     },
-    mocks: { getSessionsApi, getSessionDetailApi, notify, scrollBottom },
+    mocks: {
+      getSessionsApi,
+      getSessionDetailApi,
+      notify,
+      scrollBottom,
+      refreshSessionConnectorsAsync,
+    },
   };
 }
 
@@ -90,6 +97,7 @@ describe("useChatList", () => {
       isLocal: true,
       loaded: true,
     });
+    expect(mocks.refreshSessionConnectorsAsync).toHaveBeenCalledWith("local-generated");
 
     await api.selectSession("persisted-1");
     await api.selectSession("local-generated");
