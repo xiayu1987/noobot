@@ -29,7 +29,7 @@ function resolvePositiveInteger(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
-async function rotateDesktopLog(filePath, retain) {
+async function rotateDesktopLog(filePath, retain, content) {
   await fs.promises.rm(`${filePath}.${retain}`, { force: true });
   for (let index = retain - 1; index >= 1; index -= 1) {
     try {
@@ -38,11 +38,7 @@ async function rotateDesktopLog(filePath, retain) {
       if (error?.code !== "ENOENT") throw error;
     }
   }
-  try {
-    await fs.promises.rename(filePath, `${filePath}.1`);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+  await fs.promises.writeFile(`${filePath}.1`, content);
 }
 
 export function appendDesktopLogLine(
@@ -67,18 +63,18 @@ export function appendDesktopLogLine(
     .then(async () => {
       await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
       const lineBytes = Buffer.byteLength(line, "utf8");
-      let handle = await fs.promises.open(filePath, "a+");
+      const handle = await fs.promises.open(filePath, "a+");
       try {
         const fileStat = await handle.stat();
         if (fileStat.isFile() && fileStat.size > 0 && fileStat.size + lineBytes > maxBytes) {
-          await handle.close();
-          handle = null;
-          await rotateDesktopLog(filePath, retain);
-          handle = await fs.promises.open(filePath, "a");
+          const previousContent = Buffer.alloc(fileStat.size);
+          await handle.read(previousContent, 0, previousContent.length, 0);
+          await rotateDesktopLog(filePath, retain, previousContent);
+          await handle.truncate(0);
         }
         await handle.writeFile(line, "utf8");
       } finally {
-        await handle?.close();
+        await handle.close();
       }
     });
   desktopLogQueues.set(filePath, operation);

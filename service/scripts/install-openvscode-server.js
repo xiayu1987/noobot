@@ -4,17 +4,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { existsSync, readFileSync } from "node:fs";
 import { chmod, mkdir, open, rm, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 const REPO_API = "https://api.github.com/repos/gitpod-io/openvscode-server";
 const MAX_ARCHIVE_BYTES = LENGTH_THRESHOLDS.installers.openVscodeArchiveBytes;
 const DOWNLOAD_HOSTS = new Set(["github.com", "release-assets.githubusercontent.com"]);
+const execFileAsync = promisify(execFile);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const serviceRoot = path.resolve(currentDir, "..");
 const installDir = path.resolve(
@@ -266,12 +267,18 @@ module.exports.default = api;
   console.log("[openvscode] patched missing vsda web assets");
 }
 
-function readInstalledTagName(baseInstallDir) {
+async function readInstalledTagName(installedBinaryPath) {
   try {
-    const filePath = path.join(baseInstallDir, "noobot-install-info.json");
-    if (!existsSync(filePath)) return "";
-    const parsed = JSON.parse(String(readFileSync(filePath, "utf8") || "{}"));
-    return String(parsed?.tagName || "").trim();
+    const { stdout } = await execFileAsync(installedBinaryPath, ["--version"], {
+      encoding: "utf8",
+      timeout: 15000,
+      maxBuffer: 64 * 1024,
+    });
+    const installedVersion = String(stdout || "")
+      .split(/\r?\n/, 1)[0]
+      .trim();
+    if (!/^\d+\.\d+\.\d+$/.test(installedVersion)) return "";
+    return `openvscode-server-v${installedVersion}`;
   } catch {
     return "";
   }
@@ -287,7 +294,7 @@ async function inspectExistingInstallation(binaryPath) {
     }
     try {
       const release = await resolveRelease();
-      const installedTagName = readInstalledTagName(installDir);
+      const installedTagName = await readInstalledTagName(binaryPath);
       if (installedTagName && installedTagName === String(release?.tag_name || "").trim()) {
         console.log(`[openvscode] already up to date: ${installedTagName}`);
         return { done: true, release, asset: null };
@@ -336,20 +343,6 @@ async function main() {
   await run("tar", ["-xzf", archivePath, "-C", installDir, "--strip-components=1"]);
   await chmod(binaryPath, 0o755);
   await ensureVsdaWebFallback(installDir);
-  await writeFile(
-    path.join(installDir, "noobot-install-info.json"),
-    JSON.stringify(
-      {
-        tagName: release?.tag_name || "",
-        assetName: asset.name,
-        installedAt: new Date().toISOString(),
-        binaryPath,
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
   await rm(tmpDir, { recursive: true, force: true });
   console.log(`[openvscode] ready: ${binaryPath}`);
 }
