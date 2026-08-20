@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Node](https://img.shields.io/badge/node-%3E%3D22.22.2-blue)
 
-[Download the latest Windows or macOS release](https://github.com/xiayu1987/noobot/releases/latest) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
+[Windows installer](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot.Setup.<version>.exe`) · [macOS package](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot-<version>-mac.zip`) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
 
 Noobot is an open-source Web and desktop AI agent application built with Node.js, Vue 3, and Electron. It provides isolated user workspaces, durable sessions, extensible tools, semantic workflows, and OpenAI-compatible or DashScope model access from one self-hosted deployment.
 
@@ -42,42 +42,12 @@ An English demo of a fictional portfolio analysis: Noobot verifies source data, 
 
 ## Get Noobot
 
-| Option          | Best for                         | Start here                                                            |
-| --------------- | -------------------------------- | --------------------------------------------------------------------- |
-| Windows desktop | Local desktop use                | [Latest release](https://github.com/xiayu1987/noobot/releases/latest) |
-| macOS desktop   | Local desktop use                | [Latest release](https://github.com/xiayu1987/noobot/releases/latest) |
-| Self-hosted Web | Server or development deployment | [`./start.sh`](#quick-start)                                          |
-
-## Project Structure
-
-```text
-noobot/
-├── agent/                    # Agent core (tools, context, execution flow)
-├── service/                  # Node.js backend (Express 5 + WebSocket + LangChain)
-├── agent-proxy/              # Agent proxy gateway (WebSocket fanout, replay, HTTP proxy)
-├── model-proxy/              # Model proxy layer
-├── workflow/                 # Semantic workflow engine
-├── plugin/
-│   ├── noobot-plugin-harness/  # Harness execution plugin
-│   └── noobot-plugin-workflow/ # Workflow integration plugin
-├── runtime-events/           # Structured startup/session/system event library
-├── sanitize/                 # Shared output and sensitive-data sanitization
-├── shared/                   # Shared thresholds and runtime configuration
-├── i18n/                     # Shared i18n package
-├── client/
-│   ├── noobot-chat/          # Vue 3 web client (Vite)
-│   ├── startup/              # Startup UI
-│   ├── windows/              # Windows Electron packaging
-│   ├── mac/                  # macOS Electron packaging
-│   └── shared/               # Client-side shared code
-├── scripts/                  # Release, launcher, and repository checks
-├── docs/                     # Architecture / refactor docs
-├── user-template/            # User workspace template
-├── workspace/                # Local runtime user data (not source code)
-├── start.sh                  # one-command startup/deploy script
-├── stop-services.sh          # stop the local PM2 applications
-└── README.md
-```
+| Option                   | Download or command                                                                                             | Notes                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Windows installer        | [Latest release](https://github.com/xiayu1987/noobot/releases/latest), then choose `Noobot.Setup.<version>.exe` | Recommended for Windows                   |
+| Windows packaged archive | [Latest release](https://github.com/xiayu1987/noobot/releases/latest), then choose `Noobot-<version>-win.zip`   | ZIP distribution without the setup wizard |
+| macOS packaged archive   | [Latest release](https://github.com/xiayu1987/noobot/releases/latest), then choose `Noobot-<version>-mac.zip`   | Packaged macOS desktop client             |
+| Self-hosted Web          | [`./start.sh`](#quick-start)                                                                                    | Linux or macOS server deployment          |
 
 ## Quick Start
 

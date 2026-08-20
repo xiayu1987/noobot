@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 ![Node](https://img.shields.io/badge/node-%3E%3D22.22.2-blue)
 
-[下载最新 Windows 或 macOS 版本](https://github.com/xiayu1987/noobot/releases/latest) · [配置文档](./CONFIGURATION.zh-CN.md) · [参与讨论](https://github.com/xiayu1987/noobot/discussions)
+[Windows 安装程序](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot.Setup.<版本>.exe`）· [macOS 客户端](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot-<版本>-mac.zip`）· [配置文档](./CONFIGURATION.zh-CN.md) · [参与讨论](https://github.com/xiayu1987/noobot/discussions)
 
 Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI Agent 应用。它在一个自托管部署中提供隔离用户工作区、持久会话、可扩展工具、语义工作流，以及 OpenAI 兼容接口和 DashScope 模型接入。
 
@@ -42,42 +42,12 @@ Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI A
 
 ## 获取 Noobot
 
-| 方式           | 适用场景         | 入口                                                            |
-| -------------- | ---------------- | --------------------------------------------------------------- |
-| Windows 桌面端 | 本地桌面使用     | [最新版本](https://github.com/xiayu1987/noobot/releases/latest) |
-| macOS 桌面端   | 本地桌面使用     | [最新版本](https://github.com/xiayu1987/noobot/releases/latest) |
-| 自托管 Web     | 服务器部署或开发 | [`./start.sh`](#快速开始)                                       |
-
-## 项目结构
-
-```text
-noobot/
-├── agent/                    # Agent 核心（工具、上下文、执行流）
-├── service/                  # Node.js 后端（Express 5 + WebSocket + LangChain）
-├── agent-proxy/              # Agent 代理网关（WebSocket 扇出、消息重放、HTTP 代理）
-├── model-proxy/              # 模型代理层
-├── workflow/                 # 语义工作流引擎
-├── plugin/
-│   ├── noobot-plugin-harness/  # Harness 执行插件
-│   └── noobot-plugin-workflow/ # 工作流集成插件
-├── runtime-events/           # 启动/会话/系统结构化事件库
-├── sanitize/                 # 输出与敏感数据清洗
-├── shared/                   # 共享阈值与运行配置
-├── i18n/                     # 共享 i18n 包
-├── client/
-│   ├── noobot-chat/          # Vue 3 Web 客户端（Vite）
-│   ├── startup/              # 启动页
-│   ├── windows/              # Windows Electron 打包
-│   ├── mac/                  # macOS Electron 打包
-│   └── shared/               # 客户端共享代码
-├── scripts/                  # 发布、启动引导与仓库检查脚本
-├── docs/                     # 架构/重构文档
-├── user-template/            # 用户工作区模板
-├── workspace/                # 本地运行时用户数据（非源码）
-├── start.sh                  # 一键启动/部署脚本
-├── stop-services.sh          # 停止本地 PM2 应用
-└── README.md
-```
+| 方式             | 下载或命令                                                                                          | 说明                        |
+| ---------------- | --------------------------------------------------------------------------------------------------- | --------------------------- |
+| Windows 安装程序 | 进入[最新版本](https://github.com/xiayu1987/noobot/releases/latest)，选择 `Noobot.Setup.<版本>.exe` | Windows 推荐下载方式        |
+| Windows 打包归档 | 进入[最新版本](https://github.com/xiayu1987/noobot/releases/latest)，选择 `Noobot-<版本>-win.zip`   | 不使用安装向导的 ZIP 分发包 |
+| macOS 打包归档   | 进入[最新版本](https://github.com/xiayu1987/noobot/releases/latest)，选择 `Noobot-<版本>-mac.zip`   | 已打包的 macOS 桌面客户端   |
+| 自托管 Web       | [`./start.sh`](#快速开始)                                                                           | Linux 或 macOS 服务器部署   |
 
 ## 快速开始
 
