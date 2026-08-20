@@ -21,7 +21,7 @@ Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI A
 
 全英文虚构股票组合分析演示：Noobot 验证源数据、串联四次文件工具调用、实时展示分析过程，并将结果发布为可复用的报告附件。
 
-![Noobot 使用工具分析虚构股票组合](./docs/assets/noobot-tool-workflow.gif)
+![Noobot 使用工具分析虚构股票组合](./docs/assets/noobot-tool-workflow-v2.gif)
 
 <details>
 <summary>查看完成后的分析结果</summary>
