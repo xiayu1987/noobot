@@ -21,7 +21,7 @@ Co-creators: Hyler · Epicur · gonglei · Z · Y · C
 
 An English demo of a fictional portfolio analysis: Noobot verifies source data, chains four file tools, surfaces the live analysis flow, and publishes reusable report attachments.
 
-![Noobot tool workflow analyzing a fictional stock portfolio](./docs/assets/noobot-tool-workflow.gif)
+![Noobot tool workflow analyzing a fictional stock portfolio](./docs/assets/noobot-tool-workflow-v2.gif)
 
 <details>
 <summary>View the completed analysis</summary>
