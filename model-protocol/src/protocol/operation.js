@@ -3,6 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import {
+  MODEL_INPUT_PROCESSING_KIND,
+  classifyModelInputProcessing,
+} from "../model/model-input-processing.js";
+
 export const MODEL_OPERATION_KIND = Object.freeze({
   CHAT: "chat",
   WEB_SEARCH: "web_search",
@@ -110,8 +115,12 @@ export function normalizeModelOperation(input = {}) {
       const attachmentPath = `model operation.input.attachments[${index}]`;
       const attachment = requirePlainObject(value, attachmentPath);
       rejectUnknownKeys(attachment, ["mimeType", "data", "fileName"], attachmentPath);
+      const mimeType = requireText(attachment.mimeType, `${attachmentPath}.mimeType`);
+      if (classifyModelInputProcessing(mimeType).kind === MODEL_INPUT_PROCESSING_KIND.DIRECT_TEXT) {
+        throw new TypeError(`${attachmentPath}.mimeType is directly readable text: ${mimeType}`);
+      }
       return Object.freeze({
-        mimeType: requireText(attachment.mimeType, `${attachmentPath}.mimeType`),
+        mimeType,
         data: requireText(attachment.data, `${attachmentPath}.data`),
         fileName: String(attachment.fileName || "").trim(),
       });

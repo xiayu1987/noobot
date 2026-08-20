@@ -271,7 +271,11 @@ export class ConnectorRuntime {
       const record = await this._record(userId, normalized.connectorId);
       const active = this.handles.get(key);
       if (!active) throw new TypeError("connector is not connected");
-      if (!active.implementation.definition.operations.includes(normalized.operation)) {
+      if (
+        !active.implementation.definition.operations.some(
+          (operation) => operation.name === normalized.operation,
+        )
+      ) {
         throw new TypeError(`connector operation is not registered: ${normalized.operation}`);
       }
       return normalizeConnectorAccessResult(

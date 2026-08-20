@@ -83,6 +83,8 @@ test("file repository provisions Session and initial Turn in one persisted artif
     assert.equal(persistedSession.messages.length, 1);
     assert.equal(persistedSession.messages[0].content, "persist me before execution");
     assert.equal(persistedSession.messages[0].turnScopeId, "turn-1");
+    assert.equal(persistedSession.aggregateVersion, 1);
+    assert.equal(result.aggregateVersion, 1);
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);

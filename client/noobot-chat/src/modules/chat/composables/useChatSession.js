@@ -21,6 +21,7 @@ import {
   renameSessionApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { encryptPayloadBySessionId } from "../../../shared/utils/sessionCrypto.js";
+import { listUserConnectors } from "../../../infrastructure/api/connectors/connectorApi.js";
 import { RoleEnum } from "../model/chatConstants.js";
 import {
   createConnectorPanelState,
@@ -437,6 +438,7 @@ export function useChatSession({
 
   const connectorPanel = useConnectorPanel({
     ensureConnected,
+    listUserConnectorsApi: listUserConnectors,
     getSessionConnectorsApi,
     putSessionConnectorSelectionApi,
     userId,
@@ -596,6 +598,7 @@ export function useChatSession({
       resolveActiveSessionIdentity,
       resolveActiveTurnScopeIdentity,
       submitTurnRuntimeEvent,
+      waitForSessionConnectorState: connectorPanel.waitForSessionConnectorState,
       send: chatEngine.send,
       stopSending: chatEngine.stopSending,
       notify,

@@ -40,7 +40,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     "scoped",
     "session-1",
     "model",
-    "38582bd8-547d-4189-9096-b1db03577511.txt",
+    "38582bd8-547d-4189-9096-b1db03577511.docx",
   );
   const modelInputPath = path.join(basePath, modelRelativePath);
   await fs.mkdir(path.dirname(inputPath), { recursive: true });
@@ -100,8 +100,8 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
         attachmentId: "source-3",
         sessionId: "session-1",
         attachmentSource: "model",
-        name: "workspace-file.txt",
-        mimeType: "text/plain",
+        name: "workspace-file.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         path: modelInputPath,
         relativePath: modelRelativePath,
       },
@@ -214,7 +214,7 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   assert.match(modelRequest.operation.input.attachments[0].data, /^data:image\/png;base64,/);
   assert.equal(modelRequest.operation.input.attachments[1].mimeType, "application/pdf");
   assert.equal(modelRequest.operation.input.attachments[1].fileName, "invoice.pdf");
-  assert.equal(modelRequest.operation.input.attachments[2].fileName, "workspace-file.txt");
+  assert.equal(modelRequest.operation.input.attachments[2].fileName, "workspace-file.docx");
   assert.equal(modelRequest.invocation.contextSequencePolicy, "independent_request");
   assert.equal(ingestRequest.generationSource, "multimodal_parse_tool");
   assert.equal(ingestRequest.artifacts[0].name, "scan.multimodal-parse.multimodal_model.md");
@@ -309,6 +309,29 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
   assert.equal(result.ok, true);
   assert.deepEqual(result.summary.source_attachment_identities, []);
   assert.equal(result.summary.source_attachment_backwritten_count, 0);
+});
+
+test("multimodal_parse rejects directly readable text before invoking a model", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-text-"));
+  await fs.writeFile(path.join(basePath, "tool-result.txt"), '{"attachments":[]}', "utf8");
+  let modelCalled = false;
+  const agentContext = createTestAgentExecutionScope({
+    basePath,
+    userId: "admin",
+    userMessageAttachments: [],
+    modelPort: {
+      async invoke() {
+        modelCalled = true;
+      },
+    },
+  });
+  const [tool] = createMultimodalParseTool({ agentContext });
+
+  await assert.rejects(
+    () => tool.invoke({ inputs: [{ source: "tool-result.txt" }] }),
+    /read_file|资源分段读取/,
+  );
+  assert.equal(modelCalled, false);
 });
 
 test("multimodal_parse passes audio and video files to the configured model", async () => {

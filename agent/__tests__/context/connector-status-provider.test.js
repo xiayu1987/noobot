@@ -14,7 +14,7 @@ const connectors = [
     name: "selected database",
     type: "database",
     subType: "postgres",
-    operations: ["execute"],
+    operations: [{ name: "execute", description: "Execute SQL.", inputSchema: { type: "object", properties: {} } }],
   },
   {
     connectorId: "con_unselected",
@@ -22,7 +22,7 @@ const connectors = [
     name: "private mail",
     type: "email",
     subType: "smtp_imap",
-    operations: ["read"],
+    operations: [{ name: "read", description: "Read mail.", inputSchema: { type: "object", properties: {} } }],
   },
 ];
 
@@ -43,7 +43,13 @@ test("connector system context projects only selected stable identity fields", a
         connector_name: "selected database",
         connector_type: "database",
         connector_sub_type: "postgres",
-        connector_operations: ["execute"],
+        connector_operations: [
+          {
+            name: "execute",
+            description: "Execute SQL.",
+            input_schema: { type: "object", properties: {} },
+          },
+        ],
       },
     ],
   });
