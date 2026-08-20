@@ -136,6 +136,8 @@ test("first send creates the session before committing action accepted", async (
   assert.equal(Boolean(eventIdOf(accepted.envelope)), true);
   assert.equal(eventIdOf(accepted.envelope), h.reload().authorityEventOutbox[0]?.eventId);
   assert.equal(h.reload().turnLifecycle.activeTurnScopeId, "t1");
+  assert.equal(accepted.aggregateVersion, 1);
+  assert.equal(h.reload().aggregateVersion, 1);
 });
 
 test("authority outbox delivery is read, attempted, and acknowledged through the session transaction", async () => {

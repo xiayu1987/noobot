@@ -5,7 +5,17 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createConnectorInstanceDefinition, connectorField } from "@noobot/connector-protocol";
+import {
+  createConnectorInstanceDefinition,
+  connectorField,
+  connectorOperation,
+} from "@noobot/connector-protocol";
+
+const executeOperation = () =>
+  connectorOperation("execute", {
+    description: "Execute the test operation.",
+    inputSchema: { type: "object", properties: {} },
+  });
 import { ConnectorRuntime } from "../src/index.js";
 
 function repository() {
@@ -60,7 +70,7 @@ test("runtime rejects unregistered instances and owns their lifecycle", async ()
       type: "terminal",
       subType: "echo",
       fields: [connectorField("token", { required: true, secret: true })],
-      operations: ["execute"],
+      operations: [executeOperation()],
     }),
     create: async () => ({ ready: true }),
     health: async () => ({ ok: true }),
@@ -106,7 +116,7 @@ test("runtime resolves workspace fields inside the authoritative user workspace"
       type: "database",
       subType: "file",
       fields: [connectorField("file", { required: true, kind: "workspace_path" })],
-      operations: ["execute"],
+      operations: [executeOperation()],
     }),
     create: async () => ({}),
     health: async () => ({ ok: true }),
@@ -152,7 +162,7 @@ test("runtime serializes access and disposal for one connector", async () => {
       type: "terminal",
       subType: "serial",
       fields: [],
-      operations: ["execute"],
+      operations: [executeOperation()],
     }),
     create: async () => ({}),
     health: async () => ({ ok: true }),

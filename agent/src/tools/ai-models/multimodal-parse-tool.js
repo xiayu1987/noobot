@@ -14,8 +14,9 @@ import {
 } from "../../config/index.js";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
-  MODEL_MULTIMODAL_MODALITY,
+  MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
+  classifyModelInputProcessing,
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
@@ -44,16 +45,6 @@ function resolveMimeType(filePath = "", sourceAttachment = null) {
     EXTENSION_TO_MIME[path.extname(String(filePath || "")).toLowerCase()] ||
     DEFAULT_MIME_TYPE
   );
-}
-
-function resolveInputModality(mimeType = "") {
-  const normalized = String(mimeType || "")
-    .trim()
-    .toLowerCase();
-  if (normalized.startsWith("image/")) return MODEL_MULTIMODAL_MODALITY.IMAGE;
-  if (normalized.startsWith("audio/")) return MODEL_MULTIMODAL_MODALITY.AUDIO;
-  if (normalized.startsWith("video/")) return MODEL_MULTIMODAL_MODALITY.VIDEO;
-  return MODEL_MULTIMODAL_MODALITY.DOCUMENT;
 }
 
 function resolveConfiguredParseModel({
@@ -136,7 +127,38 @@ export function createMultimodalParseTool({ agentContext }) {
       const inputMimeTypes = inputFiles.map((inputFile, index) =>
         resolveMimeType(inputFile, sourceAttachmentMetas[index]),
       );
-      const requiredModalities = Array.from(new Set(inputMimeTypes.map(resolveInputModality)));
+      const inputProcessing = inputMimeTypes.map(classifyModelInputProcessing);
+      const directTextInputs = inputProcessing
+        .map((processing, index) => ({
+          processing,
+          input: inputs[index],
+          label:
+            String(resolvedInputs[index]?.resourceRef?.logical?.path || "").trim() ||
+            (typeof inputs[index] === "string"
+              ? inputs[index]
+              : JSON.stringify(inputs[index] || {})),
+        }))
+        .filter(({ processing }) => processing.kind === MODEL_INPUT_PROCESSING_KIND.DIRECT_TEXT);
+      if (directTextInputs.length) {
+        throw recoverableToolError(
+          tTool(runtime, "tools.multimodalParse.directTextUnsupported", {
+            inputs: directTextInputs.map(({ label }) => label).join(", "),
+          }),
+          {
+            code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
+            details: {
+              inputs: directTextInputs.map(({ input, processing }) => ({
+                input,
+                mimeType: processing.mimeType,
+                processingKind: processing.kind,
+              })),
+            },
+          },
+        );
+      }
+      const requiredModalities = Array.from(
+        new Set(inputProcessing.map(({ modality }) => modality)),
+      );
       const inputFileStats = await Promise.all(inputFiles.map((filePath) => stat(filePath)));
       const totalFileSizeBytes = inputFileStats.reduce(
         (total, inputFileStat) => total + Number(inputFileStat.size || 0),

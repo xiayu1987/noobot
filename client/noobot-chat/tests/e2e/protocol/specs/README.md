@@ -21,9 +21,11 @@ specs. See the [English plan](../../../../../../docs/browser-protocol-e2e-test-p
 - `046`: real-time user, assistant, Workflow card, DSL collapse, and stop-state consistency across
   two browser contexts.
 
-PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-099 was
-removed as duplicate coverage. All current scenarios are implemented; permanent skips and
-placeholder scenarios without business assertions are forbidden.
+PBE-018, PBE-019, and PBE-020 are strict subsets of PBE-033, PBE-032, and PBE-028. PBE-047 covers
+connector creation, persisted-Session selection write ordering, database access, model context, and
+persistence. It blocks the selection write and asserts that a concurrent send cannot overtake the
+Session authority update. PBE-099 was removed as duplicate coverage. All current scenarios are
+implemented; permanent skips and placeholder scenarios without business assertions are forbidden.
 
 ### PBE-033: Low-turn complete Harness flow
 
@@ -68,7 +70,7 @@ the final answer.
 - `033`～`036`：Harness 全流程注入、主 Agent `task_summary` checkpoint、周期 `task_check` 切片，以及安全工具/实时思考/交互模型输入闭环。
 - `044`：自然完成后执行工具链，两次在工具结果后停止并继续，最终自然完成；逐份审计停止快照的序列化结构及 Continue 后真实模型输入的恢复投影。
 - `045`：同一 assistant 响应并行发起四个工具，部分完成后停止；审计整批调用结果配对、停止快照及 Continue 模型输入恢复。
-- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-028 同一 Session同时核对 Workflow/Harness model 附件、真实 HTTP 读取、刷新后投影，以及普通 Harness guidance 不进入 transfer；PBE-099 的重复组合审计已删除。
+- PBE-018、PBE-019、PBE-020 已分别合并到 PBE-033、PBE-032、PBE-028；PBE-047 覆盖连接器创建、持久化 Session 选择写入顺序、数据库访问、模型上下文及持久化审计，并通过阻塞选择写入验证并发发送不能越过 Session 权威更新；PBE-099 的重复组合审计已删除。
 - 当前场景均已落地；禁止提交永久 `skip` 或无业务断言的占位场景。
 
 ### PBE-033：Harness 低轮次完整流程

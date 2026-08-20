@@ -11,6 +11,7 @@ export * from "./model/provider-spec.js";
 export * from "./model/model-selection.js";
 export * from "./model/model-profile.js";
 export * from "./model/model-capabilities.js";
+export * from "./model/model-input-processing.js";
 export * from "./model/model-library.js";
 export * from "./tools/tool-call.js";
 export * from "./tools/tool-binding.js";

@@ -118,4 +118,132 @@ describe("connectorService", () => {
       selectedConnectorIds: ["con_db"],
     });
   });
+
+  it("refreshes a new Session from the user catalog without replacing its local selection", async () => {
+    let releaseCatalog;
+    const listUserConnectorsApi = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseCatalog = () =>
+            resolve(
+              okResponse({
+                connectors: [{ connectorId: "con_db", status: "connected" }],
+              }),
+            );
+        }),
+    );
+    const activeSession = {
+      sessionId: "local-1",
+      isLocal: true,
+      connectorPanelState: { connectors: [], selectedConnectorIds: [] },
+    };
+    const service = createConnectorService({
+      ensureConnected: () => true,
+      listUserConnectorsApi,
+      getSessionConnectorsApi: vi.fn(),
+      putSessionConnectorSelectionApi: vi.fn(),
+      userId: ref("alice"),
+      authFetch: vi.fn(),
+    });
+
+    const refresh = service.refreshSessionConnectors({
+      sessionId: "local-1",
+      sessions: [activeSession],
+    });
+    await vi.waitFor(() => expect(listUserConnectorsApi).toHaveBeenCalledOnce());
+    await service.updateSessionSelectedConnectors({
+      activeSession,
+      selectedConnectorIds: ["con_db"],
+    });
+    releaseCatalog();
+    await refresh;
+
+    expect(listUserConnectorsApi).toHaveBeenCalledWith({
+      userId: "alice",
+      fetcher: expect.any(Function),
+    });
+    expect(activeSession.connectorPanelState).toMatchObject({
+      rootSessionId: "local-1",
+      connectors: [{ connectorId: "con_db", status: "connected" }],
+      selectedConnectorIds: ["con_db"],
+    });
+  });
+
+  it("exposes the authoritative selection write as a send barrier", async () => {
+    let releaseSelection;
+    const putSessionConnectorSelectionApi = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseSelection = () => resolve(okResponse({ selectedConnectorIds: ["con_db"] }));
+        }),
+    );
+    const activeSession = {
+      sessionId: "session-1",
+      connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
+    };
+    const service = createConnectorService({
+      ensureConnected: () => true,
+      getSessionConnectorsApi: vi.fn(),
+      putSessionConnectorSelectionApi,
+      userId: ref("alice"),
+      authFetch: vi.fn(),
+    });
+
+    const update = service.updateSessionSelectedConnectors({
+      activeSession,
+      selectedConnectorIds: ["con_db"],
+    });
+    let barrierSettled = false;
+    const barrier = service.waitForSessionConnectorState("session-1").then(() => {
+      barrierSettled = true;
+    });
+    await vi.waitFor(() => expect(putSessionConnectorSelectionApi).toHaveBeenCalledOnce());
+    expect(barrierSettled).toBe(false);
+
+    releaseSelection();
+    await Promise.all([update, barrier]);
+    expect(activeSession.connectorPanelState.selectedConnectorIds).toEqual(["con_db"]);
+  });
+
+  it("serializes persisted Session refresh and selection writes", async () => {
+    let releaseRefresh;
+    const getSessionConnectorsApi = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          releaseRefresh = () =>
+            resolve(okResponse({ sessionId: "session-1", selectedConnectorIds: [] }));
+        }),
+    );
+    const putSessionConnectorSelectionApi = vi.fn(async () =>
+      okResponse({ selectedConnectorIds: ["con_db"] }),
+    );
+    const activeSession = {
+      sessionId: "session-1",
+      isLocal: false,
+      connectorPanelState: { connectors: [{ connectorId: "con_db" }] },
+    };
+    const service = createConnectorService({
+      ensureConnected: () => true,
+      getSessionConnectorsApi,
+      putSessionConnectorSelectionApi,
+      userId: ref("alice"),
+      authFetch: vi.fn(),
+    });
+
+    const refresh = service.refreshSessionConnectors({
+      sessionId: "session-1",
+      sessions: [activeSession],
+    });
+    await vi.waitFor(() => expect(getSessionConnectorsApi).toHaveBeenCalledOnce());
+    const update = service.updateSessionSelectedConnectors({
+      activeSession,
+      selectedConnectorIds: ["con_db"],
+    });
+    expect(putSessionConnectorSelectionApi).not.toHaveBeenCalled();
+
+    releaseRefresh();
+    await Promise.all([refresh, update]);
+    expect(putSessionConnectorSelectionApi).toHaveBeenCalledOnce();
+    expect(activeSession.connectorPanelState.selectedConnectorIds).toEqual(["con_db"]);
+  });
 });

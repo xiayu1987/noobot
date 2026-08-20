@@ -8,6 +8,7 @@ import test from "node:test";
 import {
   assertConnectorAccessPort,
   connectorField,
+  connectorOperation,
   createConnectorSecretAad,
   createConnectorInstanceDefinition,
   normalizeConnectorParameters,
@@ -22,7 +23,12 @@ test("connector definitions validate one canonical instance shape", () => {
     type: "terminal",
     subType: "ssh",
     fields: [connectorField("host", { required: true })],
-    operations: ["execute"],
+    operations: [
+      connectorOperation("execute", {
+        description: "Execute a command.",
+        inputSchema: { type: "object", properties: {} },
+      }),
+    ],
   });
   assert.deepEqual(normalizeConnectorParameters(definition, { host: "example.com" }), {
     host: "example.com",
@@ -33,7 +39,12 @@ test("connector definitions validate one canonical instance shape", () => {
     type: "cloud-storage",
     subType: "object-store",
     fields: [],
-    operations: ["read"],
+    operations: [
+      connectorOperation("read", {
+        description: "Read an object.",
+        inputSchema: { type: "object", properties: {} },
+      }),
+    ],
   });
   assert.equal(extensibleDefinition.type, "cloud-storage");
   assert.throws(
@@ -42,7 +53,12 @@ test("connector definitions validate one canonical instance shape", () => {
         instanceType: "example.invalid",
         type: "Cloud Storage",
         subType: "object-store",
-        operations: ["read"],
+        operations: [
+          connectorOperation("read", {
+            description: "Read an object.",
+            inputSchema: { type: "object", properties: {} },
+          }),
+        ],
       }),
     /type/,
   );

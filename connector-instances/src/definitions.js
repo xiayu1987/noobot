@@ -3,7 +3,31 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { connectorField, createConnectorInstanceDefinition } from "@noobot/connector-protocol";
+import {
+  connectorField,
+  connectorOperation,
+  createConnectorInstanceDefinition,
+} from "@noobot/connector-protocol";
+
+const commandInputSchema = Object.freeze({
+  type: "object",
+  properties: {
+    command: { type: "string", description: "Command text to execute." },
+  },
+  required: ["command"],
+  additionalProperties: false,
+});
+
+const databaseExecuteOperation = () =>
+  connectorOperation("execute", {
+    description: "Execute one SQL statement against the configured database.",
+    inputSchema: {
+      ...commandInputSchema,
+      properties: {
+        command: { type: "string", description: "SQL statement to execute." },
+      },
+    },
+  });
 
 const authFields = () => [
   connectorField("host", { required: true }),
@@ -22,7 +46,7 @@ export const MYSQL_DEFINITION = createConnectorInstanceDefinition({
     ...authFields().slice(1),
     connectorField("database", { required: true }),
   ],
-  operations: ["execute"],
+  operations: [databaseExecuteOperation()],
 });
 
 export const POSTGRES_DEFINITION = createConnectorInstanceDefinition({
@@ -36,7 +60,7 @@ export const POSTGRES_DEFINITION = createConnectorInstanceDefinition({
     ...authFields().slice(1),
     connectorField("database", { required: true }),
   ],
-  operations: ["execute"],
+  operations: [databaseExecuteOperation()],
 });
 
 export const SQLITE_DEFINITION = createConnectorInstanceDefinition({
@@ -45,7 +69,7 @@ export const SQLITE_DEFINITION = createConnectorInstanceDefinition({
   subType: "sqlite",
   displayName: "SQLite",
   fields: [connectorField("file_path", { required: true, kind: "workspace_path" })],
-  operations: ["execute"],
+  operations: [databaseExecuteOperation()],
 });
 
 export const SSH_DEFINITION = createConnectorInstanceDefinition({
@@ -58,7 +82,12 @@ export const SSH_DEFINITION = createConnectorInstanceDefinition({
     connectorField("port", { kind: "number", defaultValue: 22 }),
     ...authFields().slice(1),
   ],
-  operations: ["execute"],
+  operations: [
+    connectorOperation("execute", {
+      description: "Execute one shell command on the configured SSH host.",
+      inputSchema: commandInputSchema,
+    }),
+  ],
 });
 
 export const SMTP_IMAP_DEFINITION = createConnectorInstanceDefinition({
@@ -77,5 +106,47 @@ export const SMTP_IMAP_DEFINITION = createConnectorInstanceDefinition({
     connectorField("password", { required: true, secret: true }),
     connectorField("from_email"),
   ],
-  operations: ["send", "list", "read", "list_folders"],
+  operations: [
+    connectorOperation("send", {
+      description: "Send an email message.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          to: { type: "string" },
+          subject: { type: "string" },
+          text: { type: "string" },
+          html: { type: "string" },
+        },
+        required: ["to", "subject"],
+        additionalProperties: true,
+      },
+    }),
+    connectorOperation("list", {
+      description: "List email messages in a mailbox folder.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          folder: { type: "string" },
+          limit: { type: "number" },
+        },
+        additionalProperties: true,
+      },
+    }),
+    connectorOperation("read", {
+      description: "Read one email message by its mailbox identity.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          folder: { type: "string" },
+          uid: { type: "number" },
+        },
+        required: ["uid"],
+        additionalProperties: true,
+      },
+    }),
+    connectorOperation("list_folders", {
+      description: "List available mailbox folders.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    }),
+  ],
 });

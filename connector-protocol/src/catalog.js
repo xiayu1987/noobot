@@ -26,6 +26,31 @@ export const connectorField = (
   });
 };
 
+export function connectorOperation(
+  name,
+  { description = "", inputSchema = { type: "object", properties: {} } } = {},
+) {
+  const normalizedName = String(name || "").trim();
+  const normalizedDescription = String(description || "").trim();
+  if (!CONNECTOR_IDENTIFIER_PATTERN.test(normalizedName)) {
+    throw new TypeError(`connector operation name is invalid: ${normalizedName}`);
+  }
+  if (!normalizedDescription) {
+    throw new TypeError(`connector operation description is required: ${normalizedName}`);
+  }
+  if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
+    throw new TypeError(`connector operation inputSchema is invalid: ${normalizedName}`);
+  }
+  if (inputSchema.type !== "object") {
+    throw new TypeError(`connector operation inputSchema must describe an object: ${normalizedName}`);
+  }
+  return Object.freeze({
+    name: normalizedName,
+    description: normalizedDescription,
+    inputSchema: Object.freeze(structuredClone(inputSchema)),
+  });
+}
+
 export function normalizeConnectorType(value = "") {
   const normalized = String(value || "").trim();
   return CONNECTOR_IDENTIFIER_PATTERN.test(normalized) ? normalized : "";
@@ -38,10 +63,17 @@ export function createConnectorInstanceDefinition(input = {}) {
   if (!instanceType || !type || !subType) {
     throw new TypeError("connector instanceType, type and subType are required");
   }
-  const operations = [
-    ...new Set((input.operations || []).map(String).map((item) => item.trim())),
-  ].filter(Boolean);
+  const operations = (input.operations || []).map((item) =>
+    connectorOperation(item?.name, {
+      description: item?.description,
+      inputSchema: item?.inputSchema,
+    }),
+  );
   if (!operations.length) throw new TypeError("connector instance operations are required");
+  const operationNames = operations.map((item) => item.name);
+  if (new Set(operationNames).size !== operationNames.length) {
+    throw new TypeError("connector instance operations must have unique names");
+  }
   const fields = [...(input.fields || [])].map((item) => connectorField(item?.name, item));
   const fieldNames = fields.map((item) => String(item?.name || "").trim());
   if (fieldNames.some((name) => !name) || new Set(fieldNames).size !== fieldNames.length) {

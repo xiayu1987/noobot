@@ -115,12 +115,12 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "一起解析一个或多个图片、文档、音频或视频文件并保存结果。每项 source 使用逻辑文件路径或完整附件身份。",
+      text: "使用多模态模型提取一个或多个图片、二进制文档、音频或视频的内容并保存结果。纯文本、JSON、CSV、代码、日志及工具结果附件应通过 read_file 或资源分段读取，禁止使用本工具。每项 source 使用逻辑文件路径或完整附件身份。",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "一个或多个图片、文档、音频或视频输入；每项包含逻辑文件路径或完整附件身份。",
+        text: "一个或多个需要模型提取的图片、二进制文档、音频或视频输入；不接受可直接读取的文本输入。每项包含逻辑文件路径或完整附件身份。",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
@@ -143,6 +143,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.filePathsRequired": "inputs 至少需要包含一个文件输入",
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `所有文件合计必须小于 ${Number(params.maxSizeMB || 50)} MB`,
+      "tools.multimodalParse.directTextUnsupported": (params = {}) =>
+        `以下输入是可直接读取的文本，不属于多模态解析范围：${String(params.inputs || "").trim()}。请使用 read_file 或资源分段读取。`,
       "tools.multimodalParse.defaultPrompt":
         "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
       "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型",

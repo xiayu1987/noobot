@@ -438,6 +438,7 @@ export async function applyTurnLifecycleEvent({
         parentSessionId: resolvedParentSessionId,
         nowValue,
       });
+      if (userMessage) session.aggregateVersion = concurrency.nextAggregateVersion;
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.authorityEventOutbox = result.eventOutbox;
@@ -566,6 +567,7 @@ export async function provisionSessionWithInitialTurn({
         parentSessionId: resolvedParentSessionId,
         nowValue,
       });
+      if (userMessage) session.aggregateVersion = actualVersion + 1;
       session.authorityEventOutbox = result.eventOutbox;
       session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;

@@ -8,6 +8,7 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 
 export function useConnectorPanel({
   ensureConnected,
+  listUserConnectorsApi,
   getSessionConnectorsApi,
   putSessionConnectorSelectionApi,
   userId,
@@ -18,16 +19,13 @@ export function useConnectorPanel({
   const { translate } = useLocale();
   const connectorService = createConnectorService({
     ensureConnected,
+    listUserConnectorsApi,
     getSessionConnectorsApi,
     putSessionConnectorSelectionApi,
     userId,
     authFetch,
     translateText: translate,
   });
-
-  function applySessionConnectorPayload(sessionItem, payload = {}) {
-    return connectorService.applySessionConnectorPayload(sessionItem, payload);
-  }
 
   async function refreshSessionConnectors(sessionId = "") {
     return connectorService.refreshSessionConnectors({
@@ -50,10 +48,14 @@ export function useConnectorPanel({
     });
   }
 
+  function waitForSessionConnectorState(sessionId = "") {
+    return connectorService.waitForSessionConnectorState(sessionId);
+  }
+
   return {
-    applySessionConnectorPayload,
     refreshSessionConnectors,
     refreshSessionConnectorsAsync,
     updateSessionSelectedConnectors,
+    waitForSessionConnectorState,
   };
 }

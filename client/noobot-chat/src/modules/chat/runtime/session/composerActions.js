@@ -14,6 +14,7 @@ export function createComposerActions({
   resolveActiveSessionIdentity,
   resolveActiveTurnScopeIdentity,
   submitTurnRuntimeEvent,
+  waitForSessionConnectorState,
   send,
   stopSending,
   notify,
@@ -25,6 +26,8 @@ export function createComposerActions({
 
   async function sendWithComposerActionState(...args) {
     const sessionRuntimeIdValue = resolveActiveSessionIdentity();
+    const connectorStateTask = waitForSessionConnectorState?.(sessionRuntimeIdValue);
+    if (connectorStateTask) await connectorStateTask;
     const currentTurn = resolveSessionTurnRuntime(
       turnRuntimeRegistry.value,
       sessionRuntimeIdValue,
