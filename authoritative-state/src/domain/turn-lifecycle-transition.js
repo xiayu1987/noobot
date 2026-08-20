@@ -104,6 +104,15 @@ function requestHashFor(request) {
     turnScopeId: request.turnScopeId,
     phase: request.phase,
     action: clean(input.action),
+    userMessage:
+      input.userMessage && typeof input.userMessage === "object"
+        ? {
+            content: String(input.userMessage.content || "").trim(),
+            messageId: clean(input.userMessage.messageId),
+            parentDialogProcessId: clean(input.userMessage.parentDialogProcessId),
+            frontendUserMessage: input.userMessage.frontendUserMessage === true,
+          }
+        : null,
     executionState: clean(input.executionState),
     startedAt: clean(input.startedAt),
     finishedAt: clean(input.finishedAt),

@@ -53,10 +53,23 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         turnScopeId: payload.turnScopeId,
         frontendUserMessage: payload.frontendUserMessage === true,
         messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
-        attachments: payload.attachments || [],
+        attachments: [],
       };
       persistedTurns.push(userMessage);
-      return { userMessage, attachments: userMessage.attachments, aggregateVersion: 1 };
+      return { sessionId: payload.sessionId, userMessage, attachments: [], aggregateVersion: 1 };
+    },
+    async bindTurnAttachments(payload = {}) {
+      const index = persistedTurns.findIndex(
+        (message) => message.messageUid === payload.messageUid,
+      );
+      const userMessage = { ...persistedTurns[index], attachments: payload.attachments };
+      persistedTurns[index] = userMessage;
+      return {
+        session: { sessionId: payload.sessionId },
+        userMessage,
+        attachments: payload.attachments,
+        aggregateVersion: 2,
+      };
     },
     async saveCurrentTurnTasks(payload = {}) {
       savedCurrentTurnTasksPayload = payload;
@@ -329,10 +342,16 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
   assert.equal(typeof fullTurnLog?.data?.content?.preview, "string");
   assert.equal(fullTurnLog?.data?.artifactRef?.source, "session.messages");
   assert.equal(upstreamEvents.length > 0, true, "应向上游持续回传事件");
+  assert.deepEqual(
+    upstreamEvents.find((event) => event?.event === "turn_committed")?.data?.userMessage
+      ?.attachments || [],
+    [],
+    "turn_committed 应只回传已持久化的用户消息",
+  );
   assert.equal(
-    upstreamEvents.find((event) => event?.event === "turn_committed")?.data?.userMessage,
+    upstreamEvents.find((event) => event?.event === "turn_attachments_bound")?.data?.userMessage,
     userTurn,
-    "turn_committed 应回传唯一持久化用户消息及其 canonical 附件",
+    "turn_attachments_bound 应回传绑定 canonical 附件后的唯一持久化用户消息",
   );
   assert.ok(capturedAgentContext, "agent 应收到构建后的完整上下文");
 });

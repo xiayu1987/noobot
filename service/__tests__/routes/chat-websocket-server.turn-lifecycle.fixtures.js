@@ -108,6 +108,8 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
   const commitInputs = [];
   let runCount = 0;
   let lastRunConfig = null;
+  let lastTurnAcceptance = null;
+  const userMessages = new Map();
   const bot = {
     async resolveExecutionIntent({ turnScopeId = "", runConfig = {} } = {}) {
       const executionId = String(runConfig?.executionId || `agent:${turnScopeId}`).trim();
@@ -121,6 +123,13 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
       };
     },
     async applyTurnLifecycleEvent(input) {
+      if (
+        input.eventType === TURN_EVENT.ACTION_ACCEPTED &&
+        input.action !== "resend" &&
+        !String(input.dialogProcessId || "").trim()
+      ) {
+        input.dialogProcessId = `dialog:${input.turnScopeId}`;
+      }
       commitInputs.push(structuredClone(input));
       const result = commitTurnLifecycle({
         lifecycle,
@@ -144,9 +153,34 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         eventOutbox = result.eventOutbox;
         committed.push(input.eventType);
       }
-      return input.terminalStatus && result.applied
-        ? { ...result, turnStatus: result.turn.terminalStatus }
-        : result;
+      let userMessage = null;
+      if (input.eventType === TURN_EVENT.ACTION_ACCEPTED && input.action !== "resend") {
+        userMessage = userMessages.get(input.turnScopeId) || {
+          messageUid: `session-message:${input.turnScopeId}`,
+          messageId: String(input.userMessage?.messageId || `user-message:${input.turnScopeId}`),
+          role: "user",
+          type: "message",
+          content: String(input.userMessage?.content || ""),
+          sessionId: input.sessionId,
+          parentSessionId: String(input.parentSessionId || ""),
+          dialogProcessId: input.dialogProcessId,
+          parentDialogProcessId: String(input.userMessage?.parentDialogProcessId || ""),
+          turnScopeId: input.turnScopeId,
+          frontendUserMessage: input.userMessage?.frontendUserMessage === true,
+          messageOrigin: "user",
+          attachments: [],
+        };
+        userMessages.set(input.turnScopeId, userMessage);
+      }
+      return {
+        ...result,
+        ...(input.terminalStatus && result.applied
+          ? { turnStatus: result.turn.terminalStatus }
+          : {}),
+        ...(userMessage
+          ? { userMessage, dialogProcessId: input.dialogProcessId, aggregateVersion: 1 }
+          : {}),
+      };
     },
     async getPendingAuthorityEvents() {
       return { found: true, events: listPendingAuthorityEvents(eventOutbox) };
@@ -178,9 +212,10 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
         reason: result.reason,
       };
     },
-    async runSession({ sessionId, runConfig, eventListener }) {
+    async runSession({ sessionId, runConfig, turnAcceptance, eventListener }) {
       runCount += 1;
       lastRunConfig = structuredClone(runConfig);
+      lastTurnAcceptance = structuredClone(turnAcceptance);
       if (failureAt === "action")
         throw Object.assign(new Error("agent initialization failed"), {
           code: "agent_init_failed",
@@ -214,6 +249,7 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
     commitInputs: () => structuredClone(commitInputs),
     runCount: () => runCount,
     lastRunConfig: () => structuredClone(lastRunConfig),
+    lastTurnAcceptance: () => structuredClone(lastTurnAcceptance),
     lifecycle: () => lifecycle,
     eventOutbox: () => structuredClone(eventOutbox),
   };

@@ -17,7 +17,6 @@ export function useAppShellPanelActions({
   ensureConnected,
   notify,
   translate = (key) => key,
-  closeAllDrawers,
   toggleSidebar,
   closeMobileSidebar,
   openWorkspaceRaw,
@@ -97,7 +96,6 @@ export function useAppShellPanelActions({
     const nextVisible = Boolean(value);
     if (composerMorePanelVisible?.value === nextVisible) return;
     if (nextVisible) {
-      closeAllDrawers?.();
       closeMobileSidebar?.();
     }
     if (composerMorePanelVisible) composerMorePanelVisible.value = nextVisible;

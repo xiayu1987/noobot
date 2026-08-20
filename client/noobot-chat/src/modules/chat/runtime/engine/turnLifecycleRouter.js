@@ -10,6 +10,21 @@ import {
   TURN_COMMITTED_WIRE_EVENT,
   validateTurnCommittedEventData,
 } from "@noobot/session-protocol/turn-commit";
+import {
+  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
+  validateTurnAttachmentsBoundEventData,
+} from "@noobot/session-protocol/turn-attachment-bind";
+
+const TURN_USER_MESSAGE_EVENTS = Object.freeze({
+  [TURN_COMMITTED_WIRE_EVENT]: {
+    validate: validateTurnCommittedEventData,
+    logPrefix: "frontend.turnCommit",
+  },
+  [TURN_ATTACHMENTS_BOUND_WIRE_EVENT]: {
+    validate: validateTurnAttachmentsBoundEventData,
+    logPrefix: "frontend.turnAttachmentsBound",
+  },
+});
 
 export function routeForeignTurnLifecycleEvent(event, data, context) {
   const { activeSession, applyTurnLifecycleEnvelope, logSessionEvent, sessionId } = context;
@@ -162,12 +177,13 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     }
     return true;
   }
-  if (event !== TURN_COMMITTED_WIRE_EVENT) return false;
+  const userMessageEvent = TURN_USER_MESSAGE_EVENTS[event];
+  if (!userMessageEvent) return false;
   const eventSessionId = normalizeTrimmedString(data?.sessionId);
   const targetSessionId = normalizeTrimmedString(activeSession?.value?.sessionId || sessionId);
   const committedUserMessage = data?.userMessage;
   const committedMessageId = normalizeTrimmedString(committedUserMessage?.messageId);
-  const validation = validateTurnCommittedEventData(data);
+  const validation = userMessageEvent.validate(data);
   let applied = false;
   let reason = "";
   if (!validation.ok) {
@@ -202,8 +218,8 @@ export function routeCurrentTurnLifecycleEvent(event, data, context) {
     category: applied ? "message" : "state",
     level: applied ? "info" : "warn",
     event: applied
-      ? "frontend.turnCommit.userMessageApplied"
-      : "frontend.turnCommit.userMessageRejected",
+      ? `${userMessageEvent.logPrefix}.userMessageApplied`
+      : `${userMessageEvent.logPrefix}.userMessageRejected`,
     sessionId: eventSessionId || targetSessionId,
     dialogProcessId: data?.dialogProcessId || "",
     turnScopeId: data?.turnScopeId || "",

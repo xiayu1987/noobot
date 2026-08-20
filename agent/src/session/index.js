@@ -356,6 +356,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.commitTurn(payload);
     },
 
+    async bindTurnAttachments(payload = {}) {
+      return sessionMessageService.bindTurnAttachments(payload);
+    },
+
     async deleteFromMessage(payload = {}) {
       return sessionMessageService.deleteFromMessage(payload);
     },

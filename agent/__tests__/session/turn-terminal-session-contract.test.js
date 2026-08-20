@@ -27,6 +27,8 @@ function terminalLifecycle({
     turns: {
       [turnScopeId]: {
         turnScopeId,
+        messageId: `${turnScopeId}-event-message`,
+        presentationMessageId: `${turnScopeId}-presentation-message`,
         dialogProcessId,
         state,
         sequence: 2,
@@ -91,6 +93,31 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
   assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].state, "completed");
   assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].terminalStatus.status, "completed");
   assert.ok(summary.turnLifecycleSnapshot.commandId);
+});
+
+test("action failure before message persistence remains terminal after summary hydration", () => {
+  const session = normalizeSessionEntity(
+    {
+      sessionId: "s-action-failure",
+      updatedAt: now(),
+      messages: [],
+      turnLifecycle: terminalLifecycle({
+        state: "action_failed",
+        status: "error",
+        reason: "attachment_rejected",
+      }),
+    },
+    { now },
+  );
+
+  const summary = buildSessionDisplaySummary(session);
+  assert.equal(summary.messages.length, 1);
+  assert.equal(summary.messages[0].turnPlaceholder, true);
+  assert.equal(summary.messages[0].turnScopeId, "t1");
+  assert.equal(summary.turnLifecycleSnapshot.activeTurn, null);
+  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns.length, 1);
+  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].state, "action_failed");
+  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].terminalStatus.status, "error");
 });
 
 test("parent and child sessions own independent lifecycle aggregates", () => {

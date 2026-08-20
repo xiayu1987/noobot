@@ -213,6 +213,10 @@ export class SessionExecutionEngine {
         typeof this.session?.commitTurn === "function"
           ? (payload = {}) => this.session.commitTurn(payload)
           : null,
+      bindSessionTurnAttachments:
+        typeof this.session?.bindTurnAttachments === "function"
+          ? (payload = {}) => this.session.bindTurnAttachments(payload)
+          : null,
       assertReusedUserTurnIdentity: (payload = {}) => this._assertReusedUserTurnIdentity(payload),
       getSessionTurns: (payload = {}) => this.session?.getSessionTurns?.(payload),
       getTurnSummaryCheckpointState: (payload = {}) =>
@@ -727,6 +731,7 @@ export class SessionExecutionEngine {
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
+    turnAcceptance = null,
     turnScopeId = "",
     parentAsyncResultContainer = null,
     persistenceContext = null,
@@ -746,6 +751,7 @@ export class SessionExecutionEngine {
       abortSignal,
       userInteractionBridge,
       runConfig,
+      turnAcceptance,
       turnScopeId,
       parentAsyncResultContainer,
       persistenceContext,

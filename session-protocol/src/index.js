@@ -9,6 +9,8 @@ export * from "./policies.js";
 export * from "./turn-lifecycle.js";
 export * from "./execution-lifecycle.js";
 export * from "./errors.js";
+export * from "./turn-attachment-bind.js";
+export * from "./turn-acceptance.js";
 export * from "./identity/session-identity.js";
 export * from "./identity/turn-identity.js";
 export * from "./identity/message-identity.js";
@@ -20,6 +22,7 @@ export {
   normalizeCommandReceipts,
 } from "./command/command-receipt.js";
 export * from "./command/turn-commit-command.js";
+export * from "./command/turn-attachment-bind-command.js";
 export * from "./command/turn-replace-command.js";
 export * from "./command/message-delete-command.js";
 export * from "./lifecycle/turn-state.js";

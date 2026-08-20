@@ -39,6 +39,7 @@ export class SessionExecutionRunner {
     appendAgentMessages,
     assertPersistenceContextIdentity,
     commitSessionTurn,
+    bindSessionTurnAttachments,
     assertReusedUserTurnIdentity,
     getSessionTurns,
     getTurnSummaryCheckpointState,
@@ -60,6 +61,7 @@ export class SessionExecutionRunner {
     this.appendAgentMessages = appendAgentMessages;
     this.assertPersistenceContextIdentity = assertPersistenceContextIdentity;
     this.commitSessionTurn = commitSessionTurn;
+    this.bindSessionTurnAttachments = bindSessionTurnAttachments;
     this.assertReusedUserTurnIdentity = assertReusedUserTurnIdentity;
     this.getSessionTurns = getSessionTurns;
     this.getTurnSummaryCheckpointState = getTurnSummaryCheckpointState;
@@ -82,6 +84,7 @@ export class SessionExecutionRunner {
     abortSignal = null,
     userInteractionBridge = null,
     runConfig = {},
+    turnAcceptance = null,
     turnScopeId = "",
     parentAsyncResultContainer = null,
     persistenceContext = null,
@@ -173,6 +176,7 @@ export class SessionExecutionRunner {
         prepareTurnInput: this.prepareTurnInput,
         assertReusedUserTurnIdentity: this.assertReusedUserTurnIdentity,
         commitSessionTurn: this.commitSessionTurn,
+        bindSessionTurnAttachments: this.bindSessionTurnAttachments,
         normalizedMessage,
         attachments,
         systemMessages,
@@ -193,6 +197,7 @@ export class SessionExecutionRunner {
         resolvedRunConfig,
         requestRunConfig,
         scenarioResolvedRunConfig,
+        turnAcceptance,
       });
       if (typeof this.prepareAgentTurnExecution !== "function") {
         throw new Error("prepareAgentTurnExecution is required");

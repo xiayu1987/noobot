@@ -133,6 +133,18 @@ test("message listener boundary contains failures raised by terminal error persi
     )?.data;
     assert.equal(receipt?.outcome, AGENT_COMMAND_RECEIPT_OUTCOME.FAILED);
     assert.equal(receipt?.error?.code, "agent_init_failed");
+    const committedUserMessage = events.find((item) => item?.event === "turn_committed")?.data;
+    assert.equal(committedUserMessage?.userMessage?.content, payload.message);
+    assert.equal(committedUserMessage?.turnScopeId, "turn-terminal-boundary");
+    assert.deepEqual(authoritative.lastTurnAcceptance(), {
+      commandId: "command-terminal-boundary",
+      sessionId: "s-terminal-boundary",
+      turnScopeId: "turn-terminal-boundary",
+      dialogProcessId: "dialog:turn-terminal-boundary",
+      messageUid: "session-message:turn-terminal-boundary",
+      aggregateVersion: 1,
+      committedEventPublished: true,
+    });
     assert.equal(server.server.listening, true);
   } finally {
     await closeServer(server);

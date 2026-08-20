@@ -135,6 +135,7 @@ async function executeAcceptedRun(context, command, run, accepted, active) {
     caller: "user",
     message: run.message,
     attachments: run.attachments,
+    turnAcceptance: run.turnAcceptance || null,
     eventListener: listener.eventListener,
     abortSignal: context.state.currentAbortSignal,
     userInteractionBridge: context.userInteractionBridge,

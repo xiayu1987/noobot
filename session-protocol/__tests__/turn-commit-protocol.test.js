@@ -24,7 +24,7 @@ function createCommit(overrides = {}) {
       sessionId: "session-1",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      attachments: [{ attachmentId: "attachment-1", sessionId: "session-1" }],
+      attachments: [],
     },
     ...overrides,
   };
@@ -36,7 +36,7 @@ test("turn_committed accepts one canonical persisted user message", () => {
   assert.equal(assertTurnCommittedEventData(commit), commit);
 });
 
-test("turn_committed rejects non-canonical or cross-session attachments", () => {
+test("turn_committed rejects attachments owned by the binding command", () => {
   const validation = validateTurnCommittedEventData(
     createCommit({
       userMessage: {
@@ -49,7 +49,11 @@ test("turn_committed rejects non-canonical or cross-session attachments", () => 
     }),
   );
   assert.equal(validation.ok, false);
-  assert.deepEqual(validation.errors, ["attachment_id_missing", "attachment_session_mismatch"]);
+  assert.deepEqual(validation.errors, [
+    "user_message_attachments_forbidden",
+    "attachment_id_missing",
+    "attachment_session_mismatch",
+  ]);
 });
 
 test("turn_committed rejects mismatched message identity atomically", () => {

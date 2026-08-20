@@ -8,7 +8,7 @@ import { emitEvent } from "../../events/index.js";
 import { projectExecutionTransportPayload } from "../../events/transport-payload.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
-import { TURN_EVENT, TURN_PHASE } from "@noobot/session-protocol";
+import { TURN_EVENT, TURN_PHASE, createTurnAcceptanceReceipt } from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import { readSelectedModelValue } from "../execution/runner/debug-utils.js";
 
@@ -164,7 +164,24 @@ async function runDetachedSubSession(dependencies, request) {
   const identity = resolveDetachedIdentity(request, runtime);
   const prepared = await prepareDetachedExecution(dependencies, request, runtime, identity);
   const lifecycle = await createDetachedLifecycle(dependencies, request, identity, prepared);
-  await commitDetachedStart(lifecycle, prepared.effectiveRunConfig.thinkingStartedAt);
+  const accepted = await commitDetachedStart(
+    lifecycle,
+    prepared.effectiveRunConfig.thinkingStartedAt,
+    request,
+    identity,
+    prepared.effectiveRunConfig,
+  );
+  prepared.turnAcceptance = accepted.userMessage
+    ? createTurnAcceptanceReceipt({
+        commandId: lifecycle.commandId,
+        sessionId: identity.subSessionId,
+        turnScopeId: identity.turnScopeId,
+        dialogProcessId: accepted.dialogProcessId || identity.subDialogProcessId,
+        messageUid: accepted.userMessage.messageUid,
+        aggregateVersion: accepted.aggregateVersion,
+        committedEventPublished: false,
+      })
+    : null;
   let result;
   try {
     result = await executeDetachedSession(
@@ -489,8 +506,8 @@ function createLifecycleCommitter(session, lifecycleIdentity, scopedEventListene
   };
 }
 
-async function commitDetachedStart(lifecycle, startedAt) {
-  await lifecycle.commit({
+async function commitDetachedStart(lifecycle, startedAt, request, identity, runConfig) {
+  const accepted = await lifecycle.commit({
     commandId: `${lifecycle.commandId}:accepted`,
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
@@ -499,6 +516,12 @@ async function commitDetachedStart(lifecycle, startedAt) {
     startedAt,
     createSessionIfAbsent: true,
     expectedRevision: 0,
+    userMessage: {
+      content: String(request.message || "").trim(),
+      messageId: String(runConfig?.userMessageId || "").trim(),
+      parentDialogProcessId: identity.parentDialogProcessId,
+      frontendUserMessage: false,
+    },
   });
   await lifecycle.commit({
     commandId: `${lifecycle.commandId}:processing-started`,
@@ -506,6 +529,7 @@ async function commitDetachedStart(lifecycle, startedAt) {
     phase: TURN_PHASE.PROCESSING,
     executionState: "sending",
   });
+  return accepted;
 }
 
 async function executeDetachedSession(
@@ -526,6 +550,7 @@ async function executeDetachedSession(
     message: request.message || "",
     attachments: prepared.subSessionAttachments,
     systemMessages: prepared.systemMessages,
+    turnAcceptance: prepared.turnAcceptance,
     eventListener: identity.scopedEventListener,
     abortSignal: identity.abortSignal,
     userInteractionBridge: identity.userInteractionBridge,

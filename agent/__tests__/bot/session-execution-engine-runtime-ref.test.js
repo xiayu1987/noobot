@@ -57,6 +57,15 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
   const engine = new SessionExecutionEngine({});
   const persistenceContext = { kind: "trusted-context" };
   const persistenceScope = { scopeId: "agent:child" };
+  const turnAcceptance = Object.freeze({
+    commandId: "command-1",
+    sessionId: "s1",
+    turnScopeId: "turn-1",
+    dialogProcessId: "dialog-1",
+    messageUid: "message-1",
+    aggregateVersion: 1,
+    committedEventPublished: true,
+  });
   let captured = null;
   engine.runner = {
     async runSession(payload) {
@@ -71,10 +80,12 @@ test("SessionExecutionEngine preserves persistence context and cross-layer scope
     message: "hello",
     persistenceContext,
     persistenceScope,
+    turnAcceptance,
   });
 
   assert.equal(captured.persistenceContext, persistenceContext);
   assert.equal(captured.persistenceScope, persistenceScope);
+  assert.equal(captured.turnAcceptance, turnAcceptance);
 });
 
 test("SessionExecutionEngine exposes the complete authority event repository port", async () => {
@@ -135,7 +146,16 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
       async applyTurnLifecycleEvent(payload = {}) {
         lifecycleSequence += 1;
         const envelope = { ...payload, revision: lifecycleSequence, sequence: lifecycleSequence };
-        return { applied: true, envelope, turn: envelope };
+        return {
+          applied: true,
+          envelope,
+          turn: envelope,
+          aggregateVersion: lifecycleSequence,
+          dialogProcessId: payload.dialogProcessId,
+          ...(payload.eventType === "turn.action_accepted"
+            ? { userMessage: { messageUid: "detached-user-message" } }
+            : {}),
+        };
       },
     },
   });
@@ -167,4 +187,5 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
 
   assert.equal(capturedRunSessionPayload?.userInteractionBridge, bridge);
   assert.match(capturedRunSessionPayload?.turnScopeId, /^internal-turn:/);
+  assert.equal(capturedRunSessionPayload?.turnAcceptance?.messageUid, "detached-user-message");
 });

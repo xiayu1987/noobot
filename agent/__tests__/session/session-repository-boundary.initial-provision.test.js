@@ -42,6 +42,11 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     eventType: TURN_EVENT.ACTION_ACCEPTED,
     phase: TURN_PHASE.ACTION,
     action: "send",
+    userMessage: {
+      content: "persist me before execution",
+      messageId: `user-message-${turnScopeId}`,
+      frontendUserMessage: true,
+    },
     expectedRevision: 0,
     createSessionIfAbsent: true,
   };
@@ -49,11 +54,20 @@ function firstSend(commandId, turnScopeId = "turn-1") {
 
 test("file repository provisions Session and initial Turn in one persisted artifact", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
-    const runtime = createSessionServices({ workspaceRoot }, { now: () => "2026-07-19T00:00:00.000Z" });
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope("u1", "session-1", "");
+    const runtime = createSessionServices(
+      { workspaceRoot },
+      { now: () => "2026-07-19T00:00:00.000Z" },
+    );
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      "u1",
+      "session-1",
+      "",
+    );
     assert.equal(await exists(scope.sessionFile), false);
 
-    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("command-1"));
+    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      firstSend("command-1"),
+    );
     assert.equal(result.applied, true);
     assert.equal(result.sessionCreated, true);
 
@@ -61,9 +75,31 @@ test("file repository provisions Session and initial Turn in one persisted artif
     assert.equal(persisted.turnLifecycle.activeTurnScopeId, "turn-1");
     assert.equal(persisted.turnLifecycle.turns["turn-1"].state, TURN_STATE.ACTION_REQUESTING);
     assert.equal(persisted.turnLifecycle.sequence, 1);
+    const persistedSession = await runtime.repositories.sessionRepository.findById(
+      "u1",
+      "session-1",
+      "",
+    );
+    assert.equal(persistedSession.messages.length, 1);
+    assert.equal(persistedSession.messages[0].content, "persist me before execution");
+    assert.equal(persistedSession.messages[0].turnScopeId, "turn-1");
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
+  });
+});
+
+test("initial acceptance allocates one stable dialog identity before persistence", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const runtime = createSessionServices({ workspaceRoot });
+    const input = firstSend("dialog-allocation");
+    delete input.dialogProcessId;
+    const accepted = await runtime.sessionMessageService.applyTurnLifecycleEvent(input);
+    const replay = await runtime.sessionMessageService.applyTurnLifecycleEvent(input);
+    assert.equal(Boolean(accepted.dialogProcessId), true);
+    assert.equal(replay.deduplicated, true);
+    assert.equal(replay.dialogProcessId, accepted.dialogProcessId);
+    assert.equal(replay.userMessage.dialogProcessId, accepted.dialogProcessId);
   });
 });
 
@@ -83,7 +119,11 @@ test("shared file mutation lock makes concurrent initial provisions idempotent a
       firstSend("competing-command", "turn-2"),
     );
     assert.equal(competing.reason, "session_action_conflict");
-    const persisted = await firstRuntime.repositories.sessionRepository.findById("u1", "session-1", "");
+    const persisted = await firstRuntime.repositories.sessionRepository.findById(
+      "u1",
+      "session-1",
+      "",
+    );
     assert.equal(persisted.turnLifecycle.sequence, 1);
     assert.equal(persisted.turnLifecycle.activeTurnScopeId, "turn-1");
   });
@@ -93,9 +133,15 @@ test("deleted Session cannot be revived by initial provision", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createSessionServices({ workspaceRoot });
     await runtime.sessionCrudService.ensureSession("u1", "session-1");
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope("u1", "session-1", "");
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      "u1",
+      "session-1",
+      "",
+    );
     await runtime.sessionTreeService.deleteSessionBranch({ userId: "u1", sessionId: "session-1" });
-    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("revive-command"));
+    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      firstSend("revive-command"),
+    );
     assert.equal(result.applied, false);
     assert.equal(result.reason, "session_deleted");
     assert.equal(await exists(scope.sessionFile), false);
@@ -121,7 +167,10 @@ test("failed initial provision save leaves no empty Session artifact or summary"
 
     assert.equal(await exists(scope.sessionFile), false);
     const summary = await repository.readSessionsSummary("u1");
-    assert.equal(summary.sessions.some((item) => item.sessionId === "session-1"), false);
+    assert.equal(
+      summary.sessions.some((item) => item.sessionId === "session-1"),
+      false,
+    );
   });
 });
 
@@ -136,14 +185,18 @@ test("summary write failure is repaired from the committed Session artifact", as
       return originalUpsert(...args);
     };
 
-    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("summary-repair"));
+    const result = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      firstSend("summary-repair"),
+    );
     assert.equal(result.applied, true);
     const persisted = await repository.findById("u1", "session-1", "");
     assert.equal(persisted.turnLifecycle.sequence, 1);
     const summary = await repository.readSessionsSummary("u1");
     assert.equal(summary.sessions.filter((item) => item.sessionId === "session-1").length, 1);
 
-    const replay = await runtime.sessionMessageService.applyTurnLifecycleEvent(firstSend("summary-repair"));
+    const replay = await runtime.sessionMessageService.applyTurnLifecycleEvent(
+      firstSend("summary-repair"),
+    );
     assert.equal(replay.deduplicated, true);
     assert.equal((await repository.findById("u1", "session-1", "")).turnLifecycle.sequence, 1);
   });
@@ -152,7 +205,11 @@ test("summary write failure is repaired from the committed Session artifact", as
 test("appendTurn cannot implicitly create a missing Session", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const runtime = createSessionServices({ workspaceRoot });
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope("u1", "session-1", "");
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      "u1",
+      "session-1",
+      "",
+    );
     const result = await runtime.sessionMessageService.appendTurn({
       userId: "u1",
       sessionId: "session-1",
@@ -196,14 +253,16 @@ test("getSessionTurns reads from the same scoped persistence location used by ap
       dialogProcessId: "dialog-child-1",
       turnScopeId: "turn-child-1",
       content: "child model response",
-      activityTimeline: [{
-        eventId: "model-content:msg-child-1",
-        activityKind: "model-content",
-        sequence: 1,
-        sequenceDomain: "message-event",
-        sequenceScopeId: "msg-child-1",
-        authority: "authoritative",
-      }],
+      activityTimeline: [
+        {
+          eventId: "model-content:msg-child-1",
+          activityKind: "model-content",
+          sequence: 1,
+          sequenceDomain: "message-event",
+          sequenceScopeId: "msg-child-1",
+          authority: "authoritative",
+        },
+      ],
     });
 
     const scopedTurns = await facade.getSessionTurns({
