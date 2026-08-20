@@ -9,6 +9,7 @@ import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { normalizeSessionEntity } from "../../src/session/entities/session-entity.js";
 import { SessionMessageService } from "../../src/session/services/session-message-service.js";
 import { SessionCrudService } from "../../src/session/services/session-crud-service.js";
+import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 
 const now = () => "2026-07-18T00:00:00.000Z";
 
@@ -87,18 +88,30 @@ function newSessionHarness() {
   };
 }
 
-const event = (eventType, commandId, expectedRevision, extra = {}) => ({
-  userId: "u1",
-  sessionId: "s1",
-  turnScopeId: "t1",
-  dialogProcessId: "dp1",
-  messageId: "turn-message-t1",
-  presentationMessageId: "presentation-t1",
-  eventType,
-  commandId,
-  expectedRevision,
-  ...extra,
-});
+const event = (eventType, commandId, expectedRevision, extra = {}) => {
+  const action = String(extra.action || "").trim();
+  return {
+    userId: "u1",
+    sessionId: "s1",
+    turnScopeId: "t1",
+    dialogProcessId: "dp1",
+    messageId: "turn-message-t1",
+    presentationMessageId: "presentation-t1",
+    eventType,
+    commandId,
+    expectedRevision,
+    ...extra,
+    ...(eventType === TURN_EVENT.ACTION_ACCEPTED && action !== "resend"
+      ? {
+          userMessage: {
+            content: "authoritative user message",
+            messageId: "user-message-t1",
+            frontendUserMessage: true,
+          },
+        }
+      : {}),
+  };
+};
 
 const eventIdOf = (envelope) => envelope?.identity?.eventId;
 const deliveryReceiptOf = (envelope) => ({
@@ -366,7 +379,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   assert.equal(h.reload().authorityEventOutbox.length, 0);
   assert.deepEqual(h.reload().turnLifecycle.turns, {});
 
-  await h.service.applyTurnLifecycleEvent(
+  const failed = await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
   );
   await h.service.applyTurnLifecycleEvent(
@@ -517,7 +530,10 @@ test("command replay is idempotent and conflicting reuse is rejected", async () 
   });
   await h.service.applyTurnLifecycleEvent(input);
   const replay = await h.service.applyTurnLifecycleEvent(input);
-  const conflict = await h.service.applyTurnLifecycleEvent({ ...input, action: "resend" });
+  const conflict = await h.service.applyTurnLifecycleEvent({
+    ...input,
+    executionState: "conflicting",
+  });
   assert.equal(replay.deduplicated, true);
   assert.equal(conflict.reason, "idempotency_key_reused");
   assert.equal(h.reload().turnLifecycle.sequence, 1);
@@ -661,6 +677,53 @@ test("snapshot reloads authoritative state without mutating sequence and support
   assert.equal(result.snapshot.activeTurn.sessionId, "s1");
   assert.equal(result.snapshot.activeTurn.capabilities.canStop, true);
   assert.equal(h.reload().turnLifecycle.sequence, before);
+});
+
+test("summary and reconnect snapshots share action-failure presentation scope", async () => {
+  const h = harness();
+  await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.ACTION_ACCEPTED, "action-accepted", 0, {
+      action: "send",
+      phase: TURN_PHASE.ACTION,
+    }),
+  );
+  const failed = await h.service.applyTurnLifecycleEvent(
+    event(TURN_EVENT.FAILED, "action-failed", 1, {
+      phase: TURN_PHASE.ACTION,
+      executionState: "error",
+      failure: { code: "attachment_rejected", retryable: false },
+      terminalStatus: {
+        command: "error",
+        turnScopeId: "t1",
+        dialogProcessId: "dp1",
+        description: "attachment rejected",
+        updatedAt: now(),
+      },
+    }),
+  );
+
+  assert.equal(failed.applied, true, failed.reason);
+  const session = h.reload();
+  assert.equal(session.turnLifecycle.turns.t1.state, "action_failed");
+  assert.equal(session.turnLifecycle.turns.t1.executionState, "error");
+  assert.equal(session.turnLifecycle.turns.t1.terminalStatus.status, "error");
+  const summarySnapshot = buildSessionDisplaySummary(session).turnLifecycleSnapshot;
+  const reconnectSnapshot = (
+    await h.service.getTurnLifecycleSnapshot({
+      userId: "u1",
+      sessionId: "s1",
+      commandId: "snapshot-action-failure",
+    })
+  ).snapshot;
+  const projectTerminalScopes = (snapshot) =>
+    snapshot.recentTerminalTurns.map((turn) => [turn.turnScopeId, turn.state]);
+
+  assert.deepEqual(projectTerminalScopes(summarySnapshot), [["t1", "action_failed"]]);
+  assert.deepEqual(
+    projectTerminalScopes(reconnectSnapshot),
+    projectTerminalScopes(summarySnapshot),
+  );
+  assert.equal(reconnectSnapshot.activeTurnScopeId, "");
 });
 
 test("retryable finalize failure keeps the session locked and completes idempotently after reload", async () => {

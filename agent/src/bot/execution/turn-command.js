@@ -19,7 +19,7 @@ export function resolveRunTurnScopeId({ caller = "user", turnScopeId = "" } = {}
 
 export function createTurnCommand({ userId = "", sessionId = "", parentSessionId = "",
   dialogProcessId = "", parentDialogProcessId = "", turnScopeId = "", message = "",
-  attachments = [], runConfig = {}, caller = "user" } = {}) {
+  runConfig = {}, caller = "user" } = {}) {
   const resume = runConfig?.resumeFromStoppedSnapshot === true;
   const origin = trim(caller).toLowerCase() === "bot"
     ? TURN_COMMAND_ORIGIN.INTERNAL
@@ -31,7 +31,6 @@ export function createTurnCommand({ userId = "", sessionId = "", parentSessionId
     dialogProcessId: trim(dialogProcessId), parentDialogProcessId: trim(parentDialogProcessId),
     turnScopeId: trim(turnScopeId), message: String(message || "").trim(),
     messageId: trim(runConfig?.userMessageId),
-    attachments: Array.isArray(attachments) ? attachments : [],
     expectedAggregateVersion: runConfig?.expectedAggregateVersion,
     commandId: trim(runConfig?.commandId || turnScopeId),
     sourceIdentity: resume ? {
@@ -57,7 +56,7 @@ export function createTurnCommand({ userId = "", sessionId = "", parentSessionId
 export function toCommitTurnPayload(command = {}) {
   return {
     userId: command.userId, sessionId: command.sessionId, parentSessionId: command.parentSessionId,
-    content: command.message, attachments: command.attachments,
+    content: command.message,
     messageId: command.messageId,
     dialogProcessId: command.dialogProcessId, parentDialogProcessId: command.parentDialogProcessId,
     turnScopeId: command.turnScopeId, action: command.type,

@@ -149,6 +149,7 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "execute_native_script",
     "multimodal_generate",
     "multimodal_parse",
+    "access_connector",
     "user_interaction",
     "task_summary",
     "task_check",
@@ -172,6 +173,23 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
     "mcp_servers",
   ]);
   assert.deepEqual(resolved.scenarioProfile.services, []);
+});
+
+test("programming and text scenarios expose the selected connector access boundary", () => {
+  const resolver = new RunConfigResolver({ globalConfig: {} });
+  const sourceTools = [
+    { name: "read_file" },
+    { name: "access_connector" },
+    { name: "call_service" },
+  ];
+
+  for (const scenario of ["programming", "text"]) {
+    const runConfig = resolver.resolveScenarioRunConfig({ scenario }, {});
+    const toolNames = resolveToolBindings({ sourceTools, runConfig }).map((tool) => tool.name);
+
+    assert.deepEqual(toolNames, ["read_file", "access_connector"]);
+    assert.equal(runConfig.scenarioProfile.tools.includes("access_connector"), true);
+  }
 });
 
 test("resolveScenarioRunConfig should keep selectedModel separate from runtimeModel", () => {

@@ -362,6 +362,7 @@ test("detached sub-session persists its complete authoritative lifecycle outbox"
     async save(_userId, next, _context, { expectedAggregateVersion, createOnly } = {}) {
       if (createOnly) assert.equal(persisted, null);
       else assert.equal(expectedAggregateVersion, Number(persisted?.aggregateVersion ?? 0));
+      next.aggregateVersion = Number(persisted?.aggregateVersion ?? 0) + 1;
       persisted = structuredClone(normalizeSessionEntity(next, { now: fixedNow }));
     },
     async writeSessionDisplaySummary() {},

@@ -54,6 +54,8 @@ function createBuilderForAttachmentRuntimeTest({
   promptSections = [],
   runtimeAttachments = true,
   eventListener = null,
+  botManager = null,
+  selectedConnectorIds = [],
 } = {}) {
   return new ContextBuilder({
     config: {
@@ -72,7 +74,7 @@ function createBuilderForAttachmentRuntimeTest({
       },
       skillService: null,
       eventListener,
-      botManager: null,
+      botManager,
       userInteractionBridge: null,
     },
     sessionContext: {
@@ -87,12 +89,43 @@ function createBuilderForAttachmentRuntimeTest({
           promptSections,
           runtimeCapabilities: { attachments: runtimeAttachments },
         },
+        selectedConnectorIds,
       }),
       abortSignal: null,
       parentAsyncResultContainer: null,
     },
   });
 }
+
+test("buildInitialContext always projects explicitly selected connectors", async () => {
+  const builder = createBuilderForAttachmentRuntimeTest({
+    promptSections: ["base_prompt", "system_runtime"],
+    selectedConnectorIds: ["con_db"],
+    botManager: {
+      connectorAccessPort: {
+        async access() {
+          return { ok: true };
+        },
+        async listUserConnectors() {
+          return [
+            {
+              connectorId: "con_db",
+              ownerUserId: "u1",
+              name: "primary",
+              instanceType: "builtin.database.mysql",
+              status: "connected",
+            },
+          ];
+        },
+      },
+    },
+  });
+
+  const context = await builder.buildInitialContext({ dialogProcessId: "dp-connectors" });
+  const systemText = context.context.modelContext.messageBlocks.system.join("\n");
+  assert.equal(systemText.includes('"connector_id": "con_db"'), true);
+  assert.equal(systemText.includes('"connector_name": "primary"'), true);
+});
 
 test("buildInitialContext emits the default agent context debug structure", async () => {
   const events = [];

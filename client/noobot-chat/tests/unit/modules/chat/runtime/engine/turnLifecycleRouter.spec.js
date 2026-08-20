@@ -92,7 +92,7 @@ describe("foreign Turn lifecycle routing", () => {
 });
 
 describe("committed user Turn routing", () => {
-  it("replaces draft attachments with the canonical committed attachment set", () => {
+  it("applies commit and attachment binding as consecutive authoritative mutations", () => {
     const draftMessage = {
       id: "frontend-user-1",
       messageId: "frontend-user-1",
@@ -130,7 +130,7 @@ describe("committed user Turn routing", () => {
         dialogProcessId: "dialog-1",
         turnScopeId: "client-turn:1",
         content: "parse attachments",
-        attachments: [canonicalAttachment],
+        attachments: [],
       },
     }, {
       activeSession,
@@ -147,10 +147,34 @@ describe("committed user Turn routing", () => {
       messageUid: "sm_1",
       messageId: "frontend-user-1",
       dialogProcessId: "dialog-1",
-      attachments: [canonicalAttachment],
+      attachments: [],
     });
     expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
       event: "frontend.turnCommit.userMessageApplied",
+      data: expect.objectContaining({ applied: true, attachmentCount: 0 }),
+    }));
+
+    expect(routeCurrentTurnLifecycleEvent("turn_attachments_bound", {
+      sessionId: "session-1",
+      aggregateVersion: 2,
+      dialogProcessId: "dialog-1",
+      turnScopeId: "client-turn:1",
+      userMessage: {
+        ...draftMessage,
+        attachments: [canonicalAttachment],
+      },
+    }, {
+      activeSession,
+      findCanonicalMessageById: () => draftMessage,
+      makeViewMessage: (message) => ({ ...message, attachments: [...message.attachments] }),
+      logSessionEvent,
+      sessionId: "session-1",
+    })).toBe(true);
+
+    expect(activeSession.value.aggregateVersion).toBe(2);
+    expect(draftMessage.attachments).toEqual([canonicalAttachment]);
+    expect(logSessionEvent).toHaveBeenCalledWith(expect.objectContaining({
+      event: "frontend.turnAttachmentsBound.userMessageApplied",
       data: expect.objectContaining({ applied: true, attachmentCount: 1 }),
     }));
   });

@@ -55,6 +55,19 @@ const chatMessageNavItemsStateSource = readFileSync(
 );
 
 describe("AppShell chat message navigator", () => {
+  it("keeps desktop navigation and connector overview independent from more actions", () => {
+    const panelActionsSource = readFileSync(
+      path.resolve(__dirname, "../../../src/app/composables/useAppShellPanelActions.js"),
+      "utf8",
+    );
+    const moreHandler = panelActionsSource.slice(
+      panelActionsSource.indexOf("function handleComposerMorePanelVisibleUpdate"),
+      panelActionsSource.indexOf("function handleDrawerModelUpdate"),
+    );
+    expect(moreHandler).not.toContain("closeAllDrawers?.()");
+    expect(moreHandler).toContain("closeMobileSidebar?.()");
+  });
+
   it("opens the mobile drawer through a real mounted trigger click", async () => {
     const pushPseudoRoute = vi.fn();
     let visibleState;
