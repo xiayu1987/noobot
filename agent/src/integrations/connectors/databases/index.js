@@ -6,7 +6,7 @@
 import { executePostgresCommand } from "./postgres-connector-channel.js";
 import { executeMysqlCommand } from "./mysql-connector-channel.js";
 import { executeSqliteCommand } from "./sqlite-connector-channel.js";
-import { normalizeDatabaseType } from "../../../config/index.js";
+import { CONNECTOR_TYPE, normalizeConnectorSubType } from "@noobot/connector-protocol";
 
 function stripSqlCommentsAndStrings(sql = "") {
   const source = String(sql || "");
@@ -73,7 +73,10 @@ export async function executeDatabaseCommand({ command = "", connectionInfo = {}
       stderr: "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
     };
   }
-  const databaseType = normalizeDatabaseType(connectionInfo?.database_type || "");
+  const databaseType = normalizeConnectorSubType(
+    CONNECTOR_TYPE.DATABASE,
+    connectionInfo?.database_type,
+  );
   if (databaseType === "postgres") {
     return executePostgresCommand({ command, connectionInfo });
   }

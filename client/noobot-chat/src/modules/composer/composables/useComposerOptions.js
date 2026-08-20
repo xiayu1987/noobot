@@ -5,16 +5,21 @@
  */
 import { computed } from "vue";
 
-const CONNECTOR_KEYS = ["database", "terminal", "email"];
-
 export function useComposerOptions(props, emit, translate) {
   const selectedConnectorNames = computed(() => {
-    const selectedSource =
-      props?.connectorPanelState?.selectedConnectors &&
-      typeof props.connectorPanelState.selectedConnectors === "object"
-        ? props.connectorPanelState.selectedConnectors
-        : {};
-    return CONNECTOR_KEYS.map((key) => String(selectedSource?.[key] || "").trim()).filter(Boolean);
+    const selectedIds = new Set(
+      Array.isArray(props?.connectorPanelState?.selectedConnectorIds)
+        ? props.connectorPanelState.selectedConnectorIds
+        : [],
+    );
+    return (
+      Array.isArray(props?.connectorPanelState?.connectors)
+        ? props.connectorPanelState.connectors
+        : []
+    )
+      .filter((item) => selectedIds.has(item?.connectorId))
+      .map((item) => String(item?.name || "").trim())
+      .filter(Boolean);
   });
 
   const attachmentCount = computed(() => (props.uploadFiles || []).length);

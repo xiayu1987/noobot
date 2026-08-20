@@ -11,7 +11,7 @@ export function useAppShellSessionActions({
   renameSession,
   fetchSessions,
   refreshSessionConnectorsAsync,
-  updateSessionSelectedConnector,
+  updateSessionSelectedConnectors,
   notify,
   translate = (key) => key,
 } = {}) {
@@ -27,7 +27,10 @@ export function useAppShellSessionActions({
         notify?.({ type: "success", message: translate("common.deleteSessionSuccess") });
       }
     } catch (error) {
-      notify?.({ type: "error", message: error.message || translate("common.deleteSessionFailed") });
+      notify?.({
+        type: "error",
+        message: error.message || translate("common.deleteSessionFailed"),
+      });
     }
   }
 
@@ -38,7 +41,10 @@ export function useAppShellSessionActions({
         notify?.({ type: "success", message: translate("common.renameSessionSuccess") });
       }
     } catch (error) {
-      notify?.({ type: "error", message: error.message || translate("common.renameSessionFailed") });
+      notify?.({
+        type: "error",
+        message: error.message || translate("common.renameSessionFailed"),
+      });
     }
   }
 
@@ -49,11 +55,14 @@ export function useAppShellSessionActions({
     }
   }
 
-  async function onConnectorSelected({ connectorType = "", connectorName = "" } = {}) {
+  async function onConnectorSelected(selectedConnectorIds = []) {
     try {
-      await updateSessionSelectedConnector?.({ connectorType, connectorName });
+      await updateSessionSelectedConnectors?.(selectedConnectorIds);
     } catch (error) {
-      notify?.({ type: "error", message: error.message || translate("common.updateConnectorFailed") });
+      notify?.({
+        type: "error",
+        message: error.message || translate("common.updateConnectorFailed"),
+      });
     }
   }
 

@@ -79,17 +79,7 @@ function summarizeWorkflowSessionMessages(result = {}) {
   );
 }
 
-export function registerSessionRoutes(
-  app,
-  {
-    bot,
-    handleChat,
-    getConnectorChannelStore,
-    getConnectorHistoryStore,
-    translateText,
-    pluginHost,
-  } = {},
-) {
+export function registerSessionRoutes(app, { bot, handleChat, translateText, pluginHost } = {}) {
   if (!pluginHost) throw new TypeError("session routes require the activated service plugin host");
   const jsonRoute = createJsonRouteWrapper({ translateText });
 
@@ -470,26 +460,6 @@ export function registerSessionRoutes(
       async (req, res) => {
         const { userId, sessionId } = req.params;
         const normalizedSessionId = String(sessionId || "").trim();
-        const rootSessionId = await bot.session.getRootSessionId({
-          userId,
-          sessionId: normalizedSessionId,
-        });
-        let releasedConnectors = {
-          released: false,
-          sessionId: String(rootSessionId || "").trim(),
-          releasedCounts: { databases: 0, terminals: 0, emails: 0, total: 0 },
-        };
-        const shouldReleaseRootConnectors =
-          normalizedSessionId && rootSessionId && normalizedSessionId === rootSessionId;
-        if (shouldReleaseRootConnectors) {
-          const connectorChannelStore = getConnectorChannelStore();
-          if (
-            connectorChannelStore &&
-            typeof connectorChannelStore.releaseSessionConnectors === "function"
-          ) {
-            releasedConnectors = connectorChannelStore.releaseSessionConnectors(rootSessionId);
-          }
-        }
         const result = await bot.session.deleteSessionBranch({
           userId,
           sessionId,
@@ -551,19 +521,6 @@ export function registerSessionRoutes(
             keepSessionIds,
           });
         }
-        let deletedConnectorHistory = false;
-        if (shouldReleaseRootConnectors) {
-          const connectorHistoryStore = getConnectorHistoryStore();
-          if (
-            connectorHistoryStore &&
-            typeof connectorHistoryStore.deleteSessionHistory === "function"
-          ) {
-            deletedConnectorHistory = await connectorHistoryStore.deleteSessionHistory({
-              userId,
-              sessionId: rootSessionId,
-            });
-          }
-        }
         res.json({
           ok: true,
           ...result,
@@ -571,8 +528,6 @@ export function registerSessionRoutes(
           deletedOrphanAttachments,
           deletedToolResultOverflow,
           deletedMemory,
-          releasedConnectors,
-          deletedConnectorHistory,
         });
       },
       { fallbackErrorKey: "common.deleteSessionFailed" },

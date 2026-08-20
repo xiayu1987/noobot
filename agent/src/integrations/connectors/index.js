@@ -6,9 +6,11 @@
 
 export { initConnectorChannelStore, getConnectorChannelStore } from "./channel-store.js";
 
-export { initConnectorHistoryStore, getConnectorHistoryStore } from "./history-store.js";
-
-export { ConnectorEventListener, createConnectorEventListener } from "./connector-event-listener.js";
+export {
+  initConnectorRegistry,
+  getConnectorRegistry,
+  UserConnectorRegistry,
+} from "./registry-store.js";
 
 export { executeDatabaseCommand } from "./databases/index.js";
 

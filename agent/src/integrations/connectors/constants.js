@@ -26,18 +26,3 @@ export const CONNECTOR_STATUS_CODE = {
   INTERNAL_ERROR: 500,
   UNAVAILABLE: 503,
 };
-
-export const CONNECTOR_INTERACTION_EVENT = {
-  STATUS: "connector_status",
-};
-
-export const CONNECTOR_INTERACTION_TYPE = {
-  CONNECTED: "connector_connected",
-  RECONNECT_REQUIRED: "connector_reconnect_required",
-};
-
-export const CONNECTOR_TOOL_NAME = {
-  CONNECT_DATABASE: "database_connect_connector",
-  CONNECT_TERMINAL: "terminal_connect_connector",
-  CONNECT_EMAIL: "email_connect_connector",
-};

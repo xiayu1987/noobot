@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSelectedConnectors } from "../../../session/model/sessionModel.js";
 import { normalizeTrimmedString } from "./utils.js";
 import { AGENT_COMMAND, createTurnRunCommand } from "@noobot/agent-transport-protocol";
 import {
@@ -101,9 +100,6 @@ export function buildChatPayload({
         ? { summaryPolicy: normalizedSummaryPolicy }
         : {}),
       locale: normalizeTrimmedString(locale?.value ?? locale),
-      selectedConnectors: normalizeSelectedConnectors(
-        activeSession?.value?.connectorPanelState?.selectedConnectors || {},
-      ),
       selectedPlugins: normalizeSelectedPluginKeys(selectedPlugins),
     },
     presentation: {

@@ -125,14 +125,11 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
     ok: true,
   });
 
-  assert.equal(typeof runtime.sharedTools.connectorEventListener?.onConnectorAccessed, "function");
   assert.ok(runtime.sharedTools.connectorChannelStore);
-  assert.ok(runtime.sharedTools.connectorHistoryStore);
-  assert.deepEqual(Object.keys(runtime.connectorChannels || {}).sort(), [
-    "databases",
-    "emails",
-    "terminals",
-  ]);
+  assert.equal(runtime.sharedTools.connectorRegistry, null);
+  assert.equal(runtime.sharedTools.connectorEventListener, undefined);
+  assert.equal(runtime.sharedTools.connectorHistoryStore, undefined);
+  assert.equal(runtime.connectorChannels, undefined);
 
   const hasBrowserOrInitError =
     runtime.sharedTools.browser ||

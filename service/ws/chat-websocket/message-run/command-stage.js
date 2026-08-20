@@ -16,6 +16,7 @@ import {
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
 import { createAgentApplication } from "#agent/application";
+import { resolveAuthoritativeConnectorSelection } from "../../../services/chat-run-service.js";
 import { attachRunTransport, findActiveRun } from "../run-registry.js";
 import {
   recordServiceAgentTransportDebug,
@@ -25,8 +26,11 @@ import {
 
 const text = (value) => String(value || "").trim();
 
-export function mapRunCommand(context, command) {
-  const mapped = context.mapAgentRunCommand(command, { userId: context.authInfo?.userId });
+export async function mapRunCommand(context, command) {
+  const mapped = await resolveAuthoritativeConnectorSelection({
+    bot: context.resolveBot(),
+    request: context.mapAgentRunCommand(command, { userId: context.authInfo?.userId }),
+  });
   context.state.currentTurnScopeId = text(mapped.turnScopeId) || context.state.currentTurnScopeId;
   context.state.currentLocale = context.normalizeLocale(
     mapped.runConfig.locale || context.state.currentLocale,

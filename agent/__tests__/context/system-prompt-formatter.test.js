@@ -44,13 +44,14 @@ test("composeSystemInfoSections includes MCP/connectors/attachments when data ex
     mcpServers: [{ name: "mcp-a", type: "stdio" }],
     attachments: [{ attachmentId: "att_1", sessionId: "s1", attachmentSource: "user" }],
     connectorStatusSection: {
-      connectors: { databases: [], terminals: [], emails: [] },
-      current_connectors: {
-        database: {
+      connectors: [
+        {
+          connector_id: "con_prod_db",
           connector_name: "prod-db",
           connector_type: "database",
+          connector_sub_type: "postgres",
         },
-      },
+      ],
     },
   });
 

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { executeSshCommand, closeSshChannel } from "./ssh-connector-channel.js";
-import { normalizeTerminalType } from "../../../config/index.js";
+import { CONNECTOR_TYPE, normalizeConnectorSubType } from "@noobot/connector-protocol";
 
 export async function executeTerminalCommand({
   command = "",
@@ -13,7 +13,10 @@ export async function executeTerminalCommand({
   sessionId = "",
   connectorName = "",
 } = {}) {
-  const terminalType = normalizeTerminalType(connectionInfo?.terminal_type || "");
+  const terminalType = normalizeConnectorSubType(
+    CONNECTOR_TYPE.TERMINAL,
+    connectionInfo?.terminal_type,
+  );
   if (terminalType === "ssh") {
     return executeSshCommand({
       command,
@@ -37,7 +40,10 @@ export function releaseTerminalChannel({
   sessionId = "",
   connectorName = "",
 } = {}) {
-  const terminalType = normalizeTerminalType(connectionInfo?.terminal_type || "");
+  const terminalType = normalizeConnectorSubType(
+    CONNECTOR_TYPE.TERMINAL,
+    connectionInfo?.terminal_type,
+  );
   if (terminalType === "ssh") {
     return closeSshChannel({
       channelKey,

@@ -187,7 +187,7 @@ const {
   deleteMonotonicMessage,
   resendMonotonicMessage,
   refreshSessionConnectorsAsync,
-  updateSessionSelectedConnector,
+  updateSessionSelectedConnectors,
   pendingInteractionRequest,
   interactionSubmitting,
   submitInteractionResponse,
@@ -398,7 +398,7 @@ const { handleDeleteSession, handleRenameSession, handleWorkspaceReset, onConnec
     renameSession,
     fetchSessions,
     refreshSessionConnectorsAsync,
-    updateSessionSelectedConnector,
+    updateSessionSelectedConnectors,
     notify: notifyUi,
     translate,
   });
@@ -546,6 +546,7 @@ const drawerPanels = computed(() =>
       :conversation-state-snapshot="conversationStateSnapshot"
       :conversation-state-timeline="conversationStateTimeline"
       :translate="translate"
+      :auth-fetch="authFetch"
       @toggle-sidebar="handleToggleSidebar"
       @close-mobile-sidebar="handleCloseMobileSidebar"
       @update:user-id="onUserIdUpdate"
@@ -584,6 +585,7 @@ const drawerPanels = computed(() =>
       @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
       @clear-uploads="clearUploads"
       @connector-selected="onConnectorSelected"
+      @connector-registry-changed="refreshSessionConnectorsAsync(activeSessionId)"
       @send="send"
       @stop="stopSending"
     />
@@ -595,10 +597,14 @@ const drawerPanels = computed(() =>
       :chat-message-nav-items="chatMessageNavItems"
       :current-message-anchor-id="currentMessageAnchorId"
       :translate="translate"
+      :user-id="userId"
+      :connected="connected"
+      :auth-fetch="authFetch"
       @drawer-model-update="handleDrawerModelUpdate"
       @update:mobile-chat-navigator-visible="mobileChatNavigatorVisible = $event"
       @mobile-chat-navigator-closed="handleMobileChatNavigatorClosed"
       @select-chat-message-nav-item="handleSelectChatMessageNavItem"
+      @connector-registry-changed="refreshSessionConnectorsAsync(activeSessionId)"
     />
   </div>
 </template>

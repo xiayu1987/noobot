@@ -6,12 +6,12 @@
 import {
   isContextSectionSelected,
   normalizeContextSectionSelection,
-  normalizeSelectedConnectors,
 } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import {
   getConnectorChannelStore,
-  getConnectorHistoryStore,
+  getConnectorRegistry,
 } from "../../integrations/connectors/index.js";
 import { resolveConfiguredSuperUserId } from "../../shared/utils/super-user.js";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
@@ -176,11 +176,10 @@ export async function buildSystemContext({
     : {};
   const connectorStatusSection = includeConnectors
     ? await resolveConnectorStatusSection({
-        rootSessionId: treeInfo.rootSessionId,
         userId: identity.userId,
-        selectedConnectors: normalizeSelectedConnectors(runConfig?.selectedConnectors),
+        selectedConnectorIds: normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds),
         connectorChannelStore: getConnectorChannelStore(),
-        connectorHistoryStore: getConnectorHistoryStore(),
+        connectorRegistry: getConnectorRegistry({ required: false }),
       })
     : {};
   const identityInfo = {

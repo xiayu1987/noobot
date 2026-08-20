@@ -20,7 +20,7 @@ import { createTaskCheckTool } from "./collaboration/task-check-tool.js";
 import { createRequestHelpTool } from "./collaboration/request-help-tool.js";
 import { emitEvent } from "../events/index.js";
 import { BUILTIN_THRESHOLDS, mergeConfig } from "../config/index.js";
-import { CONNECTOR_TYPE, TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
+import { TOOL_CONFIG_ALIAS_KEY, TOOL_NAME } from "./constants/index.js";
 import { runBuildToolsAdapter } from "./adapter.js";
 import { assertToolPathContract } from "@noobot/path-resolver";
 import {
@@ -86,9 +86,6 @@ const TOOL_CONFIG_ALIASES = {
   [TOOL_NAME.SWITCH_MODEL]: [TOOL_NAME.SWITCH_MODEL, TOOL_CONFIG_ALIAS_KEY.MODEL],
   [TOOL_NAME.USER_INTERACTION]: [TOOL_NAME.USER_INTERACTION],
   [TOOL_NAME.PROCESS_CONNECTOR_TOOL]: [TOOL_NAME.PROCESS_CONNECTOR_TOOL],
-  [TOOL_NAME.DATABASE_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.DATABASE],
-  [TOOL_NAME.TERMINAL_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.TERMINAL],
-  [TOOL_NAME.EMAIL_CONNECT_CONNECTOR]: [CONNECTOR_TYPE.CONNECT_TOOL_NAME.EMAIL],
   [TOOL_NAME.ACCESS_CONNECTOR]: [TOOL_NAME.ACCESS_CONNECTOR],
   [TOOL_NAME.INSPECT_CONNECTORS]: [TOOL_NAME.INSPECT_CONNECTORS],
   [TOOL_NAME.WEB_SEARCH]: [TOOL_NAME.WEB_SEARCH],

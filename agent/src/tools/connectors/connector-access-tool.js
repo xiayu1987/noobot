@@ -22,6 +22,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
 import { createConnectorTools } from "./connector-toolkit.js";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { TOOL_POLICY_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
@@ -104,11 +105,9 @@ export function createConnectorAccessTool({ agentContext }) {
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
               : {}),
-            selectedConnectors:
-              systemRuntime?.config?.selectedConnectors &&
-              typeof systemRuntime.config.selectedConnectors === "object"
-                ? systemRuntime.config.selectedConnectors
-                : {},
+            selectedConnectorIds: normalizeSelectedConnectorIds(
+              systemRuntime?.config?.selectedConnectorIds,
+            ),
             toolPolicy: {
               mode: TOOL_POLICY_MODE.CUSTOM_ONLY,
               customTools: subTools,
