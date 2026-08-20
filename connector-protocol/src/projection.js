@@ -6,12 +6,14 @@
 
 const text = (value) => String(value || "").trim();
 
-export function projectPublicConnector(record = {}, runtimeStatus = {}) {
+export function projectPublicConnector(record = {}, runtimeStatus = {}, definition = {}) {
   return Object.freeze({
     connectorId: text(record.connectorId),
     name: text(record.name),
-    type: text(record.type),
-    subType: text(record.subType),
+    instanceType: text(record.instanceType),
+    type: text(definition.type),
+    subType: text(definition.subType),
+    operations: Object.freeze([...(definition.operations || [])]),
     status: text(runtimeStatus.status || "disconnected") || "disconnected",
     statusCode: Number(runtimeStatus.statusCode ?? 0),
     statusMessage: text(runtimeStatus.statusMessage),
@@ -32,6 +34,7 @@ export function projectSelectedConnectorContext(selectedConnectorIds = [], publi
           connector_name: text(item.name),
           connector_type: text(item.type),
           connector_sub_type: text(item.subType),
+          connector_operations: Object.freeze([...(item.operations || [])]),
         }),
       ),
   );

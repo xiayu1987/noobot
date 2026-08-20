@@ -11,6 +11,7 @@ export const PSEUDO_ROUTE_ANCHOR_KEY = "anchor";
 
 export const PSEUDO_PANEL = Object.freeze({
   WORKSPACE: "workspace",
+  CONNECTORS: "connectors",
   USER_SETTINGS: "user-settings",
   CONFIG_PARAMS: "config-params",
   SIDEBAR: "sidebar",
@@ -57,7 +58,10 @@ export function isSamePseudoRoute(left = {}, right = {}, options = {}) {
   );
 }
 
-export function parsePseudoRouteFromLocation(locationObject = getSafeWindow()?.location, options = {}) {
+export function parsePseudoRouteFromLocation(
+  locationObject = getSafeWindow()?.location,
+  options = {},
+) {
   const params = new URLSearchParams(locationObject?.search || "");
   return normalizePseudoRoute(
     {
@@ -76,7 +80,8 @@ export function usePseudoRoute({
   resolveCurrentAnchor = () => "",
   applyRoute = async () => {},
 } = {}) {
-  const allowedPanelSet = allowedPanels instanceof Set ? allowedPanels : new Set(allowedPanels || []);
+  const allowedPanelSet =
+    allowedPanels instanceof Set ? allowedPanels : new Set(allowedPanels || []);
   const applyingPseudoHistory = ref(false);
   const initialPseudoRouteApplied = ref(false);
 
@@ -140,7 +145,9 @@ export function usePseudoRoute({
         ? historyObject.state.noobotPseudoRoute
         : null;
     const nextState = {
-      ...(historyObject.state && typeof historyObject.state === "object" ? historyObject.state : {}),
+      ...(historyObject.state && typeof historyObject.state === "object"
+        ? historyObject.state
+        : {}),
       noobotPseudoRoute: nextRoute,
     };
 
@@ -188,9 +195,10 @@ export function usePseudoRoute({
   async function handlePseudoRoutePopState(event) {
     const routeFromState =
       event?.state && typeof event.state === "object" ? event.state.noobotPseudoRoute : null;
-    const route = routeFromState && typeof routeFromState === "object"
-      ? normalizeRoute(routeFromState)
-      : parseFromLocation();
+    const route =
+      routeFromState && typeof routeFromState === "object"
+        ? normalizeRoute(routeFromState)
+        : parseFromLocation();
     await applyPseudoRoute(route);
   }
 

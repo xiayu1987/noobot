@@ -17,17 +17,12 @@ const TEXT_TOOLS = [
   "plan_multi_task_collaboration",
   "switch_model",
   "user_interaction",
-  "process_connector_tool",
   "access_connector",
-  "inspect_connectors",
   "web_search",
   "task_summary",
   "task_check",
   "request_help",
   "final_answer",
-  "database_connect_connector",
-  "terminal_connect_connector",
-  "email_connect_connector",
 ];
 
 export function registerToolOutputPolicies(register) {

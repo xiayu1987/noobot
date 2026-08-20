@@ -41,8 +41,7 @@ export async function registerHttpModules(
     rebuildRuntimeConfig,
     templateRootPath,
     buildWorkspaceTree,
-    getConnectorChannelStore,
-    getConnectorRegistry,
+    connectorRuntime,
     workspaceRootPath,
     handleChat,
     translateText,
@@ -115,8 +114,7 @@ export async function registerHttpModules(
 
   registerConnectorRoutes(app, {
     bot,
-    getConnectorChannelStore,
-    getConnectorRegistry,
+    connectorRuntime,
     translateText,
   });
 

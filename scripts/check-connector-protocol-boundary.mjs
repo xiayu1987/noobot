@@ -46,13 +46,63 @@ for (const relativePath of [
 
 const protocolCatalog = await source("connector-protocol/src/catalog.js");
 for (const marker of [
-  "CONNECTOR_TYPE",
-  "CONNECTOR_CATALOG",
-  "resolveConnectorDefinition",
-  "buildConnectorConnectionInfo",
+  "normalizeConnectorType",
+  "createConnectorInstanceDefinition",
+  "normalizeConnectorParameters",
 ]) {
   if (!protocolCatalog.includes(marker)) {
     violations.push(`connector-protocol/src/catalog.js: missing ${marker}`);
+  }
+}
+for (const concreteType of ["mysql", "postgres", "sqlite", "smtp_imap", "ssh"]) {
+  if (protocolCatalog.includes(`\"${concreteType}\"`)) {
+    violations.push(
+      `connector-protocol/src/catalog.js: concrete instance leaked into protocol: ${concreteType}`,
+    );
+  }
+}
+
+await assertAbsent("agent/src/integrations/connectors");
+
+const agentConnectorTool = await source("agent/src/tools/connectors/connector-access-tool.js");
+for (const forbiddenTerm of [
+  "runDetachedSubSession",
+  "connector.type",
+  "connector.subType",
+  "@noobot/connector-runtime",
+]) {
+  if (agentConnectorTool.includes(forbiddenTerm)) {
+    violations.push(`agent connector tool owns forbidden runtime detail: ${forbiddenTerm}`);
+  }
+}
+
+const agentPackage = JSON.parse(await source("agent/package.json"));
+if (agentPackage.dependencies?.["@noobot/connector-runtime"]) {
+  violations.push(
+    "agent/package.json: Agent must consume the connector protocol port, not Runtime",
+  );
+}
+
+for (const relativePath of await sourceFiles("connector-runtime/src")) {
+  const content = await source(relativePath);
+  for (const forbiddenDependency of ["noobot-agent", "@noobot/connector-instances", "/service/"]) {
+    if (content.includes(forbiddenDependency)) {
+      violations.push(`${relativePath}: runtime depends on ${forbiddenDependency}`);
+    }
+  }
+}
+
+for (const relativePath of await sourceFiles("connector-instances/src")) {
+  const content = await source(relativePath);
+  for (const forbiddenDependency of [
+    "noobot-agent",
+    "@noobot/agent-config-protocol",
+    "@noobot/connector-runtime",
+    "/service/",
+  ]) {
+    if (content.includes(forbiddenDependency)) {
+      violations.push(`${relativePath}: connector instance depends on ${forbiddenDependency}`);
+    }
   }
 }
 

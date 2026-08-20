@@ -6,3 +6,5 @@
 export * from "./catalog.js";
 export * from "./selection.js";
 export * from "./projection.js";
+export * from "./access.js";
+export * from "./lifecycle.js";

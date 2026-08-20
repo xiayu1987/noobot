@@ -25,7 +25,6 @@ test("session-routes: streams an attachment opened by the canonical attachment s
       }),
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: (key) => key,
   });
 
@@ -52,7 +51,6 @@ test("session-routes: 附件不存在返回 404 + 标准错误体", async () => 
       openAttachmentStream: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: (key) => (key === "common.attachmentNotFound" ? "attachment-not-found" : key),
   });
 
@@ -86,7 +84,6 @@ for (const [label, query] of [
         },
       },
       handleChat: (_req, res) => res.json({ ok: true }),
-      getConnectorChannelStore: () => ({}),
       translateText: (key) => (key === "common.attachmentNotFound" ? "attachment-not-found" : key),
     });
 
@@ -115,7 +112,6 @@ test("session-routes: 会话查询异常返回 400 + 标准错误体", async () 
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -140,7 +136,6 @@ test("session-routes: 插件诊断接口返回发现/加载/错误信息", async
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -184,7 +179,6 @@ test("session-routes: terminal resolution uses only canonical Session identity",
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
   await withTestServer(app, async (baseUrl) => {
@@ -223,7 +217,6 @@ test("session-routes: terminal resolution rejects storage locator query fields",
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 

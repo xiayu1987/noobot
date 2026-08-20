@@ -4,97 +4,57 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const CONNECTOR_TYPE = Object.freeze({
-  DATABASE: "database",
-  TERMINAL: "terminal",
-  EMAIL: "email",
-});
+const CONNECTOR_FIELD_KINDS = new Set(["text", "number", "boolean", "workspace_path"]);
+const CONNECTOR_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 
-const field = (name, { required = false, secret = false, kind = "text", defaultValue } = {}) =>
-  Object.freeze({
-    name,
+export const connectorField = (
+  name,
+  { required = false, secret = false, kind = "text", defaultValue } = {},
+) => {
+  const normalizedName = String(name || "").trim();
+  const normalizedKind = String(kind || "").trim();
+  if (!normalizedName) throw new TypeError("connector field name is required");
+  if (!CONNECTOR_FIELD_KINDS.has(normalizedKind)) {
+    throw new TypeError(`connector field kind is invalid: ${normalizedKind}`);
+  }
+  return Object.freeze({
+    name: normalizedName,
     required,
     secret,
-    kind,
+    kind: normalizedKind,
     ...(defaultValue === undefined ? {} : { defaultValue }),
   });
-
-export const CONNECTOR_CATALOG = Object.freeze([
-  Object.freeze({
-    type: CONNECTOR_TYPE.DATABASE,
-    subType: "mysql",
-    fields: Object.freeze([
-      field("host", { required: true }),
-      field("port", { kind: "number", defaultValue: 3306 }),
-      field("username", { required: true }),
-      field("password", { required: true, secret: true }),
-      field("database", { required: true }),
-    ]),
-  }),
-  Object.freeze({
-    type: CONNECTOR_TYPE.DATABASE,
-    subType: "postgres",
-    fields: Object.freeze([
-      field("host", { required: true }),
-      field("port", { kind: "number", defaultValue: 5432 }),
-      field("username", { required: true }),
-      field("password", { required: true, secret: true }),
-      field("database", { required: true }),
-    ]),
-  }),
-  Object.freeze({
-    type: CONNECTOR_TYPE.DATABASE,
-    subType: "sqlite",
-    fields: Object.freeze([field("file_path", { required: true, kind: "workspace_path" })]),
-  }),
-  Object.freeze({
-    type: CONNECTOR_TYPE.TERMINAL,
-    subType: "ssh",
-    fields: Object.freeze([
-      field("host", { required: true }),
-      field("port", { kind: "number", defaultValue: 22 }),
-      field("username", { required: true }),
-      field("password", { required: true, secret: true }),
-    ]),
-  }),
-  Object.freeze({
-    type: CONNECTOR_TYPE.EMAIL,
-    subType: "smtp_imap",
-    fields: Object.freeze([
-      field("smtp_host", { required: true }),
-      field("smtp_port", { kind: "number", defaultValue: 587 }),
-      field("smtp_secure", { kind: "boolean", defaultValue: false }),
-      field("imap_host", { required: true }),
-      field("imap_port", { kind: "number", defaultValue: 993 }),
-      field("imap_secure", { kind: "boolean", defaultValue: true }),
-      field("username", { required: true }),
-      field("password", { required: true, secret: true }),
-      field("from_email"),
-    ]),
-  }),
-]);
-
-const catalogIndex = new Map(
-  CONNECTOR_CATALOG.map((item) => [`${item.type}:${item.subType}`, item]),
-);
+};
 
 export function normalizeConnectorType(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase();
-  return Object.values(CONNECTOR_TYPE).includes(normalized) ? normalized : "";
+  const normalized = String(value || "").trim();
+  return CONNECTOR_IDENTIFIER_PATTERN.test(normalized) ? normalized : "";
 }
 
-export function resolveConnectorDefinition(type = "", subType = "") {
-  const normalizedType = normalizeConnectorType(type);
-  const normalizedSubType = String(subType || "")
-    .trim()
-    .toLowerCase();
-  return catalogIndex.get(`${normalizedType}:${normalizedSubType}`) || null;
-}
-
-export function normalizeConnectorSubType(type = "", subType = "") {
-  return resolveConnectorDefinition(type, subType)?.subType || "";
+export function createConnectorInstanceDefinition(input = {}) {
+  const instanceType = String(input.instanceType || "").trim();
+  const type = normalizeConnectorType(input.type);
+  const subType = normalizeConnectorType(input.subType);
+  if (!instanceType || !type || !subType) {
+    throw new TypeError("connector instanceType, type and subType are required");
+  }
+  const operations = [
+    ...new Set((input.operations || []).map(String).map((item) => item.trim())),
+  ].filter(Boolean);
+  if (!operations.length) throw new TypeError("connector instance operations are required");
+  const fields = [...(input.fields || [])].map((item) => connectorField(item?.name, item));
+  const fieldNames = fields.map((item) => String(item?.name || "").trim());
+  if (fieldNames.some((name) => !name) || new Set(fieldNames).size !== fieldNames.length) {
+    throw new TypeError("connector instance fields must have unique names");
+  }
+  return Object.freeze({
+    instanceType,
+    type,
+    subType,
+    displayName: String(input.displayName || subType).trim(),
+    fields: Object.freeze(fields),
+    operations: Object.freeze(operations),
+  });
 }
 
 export function normalizeConnectorParameters(definition, parameters = {}) {
@@ -127,15 +87,13 @@ export function normalizeConnectorParameters(definition, parameters = {}) {
   return Object.freeze(normalized);
 }
 
-export function buildConnectorConnectionInfo({ type = "", subType = "", parameters = {} } = {}) {
-  const normalizedType = normalizeConnectorType(type);
-  const definition = resolveConnectorDefinition(normalizedType, subType);
-  const normalizedParameters = normalizeConnectorParameters(definition, parameters);
-  const typeField =
-    normalizedType === CONNECTOR_TYPE.DATABASE
-      ? "database_type"
-      : normalizedType === CONNECTOR_TYPE.TERMINAL
-        ? "terminal_type"
-        : "email_type";
-  return Object.freeze({ ...normalizedParameters, [typeField]: definition.subType });
+export function projectConnectorInstanceDefinition(definition = {}) {
+  return Object.freeze({
+    instanceType: String(definition.instanceType || "").trim(),
+    type: normalizeConnectorType(definition.type),
+    subType: String(definition.subType || "").trim(),
+    displayName: String(definition.displayName || "").trim(),
+    fields: Object.freeze([...(definition.fields || [])]),
+    operations: Object.freeze([...(definition.operations || [])]),
+  });
 }

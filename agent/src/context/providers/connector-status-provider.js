@@ -4,35 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  assertConnectorAccessPort,
   normalizeSelectedConnectorIds,
-  projectPublicConnector,
   projectSelectedConnectorContext,
 } from "@noobot/connector-protocol";
 
 export async function resolveConnectorStatusSection({
   userId = "",
   selectedConnectorIds = [],
-  connectorChannelStore = null,
-  connectorRegistry = null,
+  connectorAccessPort = null,
 } = {}) {
   const ownerUserId = String(userId || "").trim();
   const selectedIds = normalizeSelectedConnectorIds(selectedConnectorIds);
   if (!ownerUserId || !selectedIds.length) {
     return { connectors: [] };
   }
-  if (!connectorRegistry || !connectorChannelStore) {
-    throw new Error("selected connector runtime is unavailable");
+  if (!connectorAccessPort) {
+    throw new Error("selected connector access port is unavailable");
   }
-
-  const records = await connectorRegistry.list(ownerUserId);
-  const runtimeById = new Map(
-    connectorChannelStore
-      .getUserConnectors(ownerUserId)
-      .map((item) => [String(item.connectorId || "").trim(), item]),
-  );
-  const publicConnectors = records.map((record) =>
-    projectPublicConnector(record, runtimeById.get(record.connectorId)),
-  );
+  const publicConnectors =
+    await assertConnectorAccessPort(connectorAccessPort).listUserConnectors(ownerUserId);
   return {
     connectors: projectSelectedConnectorContext(selectedIds, publicConnectors),
   };

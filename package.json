@@ -12,6 +12,8 @@
     "agent-transport-protocol",
     "event-protocol",
     "connector-protocol",
+    "connector-runtime",
+    "connector-instances",
     "timeline-runtime",
     "attachment-protocol",
     "semantic-transfer-protocol",

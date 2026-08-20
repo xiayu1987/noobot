@@ -1,0 +1,17 @@
+{
+  "name": "@noobot/connector-runtime",
+  "version": "4.2.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  },
+  "dependencies": {
+    "@noobot/connector-protocol": "file:../connector-protocol",
+    "@noobot/path-resolver": "file:../path-resolver"
+  }
+}

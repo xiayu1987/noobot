@@ -6,16 +6,14 @@
 import {
   importDefaultOrModule,
   normalizeConnectionSource,
-  normalizeTimeoutMs,
-  resolveHostPortUserPasswordDatabase,
+  resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
 
 function resolveMysqlConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
-  const resolved = resolveHostPortUserPasswordDatabase({
+  const resolved = resolveDatabaseConnection({
     source,
     defaultPort: 3306,
-    fallbackHost: "127.0.0.1",
   });
 
   return {
@@ -24,11 +22,8 @@ function resolveMysqlConnection(connectionInfo = {}) {
     user: resolved.user,
     password: resolved.password,
     database: resolved.database,
-    timeoutMs: normalizeTimeoutMs(source, 30000),
-    poolLimit: Math.max(
-      1,
-      Number(source?.pool_limit || source?.poolLimit || 4),
-    ),
+    timeoutMs: 30000,
+    poolLimit: 4,
   };
 }
 
@@ -38,20 +33,14 @@ async function importMysqlPromise() {
 
 const mysqlPools = new Map();
 
-function buildMysqlPoolKey(conn = {}) {
-  return JSON.stringify({
-    host: conn.host,
-    port: conn.port,
-    user: conn.user,
-    password: conn.password,
-    database: conn.database,
-    timeoutMs: conn.timeoutMs,
-    poolLimit: conn.poolLimit,
-  });
+function poolKey(channelKey = "") {
+  const key = String(channelKey || "").trim();
+  if (!key) throw new TypeError("mysql connector channelKey is required");
+  return key;
 }
 
-function getMysqlPool(mysql, conn = {}) {
-  const key = buildMysqlPoolKey(conn);
+function getMysqlPool(mysql, conn = {}, channelKey = "") {
+  const key = poolKey(channelKey);
   const cached = mysqlPools.get(key);
   if (cached?.pool) return cached.pool;
   const pool = mysql.createPool({
@@ -72,6 +61,7 @@ function getMysqlPool(mysql, conn = {}) {
 export async function executeMysqlCommand({
   command = "",
   connectionInfo = {},
+  channelKey = "",
 } = {}) {
   const sql = String(command || "").trim();
   if (!sql) {
@@ -84,7 +74,7 @@ export async function executeMysqlCommand({
       ok: false,
       code: 400,
       stdout: "",
-      stderr: "mysql username required (connection_info.username or connection_string)",
+      stderr: "mysql username is required",
     };
   }
 
@@ -97,7 +87,7 @@ export async function executeMysqlCommand({
       stderr: "mysql2 not installed, run: npm i mysql2",
     };
   }
-  const pool = getMysqlPool(mysql, conn);
+  const pool = getMysqlPool(mysql, conn, channelKey);
   try {
     const [rows] = await pool.query({
       sql,
@@ -125,4 +115,13 @@ export async function executeMysqlCommand({
       stderr: String(error?.message || error || "mysql query failed"),
     };
   }
+}
+
+export async function releaseMysqlConnection(channelKey = "") {
+  const key = poolKey(channelKey);
+  const cached = mysqlPools.get(key);
+  if (!cached?.pool) return false;
+  mysqlPools.delete(key);
+  await cached.pool.end();
+  return true;
 }

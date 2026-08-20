@@ -80,6 +80,7 @@ test("chat-run-service maps a validated transport command without a compat confi
   assert.equal("config" in request.runConfig, false);
   assert.equal("runTimeoutMs" in request.runConfig, false);
   assert.equal("thinkingStartedAt" in request.runConfig, false);
+  assert.equal("sharedTools" in request.runConfig, false);
 });
 
 test("chat-run-service obtains connector selection only from the root Session authority", async () => {

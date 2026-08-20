@@ -8,7 +8,9 @@
     ".": "./src/index.js",
     "./catalog": "./src/catalog.js",
     "./selection": "./src/selection.js",
-    "./projection": "./src/projection.js"
+    "./projection": "./src/projection.js",
+    "./access": "./src/access.js",
+    "./lifecycle": "./src/lifecycle.js"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"

@@ -16,10 +16,6 @@ import {
   encryptPayloadBySessionId,
 } from "../../shared/utils/session-crypto.js";
 import {
-  getConnectorChannelStore,
-  getConnectorRegistry,
-} from "../../integrations/connectors/index.js";
-import {
   resolveRuntimeTransferIdentity,
   transferSemanticContent,
 } from "../../transfer-adapter/index.js";
@@ -164,12 +160,6 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
   bridge.__sessionCryptoWrapped = true;
 }
 
-function initializeConnectorRuntime(runtimeContext = {}, sharedTools = {}) {
-  const connectorChannelStore = getConnectorChannelStore();
-  sharedTools.connectorChannelStore = connectorChannelStore;
-  sharedTools.connectorRegistry = getConnectorRegistry({ required: false });
-}
-
 async function initializeBrowserRuntime(runtimeContext = {}, sharedTools = {}) {
   try {
     await initRuntimeSharedBrowser(runtimeContext);
@@ -189,6 +179,5 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   initializeSessionCrypto(sharedTools, { sessionId });
   initializeSemanticTransfer(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
-  initializeConnectorRuntime(runtimeContext, sharedTools);
   await initializeBrowserRuntime(runtimeContext, sharedTools);
 }

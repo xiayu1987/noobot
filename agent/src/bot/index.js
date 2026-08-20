@@ -19,10 +19,14 @@ import { resolveAttachments } from "../context/providers/attachment-resolver.js"
 export * as hook from "./hook/index.js";
 
 export class BotManager {
-  constructor(globalConfig, { startupContext = {}, pluginRuntimeBundle = null } = {}) {
+  constructor(
+    globalConfig,
+    { startupContext = {}, pluginRuntimeBundle = null, connectorAccessPort = null } = {},
+  ) {
     this.globalConfig = globalConfig;
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
+    this.connectorAccessPort = connectorAccessPort;
 
     this.attach = new AttachmentService(globalConfig);
     this.sessionRuntime = createSessionServices(globalConfig, { attachmentService: this.attach });

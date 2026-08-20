@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeEmailConnectionInfo } from "./connection.js";
 
 export async function executeSendEmail({ payload = {}, connectionInfo = {} } = {}) {
@@ -16,7 +15,7 @@ export async function executeSendEmail({ payload = {}, connectionInfo = {} } = {
   const text = String(payload?.text || "").trim();
   const html = String(payload?.html || "").trim();
   if (!to) {
-    throw new Error(tSystem("connectors.email.sendToRequired"));
+    throw new Error("Email recipient is required");
   }
   const transporter = createTransport({
     logger: false,
@@ -29,15 +28,22 @@ export async function executeSendEmail({ payload = {}, connectionInfo = {} } = {
       pass: normalizedConnectionInfo.password,
     },
   });
-  const sendResult = await transporter.sendMail({
-    from: String(payload?.from || normalizedConnectionInfo.fromEmail || normalizedConnectionInfo.username).trim(),
-    to,
-    ...(cc ? { cc } : {}),
-    ...(bcc ? { bcc } : {}),
-    ...(subject ? { subject } : {}),
-    ...(text ? { text } : {}),
-    ...(html ? { html } : {}),
-  });
+  let sendResult;
+  try {
+    sendResult = await transporter.sendMail({
+      from: String(
+        payload?.from || normalizedConnectionInfo.fromEmail || normalizedConnectionInfo.username,
+      ).trim(),
+      to,
+      ...(cc ? { cc } : {}),
+      ...(bcc ? { bcc } : {}),
+      ...(subject ? { subject } : {}),
+      ...(text ? { text } : {}),
+      ...(html ? { html } : {}),
+    });
+  } finally {
+    transporter.close();
+  }
   return {
     action: "send",
     accepted: Array.isArray(sendResult?.accepted) ? sendResult.accepted : [],

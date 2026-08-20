@@ -6,12 +6,12 @@
 
 ## 1. 层级边界
 
-| 层                           | 职责                                                                          | 不负责                                    |
-| ---------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------- |
-| `attachment-protocol`        | 附件身份、descriptor、持久化记录、访问/UI 视图                                | transfer identity、方向、producer、intent |
-| `semantic-transfer-protocol` | V2 envelope、场景白名单、工具入/出口策略、三种 payload、严格校验              | 文件系统、Session、路径解析               |
-| `agent/src/transfer-adapter` | 将运行时内容物化为附件，并创建/消费 V2 envelope                               | 定义另一种 wire shape                     |
-| `tool-runner`、插件运行时    | 选择场景、提供运行身份、传播 envelope                                         | 自行构造附件身份或路径协议                |
+| 层                           | 职责                                                             | 不负责                                    |
+| ---------------------------- | ---------------------------------------------------------------- | ----------------------------------------- |
+| `attachment-protocol`        | 附件身份、descriptor、持久化记录、访问/UI 视图                   | transfer identity、方向、producer、intent |
+| `semantic-transfer-protocol` | V2 envelope、场景白名单、工具入/出口策略、三种 payload、严格校验 | 文件系统、Session、路径解析               |
+| `agent/src/transfer-adapter` | 将运行时内容物化为附件，并创建/消费 V2 envelope                  | 定义另一种 wire shape                     |
+| `tool-runner`、插件运行时    | 选择场景、提供运行身份、传播 envelope                            | 自行构造附件身份或路径协议                |
 
 唯一 envelope 字段为 `transferEnvelopes`。附件引用只携带 attachment-protocol identity 和不可变 descriptor 快照；不得携带 `path`、`relativePath`、`hostPath`、`sandboxPath` 或下载 URL。
 
@@ -110,7 +110,7 @@ tool result.outputArtifacts
 
 插件通过 `runtime.sharedTools.semanticTransfer.transferSemanticContent()` 调用统一入口。runtime builder 负责生成 identity，插件不得自行推测 Session 或 Turn identity。
 
-detached 子 Session 返回时，从 canonical `turnMessages[*].transferEnvelopes` 聚合并按 `transferId` 去重；`process_connector_tool` 只传播这些既有 envelopes，不重新持久化或重建附件。
+detached 子 Session 返回时，从 canonical `turnMessages[*].transferEnvelopes` 聚合并按 `transferId` 去重；连接器访问已改为主链路直接调用，不再创建 detached 子 Session。
 
 ## 10. Harness
 

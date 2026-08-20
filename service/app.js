@@ -8,12 +8,8 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { createGlobalConfigBuilder } from "#agent/config";
-import {
-  getConnectorChannelStore,
-  initConnectorChannelStore,
-  getConnectorRegistry,
-  initConnectorRegistry,
-} from "#agent/connectors";
+import { ConnectorRuntime } from "@noobot/connector-runtime";
+import { registerBuiltinConnectorInstances } from "@noobot/connector-instances";
 import { createAppDependencies } from "./bootstrap/create-app-dependencies.js";
 import { registerGlobalMiddlewares } from "./bootstrap/register-global-middlewares.js";
 import { registerHttpModules } from "./bootstrap/register-http-modules.js";
@@ -59,13 +55,16 @@ const globalConfigBuilder = createGlobalConfigBuilder({
   source: globalConfigSource,
   sourceName: globalConfigSource.name,
 });
+let connectorRuntime = null;
+const connectorAccessPort = Object.freeze({
+  access: (payload) => connectorRuntime.access(payload),
+  listUserConnectors: (userId) => connectorRuntime.listUserConnectors(userId),
+});
 const appDependencies = await createAppDependencies({
   startupContext,
   globalConfigBuilder,
-  initConnectorRegistry,
-  getConnectorChannelStore,
-  getConnectorRegistry,
   buildWorkspaceTree,
+  connectorAccessPort,
 });
 const {
   resolveRequestLocale,
@@ -90,10 +89,20 @@ if (shouldServeDesktopFrontend) {
   app.use("/api", (req, _res, next) => next());
 }
 
-initConnectorChannelStore();
-initConnectorRegistry({ workspaceRoot: workspaceRootPath() });
+connectorRuntime = new ConnectorRuntime({
+  repository: {
+    list: (userId) => getBot().session.listConnectorInstances({ userId }),
+    get: (payload) => getBot().session.getConnectorInstance(payload),
+    create: (payload) => getBot().session.createConnectorInstance(payload),
+    update: (payload) => getBot().session.updateConnectorInstance(payload),
+    delete: (payload) => getBot().session.deleteConnectorInstance(payload),
+  },
+  workspaceRoot: workspaceRootPath(),
+  resolveUserWorkspacePath: (userId) => getBot().getWorkspacePath(userId),
+});
+registerBuiltinConnectorInstances(connectorRuntime);
 
-await registerHttpModules(app, buildHttpModuleDependencies());
+await registerHttpModules(app, { ...buildHttpModuleDependencies(), connectorRuntime });
 
 app.get("/health", (_, res) => res.json({ ok: true }));
 
@@ -117,6 +126,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   stopManagedOpenVSCodeInstances();
+  for (const userId of await readSessionUserIds()) await connectorRuntime.releaseUser(userId);
   if (httpServer?.listening) {
     await new Promise((resolve) => httpServer.close(() => resolve()));
   }

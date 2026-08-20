@@ -66,17 +66,7 @@
     "execute_native_script": {
       "enabled": true
     },
-    "process_connector_tool": {
-      "enabled": true
-    },
     "access_connector": {
-      "enabled": true,
-      "command_file": {
-        "enabled": true,
-        "allowed_roots": []
-      }
-    },
-    "inspect_connectors": {
       "enabled": true
     },
     "web_search": {

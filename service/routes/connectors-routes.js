@@ -5,11 +5,8 @@
  */
 import {
   assertSelectedConnectorsOwned,
-  CONNECTOR_CATALOG,
   normalizeSelectedConnectorIds,
-  projectPublicConnector,
 } from "@noobot/connector-protocol";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { withJsonError } from "./route-wrapper.js";
 
 function assertOwner(req, userId = "") {
@@ -22,40 +19,6 @@ function assertOwner(req, userId = "") {
     throw error;
   }
   return requestedUserId;
-}
-
-function runtimeStatusMap(channelStore, userId = "") {
-  return new Map(
-    channelStore
-      .getUserConnectors(userId)
-      .map((item) => [String(item.connectorId || "").trim(), item]),
-  );
-}
-
-async function listPublicConnectors({ registry, channelStore, userId }) {
-  const runtimeById = runtimeStatusMap(channelStore, userId);
-  return (await registry.list(userId)).map((record) =>
-    projectPublicConnector(record, runtimeById.get(record.connectorId)),
-  );
-}
-
-async function connectRegisteredConnector({ registry, channelStore, userId, connectorId }) {
-  const connector = await registry.get({ userId, connectorId });
-  if (!connector) {
-    const error = new Error("connector not found");
-    error.status = 404;
-    error.errorCode = "connector_not_found";
-    throw error;
-  }
-  channelStore.disconnectConnector({ userId, connectorId });
-  channelStore.connectConnector({ userId, connector });
-  const status = await channelStore.inspectConnector({
-    userId,
-    connectorId,
-    timeoutMs: TIME_THRESHOLDS.connectors.serviceInspectTimeoutMs,
-  });
-  if (status.status !== "connected") channelStore.disconnectConnector({ userId, connectorId });
-  return projectPublicConnector(connector, status);
 }
 
 async function removeConnectorFromSessionSelections({ bot, userId, connectorId }) {
@@ -81,25 +44,18 @@ async function removeConnectorFromSessionSelections({ bot, userId, connectorId }
   return updatedSessionCount;
 }
 
-export function registerConnectorRoutes(
-  app,
-  { bot, getConnectorChannelStore, getConnectorRegistry, translateText } = {},
-) {
+export function registerConnectorRoutes(app, { bot, connectorRuntime, translateText } = {}) {
   const jsonOptions = { fallbackErrorKey: "common.getConnectorsFailed", translateText };
 
   app.get("/internal/connectors/catalog", (_req, res) => {
-    res.json({ ok: true, catalog: CONNECTOR_CATALOG });
+    res.json({ ok: true, catalog: connectorRuntime.listRegisteredInstances() });
   });
 
   app.get(
     "/internal/connectors/:userId",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connectors = await listPublicConnectors({
-        registry: getConnectorRegistry(),
-        channelStore: getConnectorChannelStore(),
-        userId,
-      });
+      const connectors = await connectorRuntime.listUserConnectors(userId);
       res.json({ ok: true, userId, connectors });
     }, jsonOptions),
   );
@@ -108,21 +64,17 @@ export function registerConnectorRoutes(
     "/internal/connectors/:userId",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const registry = getConnectorRegistry();
-      const record = await registry.create({
+      const record = await connectorRuntime.createConnector({
         userId,
         name: req.body?.name,
-        type: req.body?.type,
-        subType: req.body?.subType,
+        instanceType: req.body?.instanceType,
         parameters: req.body?.parameters,
       });
-      const connector = await connectRegisteredConnector({
-        registry,
-        channelStore: getConnectorChannelStore(),
+      const connection = await connectorRuntime.connect({
         userId,
         connectorId: record.connectorId,
       });
-      res.status(201).json({ ok: true, connector });
+      res.status(201).json({ ok: true, connection });
     }, jsonOptions),
   );
 
@@ -131,28 +83,22 @@ export function registerConnectorRoutes(
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
       const connectorId = String(req.params.connectorId || "").trim();
-      const channelStore = getConnectorChannelStore();
-      const registry = getConnectorRegistry();
-      const record = await registry.update({
+      const record = await connectorRuntime.updateConnector({
         userId,
         connectorId,
         name: req.body?.name,
-        type: req.body?.type,
-        subType: req.body?.subType,
+        instanceType: req.body?.instanceType,
         parameters: req.body?.parameters,
       });
       if (!record) {
         res.status(404).json({ ok: false, error: "connector_not_found" });
         return;
       }
-      channelStore.disconnectConnector({ userId, connectorId });
-      const connector = await connectRegisteredConnector({
-        registry,
-        channelStore,
+      const connection = await connectorRuntime.connect({
         userId,
         connectorId,
       });
-      res.json({ ok: true, connector });
+      res.json({ ok: true, connection });
     }, jsonOptions),
   );
 
@@ -161,8 +107,7 @@ export function registerConnectorRoutes(
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
       const connectorId = String(req.params.connectorId || "").trim();
-      getConnectorChannelStore().disconnectConnector({ userId, connectorId });
-      const deleted = await getConnectorRegistry().delete({ userId, connectorId });
+      const deleted = await connectorRuntime.deleteConnector({ userId, connectorId });
       if (!deleted) {
         res.status(404).json({ ok: false, error: "connector_not_found" });
         return;
@@ -180,13 +125,11 @@ export function registerConnectorRoutes(
     "/internal/connectors/:userId/:connectorId/connect",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connector = await connectRegisteredConnector({
-        registry: getConnectorRegistry(),
-        channelStore: getConnectorChannelStore(),
+      const connection = await connectorRuntime.connect({
         userId,
         connectorId: req.params.connectorId,
       });
-      res.json({ ok: true, connector });
+      res.json({ ok: true, connection });
     }, jsonOptions),
   );
 
@@ -195,7 +138,7 @@ export function registerConnectorRoutes(
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
       const connectorId = String(req.params.connectorId || "").trim();
-      const disconnected = getConnectorChannelStore().disconnectConnector({ userId, connectorId });
+      const disconnected = await connectorRuntime.disconnect({ userId, connectorId });
       const updatedSessionCount = await removeConnectorFromSessionSelections({
         bot,
         userId,
@@ -213,11 +156,7 @@ export function registerConnectorRoutes(
         userId,
         sessionId: req.params.sessionId,
       });
-      const connectors = await listPublicConnectors({
-        registry: getConnectorRegistry(),
-        channelStore: getConnectorChannelStore(),
-        userId,
-      });
+      const connectors = await connectorRuntime.listUserConnectors(userId);
       res.json({
         ok: true,
         userId,
@@ -232,11 +171,7 @@ export function registerConnectorRoutes(
     "/internal/connectors/:userId/sessions/:sessionId/selection",
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
-      const connectors = await listPublicConnectors({
-        registry: getConnectorRegistry(),
-        channelStore: getConnectorChannelStore(),
-        userId,
-      });
+      const connectors = await connectorRuntime.listUserConnectors(userId);
       const selectedConnectorIds = assertSelectedConnectorsOwned(
         normalizeSelectedConnectorIds(req.body?.selectedConnectorIds),
         connectors,

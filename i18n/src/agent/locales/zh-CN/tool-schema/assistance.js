@@ -213,7 +213,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `缺少必填字段: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "存在敏感字段，如果是数据库或者终端请用 process_connector_tool 连接器连接",
+        "存在敏感字段，请在客户端管理连接器，并仅通过 access_connector 访问已勾选实例",
     },
   },
 };

@@ -3,10 +3,9 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { executePostgresCommand } from "./postgres-connector-channel.js";
-import { executeMysqlCommand } from "./mysql-connector-channel.js";
-import { executeSqliteCommand } from "./sqlite-connector-channel.js";
-import { CONNECTOR_TYPE, normalizeConnectorSubType } from "@noobot/connector-protocol";
+import { executePostgresCommand, releasePostgresConnection } from "./postgres-connector-channel.js";
+import { executeMysqlCommand, releaseMysqlConnection } from "./mysql-connector-channel.js";
+import { executeSqliteCommand, releaseSqliteConnection } from "./sqlite-connector-channel.js";
 
 function stripSqlCommentsAndStrings(sql = "") {
   const source = String(sql || "");
@@ -64,7 +63,7 @@ function shouldBlockUnsafeSql(command = "") {
   return !/\bwhere\b/.test(compactSql);
 }
 
-export async function executeDatabaseCommand({ command = "", connectionInfo = {} } = {}) {
+export async function executeSafeDatabaseCommand({ command = "", execute } = {}) {
   if (shouldBlockUnsafeSql(command)) {
     return {
       ok: false,
@@ -73,23 +72,14 @@ export async function executeDatabaseCommand({ command = "", connectionInfo = {}
       stderr: "unsafe sql blocked: SELECT/UPDATE/DELETE must include WHERE condition",
     };
   }
-  const databaseType = normalizeConnectorSubType(
-    CONNECTOR_TYPE.DATABASE,
-    connectionInfo?.database_type,
-  );
-  if (databaseType === "postgres") {
-    return executePostgresCommand({ command, connectionInfo });
-  }
-  if (databaseType === "mysql") {
-    return executeMysqlCommand({ command, connectionInfo });
-  }
-  if (databaseType === "sqlite") {
-    return executeSqliteCommand({ command, connectionInfo });
-  }
-  return {
-    ok: false,
-    code: 400,
-    stdout: "",
-    stderr: "unknown database type, set connection_info.database_type as postgres/mysql/sqlite",
-  };
+  return execute(command);
 }
+
+export {
+  executeMysqlCommand,
+  executePostgresCommand,
+  executeSqliteCommand,
+  releaseMysqlConnection,
+  releasePostgresConnection,
+  releaseSqliteConnection,
+};

@@ -82,7 +82,7 @@ test("buildStaticInfo exposes only the sandbox workspace view when isolation is 
   assert.equal(JSON.stringify(staticInfo).includes("/host/"), false);
 });
 
-test("initializeRuntimeEnvironment wires shared tools and connector runtime", async () => {
+test("initializeRuntimeEnvironment wires shared tools without connector implementation state", async () => {
   const runtime = createRuntimeContext({
     userId: "u1",
     basePath: "/host/users/u1",
@@ -125,8 +125,6 @@ test("initializeRuntimeEnvironment wires shared tools and connector runtime", as
     ok: true,
   });
 
-  assert.ok(runtime.sharedTools.connectorChannelStore);
-  assert.equal(runtime.sharedTools.connectorRegistry, null);
   assert.equal(runtime.sharedTools.connectorEventListener, undefined);
   assert.equal(runtime.sharedTools.connectorHistoryStore, undefined);
   assert.equal(runtime.connectorChannels, undefined);

@@ -25,6 +25,7 @@ export function usePanelState() {
   const sidebarCollapsed = ref(false);
   const mobileSidebarOpen = ref(false);
   const workspaceVisible = ref(false);
+  const connectorVisible = ref(false);
   const userSettingsVisible = ref(false);
   const configParamsVisible = ref(false);
 
@@ -53,6 +54,7 @@ export function usePanelState() {
 
   function closeAllDrawers() {
     workspaceVisible.value = false;
+    connectorVisible.value = false;
     userSettingsVisible.value = false;
     configParamsVisible.value = false;
   }
@@ -60,6 +62,11 @@ export function usePanelState() {
   function openWorkspace() {
     closeAllDrawers();
     workspaceVisible.value = true;
+  }
+
+  function openConnectors() {
+    closeAllDrawers();
+    connectorVisible.value = true;
   }
 
   function openUserSettings() {
@@ -90,6 +97,7 @@ export function usePanelState() {
     sidebarCollapsed,
     mobileSidebarOpen,
     workspaceVisible,
+    connectorVisible,
     userSettingsVisible,
     configParamsVisible,
     drawerSize,
@@ -98,6 +106,7 @@ export function usePanelState() {
     openMobileSidebar,
     closeAllDrawers,
     openWorkspace,
+    openConnectors,
     openUserSettings,
     openConfigParams,
   };

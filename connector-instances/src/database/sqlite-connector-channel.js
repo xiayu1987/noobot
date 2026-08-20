@@ -3,31 +3,11 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  importDefaultOrModule,
-  normalizeConnectionSource,
-  normalizeConnectionString,
-  normalizeTimeoutMs,
-} from "./common-db-connector-channel.js";
+import { importDefaultOrModule, normalizeConnectionSource } from "./common-db-connector-channel.js";
 
 function resolveSqliteConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
-  const connectionString = normalizeConnectionString(source);
-  let filePath = String(
-    source?.file_path || source?.filePath || source?.database || source?.db || "",
-  ).trim();
-
-  if (!filePath && connectionString) {
-    if (connectionString === ":memory:") {
-      filePath = ":memory:";
-    } else if (connectionString.startsWith("sqlite://")) {
-      filePath = connectionString.replace(/^sqlite:\/\//i, "").trim();
-    } else if (connectionString.startsWith("file:")) {
-      filePath = connectionString.replace(/^file:/i, "").trim();
-    }
-  }
-
-  return { filePath, timeoutMs: normalizeTimeoutMs(source, 30000) };
+  return { filePath: String(source.file_path || "").trim(), timeoutMs: 30000 };
 }
 
 async function importBetterSqlite3() {
@@ -36,9 +16,14 @@ async function importBetterSqlite3() {
 
 const sqliteDatabases = new Map();
 
-function getSqliteDatabase(Database, conn = {}) {
-  const key = String(conn?.filePath || "").trim();
-  if (!key) return null;
+function databaseKey(channelKey = "") {
+  const key = String(channelKey || "").trim();
+  if (!key) throw new TypeError("sqlite connector channelKey is required");
+  return key;
+}
+
+function getSqliteDatabase(Database, conn = {}, channelKey = "") {
+  const key = databaseKey(channelKey);
   const cached = sqliteDatabases.get(key);
   if (cached?.db) return cached.db;
   const db = new Database(key);
@@ -53,6 +38,7 @@ function looksLikeQuery(sql = "") {
 export async function executeSqliteCommand({
   command = "",
   connectionInfo = {},
+  channelKey = "",
 } = {}) {
   const sql = String(command || "").trim();
   if (!sql) {
@@ -70,7 +56,7 @@ export async function executeSqliteCommand({
       ok: false,
       code: 400,
       stdout: "",
-      stderr: "sqlite file_path required (connection_info.file_path or connection_string)",
+      stderr: "sqlite file_path is required",
     };
   }
 
@@ -85,7 +71,7 @@ export async function executeSqliteCommand({
   }
 
   try {
-    const db = getSqliteDatabase(Database, conn);
+    const db = getSqliteDatabase(Database, conn, channelKey);
     if (!db) {
       return {
         ok: false,
@@ -122,4 +108,13 @@ export async function executeSqliteCommand({
       stderr: String(error?.message || error || "sqlite query failed"),
     };
   }
+}
+
+export function releaseSqliteConnection(channelKey = "") {
+  const key = databaseKey(channelKey);
+  const cached = sqliteDatabases.get(key);
+  if (!cached?.db) return false;
+  sqliteDatabases.delete(key);
+  cached.db.close();
+  return true;
 }
