@@ -133,17 +133,8 @@ Every referenced provider must explicitly declare the corresponding capability. 
 `execute_native_script` injects controlled Playwright, LibreOffice, FFmpeg/FFprobe, declared-input, and task-output capabilities. Its unique file protocol is `files.input`, `files.readText`, `files.readJson`, `files.writeText`, `files.writeJson`, `output.file`, `output.tempFile`, and `output.directory`. Reads accept `input://`, `output://`, and `temp://` task paths; writes accept only `output://`. Capability wrappers resolve task paths internally. It does not expose imports, shell commands, environment variables, executable selection, or arbitrary host paths. Browser access is limited to loopback HTTP(S). Outputs are persisted through semantic-transfer. This host-restricted mode is intended for trusted local/admin automation; it is not an operating-system security sandbox for hostile code.
 
 Execution isolation is defined by the `@noobot/execution-isolation-protocol` workspace. Extra mounts are global-admin configuration only. Changing their source, target, or read-only state causes the managed Docker container to be recreated before the next script execution. Extra mounts do not widen file-tool authorization and cannot replace `/workspace`.
-| `tools.process_connector_tool.enabled` | boolean | Enable connector processing tool |
-| `tools.process_connector_tool.max_tool_loop_turns` | number | Loop cap in connector task |
 | `tools.access_connector.enabled` | boolean | Enable connector access tool |
-| `tools.access_connector.command_file.enabled` | boolean | Enable `command_file_path` input for access_connector |
-| `tools.access_connector.command_file.max_bytes` | number | Max readable bytes for command file |
-| `tools.access_connector.command_file.allowed_extensions` | string[] | Allowlisted command file extensions |
-| `tools.access_connector.command_file.allowed_roots` | string(path)[] | Allowlisted root paths for command files (default workspace root when empty) |
 | `tools.max_output_chars` | number | Unified tool output cleaning/truncation length limit |
-| `tools.database_connect_connector.enabled` | boolean | Enable database connector tool |
-| `tools.terminal_connect_connector.enabled` | boolean | Enable terminal connector tool |
-| `tools.inspect_connectors.enabled` | boolean | Enable connector inspection tool |
 | `tools.multimodal_generate.enabled` | boolean | Enable multimodal generation tool |
 | `tools.task_summary.enabled` | boolean | Enable task summary tool |
 | `tools.task_summary.phase_summary_loop_turns` | number | Number of turns threshold to trigger phase summary |
@@ -152,7 +143,6 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 | `tools.request_help.help_model` | string | Help model alias/name (empty = current/default model logic) |
 | `tools.request_help.help_prompt_loop_turns` | number | Tool loop turns threshold for system help prompt (default 50) |
 | `tools.request_help.tool_failure_help_count` | number | Consecutive tool failures threshold for user help prompt (default 3) |
-| `tools.email_connect_connector.enabled` | boolean | Enable email connector tool |
 | `tools.web_search.enabled` | boolean | Enable web search tool |
 | `tools.web_search.mode` | enum | Search backend: `responses_api` / `search_engine` |
 | `tools.web_search.responses_api.model` | string | Provider alias/name used by Responses API web search |

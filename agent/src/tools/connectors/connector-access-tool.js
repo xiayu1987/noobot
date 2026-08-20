@@ -4,165 +4,118 @@
  * SPDX-License-Identifier: MIT
  */
 import { DynamicStructuredTool } from "@langchain/core/tools";
+import {
+  assertConnectorAccessPort,
+  normalizeSelectedConnectorIds,
+} from "@noobot/connector-protocol";
 import { z } from "zod";
-import {
-  BUILTIN_THRESHOLDS,
-  hasOwnConfigKey,
-  mergeConfig,
-  normalizeBooleanLike,
-} from "../../config/index.js";
-import {
-  getRuntimeFromAgentContext,
-  getSystemRuntimeFromRuntime,
-  getChildRunParentSessionIdFromAgentContext,
-} from "../../context/agent-context-accessor.js";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { mergeConfig } from "../../config/index.js";
+import { mapAttachmentRecordsToMetas } from "../../artifacts/meta-ops.js";
+import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
+import { MIME_TYPE } from "../../shared/constants/index.js";
+import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
-import { tTool } from "../core/tool-i18n.js";
-import { isAbortError } from "../../shared/utils/error-utils.js";
-import { createConnectorTools } from "./connector-toolkit.js";
-import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
-import { ERROR_CODE } from "../../shared/errors/constants.js";
-import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
-import { TOOL_POLICY_MODE, TOOL_NAME, TOOL_RESULT_STATUS } from "../constants/index.js";
+import { tToolDescription, tToolParamDescription } from "../core/tool-schema-i18n.js";
+import {
+  ARTIFACT_GENERATION_SOURCE,
+  TOOL_ATTACHMENT_SOURCE,
+  TOOL_NAME,
+  TOOL_RESULT_STATUS,
+} from "../constants/index.js";
+
+function assertSelectedConnector(selectedConnectorIds = [], connectorId = "") {
+  const normalizedId = String(connectorId || "").trim();
+  if (!normalizedId || !selectedConnectorIds.includes(normalizedId)) {
+    throw recoverableToolError("connector_id is not selected for this session", {
+      code: ERROR_CODE.RECOVERABLE_SELECTED_CONNECTOR_MISMATCH,
+    });
+  }
+  return normalizedId;
+}
+
+function createArtifactSink(runtime = {}) {
+  const userId = String(runtime?.userId || "").trim();
+  const sessionId = String(runtime?.systemRuntime?.sessionId || "").trim();
+  const attachmentService = runtime?.attachmentService || null;
+  if (!userId || !sessionId || !attachmentService) return null;
+  return async (artifacts = [], options = {}) => {
+    if (!Array.isArray(artifacts) || !artifacts.length) return [];
+    const generationSource = String(
+      options.generationSource || ARTIFACT_GENERATION_SOURCE.EMAIL_CONNECTOR_READ,
+    ).trim();
+    const records = await attachmentService.ingestGeneratedArtifacts({
+      userId,
+      sessionId,
+      attachmentSource: TOOL_ATTACHMENT_SOURCE.EMAIL,
+      generationSource,
+      artifacts,
+    });
+    return {
+      attachments: mapAttachmentRecordsToMetas(records, {
+        fallbackMimeType: MIME_TYPE.APPLICATION_OCTET_STREAM,
+        fallbackGenerationSource: generationSource,
+      }),
+      transferEnvelopes: [],
+    };
+  };
+}
 
 export function createConnectorAccessTool({ agentContext }) {
   const runtime = getRuntimeFromAgentContext(agentContext);
   const effectiveConfig = mergeConfig(runtime?.globalConfig || {}, runtime?.userConfig || {});
-  const processConnectorTaskEnabled =
-    effectiveConfig?.tools?.[TOOL_NAME.PROCESS_CONNECTOR_TOOL]?.enabled !== false;
-  if (!processConnectorTaskEnabled) return [];
-
-  const botManager = runtime?.botManager || null;
-  const eventListener = runtime?.eventListener || null;
-  const signal = runtime?.abortSignal || null;
+  if (effectiveConfig?.tools?.[TOOL_NAME.ACCESS_CONNECTOR]?.enabled === false) return [];
   const userId = String(runtime?.userId || agentContext?.userId || "").trim();
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const sessionId = String(systemRuntime?.sessionId || "").trim();
-  const parentSessionId = getChildRunParentSessionIdFromAgentContext(agentContext);
-  const parentDialogProcessId = String(runtime?.systemRuntime?.dialogProcessId || "").trim();
-  const allowUserInteraction = systemRuntime?.config?.allowUserInteraction !== false;
-  const hasParentStreamingConfig = hasOwnConfigKey(systemRuntime?.config || {}, "streaming");
-  const maxToolLoopTurns = BUILTIN_THRESHOLDS.subTasks.processConnectorToolMaxToolLoopTurns;
-  const connectorSubSessionSystemPrompt = tTool(
-    runtime,
-    "tools.process_connector.subSessionSystemPrompt",
+  const selectedConnectorIds = normalizeSelectedConnectorIds(
+    runtime?.systemRuntime?.config?.selectedConnectorIds,
   );
-
-  const processConnectorTaskTool = new DynamicStructuredTool({
-    name: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
-    description: tTool(runtime, "tools.process_connector.description"),
+  const tool = new DynamicStructuredTool({
+    name: TOOL_NAME.ACCESS_CONNECTOR,
+    description: tToolDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR),
     schema: z.object({
-      task: z.string().describe(tTool(runtime, "tools.process_connector.fieldTask")),
-      modelName: z
+      connector_id: z
         .string()
-        .optional()
-        .describe(tTool(runtime, "tools.process_connector.fieldModelName")),
+        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "connector_id")),
+      operation: z
+        .string()
+        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "operation")),
+      input: z
+        .record(z.string(), z.unknown())
+        .describe(tToolParamDescription(runtime, TOOL_NAME.ACCESS_CONNECTOR, "input")),
     }),
-    func: async ({ task, modelName = "" }) => {
-      const normalizedTask = String(task || "").trim();
-      if (!normalizedTask) {
-        throw recoverableToolError(tTool(runtime, "common.taskRequired"), {
-          code: ERROR_CODE.RECOVERABLE_INPUT_MISSING,
+    func: async ({ connector_id, operation, input }) => {
+      const connectorId = assertSelectedConnector(selectedConnectorIds, connector_id);
+      if (!userId) {
+        throw recoverableToolError("connector owner userId is unavailable", {
+          code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
         });
       }
-      if (typeof botManager?.runDetachedSubSession !== "function" || !userId || !sessionId) {
-        throw recoverableToolError(
-          tTool(runtime, "common.runtimeMissingBotManagerUserIdSessionId"),
-          {
-            code: ERROR_CODE.RECOVERABLE_RUNTIME_CONTEXT_MISSING,
-          },
-        );
-      }
-      const subTools = [...createConnectorTools({ agentContext })];
-      if (!subTools.length) {
-        throw recoverableToolError(
-          tTool(runtime, "tools.process_connector.errorToolsUnavailable"),
-          {
-            code: ERROR_CODE.RECOVERABLE_TOOLS_UNAVAILABLE,
-          },
-        );
+      const connectorAccessPort = runtime?.sharedTools?.connectorAccess;
+      if (!connectorAccessPort) {
+        throw recoverableToolError("connector access port is unavailable", {
+          code: ERROR_CODE.RECOVERABLE_CONNECTOR_STORE_MISSING,
+        });
       }
       try {
-        const detachedRun = await botManager.runDetachedSubSession({
-          parentExecutionScope: agentContext,
-          message: normalizedTask,
-          systemMessageFactory: () => [connectorSubSessionSystemPrompt].filter(Boolean),
-          eventListener,
-          abortSignal: signal,
-          strategy: createAgentDetachedSubSessionStrategy({
-            userId,
-            parentSessionId,
-            parentDialogProcessId,
-          }),
-          metadata: {
-            scope: TOOL_NAME.PROCESS_CONNECTOR_TOOL,
-          },
-          runConfigPatch: {
-            pluginPolicy: { mode: "none" },
-            allowUserInteraction,
-            ...(hasParentStreamingConfig
-              ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
-              : {}),
-            selectedConnectorIds: normalizeSelectedConnectorIds(
-              systemRuntime?.config?.selectedConnectorIds,
-            ),
-            toolPolicy: {
-              mode: TOOL_POLICY_MODE.CUSTOM_ONLY,
-              customTools: subTools,
-              forceIncludeUserInteraction: false,
-            },
-            ...(String(modelName || "").trim()
-              ? { runtimeModel: String(modelName || "").trim() }
-              : {}),
-            maxToolLoopTurns:
-              Number.isFinite(maxToolLoopTurns) && maxToolLoopTurns > 0
-                ? Math.floor(maxToolLoopTurns)
-                : 6,
-            sharedTools:
-              runtime?.sharedTools && typeof runtime.sharedTools === "object"
-                ? runtime.sharedTools
-                : {},
-          },
+        const result = await assertConnectorAccessPort(connectorAccessPort).access({
+          userId,
+          request: { connectorId, operation, input },
+          context: { artifactSink: createArtifactSink(runtime) },
         });
-        const subSessionId = String(detachedRun?.sessionId || "").trim();
-        const subResult = detachedRun?.result || {};
-        const answer = String(subResult?.answer || "").trim();
-        const traces = Array.isArray(subResult?.traces) ? subResult.traces : [];
-        const transferEnvelopes = Array.isArray(subResult?.transferEnvelopes)
-          ? subResult.transferEnvelopes
-          : [];
-        const usedTools = Array.from(
-          new Set(traces.map((item) => String(item?.tool || "").trim()).filter(Boolean)),
-        );
         return toToolJsonResult(
-          TOOL_NAME.PROCESS_CONNECTOR_TOOL,
+          TOOL_NAME.ACCESS_CONNECTOR,
           {
-            ok: true,
-            status: TOOL_RESULT_STATUS.COMPLETED,
-            sessionId: subSessionId,
-            parentSessionId,
-            answer,
-            ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
-            tools: subTools.map((item) => item?.name).filter(Boolean),
-            summary: {
-              answer_length: answer.length,
-              trace_count: traces.length,
-              used_tools: usedTools,
-              dialog_process_id: resolveContextMessageDialogProcessId(subResult),
-            },
+            ...result,
+            status: result.ok ? TOOL_RESULT_STATUS.COMPLETED : TOOL_RESULT_STATUS.FAILED,
           },
           true,
         );
       } catch (error) {
-        if (isAbortError(error)) throw error;
         throw recoverableToolError(error?.message || String(error), {
           code: String(error?.code || ERROR_CODE.RECOVERABLE_PROCESS_CONNECTOR_FAILED),
         });
       }
     },
   });
-
-  return [processConnectorTaskTool];
+  return [tool];
 }

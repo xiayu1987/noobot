@@ -3,10 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "noobot-i18n/agent/system-text";
 import { normalizeEmailConnectionInfo } from "./connection.js";
-import { MIME_TYPE } from "../../../shared/constants/index.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+
+const BINARY_MIME_TYPE = "application/octet-stream";
 
 const INLINE_ATTACHMENT_ITEM_PREFIX = "INLINE";
 const INLINE_ATTACHMENT_BLOCK_START = "[INLINE_ATTACHMENTS]";
@@ -17,10 +17,7 @@ function normalizeTransferEnvelopesFromPayload(payload = null) {
   return normalizeTransferEnvelopes(payload?.transferEnvelopes || []);
 }
 
-async function saveEmailAttachments({
-  attachmentHandler = null,
-  parsedEmail = null,
-} = {}) {
+async function saveEmailAttachments({ attachmentHandler = null, parsedEmail = null } = {}) {
   if (typeof attachmentHandler !== "function" || !Array.isArray(parsedEmail?.attachments)) {
     return {
       attachments: [],
@@ -30,22 +27,18 @@ async function saveEmailAttachments({
   const artifacts = [];
   let attachmentIndex = 0;
   for (const attachmentItem of parsedEmail.attachments) {
-    const contentBuffer = Buffer.isBuffer(attachmentItem?.content)
-      ? attachmentItem.content
-      : null;
+    const contentBuffer = Buffer.isBuffer(attachmentItem?.content) ? attachmentItem.content : null;
     if (!contentBuffer || !contentBuffer.length) continue;
     attachmentIndex += 1;
-    const fileName = String(attachmentItem?.filename || "").trim() || `email_attachment_${attachmentIndex}`;
-    const mimeType = String(
-      attachmentItem?.contentType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-    )
+    const fileName =
+      String(attachmentItem?.filename || "").trim() || `email_attachment_${attachmentIndex}`;
+    const mimeType = String(attachmentItem?.contentType || BINARY_MIME_TYPE)
       .trim()
       .toLowerCase();
-    const contentDisposition = String(
-      attachmentItem?.contentDisposition || "",
-    ).trim().toLowerCase();
-    const isInline =
-      contentDisposition === "inline" || Boolean(attachmentItem?.cid);
+    const contentDisposition = String(attachmentItem?.contentDisposition || "")
+      .trim()
+      .toLowerCase();
+    const isInline = contentDisposition === "inline" || Boolean(attachmentItem?.cid);
     const contentId = String(attachmentItem?.cid || "").trim();
     artifacts.push({
       name: fileName,
@@ -78,9 +71,7 @@ async function saveEmailAttachments({
     };
   }
   return {
-    attachments: Array.isArray(savedOutput?.attachments)
-      ? savedOutput.attachments
-      : [],
+    attachments: Array.isArray(savedOutput?.attachments) ? savedOutput.attachments : [],
     transferEnvelopes: normalizeTransferEnvelopesFromPayload(savedOutput),
   };
 }
@@ -113,12 +104,16 @@ export async function executeReadEmail({
       let fetchedMessages = null;
 
       if (resolvedUid) {
-        for await (const messageItem of imapClient.fetch([resolvedUid], {
-          uid: true,
-          envelope: true,
-          source: true,
-          internalDate: true,
-        }, { uid: true })) {
+        for await (const messageItem of imapClient.fetch(
+          [resolvedUid],
+          {
+            uid: true,
+            envelope: true,
+            source: true,
+            internalDate: true,
+          },
+          { uid: true },
+        )) {
           fetchedMessages = messageItem;
           break;
         }
@@ -143,9 +138,9 @@ export async function executeReadEmail({
       }
       if (!fetchedMessages) {
         if (!resolvedUid) {
-          throw new Error(tSystem("connectors.email.readUidRequired"));
+          throw new Error("Email uid is required when the mailbox is empty");
         }
-        throw new Error(`${tSystem("connectors.email.notFoundByUid")}: ${resolvedUid}`);
+        throw new Error(`Email was not found by uid: ${resolvedUid}`);
       }
       resolvedUid = Number(fetchedMessages?.uid || resolvedUid);
       const rawSourceBuffer = await (async () => {
@@ -201,9 +196,7 @@ export async function executeReadEmail({
             attachmentItem?.name || "unknown",
           ).trim()}, cid=${String(
             attachmentItem?.email_content_id || "none",
-          ).trim()}, type=${String(
-            attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
-          ).trim()}`,
+          ).trim()}, type=${String(attachmentItem?.mimeType || BINARY_MIME_TYPE).trim()}`,
       );
       const baseText = String(parsedEmail?.text || "").trim();
       const textWithInlineAttachmentHint = inlineAttachmentTextLines.length
@@ -229,7 +222,7 @@ export async function executeReadEmail({
                 ).trim()} (cid=${String(
                   attachmentItem?.email_content_id || "none",
                 ).trim()}, type=${String(
-                  attachmentItem?.mimeType || MIME_TYPE.APPLICATION_OCTET_STREAM,
+                  attachmentItem?.mimeType || BINARY_MIME_TYPE,
                 ).trim()})</li>`,
             )
             .join("")}</ul></div>`
@@ -264,7 +257,8 @@ export async function executeReadEmail({
         text: textWithInlineAttachmentHint,
         html: htmlWithInlineAttachmentHint,
         attachments,
-        ...(Array.isArray(persistedAttachments?.transferEnvelopes) && persistedAttachments.transferEnvelopes.length
+        ...(Array.isArray(persistedAttachments?.transferEnvelopes) &&
+        persistedAttachments.transferEnvelopes.length
           ? { transferEnvelopes: persistedAttachments.transferEnvelopes }
           : {}),
       };

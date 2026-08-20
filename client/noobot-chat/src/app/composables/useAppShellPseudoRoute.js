@@ -21,6 +21,7 @@ export function useAppShellPseudoRoute({
   currentMessageAnchorId,
   messageListPanelRef,
   workspaceVisible,
+  connectorVisible,
   userSettingsVisible,
   configParamsVisible,
   mobileSidebarOpen,
@@ -33,6 +34,7 @@ export function useAppShellPseudoRoute({
   closeMobileSidebar,
   openMobileSidebar,
   openWorkspaceRaw,
+  openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
   closeComposerMorePanel,
@@ -52,6 +54,7 @@ export function useAppShellPseudoRoute({
   function resolveActivePseudoPanel() {
     return resolveActivePseudoPanelState({
       workspaceVisible: workspaceVisible?.value,
+      connectorVisible: connectorVisible?.value,
       userSettingsVisible: userSettingsVisible?.value,
       configParamsVisible: configParamsVisible?.value,
       mobileSidebarOpen: mobileSidebarOpen?.value,
@@ -67,10 +70,9 @@ export function useAppShellPseudoRoute({
     const targetSessionId = String(sessionId || "").trim();
     const currentSession = activeSession?.value || null;
     if (!targetSessionId || !currentSession?.loaded) return false;
-    const currentIds = [
-      activeSessionId?.value,
-      currentSession.sessionId,
-    ].map((value) => String(value || "").trim()).filter(Boolean);
+    const currentIds = [activeSessionId?.value, currentSession.sessionId]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean);
     return currentIds.includes(targetSessionId);
   }
 
@@ -92,12 +94,19 @@ export function useAppShellPseudoRoute({
       });
     }
     if (targetPanel === PSEUDO_PANEL.WORKSPACE) openWorkspaceRaw?.();
+    if (targetPanel === PSEUDO_PANEL.CONNECTORS) openConnectorsRaw?.();
     if (targetPanel === PSEUDO_PANEL.USER_SETTINGS && isSuperAdmin?.value) openUserSettingsRaw?.();
     if (targetPanel === PSEUDO_PANEL.CONFIG_PARAMS) openConfigParamsRaw?.();
     if (targetPanel === PSEUDO_PANEL.SIDEBAR) openMobileSidebar?.();
-    if (targetPanel === PSEUDO_PANEL.COMPOSER && composerMorePanelVisible) composerMorePanelVisible.value = true;
-    if (targetPanel === PSEUDO_PANEL.THINKING_DETAILS) openThinkingDetailsPanel?.({ pushRoute: false });
-    if (targetPanel === PSEUDO_PANEL.CHAT_NAVIGATOR && isMobile?.value && mobileChatNavigatorVisible) {
+    if (targetPanel === PSEUDO_PANEL.COMPOSER && composerMorePanelVisible)
+      composerMorePanelVisible.value = true;
+    if (targetPanel === PSEUDO_PANEL.THINKING_DETAILS)
+      openThinkingDetailsPanel?.({ pushRoute: false });
+    if (
+      targetPanel === PSEUDO_PANEL.CHAT_NAVIGATOR &&
+      isMobile?.value &&
+      mobileChatNavigatorVisible
+    ) {
       mobileChatNavigatorVisible.value = true;
     }
     if (targetAnchor) {

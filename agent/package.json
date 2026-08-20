@@ -10,11 +10,9 @@
     "./agent": "./src/runtime/index.js",
     "./bot-manage": "./src/bot/index.js",
     "./tools": "./src/tools/index.js",
-    "./tools/connectors/connector-toolkit": "./src/tools/connectors/connector-toolkit.js",
     "./model": "./src/models/index.js",
     "./event": "./src/events/index.js",
     "./tracking": "./src/observability/index.js",
-    "./connectors": "./src/integrations/connectors/index.js",
     "./constants": "./src/shared/constants/index.js",
     "./utils/fs-safe": "./src/shared/utils/fs-safe.js",
     "./utils/super-user": "./src/shared/utils/super-user.js",
@@ -82,18 +80,11 @@
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",
-    "better-sqlite3": "^12.11.1",
-    "imapflow": "^1.7.0",
     "jsdom": "^30.0.1",
     "libreoffice": "^0.4.5",
     "libreoffice-convert": "^1.8.2",
-    "mailparser": "^3.9.15",
-    "mysql2": "^3.23.1",
     "node-poppler": "^10.0.1",
-    "nodemailer": "^9.0.5",
-    "pg": "^8.22.0",
     "playwright": "^1.62.1",
-    "sharp": "^0.35.3",
-    "ssh2": "^1.17.0"
+    "sharp": "^0.35.3"
   }
 }

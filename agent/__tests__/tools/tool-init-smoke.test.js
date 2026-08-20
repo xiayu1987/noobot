@@ -40,5 +40,5 @@ test("工具初始化 smoke: ai/execution/connectors", async () => {
   assert.equal(serviceTools[0]?.name, "call_service");
 
   const connectorTools = createConnectorAccessTool(buildAgentContext());
-  assert.equal(connectorTools[0]?.name, "process_connector_tool");
+  assert.equal(connectorTools[0]?.name, "access_connector");
 });

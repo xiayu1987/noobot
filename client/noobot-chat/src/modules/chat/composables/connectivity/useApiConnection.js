@@ -7,9 +7,30 @@ import { computed, ref, watch } from "vue";
 import { connectApi } from "../../../../infrastructure/api/chat/chatApi.js";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
 
+const CONNECTION_PROFILE_STORAGE_KEY = "noobot_connection_profile";
+
+function readConnectionProfile() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CONNECTION_PROFILE_STORAGE_KEY) || "null");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const userId = String(parsed.userId || "").trim();
+    const connectCode = String(parsed.connectCode || "").trim();
+    return userId && connectCode ? { userId, connectCode } : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useApiConnection({ userId, onConnected = async () => {}, notify = () => {} }) {
   const { translate, locale } = useLocale();
-  const connectCode = ref("");
+  const restoredConnectionProfile = readConnectionProfile();
+  const initialUserId = String(userId.value || "").trim();
+  let restoredConnectCode = restoredConnectionProfile?.userId === initialUserId;
+  const connectCode = ref(
+    restoredConnectionProfile?.userId === initialUserId
+      ? restoredConnectionProfile.connectCode
+      : "",
+  );
   const apiKey = ref("");
   const apiKeyUserId = ref("");
   const apiRole = ref("");
@@ -41,7 +62,7 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     () => connected.value && (isSuperAdmin.value || permissions.value.canUseIDE === true),
   );
 
-  function removePersistedCredentials() {
+  function removeLegacyCredentials() {
     localStorage.removeItem("noobot_api_key");
     localStorage.removeItem("noobot_api_user_id");
     localStorage.removeItem("noobot_api_role");
@@ -50,11 +71,21 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
 
   function persistConnectProfile() {
     const normalizedUserId = String(userId.value || "").trim();
-    if (normalizedUserId) {
+    const normalizedConnectCode = String(connectCode.value || "").trim();
+    if (normalizedUserId && normalizedConnectCode) {
       localStorage.setItem("noobot_user_id", normalizedUserId);
+      localStorage.setItem(
+        CONNECTION_PROFILE_STORAGE_KEY,
+        JSON.stringify({ userId: normalizedUserId, connectCode: normalizedConnectCode }),
+      );
     } else {
       localStorage.removeItem("noobot_user_id");
+      localStorage.removeItem(CONNECTION_PROFILE_STORAGE_KEY);
     }
+  }
+
+  function clearConnectionProfile() {
+    localStorage.removeItem(CONNECTION_PROFILE_STORAGE_KEY);
   }
 
   function clearApiAuth() {
@@ -85,7 +116,10 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     };
   }
 
-  removePersistedCredentials();
+  removeLegacyCredentials();
+  if (restoredConnectionProfile && restoredConnectionProfile.userId !== initialUserId) {
+    clearConnectionProfile();
+  }
 
   function isPlainObject(value) {
     return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -345,10 +379,22 @@ export function useApiConnection({ userId, onConnected = async () => {}, notify 
     return Boolean(await connectBackend({ silent: true }));
   }
 
-  watch([userId, connectCode], () => {
-    clearApiAuth();
-    persistConnectProfile();
-  });
+  watch(
+    [userId, connectCode],
+    ([nextUserId, nextConnectCode], [previousUserId, previousConnectCode]) => {
+      clearApiAuth();
+      if (String(nextUserId || "").trim() !== String(previousUserId || "").trim()) {
+        if (restoredConnectCode) connectCode.value = "";
+        restoredConnectCode = false;
+        clearConnectionProfile();
+        return;
+      }
+      if (String(nextConnectCode || "").trim() !== String(previousConnectCode || "").trim()) {
+        if (!restoredConnectCode) clearConnectionProfile();
+        restoredConnectCode = false;
+      }
+    },
+  );
 
   return {
     connectCode,

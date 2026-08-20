@@ -10,6 +10,7 @@ describe("drawerPanelsState", () => {
   it("builds AppShell drawer panel descriptors with existing keys, models, components and props", () => {
     const workspaceVisible = { value: true };
     const userSettingsVisible = { value: false };
+    const connectorVisible = { value: false };
     const thinkingDetailsVisible = { value: true };
     const configParamsVisible = { value: false };
     const handleWorkspaceReset = vi.fn();
@@ -18,17 +19,20 @@ describe("drawerPanelsState", () => {
       UserSettingsPanel: { name: "UserSettingsPanel" },
       ThinkingPanel: { name: "ThinkingPanel" },
       ConfigParamsPanel: { name: "ConfigParamsPanel" },
+      ConnectorManager: { name: "ConnectorManager" },
     };
 
     const panels = buildAppShellDrawerPanels({
       translate: (key) => `t:${key}`,
       workspaceVisible,
       userSettingsVisible,
+      connectorVisible,
       thinkingDetailsVisible,
       configParamsVisible,
       ...components,
       userId: "u1",
       apiKey: "api-key",
+      authFetch: vi.fn(),
       connected: true,
       isSuperAdmin: true,
       thinkingDetailsMessageItem: { id: "m1" },
@@ -36,11 +40,13 @@ describe("drawerPanelsState", () => {
       thinkingDetailsRuntime: { startedAt: "start", finishedAt: "finish", terminal: true },
       getThinkingDetailsTitle: (messageItem) => `thinking:${messageItem.id}`,
       handleWorkspaceReset,
+      handleConnectorRegistryChanged: vi.fn(),
     });
 
     expect(panels.map((panel) => panel.key)).toEqual([
       "workspace",
       "user-settings",
+      "connectors",
       "thinking-details",
       "config-params",
     ]);
@@ -64,6 +70,12 @@ describe("drawerPanelsState", () => {
       props: { apiKey: "api-key", connected: true, active: false },
     });
     expect(panels[2]).toMatchObject({
+      model: connectorVisible,
+      title: "t:connectors.management",
+      component: components.ConnectorManager,
+      props: { userId: "u1", connected: true },
+    });
+    expect(panels[3]).toMatchObject({
       model: thinkingDetailsVisible,
       title: "thinking:m1",
       component: components.ThinkingPanel,
@@ -74,7 +86,7 @@ describe("drawerPanelsState", () => {
         variant: "details",
       },
     });
-    expect(panels[3]).toMatchObject({
+    expect(panels[4]).toMatchObject({
       model: configParamsVisible,
       title: "t:common.configParams",
       component: components.ConfigParamsPanel,
@@ -91,10 +103,10 @@ describe("drawerPanelsState", () => {
   it("uses safe translation and thinking defaults for partial input", () => {
     const panels = buildAppShellDrawerPanels();
 
-    expect(panels).toHaveLength(4);
+    expect(panels).toHaveLength(5);
     expect(panels[0].title).toBe("common.workspace");
-    expect(panels[2].title).toBe("message.thinkingDetails");
-    expect(panels[2].props).toEqual({
+    expect(panels[3].title).toBe("message.thinkingDetails");
+    expect(panels[3].props).toEqual({
       messageItem: {},
       allMessages: [],
       runtime: null,
@@ -102,6 +114,6 @@ describe("drawerPanelsState", () => {
       userId: undefined,
       thinkingDetailService: null,
     });
-    expect(panels[3].props.active).toBe(false);
+    expect(panels[4].props.active).toBe(false);
   });
 });

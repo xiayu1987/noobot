@@ -6,6 +6,7 @@
 export function buildAppShellDrawerPanels({
   translate,
   workspaceVisible,
+  connectorVisible,
   userSettingsVisible,
   thinkingDetailsVisible,
   configParamsVisible,
@@ -13,8 +14,10 @@ export function buildAppShellDrawerPanels({
   UserSettingsPanel,
   ThinkingPanel,
   ConfigParamsPanel,
+  ConnectorManager,
   userId,
   apiKey,
+  authFetch,
   connected,
   isSuperAdmin,
   thinkingDetailsMessageItem,
@@ -23,11 +26,13 @@ export function buildAppShellDrawerPanels({
   thinkingDetailService,
   getThinkingDetailsTitle,
   handleWorkspaceReset,
+  handleConnectorRegistryChanged,
 } = {}) {
   const t = typeof translate === "function" ? translate : (key) => key;
-  const resolveThinkingTitle = typeof getThinkingDetailsTitle === "function"
-    ? getThinkingDetailsTitle
-    : () => t("message.thinkingDetails");
+  const resolveThinkingTitle =
+    typeof getThinkingDetailsTitle === "function"
+      ? getThinkingDetailsTitle
+      : () => t("message.thinkingDetails");
   const messageItem = thinkingDetailsMessageItem || {};
 
   return [
@@ -55,6 +60,18 @@ export function buildAppShellDrawerPanels({
         connected,
         active: Boolean(userSettingsVisible?.value),
       },
+    },
+    {
+      key: "connectors",
+      model: connectorVisible,
+      title: t("connectors.management"),
+      component: ConnectorManager,
+      props: {
+        userId,
+        connected,
+        fetcher: authFetch,
+      },
+      onConnectorRegistryChanged: handleConnectorRegistryChanged,
     },
     {
       key: "thinking-details",

@@ -133,17 +133,8 @@ Session 日志 WebSocket：
 `execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件和任务输出能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。浏览器只允许访问 loopback HTTP(S)，输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
 
 执行隔离规范由 `@noobot/execution-isolation-protocol` workspace 唯一维护。额外挂载只能通过全局管理员配置声明；挂载源、目标或只读状态变化后，托管 Docker 容器会在下一次脚本执行前重建。额外挂载不会扩大文件工具授权，也不能覆盖 `/workspace`。
-| `tools.process_connector_tool.enabled` | boolean | 启用连接器处理工具 |
-| `tools.process_connector_tool.max_tool_loop_turns` | number | 连接器任务内部循环上限 |
 | `tools.access_connector.enabled` | boolean | 启用连接器访问工具 |
-| `tools.access_connector.command_file.enabled` | boolean | 启用 access_connector 的 `command_file_path` 输入 |
-| `tools.access_connector.command_file.max_bytes` | number | 命令文件可读取的最大字节数 |
-| `tools.access_connector.command_file.allowed_extensions` | string[] | 命令文件后缀白名单 |
-| `tools.access_connector.command_file.allowed_roots` | string(path)[] | 命令文件路径白名单根目录（为空时默认工作区根目录） |
 | `tools.max_output_chars` | number | 工具输出清洗与截断的统一长度上限 |
-| `tools.database_connect_connector.enabled` | boolean | 启用数据库连接器工具 |
-| `tools.terminal_connect_connector.enabled` | boolean | 启用终端连接器工具 |
-| `tools.inspect_connectors.enabled` | boolean | 启用连接器检查工具 |
 | `tools.multimodal_generate.enabled` | boolean | 启用多模态生成工具 |
 | `tools.task_summary.enabled` | boolean | 启用阶段小结工具 |
 | `tools.task_summary.phase_summary_loop_turns` | number | 触发阶段小结的对话轮数阈值 |
@@ -152,7 +143,6 @@ Session 日志 WebSocket：
 | `tools.request_help.help_model` | string | 帮助模型别名/名称（留空按当前/默认模型逻辑） |
 | `tools.request_help.help_prompt_loop_turns` | number | 触发系统帮助提示的工具循环阈值（默认 50） |
 | `tools.request_help.tool_failure_help_count` | number | 触发用户帮助提示的连续失败阈值（默认 3） |
-| `tools.email_connect_connector.enabled` | boolean | 启用邮件连接器工具 |
 | `tools.web_search.enabled` | boolean | 启用网页搜索工具 |
 | `tools.web_search.mode` | enum | 搜索后端：`responses_api` / `search_engine` |
 | `tools.web_search.responses_api.model` | string | Responses API 网页搜索使用的模型别名/名称 |

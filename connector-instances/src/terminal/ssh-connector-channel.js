@@ -3,26 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "noobot-i18n/agent/system-text";
-import { normalizeTimeMs, resolveTimeMs } from "@noobot/agent-config-protocol";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { randomUUID } from "node:crypto";
+
+const SSH_COMMAND_TIMEOUT_MS = 30000;
 
 function resolveSshConnection(connectionInfo = {}) {
   const source = connectionInfo && typeof connectionInfo === "object" ? connectionInfo : {};
   return {
-    host: String(source?.host || source?.ip || "").trim(),
-    port: normalizeTimeMs(source?.port, {
-      fallback: 22,
-      min: 1,
-    }),
-    username: String(source?.username || source?.user || "").trim(),
-    password: String(source?.password || "").trim(),
-    timeoutMs: resolveTimeMs(source, {
-      key: "timeoutMs",
-      fallback: TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
-      min: 1000,
-    }),
+    host: String(source.host || "").trim(),
+    port: Number(source.port || 22),
+    username: String(source.username || "").trim(),
+    password: String(source.password || ""),
+    timeoutMs: SSH_COMMAND_TIMEOUT_MS,
   };
 }
 
@@ -37,12 +29,10 @@ async function importSsh2() {
 
 const sshShellStates = new Map();
 
-function buildChannelKey({ channelKey = "", sessionId = "", connectorName = "" } = {}) {
-  const explicit = String(channelKey || "").trim();
-  if (explicit) return explicit;
-  const sid = String(sessionId || "").trim();
-  const name = String(connectorName || "").trim();
-  return `${sid}::${name}`;
+function requireChannelKey(channelKey = "") {
+  const key = String(channelKey || "").trim();
+  if (!key) throw new TypeError("SSH connector channelKey is required");
+  return key;
 }
 
 function resetSshState(key = "") {
@@ -65,14 +55,8 @@ function resetSshState(key = "") {
   if (failures.length) throw new AggregateError(failures, "SSH channel cleanup failed");
 }
 
-async function ensureSshShellState({
-  channelKey = "",
-  sessionId = "",
-  connectorName = "",
-  connectionInfo = {},
-} = {}) {
-  const key = buildChannelKey({ channelKey, sessionId, connectorName });
-  if (!key) throw new Error(tSystem("connectors.ssh.channelKeyRequired"));
+async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}) {
+  const key = requireChannelKey(channelKey);
   const cached = sshShellStates.get(key);
   if (cached?.ready === true && cached?.stream && cached?.client) {
     return cached;
@@ -83,13 +67,13 @@ async function ensureSshShellState({
 
   const conn = resolveSshConnection(connectionInfo);
   if (!conn.host || !conn.username || !conn.password) {
-    throw new Error(tSystem("connectors.ssh.hostUserPassRequired"));
+    throw new Error("SSH host, username and password are required");
   }
 
   const ssh2 = await importSsh2();
   const Client = ssh2?.Client;
   if (typeof Client !== "function") {
-    throw new Error(tSystem("connectors.ssh.ssh2NotInstalled"));
+    throw new Error("ssh2 is not installed");
   }
 
   const state = {
@@ -158,11 +142,7 @@ function parseExitCodeFromOutput(output = "", marker = "") {
   return { hasMarker: true, exitCode, cleaned };
 }
 
-function runSshShellCommand(
-  state,
-  command = "",
-  timeoutMs = TIME_THRESHOLDS.connectors.defaultCommandTimeoutMs,
-) {
+function runSshShellCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     if (!state?.stream || !state?.ready) {
       reject(new Error("ssh shell not ready"));
@@ -196,10 +176,7 @@ function runSshShellCommand(
     stream.on("data", onStdout);
     if (stream?.stderr?.on) stream.stderr.on("data", onStderr);
 
-    const effectiveTimeoutMs = normalizeTimeMs(timeoutMs, {
-      fallback: 30000,
-      min: 1000,
-    });
+    const effectiveTimeoutMs = Number(timeoutMs);
     const timer = setTimeout(() => {
       done(null, new Error(`ssh command timeout after ${effectiveTimeoutMs}ms`));
     }, effectiveTimeoutMs);
@@ -214,8 +191,6 @@ export async function executeSshCommand({
   command = "",
   connectionInfo = {},
   channelKey = "",
-  sessionId = "",
-  connectorName = "",
 } = {}) {
   const cmd = String(command || "").trim();
   if (!cmd) {
@@ -226,8 +201,6 @@ export async function executeSshCommand({
     const conn = resolveSshConnection(connectionInfo);
     const state = await ensureSshShellState({
       channelKey,
-      sessionId,
-      connectorName,
       connectionInfo: conn,
     });
     state.lastUsedAt = Date.now();
@@ -246,9 +219,8 @@ export async function executeSshCommand({
   }
 }
 
-export function closeSshChannel({ channelKey = "", sessionId = "", connectorName = "" } = {}) {
-  const key = buildChannelKey({ channelKey, sessionId, connectorName });
-  if (!key) return false;
+export function closeSshChannel({ channelKey = "" } = {}) {
+  const key = requireChannelKey(channelKey);
   if (!sshShellStates.has(key)) return false;
   resetSshState(key);
   return true;

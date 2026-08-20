@@ -8,23 +8,24 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { UserConnectorRegistry } from "../../src/integrations/connectors/registry-store.js";
+import { FileSystemConnectorInstanceRepository } from "../../src/session/repositories/file-system-connector-instance-repository.js";
+import { createSessionFacade, createSessionServices } from "../../src/session/index.js";
 
-test("user connector registry isolates owners and persists secrets with owner-only permissions", async () => {
+test("Session connector repository isolates owners and persists instances with owner-only permissions", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-connectors-"));
   try {
-    const registry = new UserConnectorRegistry({ workspaceRoot });
+    const registry = new FileSystemConnectorInstanceRepository({ workspaceRoot });
     const created = await registry.create({
       userId: "u1",
       name: "mail",
-      type: "email",
-      subType: "smtp_imap",
+      instanceType: "builtin.email.smtp_imap",
       parameters: {
         smtp_host: "smtp.example.test",
         imap_host: "imap.example.test",
         username: "user@example.test",
         password: "secret",
       },
+      now: "2026-08-20T00:00:00.000Z",
     });
     assert.equal((await registry.list("u1")).length, 1);
     assert.equal((await registry.list("u2")).length, 0);
@@ -35,7 +36,7 @@ test("user connector registry isolates owners and persists secrets with owner-on
       "u1",
       "runtime",
       "connectors",
-      "connector-registry.json",
+      "connector-instances.json",
     );
     assert.equal((await stat(registryPath)).mode & 0o777, 0o600);
     assert.match(await readFile(registryPath, "utf8"), /secret/);
@@ -44,32 +45,70 @@ test("user connector registry isolates owners and persists secrets with owner-on
   }
 });
 
-test("sqlite connector paths are resolved inside the owner workspace", async () => {
+test("Session connector repository updates and deletes generic instance records", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-connectors-"));
   try {
-    const registry = new UserConnectorRegistry({ workspaceRoot });
+    const registry = new FileSystemConnectorInstanceRepository({ workspaceRoot });
     const created = await registry.create({
       userId: "u1",
       name: "local",
-      type: "database",
-      subType: "sqlite",
+      instanceType: "builtin.database.sqlite",
       parameters: { file_path: "data/local.sqlite" },
+      now: "2026-08-20T00:00:00.000Z",
     });
+    const updated = await registry.update({
+      userId: "u1",
+      connectorId: created.connectorId,
+      name: "local-updated",
+      instanceType: created.instanceType,
+      parameters: created.parameters,
+      now: "2026-08-20T00:01:00.000Z",
+    });
+    assert.equal(updated.name, "local-updated");
+    assert.equal(await registry.delete({ userId: "u1", connectorId: created.connectorId }), true);
+    assert.deepEqual(await registry.list("u1"), []);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+  }
+});
+
+test("Session facade is the connector instance persistence port", async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-connectors-"));
+  try {
+    const session = createSessionFacade(
+      createSessionServices({ workspaceRoot }, { now: () => "2026-08-20T00:00:00.000Z" }),
+    );
+    const created = await session.createConnectorInstance({
+      userId: "u1",
+      name: "primary",
+      instanceType: "custom.connector",
+      parameters: { endpoint: "connector.example.test" },
+      now: "2026-08-20T00:00:00.000Z",
+    });
+
+    assert.deepEqual(await session.listConnectorInstances({ userId: "u1" }), [created]);
+    assert.deepEqual(
+      await session.getConnectorInstance({ userId: "u1", connectorId: created.connectorId }),
+      created,
+    );
+
+    const updated = await session.updateConnectorInstance({
+      userId: "u1",
+      connectorId: created.connectorId,
+      name: "primary-renamed",
+      instanceType: created.instanceType,
+      parameters: created.parameters,
+      now: "2026-08-20T00:01:00.000Z",
+    });
+    assert.equal(updated.name, "primary-renamed");
     assert.equal(
-      created.parameters.file_path,
-      path.join(workspaceRoot, "u1", "data", "local.sqlite"),
+      await session.deleteConnectorInstance({
+        userId: "u1",
+        connectorId: created.connectorId,
+      }),
+      true,
     );
-    await assert.rejects(
-      () =>
-        registry.create({
-          userId: "u1",
-          name: "outside",
-          type: "database",
-          subType: "sqlite",
-          parameters: { file_path: "../outside.sqlite" },
-        }),
-      /outside user workspace/,
-    );
+    assert.deepEqual(await session.listConnectorInstances({ userId: "u1" }), []);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

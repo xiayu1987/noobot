@@ -7,14 +7,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { resolveConnectorStatusSection } from "../../src/context/providers/connector-status-provider.js";
 
-const records = [
+const connectors = [
   {
     connectorId: "con_selected",
     ownerUserId: "alice",
     name: "selected database",
     type: "database",
     subType: "postgres",
-    parameters: { host: "db.internal", password: "secret" },
+    operations: ["execute"],
   },
   {
     connectorId: "con_unselected",
@@ -22,7 +22,7 @@ const records = [
     name: "private mail",
     type: "email",
     subType: "smtp_imap",
-    parameters: { username: "alice@example.test", password: "mail-secret" },
+    operations: ["read"],
   },
 ];
 
@@ -30,9 +30,9 @@ test("connector system context projects only selected stable identity fields", a
   const section = await resolveConnectorStatusSection({
     userId: "alice",
     selectedConnectorIds: ["con_selected"],
-    connectorRegistry: { list: async () => records },
-    connectorChannelStore: {
-      getUserConnectors: () => [{ connectorId: "con_selected", status: "connected" }],
+    connectorAccessPort: {
+      access: async () => ({ ok: true }),
+      listUserConnectors: async () => connectors,
     },
   });
 
@@ -43,6 +43,7 @@ test("connector system context projects only selected stable identity fields", a
         connector_name: "selected database",
         connector_type: "database",
         connector_sub_type: "postgres",
+        connector_operations: ["execute"],
       },
     ],
   });
@@ -59,7 +60,7 @@ test("connector system context requires its authoritative runtime dependencies",
         userId: "alice",
         selectedConnectorIds: ["con_selected"],
       }),
-    /selected connector runtime is unavailable/,
+    /selected connector access port is unavailable/,
   );
 });
 

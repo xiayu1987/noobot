@@ -217,7 +217,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `missing required field: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
+        "Sensitive fields detected. Manage connectors in the client and use access_connector only with a selected instance.",
     },
   },
 };

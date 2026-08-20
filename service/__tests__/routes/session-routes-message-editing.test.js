@@ -91,7 +91,6 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -149,7 +148,6 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -195,7 +193,6 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -226,7 +223,6 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -271,7 +267,6 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -331,7 +326,6 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 
@@ -379,7 +373,6 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText: () => "",
   });
 

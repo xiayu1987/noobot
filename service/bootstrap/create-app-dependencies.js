@@ -34,10 +34,8 @@ const DEFAULT_WORKSPACE_USERS_CONFIG = {
 export async function createAppDependencies({
   startupContext = {},
   globalConfigBuilder,
-  initConnectorRegistry,
-  getConnectorChannelStore,
-  getConnectorRegistry,
   buildWorkspaceTree,
+  connectorAccessPort,
 } = {}) {
   const configBuilder =
     globalConfigBuilder && typeof globalConfigBuilder?.build === "function"
@@ -157,7 +155,7 @@ export async function createAppDependencies({
       bot = nextBot;
     },
     workspaceRootPath,
-    initConnectorRegistry,
+    connectorAccessPort,
   });
   const { rebuildRuntimeConfig } = runtimeConfigService;
 
@@ -216,8 +214,6 @@ export async function createAppDependencies({
       rebuildRuntimeConfig,
       templateRootPath,
       buildWorkspaceTree,
-      getConnectorChannelStore,
-      getConnectorRegistry,
       workspaceRootPath,
       handleChat,
       translateText,

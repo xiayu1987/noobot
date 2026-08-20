@@ -105,7 +105,6 @@ test("session-routes: workflow session returns summary and execution jsonl from 
   registerSessionRoutes(app, {
     bot,
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText,
   });
   await registerWorkflowPluginRoutes(app, { bot, translateText });
@@ -225,7 +224,6 @@ test("session-routes: workflow thinking-detail reads scoped session artifact by 
   registerSessionRoutes(app, {
     bot,
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
     translateText,
   });
   await registerWorkflowPluginRoutes(app, { bot, translateText });

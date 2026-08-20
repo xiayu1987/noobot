@@ -39,6 +39,9 @@ const subTypes = computed(() =>
 const definition = computed(() =>
   catalog.value.find((item) => item.type === form.type && item.subType === form.subType),
 );
+const connectedConnectors = computed(() =>
+  connectors.value.filter((connector) => connector.status === "connected"),
+);
 
 function resetParameters() {
   form.parameters = Object.fromEntries(
@@ -97,13 +100,12 @@ async function refresh() {
 async function addConnector() {
   loading.value = true;
   try {
-    await parseResponse(
+    const payload = await parseResponse(
       await createUserConnector({
         userId: props.userId,
         connector: {
           name: form.name,
-          type: form.type,
-          subType: form.subType,
+          instanceType: definition.value?.instanceType,
           parameters: form.parameters,
         },
         fetcher: props.fetcher,
@@ -114,6 +116,11 @@ async function addConnector() {
     resetParameters();
     await refresh();
     emit("changed");
+    if (payload.connection?.connected !== true) {
+      ElMessage.error(
+        payload.connection?.connector?.statusMessage || "connector_connection_failed",
+      );
+    }
   } catch (error) {
     ElMessage.error(error.message);
   } finally {
@@ -173,7 +180,8 @@ watch(() => [props.connected, props.userId], refresh);
   <section class="connector-manager" :class="{ compact }" v-loading="loading">
     <header class="manager-header">
       <span class="manager-title"
-        ><el-icon><Connection /></el-icon>{{ translate("connectors.management") }}</span
+        ><el-icon><Connection /></el-icon>{{ translate("connectors.management") }}
+        <el-tag size="small" type="success">{{ connectedConnectors.length }}</el-tag></span
       >
       <span class="manager-actions">
         <el-button text circle :title="translate('common.refresh')" @click="refresh"
@@ -226,11 +234,13 @@ watch(() => [props.connected, props.userId], refresh);
       />
     </div>
 
-    <el-dialog
+    <el-drawer
       v-model="dialogVisible"
       :title="translate('connectors.add')"
-      width="min(520px, 92vw)"
+      direction="rtl"
+      size="min(520px, 92vw)"
       append-to-body
+      class="connector-add-drawer noobot-side-drawer"
     >
       <el-form label-position="top" @submit.prevent="addConnector">
         <el-form-item :label="translate('connectors.name')" required
@@ -281,7 +291,7 @@ watch(() => [props.connected, props.userId], refresh);
           translate("connectors.connect")
         }}</el-button></template
       >
-    </el-dialog>
+    </el-drawer>
   </section>
 </template>
 
@@ -307,6 +317,9 @@ watch(() => [props.connected, props.userId], refresh);
 .manager-title {
   gap: 6px;
   font-weight: 650;
+}
+.manager-title .el-tag {
+  margin-left: 2px;
 }
 .connector-list {
   display: grid;
@@ -337,6 +350,9 @@ watch(() => [props.connected, props.userId], refresh);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.connector-add-drawer :deep(.el-drawer__body) {
+  padding: 18px;
 }
 @media (max-width: 600px) {
   .type-grid {

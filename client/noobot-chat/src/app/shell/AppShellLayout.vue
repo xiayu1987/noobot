@@ -5,10 +5,9 @@
 -->
 <script setup>
 import { ref } from "vue";
-import { Tickets } from "@element-plus/icons-vue";
+import { Connection, Tickets } from "@element-plus/icons-vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
-import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
 import { sharedSidebarProps } from "../../modules/session/model/sidebarProps.js";
 import { sharedComposerOptionProps } from "../../modules/composer/model/composerOptionProps.js";
 import {
@@ -70,6 +69,7 @@ const emit = defineEmits([
   "mobile-chat-navigator-trigger-click",
   "new-session",
   "open-config-params",
+  "open-connectors",
   "open-openvscode",
   "open-thinking-details",
   "open-user-settings",
@@ -226,15 +226,17 @@ defineExpose({
               @select="emit('select-chat-message-nav-item', $event)"
             />
           </el-affix>
-          <ConnectorManager
-            v-show="chatNavigatorVisible"
-            compact
-            :user-id="userId"
-            :connected="connected"
-            :fetcher="authFetch"
-            @changed="emit('connector-registry-changed')"
-          />
         </aside>
+        <button
+          v-if="!isMobile"
+          type="button"
+          class="connector-panel-trigger noobot-panel-card"
+          :aria-label="translate('connectors.management')"
+          @click="emit('open-connectors')"
+        >
+          <el-icon><Connection /></el-icon>
+          <span>{{ translate("connectors.management") }}</span>
+        </button>
       </div>
 
       <Teleport to="body">
@@ -248,6 +250,18 @@ defineExpose({
           @click="emit('mobile-chat-navigator-trigger-click')"
         >
           <el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>
+        </el-button>
+      </Teleport>
+      <Teleport to="body">
+        <el-button
+          v-if="isMobile"
+          class="mobile-connector-trigger noobot-floating-action-btn"
+          circle
+          size="large"
+          :aria-label="translate('connectors.management')"
+          @click="emit('open-connectors')"
+        >
+          <el-icon><Connection /></el-icon>
         </el-button>
       </Teleport>
 
@@ -395,6 +409,45 @@ defineExpose({
   padding: 8px;
 }
 
+.connector-panel-trigger {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  width: 236px;
+  padding: 10px 12px;
+  border-radius: var(--noobot-radius-sm);
+  border: 1px solid var(--noobot-border-weak);
+  color: var(--noobot-text-main);
+  background: var(--noobot-panel-bg);
+  box-shadow: var(--noobot-shadow-sm);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+}
+
+.connector-panel-trigger .el-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--noobot-radius-sm);
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+}
+
+.connector-panel-trigger:hover,
+.connector-panel-trigger:focus-visible {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  outline: none;
+}
+
 .chat-message-nav-header {
   display: flex;
   align-items: center;
@@ -477,8 +530,21 @@ defineExpose({
   line-height: 1;
 }
 
+.mobile-connector-trigger {
+  position: fixed;
+  top: calc(56px + 68px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 2001;
+  width: 44px;
+  height: 44px;
+}
+
 @media (max-width: 960px) {
   .chat-message-nav-panel {
+    display: none;
+  }
+
+  .connector-panel-trigger {
     display: none;
   }
 }

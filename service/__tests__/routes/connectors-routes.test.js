@@ -10,14 +10,24 @@ import { registerConnectorRoutes } from "../../routes/connectors-routes.js";
 import { withTestServer } from "./session-routes.helpers.js";
 
 function createHarness() {
+  const catalog = [
+    {
+      instanceType: "builtin.database.postgres",
+      type: "database",
+      subType: "postgres",
+      fields: [],
+      operations: ["execute"],
+    },
+  ];
   const records = [
     {
       connectorId: "con_db",
       ownerUserId: "alice",
       name: "production",
+      instanceType: "builtin.database.postgres",
       type: "database",
       subType: "postgres",
-      parameters: { host: "db.internal", username: "alice", password: "secret" },
+      operations: ["execute"],
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-20T00:00:00.000Z",
     },
@@ -25,9 +35,10 @@ function createHarness() {
       connectorId: "con_mail",
       ownerUserId: "alice",
       name: "mail",
+      instanceType: "builtin.email.smtp_imap",
       type: "email",
       subType: "smtp_imap",
-      parameters: { username: "alice@example.test", password: "mail-secret" },
+      operations: ["read"],
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-20T00:00:00.000Z",
     },
@@ -37,12 +48,17 @@ function createHarness() {
     ["root-a", ["con_db"]],
     ["root-b", ["con_db", "con_mail"]],
   ]);
-  const registry = {
-    list: async (userId) => records.filter((item) => item.ownerUserId === userId),
-    get: async ({ userId, connectorId }) =>
-      records.find((item) => item.ownerUserId === userId && item.connectorId === connectorId) ||
-      null,
-    delete: async ({ userId, connectorId }) => {
+  const lifecycleCalls = [];
+  const connectorRuntime = {
+    listRegisteredInstances: () => catalog,
+    listUserConnectors: async (userId) =>
+      records
+        .filter((item) => item.ownerUserId === userId)
+        .map(({ ownerUserId: _ownerUserId, ...item }) => ({
+          ...item,
+          status: runtime.has(item.connectorId) ? "connected" : "disconnected",
+        })),
+    deleteConnector: async ({ userId, connectorId }) => {
       const index = records.findIndex(
         (item) => item.ownerUserId === userId && item.connectorId === connectorId,
       );
@@ -50,10 +66,18 @@ function createHarness() {
       records.splice(index, 1);
       return true;
     },
-  };
-  const channelStore = {
-    getUserConnectors: () => [...runtime.values()],
-    disconnectConnector: ({ connectorId }) => runtime.delete(connectorId),
+    disconnect: async ({ connectorId }) => runtime.delete(connectorId),
+    createConnector: async ({ userId, name, instanceType, parameters }) => {
+      lifecycleCalls.push({ operation: "create", userId, name, instanceType, parameters });
+      return { connectorId: "con_created", ownerUserId: userId, name, instanceType, parameters };
+    },
+    connect: async ({ userId, connectorId }) => {
+      lifecycleCalls.push({ operation: "connect", userId, connectorId });
+      return {
+        connected: true,
+        connector: { connectorId, name: "created", status: "connected" },
+      };
+    },
   };
   const bot = {
     session: {
@@ -74,12 +98,20 @@ function createHarness() {
   });
   registerConnectorRoutes(app, {
     bot,
-    getConnectorChannelStore: () => channelStore,
-    getConnectorRegistry: () => registry,
+    connectorRuntime,
     translateText: (key) => key,
   });
-  return { app, records, runtime, selections };
+  return { app, records, runtime, selections, catalog, lifecycleCalls };
 }
+
+test("connector catalog exposes only runtime-registered instance definitions", async () => {
+  const { app, catalog } = createHarness();
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/catalog`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).catalog, catalog);
+  });
+});
 
 test("connector routes reject access outside the authenticated owner", async () => {
   const { app } = createHarness();
@@ -101,6 +133,29 @@ test("connector routes expose public metadata without credentials", async () => 
     assert.equal(payload.connectors[0].status, "connected");
     assert.equal(JSON.stringify(payload).includes("secret"), false);
     assert.equal("parameters" in payload.connectors[0], false);
+  });
+});
+
+test("creating a connector immediately runs its runtime connection lifecycle", async () => {
+  const { app, lifecycleCalls } = createHarness();
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/alice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: "created",
+        instanceType: "builtin.database.postgres",
+        parameters: { host: "database.internal" },
+      }),
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 201);
+    assert.equal(payload.connection.connected, true);
+    assert.deepEqual(
+      lifecycleCalls.map((item) => item.operation),
+      ["create", "connect"],
+    );
+    assert.equal(lifecycleCalls[1].connectorId, "con_created");
   });
 });
 

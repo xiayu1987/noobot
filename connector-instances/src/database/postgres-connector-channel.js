@@ -6,27 +6,23 @@
 import {
   importDefaultOrModule,
   normalizeConnectionSource,
-  normalizeTimeoutMs,
-  resolveHostPortUserPasswordDatabase,
+  resolveDatabaseConnection,
 } from "./common-db-connector-channel.js";
-import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 
 function resolvePostgresConnection(connectionInfo = {}) {
   const source = normalizeConnectionSource(connectionInfo);
-  const resolved = resolveHostPortUserPasswordDatabase({
+  const resolved = resolveDatabaseConnection({
     source,
     defaultPort: 5432,
-    fallbackHost: "127.0.0.1",
   });
 
   return {
-    connectionString: resolved.connectionString,
     host: resolved.host,
     port: resolved.port,
     user: resolved.user,
     password: resolved.password,
     database: resolved.database,
-    timeoutMs: normalizeTimeoutMs(source, 30000),
+    timeoutMs: 30000,
   };
 }
 
@@ -36,26 +32,19 @@ async function importPg() {
 
 const postgresPools = new Map();
 
-function buildPostgresPoolKey(conn = {}) {
-  return JSON.stringify({
-    connectionString: conn.connectionString,
-    host: conn.host,
-    port: conn.port,
-    user: conn.user,
-    password: conn.password,
-    database: conn.database,
-    timeoutMs: conn.timeoutMs,
-  });
+function poolKey(channelKey = "") {
+  const key = String(channelKey || "").trim();
+  if (!key) throw new TypeError("postgres connector channelKey is required");
+  return key;
 }
 
-function getPostgresPool(pg, conn = {}) {
-  const key = buildPostgresPoolKey(conn);
+function getPostgresPool(pg, conn = {}, channelKey = "") {
+  const key = poolKey(channelKey);
   const cached = postgresPools.get(key);
   if (cached?.pool) return cached.pool;
   const Pool = pg?.Pool;
   if (typeof Pool !== "function") return null;
   const pool = new Pool({
-    connectionString: conn.connectionString || undefined,
     host: conn.host,
     port: conn.port,
     user: conn.user,
@@ -64,7 +53,7 @@ function getPostgresPool(pg, conn = {}) {
     statement_timeout: conn.timeoutMs,
     query_timeout: conn.timeoutMs,
     connectionTimeoutMillis: conn.timeoutMs,
-    idleTimeoutMillis: TIME_THRESHOLDS.connectors.postgresIdleTimeoutMs,
+    idleTimeoutMillis: 30000,
     max: 5,
   });
   postgresPools.set(key, { pool, createdAt: Date.now() });
@@ -74,6 +63,7 @@ function getPostgresPool(pg, conn = {}) {
 export async function executePostgresCommand({
   command = "",
   connectionInfo = {},
+  channelKey = "",
 } = {}) {
   const sql = String(command || "").trim();
   if (!sql) {
@@ -91,8 +81,7 @@ export async function executePostgresCommand({
       ok: false,
       code: 400,
       stdout: "",
-      stderr:
-        "postgres username required (connection_info.username or connection_string)",
+      stderr: "postgres username is required",
     };
   }
   if (!conn.database) {
@@ -100,8 +89,7 @@ export async function executePostgresCommand({
       ok: false,
       code: 400,
       stdout: "",
-      stderr:
-        "postgres database required (connection_info.database or connection_string)",
+      stderr: "postgres database is required",
     };
   }
 
@@ -114,7 +102,7 @@ export async function executePostgresCommand({
       stderr: "pg not installed, run: npm i pg",
     };
   }
-  const pool = getPostgresPool(pg, conn);
+  const pool = getPostgresPool(pg, conn, channelKey);
   if (!pool) {
     return {
       ok: false,
@@ -151,4 +139,13 @@ export async function executePostgresCommand({
       stderr: String(error?.message || error || "postgres query failed"),
     };
   }
+}
+
+export async function releasePostgresConnection(channelKey = "") {
+  const key = poolKey(channelKey);
+  const cached = postgresPools.get(key);
+  if (!cached?.pool) return false;
+  postgresPools.delete(key);
+  await cached.pool.end();
+  return true;
 }

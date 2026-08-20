@@ -53,6 +53,14 @@ export async function buildAgentExecutionContext({
     runConfig,
     systemRuntime,
     userMessageAttachments: attachments,
+    sharedTools: {
+      ...(runConfig?.sharedTools && typeof runConfig.sharedTools === "object"
+        ? runConfig.sharedTools
+        : {}),
+      ...(botManager?.connectorAccessPort
+        ? { connectorAccess: botManager.connectorAccessPort }
+        : {}),
+    },
   });
   await initializeRuntimeEnvironment(runtime);
 

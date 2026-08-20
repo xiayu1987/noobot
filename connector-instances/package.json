@@ -1,0 +1,24 @@
+{
+  "name": "@noobot/connector-instances",
+  "version": "4.2.1",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  },
+  "dependencies": {
+    "@noobot/connector-protocol": "file:../connector-protocol",
+    "@noobot/semantic-transfer-protocol": "file:../semantic-transfer-protocol",
+    "better-sqlite3": "^12.11.1",
+    "imapflow": "^1.7.0",
+    "mailparser": "^3.9.15",
+    "mysql2": "^3.23.1",
+    "nodemailer": "^9.0.5",
+    "pg": "^8.22.0",
+    "ssh2": "^1.17.0"
+  }
+}

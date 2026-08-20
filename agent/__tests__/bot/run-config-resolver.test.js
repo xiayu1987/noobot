@@ -212,7 +212,7 @@ test("custom_only should not inherit tools from any scenario", () => {
             tools: ["read_file", "multimodal_parse"],
           },
           text: { tools: ["write_file", "call_mcp_task"] },
-          custom: { tools: ["execute_script", "process_connector_tool"] },
+          custom: { tools: ["execute_script", "access_connector"] },
         },
       },
     },
@@ -234,7 +234,7 @@ test("custom_only should not inherit tools from any scenario", () => {
           { name: "write_file" },
           { name: "multimodal_parse" },
           { name: "call_mcp_task" },
-          { name: "process_connector_tool" },
+          { name: "access_connector" },
         ],
       },
     };

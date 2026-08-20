@@ -293,7 +293,9 @@ describe("AppShell chat message navigator", () => {
   });
 
   it("uses Element Plus icons, theme variables, and pseudo route for the mobile navigator", () => {
-    expect(appShellLayoutSource).toContain('import { Tickets } from "@element-plus/icons-vue"');
+    expect(appShellLayoutSource).toContain(
+      'import { Connection, Tickets } from "@element-plus/icons-vue"',
+    );
     expect(appShellLayoutSource).toContain("<el-icon><Tickets /></el-icon>");
     expect(appShellLayoutSource).toContain(
       '<el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>',
@@ -316,6 +318,10 @@ describe("AppShell chat message navigator", () => {
     );
     expect(appShellLayoutSource).toContain(
       'class="mobile-chat-message-nav-trigger noobot-floating-action-btn"',
+    );
+    expect(appShellLayoutSource).toContain('class="connector-panel-trigger noobot-panel-card"');
+    expect(appShellLayoutSource).toContain(
+      'class="mobile-connector-trigger noobot-floating-action-btn"',
     );
   });
 

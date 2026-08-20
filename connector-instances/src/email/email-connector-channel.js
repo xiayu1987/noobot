@@ -3,42 +3,23 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { tSystem } from "noobot-i18n/agent/system-text";
 import { executeSendEmail } from "./send-email.js";
 import { executeListEmail } from "./list-email.js";
 import { executeReadEmail } from "./read-email.js";
 import { executeListFolders } from "./list-folders.js";
 
-function parseEmailCommand(command = "") {
-  const normalizedCommand = String(command || "").trim();
-  if (!normalizedCommand) {
-    throw new Error(tSystem("connectors.email.commandRequired"));
-  }
-  let parsedCommand = null;
-  try {
-    parsedCommand = JSON.parse(normalizedCommand);
-  } catch {
-    throw new Error(
-      `${tSystem("connectors.email.commandJsonStringRequired")}, e.g. {"action":"send",...}`,
-    );
-  }
-  if (!parsedCommand || typeof parsedCommand !== "object") {
-    throw new Error(tSystem("connectors.email.commandJsonObjectRequired"));
-  }
-  const action = String(parsedCommand?.action || "").trim().toLowerCase();
-  if (!["send", "list", "read", "list_folders"].includes(action)) {
-    throw new Error(tSystem("connectors.email.commandActionInvalid"));
-  }
-  return { action, payload: parsedCommand };
-}
-
-export async function executeEmailCommand({
-  command = "",
+export async function executeEmailOperation({
+  operation = "",
+  input = {},
   connectionInfo = {},
   attachmentHandler = null,
 } = {}) {
   try {
-    const { action, payload } = parseEmailCommand(command);
+    const action = String(operation || "").trim();
+    const payload = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+    if (!["send", "list", "read", "list_folders"].includes(action)) {
+      throw new Error("Email operation is invalid");
+    }
     let resultPayload = {};
     if (action === "send") {
       resultPayload = await executeSendEmail({ payload, connectionInfo });

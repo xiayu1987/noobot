@@ -12,7 +12,6 @@ import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 import { createModelRequestExecutor } from "@noobot/model-runtime";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 import { buildTools } from "noobot-agent/tools";
-import { createConnectorTools } from "noobot-agent/tools/connectors/connector-toolkit";
 import { sanitizeUserConfig } from "noobot-agent/config";
 import {
   createConfigValueLookup,
@@ -261,8 +260,7 @@ async function main() {
     userConfig,
   });
   const tools = await buildTools({ agentContext });
-  const extraConnectorTools = createConnectorTools({ agentContext });
-  const mergedTools = dedupeToolsByName([...tools, ...extraConnectorTools]);
+  const mergedTools = dedupeToolsByName(tools);
   const targetTools = await selectToolsInteractive(mergedTools);
 
   if (!targetTools.length) {

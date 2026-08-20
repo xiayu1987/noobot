@@ -8,12 +8,9 @@ import { normalizeEmailConnectionInfo } from "./connection.js";
 function normalizeListPaging(payload = {}) {
   const page = Number(payload?.page || 1);
   const pageSize = Number(payload?.page_size || 10);
-  const normalizedPage =
-    Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const normalizedPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const normalizedPageSize =
-    Number.isFinite(pageSize) && pageSize > 0
-      ? Math.min(Math.floor(pageSize), 50)
-      : 10;
+    Number.isFinite(pageSize) && pageSize > 0 ? Math.min(Math.floor(pageSize), 50) : 10;
   return {
     page: normalizedPage,
     pageSize: normalizedPageSize,
@@ -93,11 +90,15 @@ export async function executeListEmail({ payload = {}, connectionInfo = {} } = {
           .filter((uidItem) => Number.isFinite(uidItem) && uidItem > 0);
         totalCount = normalizedUids.length;
         if (normalizedUids.length) {
-          for await (const messageItem of imapClient.fetch(normalizedUids, {
-            uid: true,
-            envelope: true,
-            internalDate: true,
-          }, { uid: true })) {
+          for await (const messageItem of imapClient.fetch(
+            normalizedUids,
+            {
+              uid: true,
+              envelope: true,
+              internalDate: true,
+            },
+            { uid: true },
+          )) {
             messageSummaries.push(normalizeEmailSummary(messageItem));
           }
         }
