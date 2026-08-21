@@ -75,7 +75,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
 }, testInfo) => {
   await sendMessage(
     noobot.page,
-    uniquePrompt(testInfo, "connector database session provision; reply with OK only"),
+    uniquePrompt(testInfo, "provision a local connector quality-assurance session; reply with OK"),
   );
   const provisionCommand = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(provisionCommand.session).toEqual({
@@ -152,7 +152,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     noobot.page,
     uniquePrompt(
       testInfo,
-      "必须使用已选择的数据库连接器执行 SELECT * FROM users WHERE 1=1; 并返回查询结果。",
+      "这是本地数据库连接器质量验证。必须实际调用当前已选择的 access_connector 执行只读查询 SELECT * FROM users WHERE 1=1;，并等待真实工具结果后再回复。没有真实工具调用和工具结果时，不得声称查询已执行或返回结果。",
     ),
   );
   await noobot.page.waitForTimeout(250);

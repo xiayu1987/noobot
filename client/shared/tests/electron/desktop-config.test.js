@@ -37,12 +37,18 @@ async function createFixture() {
       security: {
         execution_isolation: {
           mode: "sandbox",
-          sandbox: { provider: "docker", scope: "user" },
+          sandbox: { provider: "docker", scope: "user", mounts: [] },
         },
       },
       providers: {
         openai: { model: "gpt", enabled: true, used_for_conversation: true },
-        selected: { model: "selected-model", enabled: false, used_for_conversation: false },
+        selected: {
+          model: "selected-model",
+          enabled: false,
+          used_for_conversation: false,
+          reasoning_effort: "high",
+          tool_reasoning_effort: "high",
+        },
       },
       default_provider: "openai",
       multimodal: {
@@ -57,7 +63,18 @@ async function createFixture() {
       default_provider: "openai",
       providers: {
         openai: { model: "gpt", enabled: true, used_for_conversation: true },
-        selected: { model: "selected-model", enabled: false, used_for_conversation: false },
+        selected: {
+          model: "selected-model",
+          enabled: false,
+          used_for_conversation: false,
+          reasoning_effort: "high",
+          tool_reasoning_effort: "high",
+        },
+      },
+      tools: {
+        access_connector: { enabled: true },
+        execute_script: { enabled: true },
+        read_file: { enabled: true },
       },
       multimodal: {
         parsing: { default_models: { audio: "openai", image: "openai" } },
@@ -132,8 +149,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.newly_added_config.nested.preserved_value, "client");
     assert.equal(config.security.execution_isolation.mode, "host");
     assert.equal(config.security.path_policy, undefined);
-    assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
-    assert.equal(config.attachments.limits.max_file_size_bytes, 2048);
+    assert.equal(config.attachments, undefined);
     assert.deepEqual(config.multimodal.parsing.default_models, {
       audio: "openai",
       image: "openai",

@@ -213,6 +213,7 @@ test("project launcher recursively adds new global nodes without replacing confi
     connect_code: "change-your-connect-code",
   };
   example.streaming = { enabled: true, transport: "sse" };
+  example.tools.execute_script = { enabled: true };
   example.multimodal = {
     parsing: {
       default_models: {
@@ -276,8 +277,7 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.equal(config.super_admin.connect_code, "configured-secret");
   assert.equal(config.streaming.enabled, false);
   assert.equal(config.streaming.transport, "sse");
-  assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
-  assert.equal(config.attachments.limits.max_file_size_bytes, 4096);
+  assert.equal(config.attachments, undefined);
   assert.equal(Object.hasOwn(config, "session"), false);
   assert.equal(Object.hasOwn(config.tools, "set_skill_task"), false);
   assert.deepEqual(config.tools.execute_script, { enabled: true });

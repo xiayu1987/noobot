@@ -400,17 +400,20 @@ export function createDesktopConfigManager({
     return false;
   }
 
-  function migrateExistingUserConfigs({ workspaceRootPath } = {}) {
+  function synchronizeExistingUserConfigs({ workspaceRootPath, templateConfigPath } = {}) {
     if (!fs.existsSync(workspaceRootPath)) return;
+    const template = readJsonFile(templateConfigPath, null);
+    if (!isPlainObject(template))
+      throw new Error(`invalid user config template: ${templateConfigPath}`);
     for (const entry of fs.readdirSync(workspaceRootPath, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       for (const fileName of ["config.json", "config.example.json"]) {
         const filePath = path.join(workspaceRootPath, entry.name, fileName);
         const payload = readJsonFile(filePath, null);
         if (!isPlainObject(payload)) continue;
-        const migrated = migrateConfigFileToCurrentProtocol(deepClone(payload));
-        if (JSON.stringify(payload) !== JSON.stringify(migrated)) {
-          writeJsonFile(filePath, migrated);
+        const synchronized = synchronizeConfigFileFromTemplate({ template, target: payload });
+        if (JSON.stringify(payload) !== JSON.stringify(synchronized)) {
+          writeJsonFile(filePath, synchronized);
         }
       }
     }
@@ -481,7 +484,7 @@ export function createDesktopConfigManager({
         `desktop workspace default user config is missing or invalid: ${templateConfigPath}`,
       );
     fs.mkdirSync(workspaceRootPath, { recursive: true });
-    migrateExistingUserConfigs({ workspaceRootPath });
+    synchronizeExistingUserConfigs({ workspaceRootPath, templateConfigPath });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,
       configFiles: [targetPath, templateConfigPath, templateExamplePath],

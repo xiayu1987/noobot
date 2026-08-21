@@ -64,7 +64,16 @@ function capabilityEvents(records = []) {
 
 function toolResultName(message = {}) {
   if (message.role !== "tool") return "";
-  return String(JSON.parse(String(message.content || "{}"))?.toolName || "").trim();
+  return String(toolResultPayload(message)?.toolName || "").trim();
+}
+
+function toolResultPayload(message = {}) {
+  if (message.role !== "tool") return null;
+  try {
+    return JSON.parse(String(message.content || "{}"));
+  } catch {
+    return null;
+  }
 }
 
 function toolCallId(call = {}) {
@@ -319,10 +328,20 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
       toolResultName(message) === "execute_script" &&
       chainCallIds.has(String(message.tool_call_id || "").trim()),
   );
-  expect(chainCalls).toHaveLength(7);
-  expect(chainResults).toHaveLength(7);
+  const successfulChainResults = chainResults.filter(
+    (message) => toolResultPayload(message)?.ok === true,
+  );
+  const rejectedChainResults = chainResults.filter(
+    (message) => toolResultPayload(message)?.ok === false,
+  );
+  expect(successfulChainResults).toHaveLength(7);
+  expect(chainCalls.length).toBeGreaterThanOrEqual(successfulChainResults.length);
+  expect(rejectedChainResults.length).toBe(chainCalls.length - successfulChainResults.length);
+  for (const result of rejectedChainResults) {
+    expect(JSON.stringify(toolResultPayload(result))).toMatch(/chain already complete/i);
+  }
   expect(toolResultNames.filter((name) => name === "execute_script").length).toBeGreaterThanOrEqual(
-    chainResults.length,
+    successfulChainResults.length,
   );
   expect(calledToolNames.filter((name) => name === "request_plan_refinement")).toHaveLength(1);
   expect(calledToolNames.filter((name) => name === "request_task_acceptance")).toHaveLength(1);
