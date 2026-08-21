@@ -496,7 +496,7 @@ class SubscriberBroadcastMethods {
     }
   }
 
-  sendSocketError(targetSocket, errorMessage = "") {
+  sendSocketError(targetSocket, errorMessage = "", options = {}) {
     const localizedError = localizeAgentProxyMessage(
       String(errorMessage || ""),
       String(targetSocket?.__agentProxyLocale || "").trim(),
@@ -504,10 +504,10 @@ class SubscriberBroadcastMethods {
     this.sendSocketEvent(targetSocket, {
       event: AGENT_TRANSPORT_EVENT.ERROR,
       data: createAgentTransportError({
-        code: "AGENT_PROXY_ERROR",
+        code: String(options.code || "AGENT_PROXY_ERROR").trim(),
         message:
           String(localizedError || AGENT_PROXY_ERROR.DEFAULT).trim() || AGENT_PROXY_ERROR.DEFAULT,
-        identity: {
+        identity: options.identity || {
           sessionId: targetSocket?.__agentProxySessionId,
           turnScopeId: targetSocket?.__agentProxyTurnScopeId,
         },

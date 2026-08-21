@@ -17,6 +17,10 @@ export const AGENT_TRANSPORT_EVENT = Object.freeze({
   RECONNECT_COMPLETE: "reconnect_complete",
 });
 
+export const AGENT_TRANSPORT_ERROR_CODE = Object.freeze({
+  RECONNECT_FAILED: "RECONNECT_FAILED",
+});
+
 const EXACT_PAYLOAD_EVENTS = new Set([
   AGENT_TRANSPORT_EVENT.ERROR,
   AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
@@ -65,7 +69,12 @@ export function validateAgentTransportError(errorEvent = {}) {
     return { valid: false, errors: ["transport_error_not_object"] };
   }
   const allowed = new Set([
-    "protocolVersion", "code", "message", "commandId", "identity", "occurredAt",
+    "protocolVersion",
+    "code",
+    "message",
+    "commandId",
+    "identity",
+    "occurredAt",
   ]);
   for (const key of Object.keys(errorEvent)) {
     if (!allowed.has(key)) errors.push(`unknown_transport_error_field:${key}`);
@@ -73,7 +82,11 @@ export function validateAgentTransportError(errorEvent = {}) {
   if (Number(errorEvent.protocolVersion) !== 1) errors.push("unsupported_transport_error_version");
   if (!clean(errorEvent.code)) errors.push("missing_transport_error_code");
   if (!String(errorEvent.message || "").trim()) errors.push("missing_transport_error_message");
-  if (!errorEvent.identity || typeof errorEvent.identity !== "object" || Array.isArray(errorEvent.identity)) {
+  if (
+    !errorEvent.identity ||
+    typeof errorEvent.identity !== "object" ||
+    Array.isArray(errorEvent.identity)
+  ) {
     errors.push("transport_error_identity_not_object");
   } else {
     const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);
@@ -126,7 +139,13 @@ export function validateAgentCommandReceipt(receipt = {}) {
     return { valid: false, errors: ["receipt_not_object"] };
   }
   const allowed = new Set([
-    "protocolVersion", "commandId", "commandType", "outcome", "identity", "occurredAt", "error",
+    "protocolVersion",
+    "commandId",
+    "commandType",
+    "outcome",
+    "identity",
+    "occurredAt",
+    "error",
   ]);
   for (const key of Object.keys(receipt)) {
     if (!allowed.has(key)) errors.push(`unknown_receipt_field:${key}`);
@@ -134,8 +153,13 @@ export function validateAgentCommandReceipt(receipt = {}) {
   if (Number(receipt.protocolVersion) !== 1) errors.push("unsupported_receipt_version");
   if (!clean(receipt.commandId)) errors.push("missing_command_id");
   if (!clean(receipt.commandType)) errors.push("missing_command_type");
-  if (!COMMAND_RECEIPT_OUTCOMES.has(clean(receipt.outcome).toLowerCase())) errors.push("invalid_outcome");
-  if (!receipt.identity || typeof receipt.identity !== "object" || Array.isArray(receipt.identity)) {
+  if (!COMMAND_RECEIPT_OUTCOMES.has(clean(receipt.outcome).toLowerCase()))
+    errors.push("invalid_outcome");
+  if (
+    !receipt.identity ||
+    typeof receipt.identity !== "object" ||
+    Array.isArray(receipt.identity)
+  ) {
     errors.push("identity_not_object");
   } else {
     const identityAllowed = new Set(["sessionId", "turnScopeId", "dialogProcessId"]);

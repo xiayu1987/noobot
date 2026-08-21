@@ -160,6 +160,67 @@ test("multimodal_generate: model configuration is the only image API type author
   assert.equal(modelRequest.operation.options.apiType, "openai_responses");
 });
 
+test("multimodal_generate: canonical provider merge preserves Windows default image capability", async () => {
+  let modelRequest = null;
+  const modelAlias = ["gpt", "5", "6", "sol"].join("_");
+  const runtime = {
+    globalConfig: {
+      multimodal: { generation: { default_models: { image: modelAlias } } },
+      providers: {
+        [modelAlias]: {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "test-key",
+          base_url: "https://api.aicodewith.com/chatgpt/v1",
+          model: "gpt-5.6-sol",
+          format: "openai_compatible",
+          multimodal_generation: {
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "openai_responses",
+            },
+          },
+        },
+      },
+    },
+    userConfig: {
+      providers: {
+        [modelAlias]: {
+          multimodal_generation: {
+            support_generation: { api_type: "openai_responses" },
+          },
+        },
+      },
+    },
+    modelPort: {
+      async invoke(request) {
+        modelRequest = request;
+        return { result: { rawText: "", imageArtifacts: [], output: [] } };
+      },
+    },
+  };
+  const tool = getMultimodalGenerateTool(runtime);
+
+  const result = JSON.parse(
+    await tool.invoke({
+      generation_content:
+        "A minimal flat blue square icon with a white check mark, no text, for a tool connectivity test.",
+      image_size: "512x512",
+      image_urls: [],
+      model_name: "",
+      n: 1,
+      quality: "standard",
+      resolution: "1K",
+      size: "1:1",
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(modelRequest.model.alias, modelAlias);
+  assert.equal(modelRequest.operation.options.apiType, "openai_responses");
+});
+
 test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {
   const requestedUrls = [];
   const requestedHeaders = [];

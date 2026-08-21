@@ -132,25 +132,34 @@ class ReconnectMethods {
       snapshotRequests,
     });
     attachReconnectBaselines(this, socket, reconnectChannelKeys, reconnectTransaction);
-    const sessions = Array.from(sessionsMap.values());
     if (snapshotRequests.length) {
       const snapshotResults = await settleSnapshotRequests(snapshotRequests);
       if (socket.__agentProxyReconnectTransaction !== reconnectTransaction) return;
       try {
-        applySnapshotResults(this, sessionsMap, snapshotResults);
+        const deletedSessionIds = applySnapshotResults(this, sessionsMap, snapshotResults);
+        if (deletedSessionIds.size) {
+          reconnectTransaction.channelStateBaseline =
+            reconnectTransaction.channelStateBaseline.filter(
+              (envelope) => !deletedSessionIds.has(text(envelope?.data?.sessionId)),
+            );
+        }
       } catch (error) {
         socket.__agentProxyReconnectTransaction = null;
         throw error;
       }
     }
-    logPreparedAuthorityBatches(this, sessions, channelsBySessionId);
+    const authoritativeSessions = Array.from(sessionsMap.values());
+    logPreparedAuthorityBatches(this, authoritativeSessions, channelsBySessionId);
     publishReconnectTransaction({
       manager: this,
       socket,
       transaction: reconnectTransaction,
       currentSessionId,
       requestId,
-      sessions: sessions.map(({ replayBatch, ...session }) => ({ ...session, replayBatch })),
+      sessions: authoritativeSessions.map(({ replayBatch, ...session }) => ({
+        ...session,
+        replayBatch,
+      })),
     });
   }
 

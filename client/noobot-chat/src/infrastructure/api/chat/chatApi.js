@@ -151,13 +151,6 @@ export async function resolveTurnTerminalStateApi(
   return payload && typeof payload === "object" ? payload : {};
 }
 
-export async function getSessionFullDetailApi({ userId = "", sessionId = "" }, { fetcher } = {}) {
-  const runFetch = resolveFetcher(fetcher);
-  return runFetch(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}?mode=full`,
-  );
-}
-
 export async function getSessionThinkingDetailApi(
   { userId = "", sessionId = "", dialogProcessId = "", turnScopeId = "" },
   { fetcher } = {},

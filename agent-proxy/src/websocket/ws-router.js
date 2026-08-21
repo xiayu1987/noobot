@@ -25,6 +25,7 @@ import { TURN_LIFECYCLE_RECEIPT_ACTION } from "@noobot/session-protocol";
 import {
   AGENT_COMMAND,
   AGENT_COMMAND_RECEIPT_OUTCOME,
+  AGENT_TRANSPORT_ERROR_CODE,
   AGENT_TRANSPORT_EVENT,
   EXECUTION_QUERY_COMMAND_TYPES,
   RUN_COMMAND_TYPES,
@@ -268,7 +269,19 @@ export class WsRouter {
 
     [WS_ACTION.RECONNECT](socket, payload) {
       void this.channelManager.handleReconnect(socket, payload).catch((error) => {
-        this._handleRouteFailedSocket(socket, error);
+        void writeAgentProxyRouteLifecycleEvent({
+          event: "agentProxy.route.reconnect.failed",
+          socket,
+          data: {
+            errorType: String(error?.name || "Error"),
+            errorCode: String(error?.code || ""),
+            errorMessage: String(error?.message || "reconnect failed").slice(0, 300),
+          },
+        });
+        this.channelManager.sendSocketError(socket, AGENT_PROXY_ERROR.RECONNECT_FAILED, {
+          code: AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED,
+          identity: { sessionId: String(payload?.currentSessionId || "").trim() },
+        });
       });
     },
   };

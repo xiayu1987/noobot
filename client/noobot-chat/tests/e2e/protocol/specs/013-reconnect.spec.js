@@ -57,7 +57,16 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
   await liveToolLine.locator(".base-thinking-log-line__text").click();
   await expect(liveToolLine.locator(".base-thinking-log-line__detail")).not.toBeEmpty();
   await liveToolLine.locator(".base-thinking-log-line__text").click();
+  const reconnectRequests = [];
+  const captureReconnectRequest = (request) => reconnectRequests.push(request.url());
+  noobot.page.on("request", captureReconnectRequest);
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  noobot.page.off("request", captureReconnectRequest);
+  expect(
+    reconnectRequests.filter(
+      (requestUrl) => new URL(requestUrl).searchParams.get("mode") === "full",
+    ),
+  ).toEqual([]);
   const thinkingShell = noobot.page.locator(".thinking-realtime-shell").last();
   await expect(thinkingShell).toBeVisible();
   const thinkingHeader = thinkingShell.locator(".el-collapse-item__header");

@@ -671,7 +671,9 @@ describe("useChatSession reconnect replay", () => {
       revision: 2,
       sequence: 3,
     });
-    expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/workflow-session?mode=full");
+    expect(authFetch.mock.calls.map(([url]) => url)).not.toContain(
+      "/api/internal/session/u-1/workflow-session?mode=full",
+    );
   });
 
   it.each([

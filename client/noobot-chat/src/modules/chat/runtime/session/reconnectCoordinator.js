@@ -258,9 +258,6 @@ export function createReconnectCoordinator({
             { executionId },
             StreamEventEnum.EXECUTION_SNAPSHOT,
           );
-          if (typeof chatList.fetchSessionFullDetail === "function") {
-            await chatList.fetchSessionFullDetail(sessionId);
-          }
           logStateMachineDebug("stateMachine.reconnect.executionRestore.complete", () => ({
             sessionId,
             executionId,

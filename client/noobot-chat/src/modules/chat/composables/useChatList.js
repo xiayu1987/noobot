@@ -29,7 +29,6 @@ export function useChatList({
   sessionTitleFromMessages,
   getSessionsApi,
   getSessionDetailApi,
-  getSessionFullDetailApi = null,
   getSessionThinkingDetailApi = null,
   deleteSessionApi,
   renameSessionApi,
@@ -73,19 +72,17 @@ export function useChatList({
     onSessionDetailApplied,
   });
 
-  const { fetchSessionDetail, fetchSessionFullDetail, fetchThinkingDetail } =
-    createSessionDetailRequests({
-      sessions,
-      activeSessionId,
-      userId,
-      authFetch,
-      getSessionDetailApi,
-      getSessionFullDetailApi,
-      getSessionThinkingDetailApi,
-      applySessionDetail,
-      isSameSessionIdentity,
-      translate,
-    });
+  const { fetchSessionDetail, fetchThinkingDetail } = createSessionDetailRequests({
+    sessions,
+    activeSessionId,
+    userId,
+    authFetch,
+    getSessionDetailApi,
+    getSessionThinkingDetailApi,
+    applySessionDetail,
+    isSameSessionIdentity,
+    translate,
+  });
 
   const { fetchSessions, selectSession, deleteSession, renameSession } = createSessionListActions({
     sessions,
@@ -135,7 +132,6 @@ export function useChatList({
     fetchSessions,
     selectSession,
     fetchSessionDetail,
-    fetchSessionFullDetail,
     fetchThinkingDetail,
     applySessionDetail,
     releaseAllPreviewUrls,

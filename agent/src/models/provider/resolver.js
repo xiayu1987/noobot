@@ -4,22 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeRuntimeModelSpec } from "@noobot/model-runtime";
+import { mergeConfig } from "@noobot/agent-config-protocol";
 
 export function isProviderEnabled(provider = {}) {
   return provider?.enabled !== false;
 }
 
 export function getProviders(globalConfig = {}, userConfig = {}) {
-  const globalProviders = globalConfig?.providers || {};
-  const userProviders = userConfig?.providers || {};
-  const merged = { ...globalProviders };
-  for (const [alias, userProvider] of Object.entries(userProviders)) {
-    merged[alias] = {
-      ...(globalProviders[alias] || {}),
-      ...(userProvider || {}),
-    };
-  }
-  return merged;
+  return mergeConfig(globalConfig, userConfig).providers || {};
 }
 
 export function getEnabledProviders(globalConfig = {}, userConfig = {}) {
