@@ -33,7 +33,7 @@ export class SessionTreeService {
 
       if (
         normalizedParentSessionId &&
-        await this.sessionRepo.isSessionDeleted(userId, normalizedParentSessionId)
+        (await this.sessionRepo.isSessionDeleted(userId, normalizedParentSessionId))
       ) {
         return false;
       }
@@ -47,8 +47,7 @@ export class SessionTreeService {
           updatedAt: now,
         };
       } else {
-        sessionTree.nodes[normalizedSessionId].parentSessionId =
-          normalizedParentSessionId;
+        sessionTree.nodes[normalizedSessionId].parentSessionId = normalizedParentSessionId;
         sessionTree.nodes[normalizedSessionId].updatedAt = now;
         if (!Array.isArray(sessionTree.nodes[normalizedSessionId].children)) {
           sessionTree.nodes[normalizedSessionId].children = [];
@@ -73,9 +72,7 @@ export class SessionTreeService {
             },
           );
         }
-        const parentChildren = Array.isArray(
-          sessionTree.nodes[normalizedParentSessionId].children,
-        )
+        const parentChildren = Array.isArray(sessionTree.nodes[normalizedParentSessionId].children)
           ? sessionTree.nodes[normalizedParentSessionId].children
           : [];
         if (!parentChildren.includes(normalizedSessionId)) {
@@ -88,9 +85,7 @@ export class SessionTreeService {
         );
         if (
           !sessionTree.roots.includes(normalizedParentSessionId) &&
-          !String(
-            sessionTree.nodes[normalizedParentSessionId].parentSessionId || "",
-          )
+          !String(sessionTree.nodes[normalizedParentSessionId].parentSessionId || "")
         ) {
           sessionTree.roots.push(normalizedParentSessionId);
         }
@@ -108,9 +103,10 @@ export class SessionTreeService {
   async getRootSessionId({ userId, sessionId, sessionTree = null }) {
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId) return "";
-    const tree = sessionTree && typeof sessionTree === "object"
-      ? sessionTree
-      : await this.treeRepo.getTree(userId);
+    const tree =
+      sessionTree && typeof sessionTree === "object"
+        ? sessionTree
+        : await this.treeRepo.getTree(userId);
     return this.treeRepo.resolveRootSessionIdFromTree(normalizedSessionId, tree);
   }
 
@@ -155,6 +151,14 @@ export class SessionTreeService {
         toDelete.push(normalizedSessionId);
       }
 
+      const persistedBranchIds =
+        typeof this.sessionRepo?.listPersistedSessionBranchIds === "function"
+          ? await this.sessionRepo.listPersistedSessionBranchIds(userId, normalizedSessionId)
+          : [];
+      for (const persistedSessionId of persistedBranchIds) {
+        if (!toDelete.includes(persistedSessionId)) toDelete.push(persistedSessionId);
+      }
+
       const deletedSessionIds = [];
       const deleteWithLifecycleLocks = async () => {
         if (typeof this.sessionRepo?.markSessionsDeleted === "function") {
@@ -188,7 +192,11 @@ export class SessionTreeService {
         }
       };
       if (typeof this.sessionRepo?.withSessionLifecycleMutations === "function") {
-        await this.sessionRepo.withSessionLifecycleMutations(userId, toDelete, deleteWithLifecycleLocks);
+        await this.sessionRepo.withSessionLifecycleMutations(
+          userId,
+          toDelete,
+          deleteWithLifecycleLocks,
+        );
       } else {
         await deleteWithLifecycleLocks();
       }

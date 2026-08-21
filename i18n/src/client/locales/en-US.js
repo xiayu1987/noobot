@@ -113,7 +113,6 @@ export const enUSMessages = {
     resetWorkspaceTitle: "Reset Workspace",
     resetAllWorkspaceTitle: "Reset All Users Workspace",
     noDescription: "(No description)",
-    noParams: "No params",
     allWorkspacePrefix: "[All Workspace] ",
     noFileSelected: "No file selected",
     download: "Download",

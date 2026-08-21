@@ -13,6 +13,29 @@ import { writeSessionArtifact } from "../../session-artifact-store.js";
 import { SESSION_ERROR_CODE } from "@noobot/session-protocol";
 
 class SessionCrudMethods {
+  async listPersistedSessionBranchIds(userId, sessionId) {
+    const normalizedSessionId = String(sessionId || "").trim();
+    if (!normalizedSessionId) return [];
+    const { sessionDir } = await this.resolveSessionScope(userId, normalizedSessionId);
+    const sessionIds = [];
+    const visit = async (directory) => {
+      if (!(await this.storageService.exists(path.join(directory, "session.json")))) return;
+      const session = await this.storageService.readJson(
+        path.join(directory, "session.json"),
+        null,
+      );
+      const persistedSessionId = String(session?.sessionId || "").trim();
+      if (persistedSessionId) sessionIds.push(persistedSessionId);
+      const entries = await fsReaddir(directory, { withFileTypes: true }).catch(() => []);
+      for (const entry of entries) {
+        if (!entry.isDirectory() || String(entry.name || "").startsWith(".")) continue;
+        await visit(path.join(directory, entry.name));
+      }
+    };
+    await visit(sessionDir);
+    return [...new Set(sessionIds)];
+  }
+
   async listSessionIds(userId) {
     const basePath = this._basePath(userId);
     await this.storageService.ensureRuntimeDirsByBasePath(basePath);

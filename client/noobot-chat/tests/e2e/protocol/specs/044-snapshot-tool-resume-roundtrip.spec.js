@@ -30,7 +30,10 @@ import {
   waitForCommand,
   waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
-import { assertCanonicalToolPairs, toolEventsForTurn } from "../helpers/thinking-tool-assertions.js";
+import {
+  assertCanonicalToolPairs,
+  toolEventsForTurn,
+} from "../helpers/thinking-tool-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 function executeScriptEvents(records = [], turnScopeId = "") {
@@ -51,7 +54,7 @@ async function waitForExecuteScriptResults(userId, sessionId, turnScopeId, minim
   );
 }
 
-async function stopAfterTools({ noobot, protocolCapture, command, minimumToolResults = 2 }) {
+async function stopAfterTools({ noobot, protocolCapture, command, minimumToolResults = 1 }) {
   const processing = await waitForLifecycle(
     protocolCapture,
     noobot.sessionId,
@@ -95,9 +98,7 @@ async function assertStoppedThinkingDetails(page, records, turnScopeId) {
   await action.click();
   const panel = page.locator(".thinking-details-panel");
   await expect(panel).toBeVisible();
-  await expect(panel.locator(".el-tabs__item").first()).toContainText(
-    `(${expectedRecordCount})`,
-  );
+  await expect(panel.locator(".el-tabs__item").first()).toContainText(`(${expectedRecordCount})`);
   await expect(
     panel.locator(".thinking-details-log-body .base-thinking-log-line.is-tool"),
   ).toHaveCount(expectedRecordCount);
@@ -107,9 +108,7 @@ async function assertStoppedThinkingDetails(page, records, turnScopeId) {
 
 function firstMainTraceForTurn(records = [], turnScopeId = "") {
   return modelInvocationTraces(records)
-    .filter(
-      (record) => record.turnScopeId === turnScopeId && isMainAgentModelInvocation(record),
-    )
+    .filter((record) => record.turnScopeId === turnScopeId && isMainAgentModelInvocation(record))
     .sort(
       (left, right) =>
         Number(left.data?.invocationSequence || 0) - Number(right.data?.invocationSequence || 0),
@@ -146,7 +145,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
 
   const stateRelativePath = `runtime/ops_workdir/pbe044-resume-${Date.now()}-${testInfo.workerIndex}.json`;
   const chainCommand = [
-    "node -e \"",
+    'node -e "',
     "const fs=require('fs');",
     `const p='${stateRelativePath}';`,
     "const s=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{step:0};",
@@ -155,7 +154,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     "fs.writeFileSync(p,JSON.stringify(s));",
     "console.log(JSON.stringify({step:s.step}));",
     "setTimeout(()=>{},1200);",
-    "\"",
+    '"',
   ].join("");
 
   const beforeChain = commandsForSession(protocolCapture, noobot.sessionId).length;
