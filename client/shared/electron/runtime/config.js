@@ -111,6 +111,26 @@ export function createDesktopConfigManager({
     }
   }
 
+  function removeStaleTemplateEntries({ from, to }) {
+    if (!fs.existsSync(to)) return;
+    for (const entry of fs.readdirSync(to, { withFileTypes: true })) {
+      if (["config.json", "global.config.json"].includes(entry.name)) continue;
+      const sourcePath = path.join(from, entry.name);
+      const targetPath = path.join(to, entry.name);
+      if (!fs.existsSync(sourcePath)) {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+        continue;
+      }
+      const sourceStat = fs.statSync(sourcePath);
+      const targetStat = fs.statSync(targetPath);
+      if (sourceStat.isDirectory() !== targetStat.isDirectory()) {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+        continue;
+      }
+      if (sourceStat.isDirectory()) removeStaleTemplateEntries({ from: sourcePath, to: targetPath });
+    }
+  }
+
   function logTemplateDirectoryStatus({ bundledTemplatePath, workspaceTemplatePath }) {
     const relativePaths = [
       ".",
@@ -205,6 +225,7 @@ export function createDesktopConfigManager({
         recursive: true,
         filter: (src) => !["config.json", "global.config.json"].includes(path.basename(src)),
       });
+      removeStaleTemplateEntries({ from, to });
       appendDesktopLog(`[main:config] synced desktop template directory: ${from} -> ${to}`);
       return true;
     } catch (error) {
@@ -213,6 +234,7 @@ export function createDesktopConfigManager({
       );
       try {
         copyDirectoryContentsManually({ from, to });
+        removeStaleTemplateEntries({ from, to });
         appendDesktopLog(
           `[main:config] synced desktop template directory with manual fallback: ${from} -> ${to}`,
         );
@@ -236,7 +258,11 @@ export function createDesktopConfigManager({
         `desktop bundled default user config example is missing or invalid: ${bundledExamplePath}`,
       );
     }
-    if (!isJsonObjectFile(workspaceExamplePath)) {
+    if (
+      !isJsonObjectFile(workspaceExamplePath) ||
+      JSON.stringify(readJsonFile(workspaceExamplePath, null)) !==
+        JSON.stringify(readJsonFile(bundledExamplePath, null))
+    ) {
       replaceFileFromBundledTemplate({
         from: bundledExamplePath,
         to: workspaceExamplePath,
