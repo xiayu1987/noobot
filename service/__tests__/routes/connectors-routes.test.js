@@ -119,7 +119,7 @@ function createHarness() {
     connectorRuntime,
     translateText: (key) => key,
   });
-  return { app, records, runtime, selections, catalog, lifecycleCalls };
+  return { app, records, runtime, selections, catalog, lifecycleCalls, bot, connectorRuntime };
 }
 
 test("connector catalog exposes only runtime-registered instance definitions", async () => {
@@ -216,5 +216,77 @@ test("disconnect removes the connector from every root session selection", async
     assert.equal(runtime.has("con_db"), false);
     assert.deepEqual(selections.get("root-a"), []);
     assert.deepEqual(selections.get("root-b"), ["con_mail"]);
+  });
+});
+
+test("delete returns the authoritative connector list after removing session selections", async () => {
+  const { app, records, selections } = createHarness();
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/alice/con_db`, {
+      method: "DELETE",
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.userId, "alice");
+    assert.equal(payload.connectorId, "con_db");
+    assert.equal(payload.deleted, true);
+    assert.equal(payload.updatedSessionCount, 2);
+    assert.deepEqual(
+      payload.connectors.map((connector) => connector.connectorId),
+      ["con_mail"],
+    );
+    assert.deepEqual(
+      records.map((record) => record.connectorId),
+      ["con_mail"],
+    );
+    assert.deepEqual(selections.get("root-a"), []);
+    assert.deepEqual(selections.get("root-b"), ["con_mail"]);
+  });
+});
+
+test("delete is idempotent and returns the authoritative list when the connector is absent", async () => {
+  const { app, records } = createHarness();
+  await withTestServer(app, async (baseUrl) => {
+    const firstResponse = await fetch(`${baseUrl}/internal/connectors/alice/con_db`, {
+      method: "DELETE",
+    });
+    assert.equal(firstResponse.status, 200);
+    assert.equal((await firstResponse.json()).deleted, true);
+
+    const repeatedResponse = await fetch(`${baseUrl}/internal/connectors/alice/con_db`, {
+      method: "DELETE",
+    });
+    const repeatedPayload = await repeatedResponse.json();
+    assert.equal(repeatedResponse.status, 200);
+    assert.equal(repeatedPayload.deleted, false);
+    assert.deepEqual(
+      repeatedPayload.connectors.map((connector) => connector.connectorId),
+      ["con_mail"],
+    );
+    assert.deepEqual(
+      records.map((record) => record.connectorId),
+      ["con_mail"],
+    );
+  });
+});
+
+test("delete preserves the connector when Session reference cleanup fails", async () => {
+  const { app, records, bot } = createHarness();
+  bot.session.getRootSessionSelectedConnectorIds = async () => {
+    throw new Error("session_selection_cleanup_failed");
+  };
+
+  await withTestServer(app, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/internal/connectors/alice/con_db`, {
+      method: "DELETE",
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(payload.error, "session_selection_cleanup_failed");
+    assert.deepEqual(
+      records.map((record) => record.connectorId),
+      ["con_db", "con_mail"],
+    );
   });
 });
