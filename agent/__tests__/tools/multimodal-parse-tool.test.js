@@ -466,7 +466,9 @@ test("multimodal_parse rejects an explicitly selected model without parsing capa
 
   await assert.rejects(
     () => tool.invoke({ inputs: [{ source: "input.pdf" }], model_name: "text-only" }),
-    /多模态解析|multimodal parsing/,
+    (error) =>
+      error?.code === "RECOVERABLE_MODEL_NOT_FOUND" &&
+      /多模态解析|multimodal parsing/.test(error.message),
   );
 });
 

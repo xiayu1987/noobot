@@ -10,6 +10,7 @@ import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 import { migrateLegacyMemoryFiles } from "../memory/migration.js";
+import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 
 const RESET_SECTION_PATHS = {
   memory: ["memory"],
@@ -20,6 +21,15 @@ const RESET_SECTION_PATHS = {
 };
 
 const SYNC_PRESERVE_EXISTING_ROOTS = new Set(["memory"]);
+const workspaceMutationCoordinator = new FileMutationCoordinator({
+  timeoutMessage: "workspace mutation lock timeout",
+  timeoutErrorCode: "WORKSPACE_MUTATION_BUSY",
+  operationName: "workspaceMutation.refreshLock",
+});
+
+function withWorkspaceMutation(base, operation) {
+  return workspaceMutationCoordinator.run(`${base}.mutation-lock`, operation);
+}
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
   const configuredTemplatePath = String(workspaceTemplatePath || "").trim();
@@ -98,29 +108,31 @@ export async function ensureUserWorkspaceInitialized({
     userId,
   });
 
-  let baseExists = true;
-  try {
-    await access(base);
-  } catch {
-    baseExists = false;
-  }
-
-  if (baseExists) {
-    const baseStat = await stat(base);
-    if (!baseStat.isDirectory()) {
-      throw fatalSystemError(`${tSystem("init.userWorkspacePathNotDirectory")}: ${base}`, {
-        code: ERROR_CODE.FATAL_WORKSPACE_PATH_NOT_DIRECTORY,
-        details: { base },
-      });
+  return withWorkspaceMutation(base, async () => {
+    let baseExists = true;
+    try {
+      await access(base);
+    } catch {
+      baseExists = false;
     }
-    await migrateLegacyMemoryFiles(base);
-    await syncDirectoryIncremental(templateBase, base);
-    return base;
-  }
 
-  await cp(templateBase, base, { recursive: true, force: false });
-  await migrateLegacyMemoryFiles(base);
-  return base;
+    if (baseExists) {
+      const baseStat = await stat(base);
+      if (!baseStat.isDirectory()) {
+        throw fatalSystemError(`${tSystem("init.userWorkspacePathNotDirectory")}: ${base}`, {
+          code: ERROR_CODE.FATAL_WORKSPACE_PATH_NOT_DIRECTORY,
+          details: { base },
+        });
+      }
+      await migrateLegacyMemoryFiles(base);
+      await syncDirectoryIncremental(templateBase, base);
+      return base;
+    }
+
+    await cp(templateBase, base, { recursive: true, force: false });
+    await migrateLegacyMemoryFiles(base);
+    return base;
+  });
 }
 
 export async function resetUserWorkspaceInitialized({
@@ -133,9 +145,11 @@ export async function resetUserWorkspaceInitialized({
     workspaceTemplatePath,
     userId,
   });
-  await rm(base, { recursive: true, force: true });
-  await cp(templateBase, base, { recursive: true, force: true });
-  return base;
+  return withWorkspaceMutation(base, async () => {
+    await rm(base, { recursive: true, force: true });
+    await cp(templateBase, base, { recursive: true, force: true });
+    return base;
+  });
 }
 
 export async function resetUserWorkspaceKeepRuntimeInitialized({
@@ -149,20 +163,22 @@ export async function resetUserWorkspaceKeepRuntimeInitialized({
     workspaceTemplatePath,
     userId,
   });
-  const sections = normalizeResetSections(resetSections);
-  await mkdir(base, { recursive: true });
-  const relativePaths = Array.from(
-    new Set(sections.flatMap((section) => RESET_SECTION_PATHS[section] || [])),
-  );
-  for (const relPath of relativePaths) {
-    const srcPath = path.join(templateBase, relPath);
-    const dstPath = path.join(base, relPath);
-    await rm(dstPath, { recursive: true, force: true });
-    if (!(await pathExists(srcPath))) continue;
-    await mkdir(path.dirname(dstPath), { recursive: true });
-    await cp(srcPath, dstPath, { recursive: true, force: true });
-  }
-  return base;
+  return withWorkspaceMutation(base, async () => {
+    const sections = normalizeResetSections(resetSections);
+    await mkdir(base, { recursive: true });
+    const relativePaths = Array.from(
+      new Set(sections.flatMap((section) => RESET_SECTION_PATHS[section] || [])),
+    );
+    for (const relPath of relativePaths) {
+      const srcPath = path.join(templateBase, relPath);
+      const dstPath = path.join(base, relPath);
+      await rm(dstPath, { recursive: true, force: true });
+      if (!(await pathExists(srcPath))) continue;
+      await mkdir(path.dirname(dstPath), { recursive: true });
+      await cp(srcPath, dstPath, { recursive: true, force: true });
+    }
+    return base;
+  });
 }
 
 async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "") {
@@ -207,10 +223,12 @@ export async function syncUserWorkspaceFromTemplate({
     workspaceTemplatePath,
     userId,
   });
-  await mkdir(base, { recursive: true });
-  await migrateLegacyMemoryFiles(base);
-  await syncDirectoryIncremental(templateBase, base);
-  return base;
+  return withWorkspaceMutation(base, async () => {
+    await mkdir(base, { recursive: true });
+    await migrateLegacyMemoryFiles(base);
+    await syncDirectoryIncremental(templateBase, base);
+    return base;
+  });
 }
 
 export async function ensureUserWorkspaceMissingFilesFromTemplate({
@@ -233,28 +251,30 @@ export async function ensureUserWorkspaceMissingFilesFromTemplate({
     ),
   );
 
-  if (!normalizedRelativePaths.length) {
-    await mkdir(base, { recursive: true });
-    await cp(templateBase, base, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-    });
-    return base;
-  }
+  return withWorkspaceMutation(base, async () => {
+    if (!normalizedRelativePaths.length) {
+      await mkdir(base, { recursive: true });
+      await cp(templateBase, base, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+      });
+      return base;
+    }
 
-  await mkdir(base, { recursive: true });
-  for (const relPath of normalizedRelativePaths) {
-    const srcPath = path.join(templateBase, relPath);
-    const dstPath = path.join(base, relPath);
-    if (await pathExists(dstPath)) continue;
-    if (!(await pathExists(srcPath))) continue;
-    await mkdir(path.dirname(dstPath), { recursive: true });
-    await cp(srcPath, dstPath, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-    });
-  }
-  return base;
+    await mkdir(base, { recursive: true });
+    for (const relPath of normalizedRelativePaths) {
+      const srcPath = path.join(templateBase, relPath);
+      const dstPath = path.join(base, relPath);
+      if (await pathExists(dstPath)) continue;
+      if (!(await pathExists(srcPath))) continue;
+      await mkdir(path.dirname(dstPath), { recursive: true });
+      await cp(srcPath, dstPath, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+      });
+    }
+    return base;
+  });
 }

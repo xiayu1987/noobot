@@ -25,37 +25,9 @@ import {
   AGENT_TRANSPORT_DEBUG_TYPE,
   AGENT_TRANSPORT_EVENT,
   createAgentTransportError,
-  validateAgentCommandReceipt,
-  validateAgentTransportError,
   summarizeAgentTransportCommand,
 } from "@noobot/agent-transport-protocol";
-import { validateProtocolEvent } from "@noobot/event-protocol";
-import {
-  TURN_COMMITTED_WIRE_EVENT,
-  assertTurnCommittedEventData,
-} from "@noobot/session-protocol/turn-commit";
-
-function assertUpstreamDataPlaneEvent(eventName, eventData) {
-  if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
-    const validation = validateAgentTransportError(eventData);
-    if (!validation.valid) throw new TypeError(validation.errors.join(","));
-    return;
-  }
-  if (eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
-    const validation = validateAgentCommandReceipt(eventData);
-    if (!validation.valid) throw new TypeError(validation.errors.join(","));
-    return;
-  }
-  if (eventName === TURN_COMMITTED_WIRE_EVENT) {
-    assertTurnCommittedEventData(eventData);
-    return;
-  }
-  const validation = validateProtocolEvent(eventData);
-  if (!validation.valid) throw new TypeError(validation.errors.join(","));
-  if (String(eventData?.identity?.eventType || "").trim() !== eventName) {
-    throw new TypeError("wire_event_identity_mismatch");
-  }
-}
+import { assertDataPlaneEvent } from "./data-plane-event-validator.js";
 
 class UpstreamConnectionMethods {
 
@@ -223,7 +195,7 @@ connectUpstreamChannel(channel, apiKey = "", locale = "", options = {}) {
       const isQueryResponse =
         eventName === TURN_SNAPSHOT_WIRE_EVENT ||
         Boolean(String(eventData?.commandId || "").trim() && channel.pendingExecutionRequests?.has(String(eventData.commandId).trim()));
-      if (!isQueryResponse) assertUpstreamDataPlaneEvent(eventName, eventData);
+      if (!isQueryResponse) assertDataPlaneEvent(eventName, eventData);
       const lifecycle = eventData?.payload || {};
       if (
         eventName === TURN_LIFECYCLE_WIRE_EVENT &&

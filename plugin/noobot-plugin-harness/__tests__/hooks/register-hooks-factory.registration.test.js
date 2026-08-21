@@ -28,6 +28,7 @@ const capabilityRuntimeWithBootstrap = {
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
+  const hookAbortController = new AbortController();
   const handlers = new Map();
   const hookManager = {
     on(point, handler, opts) {
@@ -67,7 +68,10 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
     tracePriority: 20,
     timeoutMs: 1000,
     planningGuidanceMode: "inject",
-    capabilityModelInvoker: null,
+    capabilityModelInvoker: async (payload = {}) => {
+      calls.push(["capabilityModelInvoker", payload.signal]);
+      return { output: { text: "ok" } };
+    },
     capabilityToolAllowlist: [],
     capabilityToolAllowlistByPurpose: {},
     planning: { planUpdate: { triggerTurnsThreshold: 1 } },
@@ -80,6 +84,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
       assert.equal("runTraceSink" in payload.harness, false);
       assert.deepEqual(payload.harness.planning, options.planning);
       assert.deepEqual(payload.harness.acceptance, options.acceptance);
+      await payload.harness.capabilityModelInvoker({ purpose: "test" });
       await payload?.harness?.globalBootstrap?.();
     },
   };
@@ -90,8 +95,15 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
   assert.equal(handlers.get("agent.before_llm_call")?.opts?.id, `${plugin.name}.trace.agent.before_llm_call`);
   assert.equal(handlers.get("agent.after_turn")?.opts?.id, `${plugin.name}.flush.agent.after_turn`);
 
-  const traceResult = await handlers.get("agent.before_llm_call").handler({ userId: "u1" });
+  const traceResult = await handlers.get("agent.before_llm_call").handler(
+    { userId: "u1" },
+    { signal: hookAbortController.signal },
+  );
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
+  assert.equal(
+    calls.find(([name]) => name === "capabilityModelInvoker")?.[1],
+    hookAbortController.signal,
+  );
   await handlers.get("agent.after_turn").handler();
 
   assert.deepEqual(

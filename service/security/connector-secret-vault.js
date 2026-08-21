@@ -8,6 +8,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { writeFileAtomic } from "@noobot/platform-compatibility/atomic-file-write";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import {
   CONNECTOR_SECRET_ALGORITHM,
   CONNECTOR_SECRET_ENVELOPE_VERSION,
@@ -19,9 +20,11 @@ import {
 const scrypt = promisify(deriveKey);
 const KEY_DOCUMENT_VERSION = 1;
 const KEY_FILE_NAME = "connector-key.json";
-const KEY_BYTES = 32;
-const IV_BYTES = 12;
-const SALT_BYTES = 16;
+const {
+  keyBytes: KEY_BYTES,
+  initializationVectorBytes: IV_BYTES,
+  saltBytes: SALT_BYTES,
+} = LENGTH_THRESHOLDS.connectorSecrets;
 
 const requiredText = (value, label) => {
   const normalized = String(value || "").trim();
@@ -37,7 +40,7 @@ function connectorSecretError(code, cause = null) {
 
 async function deriveKek(connectCode, salt) {
   return scrypt(requiredText(connectCode, "connectCode"), salt, KEY_BYTES, {
-    N: 131_072,
+    N: 131072,
     r: 8,
     p: 1,
     maxmem: 256 * 1024 * 1024,

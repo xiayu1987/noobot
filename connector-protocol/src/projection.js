@@ -13,11 +13,15 @@ export function projectPublicConnector(record = {}, runtimeStatus = {}, definiti
     instanceType: text(record.instanceType),
     type: text(definition.type),
     subType: text(definition.subType),
-    operations: Object.freeze((definition.operations || []).map((item) => Object.freeze({
-      name: text(item?.name),
-      description: text(item?.description),
-      inputSchema: Object.freeze(structuredClone(item?.inputSchema || {})),
-    }))),
+    operations: Object.freeze(
+      (definition.operations || []).map((item) =>
+        Object.freeze({
+          name: text(item?.name),
+          description: text(item?.description),
+          inputSchema: Object.freeze(structuredClone(item?.inputSchema || {})),
+        }),
+      ),
+    ),
     status: text(runtimeStatus.status || "disconnected") || "disconnected",
     statusCode: Number(runtimeStatus.statusCode ?? 0),
     statusMessage: text(runtimeStatus.statusMessage),
@@ -38,13 +42,15 @@ export function projectSelectedConnectorContext(selectedConnectorIds = [], publi
           connector_name: text(item.name),
           connector_type: text(item.type),
           connector_sub_type: text(item.subType),
-          connector_operations: Object.freeze((item.operations || []).map((operation) =>
-            Object.freeze({
-              name: text(operation?.name),
-              description: text(operation?.description),
-              input_schema: Object.freeze(structuredClone(operation?.inputSchema || {})),
-            }),
-          )),
+          connector_operations: Object.freeze(
+            (item.operations || []).map((operation) =>
+              Object.freeze({
+                name: text(operation?.name),
+                description: text(operation?.description),
+                input_schema: Object.freeze(structuredClone(operation?.inputSchema || {})),
+              }),
+            ),
+          ),
         }),
       ),
   );

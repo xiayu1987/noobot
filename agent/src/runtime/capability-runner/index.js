@@ -217,9 +217,11 @@ export function createAgentCapabilityModelInvoker({
     toolAllowlist: toolAllowlistOverride = undefined,
     headerNamespace: headerNamespaceOverride = "",
     flowPrefix: flowPrefixOverride = "",
+    signal = null,
     contextSequencePolicy = MODEL_CONTEXT_SEQUENCE_POLICY.INDEPENDENT_REQUEST,
   } = {}) {
     const runtime = resolveRuntime(ctx);
+    const invocationSignal = signal || runtime?.abortSignal || null;
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const runMessages = compactToolMessagesForMiniRunner(filterForModelContext(messages));
     if (prompt) {
@@ -287,7 +289,7 @@ export function createAgentCapabilityModelInvoker({
           messages: runMessages,
           options: {
             streaming: false,
-            signal: runtime?.abortSignal || null,
+            signal: invocationSignal,
             headers: additionalHeaders,
           },
           invocation: {
@@ -338,7 +340,7 @@ export function createAgentCapabilityModelInvoker({
           tools: boundTools,
           options: {
             streaming: false,
-            signal: runtime?.abortSignal || null,
+            signal: invocationSignal,
             headers: additionalHeaders,
             toolBinding: bindOptions,
           },
@@ -400,7 +402,7 @@ export function createAgentCapabilityModelInvoker({
           call,
           tool,
           executionScope: "auxiliary",
-          abortSignal: runtime?.abortSignal || null,
+          abortSignal: invocationSignal,
           eventListener: runtime?.eventListener || null,
           turn,
           errorLogger: null,
@@ -428,7 +430,7 @@ export function createAgentCapabilityModelInvoker({
         messages: [{ role: "system", content: finalizePrompt }, ...runMessages],
         options: {
           streaming: false,
-          signal: runtime?.abortSignal || null,
+          signal: invocationSignal,
           headers: additionalHeaders,
         },
         invocation: {

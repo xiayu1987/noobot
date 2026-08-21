@@ -16,7 +16,13 @@ function createHarness() {
       type: "database",
       subType: "postgres",
       fields: [],
-      operations: [{ name: "execute", description: "Execute SQL.", inputSchema: { type: "object", properties: {} } }],
+      operations: [
+        {
+          name: "execute",
+          description: "Execute SQL.",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ],
     },
   ];
   const records = [
@@ -27,7 +33,13 @@ function createHarness() {
       instanceType: "builtin.database.postgres",
       type: "database",
       subType: "postgres",
-      operations: [{ name: "execute", description: "Execute SQL.", inputSchema: { type: "object", properties: {} } }],
+      operations: [
+        {
+          name: "execute",
+          description: "Execute SQL.",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ],
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-20T00:00:00.000Z",
     },
@@ -38,7 +50,13 @@ function createHarness() {
       instanceType: "builtin.email.smtp_imap",
       type: "email",
       subType: "smtp_imap",
-      operations: [{ name: "read", description: "Read mail.", inputSchema: { type: "object", properties: {} } }],
+      operations: [
+        {
+          name: "read",
+          description: "Read mail.",
+          inputSchema: { type: "object", properties: {} },
+        },
+      ],
       createdAt: "2026-08-20T00:00:00.000Z",
       updatedAt: "2026-08-20T00:00:00.000Z",
     },

@@ -193,7 +193,7 @@ export function createMultimodalParseTool({ agentContext }) {
               })
             : tTool(runtime, "tools.multimodalParse.modelNotFound");
         throw recoverableToolError(selectionError, {
-          code: ERROR_CODE.FATAL_MODEL_NOT_FOUND,
+          code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
         });
       }
       const modelPort = runtime?.modelPort;

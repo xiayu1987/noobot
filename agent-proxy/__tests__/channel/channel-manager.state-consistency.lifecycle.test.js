@@ -21,6 +21,7 @@ import {
   authoritativeSnapshot,
 } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
+import { TURN_ATTACHMENTS_BOUND_WIRE_EVENT } from "@noobot/session-protocol/turn-attachment-bind";
 import {
   AGENT_TRANSPORT_EVENT,
   createAgentTransportError,
@@ -82,6 +83,47 @@ test("channel transport preserves strict event payloads during broadcast and rep
   const replay = createMockSocket();
   manager.replayChannelEvents(channel, replay, 0);
   assert.deepEqual(getEvent(replay, ATTACHMENT_LIFECYCLE_WIRE_EVENT)?.data, attachmentEnvelope);
+});
+
+test("upstream accepts the canonical Session attachment-binding receipt", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const sessionId = "session-attachment-binding";
+  const dialogProcessId = "dialog-attachment-binding";
+  const turnScopeId = "turn-attachment-binding";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+    turnScopeId,
+  });
+  const subscriber = createMockSocket();
+  manager.attachSubscriber(channel, subscriber);
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const receipt = {
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    aggregateVersion: 2,
+    userMessage: {
+      role: "user",
+      messageUid: "message-uid-attachment-binding",
+      messageId: "message-attachment-binding",
+      sessionId,
+      dialogProcessId,
+      turnScopeId,
+      attachments: [{ attachmentId: "attachment-binding-1", sessionId }],
+    },
+  };
+
+  upstream.emit(
+    "message",
+    JSON.stringify({ event: TURN_ATTACHMENTS_BOUND_WIRE_EVENT, data: receipt }),
+  );
+
+  assert.deepEqual(getEvent(subscriber, TURN_ATTACHMENTS_BOUND_WIRE_EVENT)?.data, receipt);
+  assert.equal(upstream.readyState, FakeUpstreamWebSocket.OPEN);
 });
 
 test("reconnect projects a pending interaction without mutating its strict payload", async () => {
