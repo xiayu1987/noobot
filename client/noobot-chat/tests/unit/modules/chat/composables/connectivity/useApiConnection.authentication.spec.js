@@ -222,6 +222,66 @@ describe("useApiConnection authentication recovery", () => {
     expect(localStorage.getItem("noobot_connect_code")).toBe(null);
   });
 
+  it("restores a complete system connection profile and re-authenticates on startup", async () => {
+    localStorage.setItem("noobot_user_id", "admin");
+    localStorage.setItem(
+      "noobot_connection_profile",
+      JSON.stringify({ userId: "admin", connectCode: "stored-connect-code" }),
+    );
+    connectApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        userId: "admin",
+        apiKey: "restored-key",
+        role: "super_admin",
+      }),
+    });
+
+    const connection = useApiConnection({ userId: ref("admin") });
+
+    await expect(connection.tryAutoConnect()).resolves.toBe(true);
+    expect(connectApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "admin",
+        connectCode: "stored-connect-code",
+      }),
+    );
+    expect(connection.connected.value).toBe(true);
+  });
+
+  it("does not reuse a stored connection profile after switching to another user", async () => {
+    localStorage.setItem(
+      "noobot_connection_profile",
+      JSON.stringify({ userId: "admin", connectCode: "admin-code" }),
+    );
+    const selectedUserId = ref("admin");
+    const connection = useApiConnection({ userId: selectedUserId });
+    selectedUserId.value = "xiayu";
+    await Promise.resolve();
+
+    expect(connection.connectCode.value).toBe("");
+    expect(localStorage.getItem("noobot_connection_profile")).toBe(null);
+    await expect(connection.tryAutoConnect()).resolves.toBe(false);
+    expect(connectApi).not.toHaveBeenCalled();
+  });
+
+  it("persists the system connection profile only after successful authentication", async () => {
+    connectApi.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ ok: true, userId: "admin", apiKey: "key", role: "super_admin" }),
+    });
+    const connection = useApiConnection({ userId: ref("admin") });
+    connection.connectCode.value = "admin-code";
+
+    expect(localStorage.getItem("noobot_connection_profile")).toBe(null);
+    await expect(connection.connectBackend({ silent: true })).resolves.toBe(true);
+    expect(JSON.parse(localStorage.getItem("noobot_connection_profile"))).toEqual({
+      userId: "admin",
+      connectCode: "admin-code",
+    });
+  });
+
   it("runs connection initialization once for each canonical owner during an account switch", async () => {
     connectApi.mockImplementation(({ userId }) =>
       Promise.resolve({

@@ -6,13 +6,9 @@
 import {
   isContextSectionSelected,
   normalizeContextSectionSelection,
-  normalizeSelectedConnectors,
 } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
-import {
-  getConnectorChannelStore,
-  getConnectorHistoryStore,
-} from "../../integrations/connectors/index.js";
 import { resolveConfiguredSuperUserId } from "../../shared/utils/super-user.js";
 import { resolveScenarioProfile } from "../builders/scenario-resolver.js";
 import { composeSystemInfoSections } from "../formatters/system-prompt-formatter.js";
@@ -134,7 +130,12 @@ export async function buildSystemContext({
   const includeSkills = enabled("skills");
   const includeServices = enabled("services");
   const includeMcpServers = enabled("mcp_servers");
-  const includeConnectors = enabled("connectors");
+  // A persisted session selection is an explicit capability grant. Its
+  // canonical connector projection must be visible to the model even when a
+  // scenario omits the optional connectors prompt section; otherwise the
+  // selected access_connector tool has no usable connector identity.
+  const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
+  const includeConnectors = enabled("connectors") || selectedConnectorIds.length > 0;
   const includeAttachments = enabled("attachments");
   const locale = runConfig?.locale || "zh-CN";
 
@@ -176,11 +177,9 @@ export async function buildSystemContext({
     : {};
   const connectorStatusSection = includeConnectors
     ? await resolveConnectorStatusSection({
-        rootSessionId: treeInfo.rootSessionId,
         userId: identity.userId,
-        selectedConnectors: normalizeSelectedConnectors(runConfig?.selectedConnectors),
-        connectorChannelStore: getConnectorChannelStore(),
-        connectorHistoryStore: getConnectorHistoryStore(),
+        selectedConnectorIds,
+        connectorAccessPort: botManager?.connectorAccessPort,
       })
     : {};
   const identityInfo = {

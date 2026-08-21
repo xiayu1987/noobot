@@ -21,7 +21,11 @@ export function buildPanelPseudoRoute(sessionId = "", panel = "") {
   };
 }
 
-export function buildPanelVisibilityPseudoRoute({ sessionId = "", visible = false, panel = "" } = {}) {
+export function buildPanelVisibilityPseudoRoute({
+  sessionId = "",
+  visible = false,
+  panel = "",
+} = {}) {
   return buildPanelPseudoRoute(sessionId, visible ? panel : "");
 }
 
@@ -31,6 +35,7 @@ export function buildClosePseudoPanelRoute() {
 
 export function resolveActivePseudoPanel({
   workspaceVisible = false,
+  connectorVisible = false,
   userSettingsVisible = false,
   configParamsVisible = false,
   mobileSidebarOpen = false,
@@ -41,6 +46,7 @@ export function resolveActivePseudoPanel({
   panels = {},
 } = {}) {
   if (workspaceVisible) return panels.WORKSPACE;
+  if (connectorVisible) return panels.CONNECTORS;
   if (userSettingsVisible) return panels.USER_SETTINGS;
   if (configParamsVisible) return panels.CONFIG_PARAMS;
   if (mobileSidebarOpen && isMobile) return panels.SIDEBAR;

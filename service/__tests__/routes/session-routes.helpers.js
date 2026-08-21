@@ -63,8 +63,6 @@ export function createSessionApp(options = {}) {
       ...(options.bot || {}),
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: options.translateText || (() => ""),
     ...options.routeOptions,
   });

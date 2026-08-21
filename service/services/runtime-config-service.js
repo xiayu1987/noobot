@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { createSessionPluginRuntimeBundle } from "#agent/plugin";
+import { assertConnectorAccessPort } from "@noobot/connector-protocol";
 
 export function createRuntimeConfigService({
   startupContext = {},
@@ -15,8 +16,9 @@ export function createRuntimeConfigService({
   setGlobalConfig,
   setBot,
   workspaceRootPath,
-  initConnectorHistoryStore,
+  connectorAccessPort,
 } = {}) {
+  const connectorPort = assertConnectorAccessPort(connectorAccessPort);
   async function rebuildRuntimeConfig() {
     if (!globalConfigBuilder || typeof globalConfigBuilder.build !== "function") {
       throw new Error("[runtime-config-service] globalConfigBuilder.build is required");
@@ -33,11 +35,11 @@ export function createRuntimeConfigService({
     const bot = new BotManager(resolvedGlobalConfig, {
       startupContext,
       pluginRuntimeBundle,
+      connectorAccessPort: connectorPort,
     });
     setGlobalConfigRaw(rawGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);
     setBot(bot);
-    initConnectorHistoryStore({ workspaceRoot: workspaceRootPath() });
     return {
       bot,
       globalConfigRaw: rawGlobalConfig,

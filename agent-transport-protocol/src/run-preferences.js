@@ -8,7 +8,6 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-const CONNECTOR_KEYS = Object.freeze(["database", "terminal", "email"]);
 const SUMMARY_POLICY_KEYS = Object.freeze(["phaseSummaryLoopTurns", "taskCheckLoopTurns"]);
 const PREFERENCE_KEYS = new Set([
   "allowUserInteraction",
@@ -23,7 +22,6 @@ const PREFERENCE_KEYS = new Set([
   "memoryModel",
   "pluginModelConfig",
   "summaryPolicy",
-  "selectedConnectors",
   "selectedPlugins",
 ]);
 
@@ -32,11 +30,6 @@ const clean = (value) => String(value ?? "").trim();
 function stringList(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(clean).filter(Boolean))];
-}
-
-function selectedConnectors(value) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return Object.fromEntries(CONNECTOR_KEYS.map((key) => [key, clean(source[key])]));
 }
 
 function pluginModelConfig(value) {
@@ -85,7 +78,6 @@ export function createRunPreferences(input = {}) {
     memoryModel: clean(input.memoryModel),
     ...(normalizedPluginModelConfig ? { pluginModelConfig: normalizedPluginModelConfig } : {}),
     ...(normalizedSummaryPolicy ? { summaryPolicy: normalizedSummaryPolicy } : {}),
-    selectedConnectors: selectedConnectors(input.selectedConnectors),
     selectedPlugins: stringList(input.selectedPlugins),
   };
 }
@@ -118,20 +110,6 @@ export function validateRunPreferences(preferences) {
     preferences.selectedPlugins.some((item) => typeof item !== "string")
   ) {
     errors.push("invalid_selected_plugins");
-  }
-  if (
-    !preferences.selectedConnectors ||
-    typeof preferences.selectedConnectors !== "object" ||
-    Array.isArray(preferences.selectedConnectors)
-  ) {
-    errors.push("invalid_selected_connectors");
-  } else {
-    for (const key of Object.keys(preferences.selectedConnectors)) {
-      if (!CONNECTOR_KEYS.includes(key)) errors.push(`unknown_selected_connectors_field:${key}`);
-    }
-    if (Object.values(preferences.selectedConnectors).some((item) => typeof item !== "string")) {
-      errors.push("invalid_selected_connectors");
-    }
   }
   if (
     Object.prototype.hasOwnProperty.call(preferences, "pluginModelConfig") &&

@@ -12,7 +12,7 @@ import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   dedupeAttachmentsByIdentity,
@@ -396,7 +396,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
-    selectedConnectors: normalizeSelectedConnectors(session?.selectedConnectors || {}),
+    selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstTextField([session?.createdAt, context.nowValue]),
     updatedAt: firstTextField([session?.updatedAt, context.nowValue]),
   };

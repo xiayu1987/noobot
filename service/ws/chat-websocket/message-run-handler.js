@@ -135,6 +135,7 @@ async function executeAcceptedRun(context, command, run, accepted, active) {
     caller: "user",
     message: run.message,
     attachments: run.attachments,
+    turnAcceptance: run.turnAcceptance || null,
     eventListener: listener.eventListener,
     abortSignal: context.state.currentAbortSignal,
     userInteractionBridge: context.userInteractionBridge,
@@ -146,7 +147,7 @@ async function executeAcceptedRun(context, command, run, accepted, active) {
 
 function createRunHandler(context) {
   return async function handleRun(command, { onRunBound = null }) {
-    const run = mapRunCommand(context, command);
+    const run = await mapRunCommand(context, command);
     recordReceivedCommand(context, command, run);
     validateRunIdentity(context, run);
     if (await bindExistingRun(context, run, onRunBound)) return { rebound: true };

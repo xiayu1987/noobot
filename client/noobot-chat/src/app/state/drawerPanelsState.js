@@ -25,9 +25,10 @@ export function buildAppShellDrawerPanels({
   handleWorkspaceReset,
 } = {}) {
   const t = typeof translate === "function" ? translate : (key) => key;
-  const resolveThinkingTitle = typeof getThinkingDetailsTitle === "function"
-    ? getThinkingDetailsTitle
-    : () => t("message.thinkingDetails");
+  const resolveThinkingTitle =
+    typeof getThinkingDetailsTitle === "function"
+      ? getThinkingDetailsTitle
+      : () => t("message.thinkingDetails");
   const messageItem = thinkingDetailsMessageItem || {};
 
   return [

@@ -12,6 +12,6 @@ export {
   normalizeSessionEntity,
   normalizeSessionTreeEntity,
 } from "./session-entity.js";
-export { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+export { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 export { normalizeTaskEntity } from "./task-entity.js";
 export { normalizeExecutionLogEntity } from "../../observability/execution-log/execution-log-entities.js";

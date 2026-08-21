@@ -9,10 +9,7 @@ import { projectCanonicalAttachmentIdentities } from "../../../artifacts/index.j
 import { dedupeAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
 import { upsertSessionTurnTiming } from "./turn-timing.js";
-import {
-  commitTurnLifecycle,
-  createAuthoritativeTurnSnapshot,
-} from "@noobot/authoritative-state/application";
+import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
   compactAuthorityEventOutbox,
@@ -21,12 +18,100 @@ import {
 } from "@noobot/event-protocol";
 import {
   SESSION_ERROR_CODE,
+  TURN_EVENT,
+  assertTurnAcceptanceUserMessage,
   decideAggregateConcurrency,
   materializeTurnTerminalMessages,
   normalizeDialogProcessId,
   validateSessionProvisionIntent,
 } from "@noobot/session-protocol";
-import { normalizeSessionEntity } from "../../entities/session-entity.js";
+import {
+  createSessionMessageUid,
+  normalizeMessageEntity,
+  normalizeSessionEntity,
+} from "../../entities/session-entity.js";
+import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
+import { createSessionTurnLifecycleSnapshot } from "../../session-turn-read-model.js";
+
+function validateAcceptedUserMessage(event = {}) {
+  const validation = assertTurnAcceptanceUserMessage(event);
+  return validation.materialize ? validation.value : null;
+}
+
+function resolveTurnAcceptance(service, session, event = {}) {
+  const lifecycleEvent = { ...event };
+  if (
+    String(lifecycleEvent.eventType || "").trim() === TURN_EVENT.ACTION_ACCEPTED &&
+    String(lifecycleEvent.action || "").trim() !== "resend" &&
+    !String(lifecycleEvent.dialogProcessId || "").trim()
+  ) {
+    const turnScopeId = String(lifecycleEvent.turnScopeId || "").trim();
+    const existingDialogProcessId = String(
+      session?.turnLifecycle?.turns?.[turnScopeId]?.dialogProcessId || "",
+    ).trim();
+    if (!existingDialogProcessId && typeof service.allocateDialogProcessId !== "function") {
+      throw new TypeError("Turn acceptance requires a dialog identity allocator");
+    }
+    lifecycleEvent.dialogProcessId =
+      existingDialogProcessId || String(service.allocateDialogProcessId()).trim();
+  }
+  return {
+    lifecycleEvent,
+    acceptedUserMessageInput: validateAcceptedUserMessage(lifecycleEvent),
+  };
+}
+
+function materializeAcceptedUserMessage({
+  session,
+  event,
+  input,
+  userId,
+  sessionId,
+  parentSessionId,
+  nowValue,
+}) {
+  if (!input) return null;
+  const existing = (Array.isArray(session.messages) ? session.messages : []).find(
+    (message) =>
+      String(message?.role || "").trim() === "user" &&
+      String(message?.turnScopeId || "").trim() === String(event.turnScopeId || "").trim(),
+  );
+  if (existing) return existing;
+  const userMessage = normalizeMessageEntity(
+    {
+      messageUid: createSessionMessageUid(),
+      messageId: input.messageId,
+      role: "user",
+      type: "message",
+      content: input.content,
+      userName: String(userId),
+      sessionId,
+      parentSessionId,
+      dialogProcessId: String(event.dialogProcessId || "").trim(),
+      parentDialogProcessId: input.parentDialogProcessId,
+      turnScopeId: String(event.turnScopeId || "").trim(),
+      frontendUserMessage: input.frontendUserMessage,
+      messageOrigin: input.frontendUserMessage ? "user" : "internal",
+      attachments: [],
+      turnCommit: {
+        action: String(event.action || "send").trim(),
+        commandId: String(event.causationId || event.commandId || "").trim(),
+        runState: "pending_start",
+        ...(event.continuationSource
+          ? {
+              resumeDialogProcessId: String(event.continuationSource.dialogProcessId || "").trim(),
+              resumeTurnScopeId: String(event.continuationSource.turnScopeId || "").trim(),
+            }
+          : {}),
+      },
+      ts: nowValue,
+    },
+    () => nowValue,
+  );
+  session.messages = [...(Array.isArray(session.messages) ? session.messages : []), userMessage];
+  session.dialogOrder = appendDialogOrderEntry(session.dialogOrder, userMessage);
+  return userMessage;
+}
 
 export async function getTurnLifecycleSnapshot({
   userId,
@@ -53,19 +138,10 @@ export async function getTurnLifecycleSnapshot({
   if (!session) return { found: false, reason: "session_not_found" };
   return {
     found: true,
-    snapshot: createAuthoritativeTurnSnapshot({
-      lifecycle: session.turnLifecycle,
-      turnTimings: session.turnTimings,
-      terminalTurnScopeIds: [
-        ...new Set(
-          (Array.isArray(session.messages) ? session.messages : [])
-            .map((message) => String(message?.turnScopeId || "").trim())
-            .filter(Boolean),
-        ),
-      ],
+    snapshot: createSessionTurnLifecycleSnapshot({
+      session,
       commandId,
       userId,
-      sessionId,
       knownSequence,
       terminalLimit,
       generatedAt: this.now(),
@@ -297,6 +373,11 @@ export async function applyTurnLifecycleEvent({
         persistenceContext,
       );
       if (!session) return { applied: false, reason: "session_not_found" };
+      const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
+        this,
+        session,
+        event,
+      );
       const actualVersion = resolveAggregateVersion(session);
       const concurrency = decideAggregateConcurrency({
         expectedAggregateVersion:
@@ -312,24 +393,56 @@ export async function applyTurnLifecycleEvent({
       }
       const result = commitTurnLifecycle({
         lifecycle: session.turnLifecycle,
-        event: { ...event, userId, sessionId, parentSessionId: resolvedParentSessionId },
+        event: {
+          ...lifecycleEvent,
+          userId,
+          sessionId,
+          parentSessionId: resolvedParentSessionId,
+        },
         eventOutbox: session.authorityEventOutbox,
         materializeTerminal: ({ terminalStatus, previousSummaryVersion }) =>
           materializeTurnTerminalMessages({
             messages: session.messages,
             terminalStatus,
-            assistantMessage: event.terminalStatus?.assistantMessage,
+            assistantMessage: lifecycleEvent.terminalStatus?.assistantMessage,
             previousSummaryVersion,
           }),
         createEventId: randomUUID,
         now: this.now,
       });
-      if (!result.applied) return { ...result, session, aggregateVersion: actualVersion };
+      if (!result.applied) {
+        const userMessage = acceptedUserMessageInput
+          ? (session.messages || []).find(
+              (message) =>
+                String(message?.role || "").trim() === "user" &&
+                String(message?.turnScopeId || "").trim() ===
+                  String(lifecycleEvent.turnScopeId || "").trim(),
+            )
+          : null;
+        return {
+          ...result,
+          session,
+          userMessage,
+          dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+          aggregateVersion: actualVersion,
+        };
+      }
       session.turnLifecycle = result.lifecycle;
+      const nowValue = this.now();
+      const userMessage = materializeAcceptedUserMessage({
+        session,
+        event: lifecycleEvent,
+        input: acceptedUserMessageInput,
+        userId,
+        sessionId,
+        parentSessionId: resolvedParentSessionId,
+        nowValue,
+      });
+      if (userMessage) session.aggregateVersion = concurrency.nextAggregateVersion;
       if (result.terminalMaterialization)
         session.messages = [...result.terminalMaterialization.messages];
       session.authorityEventOutbox = result.eventOutbox;
-      session.updatedAt = this.now();
+      session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: actualVersion,
@@ -342,6 +455,8 @@ export async function applyTurnLifecycleEvent({
       return {
         ...result,
         session,
+        userMessage,
+        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
         turnStatus: result.turn?.terminalStatus || null,
         aggregateVersion: resolveAggregateVersion(session),
       };
@@ -396,6 +511,11 @@ export async function provisionSessionWithInitialTurn({
             parentSessionId: resolvedParentSessionId,
           },
         );
+      const { lifecycleEvent, acceptedUserMessageInput } = resolveTurnAcceptance(
+        this,
+        session,
+        event,
+      );
       const actualVersion = resolveAggregateVersion(session);
       if (
         expectedAggregateVersion !== undefined &&
@@ -409,16 +529,47 @@ export async function provisionSessionWithInitialTurn({
       }
       const result = commitTurnLifecycle({
         lifecycle: session.turnLifecycle,
-        event: { ...event, userId, sessionId, parentSessionId: resolvedParentSessionId },
+        event: {
+          ...lifecycleEvent,
+          userId,
+          sessionId,
+          parentSessionId: resolvedParentSessionId,
+        },
         eventOutbox: session.authorityEventOutbox,
         createEventId: randomUUID,
         now: this.now,
       });
-      if (!result.applied)
-        return { ...result, session: isNew ? null : session, aggregateVersion: actualVersion };
+      if (!result.applied) {
+        const userMessage = acceptedUserMessageInput
+          ? (session.messages || []).find(
+              (message) =>
+                String(message?.role || "").trim() === "user" &&
+                String(message?.turnScopeId || "").trim() ===
+                  String(lifecycleEvent.turnScopeId || "").trim(),
+            )
+          : null;
+        return {
+          ...result,
+          session: isNew ? null : session,
+          userMessage,
+          dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
+          aggregateVersion: actualVersion,
+        };
+      }
       session.turnLifecycle = result.lifecycle;
+      const nowValue = this.now();
+      const userMessage = materializeAcceptedUserMessage({
+        session,
+        event: lifecycleEvent,
+        input: acceptedUserMessageInput,
+        userId,
+        sessionId,
+        parentSessionId: resolvedParentSessionId,
+        nowValue,
+      });
+      if (userMessage) session.aggregateVersion = actualVersion + 1;
       session.authorityEventOutbox = result.eventOutbox;
-      session.updatedAt = this.now();
+      session.updatedAt = nowValue;
       if (session.shortMemoryCheckpoint === undefined) session.shortMemoryCheckpoint = 0;
       const saved = await this.sessionRepo.save(userId, session, resolvedParentSessionId, {
         expectedAggregateVersion: isNew ? undefined : actualVersion,
@@ -429,6 +580,8 @@ export async function provisionSessionWithInitialTurn({
       return {
         ...result,
         session,
+        userMessage,
+        dialogProcessId: String(result.turn?.dialogProcessId || "").trim(),
         aggregateVersion: resolveAggregateVersion(session),
         sessionCreated: isNew,
       };

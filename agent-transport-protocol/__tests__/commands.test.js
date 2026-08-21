@@ -180,6 +180,25 @@ test("run preferences preserve an explicit disabled safety confirmation", () => 
   assert.equal(parseAgentCommand(command), command);
 });
 
+test("run transport carries connector selection only as new Session creation state", () => {
+  const command = createTurnRunCommand({
+    commandType: AGENT_COMMAND.SEND,
+    commandId: "turn-connectors",
+    identity: { sessionId: "session-1", turnScopeId: "turn-connectors" },
+    input: { message: "hello", attachments: [] },
+    preferences: { selectedConnectorIds: ["con_untrusted_request"] },
+    presentation: {},
+    concurrency: {},
+    session: { createIfAbsent: true, selectedConnectorIds: ["con_initial"] },
+  });
+
+  assert.equal("selectedConnectorIds" in command.preferences, false);
+  assert.deepEqual(command.session.selectedConnectorIds, ["con_initial"]);
+
+  command.session.createIfAbsent = false;
+  assert.throws(() => parseAgentCommand(command), /unexpected_session_selected_connector_ids/);
+});
+
 test("run summary and task-check policy has one strict per-run transport shape", () => {
   const command = createTurnRunCommand({
     commandType: AGENT_COMMAND.SEND,

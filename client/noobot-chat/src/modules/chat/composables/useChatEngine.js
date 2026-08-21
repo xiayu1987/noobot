@@ -69,12 +69,9 @@ export function useChatEngine({
   makeViewMessage,
   foldMessagesForView,
   applySessionDetail,
-  refreshSessionConnectorsAsync,
   deleteSessionMessagesFromApi,
   replaceSessionTurnApi,
   authFetch,
-  connectorTypeSet,
-  upsertConnectedConnectorInPanelState,
   pendingInteractionRequest,
   interactionSubmitting,
   clearPendingInteraction,
@@ -309,9 +306,6 @@ export function useChatEngine({
     submitInteractionResponse,
     refreshSessionsAsync,
     onConversationState,
-    connectorTypeSet,
-    upsertConnectedConnectorInPanelState,
-    refreshSessionConnectorsAsync,
     notify,
     translate,
     applyAssistantFailureState,
@@ -397,12 +391,7 @@ export function useChatEngine({
     notify,
     translate,
   };
-  const senderConnectorDeps = {
-    connectorTypeSet,
-    upsertConnectedConnectorInPanelState,
-    refreshSessionConnectorsAsync,
-    processStore,
-  };
+  const senderRuntimeDeps = { processStore };
   const send = createChatEngineSender({
     ...senderSessionDeps,
     ...senderConversationDeps,
@@ -411,7 +400,7 @@ export function useChatEngine({
     ...senderModelDeps,
     ...senderTransportDeps,
     ...senderUiDeps,
-    ...senderConnectorDeps,
+    ...senderRuntimeDeps,
     finalizePendingResendOperation: (...args) =>
       monotonicMessageActions?.finalizePendingResendOperation?.(...args),
   });

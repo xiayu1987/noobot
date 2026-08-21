@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import {
   buildSessionDisplaySummary,
   SESSION_DETAIL_MESSAGE_PROJECTION,
@@ -549,21 +549,21 @@ export class SessionCrudService {
     });
   }
 
-  async getRootSessionSelectedConnectors({ userId, sessionId }) {
+  async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
     const rootSessionId = this.sessionTreeService
       ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
       : String(sessionId || "").trim();
-    if (!rootSessionId) return normalizeSelectedConnectors({});
+    if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     const session = await this.sessionRepo.findById(userId, rootSessionId);
-    if (!session) return normalizeSelectedConnectors({});
-    return normalizeSelectedConnectors(session.selectedConnectors || {});
+    if (!session) return normalizeSelectedConnectorIds([]);
+    return normalizeSelectedConnectorIds(session.selectedConnectorIds);
   }
 
-  async setRootSessionSelectedConnectors({ userId, sessionId, selectedConnectors = {} }) {
+  async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
     const rootSessionId = this.sessionTreeService
       ? await this.sessionTreeService.getRootSessionId({ userId, sessionId })
       : String(sessionId || "").trim();
-    if (!rootSessionId) return normalizeSelectedConnectors({});
+    if (!rootSessionId) return normalizeSelectedConnectorIds([]);
     return this._withSessionMutation(userId, rootSessionId, "", async () => {
       const resolvedParentSessionId = await this.sessionRepo.resolveParentSessionId(
         userId,
@@ -575,11 +575,11 @@ export class SessionCrudService {
         rootSessionId,
         resolvedParentSessionId,
       );
-      if (!session) return normalizeSelectedConnectors({});
-      session.selectedConnectors = normalizeSelectedConnectors(selectedConnectors);
+      if (!session) return normalizeSelectedConnectorIds([]);
+      session.selectedConnectorIds = normalizeSelectedConnectorIds(selectedConnectorIds);
       session.updatedAt = this.now();
       await this.sessionRepo.save(userId, session, resolvedParentSessionId);
-      return session.selectedConnectors;
+      return session.selectedConnectorIds;
     });
   }
 }

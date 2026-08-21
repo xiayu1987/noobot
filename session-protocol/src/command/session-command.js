@@ -10,6 +10,7 @@ const clean = (value) => String(value || "").trim();
 
 export const SESSION_COMMAND = Object.freeze({
   TURN_COMMIT: "session.turn.commit",
+  TURN_ATTACHMENTS_BIND: "session.turn.attachments.bind",
   TURN_REPLACE: "session.turn.replace",
   MESSAGE_DELETE_FROM: "session.message.delete_from",
   RENAME: "session.rename",

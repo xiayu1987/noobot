@@ -72,7 +72,7 @@ export function createRegisterHarnessHooks(deps = {}) {
       disposers.push(
         hookManager.on(
           point,
-          async (ctx = {}) => {
+          async (ctx = {}, invocation = {}) => {
             if (!isPrimaryExecutionScopeFn(ctx)) return;
             migrateHarnessBucket(ctx);
             const startedAt = Date.now();
@@ -85,11 +85,20 @@ export function createRegisterHarnessHooks(deps = {}) {
                 await injectPromptFn(point, ctx, options, plugin);
                 emitHarnessHookProgressFn(ctx, "global_bootstrap_done", { point });
               };
+              const capabilityModelInvoker =
+                typeof options.capabilityModelInvoker === "function"
+                  ? (payload = {}) =>
+                      options.capabilityModelInvoker({
+                        ...payload,
+                        signal: invocation.signal || null,
+                      })
+                  : options.capabilityModelInvoker;
               await capabilityRuntime.runHook(point, ctx, {
                 pluginName: plugin.name,
                 pluginVersion: plugin.version,
                 harness: {
                   ...options,
+                  capabilityModelInvoker,
                   globalBootstrap,
                 },
               });

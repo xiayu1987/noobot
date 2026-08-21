@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyPrimaryModelReferencesToConfigFile,
+  assertConfigParamsDocumentKeys,
   ensureModelProviderInConfigFile,
   createConfigSnapshot,
   localizeBuiltinScenarios,
@@ -19,6 +20,7 @@ import {
   validateConfigSnapshot,
   normalizeKnownConfigKeys,
   normalizeConfigParamsDocument,
+  synchronizeConfigParamsDocument,
   mergeConfigParamLayers,
   buildConfigParamCatalog,
   createConfigValueLookup,
@@ -286,12 +288,34 @@ test("current config migration removes every retired config path and prunes empt
       use_last_running_task_range: false,
       use_last_completed_task_range: false,
     },
+    security: {
+      execution_isolation: { mode: "host" },
+      path_policy: { resolution: { follow_symbolic_links: false } },
+    },
     tools: {
       set_skill_task: { enabled: true },
       web_to_data: { enabled: true },
       doc_to_data: { enabled: true },
       media_to_data: { enabled: true },
       process_content_task: { enabled: true },
+      database_connect_connector: {
+        enabled: true,
+        connectors: { example_database: { password: "${EXAMPLE_DATABASE_PASSWORD}" } },
+      },
+      terminal_connect_connector: {
+        enabled: true,
+        connectors: { example_terminal: { password: "${EXAMPLE_TERMINAL_PASSWORD}" } },
+      },
+      email_connect_connector: {
+        enabled: true,
+        connectors: { example_email: { password: "${EMAIL_AUTH_CODE}" } },
+      },
+      process_connector_tool: { enabled: true },
+      inspect_connectors: { enabled: true },
+      access_connector: {
+        enabled: true,
+        command_file: { enabled: true, allowed_roots: [] },
+      },
       execute_script: {
         enabled: true,
         sandbox_mode: true,
@@ -312,7 +336,11 @@ test("current config migration removes every retired config path and prunes empt
     multimodal: {
       parsing: { default_models: { image: "vision" } },
     },
+    security: {
+      execution_isolation: { mode: "host" },
+    },
     tools: {
+      access_connector: { enabled: true },
       execute_script: { enabled: true },
       read_file: { enabled: true },
     },
@@ -402,6 +430,44 @@ test("config params document rejects ambiguous, invalid, and unknown facts", () 
       (error) => error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
     );
   }
+});
+
+test("config params document keys must be a closed subset of template keys", () => {
+  assert.deepEqual(
+    assertConfigParamsDocumentKeys(
+      {
+        values: { api_key: "secret" },
+        descriptions: { api_key: "Credential" },
+      },
+      ["API_KEY", "REGION"],
+    ),
+    {
+      values: { API_KEY: "secret" },
+      descriptions: { API_KEY: "Credential" },
+    },
+  );
+  assert.throws(
+    () => assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
+    (error) =>
+      error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT &&
+      error?.details?.keys?.[0] === "UNUSED_KEY",
+  );
+});
+
+test("config params synchronization projects stored values onto authoritative template keys", () => {
+  assert.deepEqual(
+    synchronizeConfigParamsDocument({
+      document: {
+        values: { ACTIVE_KEY: "preserved", RETIRED_KEY: "removed" },
+        descriptions: { ACTIVE_KEY: "active", RETIRED_KEY: "retired" },
+      },
+      keys: ["NEW_KEY", "ACTIVE_KEY"],
+    }),
+    {
+      values: { ACTIVE_KEY: "preserved", NEW_KEY: "" },
+      descriptions: { ACTIVE_KEY: "active", NEW_KEY: "" },
+    },
+  );
 });
 
 test("template resolution has one explicit source order and unresolved policy", () => {

@@ -14,11 +14,17 @@ function createRouteHarness() {
     activeSessionId.value = sessionId;
     activeSession.value = { sessionId, loaded: true };
   });
+  const connectorVisible = ref(false);
+  const chatNavigatorVisible = ref(true);
+  const openConnectorsRaw = vi.fn(() => {
+    connectorVisible.value = true;
+  });
   const route = useAppShellPseudoRoute({
     activeSessionId,
     activeSession,
     currentMessageAnchorId: ref(""),
     workspaceVisible: ref(false),
+    connectorVisible,
     userSettingsVisible: ref(false),
     configParamsVisible: ref(false),
     mobileSidebarOpen: ref(false),
@@ -26,15 +32,25 @@ function createRouteHarness() {
     composerMorePanelVisible: ref(false),
     thinkingDetailsVisible: ref(false),
     mobileChatNavigatorVisible: ref(false),
+    chatNavigatorVisible,
     isSuperAdmin: ref(false),
     closeAllDrawers: vi.fn(),
     closeMobileSidebar: vi.fn(),
     closeComposerMorePanel: vi.fn(),
     closeThinkingDetailsPanel: vi.fn(),
+    openConnectorsRaw,
     closeMobileSidebarOnSelect: vi.fn(),
     selectSession,
   });
-  return { route, selectSession, activeSessionId, activeSession };
+  return {
+    route,
+    selectSession,
+    activeSessionId,
+    activeSession,
+    connectorVisible,
+    chatNavigatorVisible,
+    openConnectorsRaw,
+  };
 }
 
 describe("useAppShellPseudoRoute initial Session activation", () => {
@@ -70,5 +86,20 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     await route.applyInitialPseudoRoute({ sessionId: "", panel: "", anchor: "" });
 
     expect(new URL(window.location.href).searchParams.has("session")).toBe(false);
+  });
+
+  it("collapses the default navigator when restoring the connector overview", async () => {
+    const { route, connectorVisible, chatNavigatorVisible, openConnectorsRaw } =
+      createRouteHarness();
+
+    await route.applyInitialPseudoRoute({
+      sessionId: "local-session",
+      panel: "connectors",
+      anchor: "",
+    });
+
+    expect(chatNavigatorVisible.value).toBe(false);
+    expect(connectorVisible.value).toBe(true);
+    expect(openConnectorsRaw).toHaveBeenCalledTimes(1);
   });
 });

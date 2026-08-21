@@ -17,7 +17,10 @@ function stableStringify(value) {
 }
 
 export function sha256Text(text = "") {
-  return crypto.createHash("sha256").update(String(text || "")).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(String(text || ""))
+    .digest("hex");
 }
 
 export function nowIso() {
@@ -48,7 +51,9 @@ function buildPayloadPreview(point, ctx = {}, options = {}) {
   const maxPreviewChars = options.maxPreviewChars || LENGTH_THRESHOLDS.display.harnessPreviewChars;
   if (point === HOOK_POINT.AGENT.BEFORE_LLM_CALL || point === HOOK_POINT.AGENT.AFTER_LLM_CALL) {
     return {
-      messageCount: Array.isArray(ctx?.modelContext?.messages) ? ctx.modelContext.messages.length : undefined,
+      messageCount: Array.isArray(ctx?.modelContext?.messages)
+        ? ctx.modelContext.messages.length
+        : undefined,
       toolChoice: ctx.toolChoice,
       hasToolCalls: ctx.hasToolCalls,
       callCount: Array.isArray(ctx.calls) ? ctx.calls.length : undefined,
@@ -86,10 +91,14 @@ function resolveToolTurnLimitReached(capabilityLogs = []) {
   );
 }
 
-export function buildEvent({ point, ctx = {}, options = {}, pluginName = "", pluginVersion = "" } = {}) {
-  const capabilityLogs = Array.isArray(ctx?.harnessCapabilityLogs)
-    ? ctx.harnessCapabilityLogs
-    : [];
+export function buildEvent({
+  point,
+  ctx = {},
+  options = {},
+  pluginName = "",
+  pluginVersion = "",
+} = {}) {
+  const capabilityLogs = Array.isArray(ctx?.harnessCapabilityLogs) ? ctx.harnessCapabilityLogs : [];
   const toolTurnLimitReached = resolveToolTurnLimitReached(capabilityLogs);
   return {
     kind: "hook",
@@ -132,13 +141,14 @@ export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion 
     },
     execution: {
       flags: agentContext?.context?.execution?.flags || {},
-      runtimeModel: agentContext?.context?.execution?.model?.runtimeModel || runtime.runtimeModel || "",
+      runtimeModel:
+        agentContext?.context?.execution?.model?.runtimeModel || runtime.runtimeModel || "",
     },
     session: {
       attachmentCount: Array.isArray(runtime?.userMessageAttachments)
         ? runtime.userMessageAttachments.length
         : 0,
-      connectors: agentContext?.context?.execution?.selectedConnectors || {},
+      connectorIds: agentContext?.context?.execution?.selectedConnectorIds || [],
     },
     payload: {
       systemMessageCount: Array.isArray(ctx?.modelContext?.messageBlocks?.system)

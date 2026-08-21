@@ -8,7 +8,9 @@ import { useLocale } from "../../../shared/i18n/useLocale.js";
 
 export function useConnectorPanel({
   ensureConnected,
+  listUserConnectorsApi,
   getSessionConnectorsApi,
+  putSessionConnectorSelectionApi,
   userId,
   authFetch,
   sessions,
@@ -17,30 +19,13 @@ export function useConnectorPanel({
   const { translate } = useLocale();
   const connectorService = createConnectorService({
     ensureConnected,
+    listUserConnectorsApi,
     getSessionConnectorsApi,
+    putSessionConnectorSelectionApi,
     userId,
     authFetch,
     translateText: translate,
   });
-
-  function applySessionConnectorPayload(sessionItem, payload = {}) {
-    return connectorService.applySessionConnectorPayload(sessionItem, payload);
-  }
-
-  function upsertConnectedConnectorInPanelState(
-    sessionItem,
-    {
-      connectorType = "",
-      connectorName = "",
-      status = "connected",
-    } = {},
-  ) {
-    return connectorService.upsertConnectedConnectorInPanelState(sessionItem, {
-      connectorType,
-      connectorName,
-      status,
-    });
-  }
 
   async function refreshSessionConnectors(sessionId = "") {
     return connectorService.refreshSessionConnectors({
@@ -56,23 +41,21 @@ export function useConnectorPanel({
     });
   }
 
-  async function updateSessionSelectedConnector({
-    connectorType = "",
-    connectorName = "",
-  } = {}) {
-    return connectorService.updateSessionSelectedConnector({
+  async function updateSessionSelectedConnectors(selectedConnectorIds = []) {
+    return connectorService.updateSessionSelectedConnectors({
       activeSession: activeSession?.value,
-      connectorType,
-      connectorName,
+      selectedConnectorIds,
     });
   }
 
+  function waitForSessionConnectorState(sessionId = "") {
+    return connectorService.waitForSessionConnectorState(sessionId);
+  }
+
   return {
-    connectorTypeSet: connectorService.connectorTypeSet,
-    applySessionConnectorPayload,
-    upsertConnectedConnectorInPanelState,
     refreshSessionConnectors,
     refreshSessionConnectorsAsync,
-    updateSessionSelectedConnector,
+    updateSessionSelectedConnectors,
+    waitForSessionConnectorState,
   };
 }

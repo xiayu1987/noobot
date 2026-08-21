@@ -23,20 +23,12 @@ import {
   isAuthoritativeTurnLifecycleEnvelope,
 } from "@noobot/session-protocol";
 import {
-  TURN_COMMITTED_WIRE_EVENT,
-  assertTurnCommittedEventData,
-} from "@noobot/session-protocol/turn-commit";
-import {
   EVENT_FAMILY,
   INTERACTION_EVENT_TYPE,
   isTerminalInteractionLifecycle,
   validateProtocolEvent,
 } from "@noobot/event-protocol";
-import {
-  AGENT_TRANSPORT_EVENT,
-  validateAgentCommandReceipt,
-  validateAgentTransportError,
-} from "@noobot/agent-transport-protocol";
+import { validateDataPlaneEvent } from "./data-plane-event-validator.js";
 
 const TERMINAL_TURN_EVENTS = new Set([
   TURN_EVENT.COMPLETED,
@@ -51,29 +43,6 @@ const TERMINAL_TURN_STATES = new Set([
   TURN_STATE.COMPLETION_FAILED,
   TURN_STATE.STOP_FAILED,
 ]);
-
-function validateChannelDataPlaneEvent(eventName, data) {
-  if (eventName === AGENT_TRANSPORT_EVENT.ERROR) {
-    return validateAgentTransportError(data);
-  }
-  if (eventName === AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT) {
-    return validateAgentCommandReceipt(data);
-  }
-  if (eventName === TURN_COMMITTED_WIRE_EVENT) {
-    try {
-      assertTurnCommittedEventData(data);
-      return { valid: true, errors: [] };
-    } catch (error) {
-      return { valid: false, errors: error?.validationErrors || [error?.message || "invalid_turn_commit"] };
-    }
-  }
-  const validation = validateProtocolEvent(data);
-  if (!validation.valid) return validation;
-  if (String(data?.identity?.eventType || "").trim() !== eventName) {
-    return { valid: false, errors: ["wire_event_identity_mismatch"] };
-  }
-  return validation;
-}
 
 function buildTurnLifecycleReplay(window = [], knownSequence = 0) {
   const sequence = Number(knownSequence || 0);
@@ -231,7 +200,7 @@ pushChannelEvent(channel, eventName = "", data = {}) {
   if (!channel) return null;
   const normalizedEventName = String(eventName || "").trim();
   if (!normalizedEventName) return null;
-  const dataPlaneValidation = validateChannelDataPlaneEvent(normalizedEventName, data);
+  const dataPlaneValidation = validateDataPlaneEvent(normalizedEventName, data);
   if (!dataPlaneValidation.valid) {
     this.logSessionEvent(channel, {
       category: "protocol",

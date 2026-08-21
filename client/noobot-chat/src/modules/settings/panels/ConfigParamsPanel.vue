@@ -6,7 +6,6 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { Plus } from "@element-plus/icons-vue";
 import {
   getConfigParamsApi,
   putConfigParamsApi,
@@ -14,6 +13,11 @@ import {
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { createApiKeyFetch } from "../../../shared/network/apiKeyFetch.js";
 import { SettingsJsonListEditorLayout } from "../public-api.js";
+import {
+  assertConfigParamListMatchesCatalog,
+  configParamsFromCatalog,
+  normalizeConfigParamList,
+} from "../state/configParamsState.js";
 
 const props = defineProps({
   apiKey: { type: String, default: "" },
@@ -27,6 +31,7 @@ const activeScope = ref("user");
 const loading = ref(false);
 const saving = ref(false);
 const params = ref([]);
+const catalog = ref([]);
 const paramsJsonDraft = ref("");
 const jsonParseError = ref("");
 const { translate } = useLocale();
@@ -55,35 +60,8 @@ const editorActions = computed(() => [
 ]);
 const { authFetch } = createApiKeyFetch(() => props.apiKey);
 
-function normalizeParams(input = []) {
-  const source = Array.isArray(input) ? input : [];
-  const map = new Map();
-  for (const item of source) {
-    const key = String(item?.key || "").trim();
-    if (!key) continue;
-    const value = String(item?.value ?? "").trim();
-    map.set(key, value);
-  }
-  return Array.from(map.entries())
-    .map(([key, value]) => ({ key, value }))
-    .sort((a, b) => a.key.localeCompare(b.key));
-}
-
-function paramsListFromApi({ keys = [], values = {} } = {}) {
-  const uniqueKeys = new Set(
-    (Array.isArray(keys) ? keys : []).map((item) => String(item || "").trim()).filter(Boolean),
-  );
-  for (const key of Object.keys(values || {})) uniqueKeys.add(String(key || "").trim());
-  return normalizeParams(
-    Array.from(uniqueKeys).map((key) => ({
-      key,
-      value: String(values?.[key] ?? "").trim(),
-    })),
-  );
-}
-
 function toValuesObject(list = params.value) {
-  return Object.fromEntries(normalizeParams(list).map((item) => [item.key, item.value]));
+  return Object.fromEntries(normalizeConfigParamList(list).map((item) => [item.key, item.value]));
 }
 
 function buildParamsJsonText(list = params.value) {
@@ -98,7 +76,7 @@ function parseParamsFromJsonText(text = "") {
     throw new Error(`JSON parse error: ${error.message || String(error)}`);
   }
   const values = parsed?.values && typeof parsed.values === "object" ? parsed.values : {};
-  return normalizeParams(
+  return normalizeConfigParamList(
     Object.entries(values).map(([key, value]) => ({
       key: String(key || "").trim(),
       value: String(value ?? "").trim(),
@@ -108,11 +86,16 @@ function parseParamsFromJsonText(text = "") {
 
 function syncParamsFromJsonDraft() {
   try {
-    params.value = parseParamsFromJsonText(paramsJsonDraft.value);
+    const parsedParams = parseParamsFromJsonText(paramsJsonDraft.value);
+    assertConfigParamListMatchesCatalog(parsedParams, catalog.value);
+    params.value = parsedParams;
     jsonParseError.value = "";
     return true;
   } catch (error) {
-    jsonParseError.value = error.message || translate("settings.fixJsonError");
+    jsonParseError.value =
+      error?.code === "UNKNOWN_CONFIG_PARAM_KEY"
+        ? translate("settings.unknownParamKey", { key: error.key })
+        : error.message || translate("settings.fixJsonError");
     return false;
   }
 }
@@ -128,14 +111,6 @@ const paramsJsonText = computed({
   },
 });
 
-function addParamRow() {
-  params.value.push({ key: "", value: "" });
-}
-
-function removeParamRow(index) {
-  params.value.splice(index, 1);
-}
-
 async function loadParams(scope = activeScope.value) {
   if (!props.connected || !props.apiKey) return;
   loading.value = true;
@@ -143,8 +118,9 @@ async function loadParams(scope = activeScope.value) {
     const res = await getConfigParamsApi({ scope, fetcher: authFetch });
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.loadParamsFailed"));
-    params.value = paramsListFromApi({
-      keys: data.keys || [],
+    catalog.value = Array.isArray(data.catalog) ? data.catalog : [];
+    params.value = configParamsFromCatalog({
+      catalog: catalog.value,
       values: data.values || {},
     });
     paramsJsonDraft.value = buildParamsJsonText(params.value);
@@ -174,8 +150,9 @@ async function saveParams() {
     );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveParamsFailed"));
-    params.value = paramsListFromApi({
-      keys: data.keys || [],
+    catalog.value = Array.isArray(data.catalog) ? data.catalog : catalog.value;
+    params.value = configParamsFromCatalog({
+      catalog: catalog.value,
       values: data.values || values,
     });
     paramsJsonDraft.value = buildParamsJsonText(params.value);
@@ -251,13 +228,10 @@ watch(
         v-model="paramsJsonText"
         :loading="loading"
         :left-title="translate('settings.paramsList', { label: activeScopeLabel })"
-        :left-action-icon="Plus"
-        :left-action-title="translate('settings.addParam')"
         :editor-file-path="activeScopeFilePath"
         :editor-actions="editorActions"
         :parse-error="jsonParseError"
         placeholder='{"values":{"DASHSCOPE_API_KEY":"..."}}'
-        @left-action="addParamRow"
         @editor-command="handleEditorAction"
       >
         <template #list>
@@ -269,18 +243,10 @@ watch(
             >
               <div class="row-header">
                 <span class="user-idx param-index">Param {{ idx + 1 }}</span>
-                <el-button
-                  class="icon-btn danger-text"
-                  size="small"
-                  text
-                  @click="removeParamRow(idx)"
-                  >✕</el-button
-                >
               </div>
               <el-input
                 v-model="item.key"
-                :placeholder="translate('settings.paramKey')"
-                clearable
+                readonly
                 class="row-input param-key-input"
               />
               <el-input
@@ -292,7 +258,7 @@ watch(
             </div>
             <div v-if="!params.length" class="empty-tip list-empty-tip">
               <div class="empty-icon">🔐</div>
-              <p>{{ translate("settings.noParamsAdd") }}</p>
+              <p>{{ translate("settings.noParams") }}</p>
             </div>
           </div>
         </template>

@@ -20,21 +20,8 @@ export const RoleEnum = Object.freeze({
   TOOL: "tool",
 });
 
-export const ConnectorTypeEnum = Object.freeze({
-  DATABASE: "database",
-  TERMINAL: "terminal",
-  EMAIL: "email",
-});
-
-export const CONNECTOR_TYPES = Object.freeze([
-  ConnectorTypeEnum.DATABASE,
-  ConnectorTypeEnum.TERMINAL,
-  ConnectorTypeEnum.EMAIL,
-]);
-
 export const StreamEventEnum = Object.freeze({
   INTERACTION_REQUEST: INTERACTION_EVENT_TYPE.REQUEST,
-  CONNECTOR_STATUS: "connector_status",
   ATTACHMENTS: "attachments",
   ATTACHMENT_LIFECYCLE: ATTACHMENT_LIFECYCLE_WIRE_EVENT,
   CHANNEL_STATE: AGENT_TRANSPORT_EVENT.CHANNEL_STATE,

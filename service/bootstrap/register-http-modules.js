@@ -41,9 +41,7 @@ export async function registerHttpModules(
     rebuildRuntimeConfig,
     templateRootPath,
     buildWorkspaceTree,
-    getConnectorChannelStore,
-    getConnectorHistoryStore,
-    normalizeSelectedConnectors,
+    connectorRuntime,
     workspaceRootPath,
     handleChat,
     translateText,
@@ -80,6 +78,7 @@ export async function registerHttpModules(
     requireApiKey,
     requireSuperAdmin,
     translateText,
+    connectorRuntime,
   });
 
   app.use((req, res, next) => {
@@ -116,9 +115,7 @@ export async function registerHttpModules(
 
   registerConnectorRoutes(app, {
     bot,
-    getConnectorChannelStore,
-    getConnectorHistoryStore,
-    normalizeSelectedConnectors,
+    connectorRuntime,
     translateText,
   });
 
@@ -146,8 +143,6 @@ export async function registerHttpModules(
   registerSessionRoutes(app, {
     bot,
     handleChat,
-    getConnectorChannelStore,
-    getConnectorHistoryStore,
     translateText,
     pluginHost: servicePluginHost,
   });

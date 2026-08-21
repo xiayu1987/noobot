@@ -9,6 +9,10 @@ import {
   TURN_COMMITTED_WIRE_EVENT,
   assertTurnCommittedEventData,
 } from "@noobot/session-protocol/turn-commit";
+import {
+  TURN_ATTACHMENTS_BOUND_WIRE_EVENT,
+  assertTurnAttachmentsBoundEventData,
+} from "@noobot/session-protocol/turn-attachment-bind";
 
 function buildEventAudit(eventName, eventData, sessionId, turnScopeId) {
   const canonicalEnvelope = eventData?.protocol?.name === "@noobot/event-protocol" ? eventData : null;
@@ -171,6 +175,14 @@ export function createRunEventListener({
           turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
         });
         return sendEvent(TURN_COMMITTED_WIRE_EVENT, committedTurn);
+      }
+      if (eventName === AGENT_RUN_EVENT.TURN_ATTACHMENTS_BOUND) {
+        const boundTurn = assertTurnAttachmentsBoundEventData({
+          ...eventData,
+          sessionId: String(eventData?.sessionId || sessionId || "").trim(),
+          turnScopeId: String(eventData?.turnScopeId || resolveTurnScopeId() || "").trim(),
+        });
+        return sendEvent(TURN_ATTACHMENTS_BOUND_WIRE_EVENT, boundTurn);
       }
       const childRunEvent = isChildRunEventData(eventData, {
         rootSessionId: sessionId,

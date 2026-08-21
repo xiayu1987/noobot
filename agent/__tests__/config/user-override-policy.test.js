@@ -47,14 +47,14 @@ test("sanitizeUserConfig: 应剔除 tools.execute_script 覆盖", () => {
   assert.deepEqual(out.tools, { safe_tool: { enabled: true } });
 });
 
-test("sanitizeUserConfig: 用户不能扩大全局路径策略或连接器路径根", () => {
+test("sanitizeUserConfig: 用户不能扩大全局路径策略或子 Agent 深度", () => {
   const out = sanitizeUserConfig({
     security: { path_policy: { roles: { regular_user: { host: { access: "allow" } } } } },
-    tools: { access_connector: { command_file: { allowed_roots: ["/"], enabled: false } } },
+    tools: { delegate_task_async: { maxSubAgentDepth: 99, enabled: false } },
   });
   assert.equal(out.security, undefined);
-  assert.equal(out.tools.access_connector.command_file.allowedRoots, undefined);
-  assert.equal(out.tools.access_connector.command_file.enabled, false);
+  assert.equal(out.tools.delegate_task_async.maxSubAgentDepth, undefined);
+  assert.equal(out.tools.delegate_task_async.enabled, false);
 });
 
 test("sanitizeUserConfig: execute_native_script 只能由全局管理员配置", () => {
@@ -423,6 +423,7 @@ test("mergeConfig: full/programming/text 为内置情景且用户只能覆盖内
     "execute_native_script",
     "multimodal_generate",
     "multimodal_parse",
+    "access_connector",
     "user_interaction",
     "task_summary",
     "task_check",

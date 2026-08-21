@@ -51,8 +51,6 @@ test("session-routes: 删除 session 时清理 harness 运行记录", async () =
     bot,
     pluginHost,
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: (key) => key,
   });
 
@@ -81,22 +79,28 @@ test("session-routes: 删除 session 结果缺失 deletedSessionIds 时仍删除
       getWorkspacePath: () => "",
       deleteScopedAttachmentsBySessionIds: async (payload = {}) => {
         attachmentDeleteCalls.push(payload);
-        return { deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0, deletedSessionIds: payload?.sessionIds || [] };
+        return {
+          deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0,
+          deletedSessionIds: payload?.sessionIds || [],
+        };
       },
       deleteToolResultOverflowBySessionIds: async (payload = {}) => {
         overflowDeleteCalls.push(payload);
-        return { deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0, deletedSessionIds: payload?.sessionIds || [] };
+        return {
+          deletedCount: Array.isArray(payload?.sessionIds) ? payload.sessionIds.length : 0,
+          deletedSessionIds: payload?.sessionIds || [],
+        };
       },
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: (key) => key,
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/internal/session/u1/s-fallback-delete`, { method: "DELETE" });
+    const response = await fetch(`${baseUrl}/internal/session/u1/s-fallback-delete`, {
+      method: "DELETE",
+    });
     const payload = await response.json();
     assert.equal(response.status, 200);
     assert.equal(payload.ok, true);
@@ -156,8 +160,6 @@ test("session-routes: plugin related session identities share the authoritative 
       },
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: (key) => key,
   });
 
@@ -185,7 +187,9 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
         getRootSessionId: async () => "",
         deleteSessionBranch: async () => ({ deletedSessionIds: ["s-delete"] }),
         listSessionIds: async () => ["s-keep"],
-        getAllSessionsData: async () => { throw new Error("invalid_attachment_id"); },
+        getAllSessionsData: async () => {
+          throw new Error("invalid_attachment_id");
+        },
       },
       deleteScopedAttachmentsBySessionIds: async () => ({ deletedCount: 0, deletedSessionIds: [] }),
       pruneOrphanScopedAttachments: async (payload) => {
@@ -195,8 +199,6 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: (key) => key,
   });
 
@@ -204,8 +206,10 @@ test("session-routes: orphan attachment cleanup reads ids without loading Sessio
     const response = await fetch(`${baseUrl}/internal/session/u1/s-delete`, { method: "DELETE" });
     assert.equal(response.status, 200);
   });
-  assert.deepEqual(pruneCalls, [{
-    userId: "u1",
-    keepSessionIds: ["s-keep"],
-  }]);
+  assert.deepEqual(pruneCalls, [
+    {
+      userId: "u1",
+      keepSessionIds: ["s-keep"],
+    },
+  ]);
 });

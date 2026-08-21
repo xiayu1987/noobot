@@ -11,6 +11,51 @@ import {
   parseAgentCommand,
 } from "@noobot/agent-transport-protocol";
 import { recordServiceAgentTransportDebug } from "../runtime-events/agent-transport-debug.js";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
+
+export async function resolveAuthoritativeConnectorSelection({
+  bot,
+  connectorAccessPort,
+  request,
+} = {}) {
+  const userId = String(request?.userId || "").trim();
+  const sessionId = String(request?.sessionId || "").trim();
+  if (
+    !userId ||
+    !sessionId ||
+    typeof bot?.session?.getRootSessionSelectedConnectorIds !== "function"
+  ) {
+    throw new Error("connector selection authority is unavailable");
+  }
+  let selectedConnectorIds;
+  if (request?.createSessionIfAbsent === true) {
+    selectedConnectorIds = normalizeSelectedConnectorIds(request?.initialSelectedConnectorIds);
+    const connectors = await connectorAccessPort?.listUserConnectors?.(userId);
+    const connectedConnectorIds = new Set(
+      (Array.isArray(connectors) ? connectors : [])
+        .filter((connector) => connector?.status === "connected")
+        .map((connector) => String(connector?.connectorId || "").trim())
+        .filter(Boolean),
+    );
+    const invalidIds = selectedConnectorIds.filter((id) => !connectedConnectorIds.has(id));
+    if (invalidIds.length) {
+      const error = new Error(`selected connector is unavailable: ${invalidIds.join(", ")}`);
+      error.errorCode = "connector_selection_invalid";
+      throw error;
+    }
+  } else {
+    selectedConnectorIds = normalizeSelectedConnectorIds(
+      await bot.session.getRootSessionSelectedConnectorIds({ userId, sessionId }),
+    );
+  }
+  return {
+    ...request,
+    runConfig: {
+      ...(request.runConfig || {}),
+      selectedConnectorIds,
+    },
+  };
+}
 
 export function createChatRunService({
   getBot,
@@ -18,17 +63,8 @@ export function createChatRunService({
   defaultLocale,
   translateText,
   sessionLogConfig,
+  connectorAccessPort,
 } = {}) {
-  function normalizeSelectedConnectors(input = {}) {
-    const source = input && typeof input === "object" ? input : {};
-    const normalizeConnectorName = (value = "") => String(value || "").trim();
-    return {
-      database: normalizeConnectorName(source?.database),
-      terminal: normalizeConnectorName(source?.terminal),
-      email: normalizeConnectorName(source?.email),
-    };
-  }
-
   function normalizeStringArray(input = []) {
     return Array.isArray(input)
       ? input.map((item) => String(item || "").trim()).filter(Boolean)
@@ -56,7 +92,6 @@ export function createChatRunService({
         ? { pluginModelConfig: preferences.pluginModelConfig }
         : {}),
       ...(preferences.summaryPolicy ? { summaryPolicy: preferences.summaryPolicy } : {}),
-      selectedConnectors: normalizeSelectedConnectors(preferences.selectedConnectors),
       selectedPlugins,
       turnScopeId: identity.turnScopeId,
       userMessageId: String(command.presentation?.userMessageId || "").trim(),
@@ -89,6 +124,9 @@ export function createChatRunService({
       attachments: command.input.attachments,
       expectedRevision: command.concurrency.expectedTurnRevision,
       createSessionIfAbsent: command.session?.createIfAbsent === true,
+      initialSelectedConnectorIds: normalizeSelectedConnectorIds(
+        command.session?.selectedConnectorIds,
+      ),
       runConfig,
     };
   }
@@ -106,8 +144,12 @@ export function createChatRunService({
         userId: req.auth?.userId,
         data: { accepted: true, transport: "http" },
       });
-      const request = mapAgentRunCommand(command, { userId: req.auth?.userId });
       const bot = getBot();
+      const request = await resolveAuthoritativeConnectorSelection({
+        bot,
+        connectorAccessPort,
+        request: mapAgentRunCommand(command, { userId: req.auth?.userId }),
+      });
       bot?.emitRuntimeEvent?.("debug_resend_http_received", {
         sessionId: request.sessionId,
         parentSessionId: request.parentSessionId,
@@ -142,7 +184,6 @@ export function createChatRunService({
   }
 
   return {
-    normalizeSelectedConnectors,
     mapAgentRunCommand,
     handleChat,
   };

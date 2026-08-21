@@ -82,6 +82,17 @@ function buildApiUrl(baseUrl = "", path = "") {
   return `${base}${path}`;
 }
 
+function resolveResponsesOutputText(result = {}) {
+  const sdkOutputText = String(result?.output_text || "").trim();
+  if (sdkOutputText) return sdkOutputText;
+  return (Array.isArray(result?.output) ? result.output : [])
+    .flatMap((item) => (Array.isArray(item?.content) ? item.content : []))
+    .filter((item) => item?.type === "output_text")
+    .map((item) => String(item?.text || ""))
+    .join("")
+    .trim();
+}
+
 function normalizeCount(value = 1, modelName = "") {
   const count = Math.min(10, Math.max(1, Math.floor(Number(value || 1)) || 1));
   return String(modelName || "")
@@ -335,7 +346,7 @@ export async function executeOpenAiOperation({
       { signal: signal || undefined },
     );
     return {
-      rawText: String(result?.output_text || "").trim(),
+      rawText: resolveResponsesOutputText(result),
       output: Array.isArray(result?.output) ? result.output : [],
     };
   }
@@ -384,7 +395,7 @@ export async function executeOpenAiOperation({
       { signal: signal || undefined },
     );
     return {
-      rawText: String(result?.output_text || "").trim(),
+      rawText: resolveResponsesOutputText(result),
       output: Array.isArray(result?.output) ? result.output : [],
     };
   }
@@ -405,7 +416,7 @@ export async function executeOpenAiOperation({
       { signal: signal || undefined },
     );
     return {
-      rawText: String(result?.output_text || "").trim(),
+      rawText: resolveResponsesOutputText(result),
       imageArtifacts: extractResponsesImages(result?.output),
       output: Array.isArray(result?.output) ? result.output : [],
     };

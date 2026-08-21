@@ -15,6 +15,7 @@ export const AGENT_RUN_EVENT = Object.freeze({
   AUTHORITY_EVENT_COMMITTED: "authority_event_committed",
   TURN_LIFECYCLE_COMMITTED: "turn_lifecycle_committed",
   TURN_COMMITTED: "turn_committed",
+  TURN_ATTACHMENTS_BOUND: "turn_attachments_bound",
   LIFECYCLE_STATE_CHANGED: "agent_lifecycle_state_changed",
 });
 

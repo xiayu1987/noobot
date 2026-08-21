@@ -15,9 +15,15 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick, ref, toRef } from "vue";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { classifyRealtimeLog } from "../../../../../src/app/state/sessionMessageState.js";
-import { logResendDebug, setResendDebugLogSink } from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
+import {
+  logResendDebug,
+  setResendDebugLogSink,
+} from "../../../../../src/modules/debug/loggers/resendDebugLogger.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { selectToolTimeline, selectToolTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import {
+  selectToolTimeline,
+  selectToolTimelineLogs,
+} from "../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import {
   BackendChannelState,
@@ -27,10 +33,7 @@ import {
 import { confirmTurnRuntimeDeletion } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { createAuthoritativeMessageEnvelope } from "../helpers/useReconnectReplayHelper.js";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
-import {
-  EXECUTION_SNAPSHOT_WIRE_EVENT,
-  EXECUTION_TREE_WIRE_EVENT,
-} from "@noobot/session-protocol";
+import { EXECUTION_SNAPSHOT_WIRE_EVENT, EXECUTION_TREE_WIRE_EVENT } from "@noobot/session-protocol";
 
 function canonicalExecutionQueryEvent({ family, eventType, commandId, sequence, payload }) {
   return createEventEnvelope({
@@ -82,29 +85,35 @@ describe("useChatSession reconnect replay", () => {
     });
 
     expect(sessionLogClientMock.debug).toHaveBeenCalledWith("resend", expect.any(Function));
-    expect(sessionLogClientMock.debug.mock.results.at(-1).value).toEqual(expect.objectContaining({
-      category: "debug",
-      debugType: "resend",
-      event: "resend.injected",
-      sessionId: "s-log",
-      dialogProcessId: "dp-log",
-      turnScopeId: "ts-log",
-      data: expect.objectContaining({
+    expect(sessionLogClientMock.debug.mock.results.at(-1).value).toEqual(
+      expect.objectContaining({
+        category: "debug",
+        debugType: "resend",
         event: "resend.injected",
-        detail: "through-session-log-client",
+        sessionId: "s-log",
+        dialogProcessId: "dp-log",
+        turnScopeId: "ts-log",
+        data: expect.objectContaining({
+          event: "resend.injected",
+          detail: "through-session-log-client",
+        }),
       }),
-    }));
+    );
   });
 
   it("does not recreate a confirmed-deleted Turn from reconnect message replay", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({
-      id: "s-deleted",
-      sessionId: "s-deleted",
-      messages: [],
-    })];
+    store.sessions = [
+      createSessionFixture({
+        id: "s-deleted",
+        sessionId: "s-deleted",
+        messages: [],
+      }),
+    ];
     store.activeSessionId = "s-deleted";
-    confirmTurnRuntimeDeletion(store.turnRuntimeRegistry, "turn-deleted", { sessionId: "s-deleted" });
+    confirmTurnRuntimeDeletion(store.turnRuntimeRegistry, "turn-deleted", {
+      sessionId: "s-deleted",
+    });
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
       onReconnectData({
         event: "content",
@@ -122,7 +131,9 @@ describe("useChatSession reconnect replay", () => {
     await session.handleReconnect();
 
     expect(store.sessions[0].messages).toEqual([]);
-    expect(store.turnRuntimeRegistry.sessions["s-deleted"]?.turns?.["turn-deleted"]).toBeUndefined();
+    expect(
+      store.turnRuntimeRegistry.sessions["s-deleted"]?.turns?.["turn-deleted"],
+    ).toBeUndefined();
   });
 
   it("projects live tool call and result received after refresh into the restored assistant", async () => {
@@ -137,21 +148,23 @@ describe("useChatSession reconnect replay", () => {
       pending: true,
       realtimeLogs: [],
     };
-    store.sessions = [{
-      id: "s-live",
-      sessionId: "s-live",
-      title: "live",
-      isLocal: false,
-      loaded: true,
-      messages: [{ role: RoleEnum.USER, content: "run" }, assistant],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      currentTaskId: "",
-      currentTaskStatus: "running",
-      messageCount: 2,
-      lastMessage: assistant,
-    }];
+    store.sessions = [
+      {
+        id: "s-live",
+        sessionId: "s-live",
+        title: "live",
+        isLocal: false,
+        loaded: true,
+        messages: [{ role: RoleEnum.USER, content: "run" }, assistant],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+        currentTaskId: "",
+        currentTaskStatus: "running",
+        messageCount: 2,
+        lastMessage: assistant,
+      },
+    ];
     store.activeSessionId = "s-live";
     const envelope = (eventType, sequence, extra = {}) =>
       createAuthoritativeMessageEnvelope(eventType, {
@@ -174,9 +187,11 @@ describe("useChatSession reconnect replay", () => {
     const session = createChatSession({ classifyRealtimeLog });
     await session.handleReconnect();
 
-    expect(sessionLogClientMock.log).not.toHaveBeenCalledWith(expect.objectContaining({
-      event: "frontend.thinkingReplay.liveProjectionTargetMissing",
-    }));
+    expect(sessionLogClientMock.log).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "frontend.thinkingReplay.liveProjectionTargetMissing",
+      }),
+    );
 
     const restoredAssistant = store.sessions[0].messages.find(
       (message) => message.role === RoleEnum.ASSISTANT && message.dialogProcessId === "dp-live",
@@ -200,11 +215,13 @@ describe("useChatSession reconnect replay", () => {
       pending: true,
       realtimeLogs: [],
     };
-    store.sessions = [createSessionFixture({
-      id: "s-after-reconnect",
-      sessionId: "s-after-reconnect",
-      messages: [{ role: RoleEnum.USER, content: "continue" }, assistant],
-    })];
+    store.sessions = [
+      createSessionFixture({
+        id: "s-after-reconnect",
+        sessionId: "s-after-reconnect",
+        messages: [{ role: RoleEnum.USER, content: "continue" }, assistant],
+      }),
+    ];
     store.activeSessionId = "s-after-reconnect";
     let deliverLiveEvent = null;
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
@@ -213,23 +230,23 @@ describe("useChatSession reconnect replay", () => {
     const session = createChatSession({ classifyRealtimeLog });
 
     await session.handleReconnect();
-    deliverLiveEvent(createAuthoritativeMessageEnvelope("llm_delta", {
-      eventId: "evt-after-reconnect-delta",
-      sessionId: "s-after-reconnect",
-      messageId: "msg-after-reconnect",
-      presentationMessageId: "msg-after-reconnect",
-      dialogProcessId: "dp-after-reconnect",
-      turnScopeId: "turn-after-reconnect",
-      seq: 1,
-      text: "message continued after replay",
-    }));
+    deliverLiveEvent(
+      createAuthoritativeMessageEnvelope("llm_delta", {
+        eventId: "evt-after-reconnect-delta",
+        sessionId: "s-after-reconnect",
+        messageId: "msg-after-reconnect",
+        presentationMessageId: "msg-after-reconnect",
+        dialogProcessId: "dp-after-reconnect",
+        turnScopeId: "turn-after-reconnect",
+        seq: 1,
+        text: "message continued after replay",
+      }),
+    );
 
     await vi.waitFor(() => {
       expect(assistant.content).toContain("message continued after replay");
     });
-    expect(assistant.messageEventState.consumedEventIds).toEqual([
-      "evt-after-reconnect-delta",
-    ]);
+    expect(assistant.messageEventState.consumedEventIds).toEqual(["evt-after-reconnect-delta"]);
   });
 
   it("projects a stopped-turn continuation by turnScopeId when both assistants share a dialogProcessId", async () => {
@@ -252,46 +269,48 @@ describe("useChatSession reconnect replay", () => {
       pending: true,
       realtimeLogs: [],
     };
-    store.sessions = [{
-      id: "s-continue",
-      sessionId: "s-continue",
-      title: "continue",
-      isLocal: false,
-      loaded: true,
-      messages: [
-        { role: RoleEnum.USER, content: "first", turnScopeId: "turn-stopped" },
-        stoppedAssistant,
-        { role: RoleEnum.USER, content: "continue", turnScopeId: "turn-continued" },
-        continuedAssistant,
-      ],
-      rawMessages: [],
-      sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
-      currentTaskId: "",
-      currentTaskStatus: "running",
-      messageCount: 4,
-      lastMessage: continuedAssistant,
-    }];
+    store.sessions = [
+      {
+        id: "s-continue",
+        sessionId: "s-continue",
+        title: "continue",
+        isLocal: false,
+        loaded: true,
+        messages: [
+          { role: RoleEnum.USER, content: "first", turnScopeId: "turn-stopped" },
+          stoppedAssistant,
+          { role: RoleEnum.USER, content: "continue", turnScopeId: "turn-continued" },
+          continuedAssistant,
+        ],
+        rawMessages: [],
+        sessionDocs: [],
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+        currentTaskId: "",
+        currentTaskStatus: "running",
+        messageCount: 4,
+        lastMessage: continuedAssistant,
+      },
+    ];
     store.activeSessionId = "s-continue";
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
-      onReconnectData(createAuthoritativeMessageEnvelope("thinking", {
-        eventId: "evt-continued-thinking",
-        sessionId: "s-continue",
-        messageId: "msg-continued",
-        presentationMessageId: "msg-continued",
-        dialogProcessId: "dp-continued",
-        turnScopeId: "turn-continued",
-        seq: 1,
-        text: "new thinking",
-      }));
+      onReconnectData(
+        createAuthoritativeMessageEnvelope("thinking", {
+          eventId: "evt-continued-thinking",
+          sessionId: "s-continue",
+          messageId: "msg-continued",
+          presentationMessageId: "msg-continued",
+          dialogProcessId: "dp-continued",
+          turnScopeId: "turn-continued",
+          seq: 1,
+          text: "new thinking",
+        }),
+      );
     });
 
     const session = createChatSession({ classifyRealtimeLog });
     await session.handleReconnect();
 
-    expect(stoppedAssistant.realtimeLogs).toEqual([
-      { type: "thinking", text: "old thinking" },
-    ]);
+    expect(stoppedAssistant.realtimeLogs).toEqual([{ type: "thinking", text: "old thinking" }]);
     expect(selectActivityTimelineLogs(continuedAssistant)).toEqual([
       expect.objectContaining({ text: "new thinking" }),
     ]);
@@ -311,7 +330,14 @@ describe("useChatSession reconnect replay", () => {
         loaded: true,
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          {
+            role: RoleEnum.ASSISTANT,
+            messageId: "msg-old",
+            presentationMessageId: "msg-old",
+            dialogProcessId: "dp-old",
+            turnScopeId: "turn-old",
+            content: "old keep",
+          },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
@@ -326,7 +352,7 @@ describe("useChatSession reconnect replay", () => {
         ],
         rawMessages: [],
         sessionDocs: [],
-        connectorPanelState: { selectedConnectors: {} },
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
         currentTaskId: "",
         currentTaskStatus: "idle",
         messageCount: 4,
@@ -341,17 +367,19 @@ describe("useChatSession reconnect replay", () => {
     store.interactionSubmitting = true;
 
     wsClientMock.reconnect.mockImplementationOnce(async ({ onReconnectData }) => {
-      onReconnectData(createAuthoritativeMessageEnvelope("authoritative_final_content", {
-        eventId: "evt-new-final",
-        sessionId: "s-1",
-        messageId: "msg-new",
-        presentationMessageId: "msg-new",
-        dialogProcessId: "dp-new",
-        turnScopeId: "turn-new",
-        seq: 1,
-        text: "new final answer",
-        modelAlias: "alias-1",
-      }));
+      onReconnectData(
+        createAuthoritativeMessageEnvelope("authoritative_final_content", {
+          eventId: "evt-new-final",
+          sessionId: "s-1",
+          messageId: "msg-new",
+          presentationMessageId: "msg-new",
+          dialogProcessId: "dp-new",
+          turnScopeId: "turn-new",
+          seq: 1,
+          text: "new final answer",
+          modelAlias: "alias-1",
+        }),
+      );
       onReconnectData({
         event: StreamEventEnum.DONE,
         data: {
@@ -404,7 +432,14 @@ describe("useChatSession reconnect replay", () => {
             sessionId: "s-1",
             messages: [
               { role: RoleEnum.USER, content: "old q" },
-              { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+              {
+                role: RoleEnum.ASSISTANT,
+                messageId: "msg-old",
+                presentationMessageId: "msg-old",
+                dialogProcessId: "dp-old",
+                turnScopeId: "turn-old",
+                content: "old keep",
+              },
               { role: RoleEnum.USER, content: "new q" },
               {
                 role: RoleEnum.ASSISTANT,
@@ -420,7 +455,14 @@ describe("useChatSession reconnect replay", () => {
         ],
         messages: [
           { role: RoleEnum.USER, content: "old q" },
-          { role: RoleEnum.ASSISTANT, messageId: "msg-old", presentationMessageId: "msg-old", dialogProcessId: "dp-old", turnScopeId: "turn-old", content: "old keep" },
+          {
+            role: RoleEnum.ASSISTANT,
+            messageId: "msg-old",
+            presentationMessageId: "msg-old",
+            dialogProcessId: "dp-old",
+            turnScopeId: "turn-old",
+            content: "old keep",
+          },
           { role: RoleEnum.USER, content: "new q" },
           {
             role: RoleEnum.ASSISTANT,
@@ -472,7 +514,6 @@ describe("useChatSession reconnect replay", () => {
     expect(newAssistant.pending).toBe(true);
   });
 
-
   it("passes current userId to reconnect websocket request", async () => {
     const store = useChatStore();
     store.sessions = [
@@ -485,7 +526,7 @@ describe("useChatSession reconnect replay", () => {
         messages: [],
         rawMessages: [],
         sessionDocs: [],
-        connectorPanelState: { selectedConnectors: {} },
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
         currentTaskId: "",
         currentTaskStatus: "idle",
         messageCount: 0,
@@ -515,15 +556,19 @@ describe("useChatSession reconnect replay", () => {
 
     await session.handleReconnect();
 
-    expect(wsClientMock.reconnect).toHaveBeenCalledWith(expect.objectContaining({
-      currentSessionId: "s-reconnect-user",
-      userId: "u-reconnect",
-    }));
+    expect(wsClientMock.reconnect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentSessionId: "s-reconnect-user",
+        userId: "u-reconnect",
+      }),
+    );
   });
 
   it("restores a workflow Execution tree before its selected snapshot without double-consuming responses", async () => {
     const store = useChatStore();
-    store.sessions = [createSessionFixture({ id: "workflow-session", sessionId: "workflow-session" })];
+    store.sessions = [
+      createSessionFixture({ id: "workflow-session", sessionId: "workflow-session" }),
+    ];
     store.activeSessionId = "workflow-session";
     store.turnRuntimeRegistry.sessions["workflow-session"] = {
       activeTurnScopeId: "workflow-turn",
@@ -574,11 +619,20 @@ describe("useChatSession reconnect replay", () => {
           payload: {
             ...store.turnRuntimeRegistry.executions["workflow-root"],
             commandId: payload.commandId,
-            tree: { executions: { "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"], "child-agent": child } },
+            tree: {
+              executions: {
+                "workflow-root": store.turnRuntimeRegistry.executions["workflow-root"],
+                "child-agent": child,
+              },
+            },
           },
         });
       }
-      const execution = { ...store.turnRuntimeRegistry.executions["workflow-root"], revision: 2, sequence: 3 };
+      const execution = {
+        ...store.turnRuntimeRegistry.executions["workflow-root"],
+        revision: 2,
+        sequence: 3,
+      };
       return canonicalExecutionQueryEvent({
         family: EVENT_FAMILY.EXECUTION_SNAPSHOT,
         eventType: EXECUTION_SNAPSHOT_WIRE_EVENT,
@@ -587,99 +641,114 @@ describe("useChatSession reconnect replay", () => {
         payload: { ...execution, commandId: payload.commandId, execution },
       });
     });
-    const authFetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, exists: true, messages: [] }) }));
+    const authFetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, exists: true, messages: [] }),
+    }));
     const session = createChatSession({ authFetch });
 
     await session.handleReconnect();
 
     expect(requestOrder).toEqual(["execution.tree.get", "execution.snapshot.get"]);
-    expect(wsClientMock.requestJson).toHaveBeenNthCalledWith(1,
+    expect(wsClientMock.requestJson).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
         commandType: "execution.tree.get",
       }),
       expect.any(Object),
     );
-    expect(wsClientMock.reconnect).toHaveBeenCalledWith(expect.objectContaining({
-      currentSessionId: "workflow-session",
-      knownLifecycleSequenceMap: { "workflow-session": 1 },
-    }));
+    expect(wsClientMock.reconnect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentSessionId: "workflow-session",
+        knownLifecycleSequenceMap: { "workflow-session": 1 },
+      }),
+    );
     expect(store.turnRuntimeRegistry.executions["child-agent"]).toMatchObject(child);
-    expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual(["child-agent"]);
-    expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({ revision: 2, sequence: 3 });
+    expect(store.turnRuntimeRegistry.childExecutionIdsByParentId["workflow-root"]).toEqual([
+      "child-agent",
+    ]);
+    expect(store.turnRuntimeRegistry.executions["workflow-root"]).toMatchObject({
+      revision: 2,
+      sequence: 3,
+    });
     expect(authFetch).toHaveBeenCalledWith("/api/internal/session/u-1/workflow-session?mode=full");
   });
 
   it.each([
     ["手机端发消息，PC 端刷新", "mobile-sender", "pc-refresh"],
     ["PC 端发消息，手机端刷新", "pc-sender", "mobile-refresh"],
-  ])("%s: reconnect 失败后只提示失败，不强制恢复发送中和停止按钮", async (_label, senderId, refresherId) => {
-    const store = useChatStore();
-    store.sessions = [
-      {
-        id: "s-cross-device",
-        sessionId: "s-cross-device",
-        title: "session",
-        isLocal: false,
-        loaded: true,
-        messages: [
-          { role: RoleEnum.USER, content: `hello from ${senderId}` },
-          { role: RoleEnum.ASSISTANT, content: "", pending: false },
-        ],
-        rawMessages: [],
-        sessionDocs: [],
-        connectorPanelState: { selectedConnectors: {} },
-        currentTaskId: "",
-        currentTaskStatus: "idle",
-        messageCount: 2,
-        lastMessage: null,
-        createdAt: "",
-        updatedAt: "",
-      },
-    ];
-    store.activeSessionId = "s-cross-device";
-    store.sending = false;
-    store.canStop = false;
-    wsClientMock.reconnect.mockRejectedValueOnce(new Error("socket reconnect failed"));
+  ])(
+    "%s: reconnect 失败后只提示失败，不强制恢复发送中和停止按钮",
+    async (_label, senderId, refresherId) => {
+      const store = useChatStore();
+      store.sessions = [
+        {
+          id: "s-cross-device",
+          sessionId: "s-cross-device",
+          title: "session",
+          isLocal: false,
+          loaded: true,
+          messages: [
+            { role: RoleEnum.USER, content: `hello from ${senderId}` },
+            { role: RoleEnum.ASSISTANT, content: "", pending: false },
+          ],
+          rawMessages: [],
+          sessionDocs: [],
+          connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+          currentTaskId: "",
+          currentTaskStatus: "idle",
+          messageCount: 2,
+          lastMessage: null,
+          createdAt: "",
+          updatedAt: "",
+        },
+      ];
+      store.activeSessionId = "s-cross-device";
+      store.sending = false;
+      store.canStop = false;
+      wsClientMock.reconnect.mockRejectedValueOnce(new Error("socket reconnect failed"));
 
-    const authFetch = vi.fn();
-    const notify = vi.fn();
+      const authFetch = vi.fn();
+      const notify = vi.fn();
 
-    const session = useChatSession({
-      userId: ref(refresherId),
-      apiKey: ref(""),
-      allowUserInteraction: ref(true),
-      safeConfirm: ref(true),
-      streamOutput: ref(true),
-      botScenario: ref(""),
-      connected: ref(true),
-      ensureConnected: vi.fn(() => true),
-      authFetch,
-      isImageMime: () => false,
-      classifyRealtimeLog: (item) => item,
-      scrollBottom: vi.fn(),
-      notify,
-      clearUploadSelection: vi.fn(),
-    });
+      const session = useChatSession({
+        userId: ref(refresherId),
+        apiKey: ref(""),
+        allowUserInteraction: ref(true),
+        safeConfirm: ref(true),
+        streamOutput: ref(true),
+        botScenario: ref(""),
+        connected: ref(true),
+        ensureConnected: vi.fn(() => true),
+        authFetch,
+        isImageMime: () => false,
+        classifyRealtimeLog: (item) => item,
+        scrollBottom: vi.fn(),
+        notify,
+        clearUploadSelection: vi.fn(),
+      });
 
-    await session.handleReconnect();
+      await session.handleReconnect();
 
-    const assistant = store.sessions[0].messages.find(
-      (message) => message.role === RoleEnum.ASSISTANT,
-    );
-    expect(authFetch).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenCalledWith({ type: "warning", message: "infra.reconnectFailed" });
-    expect(sessionLogClientMock.log).toHaveBeenCalledWith(expect.objectContaining({
-      category: "system",
-      event: "reconnect.failed",
-      sessionId: "s-cross-device",
-      data: expect.objectContaining({
-        event: "reconnect.failed",
-        error: "socket reconnect failed",
-      }),
-    }));
-    expect(assistant.pending).toBe(false);
-    expect(session.sending.value).toBe(false);
-    expect(session.canStop.value).toBe(false);
-  });
-
+      const assistant = store.sessions[0].messages.find(
+        (message) => message.role === RoleEnum.ASSISTANT,
+      );
+      expect(authFetch).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledWith({ type: "warning", message: "infra.reconnectFailed" });
+      expect(sessionLogClientMock.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: "system",
+          event: "reconnect.failed",
+          sessionId: "s-cross-device",
+          data: expect.objectContaining({
+            event: "reconnect.failed",
+            error: "socket reconnect failed",
+          }),
+        }),
+      );
+      expect(assistant.pending).toBe(false);
+      expect(session.sending.value).toBe(false);
+      expect(session.canStop.value).toBe(false);
+    },
+  );
 });

@@ -50,6 +50,15 @@ export function createConfigScopeService({
           ? descriptions
           : existingPayload?.descriptions || {},
     };
+    const keys =
+      scope === "system"
+        ? await collectConfigTemplateKeys()
+        : await collectUserConfigTemplateKeys(userId);
+    buildConfigParamCatalog({
+      keys,
+      descriptions: nextPayload.descriptions,
+      values: nextPayload.values,
+    });
     if (scope === "system") {
       const payload = await writeWorkspaceConfigParams(nextPayload);
       return { scope, userId: "", payload };

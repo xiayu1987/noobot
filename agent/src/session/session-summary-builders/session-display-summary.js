@@ -3,12 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { createAuthoritativeTurnSnapshot } from "@noobot/authoritative-state/application";
+import { createSessionTurnLifecycleSnapshot } from "../session-turn-read-model.js";
 import { buildSessionDisplayMessages } from "./display-message-list.js";
 import { buildSessionDisplayStats } from "./display-summary-stats.js";
 import { attachSessionToolArtifacts } from "./display-tool-artifacts.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 23;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 24;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
@@ -52,17 +52,11 @@ function resolveSessionTitle(session, messages, sessionId) {
     : sessionId.slice(0, 8);
 }
 
-function buildTurnLifecycleSnapshot({ session, messages, turnTimings, sessionId, lifecycle }) {
+function buildTurnLifecycleSnapshot({ session, sessionId, lifecycle }) {
   if (!lifecycle) return null;
-  const terminalTurnScopeIds = [
-    ...new Set(messages.map((message) => text(message?.turnScopeId)).filter(Boolean)),
-  ];
-  return createAuthoritativeTurnSnapshot({
-    lifecycle,
-    turnTimings,
-    terminalTurnScopeIds,
+  return createSessionTurnLifecycleSnapshot({
+    session,
     commandId: `session-summary:${sessionId}:${Number(lifecycle.sequence || 0)}`,
-    sessionId,
     generatedAt: text(session.updatedAt),
   });
 }

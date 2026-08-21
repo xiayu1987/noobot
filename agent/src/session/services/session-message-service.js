@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { commitTurn } from "./session-message-service/commit-turn.js";
+import { bindTurnAttachments } from "./session-message-service/bind-turn-attachments.js";
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
 import { commitAuthorityEvent } from "./session-message-service/authority-event.js";
@@ -111,6 +112,9 @@ export class SessionMessageService {
 
   async commitTurn(payload = {}) {
     return commitTurn.call(this, payload);
+  }
+  async bindTurnAttachments(payload = {}) {
+    return bindTurnAttachments.call(this, payload);
   }
   async appendTurn(payload = {}) {
     return appendTurn.call(this, payload);
