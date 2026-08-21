@@ -107,17 +107,19 @@ export function registerConnectorRoutes(app, { bot, connectorRuntime, translateT
     withJsonError(async (req, res) => {
       const userId = assertOwner(req, req.params.userId);
       const connectorId = String(req.params.connectorId || "").trim();
-      const deleted = await connectorRuntime.deleteConnector({ userId, connectorId });
-      if (!deleted) {
-        res.status(404).json({ ok: false, error: "connector_not_found" });
-        return;
-      }
+      const connectorExists = (await connectorRuntime.listUserConnectors(userId)).some(
+        (connector) => connector.connectorId === connectorId,
+      );
       const updatedSessionCount = await removeConnectorFromSessionSelections({
         bot,
         userId,
         connectorId,
       });
-      res.json({ ok: true, connectorId, updatedSessionCount });
+      const deleted = connectorExists
+        ? await connectorRuntime.deleteConnector({ userId, connectorId })
+        : false;
+      const connectors = await connectorRuntime.listUserConnectors(userId);
+      res.json({ ok: true, userId, connectorId, deleted, updatedSessionCount, connectors });
     }, jsonOptions),
   );
 

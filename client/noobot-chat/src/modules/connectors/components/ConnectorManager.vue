@@ -69,6 +69,13 @@ async function parseResponse(response) {
   return payload;
 }
 
+function replaceConnectors(payload) {
+  if (!Array.isArray(payload?.connectors)) {
+    throw new TypeError("connector_list_response_invalid");
+  }
+  connectors.value = payload.connectors;
+}
+
 async function refresh() {
   const revision = ++refreshRevision;
   const requestedUserId = String(props.userId || "").trim();
@@ -88,9 +95,7 @@ async function refresh() {
       return;
     }
     catalog.value = Array.isArray(catalogPayload.catalog) ? catalogPayload.catalog : [];
-    connectors.value = Array.isArray(connectorPayload.connectors)
-      ? connectorPayload.connectors
-      : [];
+    replaceConnectors(connectorPayload);
     if (!form.type) form.type = types.value[0] || "";
   } catch (error) {
     if (revision === refreshRevision) ElMessage.error(error.message);
@@ -158,14 +163,14 @@ async function removeConnector(connector) {
   );
   loading.value = true;
   try {
-    await parseResponse(
+    const payload = await parseResponse(
       await deleteUserConnector({
         userId: props.userId,
         connectorId: connector.connectorId,
         fetcher: props.fetcher,
       }),
     );
-    await refresh();
+    replaceConnectors(payload);
     emit("changed");
   } catch (error) {
     ElMessage.error(error.message);
