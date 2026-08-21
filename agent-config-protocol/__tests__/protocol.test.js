@@ -290,7 +290,6 @@ test("current config migration removes every retired config path and prunes empt
     },
     security: {
       execution_isolation: { mode: "host" },
-      path_policy: { resolution: { follow_symbolic_links: false } },
     },
     tools: {
       set_skill_task: { enabled: true },
@@ -298,24 +297,7 @@ test("current config migration removes every retired config path and prunes empt
       doc_to_data: { enabled: true },
       media_to_data: { enabled: true },
       process_content_task: { enabled: true },
-      database_connect_connector: {
-        enabled: true,
-        connectors: { example_database: { password: "${EXAMPLE_DATABASE_PASSWORD}" } },
-      },
-      terminal_connect_connector: {
-        enabled: true,
-        connectors: { example_terminal: { password: "${EXAMPLE_TERMINAL_PASSWORD}" } },
-      },
-      email_connect_connector: {
-        enabled: true,
-        connectors: { example_email: { password: "${EMAIL_AUTH_CODE}" } },
-      },
-      process_connector_tool: { enabled: true },
-      inspect_connectors: { enabled: true },
-      access_connector: {
-        enabled: true,
-        command_file: { enabled: true, allowed_roots: [] },
-      },
+      access_connector: { enabled: true },
       execute_script: {
         enabled: true,
         sandbox_mode: true,
@@ -520,7 +502,13 @@ test("config synchronization recursively adds template nodes through one protoco
     },
     target: {
       workspace_root: "/configured",
-      providers: { primary: { reasoning_effort: "high" } },
+      providers: {
+        primary: { reasoning_effort: "high" },
+        custom: { model: "custom-model", enabled: true },
+      },
+      tools: {
+        obsolete_tool: { enabled: true },
+      },
       user_only: true,
     },
     excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
@@ -535,8 +523,8 @@ test("config synchronization recursively adds template nodes through one protoco
         capabilities: { web_search: true },
       },
       added: { enabled: true },
+      custom: { model: "custom-model", enabled: true },
     },
-    user_only: true,
     tools: {
       execute_script: { enabled: true },
       read_file: { enabled: true },
