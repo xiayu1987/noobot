@@ -72,6 +72,7 @@ function diagnosticContentHash(content) {
 test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Session 审计", async ({
   noobot,
   protocolCapture,
+  request,
 }, testInfo) => {
   await sendMessage(
     noobot.page,
@@ -119,106 +120,125 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
       response.request().method() === "POST",
   );
   await drawer.getByRole("button", { name: /连接|Connect/i }).click();
-  expect((await createdResponse).ok()).toBe(true);
-  await expect(overview.locator(".connector-row", { hasText: connectorName })).toContainText(
-    /已连接|connected/i,
-  );
+  const createdHttpResponse = await createdResponse;
+  expect(createdHttpResponse.ok()).toBe(true);
+  const createdPayload = await createdHttpResponse.json();
+  const connectorId = String(createdPayload?.connection?.connector?.connectorId || "").trim();
+  expect(connectorId).not.toBe("");
 
-  await noobot.page.locator(".composer-icon-btn").first().click();
-  const connectorOption = noobot.page.locator(".connector-option", { hasText: connectorName });
-  await expect(connectorOption).toBeVisible();
-
-  let releaseSelectionWrite;
-  let markSelectionWriteStarted;
-  const selectionWriteStarted = new Promise((resolve) => {
-    markSelectionWriteStarted = resolve;
-  });
-  const selectionWriteGate = new Promise((resolve) => {
-    releaseSelectionWrite = resolve;
-  });
-  await noobot.page.route("**/selection", async (route) => {
-    markSelectionWriteStarted();
-    await selectionWriteGate;
-    await route.continue();
-  });
-  const selectionResponse = noobot.page.waitForResponse(
-    (response) => response.url().endsWith("/selection") && response.request().method() === "PUT",
-  );
-  await connectorOption.click();
-  await selectionWriteStarted;
-  await noobot.page.locator(".more-collapse-btn").click();
-
-  const pendingSend = sendMessage(
-    noobot.page,
-    uniquePrompt(
-      testInfo,
-      "这是本地数据库连接器质量验证。必须实际调用当前已选择的 access_connector 执行只读查询 SELECT * FROM users WHERE 1=1;，并等待真实工具结果后再回复。没有真实工具调用和工具结果时，不得声称查询已执行或返回结果。",
-    ),
-  );
-  await noobot.page.waitForTimeout(250);
-  expect(commandsForSession(protocolCapture, noobot.sessionId)).toHaveLength(1);
-
-  releaseSelectionWrite();
-  const selectionHttpResponse = await selectionResponse;
-  expect(selectionHttpResponse.ok()).toBe(true);
-  const selectionPayload = await selectionHttpResponse.json();
-  expect(selectionPayload.selectedConnectorIds).toHaveLength(1);
-  const [connectorId] = selectionPayload.selectedConnectorIds;
-  await pendingSend;
-  await expect(connectorOption.locator(".el-checkbox__input")).toHaveClass(/is-checked/);
-
-  const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", 1);
-  expect(command.session).toEqual({ createIfAbsent: false, selectedConnectorIds: [] });
-  await waitForNaturalCompletion({
-    page: noobot.page,
-    capture: protocolCapture,
-    sessionId: noobot.sessionId,
-    turnScopeId: command.identity.turnScopeId,
-  });
-
-  const session = await readSessionFact(noobot.userId, noobot.sessionId);
-  expect(session.selectedConnectorIds).toEqual([connectorId]);
-  const executionEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
-  const connectorCall = executionEvents.find(
-    (record) =>
-      record.event === "tool_call_end" &&
-      record.turnScopeId === command.identity.turnScopeId &&
-      record.data?.tool === "access_connector",
-  );
-  expect(connectorCall?.data?.success).toBe(true);
-  const connectorCallStart = executionEvents.find(
-    (record) =>
-      record.event === "tool_call_start" &&
-      record.turnScopeId === command.identity.turnScopeId &&
-      record.data?.toolCallId === connectorCall.data.toolCallId,
-  );
-  expect(connectorCallStart?.data?.args).toEqual({
-    connector_id: connectorId,
-    operation: "execute",
-    input: { command: "SELECT * FROM users WHERE 1=1;" },
-  });
-
-  let traces = modelInvocationTraces(executionEvents).filter(
-    (record) => record.turnScopeId === command.identity.turnScopeId,
-  );
-  if (!traces.length) {
-    traces = await waitForModelInvocationTraces(
-      noobot.userId,
-      noobot.sessionId,
-      (records) => records.some((record) => record.turnScopeId === command.identity.turnScopeId),
-      { timeoutMs: 120000 },
+  let releaseSelectionWrite = null;
+  try {
+    await expect(overview.locator(".connector-row", { hasText: connectorName })).toContainText(
+      /已连接|connected/i,
     );
-    traces = traces.filter((record) => record.turnScopeId === command.identity.turnScopeId);
+
+    await noobot.page.locator(".composer-icon-btn").first().click();
+    const connectorOption = noobot.page.locator(".connector-option", { hasText: connectorName });
+    await expect(connectorOption).toBeVisible();
+
+    let markSelectionWriteStarted;
+    const selectionWriteStarted = new Promise((resolve) => {
+      markSelectionWriteStarted = resolve;
+    });
+    const selectionWriteGate = new Promise((resolve) => {
+      releaseSelectionWrite = resolve;
+    });
+    await noobot.page.route("**/selection", async (route) => {
+      markSelectionWriteStarted();
+      await selectionWriteGate;
+      await route.continue();
+    });
+    const selectionResponse = noobot.page.waitForResponse(
+      (response) => response.url().endsWith("/selection") && response.request().method() === "PUT",
+    );
+    await connectorOption.click();
+    await selectionWriteStarted;
+    await noobot.page.locator(".more-collapse-btn").click();
+
+    const pendingSend = sendMessage(
+      noobot.page,
+      uniquePrompt(
+        testInfo,
+        "这是本地数据库连接器质量验证。必须实际调用当前已选择的 access_connector 执行只读查询 SELECT * FROM users WHERE 1=1;，并等待真实工具结果后再回复。没有真实工具调用和工具结果时，不得声称查询已执行或返回结果。",
+      ),
+    );
+    await noobot.page.waitForTimeout(250);
+    expect(commandsForSession(protocolCapture, noobot.sessionId)).toHaveLength(1);
+
+    releaseSelectionWrite();
+    releaseSelectionWrite = null;
+    const selectionHttpResponse = await selectionResponse;
+    expect(selectionHttpResponse.ok()).toBe(true);
+    const selectionPayload = await selectionHttpResponse.json();
+    expect(selectionPayload.selectedConnectorIds).toEqual([connectorId]);
+    await pendingSend;
+    await expect(connectorOption.locator(".el-checkbox__input")).toHaveClass(/is-checked/);
+
+    const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send", 1);
+    expect(command.session).toEqual({ createIfAbsent: false, selectedConnectorIds: [] });
+    await waitForNaturalCompletion({
+      page: noobot.page,
+      capture: protocolCapture,
+      sessionId: noobot.sessionId,
+      turnScopeId: command.identity.turnScopeId,
+    });
+
+    const session = await readSessionFact(noobot.userId, noobot.sessionId);
+    expect(session.selectedConnectorIds).toEqual([connectorId]);
+    const executionEvents = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
+    const connectorCall = executionEvents.find(
+      (record) =>
+        record.event === "tool_call_end" &&
+        record.turnScopeId === command.identity.turnScopeId &&
+        record.data?.tool === "access_connector",
+    );
+    expect(connectorCall?.data?.success).toBe(true);
+    const connectorCallStart = executionEvents.find(
+      (record) =>
+        record.event === "tool_call_start" &&
+        record.turnScopeId === command.identity.turnScopeId &&
+        record.data?.toolCallId === connectorCall.data.toolCallId,
+    );
+    expect(connectorCallStart?.data?.args).toEqual({
+      connector_id: connectorId,
+      operation: "execute",
+      input: { command: "SELECT * FROM users WHERE 1=1;" },
+    });
+
+    let traces = modelInvocationTraces(executionEvents).filter(
+      (record) => record.turnScopeId === command.identity.turnScopeId,
+    );
+    if (!traces.length) {
+      traces = await waitForModelInvocationTraces(
+        noobot.userId,
+        noobot.sessionId,
+        (records) => records.some((record) => record.turnScopeId === command.identity.turnScopeId),
+        { timeoutMs: 120000 },
+      );
+      traces = traces.filter((record) => record.turnScopeId === command.identity.turnScopeId);
+    }
+    const expectedConnectorContext = connectorContextMessage(connectorId, connectorName);
+    const primaryEvidence = traces
+      .filter((record) => record.data?.invocation?.flow === "agent.main")
+      .flatMap((record) => record.data?.messages?.evidence || []);
+    expect(primaryEvidence).toContainEqual(
+      expect.objectContaining({
+        role: "system",
+        contentLength: expectedConnectorContext.length,
+        contentHash: diagnosticContentHash(expectedConnectorContext),
+      }),
+    );
+  } finally {
+    releaseSelectionWrite?.();
+    const cleanupResponse = await request.delete(
+      `/api/internal/connectors/${encodeURIComponent(noobot.userId)}/${encodeURIComponent(connectorId)}`,
+      { headers: { "x-api-key": noobot.connectConfig.apiKey } },
+    );
+    const cleanupPayload = await cleanupResponse.json();
+    if (!cleanupResponse.ok() || cleanupPayload?.ok !== true || cleanupPayload?.deleted !== true) {
+      throw new Error(
+        `PBE connector cleanup failed (${cleanupResponse.status()}): ${String(cleanupPayload?.error || "unknown error")}`,
+      );
+    }
   }
-  const expectedConnectorContext = connectorContextMessage(connectorId, connectorName);
-  const primaryEvidence = traces
-    .filter((record) => record.data?.invocation?.flow === "agent.main")
-    .flatMap((record) => record.data?.messages?.evidence || []);
-  expect(primaryEvidence).toContainEqual(
-    expect.objectContaining({
-      role: "system",
-      contentLength: expectedConnectorContext.length,
-      contentHash: diagnosticContentHash(expectedConnectorContext),
-    }),
-  );
 });

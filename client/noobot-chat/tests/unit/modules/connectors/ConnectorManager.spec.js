@@ -97,7 +97,11 @@ describe("ConnectorManager", () => {
     expect(wrapper.text()).not.toContain("PBE delete target");
     expect(wrapper.text()).toContain("keep target");
     expect(wrapper.emitted("changed")).toHaveLength(1);
-    expect(fetcher.mock.calls.filter(([, options]) => options?.method === "DELETE")).toHaveLength(1);
-    expect(fetcher.mock.calls.filter(([url, options]) => !url.endsWith("/catalog") && !options?.method)).toHaveLength(1);
+    expect(fetcher.mock.calls.filter(([, options]) => options?.method === "DELETE")).toHaveLength(
+      1,
+    );
+    expect(
+      fetcher.mock.calls.filter(([url, options]) => !url.endsWith("/catalog") && !options?.method),
+    ).toHaveLength(1);
   });
 });

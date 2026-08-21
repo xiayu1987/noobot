@@ -10,13 +10,14 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readJsonlArtifactFile, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readJsonlArtifactFile,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(
-    path.join(os.tmpdir(), "noobot-session-boundary-"),
-  );
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
   try {
     return await fn(workspaceRoot);
   } finally {
@@ -32,14 +33,6 @@ async function exists(filePath) {
     return false;
   }
 }
-
-
-
-
-
-
-
-
 
 test("session/task/execution repositories should keep file ownership boundaries", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -70,27 +63,30 @@ test("session/task/execution repositories should keep file ownership boundaries"
     });
     assert.equal(await exists(sessionScope.taskFile), true);
 
-    await runtime.repositories.executionRepository.appendLog(
-      userId,
-      sessionId,
-      { event: "start", dialogProcessId: "dp-1" },
-    );
+    await runtime.repositories.executionRepository.appendLog(userId, sessionId, {
+      event: "start",
+      dialogProcessId: "dp-1",
+    });
     assert.equal(await exists(sessionScope.executionFile), true);
     const executionEventsFile = path.join(sessionScope.sessionDir, "execution.jsonl");
-    assert.equal(await exists(path.join(sessionScope.sessionDir, "execution-events/index.json")), true);
+    assert.equal(
+      await exists(path.join(sessionScope.sessionDir, "execution-events/index.json")),
+      true,
+    );
 
     const taskBundle = JSON.parse(await readFile(sessionScope.taskFile, "utf8"));
     assert.equal(taskBundle.currentTaskId, "t1");
-    const executionBundle = JSON.parse(
-      await readFile(sessionScope.executionFile, "utf8"),
-    );
+    const executionBundle = JSON.parse(await readFile(sessionScope.executionFile, "utf8"));
     assert.equal("logs" in executionBundle, false);
     assert.equal(executionBundle.dialogProcessId, "dp-1");
     const executionEvents = await readJsonlArtifactFile(executionEventsFile);
     assert.equal(executionEvents.length, 1);
     assert.equal(executionEvents[0].event, "start");
     assert.equal(executionEvents[0].dialogProcessId, "dp-1");
-    const restoredBundle = await runtime.repositories.executionRepository.getBundle(userId, sessionId);
+    const restoredBundle = await runtime.repositories.executionRepository.getBundle(
+      userId,
+      sessionId,
+    );
     assert.equal(restoredBundle.dialogProcessId, "dp-1");
     assert.equal(restoredBundle.logs.length, 1);
     assert.equal(restoredBundle.logs[0].event, "start");
@@ -131,9 +127,21 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     });
     await runtime.sessionCrudService.ensureSession(userId, "C", "B");
 
-    const scopeA = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "A", "");
-    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "B", "A");
-    const scopeC = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "C", "B");
+    const scopeA = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      "A",
+      "",
+    );
+    const scopeB = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      "B",
+      "A",
+    );
+    const scopeC = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      "C",
+      "B",
+    );
 
     const result = await runtime.sessionTreeService.deleteSessionBranch({
       userId,
@@ -153,19 +161,62 @@ test("deleteSessionBranch should remove descendant directories and tree nodes", 
     assert.deepEqual(tree.nodes.A.children, []);
 
     const summary = await runtime.repositories.sessionRepository.readSessionsSummary(userId);
-    assert.deepEqual(summary.sessions.map((item) => item.sessionId), ["A"]);
+    assert.deepEqual(
+      summary.sessions.map((item) => item.sessionId),
+      ["A"],
+    );
   });
 });
 
+test("deleteSessionBranch tombstones persisted child Sessions outside the Session Tree", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u1";
+    const rootSessionId = "workflow-root";
+    const childSessionId = "workflow-child";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
 
+    const runtime = createSessionServices({ workspaceRoot });
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: rootSessionId,
+    });
+    await runtime.sessionCrudService.ensureSession(userId, rootSessionId);
+    await runtime.repositories.sessionRepository.ensureSession({
+      userId,
+      sessionId: childSessionId,
+      parentSessionId: rootSessionId,
+    });
 
+    const treeBeforeDelete = await runtime.sessionTreeService.getSessionTree({ userId });
+    assert.equal(Boolean(treeBeforeDelete.nodes[childSessionId]), false);
+    const rootScope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      rootSessionId,
+    );
 
+    const result = await runtime.sessionTreeService.deleteSessionBranch({
+      userId,
+      sessionId: rootSessionId,
+    });
 
-
-
-
-
-
+    assert.deepEqual(result.deletedSessionIds.sort(), [childSessionId, rootSessionId]);
+    assert.equal(
+      await runtime.repositories.sessionRepository.isSessionDeleted(userId, childSessionId),
+      true,
+    );
+    assert.equal(
+      await runtime.repositories.fileSystemExecutionRepository.appendLog(
+        userId,
+        childSessionId,
+        { event: "late-workflow-log" },
+        {},
+        rootSessionId,
+      ),
+      false,
+    );
+    assert.equal(await exists(rootScope.sessionDir), false);
+  });
+});
 
 test("appendTurn should not recreate session after deletion marker is set", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -179,7 +230,10 @@ test("appendTurn should not recreate session after deletion marker is set", asyn
     );
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      sessionId,
+    );
     assert.equal(await exists(scope.sessionFile), true);
 
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
@@ -204,20 +258,30 @@ test("task and execution writes should not recreate a deleted session directory"
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
-    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
-
-    assert.equal(await runtime.repositories.taskRepository.save(userId, sessionId, {
-      taskId: "late-task",
-      taskName: "late task",
-      taskStatus: "start",
-    }), false);
-    assert.equal(await runtime.repositories.fileSystemExecutionRepository.saveBundle(userId, sessionId, {}), false);
-    assert.equal(await runtime.repositories.fileSystemExecutionRepository.appendLog(
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
       userId,
       sessionId,
-      { event: "late-log" },
-    ), false);
+    );
+    await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
+
+    assert.equal(
+      await runtime.repositories.taskRepository.save(userId, sessionId, {
+        taskId: "late-task",
+        taskName: "late task",
+        taskStatus: "start",
+      }),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.fileSystemExecutionRepository.saveBundle(userId, sessionId, {}),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.fileSystemExecutionRepository.appendLog(userId, sessionId, {
+        event: "late-log",
+      }),
+      false,
+    );
     assert.equal(await exists(scope.sessionDir), false);
 
     const restartedRuntime = createSessionServices({ workspaceRoot });
@@ -248,24 +312,18 @@ test("late execution initialization should not restore a deleted session tree no
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    assert.equal(
-      await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }),
-      false,
-    );
+    assert.equal(await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId }), false);
     const tree = await runtime.sessionTreeService.getSessionTree({ userId });
     assert.equal(Boolean(tree.nodes[sessionId]), false);
     assert.equal(tree.roots.includes(sessionId), false);
     assert.deepEqual(
-      (await runtime.sessionCrudService.getAllSessionSummaries({ userId }))
-        .map((item) => item.sessionId),
+      (await runtime.sessionCrudService.getAllSessionSummaries({ userId })).map(
+        (item) => item.sessionId,
+      ),
       [],
     );
   });
 });
-
-
-
-
 
 test("persistenceContext writes should respect deleted-session tombstones", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -275,51 +333,72 @@ test("persistenceContext writes should respect deleted-session tombstones", asyn
     const runtime = createSessionServices({ workspaceRoot });
 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
-    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, sessionId);
+    const scope = await runtime.repositories.sessionRepository.resolveSessionScope(
+      userId,
+      sessionId,
+    );
     const persistenceContext = {
       locationResolver: runtime.repositories.sessionRepository.sessionPathResolver,
     };
     await runtime.sessionTreeService.deleteSessionBranch({ userId, sessionId });
 
-    assert.equal(await runtime.repositories.sessionRepository.ensureSession({
-      userId,
-      sessionId,
-      persistenceContext,
-    }), false);
-    assert.equal(await runtime.repositories.sessionRepository.findById(
-      userId,
-      sessionId,
-      "",
-      persistenceContext,
-    ), null);
-    assert.equal(await runtime.repositories.sessionRepository.save(
-      userId,
-      { sessionId, messages: [{ role: "user", content: "late" }] },
-      "",
-      { persistenceContext },
-    ), false);
-    assert.equal(await runtime.repositories.taskRepository.save(
-      userId,
-      sessionId,
-      { taskId: "late-task", taskName: "late", taskStatus: "start" },
-      "",
-      persistenceContext,
-    ), false);
-    assert.equal(await runtime.repositories.fileSystemExecutionRepository.saveBundle(
-      userId,
-      sessionId,
-      {},
-      "",
-      persistenceContext,
-    ), false);
-    assert.equal(await runtime.repositories.fileSystemExecutionRepository.appendLog(
-      userId,
-      sessionId,
-      { event: "late" },
-      {},
-      "",
-      persistenceContext,
-    ), false);
+    assert.equal(
+      await runtime.repositories.sessionRepository.ensureSession({
+        userId,
+        sessionId,
+        persistenceContext,
+      }),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.sessionRepository.findById(
+        userId,
+        sessionId,
+        "",
+        persistenceContext,
+      ),
+      null,
+    );
+    assert.equal(
+      await runtime.repositories.sessionRepository.save(
+        userId,
+        { sessionId, messages: [{ role: "user", content: "late" }] },
+        "",
+        { persistenceContext },
+      ),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.taskRepository.save(
+        userId,
+        sessionId,
+        { taskId: "late-task", taskName: "late", taskStatus: "start" },
+        "",
+        persistenceContext,
+      ),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.fileSystemExecutionRepository.saveBundle(
+        userId,
+        sessionId,
+        {},
+        "",
+        persistenceContext,
+      ),
+      false,
+    );
+    assert.equal(
+      await runtime.repositories.fileSystemExecutionRepository.appendLog(
+        userId,
+        sessionId,
+        { event: "late" },
+        {},
+        "",
+        persistenceContext,
+      ),
+      false,
+    );
     assert.equal(await exists(scope.sessionDir), false);
     assert.deepEqual(await runtime.repositories.sessionRepository.listSessionIds(userId), []);
   });
@@ -359,7 +438,10 @@ test("stale generation token blocks session, task, and execution writes without 
     await runtime.sessionCrudService.ensureSession(userId, sessionId);
     const lifecycle = await repo.getSessionLifecycle(userId, sessionId);
     const scope = await repo.resolveSessionScope(userId, sessionId);
-    const staleContext = { sessionGeneration: lifecycle.generation, locationResolver: repo.sessionPathResolver };
+    const staleContext = {
+      sessionGeneration: lifecycle.generation,
+      locationResolver: repo.sessionPathResolver,
+    };
     await repo._writeSessionLifecycleRecord(userId, sessionId, {
       ...lifecycle,
       generation: lifecycle.generation + 1,
@@ -367,15 +449,37 @@ test("stale generation token blocks session, task, and execution writes without 
     });
     const sessionFileBefore = await readFile(scope.sessionFile, "utf8");
 
-    await assert.rejects(repo.save(userId, { sessionId, messages: [{ role: "user", content: "late" }] }, "", {
-      persistenceContext: staleContext,
-    }), { code: "SESSION_GENERATION_STALE" });
-    await assert.rejects(runtime.repositories.taskRepository.save(userId, sessionId, {
-      taskId: "late-task", taskName: "late", taskStatus: "start",
-    }, "", staleContext), { code: "SESSION_GENERATION_STALE" });
-    await assert.rejects(runtime.repositories.fileSystemExecutionRepository.appendLog(
-      userId, sessionId, { event: "late" }, {}, "", staleContext,
-    ), { code: "SESSION_GENERATION_STALE" });
+    await assert.rejects(
+      repo.save(userId, { sessionId, messages: [{ role: "user", content: "late" }] }, "", {
+        persistenceContext: staleContext,
+      }),
+      { code: "SESSION_GENERATION_STALE" },
+    );
+    await assert.rejects(
+      runtime.repositories.taskRepository.save(
+        userId,
+        sessionId,
+        {
+          taskId: "late-task",
+          taskName: "late",
+          taskStatus: "start",
+        },
+        "",
+        staleContext,
+      ),
+      { code: "SESSION_GENERATION_STALE" },
+    );
+    await assert.rejects(
+      runtime.repositories.fileSystemExecutionRepository.appendLog(
+        userId,
+        sessionId,
+        { event: "late" },
+        {},
+        "",
+        staleContext,
+      ),
+      { code: "SESSION_GENERATION_STALE" },
+    );
 
     assert.equal(await readFile(scope.sessionFile, "utf8"), sessionFileBefore);
     assert.equal(await exists(scope.taskFile), false);

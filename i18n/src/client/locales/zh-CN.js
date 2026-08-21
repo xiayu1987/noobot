@@ -113,7 +113,6 @@ export const zhCNMessages = {
     resetWorkspaceTitle: "重置工作区",
     resetAllWorkspaceTitle: "重置所有用户工作区",
     noDescription: "（无说明）",
-    noParams: "暂无参数",
     allWorkspacePrefix: "[全部工作区] ",
     noFileSelected: "未选择文件",
     download: "下载",
