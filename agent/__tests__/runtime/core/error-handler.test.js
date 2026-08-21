@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildEngineErrorPayload } from "../../../src/runtime/errors/error-handler.js";
+import { recoverableToolError } from "../../../src/shared/errors/index.js";
 import { resolveErrorMessage } from "../../../src/shared/utils/error-utils.js";
 
 test("structured abort identity is the canonical error message", () => {
@@ -49,4 +50,17 @@ test("engine abort payload uses the structured signal reason", () => {
   assert.equal(payload.message, "run timeout after 18000000ms");
   assert.equal(payload.error.message, "run timeout after 18000000ms");
   assert.equal(payload.error.type, "run_timeout");
+});
+
+test("engine payload preserves the recoverable tool error classification", () => {
+  const error = recoverableToolError("configured model was not found", {
+    code: "RECOVERABLE_MODEL_NOT_FOUND",
+  });
+
+  const payload = buildEngineErrorPayload({ error });
+
+  assert.equal(payload.classification, "retryable");
+  assert.equal(payload.error.retryable, true);
+  assert.equal(payload.error.fatal, false);
+  assert.equal(payload.error.code, "RECOVERABLE_MODEL_NOT_FOUND");
 });

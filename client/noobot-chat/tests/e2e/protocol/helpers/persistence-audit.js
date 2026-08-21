@@ -51,7 +51,11 @@ function failSummaryAudit(message, report) {
   throw error;
 }
 
-export async function auditSessionSummaryArtifacts(userId, sessionId, { expectation = "required" } = {}) {
+export async function auditSessionSummaryArtifacts(
+  userId,
+  sessionId,
+  { expectation = "required", requiredTitlePrefix = "" } = {},
+) {
   const root = sessionRoot(userId, sessionId);
   const summaryFiles = (await findFilesNamed(root, "session-summary.json")).sort();
   const sessionsIndexFile = path.join(workspaceRoot(), userId, "runtime/session/sessions.json");
@@ -74,6 +78,7 @@ export async function auditSessionSummaryArtifacts(userId, sessionId, { expectat
     summaryBytes: 0,
     detailBytes: 0,
     listAvailability: String(indexedSession?.availability || ""),
+    listTitle: String(indexedSession?.title || ""),
     sessions: [],
   };
   if (expectation === "forbidden") {
@@ -94,6 +99,12 @@ export async function auditSessionSummaryArtifacts(userId, sessionId, { expectat
   if (expectation !== "required") failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
   if (indexedSession?.availability !== "available") {
     failSummaryAudit(`available session is missing its canonical sessions index projection: ${sessionId}`, report);
+  }
+  if (requiredTitlePrefix && !String(indexedSession.title || "").startsWith(requiredTitlePrefix)) {
+    failSummaryAudit(
+      `session title is missing required identity prefix ${requiredTitlePrefix}: ${sessionId}`,
+      report,
+    );
   }
   if (!summaryFiles.length) failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
 

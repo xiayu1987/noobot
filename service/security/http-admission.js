@@ -6,7 +6,7 @@
 import { ipKeyGenerator } from "express-rate-limit";
 
 export const HTTP_ADMISSION_POLICY = Object.freeze({
-  connection: Object.freeze({ limit: 10, windowMs: 60000 }),
+  connection: Object.freeze({ limit: 120, windowMs: 60000 }),
   mutation: Object.freeze({ limit: 120, windowMs: 60000 }),
   read: Object.freeze({ limit: 600, windowMs: 60000 }),
 });

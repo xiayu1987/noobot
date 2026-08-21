@@ -205,44 +205,7 @@ Session 日志 WebSocket：
 - `plugins.workflow.semanticModel = "GLM_5_1"`
 - 全局示例中 `plugins.workflow.parallelNodeExecution = true`
 
-### 3.6 连接器预置
-
-#### 数据库连接器（`tools.database_connect_connector.connectors.<name>`）
-
-| 键名            | 类型         | 说明                             |
-| --------------- | ------------ | -------------------------------- |
-| `database_type` | enum         | `mysql` / `postgres` / `sqlite`  |
-| `host`          | string       | 数据库主机（mysql/postgres）     |
-| `port`          | number       | 数据库端口                       |
-| `username`      | string       | 数据库用户名                     |
-| `password`      | string       | 数据库密码（建议 `${VAR_NAME}`） |
-| `database`      | string       | 数据库名（mysql/postgres）       |
-| `file_path`     | string(path) | SQLite 文件路径                  |
-
-#### 终端连接器（`tools.terminal_connect_connector.connectors.<name>`）
-
-| 键名            | 类型   | 说明                           |
-| --------------- | ------ | ------------------------------ |
-| `terminal_type` | enum   | `ssh`                          |
-| `host`          | string | SSH 主机                       |
-| `port`          | number | SSH 端口                       |
-| `username`      | string | SSH 用户名                     |
-| `password`      | string | SSH 密码（建议 `${VAR_NAME}`） |
-
-#### 邮件连接器（`tools.email_connect_connector.connectors.<name>`）
-
-| 键名         | 类型          | 说明            |
-| ------------ | ------------- | --------------- |
-| `smtp_host`  | string        | SMTP 服务器地址 |
-| `smtp_port`  | number/string | SMTP 端口       |
-| `imap_host`  | string        | IMAP 服务器地址 |
-| `imap_port`  | number/string | IMAP 端口       |
-| `username`   | string        | 邮件账号        |
-| `password`   | string        | 邮箱授权码/密码 |
-| `from_email` | string        | 默认发件人      |
-| `to_email`   | string        | 默认收件人      |
-
-### 3.7 模型提供方（`providers.<alias>`）
+### 3.6 模型提供方（`providers.<alias>`）
 
 可直接复制的当前模型配置维护在 [`docs/model-library.json`](docs/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
 
@@ -272,7 +235,7 @@ Session 日志 WebSocket：
 
 模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 
-### 3.8 MCP 服务（`mcp_servers.<name>`）
+### 3.7 MCP 服务（`mcp_servers.<name>`）
 
 | 键名                             | 类型        | 说明                         |
 | -------------------------------- | ----------- | ---------------------------- |
@@ -284,7 +247,7 @@ Session 日志 WebSocket：
 | `mcp_servers.<name>.baseUrl`     | string(url) | MCP 接口地址                 |
 | `mcp_servers.<name>.headers`     | object      | 请求头（支持 `${VAR_NAME}`） |
 
-### 3.9 超级管理员
+### 3.8 超级管理员
 
 | 键名                       | 类型   | 说明             |
 | -------------------------- | ------ | ---------------- |

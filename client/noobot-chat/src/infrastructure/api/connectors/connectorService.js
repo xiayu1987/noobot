@@ -39,13 +39,11 @@ export function createConnectorService({
     const normalizedSessionId = String(sessionId || "").trim();
     if (!normalizedSessionId || typeof operation !== "function") return Promise.resolve();
     const previous = sessionTasks.get(normalizedSessionId) || Promise.resolve();
-    const task = previous
-      .then(operation)
-      .finally(() => {
-        if (sessionTasks.get(normalizedSessionId) === task) {
-          sessionTasks.delete(normalizedSessionId);
-        }
-      });
+    const task = previous.then(operation).finally(() => {
+      if (sessionTasks.get(normalizedSessionId) === task) {
+        sessionTasks.delete(normalizedSessionId);
+      }
+    });
     sessionTasks.set(normalizedSessionId, task);
     return task;
   }
@@ -56,12 +54,13 @@ export function createConnectorService({
     const sessionItem = sessions.find((item) => item?.sessionId === normalizedSessionId);
     if (!normalizedSessionId || !sessionItem) return;
     return enqueueSessionTask(normalizedSessionId, async () => {
-      const response = sessionItem.isLocal === true
-        ? await listUserConnectorsApi({ userId: userId?.value, fetcher: authFetch })
-        : await getSessionConnectorsApi(
-            { userId: userId?.value, sessionId: normalizedSessionId },
-            { fetcher: authFetch },
-          );
+      const response =
+        sessionItem.isLocal === true
+          ? await listUserConnectorsApi({ userId: userId?.value, fetcher: authFetch })
+          : await getSessionConnectorsApi(
+              { userId: userId?.value, sessionId: normalizedSessionId },
+              { fetcher: authFetch },
+            );
       const payload = await response.json();
       if (!response.ok || payload?.ok !== true) {
         throw new Error(payload?.error || translateText("infra.connectorStatusFetchFailed"));

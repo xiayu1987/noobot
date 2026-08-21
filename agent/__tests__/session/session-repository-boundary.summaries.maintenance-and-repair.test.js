@@ -94,6 +94,33 @@ test("session list excludes orphan session-tree nodes without Session artifacts"
   });
 });
 
+test("session discovery traverses only canonical Session directories", async () => {
+  await withTempWorkspace(async (workspaceRoot) => {
+    const userId = "u-session-discovery";
+    await mkdir(path.join(workspaceRoot, userId), { recursive: true });
+    const runtime = createSessionServices({ workspaceRoot });
+
+    await runtime.sessionTreeService.upsertSessionTree({ userId, sessionId: "root" });
+    await runtime.sessionCrudService.ensureSession(userId, "root", "");
+    await runtime.sessionTreeService.upsertSessionTree({
+      userId,
+      sessionId: "child",
+      parentSessionId: "root",
+    });
+    await runtime.sessionCrudService.ensureSession(userId, "child", "root");
+
+    const runtimeSessionRoot = path.join(workspaceRoot, userId, "runtime", "session");
+    const nonSessionTree = path.join(runtimeSessionRoot, "root", "turn-snapshots", "nested");
+    await mkdir(nonSessionTree, { recursive: true });
+    await writeFile(path.join(nonSessionTree, "session.json"), "{}", "utf8");
+
+    assert.deepEqual(
+      (await runtime.repositories.sessionRepository.listSessionIds(userId)).sort(),
+      ["child", "root"],
+    );
+  });
+});
+
 test("session summary rebuild isolates an unreadable session as an unavailable projection", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-unavailable";
@@ -263,4 +290,3 @@ test("deleting one session does not invalidate another session display summary",
     assert.equal(display.sessions[0].messages[0].content, "keep me");
   });
 });
-

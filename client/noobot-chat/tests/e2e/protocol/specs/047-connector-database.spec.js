@@ -14,6 +14,7 @@ import {
 } from "../helpers/persistence-audit.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
+import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 function requiredMysqlPassword() {
   const password = String(process.env.NOOBOT_E2E_MYSQL_PASSWORD || "");
@@ -23,9 +24,12 @@ function requiredMysqlPassword() {
 
 async function selectOption(select, text) {
   await select.click();
-  const option = select.page().locator(".el-select-dropdown:visible .el-select-dropdown__item", {
-    hasText: text,
-  }).first();
+  const option = select
+    .page()
+    .locator(".el-select-dropdown:visible .el-select-dropdown__item", {
+      hasText: text,
+    })
+    .first();
   await expect(option).toBeVisible();
   await option.click();
 }
@@ -68,8 +72,11 @@ function diagnosticContentHash(content) {
 test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Session 审计", async ({
   noobot,
   protocolCapture,
-}) => {
-  await sendMessage(noobot.page, "Reply with OK only.");
+}, testInfo) => {
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(testInfo, "connector database session provision; reply with OK only"),
+  );
   const provisionCommand = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   expect(provisionCommand.session).toEqual({
     createIfAbsent: true,
@@ -101,7 +108,9 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   await drawer.getByRole("textbox", { name: /^\*?(主机|Host)$/i }).fill("127.0.0.1");
   await drawer.getByRole("spinbutton", { name: /^(端口|Port)$/i }).fill("3306");
   await drawer.getByRole("textbox", { name: /^\*?(用户名|Username)$/i }).fill("root");
-  await drawer.getByRole("textbox", { name: /^\*?(密码|Password)$/i }).fill(requiredMysqlPassword());
+  await drawer
+    .getByRole("textbox", { name: /^\*?(密码|Password)$/i })
+    .fill(requiredMysqlPassword());
   await drawer.getByRole("textbox", { name: /^\*?(数据库|Database)$/i }).fill("test_db");
 
   const createdResponse = noobot.page.waitForResponse(
@@ -133,8 +142,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
     await route.continue();
   });
   const selectionResponse = noobot.page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/selection") && response.request().method() === "PUT",
+    (response) => response.url().endsWith("/selection") && response.request().method() === "PUT",
   );
   await connectorOption.click();
   await selectionWriteStarted;
@@ -142,7 +150,10 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
 
   const pendingSend = sendMessage(
     noobot.page,
-    "必须使用已选择的数据库连接器执行 SELECT * FROM users WHERE 1=1; 并返回查询结果。",
+    uniquePrompt(
+      testInfo,
+      "必须使用已选择的数据库连接器执行 SELECT * FROM users WHERE 1=1; 并返回查询结果。",
+    ),
   );
   await noobot.page.waitForTimeout(250);
   expect(commandsForSession(protocolCapture, noobot.sessionId)).toHaveLength(1);

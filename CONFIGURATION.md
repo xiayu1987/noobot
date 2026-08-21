@@ -205,44 +205,7 @@ Current plugin defaults in repo:
 - `plugins.workflow.semanticModel = "GLM_5_1"`
 - `plugins.workflow.parallelNodeExecution = true` in the global example
 
-### 3.6 Connector Presets
-
-#### Database preset (`tools.database_connect_connector.connectors.<name>`)
-
-| Key             | Type         | Description                           |
-| --------------- | ------------ | ------------------------------------- |
-| `database_type` | enum         | `mysql` / `postgres` / `sqlite`       |
-| `host`          | string       | DB host (mysql/postgres)              |
-| `port`          | number       | DB port                               |
-| `username`      | string       | DB username                           |
-| `password`      | string       | DB password (recommend `${VAR_NAME}`) |
-| `database`      | string       | DB name (mysql/postgres)              |
-| `file_path`     | string(path) | SQLite file path                      |
-
-#### Terminal preset (`tools.terminal_connect_connector.connectors.<name>`)
-
-| Key             | Type   | Description                            |
-| --------------- | ------ | -------------------------------------- |
-| `terminal_type` | enum   | `ssh`                                  |
-| `host`          | string | SSH host                               |
-| `port`          | number | SSH port                               |
-| `username`      | string | SSH username                           |
-| `password`      | string | SSH password (recommend `${VAR_NAME}`) |
-
-#### Email preset (`tools.email_connect_connector.connectors.<name>`)
-
-| Key          | Type          | Description        |
-| ------------ | ------------- | ------------------ |
-| `smtp_host`  | string        | SMTP server        |
-| `smtp_port`  | number/string | SMTP port          |
-| `imap_host`  | string        | IMAP server        |
-| `imap_port`  | number/string | IMAP port          |
-| `username`   | string        | Email account      |
-| `password`   | string        | Auth password/code |
-| `from_email` | string        | Default sender     |
-| `to_email`   | string        | Default recipient  |
-
-### 3.7 Providers (`providers.<alias>`)
+### 3.6 Providers (`providers.<alias>`)
 
 Copy-ready current model entries are maintained in [`docs/model-library.json`](docs/model-library.json). Runtime capability checks still use only the provider entry copied into the active configuration.
 
@@ -270,7 +233,7 @@ Copy-ready current model entries are maintained in [`docs/model-library.json`](d
 | `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | e.g. `["image"]`                                                    |
 | `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | `openai_responses` / `images_async`; required when generation is on |
 
-### 3.8 MCP Servers (`mcp_servers.<name>`)
+### 3.7 MCP Servers (`mcp_servers.<name>`)
 
 | Key                              | Type        | Description                                   |
 | -------------------------------- | ----------- | --------------------------------------------- |
@@ -282,7 +245,7 @@ Copy-ready current model entries are maintained in [`docs/model-library.json`](d
 | `mcp_servers.<name>.baseUrl`     | string(url) | MCP endpoint                                  |
 | `mcp_servers.<name>.headers`     | object      | Request headers (`${VAR_NAME}` supported)     |
 
-### 3.9 Super Admin
+### 3.8 Super Admin
 
 | Key                        | Type   | Description              |
 | -------------------------- | ------ | ------------------------ |

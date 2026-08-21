@@ -42,7 +42,9 @@ export function connectorOperation(
     throw new TypeError(`connector operation inputSchema is invalid: ${normalizedName}`);
   }
   if (inputSchema.type !== "object") {
-    throw new TypeError(`connector operation inputSchema must describe an object: ${normalizedName}`);
+    throw new TypeError(
+      `connector operation inputSchema must describe an object: ${normalizedName}`,
+    );
   }
   return Object.freeze({
     name: normalizedName,

@@ -14,7 +14,13 @@ const connectors = [
     name: "selected database",
     type: "database",
     subType: "postgres",
-    operations: [{ name: "execute", description: "Execute SQL.", inputSchema: { type: "object", properties: {} } }],
+    operations: [
+      {
+        name: "execute",
+        description: "Execute SQL.",
+        inputSchema: { type: "object", properties: {} },
+      },
+    ],
   },
   {
     connectorId: "con_unselected",
@@ -22,7 +28,9 @@ const connectors = [
     name: "private mail",
     type: "email",
     subType: "smtp_imap",
-    operations: [{ name: "read", description: "Read mail.", inputSchema: { type: "object", properties: {} } }],
+    operations: [
+      { name: "read", description: "Read mail.", inputSchema: { type: "object", properties: {} } },
+    ],
   },
 ];
 

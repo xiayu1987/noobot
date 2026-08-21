@@ -83,7 +83,7 @@ export class BotManager {
     const sessionId = String(payload?.sessionId || "").trim();
     const attachments = Array.isArray(payload?.attachments) ? payload.attachments : undefined;
     let canonicalAttachments = attachments;
-    if (attachments) {
+    if (attachments?.length) {
       await this.ensureUserWorkspace(userId);
       const runtimeBasePath = this.getWorkspacePath(userId);
       const userConfig = await this.loadUserConfig(runtimeBasePath);

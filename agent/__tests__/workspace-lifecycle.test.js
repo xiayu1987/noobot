@@ -86,6 +86,33 @@ test("existing workspace receives managed template updates without replacing use
   }
 });
 
+test("concurrent workspace initialization serializes template synchronization", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(fixture.userPath, { recursive: true });
+    await writeFile(path.join(fixture.workspaceTemplatePath, "config.example.json"), "{}\n");
+    await writeFile(path.join(fixture.userPath, "config.example.json"), "{\"stale\":true}\n");
+
+    const initialized = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        ensureUserWorkspaceInitialized({
+          workspaceRoot: fixture.workspaceRoot,
+          workspaceTemplatePath: fixture.workspaceTemplatePath,
+          userId: "user-1",
+        }),
+      ),
+    );
+
+    assert.deepEqual(new Set(initialized), new Set([fixture.userPath]));
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "config.example.json"), "utf8"),
+      "{}\n",
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("workspace initialization migrates legacy long memory before template synchronization", async () => {
   const fixture = await createFixture();
   try {

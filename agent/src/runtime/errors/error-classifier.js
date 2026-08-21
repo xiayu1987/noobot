@@ -10,6 +10,15 @@ export function classifyEngineError(error = null) {
     return "abort";
   }
 
+  const level = String(error?.level || "").trim().toLowerCase();
+  const code = String(error?.code || "").trim();
+  if (error?.fatal === true || level === "fatal" || code.startsWith("FATAL_")) {
+    return "fatal";
+  }
+  if (level === "recoverable" || code.startsWith("RECOVERABLE_")) {
+    return "retryable";
+  }
+
   const status = Number(
     error?.status ??
       error?.statusCode ??

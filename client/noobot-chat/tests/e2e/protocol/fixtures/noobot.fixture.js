@@ -151,7 +151,10 @@ async function auditSessionSummaryPersistence({ userId, sessionId, expectation, 
   await fs.mkdir(outputDir, { recursive: true });
   let audit;
   try {
-    audit = await auditSessionSummaryArtifacts(userId, sessionId, { expectation });
+    audit = await auditSessionSummaryArtifacts(userId, sessionId, {
+      expectation,
+      requiredTitlePrefix: expectation === MODEL_CALL_EXPECTATION.REQUIRED ? "[PBE:" : "",
+    });
   } catch (error) {
     audit = {
       ...(error?.audit || {}),
