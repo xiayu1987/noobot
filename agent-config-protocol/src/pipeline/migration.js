@@ -12,11 +12,18 @@ const RETIRED_CONFIG_PATHS = Object.freeze(
     ["attachments", "attachment_models"],
     ["session", "use_last_running_task_range"],
     ["session", "use_last_completed_task_range"],
+    ["security", "path_policy"],
     ["tools", "set_skill_task"],
     ["tools", "web_to_data"],
     ["tools", "doc_to_data"],
     ["tools", "media_to_data"],
     ["tools", "process_content_task"],
+    ["tools", "database_connect_connector"],
+    ["tools", "terminal_connect_connector"],
+    ["tools", "email_connect_connector"],
+    ["tools", "process_connector_tool"],
+    ["tools", "inspect_connectors"],
+    ["tools", "access_connector", "command_file"],
     ["tools", "execute_script", "sandbox_mode"],
     ["tools", "execute_script", "sandbox_provider"],
   ].map((segments) => Object.freeze(segments)),
@@ -54,9 +61,12 @@ function clone(value) {
 export function normalizeConfigMigrations(migrations = []) {
   return (Array.isArray(migrations) ? migrations : []).map((entry, index) => {
     const migrate = typeof entry === "function" ? entry : entry?.migrate;
-    if (typeof migrate !== "function") throw new TypeError(`invalid config migration at index ${index}`);
+    if (typeof migrate !== "function")
+      throw new TypeError(`invalid config migration at index ${index}`);
     return Object.freeze({
-      name: String((typeof entry === "function" ? entry.name : entry?.name) || "").trim() || `migration#${index + 1}`,
+      name:
+        String((typeof entry === "function" ? entry.name : entry?.name) || "").trim() ||
+        `migration#${index + 1}`,
       migrate,
     });
   });
