@@ -306,6 +306,58 @@ test("packaged desktop config restores missing userData template example before 
   }
 });
 
+test("packaged desktop startup refreshes the workspace template from the bundled source", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const state = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    const bundledExamplePath = path.join(
+      fixture.packagedBackendRoot,
+      "user-template",
+      "default-user",
+      "config.example.json",
+    );
+    const bundledExample = JSON.parse(await readFile(bundledExamplePath, "utf8"));
+    bundledExample.tools.access_connector.enabled = false;
+    bundledExample.tools.new_tool = { enabled: true };
+    await writeFile(bundledExamplePath, JSON.stringify(bundledExample));
+
+    manager.saveSuperAdminConfig({
+      globalConfigPath: state.globalConfigPath,
+      userConfigPath: state.templateConfigPath,
+      userId: "owner",
+      connectCode: "secret",
+      language: "en-US",
+      model: "openai",
+    });
+    const configuredTemplate = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
+    configuredTemplate.tools.access_connector.enabled = true;
+    await writeFile(state.templateConfigPath, JSON.stringify(configuredTemplate));
+
+    manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+
+    const refreshedExample = JSON.parse(await readFile(bundledExamplePath, "utf8"));
+    const workspaceExample = JSON.parse(
+      await readFile(path.join(state.workspaceTemplatePath, "config.example.json"), "utf8"),
+    );
+    const refreshedTemplate = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
+    assert.deepEqual(workspaceExample, refreshedExample);
+    assert.equal(refreshedTemplate.tools.new_tool.enabled, true);
+    assert.equal(refreshedTemplate.tools.access_connector.enabled, true);
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("packaged desktop setup selects library models and inserts missing providers into both configs", async () => {
   const fixture = await createFixture();
   try {
@@ -664,6 +716,39 @@ test("packaged desktop config restores core template even when directory sync fa
     assert.ok(logs.some((line) => line.includes("manual fallback")));
   } finally {
     fs.cpSync = originalCpSync;
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop startup removes stale files from the managed workspace template", async () => {
+  const fixture = await createFixture();
+  try {
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const stalePath = path.join(
+      fixture.userDataPath,
+      "user-template",
+      "default-user",
+      "services",
+      "retired-handler.js",
+    );
+    await manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    await writeFile(stalePath, "export default 'retired';\n");
+    await rm(path.join(fixture.packagedBackendRoot, "user-template", "default-user", "services"), {
+      recursive: true,
+      force: true,
+    });
+    await manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+    await assert.rejects(readFile(stalePath, "utf8"), { code: "ENOENT" });
+  } finally {
     await fixture.restore();
   }
 });
