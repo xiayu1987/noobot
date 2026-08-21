@@ -8,23 +8,60 @@ import {
   createModelRequest,
   createModelResponse,
   MODEL_CONTEXT_SEQUENCE_POLICY,
+  MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
   MODEL_PROTOCOL_VERSION,
   listModelLibraryOptions,
   resolveModelLibraryProvider,
   normalizeModelCapabilities,
   resolveModelMultimodalCapabilities,
+  classifyModelInputProcessing,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
   supportsModelCapability,
   validateModelResponse,
 } from "../src/index.js";
 
+test("model input processing keeps directly readable text out of multimodal parsing", () => {
+  for (const mimeType of [
+    "text/plain",
+    "text/csv; charset=utf-8",
+    "application/csv",
+    "application/json",
+    "application/problem+json",
+    "application/xml",
+  ]) {
+    assert.deepEqual(classifyModelInputProcessing(mimeType), {
+      kind: MODEL_INPUT_PROCESSING_KIND.DIRECT_TEXT,
+      mimeType: String(mimeType).split(";", 1)[0].trim().toLowerCase(),
+      modality: null,
+    });
+  }
+  assert.deepEqual(classifyModelInputProcessing("application/pdf"), {
+    kind: MODEL_INPUT_PROCESSING_KIND.MULTIMODAL,
+    mimeType: "application/pdf",
+    modality: "document",
+  });
+  assert.equal(classifyModelInputProcessing("image/png").modality, "image");
+  assert.equal(classifyModelInputProcessing("image/svg+xml").modality, "image");
+  assert.equal(classifyModelInputProcessing("audio/wav").modality, "audio");
+  assert.equal(classifyModelInputProcessing("video/mp4").modality, "video");
+});
+
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 18);
+  assert.equal(options.length, 19);
   assert.equal(options[0].key, "gpt_5_6_sol");
-  assert.equal(options.some((item) => item.key === "gpt_5_4"), true);
+  assert.equal(
+    options.some((item) => item.key === "gpt_5_4"),
+    true,
+  );
+  assert.deepEqual(
+    options
+      .filter(({ key }) => resolveModelLibraryProvider(key)?.capabilities?.web_search === true)
+      .map(({ key }) => key),
+    ["gpt_5_6_sol", "gpt_5_6_terra", "gpt_5_6_luna", "gpt_5_4", "gpt_5_5", "qwen3_7_max"],
+  );
   assert.equal(
     options.some((item) => item.key === "gemini_3_7_flash"),
     true,
@@ -100,6 +137,28 @@ test("model operations are strict discriminated contracts", () => {
     },
   });
   assert.equal(multimodalParse.operation.input.attachments[0].fileName, "input.pdf");
+  assert.throws(
+    () =>
+      createModelRequest({
+        invocation,
+        model,
+        messages: [],
+        operation: {
+          kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
+          input: {
+            prompt: "parse",
+            attachments: [
+              {
+                mimeType: "text/plain",
+                data: "data:text/plain;base64,AA==",
+                fileName: "tool-result.txt",
+              },
+            ],
+          },
+        },
+      }),
+    /directly readable text/,
+  );
   assert.throws(
     () =>
       createModelRequest({
@@ -285,7 +344,10 @@ test("model operation capabilities are governed only by explicit model configura
   });
   assert.equal(supportsModelCapability(configured, "web_search"), true);
   assert.equal(supportsModelCapability({}, "web_search"), false);
-  assert.throws(() => supportsModelCapability(configured, "unknown"), /unsupported model capability/);
+  assert.throws(
+    () => supportsModelCapability(configured, "unknown"),
+    /unsupported model capability/,
+  );
   assert.throws(
     () =>
       createModelRequest({

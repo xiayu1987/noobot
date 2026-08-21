@@ -116,12 +116,12 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "Parse one or more image, document, audio, or video files together and save the result. Each input source is a logical file path or complete attachment identity.",
+      text: "Use a multimodal model to extract content from one or more images, binary documents, audio files, or videos and save the result. Plain text, JSON, CSV, code, logs, and tool-result attachments must be read with read_file or resource chunk reading and must not use this tool. Each input source is a logical file path or complete attachment identity.",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "One or more image, document, audio, or video inputs; each item contains a logical file path or complete attachment identity.",
+        text: "One or more images, binary documents, audio files, or videos that require model extraction; directly readable text inputs are not accepted. Each item contains a logical file path or complete attachment identity.",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
@@ -144,6 +144,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodalParse.filePathsRequired": "inputs must contain at least one file input",
       "tools.multimodalParse.fileTooLarge": (params = {}) =>
         `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
+      "tools.multimodalParse.directTextUnsupported": (params = {}) =>
+        `The following inputs are directly readable text and are outside multimodal parsing: ${String(params.inputs || "").trim()}. Use read_file or resource chunk reading.`,
       "tools.multimodalParse.defaultPrompt":
         "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
       "tools.multimodalParse.modelNotFound":
@@ -217,7 +219,7 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.user_interaction.missingRequiredField": (params = {}) =>
         `missing required field: ${String(params.key || "").trim()}`,
       "tools.user_interaction.sensitiveFieldsBlocked":
-        "Sensitive fields detected. For database or terminal access, use process_connector_tool connectors.",
+        "Sensitive fields detected. Manage connectors in the client and use access_connector only with a selected instance.",
     },
   },
 };

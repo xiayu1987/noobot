@@ -11,7 +11,6 @@ import {
   Clock,
   Collection,
   Connection,
-  DataAnalysis,
   Document,
   EditPen,
   Finished,
@@ -45,9 +44,7 @@ const TOOL_CALL_ICONS = Object.freeze({
   plan_multi_task_collaboration: Tickets,
   switch_model: Switch,
   user_interaction: ChatDotRound,
-  process_connector_tool: Link,
   access_connector: Link,
-  inspect_connectors: Connection,
   web_search: Search,
   multimodal_generate: MagicStick,
   multimodal_parse: Picture,
@@ -55,13 +52,12 @@ const TOOL_CALL_ICONS = Object.freeze({
   task_check: Finished,
   request_help: Headset,
   final_answer: Message,
-  database_connect_connector: DataAnalysis,
-  terminal_connect_connector: Monitor,
-  email_connect_connector: Message,
 });
 
 function normalize(value = "") {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 export function resolveToolEventVisual({ event = "", toolName = "", tone = "" } = {}) {

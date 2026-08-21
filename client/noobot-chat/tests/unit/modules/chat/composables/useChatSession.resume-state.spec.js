@@ -110,6 +110,66 @@ describe("useChatSession summary and reconnect state", () => {
     );
   });
 
+  it("replays an action failure before message persistence as terminal after refresh", async () => {
+    const store = useChatStore();
+    const sessionId = "s-action-failure";
+    const turnScopeId = "t-action-failure";
+    store.sessions = [
+      createSessionFixture({
+        id: sessionId,
+        sessionId,
+        turnLifecycleSnapshot: {
+          protocolVersion: 1,
+          eventType: "turn.snapshot",
+          commandId: `summary:${sessionId}:2`,
+          sessionId,
+          sequence: 2,
+          activeTurnScopeId: "",
+          activeTurn: null,
+          unchanged: false,
+          generatedAt: "2026-07-10T00:00:01.000Z",
+          replacedTurns: [],
+          recentTerminalTurns: [
+            {
+              turnScopeId,
+              dialogProcessId: "dp-action-failure",
+              state: "action_failed",
+              executionState: "error",
+              messageId: `msg-event-${turnScopeId}`,
+              presentationMessageId: `msg-${turnScopeId}`,
+              phase: "action",
+              sequence: 2,
+              revision: 2,
+              terminalStatus: { status: "error", reason: "attachment_rejected" },
+              failure: { phase: "action", code: "ATTACHMENT_REJECTED" },
+              capabilities: { canStop: false },
+            },
+          ],
+        },
+      }),
+    ];
+    store.activeSessionId = sessionId;
+
+    createChatSession({
+      authFetch: routeAwareFetcher({
+        detail: { ok: true, exists: true, sessionId, sessions: [] },
+      }),
+    });
+    await nextTick();
+    await vi.waitFor(() =>
+      expect(store.turnRuntimeRegistry.sessions[sessionId].turns[turnScopeId].terminal).toBe(
+        "error",
+      ),
+    );
+
+    expect(
+      selectSessionTurnRuntime(store.turnRuntimeRegistry, sessionId, turnScopeId),
+    ).toMatchObject({
+      sending: false,
+      canStop: false,
+    });
+  });
+
   it("resolves a discovered terminal snapshot before the active Session identity is ready", async () => {
     const store = useChatStore();
     store.sessions = [
@@ -287,7 +347,7 @@ describe("useChatSession summary and reconnect state", () => {
     store.sessions = [
       mapSummaryToSession(summary, {
         sessionTitleFromMessages: (_messages, fallback) => fallback,
-        createConnectorPanelState: () => ({ selectedConnectors: {} }),
+        createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
       }),
     ];
 

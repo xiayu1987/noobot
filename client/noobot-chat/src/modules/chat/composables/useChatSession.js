@@ -16,10 +16,12 @@ import {
   getSessionFullDetailApi,
   getSessionThinkingDetailApi,
   getSessionsApi,
+  putSessionConnectorSelectionApi,
   replaceSessionTurnApi,
   renameSessionApi,
 } from "../../../infrastructure/api/chat/chatApi.js";
 import { encryptPayloadBySessionId } from "../../../shared/utils/sessionCrypto.js";
+import { listUserConnectors } from "../../../infrastructure/api/connectors/connectorApi.js";
 import { RoleEnum } from "../model/chatConstants.js";
 import {
   createConnectorPanelState,
@@ -436,7 +438,9 @@ export function useChatSession({
 
   const connectorPanel = useConnectorPanel({
     ensureConnected,
+    listUserConnectorsApi: listUserConnectors,
     getSessionConnectorsApi,
+    putSessionConnectorSelectionApi,
     userId,
     authFetch,
     sessions,
@@ -521,9 +525,6 @@ export function useChatSession({
     deleteSessionMessagesFromApi,
     replaceSessionTurnApi,
     authFetch,
-    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
-    connectorTypeSet: connectorPanel.connectorTypeSet,
-    upsertConnectedConnectorInPanelState: connectorPanel.upsertConnectedConnectorInPanelState,
     pendingInteractionRequest,
     interactionSubmitting,
     clearPendingInteraction,
@@ -573,9 +574,6 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled,
-    connectorTypeSet: connectorPanel.connectorTypeSet,
-    upsertConnectedConnectorInPanelState: connectorPanel.upsertConnectedConnectorInPanelState,
-    refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
     classifyRealtimeLog,
     navigateToLastMessage,
     translate,
@@ -600,6 +598,7 @@ export function useChatSession({
       resolveActiveSessionIdentity,
       resolveActiveTurnScopeIdentity,
       submitTurnRuntimeEvent,
+      waitForSessionConnectorState: connectorPanel.waitForSessionConnectorState,
       send: chatEngine.send,
       stopSending: chatEngine.stopSending,
       notify,
@@ -648,7 +647,7 @@ export function useChatSession({
     resendMonotonicMessage: chatEngine.resendMonotonicMessage,
     refreshSessionConnectors: connectorPanel.refreshSessionConnectors,
     refreshSessionConnectorsAsync: connectorPanel.refreshSessionConnectorsAsync,
-    updateSessionSelectedConnector: connectorPanel.updateSessionSelectedConnector,
+    updateSessionSelectedConnectors: connectorPanel.updateSessionSelectedConnectors,
     pendingInteractionRequest,
     interactionSubmitting,
     submitInteractionResponse,

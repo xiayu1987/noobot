@@ -77,17 +77,12 @@ export const TOOL_EXECUTION_REGISTRY = Object.freeze({
   plan_multi_task_collaboration: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   switch_model: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   user_interaction: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
-  process_connector_tool: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   access_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
-  inspect_connectors: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   web_search: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   task_summary: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   task_check: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   request_help: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
   final_answer: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
-  database_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
-  terminal_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
-  email_connect_connector: TOOL_EXECUTION_CLASS.SERVICE_CONTROL,
 });
 
 function objectOrEmpty(value) {

@@ -37,6 +37,7 @@
     "@noobot/attachment-protocol": "file:../../attachment-protocol",
     "@noobot/client-shared": "file:../shared",
     "@noobot/context-protocol": "file:../../context-protocol",
+    "@noobot/connector-protocol": "file:../../connector-protocol",
     "@noobot/event-protocol": "file:../../event-protocol",
     "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",

@@ -84,7 +84,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
       config: {
         allowUserInteraction: true,
         streaming: false,
-        selectedConnectors: {},
+        selectedConnectorIds: [],
       },
     },
     globalConfig: {
@@ -111,17 +111,15 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     ["fake_mcp_tool"],
   );
   assert.equal(
-    runCalls[0]?.runConfigPatch?.toolPolicy?.customTools
-      ?.some((item) => item?.name === "call_mcp_task"),
+    runCalls[0]?.runConfigPatch?.toolPolicy?.customTools?.some(
+      (item) => item?.name === "call_mcp_task",
+    ),
     false,
   );
   assert.match(runCalls[0]?.strategy?.sessionId, /^[0-9a-f-]{36}$/);
   assert.match(runCalls[0]?.strategy?.dialogProcessId, /^[0-9a-f-]{36}$/);
   assert.match(runCalls[0]?.strategy?.turnScopeId, /^internal-turn:[0-9a-f-]{36}$/);
-  assert.equal(
-    runCalls[0]?.strategy?.executionId,
-    `agent:${runCalls[0].strategy.turnScopeId}`,
-  );
+  assert.equal(runCalls[0]?.strategy?.executionId, `agent:${runCalls[0].strategy.turnScopeId}`);
   assert.equal(runCalls[0]?.strategy?.allowedRoot, AGENT_DETACHED_SESSION_ROOT);
   assert.equal(
     runCalls[0]?.strategy?.relativeDir,

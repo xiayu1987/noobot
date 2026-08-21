@@ -4,38 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-export const DATABASE_TYPE = {
-  MYSQL: "mysql",
-  POSTGRES: "postgres",
-  SQLITE: "sqlite",
-};
-
-export const DATABASE_TYPE_ALIASES = {
-  mysql: [DATABASE_TYPE.MYSQL, "mariadb"],
-  postgres: [DATABASE_TYPE.POSTGRES, "postgresql", "pg"],
-  sqlite: [DATABASE_TYPE.SQLITE, "sqlite3"],
-};
-
-export const TERMINAL_TYPE = {
-  SSH: "ssh",
-};
-
-export const TERMINAL_TYPE_ALIASES = {
-  ssh: [TERMINAL_TYPE.SSH, "linux_ssh", "server_ssh"],
-};
-
-export const CONNECTOR_TYPE = {
-  DATABASE: "database",
-  TERMINAL: "terminal",
-  EMAIL: "email",
-};
-
-export const CONNECTOR_TYPE_ALIASES = {
-  database: [CONNECTOR_TYPE.DATABASE, "db"],
-  terminal: [CONNECTOR_TYPE.TERMINAL, "server_terminal", "shell"],
-  email: [CONNECTOR_TYPE.EMAIL, "mail", "smtp_imap"],
-};
-
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
   DASHSCOPE: "dashscope",
@@ -123,7 +91,7 @@ export const CONTEXT_SECTION_ALIASES = {
   [CONTEXT_SECTION.SKILLS]: [CONTEXT_SECTION.SKILLS],
   [CONTEXT_SECTION.SERVICES]: [CONTEXT_SECTION.SERVICES],
   [CONTEXT_SECTION.MCP_SERVERS]: [CONTEXT_SECTION.MCP_SERVERS, "mcp", "mcpservers"],
-  [CONTEXT_SECTION.CONNECTORS]: [CONTEXT_SECTION.CONNECTORS, "connector_status"],
+  [CONTEXT_SECTION.CONNECTORS]: [CONTEXT_SECTION.CONNECTORS],
   [CONTEXT_SECTION.ATTACHMENTS]: [CONTEXT_SECTION.ATTACHMENTS],
 };
 
@@ -142,18 +110,6 @@ export function normalizeWithAliases(input = "", aliasesMap = {}) {
     }
   }
   return "";
-}
-
-export function normalizeDatabaseType(input = "") {
-  return normalizeWithAliases(input, DATABASE_TYPE_ALIASES);
-}
-
-export function normalizeTerminalType(input = "") {
-  return normalizeWithAliases(input, TERMINAL_TYPE_ALIASES);
-}
-
-export function normalizeConnectorType(input = "") {
-  return normalizeWithAliases(input, CONNECTOR_TYPE_ALIASES);
 }
 
 export function normalizeProviderFormat(input = "") {
@@ -229,22 +185,4 @@ export function isContextSectionSelected(selection, section) {
   }
   const canonical = normalizeContextSection(section);
   return Boolean(canonical && selection.has(canonical));
-}
-
-export function normalizeSelectedConnectors(selectedConnectors = {}) {
-  if (
-    !selectedConnectors ||
-    typeof selectedConnectors !== "object" ||
-    Array.isArray(selectedConnectors)
-  ) {
-    return {};
-  }
-  return Object.fromEntries(
-    Object.entries(selectedConnectors)
-      .map(([connectorType, connectorName]) => [
-        String(connectorType || "").trim(),
-        String(connectorName || "").trim(),
-      ])
-      .filter(([connectorType]) => Boolean(connectorType)),
-  );
 }

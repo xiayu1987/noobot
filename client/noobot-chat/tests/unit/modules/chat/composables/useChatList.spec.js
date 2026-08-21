@@ -25,6 +25,7 @@ function createUseChatListFixture(overrides = {}) {
   const sending = ref(false);
   const notify = vi.fn();
   const scrollBottom = vi.fn();
+  const refreshSessionConnectorsAsync = vi.fn();
 
   const getSessionsApi = overrides.getSessionsApi || vi.fn();
   const getSessionDetailApi = overrides.getSessionDetailApi || vi.fn();
@@ -39,7 +40,7 @@ function createUseChatListFixture(overrides = {}) {
     loadingSessions,
     loadingSessionDetail,
     sending,
-    createConnectorPanelState: () => ({ selectedConnectors: {} }),
+    createConnectorPanelState: () => ({ selectedConnectorIds: [], connectors: [] }),
     generateSessionId: () => "local-generated",
     sessionTitleFromMessages: (messages, fallback = "") =>
       messages?.[0]?.content || fallback || "title",
@@ -50,7 +51,7 @@ function createUseChatListFixture(overrides = {}) {
     makeViewMessage: (message) => ({ ...message }),
     foldMessagesForView: (messages) => [...messages],
     scrollBottom,
-    refreshSessionConnectorsAsync: vi.fn(),
+    refreshSessionConnectorsAsync,
     clearUploads: vi.fn(),
     notify,
   });
@@ -64,7 +65,13 @@ function createUseChatListFixture(overrides = {}) {
       loadingSessionDetail,
       sending,
     },
-    mocks: { getSessionsApi, getSessionDetailApi, notify, scrollBottom },
+    mocks: {
+      getSessionsApi,
+      getSessionDetailApi,
+      notify,
+      scrollBottom,
+      refreshSessionConnectorsAsync,
+    },
   };
 }
 
@@ -78,7 +85,7 @@ describe("useChatList", () => {
       loaded: true,
       messages: [],
       sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
+      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
     };
     refs.sessions.value = [persisted];
     refs.activeSessionId.value = persisted.sessionId;
@@ -90,6 +97,7 @@ describe("useChatList", () => {
       isLocal: true,
       loaded: true,
     });
+    expect(mocks.refreshSessionConnectorsAsync).toHaveBeenCalledWith("local-generated");
 
     await api.selectSession("persisted-1");
     await api.selectSession("local-generated");
@@ -111,7 +119,7 @@ describe("useChatList", () => {
       messages: existingMessages,
       rawMessages: existingMessages,
       sessionDocs: [{ sessionId: "backend-1", messages: [] }],
-      connectorPanelState: { selectedConnectors: {} },
+      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       createdAt: "2026-05-14T00:00:00.000Z",
       updatedAt: "2026-05-14T00:00:00.000Z",
       currentTaskId: "",
@@ -210,25 +218,31 @@ describe("useChatList", () => {
           ok: true,
           exists: true,
           sessionId: "session-from-route",
-          sessions: [{
-            sessionId: "session-from-route",
-            caller: RoleEnum.USER,
-            messages: [{
-              id: "route-message",
-              messageId: "route-message",
-              role: RoleEnum.USER,
-              content: "authority",
-              turnScopeId: "route-turn",
-              dialogProcessId: "route-dialog",
-            }],
-          }],
+          sessions: [
+            {
+              sessionId: "session-from-route",
+              caller: RoleEnum.USER,
+              messages: [
+                {
+                  id: "route-message",
+                  messageId: "route-message",
+                  role: RoleEnum.USER,
+                  content: "authority",
+                  turnScopeId: "route-turn",
+                  dialogProcessId: "route-dialog",
+                },
+              ],
+            },
+          ],
         }),
       })),
     });
 
-    await expect(fixture.api.fetchSessions("session-from-route", {
-      forceCurrentSessionRerender: true,
-    })).resolves.toBe(true);
+    await expect(
+      fixture.api.fetchSessions("session-from-route", {
+        forceCurrentSessionRerender: true,
+      }),
+    ).resolves.toBe(true);
 
     expect(fixture.mocks.getSessionDetailApi).toHaveBeenCalledTimes(1);
     expect(fixture.refs.activeSessionId.value).toBe("session-from-route");
@@ -245,35 +259,42 @@ describe("useChatList", () => {
   it("keeps the authoritative list when an explicit Session route does not exist", async () => {
     const getSessionDetailApi = vi.fn(async ({ sessionId }) => ({
       ok: true,
-      json: async () => sessionId === "missing-session"
-        ? { ok: true, exists: false, sessionId }
-        : {
-            ok: true,
-            exists: true,
-            sessionId,
-            sessions: [{ sessionId, caller: RoleEnum.USER, messages: [] }],
-          },
+      json: async () =>
+        sessionId === "missing-session"
+          ? { ok: true, exists: false, sessionId }
+          : {
+              ok: true,
+              exists: true,
+              sessionId,
+              sessions: [{ sessionId, caller: RoleEnum.USER, messages: [] }],
+            },
     }));
     const fixture = createUseChatListFixture({
       getSessionsApi: vi.fn(async () => ({
         ok: true,
         json: async () => ({
           ok: true,
-          sessions: [{
-            sessionId: "persisted-session",
-            caller: RoleEnum.USER,
-            updatedAt: "2026-08-05T00:00:00.000Z",
-          }],
+          sessions: [
+            {
+              sessionId: "persisted-session",
+              caller: RoleEnum.USER,
+              updatedAt: "2026-08-05T00:00:00.000Z",
+            },
+          ],
         }),
       })),
       getSessionDetailApi,
     });
 
-    await expect(fixture.api.fetchSessions("missing-session", {
-      forceCurrentSessionRerender: true,
-    })).resolves.toBe(true);
+    await expect(
+      fixture.api.fetchSessions("missing-session", {
+        forceCurrentSessionRerender: true,
+      }),
+    ).resolves.toBe(true);
 
-    expect(fixture.refs.sessions.value.map((session) => session.sessionId)).toEqual(["persisted-session"]);
+    expect(fixture.refs.sessions.value.map((session) => session.sessionId)).toEqual([
+      "persisted-session",
+    ]);
     expect(fixture.refs.activeSessionId.value).toBe("persisted-session");
     expect(fixture.mocks.notify).not.toHaveBeenCalled();
     expect(getSessionDetailApi).toHaveBeenCalledWith(
@@ -313,8 +334,18 @@ describe("useChatList", () => {
               createdAt: "2026-05-14T00:00:00.000Z",
               updatedAt: "2026-05-14T00:03:00.000Z",
               messages: [
-                { id: "refresh-user", messageId: "refresh-user", role: RoleEnum.USER, content: "fresh server" },
-                { id: "refresh-assistant", messageId: "refresh-assistant", role: RoleEnum.ASSISTANT, content: "fresh answer" },
+                {
+                  id: "refresh-user",
+                  messageId: "refresh-user",
+                  role: RoleEnum.USER,
+                  content: "fresh server",
+                },
+                {
+                  id: "refresh-assistant",
+                  messageId: "refresh-assistant",
+                  role: RoleEnum.ASSISTANT,
+                  content: "fresh answer",
+                },
               ],
             },
           ],
@@ -322,17 +353,19 @@ describe("useChatList", () => {
       })),
     });
     const { api, refs, mocks } = fixture;
-    refs.sessions.value = [{
-      id: "backend-refresh",
-      sessionId: "backend-refresh",
-      title: "loaded",
-      isLocal: false,
-      loaded: true,
-      messages: existingMessages,
-      rawMessages: [],
-      sessionDocs: [{ sessionId: "backend-refresh", messages: existingMessages }],
-      connectorPanelState: { selectedConnectors: {} },
-    }];
+    refs.sessions.value = [
+      {
+        id: "backend-refresh",
+        sessionId: "backend-refresh",
+        title: "loaded",
+        isLocal: false,
+        loaded: true,
+        messages: existingMessages,
+        rawMessages: [],
+        sessionDocs: [{ sessionId: "backend-refresh", messages: existingMessages }],
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+      },
+    ];
     refs.activeSessionId.value = "backend-refresh";
 
     await api.fetchSessions("", {
@@ -370,22 +403,26 @@ describe("useChatList", () => {
   it("session detail arbiter waits for an in-flight request for the same session", async () => {
     let resolveResponse;
     const getSessionDetailApi = vi.fn(
-      () => new Promise((resolve) => {
-        resolveResponse = () => resolve({
-          ok: true,
-          json: async () => ({
-            ok: true,
-            exists: true,
-            sessionId: "backend-pending",
-            sessions: [{ sessionId: "backend-pending", messages: [] }],
-          }),
-        });
-      }),
+      () =>
+        new Promise((resolve) => {
+          resolveResponse = () =>
+            resolve({
+              ok: true,
+              json: async () => ({
+                ok: true,
+                exists: true,
+                sessionId: "backend-pending",
+                sessions: [{ sessionId: "backend-pending", messages: [] }],
+              }),
+            });
+        }),
     );
     const { api } = createUseChatListFixture({ getSessionDetailApi });
 
     const firstPromise = api.fetchSessionDetail("backend-pending", { source: "selectSession" });
-    const secondPromise = api.fetchSessionDetail("backend-pending", { source: "reconnectHydration" });
+    const secondPromise = api.fetchSessionDetail("backend-pending", {
+      source: "reconnectHydration",
+    });
     resolveResponse();
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
 
@@ -396,17 +433,21 @@ describe("useChatList", () => {
   it("session detail arbiter reuses the active loaded session snapshot for hydration intent", async () => {
     const getSessionDetailApi = vi.fn();
     const { api, refs } = createUseChatListFixture({ getSessionDetailApi });
-    refs.sessions.value = [{
-      id: "s-loaded",
-      sessionId: "s-loaded",
-      title: "loaded",
-      isLocal: false,
-      loaded: true,
-      messages: [{ role: RoleEnum.USER, content: "hi" }],
-      rawMessages: [],
-      sessionDocs: [{ sessionId: "s-loaded", messages: [{ role: RoleEnum.USER, content: "hi" }] }],
-      connectorPanelState: { selectedConnectors: {} },
-    }];
+    refs.sessions.value = [
+      {
+        id: "s-loaded",
+        sessionId: "s-loaded",
+        title: "loaded",
+        isLocal: false,
+        loaded: true,
+        messages: [{ role: RoleEnum.USER, content: "hi" }],
+        rawMessages: [],
+        sessionDocs: [
+          { sessionId: "s-loaded", messages: [{ role: RoleEnum.USER, content: "hi" }] },
+        ],
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
+      },
+    ];
     refs.activeSessionId.value = "s-loaded";
 
     const detail = await api.fetchSessionDetail("s-loaded", {
@@ -429,7 +470,7 @@ describe("useChatList", () => {
       messages: [],
       rawMessages: [],
       sessionDocs: [],
-      connectorPanelState: { selectedConnectors: {} },
+      connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       createdAt: "2026-05-14T00:00:00.000Z",
       updatedAt: "2026-05-14T00:00:00.000Z",
       currentTaskId: "",
@@ -451,12 +492,16 @@ describe("useChatList", () => {
             updatedAt: "2026-05-14T00:02:00.000Z",
             messages: [
               {
-                id: "restored-user", messageId: "restored-user",
-                role: RoleEnum.USER, content: "restored question",
+                id: "restored-user",
+                messageId: "restored-user",
+                role: RoleEnum.USER,
+                content: "restored question",
               },
               {
-                id: "restored-assistant", messageId: "restored-assistant",
-                role: RoleEnum.ASSISTANT, content: "restored answer",
+                id: "restored-assistant",
+                messageId: "restored-assistant",
+                role: RoleEnum.ASSISTANT,
+                content: "restored answer",
               },
             ],
           },
@@ -484,7 +529,7 @@ describe("useChatList", () => {
         messages: [],
         rawMessages: [],
         sessionDocs: [],
-        connectorPanelState: { selectedConnectors: {} },
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },
       {
         id: "s-2",
@@ -495,7 +540,7 @@ describe("useChatList", () => {
         messages: [],
         rawMessages: [],
         sessionDocs: [],
-        connectorPanelState: { selectedConnectors: {} },
+        connectorPanelState: { selectedConnectorIds: [], connectors: [] },
       },
     ];
     refs.activeSessionId.value = "s-1";

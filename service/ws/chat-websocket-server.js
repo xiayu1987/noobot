@@ -21,6 +21,7 @@ export function registerChatWebSocketServer(
     resolveRequestLocale,
     resolveAuthByApiKey,
     mapAgentRunCommand,
+    connectorAccessPort,
     normalizeLocale,
     defaultLocale,
     translateText,
@@ -50,6 +51,7 @@ export function registerChatWebSocketServer(
       defaultLocale,
       translateText,
       mapAgentRunCommand,
+      connectorAccessPort,
       sessionLogConfig,
     }),
   );

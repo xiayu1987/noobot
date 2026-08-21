@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { lstat, readFile, readdir } from "node:fs/promises";
-import { execFile as execFileCallback } from "node:child_process";
+import { execFile as execFileCallback, spawn } from "node:child_process";
 import { filePath as path } from "@noobot/path-resolver";
 import { promisify } from "node:util";
 import { recoverableToolError } from "../../shared/errors/index.js";
@@ -14,7 +14,6 @@ import {
   DEFAULT_SEARCH_CONTEXT_LINES,
   DEFAULT_SEARCH_EXCLUDED_DIRS,
   DEFAULT_SEARCH_MAX_RESULTS,
-  MAX_SEARCH_BUFFER_SIZE,
   escapeRegExp,
   isForbiddenWorkspaceRelativePath,
   matchesGlob,
@@ -162,6 +161,63 @@ export async function hasRipgrep() {
   return Boolean(await resolveRipgrepPath());
 }
 
+function runRipgrepSearch({ ripgrepPath, args, rootPath, maxCount, abortSignal }) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(ripgrepPath, args, {
+      cwd: rootPath,
+      windowsHide: true,
+      signal: abortSignal || undefined,
+    });
+    const lines = [];
+    let pending = "";
+    let matchCount = 0;
+    let stoppedAtLimit = false;
+    let stderr = "";
+
+    const consumeLine = (line) => {
+      if (!line) return;
+      lines.push(line);
+      try {
+        if (JSON.parse(line)?.type === "match") matchCount += 1;
+      } catch {
+        // Non-JSON diagnostics are handled by the process exit contract.
+      }
+      if (matchCount >= maxCount && !stoppedAtLimit) {
+        stoppedAtLimit = true;
+        child.kill();
+      }
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      pending += chunk;
+      const completeLines = pending.split(/\r?\n/);
+      pending = completeLines.pop() || "";
+      for (const line of completeLines) consumeLine(line);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", (error) => {
+      if (abortSignal?.aborted) reject(abortSignal.reason || error);
+      else reject(error);
+    });
+    child.on("close", (code) => {
+      consumeLine(pending);
+      if (abortSignal?.aborted) {
+        reject(abortSignal.reason || new DOMException("The operation was aborted", "AbortError"));
+        return;
+      }
+      if (!stoppedAtLimit && code !== 0 && code !== 1) {
+        reject(new Error(stderr.trim() || `ripgrep exited with code ${code}`));
+        return;
+      }
+      resolve({ stdout: lines.join("\n"), stoppedAtLimit });
+    });
+  });
+}
+
 
 export async function searchFilesWithRipgrep({
   rootPath = "",
@@ -200,7 +256,6 @@ export async function searchFilesWithRipgrep({
     "--glob",
     "!**/coverage/**",
   ];
-  args.push("--max-count", String(maxCount));
   if (contextCount > 0) {
     args.push("--context", String(contextCount));
   }
@@ -211,18 +266,13 @@ export async function searchFilesWithRipgrep({
   }
   args.push("--", String(query || "").trim(), ".");
 
-  let stdout = "";
-  try {
-    const result = await execFile(ripgrepPath, args, {
-      cwd: rootPath,
-      maxBuffer: MAX_SEARCH_BUFFER_SIZE,
-      signal: abortSignal || undefined,
-    });
-    stdout = String(result?.stdout || "");
-  } catch (error) {
-    if (Number(error?.code) !== 1) throw error;
-    stdout = String(error?.stdout || "");
-  }
+  const { stdout, stoppedAtLimit } = await runRipgrepSearch({
+    ripgrepPath,
+    args,
+    rootPath,
+    maxCount,
+    abortSignal,
+  });
   if (!stdout.trim()) {
     return { matches: [], truncated: false };
   }
@@ -296,6 +346,6 @@ export async function searchFilesWithRipgrep({
   }
   return {
     matches,
-    truncated: rawMatches.length > maxCount || matches.length >= maxCount,
+    truncated: stoppedAtLimit || rawMatches.length > maxCount || matches.length >= maxCount,
   };
 }

@@ -315,7 +315,7 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
     noobot.page,
     uniquePrompt(
       testInfo,
-      "直接调用 multimodal_parse 解析用户上传的 pbe-038-source.png，并报告解析结果文件名；不要创建子会话",
+      "直接调用 multimodal_parse 解析用户上传的 pbe-038-source.png，model_name 使用 gpt_5_4，并报告解析结果文件名；不要创建子会话",
     ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");

@@ -25,7 +25,7 @@ class SessionCrudMethods {
     const deletedSessions = await this._readDeletedSessions(userId);
     const deletedSet = new Set(Object.keys(deletedSessions?.sessions || {}));
     const sessionIds = [];
-    const visit = async (directory, relativeSegments = []) => {
+    const visit = async (directory) => {
       const directoryEntries =
         directory === this._sessionRoot(userId)
           ? entries
@@ -38,12 +38,13 @@ class SessionCrudMethods {
         )
           continue;
         const childDir = path.join(directory, entry.name);
-        const childSegments = [...relativeSegments, entry.name];
-        if (await this.storageService.exists(path.join(childDir, "session.json"))) {
-          const sessionId = String(entry.name || "").trim();
-          if (sessionId && !deletedSet.has(sessionId)) sessionIds.push(sessionId);
-        }
-        await visit(childDir, childSegments);
+        const sessionFileExists = await this.storageService.exists(
+          path.join(childDir, "session.json"),
+        );
+        if (!sessionFileExists) continue;
+        const sessionId = String(entry.name || "").trim();
+        if (sessionId && !deletedSet.has(sessionId)) sessionIds.push(sessionId);
+        await visit(childDir);
       }
     };
     await visit(this._sessionRoot(userId));
@@ -84,7 +85,7 @@ class SessionCrudMethods {
               currentTaskId: "",
               shortMemoryCheckpoint: 0,
               messages: [],
-              selectedConnectors: {},
+              selectedConnectorIds: [],
             },
             { now: this.now, sessionId, parentSessionId: resolvedParentSessionId || "" },
           );
@@ -114,7 +115,7 @@ class SessionCrudMethods {
         currentTaskId: "",
         shortMemoryCheckpoint: 0,
         messages: [],
-        selectedConnectors: {},
+        selectedConnectorIds: [],
       },
       { now: this.now, sessionId, parentSessionId },
     );

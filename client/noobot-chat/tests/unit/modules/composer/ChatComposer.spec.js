@@ -118,11 +118,26 @@ const globalStubs = {
   "el-dialog": ElDialogStub,
   ElIcon: defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
   "el-icon": defineComponent({ name: "ElIcon", template: "<span><slot /></span>" }),
-  ElCollapseTransition: defineComponent({ name: "ElCollapseTransition", template: "<div><slot /></div>" }),
-  "el-collapse-transition": defineComponent({ name: "ElCollapseTransition", template: "<div><slot /></div>" }),
-  ElSwitch: defineComponent({ name: "ElSwitch", template: "<button type='button'><slot /></button>" }),
-  "el-switch": defineComponent({ name: "ElSwitch", template: "<button type='button'><slot /></button>" }),
-  ConnectorSelectorPanel: defineComponent({ name: "ConnectorSelectorPanel", template: "<div class='connector-selector-stub'></div>" }),
+  ElCollapseTransition: defineComponent({
+    name: "ElCollapseTransition",
+    template: "<div><slot /></div>",
+  }),
+  "el-collapse-transition": defineComponent({
+    name: "ElCollapseTransition",
+    template: "<div><slot /></div>",
+  }),
+  ElSwitch: defineComponent({
+    name: "ElSwitch",
+    template: "<button type='button'><slot /></button>",
+  }),
+  "el-switch": defineComponent({
+    name: "ElSwitch",
+    template: "<button type='button'><slot /></button>",
+  }),
+  ConnectorSelectorPanel: defineComponent({
+    name: "ConnectorSelectorPanel",
+    template: "<div class='connector-selector-stub'></div>",
+  }),
 };
 
 const globalMountOptions = {
@@ -399,11 +414,7 @@ describe("ChatComposer interactions", () => {
     const clickSpy = vi.fn();
     const Harness = defineComponent({
       setup() {
-        const capture = useComposerMediaCapture(
-          { sending: false },
-          vi.fn(),
-          (key) => key,
-        );
+        const capture = useComposerMediaCapture({ sending: false }, vi.fn(), (key) => key);
         capture.cameraInputRef.value = { click: clickSpy };
         return capture;
       },
@@ -549,16 +560,14 @@ describe("ChatComposer interactions", () => {
   it("shows selected scenario, connectors, plugins, and attachments at the top", () => {
     const wrapper = mountComposer({
       botScenario: "programming",
-      uploadFiles: [
-        { name: "brief.pdf" },
-        { name: "screenshot.png" },
-      ],
+      uploadFiles: [{ name: "brief.pdf" }, { name: "screenshot.png" }],
       connectorPanelState: {
-        selectedConnectors: {
-          database: "prod-db",
-          terminal: "ops-shell",
-          email: "alerts-mail",
-        },
+        selectedConnectorIds: ["con_db", "con_shell", "con_mail"],
+        connectors: [
+          { connectorId: "con_db", name: "prod-db" },
+          { connectorId: "con_shell", name: "ops-shell" },
+          { connectorId: "con_mail", name: "alerts-mail" },
+        ],
       },
       availablePlugins: [
         { key: "workflow", label: "工作流", enabled: true },

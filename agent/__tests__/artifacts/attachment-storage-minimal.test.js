@@ -72,6 +72,46 @@ test("AttachmentService.ingest + getAttachmentById keeps core behavior", async (
   });
 });
 
+test("AttachmentService.ingest accepts arbitrary and extensionless user files", async () => {
+  await withTempDir(async (workspaceRoot) => {
+    const service = new AttachmentService({ workspaceRoot });
+    const contentBase64 = Buffer.from("opaque-content", "utf8").toString("base64");
+
+    const saved = await service.ingest({
+      userId: "u1",
+      sessionId: "arbitrary-files",
+      attachmentSource: "user",
+      attachments: [
+        {
+          name: "release.zip",
+          mimeType: "application/zip",
+          contentBase64,
+        },
+        {
+          name: "payload.custombin",
+          mimeType: "application/x-custom-binary",
+          contentBase64,
+        },
+        {
+          name: "extensionless",
+          mimeType: "application/octet-stream",
+          contentBase64,
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      saved.map((item) => [item.name, item.mimeType]),
+      [
+        ["release.zip", "application/zip"],
+        ["payload.custombin", "application/x-custom-binary"],
+        ["extensionless", "application/octet-stream"],
+      ],
+    );
+    await Promise.all(saved.map((item) => stat(item.path)));
+  });
+});
+
 test("attachment storage encodes logical scope identities before filesystem projection", async () => {
   await withTempDir(async (workspaceRoot) => {
     const service = new AttachmentService({ workspaceRoot });
@@ -742,12 +782,13 @@ test("policy + mime minimal compatibility", () => {
 
   assert.equal(policy.maxFileSizeBytes, BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes);
   assert.deepEqual(policy.allowedMimeTypes, BUILTIN_ATTACHMENT_POLICY.allowedMimeTypes);
-  assert.equal(policy.allowedExtensions.includes(".png"), true);
-  assert.equal(policy.allowedExtensions.includes(".txt"), true);
+  assert.deepEqual(policy.allowedExtensions, []);
   assert.deepEqual(validateAttachmentPolicy(policy), policy);
 
   assert.equal(isMimeTypeAllowed("image/png", policy.allowedMimeTypes), true);
   assert.equal(isExtensionAllowed("a.png", policy.allowedExtensions), true);
+  assert.equal(isExtensionAllowed("archive.unknown-format", policy.allowedExtensions), true);
+  assert.equal(isExtensionAllowed("extensionless", policy.allowedExtensions), true);
   assert.equal(getMimeTypeFromExtension("photo.png"), "image/png");
   assert.equal(isValidMimeType("text/plain"), true);
 });

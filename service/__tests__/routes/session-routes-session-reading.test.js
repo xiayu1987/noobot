@@ -46,8 +46,6 @@ test("session-routes: sessions 列表只读取并返回概要", async () => {
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -134,8 +132,6 @@ test("session-routes: session 详情默认返回展示概要，full 模式按需
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -392,8 +388,6 @@ test("session-routes: thinking-detail 仅按 dialogProcessId 返回本次对话�
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 

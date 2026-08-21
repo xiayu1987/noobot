@@ -34,6 +34,7 @@ export function createMessageHandler({
   translateText,
   normalizeLocale,
   mapAgentRunCommand,
+  connectorAccessPort,
   resolveBot,
   sessionLogConfig,
   pendingInteractionRequests,
@@ -54,17 +55,42 @@ export function createMessageHandler({
 
   const { handleInteractionResponse, handleSnapshotGet, handleExecutionQuery, handleFinalize } =
     createMessageQueryHandlers({
-    state, authInfo, sendEvent, translateText, resolveBot,
-      pendingInteractionRequests, recoverTurnFinalize, recoverSnapshotOrphan,
+      state,
+      authInfo,
+      sendEvent,
+      translateText,
+      resolveBot,
+      pendingInteractionRequests,
+      recoverTurnFinalize,
+      recoverSnapshotOrphan,
     });
   const handleStop = createMessageStopHandler({
-    state, canonicalRunOwnerId, sendEvent, translateText, resolveBot, sessionLogConfig,
-    rejectAllPendingInteractions, commitTurnLifecycle,
+    state,
+    canonicalRunOwnerId,
+    sendEvent,
+    translateText,
+    resolveBot,
+    sessionLogConfig,
+    rejectAllPendingInteractions,
+    commitTurnLifecycle,
   });
   const { handleRun, commitCurrentFailure } = createMessageRunHandler({
-    state, authInfo, sendEvent, translateText, normalizeLocale, mapAgentRunCommand,
-    resolveBot, sessionLogConfig, userInteractionBridge, buildRunStateSnapshot,
-    finalizeTimeout, finalizeUserStopped, finalizeCompleted, commitTurnLifecycle, dispatchAuthorityEvents,
+    state,
+    authInfo,
+    sendEvent,
+    translateText,
+    normalizeLocale,
+    mapAgentRunCommand,
+    connectorAccessPort,
+    resolveBot,
+    sessionLogConfig,
+    userInteractionBridge,
+    buildRunStateSnapshot,
+    finalizeTimeout,
+    finalizeUserStopped,
+    finalizeCompleted,
+    commitTurnLifecycle,
+    dispatchAuthorityEvents,
   });
 
   return async function onMessage(rawMessage) {
@@ -112,7 +138,9 @@ export function createMessageHandler({
       }
       runMessageStarted = true;
       const runResult = await handleRun(command, {
-        onRunBound: (handle) => { boundRunHandle = handle; },
+        onRunBound: (handle) => {
+          boundRunHandle = handle;
+        },
       });
       if (runResult?.rebound === true) {
         runMessageStarted = false;
@@ -148,11 +176,16 @@ export function createMessageHandler({
         void recordServiceWebSocketLifecycle({
           sessionLogConfig,
           event: "service.websocket.request.rejected",
-          data: { errorType: error?.name || "Error", errorCode: String(error?.errorCode || error?.code || "") },
+          data: {
+            errorType: error?.name || "Error",
+            errorCode: String(error?.errorCode || error?.code || ""),
+          },
         });
         if (parsedCommand) {
           sendFailedCommandReceipt(sendEvent, parsedCommand, {
-            code: String(error?.errors?.[0] || error?.errorCode || error?.code || "invalid_command").trim(),
+            code: String(
+              error?.errors?.[0] || error?.errorCode || error?.code || "invalid_command",
+            ).trim(),
             message: error?.message || translateText("ws.unknownError", state.currentLocale),
           });
         }

@@ -11,7 +11,7 @@ import {
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
 import { hasOwnConfigKey, normalizeBooleanLike } from "../../config/index.js";
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
   if (!userId) return "";
@@ -61,7 +61,7 @@ export function buildDynamicInfo({
     runConfig?.toolPolicy && typeof runConfig.toolPolicy === "object"
       ? { ...runConfig.toolPolicy }
       : null;
-  const selectedConnectors = normalizeSelectedConnectors(runConfig?.selectedConnectors);
+  const selectedConnectorIds = normalizeSelectedConnectorIds(runConfig?.selectedConnectorIds);
   const config = {
     allowUserInteraction: runConfig?.allowUserInteraction !== false,
     safeConfirm: runConfig?.safeConfirm !== false,
@@ -74,7 +74,7 @@ export function buildDynamicInfo({
       ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
       : {}),
     ...(toolPolicy ? { toolPolicy } : {}),
-    selectedConnectors,
+    selectedConnectorIds,
   };
   return {
     userId: String(userId || "").trim(),

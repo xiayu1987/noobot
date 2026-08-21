@@ -6,15 +6,12 @@
 import { PathResolver } from "./path-resolver.js";
 import { SessionPathResolver } from "./session-path-resolver.js";
 import { StorageService } from "./storage-service.js";
-import {
-  normalizeMessagesEntity,
-  normalizeSelectedConnectors,
-  normalizeTaskEntity,
-} from "./entities/normalizers.js";
+import { normalizeMessagesEntity, normalizeTaskEntity } from "./entities/normalizers.js";
 import { FileSystemSessionTreeRepository } from "./repositories/file-system-session-tree-repository.js";
 import { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 import { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 import { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
+import { FileSystemConnectorInstanceRepository } from "./repositories/file-system-connector-instance-repository.js";
 import { SessionTreeService } from "./services/session-tree-service.js";
 import { SessionCrudService } from "./services/session-crud-service.js";
 import { SessionMessageService } from "./services/session-message-service.js";
@@ -59,6 +56,9 @@ export function createSessionServices(
   const canonicalAttachmentService = attachmentService || new AttachmentService(globalConfig);
   const pathResolver = new PathResolver(globalConfig || {});
   const storageService = new StorageService({ pathResolver });
+  const connectorInstanceRepository = new FileSystemConnectorInstanceRepository({
+    workspaceRoot: globalConfig?.workspaceRoot || ".",
+  });
 
   const sessionTreeRepository = new FileSystemSessionTreeRepository({
     pathResolver,
@@ -80,7 +80,6 @@ export function createSessionServices(
     storageService,
     normalizeMessages: (messages, options = {}) =>
       normalizeMessagesEntity(messages, nowFn, options),
-    normalizeSelectedConnectors,
     now: nowFn,
   });
 
@@ -195,6 +194,7 @@ export function createSessionServices(
       taskRepository,
       fileSystemExecutionRepository,
       executionRepository,
+      connectorInstanceRepository,
     },
     services: {
       sessionTreeService,
@@ -219,6 +219,7 @@ export function createSessionFacade(runtime = {}) {
     taskService,
     executionLogService,
   } = services;
+  const connectorInstanceRepository = runtime?.repositories?.connectorInstanceRepository || null;
 
   const bindPersistenceScope = (payload = {}) => {
     const persistenceScope =
@@ -355,6 +356,10 @@ export function createSessionFacade(runtime = {}) {
       return sessionMessageService.commitTurn(payload);
     },
 
+    async bindTurnAttachments(payload = {}) {
+      return sessionMessageService.bindTurnAttachments(payload);
+    },
+
     async deleteFromMessage(payload = {}) {
       return sessionMessageService.deleteFromMessage(payload);
     },
@@ -468,16 +473,44 @@ export function createSessionFacade(runtime = {}) {
       return sessionCrudService.renameSession({ userId, sessionId, title });
     },
 
-    async getRootSessionSelectedConnectors({ userId, sessionId }) {
-      return sessionCrudService.getRootSessionSelectedConnectors({ userId, sessionId });
+    async getRootSessionSelectedConnectorIds({ userId, sessionId }) {
+      return sessionCrudService.getRootSessionSelectedConnectorIds({ userId, sessionId });
     },
 
-    async setRootSessionSelectedConnectors({ userId, sessionId, selectedConnectors = {} }) {
-      return sessionCrudService.setRootSessionSelectedConnectors({
+    async setRootSessionSelectedConnectorIds({ userId, sessionId, selectedConnectorIds = [] }) {
+      return sessionCrudService.setRootSessionSelectedConnectorIds({
         userId,
         sessionId,
-        selectedConnectors,
+        selectedConnectorIds,
       });
+    },
+
+    async listConnectorInstances({ userId }) {
+      return connectorInstanceRepository.list(userId);
+    },
+
+    async getConnectorInstance({ userId, connectorId }) {
+      return connectorInstanceRepository.get({ userId, connectorId });
+    },
+
+    async createConnectorInstance(payload = {}) {
+      return connectorInstanceRepository.create(payload);
+    },
+
+    async updateConnectorInstance(payload = {}) {
+      return connectorInstanceRepository.update(payload);
+    },
+
+    async deleteConnectorInstance({ userId, connectorId }) {
+      return connectorInstanceRepository.delete({ userId, connectorId });
+    },
+
+    async readLegacyConnectorInstances({ userId }) {
+      return connectorInstanceRepository.readLegacy(userId);
+    },
+
+    async migrateLegacyConnectorInstances(payload = {}) {
+      return connectorInstanceRepository.migrateLegacy(payload);
     },
 
     async deleteSessionBranch({ userId, sessionId }) {
@@ -499,6 +532,7 @@ export { FileSystemSessionTreeRepository } from "./repositories/file-system-sess
 export { FileSystemSessionRepository } from "./repositories/file-system-session-repository.js";
 export { FileSystemTaskRepository } from "./repositories/file-system-task-repository.js";
 export { FileSystemExecutionRepository } from "./repositories/file-system-execution-repository.js";
+export { FileSystemConnectorInstanceRepository } from "./repositories/file-system-connector-instance-repository.js";
 export {
   SessionMutationCoordinator,
   sessionMutationCoordinator,
@@ -538,7 +572,7 @@ export {
 export {
   normalizeMessageEntity,
   normalizeMessagesEntity,
-  normalizeSelectedConnectors,
+  normalizeSelectedConnectorIds,
   normalizeSessionTreeEntity,
   normalizeTaskEntity,
   normalizeExecutionLogEntity,

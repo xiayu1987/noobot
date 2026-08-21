@@ -5,7 +5,6 @@
  */
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
-import { dedupeAttachments, assertCanonicalAttachments } from "./attachment-helpers.js";
 import { resolveAggregateVersion } from "./anchor-utils.js";
 import { appendDialogOrderEntry } from "../../entities/dialog-order-entity.js";
 import {
@@ -19,24 +18,30 @@ import {
   SESSION_ERROR_CODE,
 } from "@noobot/session-protocol";
 
-export async function commitTurn({
-  userId,
-  sessionId,
-  parentSessionId = "",
-  content = "",
-  action = "send",
-  turnScopeId = "",
-  dialogProcessId = "",
-  parentDialogProcessId = "",
-  attachments = [],
-  expectedAggregateVersion = null,
-  commandId = "",
-  messageId = "",
-  resumeDialogProcessId = "",
-  resumeTurnScopeId = "",
-  frontendUserMessage = true,
-  persistenceContext = null,
-} = {}) {
+export async function commitTurn(payload = {}) {
+  if (Object.prototype.hasOwnProperty.call(payload, "attachments")) {
+    throw Object.assign(
+      new TypeError("attachments must be bound with session.turn.attachments.bind"),
+      { statusCode: 400 },
+    );
+  }
+  const {
+    userId,
+    sessionId,
+    parentSessionId = "",
+    content = "",
+    action = "send",
+    turnScopeId = "",
+    dialogProcessId = "",
+    parentDialogProcessId = "",
+    expectedAggregateVersion = null,
+    commandId = "",
+    messageId = "",
+    resumeDialogProcessId = "",
+    resumeTurnScopeId = "",
+    frontendUserMessage = true,
+    persistenceContext = null,
+  } = payload;
   if (!userId || !sessionId) {
     const error = new Error("userId and sessionId are required");
     error.statusCode = 400;
@@ -58,7 +63,6 @@ export async function commitTurn({
     turnScopeId: normalizedTurnScopeId,
     resumeDialogProcessId: String(resumeDialogProcessId || "").trim(),
     resumeTurnScopeId: String(resumeTurnScopeId || "").trim(),
-    attachments,
   });
   if (!normalizedContent || !normalizedTurnScopeId || !normalizedCommandId) {
     const error = new Error("content, turnScopeId and commandId are required");
@@ -110,7 +114,7 @@ export async function commitTurn({
         return {
           session,
           userMessage: existing,
-          attachments: existing.attachments || [],
+          attachments: [],
           aggregateVersion: resolveAggregateVersion(session),
           deduplicated: true,
           turnScopeId: normalizedTurnScopeId,
@@ -147,8 +151,6 @@ export async function commitTurn({
         }
       }
       const nowValue = this.now();
-      assertCanonicalAttachments(attachments, sessionId);
-      const canonicalAttachments = dedupeAttachments(Array.isArray(attachments) ? attachments : []);
       const userMessage = normalizeMessageEntity(
         {
           messageUid: createSessionMessageUid(),
@@ -164,7 +166,7 @@ export async function commitTurn({
           turnScopeId: normalizedTurnScopeId,
           frontendUserMessage: frontendUserMessage === true,
           messageOrigin: frontendUserMessage === true ? "user" : "internal",
-          attachments: canonicalAttachments,
+          attachments: [],
           turnCommit: {
             action: normalizedAction,
             commandId: normalizedCommandId,

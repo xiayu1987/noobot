@@ -13,9 +13,15 @@ import {
   SESSION_ERROR_CODE,
   TURN_EVENT,
   TURN_PHASE,
+  createTurnAcceptanceReceipt,
   createTurnLifecycleCommandId,
 } from "@noobot/session-protocol";
+import {
+  TURN_COMMITTED_WIRE_EVENT,
+  assertTurnCommittedEventData,
+} from "@noobot/session-protocol/turn-commit";
 import { createAgentApplication } from "#agent/application";
+import { resolveAuthoritativeConnectorSelection } from "../../../services/chat-run-service.js";
 import { attachRunTransport, findActiveRun } from "../run-registry.js";
 import {
   recordServiceAgentTransportDebug,
@@ -25,8 +31,12 @@ import {
 
 const text = (value) => String(value || "").trim();
 
-export function mapRunCommand(context, command) {
-  const mapped = context.mapAgentRunCommand(command, { userId: context.authInfo?.userId });
+export async function mapRunCommand(context, command) {
+  const mapped = await resolveAuthoritativeConnectorSelection({
+    bot: context.resolveBot(),
+    connectorAccessPort: context.connectorAccessPort,
+    request: context.mapAgentRunCommand(command, { userId: context.authInfo?.userId }),
+  });
   context.state.currentTurnScopeId = text(mapped.turnScopeId) || context.state.currentTurnScopeId;
   context.state.currentLocale = context.normalizeLocale(
     mapped.runConfig.locale || context.state.currentLocale,
@@ -134,6 +144,16 @@ function createActionEvent(context, command, run, executionIntent, startedAt) {
     expectedRevision: run.expectedRevision ?? 0,
     expectedAggregateVersion: run.normalizedRunConfig.expectedAggregateVersion,
     ...executionIntent,
+    ...(![AGENT_COMMAND.RESEND].includes(command.commandType)
+      ? {
+          userMessage: {
+            content: run.message,
+            messageId: run.normalizedRunConfig.userMessageId,
+            parentDialogProcessId: run.parentDialogProcessId,
+            frontendUserMessage: true,
+          },
+        }
+      : {}),
     ...(isContinue
       ? {
           continuationSource: {
@@ -187,6 +207,36 @@ export async function acceptRunCommand(context, command, run) {
   Object.assign(run.normalizedRunConfig, executionIntent);
   const actionEvent = createActionEvent(context, command, run, executionIntent, startedAt);
   const accepted = await commitAction(context, actionEvent, run);
+  if (accepted.dialogProcessId) run.dialogProcessId = text(accepted.dialogProcessId);
+  if (accepted.userMessage) {
+    const committedEvent = assertTurnCommittedEventData({
+      sessionId: run.sessionId,
+      aggregateVersion: accepted.aggregateVersion,
+      dialogProcessId: run.dialogProcessId,
+      turnScopeId: context.state.currentTurnScopeId,
+      userMessage: accepted.userMessage,
+    });
+    context.sendEvent(TURN_COMMITTED_WIRE_EVENT, committedEvent);
+    run.turnAcceptance = createTurnAcceptanceReceipt({
+      commandId: text(command.commandId),
+      sessionId: run.sessionId,
+      turnScopeId: context.state.currentTurnScopeId,
+      dialogProcessId: run.dialogProcessId,
+      messageUid: accepted.userMessage.messageUid,
+      aggregateVersion: accepted.aggregateVersion,
+      committedEventPublished: true,
+    });
+  }
+  if (
+    run.createSessionIfAbsent === true &&
+    run.normalizedRunConfig.selectedConnectorIds.length > 0
+  ) {
+    await activeBot.session.setRootSessionSelectedConnectorIds({
+      userId: run.userId,
+      sessionId: run.sessionId,
+      selectedConnectorIds: run.normalizedRunConfig.selectedConnectorIds,
+    });
+  }
   context.lifecycle.pending = null;
   context.lifecycle.latestTurn = accepted.turn || null;
   void recordServiceAgentTransportDebug({

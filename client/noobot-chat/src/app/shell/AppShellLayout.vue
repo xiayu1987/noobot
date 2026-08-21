@@ -5,9 +5,10 @@
 -->
 <script setup>
 import { ref } from "vue";
-import { Tickets } from "@element-plus/icons-vue";
+import { Connection, Tickets } from "@element-plus/icons-vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
+import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
 import { sharedSidebarProps } from "../../modules/session/model/sidebarProps.js";
 import { sharedComposerOptionProps } from "../../modules/composer/model/composerOptionProps.js";
 import {
@@ -37,6 +38,7 @@ defineProps({
   stopExecution: { type: Function, default: null },
   chatMessageNavItems: { type: Array, default: () => [] },
   chatNavigatorVisible: { type: Boolean, default: true },
+  connectorVisible: { type: Boolean, default: false },
   currentMessageAnchorId: { type: String, default: "" },
   input: { type: String, default: "" },
   composerMorePanelVisible: { type: Boolean, default: false },
@@ -54,6 +56,7 @@ defineProps({
   conversationStateSnapshot: { type: Object, default: () => ({}) },
   conversationStateTimeline: { type: Array, default: () => [] },
   translate: { type: Function, required: true },
+  authFetch: { type: Function, required: true },
 });
 
 const emit = defineEmits([
@@ -62,11 +65,13 @@ const emit = defineEmits([
   "remove-upload",
   "connect",
   "connector-selected",
+  "connector-registry-changed",
   "delete-session",
   "rename-session",
   "mobile-chat-navigator-trigger-click",
   "new-session",
   "open-config-params",
+  "open-connectors",
   "open-openvscode",
   "open-thinking-details",
   "open-user-settings",
@@ -77,6 +82,7 @@ const emit = defineEmits([
   "select-session",
   "stop",
   "toggle-chat-navigator-visible",
+  "toggle-connectors-visible",
   "toggle-sidebar",
   "update:allowUserInteraction",
   "update:botScenario",
@@ -160,7 +166,9 @@ defineExpose({
 
       <div
         class="chat-content-body"
-        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+        :class="{
+          'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile,
+        }"
       >
         <ChatMessageListPanel
           ref="messageListPanelRef"
@@ -180,55 +188,94 @@ defineExpose({
           @open-thinking-details="emit('open-thinking-details', $event)"
         />
 
-        <aside
-          v-if="!isMobile && chatMessageNavItems.length"
-          class="chat-message-nav-panel noobot-panel-card"
-          :class="{ 'is-collapsed': !chatNavigatorVisible }"
-        >
-          <div class="chat-message-nav-header">
-            <button
-              type="button"
-              class="chat-message-nav-icon chat-message-nav-icon-button"
-              :aria-label="
-                chatNavigatorVisible
-                  ? translate('common.hideChatNavigator')
-                  : translate('common.showChatNavigator')
-              "
-              @click="emit('toggle-chat-navigator-visible')"
-            >
-              <el-icon><Tickets /></el-icon>
-            </button>
-            <div v-show="chatNavigatorVisible" class="chat-message-nav-title-group">
-              <div>
-                <span class="chat-message-nav-title">{{ translate("common.chatNavigator") }}</span>
-                <span class="chat-message-nav-count">{{ chatMessageNavItems.length }}</span>
+        <div v-if="!isMobile" class="right-tool-panels">
+          <aside
+            class="chat-message-nav-panel noobot-panel-card"
+            :class="{ 'is-collapsed': !chatNavigatorVisible }"
+          >
+            <div class="chat-message-nav-header">
+              <button
+                type="button"
+                class="chat-message-nav-icon chat-message-nav-icon-button"
+                :aria-label="
+                  chatNavigatorVisible
+                    ? translate('common.hideChatNavigator')
+                    : translate('common.showChatNavigator')
+                "
+                @click="emit('toggle-chat-navigator-visible')"
+              >
+                <el-icon><Tickets /></el-icon>
+              </button>
+              <div v-show="chatNavigatorVisible" class="chat-message-nav-title-group">
+                <div>
+                  <span class="chat-message-nav-title">{{
+                    translate("common.chatNavigator")
+                  }}</span>
+                  <span class="chat-message-nav-count">{{ chatMessageNavItems.length }}</span>
+                </div>
               </div>
+              <el-button
+                text
+                size="small"
+                class="chat-message-nav-toggle"
+                v-show="chatNavigatorVisible"
+                @click="emit('toggle-chat-navigator-visible')"
+              >
+                {{ translate("common.hideChatNavigator") }}
+              </el-button>
             </div>
-            <el-button
-              text
-              size="small"
-              class="chat-message-nav-toggle"
-              v-show="chatNavigatorVisible"
-              @click="emit('toggle-chat-navigator-visible')"
-            >
-              {{ translate("common.hideChatNavigator") }}
-            </el-button>
-          </div>
-          <el-affix :offset="80">
-            <ChatMessageNavigator
-              v-show="chatNavigatorVisible"
-              :items="chatMessageNavItems"
-              :current-id="currentMessageAnchorId"
-              :is-mobile="isMobile"
-              @select="emit('select-chat-message-nav-item', $event)"
+            <el-affix :offset="80">
+              <ChatMessageNavigator
+                v-show="chatNavigatorVisible"
+                :items="chatMessageNavItems"
+                :current-id="currentMessageAnchorId"
+                :is-mobile="isMobile"
+                @select="emit('select-chat-message-nav-item', $event)"
+              />
+            </el-affix>
+          </aside>
+          <aside
+            class="connector-overview-panel noobot-panel-card"
+            :class="{ 'is-collapsed': !connectorVisible }"
+          >
+            <div class="connector-overview-header">
+              <button
+                type="button"
+                class="chat-message-nav-icon chat-message-nav-icon-button"
+                :aria-label="translate('connectors.management')"
+                @click="emit('toggle-connectors-visible')"
+              >
+                <el-icon><Connection /></el-icon>
+              </button>
+              <span v-show="connectorVisible" class="connector-overview-title">{{
+                translate("connectors.management")
+              }}</span>
+              <el-button
+                v-show="connectorVisible"
+                text
+                size="small"
+                @click="emit('toggle-connectors-visible')"
+              >
+                {{ translate("connectors.collapse") }}
+              </el-button>
+            </div>
+            <ConnectorManager
+              v-show="connectorVisible"
+              :user-id="userId"
+              :connected="connected"
+              :fetcher="authFetch"
+              :drawer-size="isMobile ? '100%' : '72%'"
+              :show-header="true"
+              compact
+              @changed="emit('connector-registry-changed')"
             />
-          </el-affix>
-        </aside>
+          </aside>
+        </div>
       </div>
 
       <Teleport to="body">
         <el-button
-          v-if="isMobile && chatMessageNavItems.length"
+          v-if="isMobile"
           class="mobile-chat-message-nav-trigger noobot-floating-action-btn"
           type="primary"
           circle
@@ -239,10 +286,41 @@ defineExpose({
           <el-icon class="mobile-chat-message-nav-trigger-icon"><Tickets /></el-icon>
         </el-button>
       </Teleport>
+      <Teleport to="body">
+        <el-button
+          v-if="isMobile"
+          class="mobile-connector-trigger noobot-floating-action-btn"
+          circle
+          size="large"
+          :aria-label="translate('connectors.management')"
+          @click="emit('open-connectors')"
+        >
+          <el-icon><Connection /></el-icon>
+        </el-button>
+      </Teleport>
+      <el-drawer
+        v-if="isMobile"
+        :model-value="connectorVisible"
+        :title="translate('connectors.management')"
+        direction="rtl"
+        size="82%"
+        class="connector-overview-drawer noobot-side-drawer"
+        @update:model-value="connectorVisible && emit('toggle-connectors-visible')"
+      >
+        <ConnectorManager
+          :user-id="userId"
+          :connected="connected"
+          :fetcher="authFetch"
+          :drawer-size="isMobile ? '100%' : '72%'"
+          @changed="emit('connector-registry-changed')"
+        />
+      </el-drawer>
 
       <div
         class="chat-composer-body"
-        :class="{ 'chat-navigator-open': chatNavigatorVisible && chatMessageNavItems.length }"
+        :class="{
+          'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile,
+        }"
       >
         <UserInteractionForm
           v-if="pendingInteractionRequest"
@@ -344,8 +422,8 @@ defineExpose({
 }
 
 @media (min-width: 961px) {
-  .chat-content-body.chat-navigator-open,
-  .chat-composer-body.chat-navigator-open {
+  .chat-content-body.right-tool-panel-open,
+  .chat-composer-body.right-tool-panel-open {
     padding-right: 268px;
   }
 }
@@ -364,10 +442,6 @@ defineExpose({
 }
 
 .chat-message-nav-panel {
-  position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 8;
   width: 236px;
   max-width: 24vw;
   padding: 12px;
@@ -378,10 +452,66 @@ defineExpose({
     max-width 0.18s ease;
 }
 
+.right-tool-panels {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-height: calc(100% - 36px);
+  pointer-events: none;
+}
+
+.right-tool-panels > * {
+  flex: 0 1 auto;
+  pointer-events: auto;
+}
+
 .chat-message-nav-panel.is-collapsed {
   width: 44px;
   max-width: 44px;
   padding: 8px;
+}
+
+.connector-overview-panel {
+  width: 236px;
+  max-width: 24vw;
+  padding: 12px;
+  backdrop-filter: blur(14px);
+  transition:
+    width 0.18s ease,
+    padding 0.18s ease,
+    max-width 0.18s ease;
+}
+
+.connector-overview-panel.is-collapsed {
+  width: 44px;
+  max-width: 44px;
+  padding: 8px;
+}
+
+.connector-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--noobot-text-main);
+}
+
+.connector-overview-panel.is-collapsed .connector-overview-header {
+  justify-content: center;
+}
+
+.connector-overview-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-message-nav-header {
@@ -466,8 +596,21 @@ defineExpose({
   line-height: 1;
 }
 
+.mobile-connector-trigger {
+  position: fixed;
+  top: calc(56px + 68px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 2001;
+  width: 44px;
+  height: 44px;
+}
+
 @media (max-width: 960px) {
   .chat-message-nav-panel {
+    display: none;
+  }
+
+  .connector-overview-panel {
     display: none;
   }
 }

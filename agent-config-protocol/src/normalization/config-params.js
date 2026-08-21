@@ -91,18 +91,9 @@ export function mergeConfigParamLayers(...layers) {
   );
 }
 
-export function buildConfigParamCatalog({
-  keys = [],
-  descriptions = {},
-  values = {},
-  extraKeys = [],
-} = {}) {
-  const document = normalizeConfigParamsDocument({ values, descriptions });
-  const explicitKeys = [
-    ...(Array.isArray(keys) ? keys : []),
-    ...(Array.isArray(extraKeys) ? extraKeys : []),
-  ].map(normalizeConfigParamKey);
-  for (const key of explicitKeys) {
+function normalizeExplicitConfigParamKeys(keys = []) {
+  const normalizedKeys = (Array.isArray(keys) ? keys : []).map(normalizeConfigParamKey);
+  for (const key of normalizedKeys) {
     if (!CONFIG_PARAM_KEY_PATTERN.test(key)) {
       throw new AgentConfigProtocolError(`invalid config param key: ${key}`, {
         code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
@@ -110,6 +101,54 @@ export function buildConfigParamCatalog({
       });
     }
   }
+  return Array.from(new Set(normalizedKeys));
+}
+
+export function assertConfigParamsDocumentKeys(document = {}, keys = []) {
+  const normalizedDocument = normalizeConfigParamsDocument(document);
+  const allowedKeys = new Set(normalizeExplicitConfigParamKeys(keys));
+  const documentKeys = new Set([
+    ...Object.keys(normalizedDocument.values),
+    ...Object.keys(normalizedDocument.descriptions),
+  ]);
+  const unknownKeys = Array.from(documentKeys)
+    .filter((key) => !allowedKeys.has(key))
+    .sort((left, right) => left.localeCompare(right));
+  if (unknownKeys.length) {
+    throw new AgentConfigProtocolError(`unknown config param key: ${unknownKeys[0]}`, {
+      code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
+      details: { field: "values", keys: unknownKeys },
+    });
+  }
+  return normalizedDocument;
+}
+
+export function synchronizeConfigParamsDocument({ document = {}, keys = [] } = {}) {
+  const normalizedDocument = normalizeConfigParamsDocument(document);
+  const authoritativeKeys = normalizeExplicitConfigParamKeys(keys).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return {
+    values: Object.fromEntries(
+      authoritativeKeys.map((key) => [key, normalizedDocument.values[key] || ""]),
+    ),
+    descriptions: Object.fromEntries(
+      authoritativeKeys.map((key) => [key, normalizedDocument.descriptions[key] || ""]),
+    ),
+  };
+}
+
+export function buildConfigParamCatalog({
+  keys = [],
+  descriptions = {},
+  values = {},
+  extraKeys = [],
+} = {}) {
+  const document = normalizeConfigParamsDocument({ values, descriptions });
+  const explicitKeys = normalizeExplicitConfigParamKeys([
+    ...(Array.isArray(keys) ? keys : []),
+    ...(Array.isArray(extraKeys) ? extraKeys : []),
+  ]);
   return Array.from(
     new Set([
       ...explicitKeys,

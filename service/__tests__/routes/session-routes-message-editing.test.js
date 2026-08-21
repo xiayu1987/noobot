@@ -12,11 +12,10 @@ import {
 } from "@noobot/session-protocol";
 import express, { registerSessionRoutes, withTestServer } from "./session-routes.helpers.js";
 
-function createReplaceTurnResult(payload, {
-  version,
-  replacedTurnScopeIds,
-  replacementUserMessageId,
-} = {}) {
+function createReplaceTurnResult(
+  payload,
+  { version, replacedTurnScopeIds, replacementUserMessageId } = {},
+) {
   const replacementDialogProcessId = "dialog-replacement";
   const replacementUser = {
     role: "user",
@@ -43,13 +42,23 @@ function createReplaceTurnResult(payload, {
   };
 }
 
-function mutationCommand(type, {
-  userId = "u1", sessionId = "s1", parentSessionId = "",
-  commandId = "test-command", expectedAggregateVersion = 0, ...payload
-} = {}) {
+function mutationCommand(
+  type,
+  {
+    userId = "u1",
+    sessionId = "s1",
+    parentSessionId = "",
+    commandId = "test-command",
+    expectedAggregateVersion = 0,
+    ...payload
+  } = {},
+) {
   return createSessionCommand({
-    commandId, type, scope: { userId, sessionId, parentSessionId },
-    expectedAggregateVersion, payload,
+    commandId,
+    type,
+    scope: { userId, sessionId, parentSessionId },
+    expectedAggregateVersion,
+    payload,
   });
 }
 
@@ -67,7 +76,11 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
         deleteFromMessage: async (payload) => {
           calls.push(payload);
           return {
-            session: { sessionId: payload.sessionId, messages: [{ id: "m1" }], aggregateVersion: 3 },
+            session: {
+              sessionId: payload.sessionId,
+              messages: [{ id: "m1" }],
+              aggregateVersion: 3,
+            },
             deletedCount: 2,
             anchorIndex: 1,
             deletedTurnScopeIds: ["turn-delete", "turn-tail"],
@@ -78,8 +91,6 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -89,7 +100,9 @@ test("session-routes: delete-from 路由透传请求体并返回后端快照", a
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...mutationCommand(SESSION_COMMAND.MESSAGE_DELETE_FROM, {
-          parentSessionId: "parent-1", commandId: "idem-1", expectedAggregateVersion: 2,
+          parentSessionId: "parent-1",
+          commandId: "idem-1",
+          expectedAggregateVersion: 2,
           anchor: { dialogProcessId: "dp-1" },
         }),
       }),
@@ -135,8 +148,6 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -145,9 +156,12 @@ test("session-routes: delete-from 保留服务层 404/409 状态码", async () =
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/delete-from`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mutationCommand(SESSION_COMMAND.MESSAGE_DELETE_FROM, {
-          commandId: `delete-${statusCode}`, anchor: { turnScopeId: "scope-missing" },
-        })),
+        body: JSON.stringify(
+          mutationCommand(SESSION_COMMAND.MESSAGE_DELETE_FROM, {
+            commandId: `delete-${statusCode}`,
+            anchor: { turnScopeId: "scope-missing" },
+          }),
+        ),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);
@@ -179,8 +193,6 @@ test("session-routes: rename 路由 trim 标题并返回成功", async () => {
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -211,8 +223,6 @@ test("session-routes: rename 空标题返回 400，session 不存在返回 404",
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -257,8 +267,6 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -266,14 +274,16 @@ test("session-routes: replace-turn 路由透传请求体并返回后端快照", 
     const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
-        parentSessionId: "parent-1",
-        anchor: { turnScopeId: "scope-old" },
-        newContent: " edited content ",
-        turnScopeId: " turn-scope-replace ",
-        expectedAggregateVersion: 3,
-        commandId: "idem-2",
-      })),
+      body: JSON.stringify(
+        mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+          parentSessionId: "parent-1",
+          anchor: { turnScopeId: "scope-old" },
+          newContent: " edited content ",
+          turnScopeId: " turn-scope-replace ",
+          expectedAggregateVersion: 3,
+          commandId: "idem-2",
+        }),
+      ),
     });
     const payload = await response.json();
     assert.equal(response.status, 200);
@@ -316,25 +326,28 @@ test("session-routes: replace-turn rejects duplicate /api/internal service route
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
   await withTestServer(app, async (baseUrl) => {
-    const response = await fetch(`${baseUrl}/api/internal/session/primary-user/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
-        userId: "primary-user",
-        sessionId: "93606d58-60eb-4ca4-bccf-c926e67e1fed",
-        anchor: { turnScopeId: "client-turn:api" },
-        newContent: "edited content",
-        turnScopeId: "client-turn:api-new",
-        expectedAggregateVersion: 2,
-        commandId: "replace-api-command",
-      })),
-    });
+    const response = await fetch(
+      `${baseUrl}/api/internal/session/primary-user/93606d58-60eb-4ca4-bccf-c926e67e1fed/messages/replace-turn`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+            userId: "primary-user",
+            sessionId: "93606d58-60eb-4ca4-bccf-c926e67e1fed",
+            anchor: { turnScopeId: "client-turn:api" },
+            newContent: "edited content",
+            turnScopeId: "client-turn:api-new",
+            expectedAggregateVersion: 2,
+            commandId: "replace-api-command",
+          }),
+        ),
+      },
+    );
     assert.equal(response.status, 404);
     assert.equal(calls.length, 0);
   });
@@ -360,8 +373,6 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       getAttachmentById: async () => null,
     },
     handleChat: (_req, res) => res.json({ ok: true }),
-    getConnectorChannelStore: () => ({}),
-    getConnectorHistoryStore: () => ({}),
     translateText: () => "",
   });
 
@@ -370,10 +381,14 @@ test("session-routes: replace-turn 保留服务层 404/409 状态码", async () 
       const response = await fetch(`${baseUrl}/internal/session/u1/s1/messages/replace-turn`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
-          commandId: `replace-${statusCode}`,
-          anchor: { turnScopeId: "scope-missing" }, newContent: "edit", turnScopeId: "scope-new",
-        })),
+        body: JSON.stringify(
+          mutationCommand(SESSION_COMMAND.TURN_REPLACE, {
+            commandId: `replace-${statusCode}`,
+            anchor: { turnScopeId: "scope-missing" },
+            newContent: "edit",
+            turnScopeId: "scope-new",
+          }),
+        ),
       });
       const payload = await response.json();
       assert.equal(response.status, statusCode);

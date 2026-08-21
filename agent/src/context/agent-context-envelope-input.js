@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
 import { safeNum } from "../shared/utils/shared-utils.js";
 
@@ -65,7 +65,9 @@ export function createAgentContextEnvelopeInput({
         maxToolLoopTurns: safeNum(systemRuntime?.config?.maxToolLoopTurns),
       },
       model: { runtimeModel, allEnabledProviders },
-      selectedConnectors: normalizeSelectedConnectors(systemRuntime?.config?.selectedConnectors),
+      selectedConnectorIds: normalizeSelectedConnectorIds(
+        systemRuntime?.config?.selectedConnectorIds,
+      ),
     },
     contextBuild,
     messageBlocks: {

@@ -77,7 +77,7 @@ test("buildTools: 重组后应注册关键工具", async () => {
     "write_file",
     "call_service",
     "call_mcp_task",
-    "process_connector_tool",
+    "access_connector",
     "switch_model",
     "task_summary",
     "request_help",
@@ -167,7 +167,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
         tools: {
           service: { enabled: false },
           model: { enabled: false },
-          process_connector_tool: { enabled: false },
+          access_connector: { enabled: false },
           request_help: { enabled: false },
           web_search: { enabled: false },
           agent_collab: { enabled: false },
@@ -181,7 +181,7 @@ test("buildTools: enabled=false 应按配置过滤", async () => {
   const shouldBeDisabled = [
     "call_service",
     "switch_model",
-    "process_connector_tool",
+    "access_connector",
     "request_help",
     "web_search",
     "delegate_task_async",

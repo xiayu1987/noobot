@@ -41,9 +41,9 @@ watch(
 
 <template>
   <el-anchor
-    v-if="items.length"
     ref="navigatorRef"
     class="chat-message-navigator noobot-surface-card"
+    :class="{ 'is-empty': !items.length }"
     :container="null"
     :marker="false"
     :offset="16"
@@ -70,10 +70,18 @@ watch(
         <template #reference>
           <span
             class="chat-message-navigator__item"
-            :class="`is-${String(item.role || 'session').trim().toLowerCase() || 'session'}`"
+            :class="`is-${
+              String(item.role || 'session')
+                .trim()
+                .toLowerCase() || 'session'
+            }`"
           >
-            <span class="chat-message-navigator__role noobot-soft-badge">{{ item.roleLabel || item.role }}</span>
-            <span v-if="item.preview" class="chat-message-navigator__content">{{ item.preview }}</span>
+            <span class="chat-message-navigator__role noobot-soft-badge">{{
+              item.roleLabel || item.role
+            }}</span>
+            <span v-if="item.preview" class="chat-message-navigator__content">{{
+              item.preview
+            }}</span>
           </span>
         </template>
         <div class="chat-nav-popover">
@@ -90,6 +98,9 @@ watch(
         </div>
       </el-popover>
     </el-anchor-link>
+    <span v-if="!items.length" class="chat-message-navigator__empty">
+      {{ translate("common.noMessages") }}
+    </span>
   </el-anchor>
 </template>
 
@@ -106,6 +117,18 @@ watch(
   scrollbar-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent)
     color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 20%, transparent);
   box-sizing: border-box;
+}
+
+.chat-message-navigator.is-empty {
+  min-height: 42px;
+}
+
+.chat-message-navigator__empty {
+  display: block;
+  padding: 8px 4px;
+  color: var(--noobot-text-secondary, var(--el-text-color-secondary));
+  font-size: var(--noobot-font-size-xs);
+  text-align: center;
 }
 
 .chat-message-navigator.el-anchor > :deep(.el-anchor__list) {
@@ -133,7 +156,8 @@ watch(
   white-space: nowrap;
   color: var(--noobot-text-secondary, var(--el-text-color-secondary));
   background: var(--noobot-fill-soft, var(--el-fill-color-lighter));
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   transition:
@@ -160,8 +184,13 @@ watch(
   font-weight: 800;
   letter-spacing: 0.035em;
   text-align: center;
-  background: color-mix(in srgb, var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%,
+    var(--noobot-panel-bg, var(--el-bg-color-overlay))
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
 }
 
 .chat-message-navigator__content {
@@ -172,14 +201,30 @@ watch(
 }
 
 .chat-message-navigator__item.is-user .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-text-strong, var(--el-text-color-primary)));
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 86%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  color: color-mix(
+    in srgb,
+    var(--el-color-primary) 88%,
+    var(--noobot-text-strong, var(--el-text-color-primary))
+  );
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary-light-9) 86%,
+    var(--noobot-panel-bg, var(--el-bg-color-overlay))
+  );
   border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
 }
 
 .chat-message-navigator__item.is-assistant .chat-message-navigator__role {
-  color: color-mix(in srgb, var(--el-color-success) 78%, var(--noobot-text-strong, var(--el-text-color-primary)));
-  background: color-mix(in srgb, var(--el-color-success-light-9) 86%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  color: color-mix(
+    in srgb,
+    var(--el-color-success) 78%,
+    var(--noobot-text-strong, var(--el-text-color-primary))
+  );
+  background: color-mix(
+    in srgb,
+    var(--el-color-success-light-9) 86%,
+    var(--noobot-panel-bg, var(--el-bg-color-overlay))
+  );
   border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
 }
 
@@ -200,7 +245,11 @@ watch(
 :deep(.el-anchor__link:hover) {
   color: var(--noobot-text-main, var(--el-text-color-primary));
   background: var(--noobot-fill-hover, var(--el-fill-color-light));
-  border-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 24%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
   transform: translateX(2px);
 }
 
@@ -208,7 +257,11 @@ watch(
 :deep(.el-anchor__link.is-current) {
   color: var(--noobot-text-strong, var(--el-text-color-primary));
   background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));
-  border-color: color-mix(in srgb, var(--el-color-primary) 42%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 42%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
   font-weight: 700;
 }
 
@@ -221,11 +274,12 @@ watch(
   .chat-message-navigator {
     max-height: calc(100dvh - 120px);
     padding: 8px 10px;
-    border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 58%, transparent);
-    background: color-mix(
+    border-color: color-mix(
       in srgb,
-      var(--noobot-panel-bg, var(--el-bg-color)) 96%, transparent
+      var(--noobot-panel-border, var(--el-border-color)) 58%,
+      transparent
     );
+    background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color)) 96%, transparent);
   }
 
   :deep(.el-anchor__link) {

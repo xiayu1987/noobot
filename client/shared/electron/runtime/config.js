@@ -7,11 +7,13 @@ import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
+  assertConfigParamsDocumentKeys,
   collectConfigTemplateKeys,
   DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   ensureModelProviderInConfigFile,
   migrateConfigFileToCurrentProtocol,
   normalizeConfigParamsDocument,
+  synchronizeConfigParamsDocument,
   synchronizeConfigFileFromTemplate,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
@@ -249,14 +251,11 @@ export function createDesktopConfigManager({
       ...configFiles.map((filePath) => readJsonFile(filePath, {})),
     );
     const filePath = path.join(workspaceRootPath, "config-params.json");
-    const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
-    const values = { ...current.values };
-    for (const key of keys)
-      if (!Object.prototype.hasOwnProperty.call(values, key)) values[key] = "";
-    writeJsonFile(
-      filePath,
-      normalizeConfigParamsDocument({ values, descriptions: current.descriptions }),
-    );
+    const synchronized = synchronizeConfigParamsDocument({
+      document: readJsonFile(filePath, {}) || {},
+      keys,
+    });
+    writeJsonFile(filePath, synchronized);
     return filePath;
   }
 
@@ -374,8 +373,12 @@ export function createDesktopConfigManager({
   function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
     const filePath = path.join(workspaceRootPath, "config-params.json");
     const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
+    const incoming = assertConfigParamsDocumentKeys(
+      { values: isPlainObject(values) ? values : {} },
+      Object.keys(current.values),
+    );
     const next = normalizeConfigParamsDocument({
-      values: { ...current.values, ...(isPlainObject(values) ? values : {}) },
+      values: { ...current.values, ...incoming.values },
       descriptions: current.descriptions,
     });
     writeJsonFile(filePath, next);

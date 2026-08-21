@@ -97,7 +97,7 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   capability: {
-    separateModelMinTimeoutMs: TIME_TIERS.threeMinutesMs,
+    separateModelMinTimeoutMs: TIME_TIERS.fiveMinutesMs,
   },
 
   openvscode: {
@@ -138,7 +138,7 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   harness: {
-    hookTimeoutMs: TIME_TIERS.oneSecondMs,
+    hookTimeoutMs: TIME_TIERS.fiveMinutesMs,
     manifestDebounceMs: TIME_TIERS.fastProbeMs,
     manifestCacheMaxAgeMs: 10 * MINUTE_MS,
     manifestCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,

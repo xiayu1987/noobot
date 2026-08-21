@@ -65,3 +65,31 @@ test("ripgrep file search scans files larger than the former per-file threshold"
     await rm(rootPath, { recursive: true, force: true });
   }
 });
+
+test("ripgrep file search enforces maxResults across files", async (t) => {
+  if (!(await hasRipgrep())) {
+    t.skip("ripgrep is not installed");
+    return;
+  }
+  const rootPath = await mkdtemp(path.join(tmpdir(), "noobot-bounded-file-search-"));
+  try {
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        writeFile(path.join(rootPath, `match-${index}.txt`), "GLOBAL_SEARCH_MARKER\n", "utf8"),
+      ),
+    );
+
+    const result = await searchFilesWithRipgrep({
+      rootPath,
+      workspacePath: rootPath,
+      query: "GLOBAL_SEARCH_MARKER",
+      contextLines: 0,
+      maxResults: 7,
+    });
+
+    assert.equal(result.matches.length, 7);
+    assert.equal(result.truncated, true);
+  } finally {
+    await rm(rootPath, { recursive: true, force: true });
+  }
+});

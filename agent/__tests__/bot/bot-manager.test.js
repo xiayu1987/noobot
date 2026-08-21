@@ -146,6 +146,33 @@ test("BotManager replaceSessionTurn ingests uploads before persisting the replac
   assert.equal(result.attachments[0].attachmentId, "canonical-1");
 });
 
+test("BotManager replaceSessionTurn persists an empty attachment set without workspace ingestion", async () => {
+  const calls = [];
+  const manager = createBotManagerWithMocks({
+    workspaceService: {
+      async ensureUserWorkspace() {
+        calls.push("ensure");
+      },
+    },
+    session: {
+      async replaceTurn(payload) {
+        calls.push("replace");
+        return payload;
+      },
+    },
+  });
+
+  const result = await manager.replaceSessionTurn({
+    userId: "u1",
+    sessionId: "s1",
+    newContent: "edited",
+    attachments: [],
+  });
+
+  assert.deepEqual(calls, ["replace"]);
+  assert.deepEqual(result.attachments, []);
+});
+
 test("BotManager should cleanup session-scoped tool-result-overflow directories", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-overflow-cleanup-"));
   const overflowRoot = path.join(basePath, "runtime", "ops_workdir", ".tool-result-overflow");

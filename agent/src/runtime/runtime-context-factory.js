@@ -25,6 +25,7 @@ export function createRuntimeContext({
   runConfig = {},
   systemRuntime = {},
   userMessageAttachments = [],
+  sharedTools = null,
 } = {}) {
   const normalizedRunConfig =
     runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
@@ -44,9 +45,11 @@ export function createRuntimeContext({
     allEnabledProviders:
       allEnabledProviders && typeof allEnabledProviders === "object" ? allEnabledProviders : {},
     sharedTools:
-      normalizedRunConfig.sharedTools && typeof normalizedRunConfig.sharedTools === "object"
-        ? normalizedRunConfig.sharedTools
-        : {},
+      sharedTools && typeof sharedTools === "object"
+        ? sharedTools
+        : normalizedRunConfig.sharedTools && typeof normalizedRunConfig.sharedTools === "object"
+          ? normalizedRunConfig.sharedTools
+          : {},
     hookManager:
       normalizedRunConfig.hookManager && typeof normalizedRunConfig.hookManager === "object"
         ? normalizedRunConfig.hookManager

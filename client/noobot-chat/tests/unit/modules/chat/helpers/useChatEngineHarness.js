@@ -87,7 +87,7 @@ export const makeSession = (id, overrides = {}) => ({
   messages: [],
   rawMessages: [],
   sessionDocs: [],
-  connectorPanelState: { selectedConnectors: {} },
+  connectorPanelState: { selectedConnectorIds: [], connectors: [] },
   messageCount: 0,
   lastMessage: null,
   updatedAt: "",

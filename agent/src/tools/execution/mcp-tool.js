@@ -24,7 +24,7 @@ import { toToolJsonResult } from "../core/tool-json-result.js";
 import { appendMcpErrorLog } from "../../observability/index.js";
 import { tTool } from "../core/tool-i18n.js";
 import { isAbortError } from "../../shared/utils/error-utils.js";
-import { normalizeSelectedConnectors } from "@noobot/agent-config-protocol/enums";
+import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 import { createAgentDetachedSubSessionStrategy } from "../../bot/session/detached-subsession-strategy.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import {
@@ -118,8 +118,8 @@ export function createMcpTool({ agentContext }) {
             ...(hasParentStreamingConfig
               ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
               : {}),
-            selectedConnectors: normalizeSelectedConnectors(
-              runtime?.systemRuntime?.config?.selectedConnectors || {},
+            selectedConnectorIds: normalizeSelectedConnectorIds(
+              runtime?.systemRuntime?.config?.selectedConnectorIds,
             ),
             toolPolicy: {
               mode: TOOL_POLICY_MODE.CUSTOM_ONLY,

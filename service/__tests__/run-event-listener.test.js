@@ -82,6 +82,31 @@ test("run-event-listener forwards the committed Turn receipt only through its ex
   assert.equal(frames[0].data.aggregateVersion, 7);
 });
 
+test("run-event-listener forwards the attachment binding receipt through its explicit contract", () => {
+  const { listener, frames } = createListener();
+  listener.onEvent({
+    event: "turn_attachments_bound",
+    data: {
+      sessionId: "root-session",
+      dialogProcessId: "dialog-1",
+      turnScopeId: "turn-1",
+      aggregateVersion: 8,
+      userMessage: {
+        messageUid: "sm_1",
+        messageId: "frontend-user-1",
+        role: "user",
+        sessionId: "root-session",
+        dialogProcessId: "dialog-1",
+        turnScopeId: "turn-1",
+        attachments: [{ attachmentId: "a1", sessionId: "root-session" }],
+      },
+    },
+  });
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].event, "turn_attachments_bound");
+  assert.equal(frames[0].data.aggregateVersion, 8);
+});
+
 test("run-event-listener dispatches a canonical authority commit without rebuilding its envelope", () => {
   const dispatched = [];
   const { listener, frames } = createListener({

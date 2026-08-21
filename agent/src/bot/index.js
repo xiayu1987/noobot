@@ -19,10 +19,14 @@ import { resolveAttachments } from "../context/providers/attachment-resolver.js"
 export * as hook from "./hook/index.js";
 
 export class BotManager {
-  constructor(globalConfig, { startupContext = {}, pluginRuntimeBundle = null } = {}) {
+  constructor(
+    globalConfig,
+    { startupContext = {}, pluginRuntimeBundle = null, connectorAccessPort = null } = {},
+  ) {
     this.globalConfig = globalConfig;
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
+    this.connectorAccessPort = connectorAccessPort;
 
     this.attach = new AttachmentService(globalConfig);
     this.sessionRuntime = createSessionServices(globalConfig, { attachmentService: this.attach });
@@ -79,7 +83,7 @@ export class BotManager {
     const sessionId = String(payload?.sessionId || "").trim();
     const attachments = Array.isArray(payload?.attachments) ? payload.attachments : undefined;
     let canonicalAttachments = attachments;
-    if (attachments) {
+    if (attachments?.length) {
       await this.ensureUserWorkspace(userId);
       const runtimeBasePath = this.getWorkspacePath(userId);
       const userConfig = await this.loadUserConfig(runtimeBasePath);

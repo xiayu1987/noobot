@@ -20,7 +20,6 @@ import {
 import {
   isTerminalInteraction,
   normalizeInteractionRequestPayload,
-  resolveConnectorStatusPayload,
 } from "../interactionPayload.js";
 import { mergeAttachments } from "../../model/dialogProcessChain.js";
 
@@ -53,24 +52,6 @@ function canonicalAttachmentProjectionKey(attachment = {}) {
     return `canonical:${attachmentIdentityKey(projectAttachmentIdentity(attachment))}`;
   }
   return "";
-}
-
-export function handleConnectorStatusStreamEvent({
-  data,
-  activeSession,
-  connectorTypeSet,
-  upsertConnectedConnectorInPanelState,
-  refreshSessionConnectorsAsync,
-}) {
-  const { connectorType, connectorName, status } = resolveConnectorStatusPayload(data);
-  if (connectorTypeSet?.has?.(connectorType) && connectorName) {
-    upsertConnectedConnectorInPanelState(activeSession.value, {
-      connectorType,
-      connectorName,
-      status,
-    });
-    refreshSessionConnectorsAsync(activeSession.value?.sessionId || "");
-  }
 }
 
 export function handleAttachmentsStreamEvent({
@@ -180,10 +161,6 @@ export function handleInteractionRequestStreamEvent({
 }
 
 export function handleBasicStreamEvent(event, context = {}) {
-  if (event === StreamEventEnum.CONNECTOR_STATUS) {
-    handleConnectorStatusStreamEvent(context);
-    return true;
-  }
   if (event === StreamEventEnum.ATTACHMENTS) {
     handleAttachmentsStreamEvent(context);
     return true;

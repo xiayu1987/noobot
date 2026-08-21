@@ -18,6 +18,7 @@ export async function startHttpServer({
   resolveRequestLocale,
   resolveAuthByApiKey,
   mapAgentRunCommand,
+  connectorAccessPort,
   normalizeLocale,
   defaultLocale,
   translateText,
@@ -45,6 +46,7 @@ export async function startHttpServer({
     resolveRequestLocale,
     resolveAuthByApiKey,
     mapAgentRunCommand,
+    connectorAccessPort,
     normalizeLocale,
     defaultLocale,
     translateText,
@@ -64,18 +66,21 @@ export async function startHttpServer({
   const address = server.address();
   const listenHost = typeof address === "object" && address ? address.address : "";
   const listenPort = typeof address === "object" && address ? address.port : port;
-  await writeRoutedRuntimeEvent({
-    scope: "startup",
-    source: "service",
-    channel: RUNTIME_EVENT_CHANNELS.DIRECT,
-    category: RUNTIME_EVENT_CATEGORIES.STATE,
-    level: "info",
-    event: "service.startup.httpServer.listen.started",
-    workspaceRoot: sessionLogConfig.workspaceRoot,
-    data: {
-      host: String(listenHost || ""),
-      port: listenPort,
+  await writeRoutedRuntimeEvent(
+    {
+      scope: "startup",
+      source: "service",
+      channel: RUNTIME_EVENT_CHANNELS.DIRECT,
+      category: RUNTIME_EVENT_CATEGORIES.STATE,
+      level: "info",
+      event: "service.startup.httpServer.listen.started",
+      workspaceRoot: sessionLogConfig.workspaceRoot,
+      data: {
+        host: String(listenHost || ""),
+        port: listenPort,
+      },
     },
-  }, { ...sessionLogConfig, dirName: "events" });
+    { ...sessionLogConfig, dirName: "events" },
+  );
   return server;
 }

@@ -7,8 +7,7 @@ import {
   collectAttachmentRefsFromTransferEnvelopes,
   dedupeAttachmentRefs,
 } from "../transfer-attachment-refs.js";
-
-const TERMINAL_PRESENTATION_STATES = new Set(["user_stopped", "error", "timeout"]);
+import { selectPresentedSessionLifecycleTurns } from "../session-turn-read-model.js";
 
 function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
   const turnScopeId = String(turn?.turnScopeId || "").trim();
@@ -34,30 +33,9 @@ function buildLifecycleTurnPresentation(turn = {}, sessionId = "") {
 }
 
 export function buildLifecycleTurnPresentations(lifecycle = null, sessionId = "") {
-  const turns = lifecycle?.turns && typeof lifecycle.turns === "object"
-    ? lifecycle.turns
-    : {};
-  const activeTurnScopeId = String(lifecycle?.activeTurnScopeId || "").trim();
-  if (activeTurnScopeId && !turns[activeTurnScopeId]) {
-    throw new TypeError("active Turn presentation invariant failed: turn_missing");
-  }
-  const entries = Object.entries(turns);
-  for (const [turnScopeId, turn] of entries) {
-    if (String(turn?.turnScopeId || "").trim() !== turnScopeId) {
-      throw new TypeError("Turn presentation invariant failed: turn_scope_mismatch");
-    }
-  }
-  return entries
-    .map(([, turn]) => turn)
-    .filter((turn = {}) => {
-      const turnScopeId = String(turn?.turnScopeId || "").trim();
-      const terminal = String(
-        turn?.terminalStatus?.status || turn?.executionState || "",
-      ).trim().toLowerCase();
-      return turnScopeId === activeTurnScopeId || TERMINAL_PRESENTATION_STATES.has(terminal);
-    })
-    .sort((left, right) => Number(left?.sequence || 0) - Number(right?.sequence || 0))
-    .map((turn) => buildLifecycleTurnPresentation(turn, sessionId));
+  return selectPresentedSessionLifecycleTurns(lifecycle).map((turn) =>
+    buildLifecycleTurnPresentation(turn, sessionId),
+  );
 }
 
 export function buildToolArtifactTimelineProjection(session = {}) {

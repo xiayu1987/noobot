@@ -77,6 +77,12 @@ const LENGTH_TIERS = deepFreeze({
 });
 
 export const LENGTH_THRESHOLDS = deepFreeze({
+  connectorSecrets: {
+    keyBytes: 32,
+    initializationVectorBytes: 12,
+    saltBytes: 16,
+  },
+
   context: {
     phaseSummaryMessageChars: LENGTH_TIERS.chars.phaseSummary,
 

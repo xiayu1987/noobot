@@ -56,6 +56,7 @@ const {
   sidebarCollapsed,
   mobileSidebarOpen,
   workspaceVisible,
+  connectorVisible,
   userSettingsVisible,
   configParamsVisible,
   drawerSize,
@@ -64,6 +65,7 @@ const {
   openMobileSidebar,
   closeAllDrawers,
   openWorkspace: openWorkspaceRaw,
+  openConnectors: openConnectorsRaw,
   openUserSettings: openUserSettingsRaw,
   openConfigParams: openConfigParamsRaw,
 } = usePanelState();
@@ -187,7 +189,7 @@ const {
   deleteMonotonicMessage,
   resendMonotonicMessage,
   refreshSessionConnectorsAsync,
-  updateSessionSelectedConnector,
+  updateSessionSelectedConnectors,
   pendingInteractionRequest,
   interactionSubmitting,
   submitInteractionResponse,
@@ -306,7 +308,6 @@ const {
   fetchThinkingDetail,
   notify: notifyUi,
   translate,
-  closeAllDrawers,
   closeMobileSidebar,
   closeComposerMorePanel,
   pushPseudoRoute: (route) => pushPseudoRoute(route),
@@ -331,6 +332,7 @@ const {
   currentMessageAnchorId,
   messageListPanelRef,
   workspaceVisible,
+  connectorVisible,
   userSettingsVisible,
   configParamsVisible,
   mobileSidebarOpen,
@@ -338,11 +340,13 @@ const {
   composerMorePanelVisible,
   thinkingDetailsVisible,
   mobileChatNavigatorVisible,
+  chatNavigatorVisible,
   isSuperAdmin,
   closeAllDrawers,
   closeMobileSidebar,
   openMobileSidebar,
   openWorkspaceRaw,
+  openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
   closeComposerMorePanel,
@@ -363,10 +367,10 @@ appShellPanelActions = useAppShellPanelActions({
   ensureConnected,
   notify: notifyUi,
   translate,
-  closeAllDrawers,
   toggleSidebar,
   closeMobileSidebar,
   openWorkspaceRaw,
+  openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
   pushPanelPseudoRoute,
@@ -376,6 +380,7 @@ appShellPanelActions = useAppShellPanelActions({
 
 const {
   openWorkspace,
+  openConnectors: openConnectorsPanel,
   openUserSettings,
   openConfigParams,
   handleToggleSidebar,
@@ -398,7 +403,7 @@ const { handleDeleteSession, handleRenameSession, handleWorkspaceReset, onConnec
     renameSession,
     fetchSessions,
     refreshSessionConnectorsAsync,
-    updateSessionSelectedConnector,
+    updateSessionSelectedConnectors,
     notify: notifyUi,
     translate,
   });
@@ -462,6 +467,27 @@ function onConnectCodeUpdate(value = "") {
   connectCode.value = String(value || "");
 }
 
+function openConnectors() {
+  chatNavigatorVisible.value = false;
+  openConnectorsPanel();
+}
+
+function toggleConnectorOverview() {
+  if (connectorVisible.value) {
+    handleDrawerModelUpdate({ model: connectorVisible }, false);
+    return;
+  }
+  openConnectors();
+}
+
+function toggleChatNavigatorOverview() {
+  const nextVisible = !chatNavigatorVisible.value;
+  if (nextVisible && connectorVisible.value) {
+    handleDrawerModelUpdate({ model: connectorVisible }, false);
+  }
+  chatNavigatorVisible.value = nextVisible;
+}
+
 const drawerPanels = computed(() =>
   buildAppShellDrawerPanels({
     translate,
@@ -520,6 +546,7 @@ const drawerPanels = computed(() =>
       :stop-execution="stopSending"
       :chat-message-nav-items="chatMessageNavItems"
       :chat-navigator-visible="chatNavigatorVisible"
+      :connector-visible="connectorVisible"
       :current-message-anchor-id="currentMessageAnchorId"
       :input="input"
       :composer-more-panel-visible="composerMorePanelVisible"
@@ -546,6 +573,7 @@ const drawerPanels = computed(() =>
       :conversation-state-snapshot="conversationStateSnapshot"
       :conversation-state-timeline="conversationStateTimeline"
       :translate="translate"
+      :auth-fetch="authFetch"
       @toggle-sidebar="handleToggleSidebar"
       @close-mobile-sidebar="handleCloseMobileSidebar"
       @update:user-id="onUserIdUpdate"
@@ -558,10 +586,12 @@ const drawerPanels = computed(() =>
       @select-session="handleSelectSession"
       @open-openvscode="openOpenVSCode"
       @open-workspace="openWorkspace"
+      @open-connectors="openConnectors"
+      @toggle-connectors-visible="toggleConnectorOverview"
       @open-user-settings="openUserSettings"
       @open-config-params="openConfigParams"
       @open-thinking-details="openThinkingDetailsPanel"
-      @toggle-chat-navigator-visible="chatNavigatorVisible = !chatNavigatorVisible"
+      @toggle-chat-navigator-visible="toggleChatNavigatorOverview"
       @select-chat-message-nav-item="handleSelectChatMessageNavItem"
       @mobile-chat-navigator-trigger-click="openChatMessageNavigator"
       @interaction-confirm="handleInteractionConfirm"
@@ -584,6 +614,7 @@ const drawerPanels = computed(() =>
       @update:more-panel-visible="handleComposerMorePanelVisibleUpdate"
       @clear-uploads="clearUploads"
       @connector-selected="onConnectorSelected"
+      @connector-registry-changed="refreshSessionConnectorsAsync(activeSessionId)"
       @send="send"
       @stop="stopSending"
     />

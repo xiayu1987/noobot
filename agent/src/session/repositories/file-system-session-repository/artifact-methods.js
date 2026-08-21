@@ -279,7 +279,7 @@ class SessionArtifactMethods {
         caller: String(session.caller || "user").trim() || "user",
         modelAlias: String(session.modelAlias || ""),
         messages: this.normalizeMessages(session.messages || [], { sessionId }),
-        selectedConnectors: this.normalizeSelectedConnectors(session.selectedConnectors || {}),
+        selectedConnectorIds: this.normalizeSelectedConnectorIds(session.selectedConnectorIds),
       },
       { now: this.now, sessionId, parentSessionId },
     );

@@ -35,6 +35,9 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "description": "OpenAI balanced model for coding and general-purpose agent workloads",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -56,6 +59,9 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "description": "OpenAI fast and cost-efficient model for high-volume agent workloads",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -77,6 +83,33 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "description": "OpenAI general-purpose model for reasoning, coding, and agent workflows",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "gpt_5_5": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-5.5",
+      "format": "openai_compatible",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "description": "OpenAI general-purpose model recommended for Responses API Web Search",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -276,6 +309,9 @@
       "format": "dashscope",
       "preserve_thinking": false,
       "description": "Alibaba flagship Qwen model for complex reasoning and agentic work",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []

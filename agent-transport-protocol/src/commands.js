@@ -43,7 +43,7 @@ const INPUT_KEYS = new Set(["message", "attachments"]);
 const PRESENTATION_KEYS = new Set(["userMessageId", "assistantMessageId"]);
 const RUN_CONCURRENCY_KEYS = new Set(["expectedTurnRevision", "expectedAggregateVersion"]);
 const STOP_CONCURRENCY_KEYS = new Set(["expectedTurnRevision"]);
-const SESSION_KEYS = new Set(["createIfAbsent"]);
+const SESSION_KEYS = new Set(["createIfAbsent", "selectedConnectorIds"]);
 const CONTINUATION_KEYS = new Set(["dialogProcessId", "turnScopeId"]);
 const STOP_KEYS = new Set(["executionId", "partialAssistant"]);
 const PARTIAL_ASSISTANT_KEYS = new Set([
@@ -107,6 +107,9 @@ export function createTurnRunCommand(input = {}) {
     }),
     session: {
       createIfAbsent: input.session?.createIfAbsent === true,
+      selectedConnectorIds: Array.isArray(input.session?.selectedConnectorIds)
+        ? input.session.selectedConnectorIds.map(clean).filter(Boolean)
+        : [],
     },
     ...(commandType === AGENT_COMMAND.CONTINUE
       ? {
@@ -260,6 +263,20 @@ export function validateAgentCommand(command) {
     if (!isObject(command.session)) errors.push("session_not_object");
     else {
       rejectUnknownFields(command.session, SESSION_KEYS, "session", errors);
+      if (!Array.isArray(command.session.selectedConnectorIds)) {
+        errors.push("invalid_session_selected_connector_ids");
+      } else if (
+        command.session.selectedConnectorIds.some(
+          (connectorId) => typeof connectorId !== "string" || !clean(connectorId),
+        ) ||
+        new Set(command.session.selectedConnectorIds.map(clean)).size !==
+          command.session.selectedConnectorIds.length
+      ) {
+        errors.push("invalid_session_selected_connector_ids");
+      }
+      if (!command.session.createIfAbsent && command.session.selectedConnectorIds?.length) {
+        errors.push("unexpected_session_selected_connector_ids");
+      }
       if (typeof command.session.createIfAbsent !== "boolean")
         errors.push("invalid_create_if_absent");
       if (commandType !== AGENT_COMMAND.SEND && command.session.createIfAbsent) {

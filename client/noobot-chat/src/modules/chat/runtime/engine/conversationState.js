@@ -7,7 +7,6 @@ import { RoleEnum, StreamEventEnum } from "../../model/chatConstants.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
-  resolveConnectorConnectedPayload,
 } from "../interactionPayload.js";
 import {
   isBlankCompatibleSameId,
@@ -45,9 +44,6 @@ export function createChatEngineConversationState({
   setPendingInteractionRequest,
   submitInteractionResponse,
   onConversationState,
-  connectorTypeSet,
-  upsertConnectedConnectorInPanelState,
-  refreshSessionConnectorsAsync,
   notify,
   translate,
 } = {}) {
@@ -62,17 +58,6 @@ export function createChatEngineConversationState({
     const requestId = String(request?.requestId || "").trim();
     if (requestId && connectorConnectedAckedRequestIds.has(requestId)) {
       return true;
-    }
-    if (String(request?.interactionType || "").trim() === "connector_connected") {
-      const { connectorType, connectorName, status } = resolveConnectorConnectedPayload(request);
-      if (connectorTypeSet?.has?.(connectorType) && connectorName) {
-        upsertConnectedConnectorInPanelState(activeSession.value, {
-          connectorType,
-          connectorName,
-          status,
-        });
-        refreshSessionConnectorsAsync(activeSession.value?.sessionId || "");
-      }
     }
     if (request?.requestId) {
       try {

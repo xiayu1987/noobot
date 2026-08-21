@@ -16,11 +16,6 @@ import {
   encryptPayloadBySessionId,
 } from "../../shared/utils/session-crypto.js";
 import {
-  createConnectorEventListener,
-  getConnectorChannelStore,
-  getConnectorHistoryStore,
-} from "../../integrations/connectors/index.js";
-import {
   resolveRuntimeTransferIdentity,
   transferSemanticContent,
 } from "../../transfer-adapter/index.js";
@@ -165,30 +160,6 @@ function initializeUserInteractionBridgeCrypto(runtimeContext = {}, sharedTools 
   bridge.__sessionCryptoWrapped = true;
 }
 
-function initializeConnectorRuntime(
-  runtimeContext = {},
-  sharedTools = {},
-  { rootSessionId = "", sessionId = "" } = {},
-) {
-  const connectorChannelStore = getConnectorChannelStore();
-  const connectorHistoryStore = getConnectorHistoryStore();
-  sharedTools.connectorChannelStore = connectorChannelStore;
-  sharedTools.connectorHistoryStore = connectorHistoryStore;
-  sharedTools.connectorEventListener = createConnectorEventListener({
-    runtime: runtimeContext,
-    store: connectorChannelStore,
-    historyStore: connectorHistoryStore,
-    rootSessionId,
-    sessionId,
-    dialogProcessId: String(runtimeContext?.systemRuntime?.dialogProcessId || "").trim(),
-    allowUserInteraction: runtimeContext?.systemRuntime?.config?.allowUserInteraction !== false,
-    bridge: runtimeContext?.userInteractionBridge || null,
-  });
-  runtimeContext.connectorChannels = rootSessionId
-    ? connectorChannelStore.getSessionConnectors(rootSessionId)
-    : { databases: [], terminals: [], emails: [] };
-}
-
 async function initializeBrowserRuntime(runtimeContext = {}, sharedTools = {}) {
   try {
     await initRuntimeSharedBrowser(runtimeContext);
@@ -202,15 +173,11 @@ export async function initializeRuntimeEnvironment(runtimeContext = {}) {
   if (!isPlainObject(runtimeContext)) return;
   const sharedTools = ensureSharedTools(runtimeContext);
   const sessionId = String(runtimeContext?.systemRuntime?.sessionId || "").trim();
-  const rootSessionId = String(
-    runtimeContext?.systemRuntime?.rootSessionId || sessionId || "",
-  ).trim();
 
   initializeSharedFetch(sharedTools);
   initializeTextCleaner(sharedTools);
   initializeSessionCrypto(sharedTools, { sessionId });
   initializeSemanticTransfer(runtimeContext, sharedTools);
   initializeUserInteractionBridgeCrypto(runtimeContext, sharedTools);
-  initializeConnectorRuntime(runtimeContext, sharedTools, { rootSessionId, sessionId });
   await initializeBrowserRuntime(runtimeContext, sharedTools);
 }

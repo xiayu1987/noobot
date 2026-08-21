@@ -14,7 +14,13 @@ export const captureTest = base.extend({
         method: request.method(), url: request.url(), resourceType: request.resourceType(),
         ...(/replace-turn/i.test(request.url()) ? { postData: request.postData() } : {}),
       }));
-      target.on("response", (response) => evidence.httpResponses.push({ status: response.status(), url: response.url() }));
+      target.on("response", async (response) => {
+        const record = { status: response.status(), url: response.url() };
+        if (/replace-turn/i.test(response.url()) && response.status() >= 400) {
+          record.body = await response.text().catch(() => "");
+        }
+        evidence.httpResponses.push(record);
+      });
       target.on("websocket", (socket) => {
         evidence.websockets.push({ url: socket.url() });
         socket.on("framesent", ({ payload }) => evidence.websocketSent.push({ url: socket.url(), payload }));

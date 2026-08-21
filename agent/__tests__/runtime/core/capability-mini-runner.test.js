@@ -13,6 +13,7 @@ import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 
 test("capability mini-runner requires and uses the host ModelPort", async () => {
   const calls = [];
+  const invocationAbortController = new AbortController();
   let resolvedConfig = null;
   const invoker = createAgentCapabilityModelInvoker({
     enableToolBinding: false,
@@ -80,6 +81,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     model: "GLM_5_1",
     purpose: "workflow_semantic",
     domain: "botPlugin",
+    signal: invocationAbortController.signal,
     ctx: {
       agentContext: createTestAgentExecutionScope(runtime, {
         identity: {
@@ -101,6 +103,7 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
     userConfig: {},
   });
   assert.equal(calls[0]?.invocation?.purpose, "workflow_semantic");
+  assert.equal(calls[0]?.options?.signal, invocationAbortController.signal);
 });
 
 test("capability mini-runner fails closed without a versioned config snapshot", () => {

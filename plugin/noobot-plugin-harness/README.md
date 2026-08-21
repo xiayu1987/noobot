@@ -153,7 +153,7 @@ if (api?.policy?.patch && Array.isArray(options?.denyToolNames)) {
 | `harnessDirName` | `harness` | Harness directory name below runtime directory. |
 | `promptPriority` | `80` | Hook priority for prompt injection handlers. |
 | `tracePriority` | `20` | Hook priority for trace handlers. |
-| `timeoutMs` | `1000` | Hook handler timeout. |
+| `timeoutMs` | `300000` | Hook handler timeout, including separate-model capability calls. |
 | `maxPreviewChars` | `1200` | Maximum preview size for recorded payload snippets. |
 | `promptText` | built-in policy | System prompt text injected at `before_llm_call`. |
 | `finalResponseText` | built-in guard | System prompt text injected at `before_final_output`. |

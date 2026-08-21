@@ -135,12 +135,10 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
 
 export function buildReconnectReplayEnvelopeCallbacks({
   onInteractionRequest,
-  onConnectorStatus,
   onAttachments,
 } = {}) {
   return {
     onInteractionRequest: (eventData) => onInteractionRequest?.(eventData),
-    onConnectorStatus: (eventData) => onConnectorStatus?.(eventData),
     onAttachments: (targetMessage, attachments = []) => onAttachments?.(targetMessage, attachments),
   };
 }

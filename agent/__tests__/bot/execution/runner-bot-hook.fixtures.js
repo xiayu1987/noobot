@@ -85,10 +85,12 @@ export function createRunner({
   appendAgentMessages = async () => {},
   getSessionTurns = null,
   commitSessionTurn = async () => ({}),
+  bindSessionTurnAttachments = async () => ({}),
   assertReusedUserTurnIdentity = async () => ({}),
   assertPersistenceContextIdentity = null,
 } = {}) {
   let authorityEventSequence = 0;
+  const committedUserMessages = new Map();
   const sessionManager = {
     async commitMessageEvent({
       sessionId,
@@ -196,14 +198,6 @@ export function createRunner({
   const commitCanonicalUserMessage = async (payload = {}) => {
     const result = (await commitSessionTurn(payload)) || {};
     const turnIdentity = String(payload.turnScopeId || "turn").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const sourceAttachments = Array.isArray(result.attachments)
-      ? result.attachments
-      : payload.attachments || [];
-    const attachments = sourceAttachments.map((attachment = {}, index) => ({
-      ...attachment,
-      attachmentId: String(attachment?.attachmentId || `att_test_${turnIdentity}_${index}`).trim(),
-      sessionId: payload.sessionId,
-    }));
     const sourceUserMessage = result.userMessage || {};
     const messageUid = String(sourceUserMessage.messageUid || `sm_test_${turnIdentity}`).trim();
     const messageId = String(
@@ -212,31 +206,49 @@ export function createRunner({
         payload?.runConfig?.userMessageId ||
         `msg_user_test_${turnIdentity}`,
     ).trim();
+    const userMessage = {
+      ...sourceUserMessage,
+      messageUid,
+      messageId,
+      role: "user",
+      type: "message",
+      content: sourceUserMessage.content ?? payload.content,
+      userName: sourceUserMessage.userName ?? payload.userId,
+      sessionId: payload.sessionId,
+      parentSessionId: payload.parentSessionId,
+      dialogProcessId: payload.dialogProcessId,
+      parentDialogProcessId: payload.parentDialogProcessId,
+      turnScopeId: payload.turnScopeId,
+      frontendUserMessage:
+        sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
+      messageOrigin:
+        sourceUserMessage.messageOrigin ||
+        (payload.frontendUserMessage === true ? "user" : "internal"),
+      attachments: [],
+    };
+    committedUserMessages.set(messageUid, userMessage);
     return {
       ...result,
       sessionId: payload.sessionId,
       aggregateVersion: result.aggregateVersion ?? 1,
-      attachments,
-      userMessage: {
-        ...sourceUserMessage,
-        messageUid,
-        messageId,
-        role: "user",
-        type: "message",
-        content: sourceUserMessage.content ?? payload.content,
-        userName: sourceUserMessage.userName ?? payload.userId,
-        sessionId: payload.sessionId,
-        parentSessionId: payload.parentSessionId,
-        dialogProcessId: payload.dialogProcessId,
-        parentDialogProcessId: payload.parentDialogProcessId,
-        turnScopeId: payload.turnScopeId,
-        frontendUserMessage:
-          sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
-        messageOrigin:
-          sourceUserMessage.messageOrigin ||
-          (payload.frontendUserMessage === true ? "user" : "internal"),
-        attachments,
-      },
+      attachments: [],
+      userMessage,
+    };
+  };
+  const bindCanonicalUserMessageAttachments = async (payload = {}) => {
+    const result = (await bindSessionTurnAttachments(payload)) || {};
+    const committed = committedUserMessages.get(payload.messageUid) || {};
+    const userMessage = {
+      ...committed,
+      ...(result.userMessage || {}),
+      attachments: result.attachments || payload.attachments || [],
+    };
+    committedUserMessages.set(payload.messageUid, userMessage);
+    return {
+      ...result,
+      aggregateVersion: result.aggregateVersion ?? 2,
+      attachments: userMessage.attachments,
+      userMessage,
     };
   };
   const assertCanonicalReusedUserMessage = async (payload = {}) => {
@@ -277,6 +289,7 @@ export function createRunner({
     appendSessionTurn: async () => {},
     assertPersistenceContextIdentity,
     commitSessionTurn: commitCanonicalUserMessage,
+    bindSessionTurnAttachments: bindCanonicalUserMessageAttachments,
     assertReusedUserTurnIdentity: assertCanonicalReusedUserMessage,
     finalizeRunSession: async () => ({ answer: "ok" }),
     upsertParentAsyncTask: () => {},

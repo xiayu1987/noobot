@@ -17,10 +17,10 @@ export function useAppShellPanelActions({
   ensureConnected,
   notify,
   translate = (key) => key,
-  closeAllDrawers,
   toggleSidebar,
   closeMobileSidebar,
   openWorkspaceRaw,
+  openConnectorsRaw,
   openUserSettingsRaw,
   openConfigParamsRaw,
   pushPanelPseudoRoute,
@@ -40,6 +40,17 @@ export function useAppShellPanelActions({
     closeComposerMorePanel();
     openWorkspaceRaw?.();
     pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.WORKSPACE);
+  }
+
+  function openConnectors() {
+    if (!ensureConnected?.()) return;
+    if (!userId?.value?.trim()) {
+      notify?.({ type: "warning", message: translate("common.userIdRequired") });
+      return;
+    }
+    closeComposerMorePanel();
+    openConnectorsRaw?.();
+    pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.CONNECTORS);
   }
 
   async function openUserSettings() {
@@ -85,7 +96,6 @@ export function useAppShellPanelActions({
     const nextVisible = Boolean(value);
     if (composerMorePanelVisible?.value === nextVisible) return;
     if (nextVisible) {
-      closeAllDrawers?.();
       closeMobileSidebar?.();
     }
     if (composerMorePanelVisible) composerMorePanelVisible.value = nextVisible;
@@ -104,6 +114,7 @@ export function useAppShellPanelActions({
   return {
     closeComposerMorePanel,
     openWorkspace,
+    openConnectors,
     openUserSettings,
     openConfigParams,
     handleToggleSidebar,

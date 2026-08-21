@@ -51,6 +51,7 @@ function handleMobileNavigatorClose() {
       :is="drawer.component"
       v-bind="drawer.props"
       @workspace-reset="drawer.onWorkspaceReset?.()"
+      @changed="drawer.onConnectorRegistryChanged?.()"
     />
   </el-drawer>
 
