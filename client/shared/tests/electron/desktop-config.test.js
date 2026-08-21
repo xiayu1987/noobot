@@ -456,6 +456,59 @@ test("packaged desktop startup removes retired nodes from existing user configs"
   }
 });
 
+test("packaged desktop startup removes config params absent from current templates", async () => {
+  const fixture = await createFixture();
+  try {
+    const globalExamplePath = path.join(
+      fixture.packagedBackendRoot,
+      "service",
+      "config",
+      "global.config.example.json",
+    );
+    const globalExample = JSON.parse(await readFile(globalExamplePath, "utf8"));
+    globalExample.providers.openai.api_key = "${ACTIVE_API_KEY}";
+    await writeFile(globalExamplePath, JSON.stringify(globalExample));
+
+    const configParamsPath = path.join(fixture.userDataPath, "workspace", "config-params.json");
+    await mkdir(path.dirname(configParamsPath), { recursive: true });
+    await writeFile(
+      configParamsPath,
+      JSON.stringify({
+        values: { ACTIVE_API_KEY: "preserved", RETIRED_API_KEY: "stale" },
+        descriptions: { ACTIVE_API_KEY: "active", RETIRED_API_KEY: "retired" },
+      }),
+    );
+
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+    });
+    const state = manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+
+    assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")), {
+      values: { ACTIVE_API_KEY: "preserved" },
+      descriptions: { ACTIVE_API_KEY: "active" },
+    });
+    assert.deepEqual(state.missingParams, []);
+    assert.throws(
+      () =>
+        manager.saveConfigParamValues({
+          workspaceRootPath: state.workspaceRootPath,
+          values: { RETIRED_API_KEY: "must-not-return" },
+        }),
+      /unknown config param key: RETIRED_API_KEY/,
+    );
+    assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")).values, {
+      ACTIVE_API_KEY: "preserved",
+    });
+  } finally {
+    await fixture.restore();
+  }
+});
+
 test("packaged desktop config fails fast when bundled default user template is missing", async () => {
   const fixture = await createFixture();
   try {
