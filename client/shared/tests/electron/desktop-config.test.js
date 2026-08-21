@@ -39,9 +39,6 @@ async function createFixture() {
           mode: "sandbox",
           sandbox: { provider: "docker", scope: "user" },
         },
-        path_policy: {
-          resolution: { follow_symbolic_links: false },
-        },
       },
       providers: {
         openai: { model: "gpt", enabled: true, used_for_conversation: true },
@@ -134,7 +131,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.equal(config.newly_added_config.nested.default_value, true);
     assert.equal(config.newly_added_config.nested.preserved_value, "client");
     assert.equal(config.security.execution_isolation.mode, "host");
-    assert.equal(config.security.path_policy.resolution.follow_symbolic_links, false);
+    assert.equal(config.security.path_policy, undefined);
     assert.equal(Object.hasOwn(config.attachments, "attachment_models"), false);
     assert.equal(config.attachments.limits.max_file_size_bytes, 2048);
     assert.deepEqual(config.multimodal.parsing.default_models, {
@@ -419,6 +416,24 @@ test("packaged desktop startup removes retired nodes from existing user configs"
         doc_to_data: { enabled: true },
         media_to_data: { enabled: true },
         process_content_task: { enabled: true },
+        database_connect_connector: {
+          enabled: true,
+          connectors: { example_database: { password: "${EXAMPLE_DATABASE_PASSWORD}" } },
+        },
+        terminal_connect_connector: {
+          enabled: true,
+          connectors: { example_terminal: { password: "${EXAMPLE_TERMINAL_PASSWORD}" } },
+        },
+        email_connect_connector: {
+          enabled: true,
+          connectors: { example_email: { password: "${EMAIL_AUTH_CODE}" } },
+        },
+        process_connector_tool: { enabled: true },
+        inspect_connectors: { enabled: true },
+        access_connector: {
+          enabled: true,
+          command_file: { enabled: true, allowed_roots: [] },
+        },
         execute_script: {
           enabled: true,
           sandbox_mode: true,
@@ -447,6 +462,7 @@ test("packaged desktop startup removes retired nodes from existing user configs"
       assert.equal(Object.hasOwn(config, "attachments"), false);
       assert.equal(Object.hasOwn(config, "session"), false);
       assert.deepEqual(config.tools, {
+        access_connector: { enabled: true },
         execute_script: { enabled: true },
         read_file: { enabled: true },
       });
@@ -470,6 +486,19 @@ test("packaged desktop startup removes config params absent from current templat
     await writeFile(globalExamplePath, JSON.stringify(globalExample));
 
     const configParamsPath = path.join(fixture.userDataPath, "workspace", "config-params.json");
+    const globalConfigPath = path.join(fixture.userDataPath, "config", "global.config.json");
+    await mkdir(path.dirname(globalConfigPath), { recursive: true });
+    await writeFile(
+      globalConfigPath,
+      JSON.stringify({
+        tools: {
+          database_connect_connector: {
+            enabled: true,
+            connectors: { example_database: { password: "${RETIRED_API_KEY}" } },
+          },
+        },
+      }),
+    );
     await mkdir(path.dirname(configParamsPath), { recursive: true });
     await writeFile(
       configParamsPath,
@@ -492,6 +521,8 @@ test("packaged desktop startup removes config params absent from current templat
       values: { ACTIVE_API_KEY: "preserved" },
       descriptions: { ACTIVE_API_KEY: "active" },
     });
+    const globalConfig = JSON.parse(await readFile(globalConfigPath, "utf8"));
+    assert.equal(globalConfig.tools, undefined);
     assert.deepEqual(state.missingParams, []);
     assert.throws(
       () =>
