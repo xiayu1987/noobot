@@ -7,25 +7,21 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { frontendConfig } from "../../../../infrastructure/config/frontendConfig.js";
 import { nowMs } from "../../model/timeFields.js";
 
-export function useReconnect({
-  connected,
-  hasActiveSession,
-  handleReconnect,
-} = {}) {
+export function useReconnect({ connected, hasActiveSession, handleReconnect } = {}) {
   const reconnectPromise = ref(null);
   const lastReconnectAttemptAt = ref(0);
   const cooldownMs = frontendConfig.reconnect.signalCooldownMs;
 
   async function reconnectActiveSession({ force = false } = {}) {
-    if (!connected?.value) return;
-    if (!hasActiveSession?.()) return;
-    if (reconnectPromise.value) return;
+    if (!connected?.value) return false;
+    if (!hasActiveSession?.()) return false;
+    if (reconnectPromise.value) return reconnectPromise.value;
     const now = nowMs();
     if (!force && now - lastReconnectAttemptAt.value < cooldownMs) return;
     lastReconnectAttemptAt.value = now;
     reconnectPromise.value = handleReconnect?.();
     try {
-      await reconnectPromise.value;
+      return await reconnectPromise.value;
     } finally {
       reconnectPromise.value = null;
     }
@@ -67,8 +63,6 @@ export function useReconnect({
   onBeforeUnmount(() => {
     removeListeners();
   });
-
-
   return {
     reconnectActiveSession,
     handleBrowserReconnectSignal,

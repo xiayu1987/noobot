@@ -32,6 +32,12 @@ describe("useReconnect", () => {
     const p1 = reconnectActiveSession();
     const p2 = reconnectActiveSession();
     expect(handleReconnect).toHaveBeenCalledTimes(1);
+    let secondCallSettled = false;
+    void p2.then(() => {
+      secondCallSettled = true;
+    });
+    await Promise.resolve();
+    expect(secondCallSettled).toBe(false);
     resolveReconnect();
     await Promise.all([p1, p2]);
     scope.stop();

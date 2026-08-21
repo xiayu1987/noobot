@@ -78,8 +78,7 @@ export const AGENT_PROXY_ERROR = {
   UNSUPPORTED_ACTION: (action = "") =>
     `agentProxy unsupported action: ${String(action || "").trim()}`,
   CHANNEL_NOT_FOUND_FOR_STOP: "agentProxy channel not found for stop",
-  CHANNEL_NOT_FOUND_FOR_INTERACTION:
-    "agentProxy channel not found for interaction",
+  CHANNEL_NOT_FOUND_FOR_INTERACTION: "agentProxy channel not found for interaction",
   CHANNEL_NOT_FOUND_FOR_JOIN: "agentProxy channel not found for join",
   PERMISSION_DENIED_FOR_ACTION: (action = "") =>
     `agentProxy permission denied for action: ${String(action || "").trim()}`,
@@ -90,6 +89,7 @@ export const AGENT_PROXY_ERROR = {
   UPSTREAM_URL_EMPTY: "agentProxy upstream url is empty",
   FAILED_TO_SEND_PAYLOAD: "agentProxy failed to send payload",
   INVALID_UPSTREAM_EVENT: "agentProxy invalid upstream event",
+  RECONNECT_FAILED: "agentProxy reconnect failed",
   ROUTE_FAILED: "agentProxy websocket route failed",
   INVALID_REQUEST_URL: "agentProxy invalid request url",
   UPSTREAM_HTTP_ERROR: "agentProxy upstream http error",

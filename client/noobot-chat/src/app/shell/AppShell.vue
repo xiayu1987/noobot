@@ -149,7 +149,7 @@ const {
     await applyInitialPseudoRoute(route);
     await locateDoneMessageAfterRender();
     chatWebSocketClient.connect();
-    reconnectActiveSession({ force: true });
+    await reconnectActiveSession({ force: true });
   },
 });
 attachmentService.configure({ fetcher: authFetch });

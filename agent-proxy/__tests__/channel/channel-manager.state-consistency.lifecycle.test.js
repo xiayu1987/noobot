@@ -23,7 +23,10 @@ import {
 import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 import { TURN_ATTACHMENTS_BOUND_WIRE_EVENT } from "@noobot/session-protocol/turn-attachment-bind";
 import {
+  AGENT_COMMAND,
+  AGENT_COMMAND_RECEIPT_OUTCOME,
   AGENT_TRANSPORT_EVENT,
+  createAgentCommandReceipt,
   createAgentTransportError,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
@@ -260,6 +263,43 @@ test("upstream snapshot errors resolve and release the reconnect command", () =>
         message: "snapshot not found",
         commandId: "snapshot-command-error",
         identity: { sessionId: "session-snapshot-error" },
+      }),
+    }),
+  );
+
+  assert.deepEqual(resolution, { ok: false, reason: "snapshot_not_found" });
+  assert.equal(channel.pendingSnapshotRequests.size, 0);
+});
+
+test("upstream snapshot failure receipts resolve and release the reconnect command", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const sessionId = "session-snapshot-receipt";
+  const commandId = "snapshot-command-receipt";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  let resolution = null;
+  channel.pendingSnapshotRequests.set(commandId, {
+    resolve: (result) => {
+      resolution = result;
+    },
+  });
+
+  upstream.emit(
+    "message",
+    JSON.stringify({
+      event: AGENT_TRANSPORT_EVENT.COMMAND_RECEIPT,
+      data: createAgentCommandReceipt({
+        commandId,
+        commandType: AGENT_COMMAND.TURN_SNAPSHOT_GET,
+        outcome: AGENT_COMMAND_RECEIPT_OUTCOME.FAILED,
+        identity: { sessionId },
+        error: { code: "snapshot_not_found", message: "snapshot not found" },
       }),
     }),
   );

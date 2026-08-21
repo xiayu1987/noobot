@@ -133,6 +133,43 @@ describe("5. 配置优先级测试", () => {
       assert.equal(merged.openai.model, "gpt-4-turbo", "user provider 的 model 应覆盖");
     });
 
+    it("同名 provider 应按配置协议深合并多模态能力", () => {
+      const globalConfig = createBaseGlobalConfig({
+        providers: {
+          openai: {
+            format: "openai_compatible",
+            model: "gpt-5.6-sol",
+            enabled: true,
+            multimodal_generation: {
+              support_generation: {
+                enabled: true,
+                support_scope: ["image"],
+                api_type: "openai_responses",
+              },
+            },
+          },
+        },
+      });
+      const userConfig = createBaseUserConfig({
+        providers: {
+          openai: {
+            multimodal_generation: {
+              support_generation: { api_type: "openai_responses" },
+            },
+          },
+        },
+      });
+
+      const merged = getProviders(globalConfig, userConfig);
+      assert.deepEqual(merged.openai.multimodal_generation, {
+        support_generation: {
+          enabled: true,
+          support_scope: ["image"],
+          api_type: "openai_responses",
+        },
+      });
+    });
+
     it("user providers 不应影响 global 中未覆盖的 provider", () => {
       const globalConfig = createBaseGlobalConfig();
       const userConfig = createBaseUserConfig({

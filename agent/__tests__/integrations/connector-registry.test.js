@@ -5,7 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { FileSystemConnectorInstanceRepository } from "../../src/session/repositories/file-system-connector-instance-repository.js";
@@ -42,8 +42,13 @@ test("Session connector repository isolates owners and persists instances with o
       "connectors",
       "connector-instances.json",
     );
-    assert.equal((await stat(registryPath)).mode & 0o777, 0o600);
-    assert.doesNotMatch(await readFile(registryPath, "utf8"), /password|secret/);
+    const registryFile = await open(registryPath, "r");
+    try {
+      assert.equal((await registryFile.stat()).mode & 0o777, 0o600);
+      assert.doesNotMatch(await registryFile.readFile("utf8"), /password|secret/);
+    } finally {
+      await registryFile.close();
+    }
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
   }

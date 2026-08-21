@@ -16,6 +16,8 @@ import {
 } from "@noobot/session-protocol";
 import {
   AGENT_TRANSPORT_DEBUG_TYPE,
+  AGENT_TRANSPORT_ERROR_CODE,
+  AGENT_TRANSPORT_EVENT,
   createAgentTransportEvent,
   getAgentTransportEventSessionId,
   getAgentCommandIdentity,
@@ -677,6 +679,18 @@ export function createChatWebSocketClient({
       const handleReconnectProtocolEvent = ({ event, data }) => {
         try {
           if (event === "transport_ready") return;
+
+          if (
+            event === AGENT_TRANSPORT_EVENT.ERROR &&
+            data?.code === AGENT_TRANSPORT_ERROR_CODE.RECONNECT_FAILED
+          ) {
+            const error = new Error(
+              normalizeErrorMessage(data?.message, translateText("infra.reconnectFailed")),
+            );
+            error.code = normalizeTrimmedString(data?.code);
+            failReconnect(error, { rejectRequests: false });
+            return;
+          }
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
             if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {

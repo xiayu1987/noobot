@@ -75,6 +75,7 @@ function logResolvedSnapshot(manager, channel, request, snapshotSequence) {
 }
 
 export function applySnapshotResults(manager, sessionsMap, snapshotResults) {
+  const deletedSessionIds = new Set();
   for (const request of snapshotResults) {
     request.channel.transport.closeOwnedConnection(
       request.queryConnection,
@@ -99,6 +100,13 @@ export function applySnapshotResults(manager, sessionsMap, snapshotResults) {
       event: "agentProxy.reconnect.snapshot.failed",
       data: { sessionId: request.sessionId, commandId: request.commandId, reason },
     });
+    if (reason === "session_not_found") {
+      sessionsMap.delete(request.sessionId);
+      deletedSessionIds.add(request.sessionId);
+      manager.deleteChannel(request.channel.key);
+      continue;
+    }
     throw new Error(`authoritative_snapshot_failed:${request.sessionId}:${reason}`);
   }
+  return deletedSessionIds;
 }

@@ -19,7 +19,6 @@ export function createSessionDetailRequests({
   userId,
   authFetch,
   getSessionDetailApi,
-  getSessionFullDetailApi = null,
   getSessionThinkingDetailApi = null,
   applySessionDetail,
   isSameSessionIdentity,
@@ -180,40 +179,6 @@ export function createSessionDetailRequests({
     }
   }
 
-  async function fetchSessionFullDetail(sessionId, options = {}) {
-    const normalizedSessionId = normalizeSessionId(sessionId);
-    if (typeof getSessionFullDetailApi !== "function") {
-      throw new TypeError("full Session Detail API is unavailable");
-    }
-    logWorkflowDiagnostics("frontend.workflowDetail.fullRequestStarted", () => ({
-      sessionId: normalizedSessionId || sessionId,
-      requestSource: normalizeSessionId(options.source || options.reason || "full-detail"),
-    }));
-    const data = await requestSessionDetailData(() =>
-      getSessionFullDetailApi(
-        { userId: userId.value, sessionId: normalizedSessionId || sessionId },
-        { fetcher: authFetch },
-      ),
-    );
-    const { sessionDocs, responseMessages } = collectSessionResponseDetails(data);
-    const rawMessageCount = sessionDocs.reduce(
-      (count, doc = {}) => count + (Array.isArray(doc?.rawMessages) ? doc.rawMessages.length : 0),
-      0,
-    );
-    logWorkflowDiagnostics("frontend.workflowDetail.fullResponseReceived", () => ({
-      sessionId: normalizeSessionId(data.sessionId || normalizedSessionId || sessionId),
-      requestSource: normalizeSessionId(options.source || options.reason || "full-detail"),
-      sessionDocCount: sessionDocs.length,
-      messageCount: responseMessages.length,
-      rawMessageCount,
-      detailMode: String(data?.detailMode || ""),
-      schemaVersions: sessionDocs.map((doc = {}) => Number(doc?.schemaVersion || 0)),
-      workflowCandidates: summarizeWorkflowMessages(responseMessages),
-    }));
-    applySessionDetail(data, options);
-    return data;
-  }
-
   async function fetchThinkingDetail(sessionId, { dialogProcessId = "", turnScopeId = "" } = {}) {
     const normalizedSessionId = normalizeSessionId(sessionId);
     const normalizedDialogProcessId = String(dialogProcessId || "").trim();
@@ -239,7 +204,6 @@ export function createSessionDetailRequests({
 
   return {
     fetchSessionDetail,
-    fetchSessionFullDetail,
     fetchThinkingDetail,
   };
 }

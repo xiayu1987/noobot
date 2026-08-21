@@ -180,8 +180,21 @@ async function auditSessionSummaryPersistence({ userId, sessionId, expectation, 
   });
 }
 
+async function deleteTestSession({ request, apiKey, userId, sessionId }) {
+  const response = await request.delete(
+    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+    { headers: { "x-api-key": apiKey } },
+  );
+  const result = await response.json();
+  if (!response.ok() || result?.ok !== true) {
+    throw new Error(
+      `PBE Session cleanup failed (${response.status()}): ${String(result?.error || "unknown error")}`,
+    );
+  }
+}
+
 export const test = artifactTest.extend({
-  noobot: async ({ page }, use, testInfo) => {
+  noobot: async ({ page, request }, use, testInfo) => {
     const credentials = readE2eCredentials();
     const policy = modelObservationPolicyForTitle(testInfo.title);
     await installE2eModelPreferences(page);
@@ -216,6 +229,16 @@ export const test = artifactTest.extend({
           sessionId,
           expectation: policy.expectation,
           testInfo,
+        });
+      } catch (error) {
+        failures.push(error);
+      }
+      try {
+        await deleteTestSession({
+          request,
+          apiKey: connectConfig.apiKey,
+          userId: credentials.userId,
+          sessionId,
         });
       } catch (error) {
         failures.push(error);
