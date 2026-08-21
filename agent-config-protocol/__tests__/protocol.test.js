@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   applyPrimaryModelReferencesToConfigFile,
+  assertConfigParamsDocumentKeys,
   ensureModelProviderInConfigFile,
   createConfigSnapshot,
   localizeBuiltinScenarios,
@@ -402,6 +403,28 @@ test("config params document rejects ambiguous, invalid, and unknown facts", () 
       (error) => error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
     );
   }
+});
+
+test("config params document keys must be a closed subset of template keys", () => {
+  assert.deepEqual(
+    assertConfigParamsDocumentKeys(
+      {
+        values: { api_key: "secret" },
+        descriptions: { api_key: "Credential" },
+      },
+      ["API_KEY", "REGION"],
+    ),
+    {
+      values: { API_KEY: "secret" },
+      descriptions: { API_KEY: "Credential" },
+    },
+  );
+  assert.throws(
+    () => assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
+    (error) =>
+      error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT &&
+      error?.details?.keys?.[0] === "UNUSED_KEY",
+  );
 });
 
 test("template resolution has one explicit source order and unresolved policy", () => {
