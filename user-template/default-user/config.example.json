@@ -144,6 +144,9 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "description": "擅长编码",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -165,6 +168,9 @@
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "description": "擅长编码",
+      "capabilities": {
+        "web_search": true
+      },
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]

@@ -20,6 +20,7 @@ import {
   validateConfigSnapshot,
   normalizeKnownConfigKeys,
   normalizeConfigParamsDocument,
+  synchronizeConfigParamsDocument,
   mergeConfigParamLayers,
   buildConfigParamCatalog,
   createConfigValueLookup,
@@ -424,6 +425,22 @@ test("config params document keys must be a closed subset of template keys", () 
     (error) =>
       error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT &&
       error?.details?.keys?.[0] === "UNUSED_KEY",
+  );
+});
+
+test("config params synchronization projects stored values onto authoritative template keys", () => {
+  assert.deepEqual(
+    synchronizeConfigParamsDocument({
+      document: {
+        values: { ACTIVE_KEY: "preserved", RETIRED_KEY: "removed" },
+        descriptions: { ACTIVE_KEY: "active", RETIRED_KEY: "retired" },
+      },
+      keys: ["NEW_KEY", "ACTIVE_KEY"],
+    }),
+    {
+      values: { ACTIVE_KEY: "preserved", NEW_KEY: "" },
+      descriptions: { ACTIVE_KEY: "active", NEW_KEY: "" },
+    },
   );
 });
 

@@ -8,6 +8,37 @@ import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapte
 import { dashscopeAdapter } from "../src/adapters/dashscope-adapter.js";
 import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 
+test("Web Search reads text from the canonical Responses output items", async () => {
+  const result = await executeOpenAiOperation({
+    modelSpec: { model: "gpt-5.5", base_url: "https://example.test/v1" },
+    credential: "key",
+    operation: {
+      kind: MODEL_OPERATION_KIND.WEB_SEARCH,
+      input: { query: "latest" },
+      options: {},
+    },
+    openAiClientFactory: () => ({
+      responses: {
+        create: async () => ({
+          output: [
+            { type: "web_search_call", status: "completed" },
+            {
+              type: "message",
+              content: [{ type: "output_text", text: "search result" }],
+            },
+          ],
+        }),
+      },
+    }),
+  });
+
+  assert.equal(result.rawText, "search result");
+  assert.deepEqual(
+    result.output.map((item) => item.type),
+    ["web_search_call", "message"],
+  );
+});
+
 test("Responses image generation sends the prompt through the canonical input field", async () => {
   let request;
   await executeOpenAiOperation({

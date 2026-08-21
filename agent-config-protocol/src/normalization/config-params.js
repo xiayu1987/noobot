@@ -123,6 +123,21 @@ export function assertConfigParamsDocumentKeys(document = {}, keys = []) {
   return normalizedDocument;
 }
 
+export function synchronizeConfigParamsDocument({ document = {}, keys = [] } = {}) {
+  const normalizedDocument = normalizeConfigParamsDocument(document);
+  const authoritativeKeys = normalizeExplicitConfigParamKeys(keys).sort((left, right) =>
+    left.localeCompare(right),
+  );
+  return {
+    values: Object.fromEntries(
+      authoritativeKeys.map((key) => [key, normalizedDocument.values[key] || ""]),
+    ),
+    descriptions: Object.fromEntries(
+      authoritativeKeys.map((key) => [key, normalizedDocument.descriptions[key] || ""]),
+    ),
+  };
+}
+
 export function buildConfigParamCatalog({
   keys = [],
   descriptions = {},
