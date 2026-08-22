@@ -168,24 +168,24 @@ export default {
   "tools.search.fieldRiskLevel":
     "操作风险等级：low、medium、high 或 critical。搜索可能检索或返回隐私信息、密码、令牌、凭证或密钥时必须标记为 critical。",
   "tools.patch_file.description":
-    "使用 git/unified diff 或 apply_patch 修改文件，路径按确定性协议解析。",
+    "先 read_file/search 确认文件，再按返回的完整 path 修改；省略 root，不要自行添加 project、a/ 或 b/ 前缀。",
   "tools.patch_file.fieldFormat": "补丁格式；省略时根据内容识别，显式格式与内容不一致会被拒绝。",
   "tools.patch_file.fieldPatch":
-    "补丁内容；推荐先读文件，用精确上下文。路径按当前系统上下文的路径规则填写，不要把虚拟根名写成相对路径前缀。",
+    "补丁内容；使用 read_file/search 返回的完整 path 和精确上下文，不要改写路径。",
   "tools.patch_file.fieldPatchPathHintHost":
-    "workspace 逻辑视角：优先使用当前用户工作区相对路径；普通用户不能访问规范化后仍属于 host 视角的路径，指向本人工作区的绝对输入会规范化为 workspace 视角。",
+    "普通用户必须原样使用 read_file/search 返回的 workspace path，不要改写或添加前缀。",
   "tools.patch_file.fieldPatchPathHintSuperHost":
-    "workspace 逻辑视角：相对路径基于当前用户工作区；超级管理员也可使用经全局路径策略授权的 host 绝对路径。",
+    "超级管理员也必须原样使用 read_file/search 返回的 path；host 绝对路径同样不得改写或添加前缀。",
   "tools.patch_file.fieldStrip":
-    "从相对 diff 路径开头精确移除的层级数（a/、b/ 前缀通常为 1）。不会猜测路径；strip 后仍含父目录穿越会被拒绝。",
-  "tools.patch_file.fieldRoot": "补丁根目录（可选，仅工作区相对子目录）；通常可省略。不要用 ..。",
-  "tools.patch_file.fieldRootPathHintSandbox": "root 不是沙箱绝对路径入口。",
-  "tools.patch_file.fieldRootPathHintHost": "root 只用于选择工作区子目录。",
-  "tools.patch_file.fieldRootPathHintSuperHost": "root 不是 host 绝对路径入口。",
+    "路径含 a/、b/ 前缀时才设置对应 strip；使用完整 path 时设为 0。",
+  "tools.patch_file.fieldRoot": "通常省略；填写时只能是工作区相对子目录，不要用绝对路径或 ..。",
+  "tools.patch_file.fieldRootPathHintSandbox": "通常省略 root；不得填写沙箱绝对路径。",
+  "tools.patch_file.fieldRootPathHintHost": "通常省略 root；填写时只能是工作区相对子目录。",
+  "tools.patch_file.fieldRootPathHintSuperHost": "通常省略 root；不得填写 host 绝对路径。",
   "tools.patch_file.rootInvalidHintHost":
-    "不要用 root:'..' 或绝对路径作为 root；root 只选工作区相对子目录。",
+    "root 通常省略；填写时只能是工作区相对子目录，不得使用绝对路径或 ..。",
   "tools.patch_file.rootInvalidHintSuperHost":
-    "不要用 root:'..' 或 host 绝对路径作为 root；root 只选工作区相对子目录，host 绝对路径应直接写在补丁文件路径里。",
+    "root 通常省略；填写时只能是工作区相对子目录，不得使用 host 绝对路径或 ..。",
   "tools.patch_file.fieldDryRun": "只验证不写入。",
   "tools.patch_file.fieldRiskLevel":
     "操作风险等级：low、medium、high 或 critical。按与脚本执行相同的影响和破坏性标准分级。",
