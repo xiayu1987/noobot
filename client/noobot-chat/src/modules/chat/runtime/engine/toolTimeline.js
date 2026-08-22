@@ -24,6 +24,17 @@ import { createWeakArrayIndex, upsertOrderedFact } from "@noobot/timeline-runtim
 const text = (value) => String(value || "").trim();
 const sequenceOf = (value) => Number(value?.sequence || value?.seq || 0);
 
+function parseToolResultObject(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  if (typeof value !== "string") return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function canonicalAttachments(attachments = []) {
   return (Array.isArray(attachments) ? attachments : []).flatMap((attachment) => {
     const normalized =
@@ -250,9 +261,15 @@ export function selectCompletedToolArtifacts(message = {}) {
   const logs = completedEntries
     .map((item) => projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }))
     .filter(Boolean);
+  const mutations = completedEntries.flatMap((item) => {
+    const result = parseToolResultObject(item?.resultEvent?.result);
+    const mutation = result?.mutation;
+    return mutation && typeof mutation === "object" && mutation.id ? [mutation] : [];
+  });
   return {
     resultCount: completedEntries.length,
     logs,
+    mutations,
     attachments: completedEntries.flatMap((item) => {
       const eventAttachments = item?.resultEvent?.attachments;
       return canonicalAttachments(eventAttachments);

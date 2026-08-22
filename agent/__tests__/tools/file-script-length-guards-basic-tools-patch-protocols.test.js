@@ -332,12 +332,13 @@ test("patch_file: root 参数可将补丁路径解析到 workspace 子项目", a
   assert.equal(dryRunResult.ok, true);
   assert.equal(dryRunResult.dryRun, true);
   assert.deepEqual(dryRunResult.root, { view: "workspace", path: "noobot" });
-  assert.deepEqual(dryRunResult.changes, [
-    {
-      path: { view: "workspace", path: "noobot/service/ws/chat-websocket-server.js" },
-      action: "write",
-    },
-  ]);
+  assert.equal(dryRunResult.changes.length, 1);
+  assert.deepEqual(dryRunResult.changes[0].path, {
+    view: "workspace",
+    path: "noobot/service/ws/chat-websocket-server.js",
+  });
+  assert.equal(dryRunResult.changes[0].action, "write");
+  assert.equal(dryRunResult.changes[0].mutation, null);
   assert.equal(
     await fs.readFile(path.join(repoPath, "service/ws/chat-websocket-server.js"), "utf8"),
     "one\ntwo\n",
@@ -392,12 +393,13 @@ test("patch_file: root 参数兼容 Windows 风格反斜杠 diff 路径", async 
     }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changes, [
-    {
-      path: { view: "workspace", path: "app/service/ws/chat-websocket-server.js" },
-      action: "write",
-    },
-  ]);
+  assert.equal(result.changes.length, 1);
+  assert.deepEqual(result.changes[0].path, {
+    view: "workspace",
+    path: "app/service/ws/chat-websocket-server.js",
+  });
+  assert.equal(result.changes[0].action, "write");
+  assert.match(result.changes[0].mutation.id, /^[0-9a-f-]{36}$/i);
   assert.equal(
     await fs.readFile(path.join(appPath, "service/ws/chat-websocket-server.js"), "utf8"),
     "one\nTWO\n",

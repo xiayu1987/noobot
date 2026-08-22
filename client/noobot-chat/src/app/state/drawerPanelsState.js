@@ -21,6 +21,7 @@ export function buildAppShellDrawerPanels({
   thinkingDetailsAllMessages,
   thinkingDetailsRuntime,
   thinkingDetailService,
+  fileMutationPreviewService,
   getThinkingDetailsTitle,
   handleWorkspaceReset,
 } = {}) {
@@ -69,6 +70,7 @@ export function buildAppShellDrawerPanels({
         variant: "details",
         userId,
         thinkingDetailService: thinkingDetailService || null,
+        fileMutationPreviewService: fileMutationPreviewService || null,
       },
     },
     {

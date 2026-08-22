@@ -39,6 +39,7 @@
     "agent-config-protocol",
     "execution-isolation-protocol",
     "security-assessment-protocol",
+    "file-mutation-protocol",
     "model-protocol",
     "model-runtime",
     "sanitize",

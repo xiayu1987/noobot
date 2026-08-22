@@ -158,9 +158,10 @@ test("patch_file: super user can patch an absolute file outside workspace root",
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changes, [
-    { path: { view: "host", path: outsideFile }, action: "write" },
-  ]);
+  assert.equal(result.changes.length, 1);
+  assert.deepEqual(result.changes[0].path, { view: "host", path: outsideFile });
+  assert.equal(result.changes[0].action, "write");
+  assert.equal(result.changes[0].mutation.id, result.mutations[0].id);
   assert.equal(await fs.readFile(outsideFile, "utf8"), "one\nTWO\n");
 });
 
@@ -609,9 +610,13 @@ test("patch_file: 普通用户必须显式提供 workspace 子项目路径", asy
     await tool.invoke({ riskLevel: "low", format: "unified_diff", patch: diff, strip: 1 }),
   );
   assert.equal(result.ok, true);
-  assert.deepEqual(result.changes, [
-    { path: { view: "workspace", path: "noobot/client/noobot-chat/src/a.txt" }, action: "write" },
-  ]);
+  assert.equal(result.changes.length, 1);
+  assert.deepEqual(result.changes[0].path, {
+    view: "workspace",
+    path: "noobot/client/noobot-chat/src/a.txt",
+  });
+  assert.equal(result.changes[0].action, "write");
+  assert.equal(result.changes[0].mutation.id, result.mutations[0].id);
   assert.equal(
     await fs.readFile(path.join(repoPath, "client/noobot-chat/src/a.txt"), "utf8"),
     "one\nTWO\n",
