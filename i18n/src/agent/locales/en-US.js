@@ -179,28 +179,28 @@ export default {
   "tools.search.fieldRiskLevel":
     "Operation risk level: low, medium, high, or critical. Searches that may retrieve or return privacy information, passwords, tokens, credentials, or secrets must be marked critical.",
   "tools.patch_file.description":
-    "Apply git/unified diff or apply_patch content with deterministic path resolution.",
+    "Read/search the file first, then use its complete returned path; omit root and do not add project, a/, or b/ prefixes.",
   "tools.patch_file.fieldFormat":
     "Patch format; omit it to detect the format from the content. An explicit mismatch is rejected.",
   "tools.patch_file.fieldPatch":
-    "Patch content; read the file first and use exact context. Follow the current path rules in system context. Do not write virtual root names as relative path prefixes.",
+    "Patch content; reuse the complete path and exact context returned by read_file/search.",
   "tools.patch_file.fieldPatchPathHintHost":
-    "Workspace logical view: prefer paths relative to the current user's workspace. Regular users cannot access paths that remain in the host view after normalization; absolute inputs inside their own workspace normalize to the workspace view.",
+    "Regular users must copy the workspace path returned by read_file/search exactly; do not rewrite it or add prefixes.",
   "tools.patch_file.fieldPatchPathHintSuperHost":
-    "Workspace logical view: relative paths use the current user's workspace; super administrators may also use host absolute paths authorized by the global path policy.",
+    "Super administrators must also copy the path returned by read_file/search exactly; host absolute paths must not be rewritten or prefixed.",
   "tools.patch_file.fieldStrip":
-    "Exact number of leading relative diff path components to remove (usually 1 for a/ and b/). No path guessing is performed; parent traversal remaining after stripping is rejected.",
+    "Set strip only for a/ or b/ prefixes; use 0 with a complete path.",
   "tools.patch_file.fieldRoot":
-    "Patch root directory (optional, workspace-relative child directory only). Usually omit it. Do not use parent-directory traversal.",
+    "Usually omit; if set, use only a workspace-relative child directory, never an absolute path or .. .",
   "tools.patch_file.fieldRootPathHintSandbox":
-    "root is not an entry point for sandbox absolute paths.",
-  "tools.patch_file.fieldRootPathHintHost": "root only selects a workspace child directory.",
+    "Usually omit root; sandbox absolute paths are not allowed.",
+  "tools.patch_file.fieldRootPathHintHost": "Usually omit root; use only a workspace-relative child directory.",
   "tools.patch_file.fieldRootPathHintSuperHost":
-    "root is not an entry point for host absolute paths.",
+    "Usually omit root; host absolute paths are not allowed.",
   "tools.patch_file.rootInvalidHintHost":
-    "Do not use root:'..' or absolute paths as root; root only selects a workspace-relative child directory.",
+    "Usually omit root; if set, use only a workspace-relative child directory, never an absolute path or .. .",
   "tools.patch_file.rootInvalidHintSuperHost":
-    "Do not use root:'..' or host absolute paths as root; root only selects a workspace-relative child directory. Put host absolute paths directly in patch file paths.",
+    "Usually omit root; if set, use only a workspace-relative child directory, never a host absolute path or .. .",
   "tools.patch_file.fieldDryRun": "Validate only, do not write.",
   "tools.patch_file.fieldRiskLevel":
     "Operation risk level: low, medium, high, or critical. Classify impact and destructiveness using the same standard as script execution.",
