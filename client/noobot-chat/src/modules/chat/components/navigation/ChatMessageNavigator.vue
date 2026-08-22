@@ -6,6 +6,7 @@
 <script setup>
 import { nextTick, ref, watch } from "vue";
 import { useLocale } from "../../../../shared/i18n/useLocale.js";
+import noobotIcon from "../../../../shared/assets/noobot.svg";
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -76,9 +77,11 @@ watch(
                 .toLowerCase() || 'session'
             }`"
           >
-            <span class="chat-message-navigator__role noobot-soft-badge">{{
-              item.roleLabel || item.role
-            }}</span>
+            <span class="chat-message-navigator__role noobot-message-avatar">
+              <template v-if="item.role === 'user'">ME</template>
+              <img v-else-if="item.role === 'assistant'" :src="noobotIcon" alt="Noobot" />
+              <template v-else>{{ item.roleLabel || item.role }}</template>
+            </span>
             <span v-if="item.preview" class="chat-message-navigator__content">{{
               item.preview
             }}</span>
@@ -177,20 +180,33 @@ watch(
 
 .chat-message-navigator__role {
   flex: 0 0 auto;
-  min-width: 28px;
-  padding: 2px 7px;
+  width: var(--noobot-msg-avatar-size, 30px);
+  height: var(--noobot-msg-avatar-size, 30px);
+  min-width: var(--noobot-msg-avatar-size, 30px);
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: var(--noobot-font-size-2xs);
   line-height: 1.25;
   font-weight: 800;
-  letter-spacing: 0.035em;
+  letter-spacing: 0;
   text-align: center;
-  background: color-mix(
-    in srgb,
-    var(--noobot-fill-soft, var(--el-fill-color-lighter)) 70%,
-    var(--noobot-panel-bg, var(--el-bg-color-overlay))
-  );
-  border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 70%, transparent);
+  color: var(--noobot-msg-avatar-text);
+  background: var(--noobot-msg-avatar-bg);
+  border: 0;
+}
+
+.chat-message-navigator__role img {
+  width: 72%;
+  height: 72%;
+  object-fit: contain;
+  display: block;
+}
+
+.chat-message-navigator__item.is-user .chat-message-navigator__role {
+  background: var(--noobot-msg-user-avatar);
 }
 
 .chat-message-navigator__content {
@@ -198,34 +214,6 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.chat-message-navigator__item.is-user .chat-message-navigator__role {
-  color: color-mix(
-    in srgb,
-    var(--el-color-primary) 88%,
-    var(--noobot-text-strong, var(--el-text-color-primary))
-  );
-  background: color-mix(
-    in srgb,
-    var(--el-color-primary-light-9) 86%,
-    var(--noobot-panel-bg, var(--el-bg-color-overlay))
-  );
-  border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
-}
-
-.chat-message-navigator__item.is-assistant .chat-message-navigator__role {
-  color: color-mix(
-    in srgb,
-    var(--el-color-success) 78%,
-    var(--noobot-text-strong, var(--el-text-color-primary))
-  );
-  background: color-mix(
-    in srgb,
-    var(--el-color-success-light-9) 86%,
-    var(--noobot-panel-bg, var(--el-bg-color-overlay))
-  );
-  border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
 }
 
 :deep(.el-anchor__link::before) {

@@ -2,7 +2,7 @@
   --noobot-msg-avatar-bg: var(--noobot-base-blue-500);
   --noobot-msg-avatar-text: var(--noobot-base-white);
   --noobot-msg-assistant-avatar: var(--noobot-msg-avatar-bg);
-  --noobot-msg-user-avatar: var(--noobot-msg-avatar-bg);
+  --noobot-msg-user-avatar: var(--noobot-base-slate-700);
   --noobot-msg-meta: var(--noobot-base-slate-500);
   --noobot-msg-assistant-bg: var(--noobot-base-white);
   --noobot-msg-assistant-border: var(--noobot-base-slate-200);
