@@ -21,7 +21,10 @@ const { translate } = useLocale();
 <template>
   <div class="base-message-shell" :class="role">
     <div v-if="!hideHeader" class="base-message-header" :class="{ user: role === 'user' }">
-      <div class="base-message-avatar noobot-message-avatar">
+      <div
+        class="base-message-avatar noobot-message-avatar"
+        :class="{ 'is-user': role === 'user' }"
+      >
         <template v-if="role === 'user'">{{ translate("message.me") }}</template>
         <img v-else class="base-message-assistant-icon" :src="noobotIcon" alt="Noobot" />
       </div>
@@ -82,6 +85,10 @@ const { translate } = useLocale();
   line-height: 1;
   flex: 0 0 var(--noobot-msg-avatar-size);
   overflow: hidden;
+}
+
+.base-message-avatar.is-user {
+  background: var(--noobot-msg-user-avatar);
 }
 
 .base-message-assistant-icon {
