@@ -23,6 +23,7 @@ const props = defineProps({
   formatTime: { type: Function, default: null },
   formatFileSize: { type: Function, default: null },
   isImageMime: { type: Function, default: null },
+  fileMutationPreviewService: { type: Object, default: null },
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
@@ -113,6 +114,8 @@ const {
     :thinking-content-items="thinkingContentItems"
     :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"
+    :user-id="userId"
+    :file-mutation-preview-service="fileMutationPreviewService"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"

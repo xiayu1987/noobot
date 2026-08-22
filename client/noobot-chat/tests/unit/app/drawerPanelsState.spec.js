@@ -101,6 +101,7 @@ describe("drawerPanelsState", () => {
       variant: "details",
       userId: undefined,
       thinkingDetailService: null,
+      fileMutationPreviewService: null,
     });
     expect(panels[3].props.active).toBe(false);
   });

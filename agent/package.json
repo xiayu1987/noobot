@@ -23,6 +23,7 @@
     "./attach": "./src/artifacts/index.js",
     "./semantic-transfer": "./src/transfer-adapter/index.js",
     "./context": "./src/context/index.js",
+    "./file-mutation-service": "./src/tools/execution/file-mutation-service.js",
     "./config": "./src/config/index.js",
     "./plugin": "./src/extensions/plugins/session-plugin-runtime-provider.js",
     "./application": "./src/application/index.js",
@@ -77,6 +78,7 @@
     "@noobot/plugin-runtime": "file:../plugin-runtime",
     "@noobot/plugin-protocol": "file:../plugin-protocol",
     "@noobot/path-resolver": "file:../path-resolver"
+    ,"@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",

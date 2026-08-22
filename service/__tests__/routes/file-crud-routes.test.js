@@ -158,3 +158,38 @@ test("file-crud-routes: allowAbsolutePath=true 时允许读取和写入 root 外
     await rm(outsideRoot, { recursive: true, force: true });
   }
 });
+
+test("file-crud-routes: mutation file endpoint returns the persisted after snapshot", async () => {
+  const app = express();
+  app.use(express.json());
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-mutation-file-"));
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: () => tempRoot,
+    buildWorkspaceTree: async () => ({ name: "root", children: [] }),
+    translateText: (key) => key,
+  });
+  try {
+    await withTestServer(app, async (baseUrl) => {
+      const writeResponse = await fetch(`${baseUrl}/internal/workspace/admin/file`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: "history.txt", content: "historical-after\n" }),
+      });
+      const writePayload = await writeResponse.json();
+      assert.equal(writeResponse.status, 200);
+      const mutationId = writePayload.mutation.id;
+      await writeFile(path.join(tempRoot, "history.txt"), "later-version\n", "utf8");
+
+      const fileResponse = await fetch(
+        `${baseUrl}/internal/workspace/admin/file-mutations/${encodeURIComponent(mutationId)}/file`,
+      );
+      const filePayload = await fileResponse.json();
+      assert.equal(fileResponse.status, 200);
+      assert.equal(filePayload.content, "historical-after\n");
+      assert.equal(filePayload.mutationId, mutationId);
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

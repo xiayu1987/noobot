@@ -386,6 +386,28 @@ export async function putWorkspaceFileApi(
   });
 }
 
+export async function getWorkspaceFileMutationDiffApi(
+  { userId = "", mutationId = "", allWorkspace = false },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const prefix = allWorkspace
+    ? "/api/internal/admin/workspace-all"
+    : `/api/internal/workspace/${encodeURIComponent(userId)}`;
+  return runFetch(`${prefix}/file-mutations/${encodeURIComponent(mutationId)}/diff`);
+}
+
+export async function getWorkspaceFileMutationFileApi(
+  { userId = "", mutationId = "", allWorkspace = false },
+  { fetcher } = {},
+) {
+  const runFetch = resolveFetcher(fetcher);
+  const prefix = allWorkspace
+    ? "/api/internal/admin/workspace-all"
+    : `/api/internal/workspace/${encodeURIComponent(userId)}`;
+  return runFetch(`${prefix}/file-mutations/${encodeURIComponent(mutationId)}/file`);
+}
+
 export async function getRegularUsersApi({ fetcher } = {}) {
   const runFetch = resolveFetcher(fetcher);
   return runFetch("/api/internal/admin/users");

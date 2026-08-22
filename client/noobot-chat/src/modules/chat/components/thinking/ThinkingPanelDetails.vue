@@ -26,8 +26,11 @@ import {
   isStateMachineDebugEnabled,
   logStateMachineDebug,
 } from "../../../debug/loggers/stateMachineLogger.js";
+import FileMutationPreview from "./FileMutationPreview.vue";
+import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 const props = defineProps({
   messageItem: { type: Object, required: true },
+  userId: { type: String, default: "" },
   translate: { type: Function, required: true },
   isRunning: Boolean,
   groupedToolLogs: { type: Array, default: () => [] },
@@ -38,12 +41,14 @@ const props = defineProps({
   getDetailKey: { type: Function, required: true },
   isExpanded: { type: Function, required: true },
   toggleExpanded: { type: Function, required: true },
+  fileMutationPreviewService: { type: Object, default: null },
 });
 const DETAIL_TAB = Object.freeze({
   EXECUTION: "execution",
   THINKING: "thinking",
 });
 const activeDetailTab = ref(DETAIL_TAB.EXECUTION);
+const mutations = computed(() => selectCompletedToolArtifacts(props.messageItem).mutations);
 const rendererProjection = computed(() =>
   (Array.isArray(props.groupedToolLogs) ? props.groupedToolLogs : []).flatMap((group = {}) =>
     (Array.isArray(group.items) ? group.items : []).map((item, itemIndex) => ({
@@ -274,6 +279,9 @@ watch(
             v-if="!detailCount"
             :text="translate('message.noToolCalls')"
           /></div></el-tab-pane
+      ><el-tab-pane v-if="mutations.length" label="文件变更" name="file-mutations">
+        <FileMutationPreview :user-id="userId" :mutations="mutations" :service="fileMutationPreviewService" />
+      </el-tab-pane
       ><el-tab-pane
         :name="DETAIL_TAB.THINKING"
         :label="

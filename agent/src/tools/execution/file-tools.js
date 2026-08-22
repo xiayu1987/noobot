@@ -49,6 +49,11 @@ import {
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import {
+  applyFileMutation,
+  resolveFileMutationRoot,
+  rollbackFileMutation,
+} from "./file-mutation-service.js";
+import {
   applySearchHunks,
   applyUnifiedHunks,
   parseApplyPatch,
@@ -81,6 +86,14 @@ function buildLineNumberedNearbyContent(content = "", targetLine = 1, radius = 3
 
 function resourceFileName(resource) {
   return path.basename(String(resource?.logical?.path || "").trim());
+}
+
+function mutationLogicalPath(pathRef) {
+  const projected = projectToolPathRef(pathRef);
+  if (!["workspace", "host"].includes(projected.view) || !projected.path) {
+    throw new TypeError("file mutation requires a projected file path");
+  }
+  return projected.path;
 }
 
 function buildPatchFailurePayload({ error, original = "", pathRef = null } = {}) {
@@ -373,7 +386,14 @@ export function createFileTool({ agentContext }) {
           fileName: path.basename(resolvedPath),
         });
       }
-      await workspaceIo.writeText(resolvedPath, content);
+      const mutation = await applyFileMutation({
+        filePath: resolvedPath,
+        logicalPath: mutationLogicalPath(pathRef),
+        content,
+        operation: "replace",
+        mutationRoot: resolveFileMutationRoot(runtime.basePath),
+        writeText: (target, value) => workspaceIo.writeText(target, value),
+      });
       const resource = await registerResource({
         agentContext,
         executionPath: resolvedPath,
@@ -381,19 +401,11 @@ export function createFileTool({ agentContext }) {
         capabilities: { read: true, write: true, scriptInput: true },
       });
       return toToolJsonResult(TOOL_NAME.WRITE_FILE, {
-        ok: true,
+        ...mutation,
         state: TOOL_RESULT_STATE.OK,
         path: projectToolPathRef(pathRef),
         fileName: resourceFileName(resource),
         resources: [resource],
-        outputArtifacts: [
-          {
-            type: "text",
-            name: path.basename(resolvedPath),
-            mimeType: "text/plain",
-            content,
-          },
-        ],
       });
     },
   });
@@ -734,13 +746,52 @@ export function createFileTool({ agentContext }) {
           deletePlans.push({ filePath: item.resolvedOldPath, pathRef: item.oldPathRef });
         }
       }
+      const mutations = [];
+      const mutationByPath = new Map();
       if (!dryRun) {
-        for (const plan of writePlans) {
-          await workspaceIo.writeText(plan.filePath, plan.content);
-        }
-        for (const plan of deletePlans) {
-          if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
-          await workspaceIo.remove(plan.filePath);
+        const mutationRoot = resolveFileMutationRoot(runtime.basePath);
+        try {
+          for (const plan of writePlans) {
+            const mutation = await applyFileMutation({
+              filePath: plan.filePath,
+              logicalPath: mutationLogicalPath(plan.pathRef),
+              content: plan.content,
+              operation: "update",
+              mutationRoot,
+              writeText: (target, value) => workspaceIo.writeText(target, value),
+              removeFile: (target) => workspaceIo.remove(target),
+            });
+            mutations.push(mutation);
+            mutationByPath.set(plan.filePath, mutation);
+          }
+          for (const plan of deletePlans) {
+            if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
+            const mutation = await applyFileMutation({
+              filePath: plan.filePath,
+              logicalPath: mutationLogicalPath(plan.pathRef),
+              operation: "delete",
+              mutationRoot,
+              writeText: (target, value) => workspaceIo.writeText(target, value),
+              removeFile: (target) => workspaceIo.remove(target),
+            });
+            mutations.push(mutation);
+            mutationByPath.set(plan.filePath, mutation);
+          }
+        } catch (error) {
+          for (const mutation of mutations.toReversed()) {
+            const plan = [...writePlans, ...deletePlans].find(
+              (item) => mutationByPath.get(item.filePath)?.mutation?.id === mutation.mutation.id,
+            );
+            if (!plan) continue;
+            await rollbackFileMutation({
+              mutationRoot,
+              mutationId: mutation.mutation.id,
+              filePath: plan.filePath,
+              writeText: (target, value) => workspaceIo.writeText(target, value),
+              removeFile: (target) => workspaceIo.remove(target),
+            });
+          }
+          throw error;
         }
       }
       const resources = dryRun
@@ -767,15 +818,18 @@ export function createFileTool({ agentContext }) {
           }),
         ),
         changes: [
-          ...writePlans.map((item) => ({
+          ...writePlans.map((item, index) => ({
             path: projectToolPathRef(item.pathRef),
             action: "write",
+            mutation: mutationByPath.get(item.filePath)?.mutation || null,
           })),
-          ...deletePlans.map((item) => ({
+          ...deletePlans.map((item, index) => ({
             path: projectToolPathRef(item.pathRef),
             action: "delete",
+            mutation: mutationByPath.get(item.filePath)?.mutation || null,
           })),
         ],
+        mutations: mutations.map((item) => item.mutation),
         resources,
       });
     },

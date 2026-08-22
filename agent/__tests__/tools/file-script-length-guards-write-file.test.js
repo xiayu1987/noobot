@@ -138,7 +138,7 @@ test("write_file: host 模式返回宿主正常路径并在 host 执行", async 
   assert.equal("resolvedPath" in result, false);
 });
 
-test("write_file: successful output is published as a canonical attachment", async () => {
+test("write_file: successful output uses the canonical mutation result", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-write-transfer-"));
   const attachmentService = buildAttachmentService();
   const agentContext = buildAgentContext(basePath, "primary-user", {
@@ -159,24 +159,11 @@ test("write_file: successful output is published as a canonical attachment", asy
   const result = parseToolResult(runnerResult.toolResultText);
 
   assert.equal(runnerResult.success, true);
-  assert.equal(runnerResult.transferEnvelopes?.length, 1);
-  assert.equal(runnerResult.transferEnvelopes[0]?.version, 2);
-  assert.equal(runnerResult.transferEnvelopes[0]?.payload?.attachments?.[0]?.name, "result.md");
-  assert.equal("resources" in result, false);
-  assert.equal(runnerResult.internalResources.length, 2);
-  const workspaceResource = runnerResult.internalResources.find(
-    (resource) => resource.source === "workspace",
-  );
-  const attachmentResource = runnerResult.internalResources.find(
-    (resource) => resource.source === "attachment",
-  );
-  assert.equal(workspaceResource.logical.path, "runtime/ops_workdir/result.md");
-  assert.equal(attachmentResource.logical.path, "result.md");
-  assert.equal(
-    attachmentResource.attachment.attachmentId,
-    runnerResult.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
-  );
-  assert.equal("attachments" in result, false);
+  assert.equal(runnerResult.transferEnvelopes?.length || 0, 0);
+  assert.equal(result.protocol, "noobot.file-mutation-result");
+  assert.ok(result.mutation?.id);
+  assert.equal(result.mutation.path, "runtime/ops_workdir/result.md");
+  assert.equal(result.mutation.after.size, 8);
   assert.equal("outputArtifacts" in result, false);
   assert.equal(
     await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"),
@@ -341,7 +328,13 @@ test("workspace I/O: file tools keep one sandbox display path end to end", async
     }),
   );
   assert.equal(patched.ok, true, JSON.stringify(patched));
-  assert.deepEqual(patched.changes, [{ path: written.path, action: "write" }]);
+  assert.equal(patched.changes.length, 1);
+  assert.deepEqual(patched.changes[0].path, written.path);
+  assert.equal(patched.changes[0].action, "write");
+  assert.ok(patched.changes[0].mutation?.id);
+  assert.equal(patched.changes[0].mutation.path, written.path.path);
+  assert.equal(patched.mutations.length, 1);
+  assert.equal(patched.mutations[0].id, patched.changes[0].mutation.id);
 
   const finalRead = parseToolResult(
     await tools.get("read_file").invoke({
