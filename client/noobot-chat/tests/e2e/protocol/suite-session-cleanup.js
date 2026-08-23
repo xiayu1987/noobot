@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import fs from "node:fs/promises";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { request as playwrightRequest } from "@playwright/test";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
