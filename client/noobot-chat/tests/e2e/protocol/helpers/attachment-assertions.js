@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
+import { assertFileMutationResult } from "@noobot/file-mutation-protocol";
 
 export function assertCanonicalAttachment(actual, expected) {
   const identity = actual?.identity || actual;
@@ -30,6 +31,25 @@ export function writeFileResultsForTurn(records = [], turnScopeId = "") {
       record?.data?.tool === "write_file" &&
       record?.data?.success === true,
   );
+}
+
+export function mutationResultsForTurn(records = [], turnScopeId = "", toolName = "") {
+  return records
+    .filter(
+      (record) =>
+        record?.event === "tool_call_end" &&
+        record?.turnScopeId === turnScopeId &&
+        record?.data?.tool === toolName &&
+        record?.data?.success === true,
+    )
+    .map((record) => ({
+      record,
+      result: assertFileMutationResult(
+        typeof record.data.result === "object" && record.data.result !== null
+          ? record.data.result
+          : JSON.parse(String(record.data.result || "")),
+      ),
+    }));
 }
 
 function transferAttachments(value = {}) {

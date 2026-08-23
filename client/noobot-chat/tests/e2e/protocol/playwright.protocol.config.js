@@ -10,10 +10,27 @@ import { validateModelObservationPolicyCoverage } from "./helpers/model-observat
 
 const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
+const suiteSessionRegistry = path.join(repositoryRoot, "test-results/protocol/suite-sessions.json");
+process.env.NOOBOT_E2E_SESSION_REGISTRY = suiteSessionRegistry;
 const e2eWorkspaceRoot = String(process.env.NOOBOT_E2E_WORKSPACE_ROOT || "").trim();
 const runtimeEventsWorkspaceRoot = String(process.env.NOOBOT_RUNTIME_EVENTS_WORKSPACE_ROOT || "").trim();
 const workspaceRoot = String(process.env.NOOBOT_WORKSPACE_ROOT || "").trim();
 const configuredWorkspaceRoots = [workspaceRoot, e2eWorkspaceRoot, runtimeEventsWorkspaceRoot].filter(Boolean);
+
+function resolveBaseUrl(value) {
+  const raw = String(value || "").trim();
+  const candidate = raw || "http://127.0.0.1:10060";
+  let parsed;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    throw new Error("NOOBOT_E2E_BASE_URL must be an absolute HTTP(S) URL");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw new Error("NOOBOT_E2E_BASE_URL must be an absolute HTTP(S) URL");
+  }
+  return parsed.toString().replace(/\/$/, "");
+}
 
 validateModelObservationPolicyCoverage(path.join(protocolRoot, "specs"));
 
@@ -36,12 +53,12 @@ export default defineConfig({
   workers: 1,
   timeout: 420000,
   expect: { timeout: 15000 },
-  reporter: [["line"], ["html", {
+  reporter: [["line"], [path.join(protocolRoot, "suite-session-cleanup.js")], ["html", {
     open: "never",
     outputFolder: path.join(repositoryRoot, "test-results/protocol/report"),
   }]],
   use: {
-    baseURL: process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060",
+    baseURL: resolveBaseUrl(process.env.NOOBOT_E2E_BASE_URL),
     actionTimeout: 15000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

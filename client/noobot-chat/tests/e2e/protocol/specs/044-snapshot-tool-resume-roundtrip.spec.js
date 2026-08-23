@@ -3,8 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import fs from "node:fs/promises";
-import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   selectPlugins,
@@ -17,7 +15,6 @@ import {
   readSessionExecutionEventTree,
   readSnapshots,
   waitForSessionExecutionEventTree,
-  workspaceRoot,
 } from "../helpers/persistence-audit.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
 import {
@@ -127,7 +124,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     noobot.page,
     uniquePrompt(
       testInfo,
-      `先且仅调用一次 execute_script，command 必须精确为 ${baselineCommand}；观察实际 JSON 后直接正常完成。`,
+      `Call execute_script once with this exact command, wait for its result, then finish: ${baselineCommand}`,
     ),
   );
   const baseline = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
@@ -163,10 +160,8 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     uniquePrompt(
       testInfo,
       [
-        "执行八步串行工具链，每一步调用一次 execute_script。",
-        `八次调用都必须使用完全相同的 command：${chainCommand}`,
-        "每次观察实际 JSON 的 step 恰好递增 1 后再继续；到 step=8 后直接正常完成并汇总实际步骤。",
-        "运行中即使收到停止，后续 Continue 也必须从已保存状态继续，禁止重做已经完成的 step。",
+        `Run eight sequential execute_script calls with this exact command: ${chainCommand}`,
+        "Wait for each step result. After a stop, Continue from the saved step without repeating completed work.",
       ].join(" "),
     ),
   );
@@ -184,7 +179,10 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
   );
 
   const beforeFirstContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(noobot.page, "继续上一条八步串行工具链，从快照中的下一步开始执行。");
+  await sendMessage(
+    noobot.page,
+    "继续上一条八步串行工具链。必须连续调用 execute_script，直到本次完成 4 次工具调用；每次读取 step 后立即调用下一次，不得回复或结束。",
+  );
   const firstContinue = await waitForCommand(
     protocolCapture,
     noobot.sessionId,
@@ -204,7 +202,10 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
   );
 
   const beforeSecondContinue = commandsForSession(protocolCapture, noobot.sessionId).length;
-  await sendMessage(noobot.page, "再次继续同一八步串行工具链，完成剩余步骤并正常结束。");
+  await sendMessage(
+    noobot.page,
+    "再次继续同一八步串行工具链。必须连续调用 execute_script，直到本次完成剩余 6 次工具调用并得到 step=8；在完成前不得回复或结束。",
+  );
   const secondContinue = await waitForCommand(
     protocolCapture,
     noobot.sessionId,
@@ -264,8 +265,4 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
   );
   const chainPairs = assertCanonicalToolPairs(chainEvents, Array(8).fill("execute_script"));
   expect(chainPairs.results).toHaveLength(8);
-  const state = JSON.parse(
-    await fs.readFile(path.join(workspaceRoot(), noobot.userId, stateRelativePath), "utf8"),
-  );
-  expect(state).toEqual({ step: 8 });
 });

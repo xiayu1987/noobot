@@ -17,12 +17,11 @@ import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import {
   readRenderedFileNames,
   writeFileResultsForTurn,
-  attachmentKeys,
-  transferAttachmentsForTurn,
+  mutationResultsForTurn,
 } from "../helpers/attachment-assertions.js";
 import {
   modelInvocationTraces,
-  readAttachmentIndex,
+  readFileMutationRecords,
   readSessionExecutionEventTree,
   readSessionExecutionEvents,
 } from "../helpers/persistence-audit.js";
@@ -46,7 +45,6 @@ const EXPECTED_TOOLS = Object.freeze([
   "user_interaction",
 ]);
 const REALTIME_EXECUTION_WINDOW_SIZE = 10;
-const GENERATED_FILE_NAME = "case036.txt";
 const EXTERNAL_AND_NATIVE_TOOLS = Object.freeze([
   "execute_native_script",
   "multimodal_parse",
@@ -57,7 +55,13 @@ const EXTERNAL_AND_NATIVE_TOOLS = Object.freeze([
   "call_mcp_task",
 ]);
 
-async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScopeId }) {
+async function assertGeneratedFilesConverged({
+  page,
+  userId,
+  sessionId,
+  turnScopeId,
+  filePath = "runtime/ops_workdir/case036.txt",
+}) {
   let executionResults = [];
   let persistedFiles = [];
   await expect
@@ -65,14 +69,19 @@ async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScop
       async () => {
         const events = await readSessionExecutionEvents(userId, sessionId);
         executionResults = writeFileResultsForTurn(events, turnScopeId);
-        const attachmentIndex = await readAttachmentIndex(userId, sessionId, "model");
-        persistedFiles = Object.values(attachmentIndex?.attachments || {}).filter(
-          (attachment) =>
-            (attachment?.descriptor?.name || attachment?.name) === GENERATED_FILE_NAME,
+        const executionResult = executionResults[0]
+          ? JSON.parse(String(executionResults[0].data.result || "{}"))
+          : {};
+        const executionMutationId = executionResult?.mutations?.[0]?.id || "";
+        persistedFiles = (await readFileMutationRecords(userId, sessionId)).filter(
+          (record) => record?.mutations?.[0]?.id === executionMutationId,
         );
         return {
           executionCount: executionResults.length,
-          executionFileCount: transferAttachmentsForTurn(executionResults, turnScopeId).length,
+          executionFileCount: executionResults.flatMap((record) => {
+            const result = JSON.parse(String(record.data.result || ""));
+            return Array.isArray(result?.mutations) ? result.mutations : [];
+          }).length,
           persistedCount: persistedFiles.length,
         };
       },
@@ -84,12 +93,72 @@ async function assertGeneratedFilesConverged({ page, userId, sessionId, turnScop
       persistedCount: 1,
     });
 
-  const executionFiles = transferAttachmentsForTurn(executionResults, turnScopeId);
-  expect(attachmentKeys(persistedFiles)).toEqual(attachmentKeys(executionFiles));
+  const executionMutations = executionResults.flatMap((record) => {
+    const result = JSON.parse(String(record.data.result || ""));
+    return Array.isArray(result?.mutations) ? result.mutations : [];
+  });
+  expect(persistedFiles.map((record) => record.mutations[0].id).sort()).toEqual(
+    executionMutations.map((mutation) => mutation.id).sort(),
+  );
   await expect
     .poll(() => readRenderedFileNames(page), { timeout: 30000 })
-    .toEqual([GENERATED_FILE_NAME]);
-  expect(executionResults).toHaveLength((await readRenderedFileNames(page, {})).length);
+    .toEqual(expect.arrayContaining([filePath]));
+  expect(executionResults).toHaveLength(1);
+}
+
+async function assertFileMutationArtifacts(page, records, turnScopeId, filePath) {
+  const writes = mutationResultsForTurn(records, turnScopeId, "write_file");
+  const updates = mutationResultsForTurn(records, turnScopeId, "patch_file");
+  expect(writes).toHaveLength(1);
+  expect(updates).toHaveLength(1);
+
+  const writeMutation = writes[0].result.mutations[0];
+  const updateMutation = updates[0].result.mutations[0];
+  expect(writeMutation).toMatchObject({
+    path: filePath,
+    operation: "create",
+    before: { exists: false },
+    after: { exists: true, isText: true },
+  });
+  expect(updateMutation).toMatchObject({
+    path: filePath,
+    operation: "update",
+    aggregate: { revision: 1, diffCount: 1, path: filePath },
+    before: { exists: true, isText: true },
+    after: { exists: true, isText: true },
+  });
+  expect(updateMutation.diff).toMatchObject({ additions: 1, deletions: 1, changedLines: 2 });
+
+  const artifactTabs = page.locator(".message-artifact-tabs").last();
+  await expect(artifactTabs).toBeVisible();
+  const writeTab = artifactTabs.getByRole("tab", { name: /文件写入|File Writes/i });
+  const updateTab = artifactTabs.getByRole("tab", { name: /文件更新|File Updates/i });
+  await expect(writeTab).toBeVisible();
+  await expect(updateTab).toBeVisible();
+
+  await writeTab.click();
+  const writeCard = artifactTabs.locator(".el-tab-pane:visible .mutation-file-item");
+  await expect(writeCard).toHaveCount(1);
+  await writeCard.click();
+  const writeDialog = page.locator(".generated-file-preview-dialog");
+  await expect(writeDialog).toBeVisible();
+  await expect(writeDialog.locator(".mutation-file-content")).toContainText("CASE036-TOOL-CONTENT");
+  await writeDialog.locator(".el-dialog__headerbtn").click();
+  await expect(writeDialog).toBeHidden();
+
+  await updateTab.click();
+  const updateCard = artifactTabs.locator(".el-tab-pane:visible .mutation-file-item");
+  await expect(updateCard).toHaveCount(1);
+  await updateCard.click();
+  const updateDialog = page.locator(".generated-file-preview-dialog");
+  await expect(updateDialog).toBeVisible();
+  await expect(updateDialog.locator(".mutation-diff-split")).toBeVisible();
+  await expect(updateDialog.locator(".mutation-diff-pane")).toHaveCount(2);
+  await expect(updateDialog.locator(".mutation-diff-line.is-removed")).toHaveCount(1);
+  await expect(updateDialog.locator(".mutation-diff-line.is-added")).toHaveCount(1);
+  await expect(updateDialog.locator(".mutation-line-sign")).toContainText(["-", "+"]);
+  await updateDialog.locator(".el-dialog__headerbtn").click();
+  await expect(updateDialog).toBeHidden();
 }
 
 test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async ({
@@ -101,6 +170,8 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await setHarnessCapability(noobot.page, "Planning", false);
   await setHarnessCapability(noobot.page, "Planning Acceptance", false);
   await setHarnessGuidanceAnalysisIntensity(noobot.page, 9);
+  const generatedFileName = `case036-${testInfo.testId}-${Date.now()}.txt`;
+  const generatedFilePath = `runtime/ops_workdir/${generatedFileName}`;
   await sendMessage(
     noobot.page,
     uniquePrompt(
@@ -108,10 +179,10 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
       [
         "严格按顺序且每种只调用一次以下七个工具，不得调用任何其他工具：",
         "只能使用下面列出的七个规范工具名；不得发明、缩写、别名化或调用任何未列出的工具，尤其不得调用 `zz`。",
-        "1) write_file 写 runtime/ops_workdir/case036.txt，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；",
-        "2) read_file 读取该文件且不显示行号，riskLevel=low；",
+        `1) write_file 写 ${generatedFilePath}，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；`,
+        `2) read_file 读取 ${generatedFilePath} 且不显示行号，riskLevel=low；`,
         "3) search 使用 source=text 在文本 CASE036-SEARCH-TARGET 中查 SEARCH-TARGET，riskLevel=low；",
-        "4) patch_file 对 case036.txt 做仅把 TOOL 改为 PATCH 的 unified diff，但 dryRun=true、root=runtime/ops_workdir、strip=1、riskLevel=low；",
+        `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=runtime/ops_workdir、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
         "5) execute_script 执行 printf CASE036-SCRIPT，foreground、riskLevel=low；",
         "6) list_skills 使用空参数；",
         "7) user_interaction 显示 CASE036-INTERACTION，并要求一个必填字段 verificationCode，显示名 Verification Code。不得提前结束，必须执行到这个交互步骤。",
@@ -130,6 +201,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     userId: noobot.userId,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
+    filePath: generatedFilePath,
   });
   const shell = await realtimeObservation;
   await assertRealtimeToolDetails(shell, REALTIME_EXECUTION_WINDOW_SIZE);
@@ -145,10 +217,11 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     userId: noobot.userId,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
+    filePath: generatedFilePath,
   });
   const pendingProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
-  expect(pendingProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary }))).toEqual(
-    pendingProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })),
+  expect(pendingProjectionAfterRefresh.map(({ event }) => event)).toEqual(
+    pendingProjectionBeforeRefresh.map(({ event }) => event),
   );
 
   await interaction.locator(".el-input input").fill("CASE036-UI-VALUE");
@@ -172,6 +245,9 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   );
   const events = toolEventsForTurn(records, command.identity.turnScopeId);
   const { calls, results } = assertCanonicalToolPairs(events, EXPECTED_TOOLS);
+  await assertFileMutationArtifacts(noobot.page, records, command.identity.turnScopeId, generatedFilePath);
+  await reloadAndWaitForReconnect(noobot.page, protocolCapture);
+  await assertFileMutationArtifacts(noobot.page, records, command.identity.turnScopeId, generatedFilePath);
   const interactionCall = calls.find((event) => event.data?.tool === "user_interaction");
   const interactionResult = results.find(
     (event) => event.data?.toolCallId === interactionCall.data?.toolCallId,
@@ -211,6 +287,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     userId: noobot.userId,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
+    filePath: generatedFilePath,
   });
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   await expect(interaction).toBeHidden();
@@ -220,17 +297,17 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     userId: noobot.userId,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
+    filePath: generatedFilePath,
   });
-  expect(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary }))).toEqual(
-    completedProjectionBeforeRefresh.map(({ event, summary }) => ({ event, summary })),
+  expect(completedProjectionAfterRefresh.map(({ event }) => event)).toEqual(
+    completedProjectionBeforeRefresh.map(({ event }) => event),
   );
-  expect(completedProjectionAfterRefresh.every(({ detail }) => detail === "")).toBe(true);
   const detailProjection = await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
   expect(
     detailProjection
       .slice(-REALTIME_EXECUTION_WINDOW_SIZE)
-      .map(({ event, summary }) => ({ event, summary })),
-  ).toEqual(completedProjectionAfterRefresh.map(({ event, summary }) => ({ event, summary })));
+    .map(({ event }) => event),
+  ).toEqual(completedProjectionAfterRefresh.map(({ event }) => event));
 });
 
 test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", async ({

@@ -8,8 +8,8 @@ import { PLUGIN_PROTOCOL_VERSION } from "@noobot/plugin-protocol";
 import {
   assertAttachmentHttpAccess,
   assertUniqueAttachmentIds,
+  mutationResultsForTurn,
   readRenderedFileNames,
-  transferAttachmentsForTurn,
 } from "../helpers/attachment-assertions.js";
 import {
   addAttachment,
@@ -21,6 +21,7 @@ import {
 } from "../helpers/browser-actions.js";
 import {
   readAttachmentIndex,
+  readFileMutationRecords,
   readSessionExecutionEventTree,
   waitForSessionExecutionEventTree,
   waitForModelInvocationTraces,
@@ -208,30 +209,25 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
       record.data?.success === true,
   );
   expect(childWriteResults).toHaveLength(1);
-  const childWrittenAttachments = transferAttachmentsForTurn(
+  const childMutations = mutationResultsForTurn(
     childWriteResults,
     childWriteResults[0].turnScopeId,
+    "write_file",
   );
-  expect(childWrittenAttachments).toHaveLength(1);
-  const childAttachmentIndex = await readAttachmentIndex(noobot.userId, childSessionId, "model");
-  expect(childAttachmentIndex).toMatchObject({
-    sessionId: childSessionId,
-    attachmentSource: "model",
+  expect(childMutations).toHaveLength(1);
+  const childMutationRecords = await readFileMutationRecords(noobot.userId, childSessionId, {
+    rootSessionId: noobot.sessionId,
   });
-  const childAttachments = Object.values(childAttachmentIndex.attachments || {});
-  expect(childAttachments).toHaveLength(1);
-  expect(childAttachments[0]).toMatchObject({
-    identity: {
-      sessionId: childSessionId,
-      attachmentSource: "model",
-    },
-    descriptor: {
-      name: childFilePath.split("/").pop(),
-      generatedByModel: true,
-      generationSource: "write_file_output",
-    },
+  const childMutationRecord = childMutationRecords.find(
+    (record) => record?.mutations?.[0]?.path === childFilePath,
+  );
+  expect(childMutationRecord).toBeTruthy();
+  expect(childMutationRecord.mutations[0]).toMatchObject({
+    id: childMutations[0].result.mutations[0].id,
+    path: childFilePath,
+    operation: "create",
+    after: { exists: true, isText: true },
   });
-  expect(childAttachments[0].identity.attachmentId).not.toBe(attachments[0].identity.attachmentId);
 
   await expect
     .poll(() => readAttachmentIndex(noobot.userId, noobot.sessionId, "model"), { timeout: 30000 })

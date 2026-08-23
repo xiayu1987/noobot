@@ -93,8 +93,8 @@ the final answer.
 
 断言：每次主模型输入的 `Current execution context` 小于 256 字符且不含 Session 路由身份、Session tree 或执行器安全字段；`task_check_required` 每次只对应一个模型输入 marker，下一轮不残留；`task_check` 输入严格遵循 `NOOBOT_TASK_CHECK/1`，结果只含协议回执且不保存附件；最后一次 checkpoint 前的最新检查 call/result 保持 `summarized!=true`，思考面板展示本轮最新检查摘要，下一轮主模型的 history 仍能看到该工具结果。
 
-### PBE-036 全工具与实时思考交互闭环
+### PBE-036 全工具、文件 mutation 与实时思考交互闭环
 
-步骤：启用 Harness 的真实 guidance analysis，但关闭 planning/acceptance，按固定顺序调用本场景声明的安全业务工具集合 `write_file/read_file/search/patch_file(dryRun)/execute_script/list_skills/user_interaction`。浏览器在交互卡片填写固定验证码，并持续采样实时思考面板，而不是仅在完成后读取最终 DOM。模型/provider 若不输出工具调用前文本，不伪造主模型思考内容；分析区域由真实 Harness capability 事件驱动。
+步骤：启用 Harness 的真实 guidance analysis，但关闭 planning/acceptance，按固定顺序调用本场景声明的安全业务工具集合 `write_file/read_file/search/patch_file/execute_script/list_skills/user_interaction`。其中 `write_file` 创建文件，`patch_file(dryRun=false)` 对同一文件执行真实更新。浏览器在交互卡片填写固定验证码，并持续采样实时思考面板，而不是仅在完成后读取最终 DOM。模型/provider 若不输出工具调用前文本，不伪造主模型思考内容；分析区域由真实 Harness capability 事件驱动。
 
-断言：权威 execution-events 中实际工具集合与声明集合严格相等，每个 `toolCallId` 的调用、参数、成功返回一一配对；实时面板至少出现两种不同内容签名，模型分析与执行记录都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，思考详情则展示并可展开完整 7 对工具历史；思考内容标签有真实内容；交互标题、字段、提交值及工具返回闭合，读文件、搜索和脚本的实际结果进入最终回答。
+断言：权威 execution-events 中实际工具集合与声明集合严格相等，每个 `toolCallId` 的调用、参数、成功返回一一配对；`write_file` 和 `patch_file` 的 canonical file mutation result 分别产生 create/update artifact，更新聚合 revision、diffCount 和增删行均闭合；完成后浏览器展示独立的“文件写入”和“文件更新” tab，写入项可预览其写入快照内容，更新项可打开左右分栏 diff 并展示 `-`/`+` 行；刷新后两个 tab 和预览数据仍可读取。实时面板至少出现两种不同内容签名，模型分析与执行记录都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，思考详情则展示并可展开完整 7 对工具历史；思考内容标签有真实内容；交互标题、字段、提交值及工具返回闭合，读文件、搜索和脚本的实际结果进入最终回答。
