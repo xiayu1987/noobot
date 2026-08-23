@@ -6,6 +6,7 @@
 <script setup>
 import { computed, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
+import { Paperclip } from "@element-plus/icons-vue";
 import { useMessagePreview } from "../../composables/message/useMessagePreview.js";
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
 import {
@@ -48,6 +49,9 @@ import {
   summarizeWorkflowMessage,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { chatMessageItemProps } from "../../model/messageItemProps.js";
+import FileMutationPreview from "../thinking/FileMutationPreview.vue";
+import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
+import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 
 const emit = defineEmits(["open-thinking-details"]);
 
@@ -102,12 +106,99 @@ const {
   },
 });
 
+const postMessageCardRenderers = computed(() =>
+  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST, { messageItem: props.messageItem }),
+);
+const suppressDefaultAssets = computed(() =>
+  postMessageCardRenderers.value.some((renderer = {}) => renderer?.suppressDefaultAssets === true),
+);
 const { displayedAttachments } = useMessageFiles({
   getMessageItem: () => props.messageItem,
   getAllMessages: () => props.allMessages,
   getSessionDocs: () => props.sessionDocs,
   getUserId: () => props.userId,
 });
+const completedToolArtifacts = computed(() => selectCompletedToolArtifacts(props.messageItem));
+const writeMutations = computed(() => completedToolArtifacts.value.writeMutations);
+const patchMutations = computed(() => completedToolArtifacts.value.patchMutations);
+const artifactAttachments = computed(() =>
+  suppressDefaultAssets.value ? [] : displayedAttachments.value,
+);
+const hasMessageArtifacts = computed(() =>
+  (artifactAttachments.value.length > 0 || writeMutations.value.length > 0 || patchMutations.value.length > 0),
+);
+const artifactTab = ref("attachments");
+watch(
+  [() => artifactAttachments.value.length, () => writeMutations.value.length, () => patchMutations.value.length],
+  () => {
+    const availableTab = artifactAttachments.value.length
+      ? "attachments"
+      : writeMutations.value.length
+        ? "write-files"
+        : patchMutations.value.length
+          ? "patch-files"
+          : "attachments";
+    const activeTabAvailable =
+      (artifactTab.value === "attachments" && artifactAttachments.value.length > 0) ||
+      (artifactTab.value === "write-files" && writeMutations.value.length > 0) ||
+      (artifactTab.value === "patch-files" && patchMutations.value.length > 0);
+    if (!activeTabAvailable) {
+      artifactTab.value = availableTab;
+    }
+  },
+  { immediate: true },
+);
+const mutationPreviewVisible = ref(false);
+const mutationPreviewLoading = ref(false);
+const mutationPreviewError = ref("");
+const mutationPreviewMutation = ref(null);
+const mutationPreviewKind = ref("file");
+const mutationPreviewContent = ref("");
+const mutationPreviewDiff = ref(null);
+let mutationPreviewGeneration = 0;
+const mutationPreviewDiffRows = computed(() => (mutationPreviewDiff.value?.lines || []).map((line) => ({
+  old: line.type === "added" ? null : line,
+  next: line.type === "removed" ? null : line,
+})));
+async function openMutationPreview({ mutation, kind } = {}) {
+  const generation = ++mutationPreviewGeneration;
+  const requestedMutation = mutation || null;
+  const requestedKind = kind || "file";
+  const requestedSessionId = getMessageSessionId(props.messageItem);
+  mutationPreviewMutation.value = mutation || null;
+  mutationPreviewKind.value = requestedKind;
+  mutationPreviewVisible.value = true;
+  mutationPreviewLoading.value = true;
+  mutationPreviewError.value = "";
+  mutationPreviewContent.value = "";
+  mutationPreviewDiff.value = null;
+  try {
+    const payload = requestedKind === "diff"
+      ? await fileMutationPreviewService.getDiff({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedMutation?.sessionScope, mutationId: requestedMutation?.id })
+      : await fileMutationPreviewService.getFile({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedMutation?.sessionScope, mutationId: requestedMutation?.id });
+    if (generation !== mutationPreviewGeneration) return;
+    if (requestedKind === "diff") mutationPreviewDiff.value = payload.diff || payload;
+    else mutationPreviewContent.value = String(payload.content || "");
+  } catch (error) {
+    if (generation !== mutationPreviewGeneration) return;
+    mutationPreviewError.value = String(error?.message || error || translate("message.mutationLoadFailed"));
+  } finally {
+    if (generation === mutationPreviewGeneration) mutationPreviewLoading.value = false;
+  }
+}
+async function downloadMutation(mutation = {}) {
+  try {
+    await fileMutationPreviewService.downloadFile({
+      userId: props.userId,
+      sessionId: getMessageSessionId(props.messageItem),
+      sessionScope: mutation?.sessionScope,
+      mutationId: mutation?.id,
+      fileName: mutation?.path,
+    });
+  } catch (error) {
+    ElMessage.error(String(error?.message || error || translate("message.downloadFailed")));
+  }
+}
 
 watch(
   () =>
@@ -160,9 +251,6 @@ const assistantContentExpanded = computed(() => {
 
 const preMessageCardRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_PRE, { messageItem: props.messageItem }),
-);
-const postMessageCardRenderers = computed(() =>
-  resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_CARD_POST, { messageItem: props.messageItem }),
 );
 const thinkingPanelContributionIds = Object.freeze(["thinking-panel"]);
 const hasThinkingPanelContribution = computed(() =>
@@ -246,9 +334,6 @@ watch(
     });
   },
   { immediate: true },
-);
-const suppressDefaultAssets = computed(() =>
-  postMessageCardRenderers.value.some((renderer = {}) => renderer?.suppressDefaultAssets === true),
 );
 const preContentMessageActionRenderers = computed(() =>
   resolveExtensionPoint(EXTENSION_POINTS.MESSAGE_ACTION_AFTER_PRE_CARDS, {
@@ -467,25 +552,58 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <BaseFileCardList v-if="!suppressDefaultAssets && displayedAttachments.length">
-      <BaseAttachmentFileCard
-        v-for="attachmentItem in displayedAttachments"
-        :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
-        :attachment-item="attachmentItem"
-        :user-id="userId"
-        :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
-        :is-image-mime="isImageMime"
-        :can-preview-attachment="canPreviewAttachment"
-        :can-preview-parsed-result="canPreviewParsedResult"
-        :format-file-size="formatFileSize"
-        :translate="translate"
-        show-parsed-result
-        @preview="openAttachmentPreview"
-        @download="onDownloadAttachment"
-        @preview-parsed-result="openParsedResultPreview"
-        @download-parsed-result="onDownloadParsedResult"
-      />
-    </BaseFileCardList>
+    <el-tabs v-if="hasMessageArtifacts" v-model="artifactTab" class="message-artifact-tabs">
+      <el-tab-pane v-if="artifactAttachments.length" :label="translate('message.artifactAttachments')" name="attachments">
+        <BaseFileCardList>
+          <BaseAttachmentFileCard
+            v-for="attachmentItem in artifactAttachments"
+            :key="`attachment:${getAttachmentRenderKey(attachmentItem)}`"
+            :attachment-item="attachmentItem"
+            :user-id="userId"
+            :thumbnail-url="attachmentItem.thumbnailUrl || attachmentItem.previewUrl || ''"
+            :is-image-mime="isImageMime"
+            :can-preview-attachment="canPreviewAttachment"
+            :can-preview-parsed-result="canPreviewParsedResult"
+            :format-file-size="formatFileSize"
+            :translate="translate"
+            :preview-icon="Paperclip"
+            show-parsed-result
+            @preview="openAttachmentPreview"
+            @download="onDownloadAttachment"
+            @preview-parsed-result="openParsedResultPreview"
+            @download-parsed-result="onDownloadParsedResult"
+          />
+        </BaseFileCardList>
+      </el-tab-pane>
+      <el-tab-pane v-if="writeMutations.length" :label="translate('message.artifactWriteFiles')" name="write-files">
+        <FileMutationPreview
+          v-if="writeMutations.length"
+          :user-id="userId"
+          :session-id="getMessageSessionId(messageItem)"
+          :mutations="writeMutations"
+          :service="fileMutationPreviewService"
+          :translate="translate"
+          compact
+          preview-kind="file"
+          @preview="openMutationPreview"
+          @download="downloadMutation"
+        />
+      </el-tab-pane>
+      <el-tab-pane v-if="patchMutations.length" :label="translate('message.artifactPatchFiles')" name="patch-files">
+        <FileMutationPreview
+          v-if="patchMutations.length"
+          :user-id="userId"
+          :session-id="getMessageSessionId(messageItem)"
+          :mutations="patchMutations"
+          :service="fileMutationPreviewService"
+          :translate="translate"
+          compact
+          preview-kind="diff"
+          @preview="openMutationPreview"
+          @download="downloadMutation"
+        />
+      </el-tab-pane>
+    </el-tabs>
 
     <ExtensionOutlet
       :point="EXTENSION_POINTS.MESSAGE_CARD_POST"
@@ -495,6 +613,24 @@ function toggleAssistantContent() {
   </BaseMessageShell>
 
   <Teleport to="body">
+    <el-dialog
+      v-if="mutationPreviewVisible"
+      v-model="mutationPreviewVisible"
+      :title="translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.path || '' })"
+      :teleported="false"
+      modal-class="noobot-file-preview-overlay"
+      class="generated-file-preview-dialog"
+      destroy-on-close
+    >
+      <el-skeleton v-if="mutationPreviewLoading" :rows="5" animated />
+      <el-alert v-else-if="mutationPreviewError" :title="mutationPreviewError" type="error" :closable="false" />
+      <div v-else-if="mutationPreviewKind === 'diff' && mutationPreviewDiff" class="mutation-diff-split" role="table">
+        <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewBefore') }}</div><div v-for="(row, index) in mutationPreviewDiffRows" :key="`modal-old-${index}`" class="mutation-diff-line" :class="row.old ? `is-${row.old.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.old?.oldLine || "" }}</span><span class="mutation-line-sign">{{ row.old?.type === "removed" ? "-" : "" }}</span><code>{{ row.old?.text || "" }}</code></div></div>
+        <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewAfter') }}</div><div v-for="(row, index) in mutationPreviewDiffRows" :key="`modal-new-${index}`" class="mutation-diff-line" :class="row.next ? `is-${row.next.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.next?.newLine || "" }}</span><span class="mutation-line-sign">{{ row.next?.type === "added" ? "+" : "" }}</span><code>{{ row.next?.text || "" }}</code></div></div>
+      </div>
+      <pre v-else class="mutation-file-content">{{ mutationPreviewContent }}</pre>
+    </el-dialog>
+
     <el-dialog
       v-model="attachmentPreviewVisible"
       :title="translate('message.attachmentPreviewTitle', { name: attachmentPreviewName || '' })"
@@ -545,6 +681,8 @@ function toggleAssistantContent() {
   </Teleport>
 </template>
 
+<style src="../../../../shared/ui/file-mutation-preview-common.css"></style>
+
 <style scoped>
 .message-runtime-panels {
   box-sizing: border-box;
@@ -552,6 +690,25 @@ function toggleAssistantContent() {
   border-radius: var(--noobot-radius-xs);
   background: transparent;
 }
+.message-artifact-tabs {
+  margin-top: var(--noobot-space-md);
+  padding: var(--noobot-space-xs);
+  border: 1px solid var(--noobot-msg-file-card-border);
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-msg-file-card-bg);
+}
+.message-artifact-tabs :deep(.el-tabs__header) { margin-bottom: var(--noobot-space-md); }
+.message-artifact-tabs :deep(.el-tabs__nav-wrap) { padding-inline: var(--noobot-space-xs); }
+.message-artifact-tabs :deep(.el-tabs__item) {
+  box-sizing: border-box;
+  height: 36px;
+  line-height: 36px;
+}
+.message-artifact-tabs :deep(.el-tabs__content) {
+  padding: var(--noobot-space-xs);
+  background: var(--noobot-msg-file-card-bg);
+}
+.message-artifact-tabs :deep(.base-file-card-list) { margin-top: 0; }
 
 .message-runtime-panels.is-running {
   animation: message-runtime-panels-glow 2.4s ease-in-out infinite;

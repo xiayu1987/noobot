@@ -14,7 +14,7 @@ import {
 const REQUIRED_MESSAGE_SUMMARY_KEYS = new Set(["turnScopeId"]);
 
 export function compactThinkingTimeline(items = []) {
-  const compactFact = (fact = {}, summary = "") => ({
+  const compactFact = (fact = {}, summary = "", result = null) => ({
     eventId: String(fact.eventId || "").trim(),
     sequence: fact.sequence,
     ...(String(fact.sequenceScopeId || "").trim()
@@ -34,6 +34,7 @@ export function compactThinkingTimeline(items = []) {
     ...(Array.isArray(fact.attachments) && fact.attachments.length
       ? { attachments: fact.attachments }
       : {}),
+    ...(result ? { result } : {}),
     ...(summary ? { summary } : {}),
   });
   return (Array.isArray(items) ? items : []).map((item = {}) => ({
@@ -52,6 +53,7 @@ export function compactThinkingTimeline(items = []) {
       : {}),
     ...(item.resultEvent
       ? {
+          result: item.result,
           resultEvent: compactFact(
             item.resultEvent,
             projectToolOperationSummary(item.tool, item.result, { result: true }),

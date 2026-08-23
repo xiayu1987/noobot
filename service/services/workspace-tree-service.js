@@ -7,6 +7,11 @@ import path from "node:path";
 import { readdir } from "node:fs/promises";
 import { safeJoin } from "#agent/utils";
 
+function isWorkspaceControlEntry(name = "") {
+  const normalized = String(name || "").trim();
+  return normalized.endsWith(".mutation-lock") || normalized.endsWith(".mutation-locks");
+}
+
 export async function buildWorkspaceTree(
   rootPath,
   currentPath = "",
@@ -16,7 +21,10 @@ export async function buildWorkspaceTree(
   if (depth > maxDepth) return [];
   const absolutePath = currentPath ? safeJoin(rootPath, currentPath) : rootPath;
   const directoryEntries = (await readdir(absolutePath, { withFileTypes: true }))
-    .filter((directoryEntry) => !directoryEntry.name.startsWith("."))
+    .filter(
+      (directoryEntry) =>
+        !directoryEntry.name.startsWith(".") && !isWorkspaceControlEntry(directoryEntry.name),
+    )
     .sort((leftEntry, rightEntry) => {
       if (leftEntry.isDirectory() && !rightEntry.isDirectory()) return -1;
       if (!leftEntry.isDirectory() && rightEntry.isDirectory()) return 1;

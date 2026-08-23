@@ -401,20 +401,25 @@ function foldConversationMessages(messages = [], buildView) {
   // result cannot disappear from the visible assistant projection.
   for (const message of sourceMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
-    if (!key || getMessageRole(message) !== "assistant") continue;
-    const envelopes = getMessageTransferEnvelopes(message);
-    const attachments = getMessageAttachments(message);
-    const existing = turnArtifacts.get(key) || { envelopes: [], attachments: [] };
+    if (!key) continue;
+    const isAssistant = getMessageRole(message) === "assistant";
+    const envelopes = isAssistant ? getMessageTransferEnvelopes(message) : [];
+    const attachments = isAssistant ? getMessageAttachments(message) : [];
+    const existing = turnArtifacts.get(key) || { envelopes: [], attachments: [], toolTimeline: [] };
     turnArtifacts.set(key, {
       envelopes: envelopes.length ? [...existing.envelopes, ...envelopes] : existing.envelopes,
       attachments: attachments.length
         ? mergeAttachments(existing.attachments, attachments)
         : existing.attachments,
+      toolTimeline: message.toolTimeline?.length
+        ? mergeToolTimelines(existing.toolTimeline, message.toolTimeline)
+        : existing.toolTimeline,
     });
   }
   for (const message of mergedMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
-    const artifacts = turnArtifacts.get(key) || { envelopes: [], attachments: [] };
+    const artifacts =
+      turnArtifacts.get(key) || { envelopes: [], attachments: [], toolTimeline: [] };
     if (getMessageRole(message) !== "assistant") continue;
     if (artifacts.envelopes.length) {
       message.transferEnvelopes = artifacts.envelopes;
@@ -424,6 +429,9 @@ function foldConversationMessages(messages = [], buildView) {
         normalizeArray(message.attachments),
         artifacts.attachments,
       );
+    }
+    if (artifacts.toolTimeline.length) {
+      message.toolTimeline = mergeToolTimelines(message.toolTimeline, artifacts.toolTimeline);
     }
     message.attachments = getMessageAttachments(message);
   }

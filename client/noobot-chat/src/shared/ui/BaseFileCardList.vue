@@ -19,10 +19,4 @@
   padding-top: var(--noobot-space-sm);
   border-top: 1px dashed color-mix(in srgb, var(--noobot-cyber-cyan) 35%, transparent);
 }
-:deep(.base-file-card) {
-  display: flex;
-  align-items: center;
-  gap: var(--noobot-space-xs);
-  padding: 4px var(--noobot-space-xs);
-}
 </style>

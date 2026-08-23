@@ -30,6 +30,9 @@ function buildHostScriptAgentContext(basePath, userId, overrides = {}) {
       ...runtime,
       systemRuntime: {
         ...(runtime.systemRuntime || {}),
+        sessionDir:
+          runtime.systemRuntime?.sessionDir ||
+          path.join(basePath, "runtime", "session", runtime.systemRuntime?.sessionId || "s-1"),
         config: {
           ...(runtime.systemRuntime?.config || {}),
           safeConfirm: false,
@@ -399,7 +402,9 @@ test("execute_script: foreground timeout terminates the process group and settle
   if (process.platform === "win32") return t.skip("POSIX process-group semantics");
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-script-timeout-group-"));
   const startedAt = Date.now();
-  const result = await run("sh -c 'trap \"\" TERM; while :; do sleep 1; done'", cwd, 50);
+  const result = await run("sh -c 'trap \"\" TERM; while :; do sleep 1; done'", cwd, 50, null, {
+    generatedDataRoot: cwd,
+  });
 
   assert.equal(result.code, 124);
   assert.ok(Date.now() - startedAt < 4000);
@@ -418,6 +423,7 @@ test("execute_script: foreground abort terminates the process group and settles"
     60000,
     controller.signal,
     {
+      generatedDataRoot: cwd,
       onTerminate: () => {
         terminationHookCalls += 1;
       },

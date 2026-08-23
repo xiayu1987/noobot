@@ -4,6 +4,16 @@
  * SPDX-License-Identifier: MIT
  */
 
+.base-file-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--noobot-msg-file-card-min-height);
+  display: flex;
+  align-items: center;
+  gap: var(--noobot-space-xs);
+  padding: 4px var(--noobot-space-xs);
+}
+
 .file-thumb {
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
@@ -27,6 +37,7 @@
 }
 
 .file-icon {
+  box-sizing: border-box;
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
   border-radius: var(--noobot-radius-xs);
@@ -35,23 +46,32 @@
   justify-content: center;
   background: var(--noobot-msg-file-icon-bg);
   color: var(--noobot-text-strong);
+  border: 0;
+}
+
+.file-icon > .el-icon,
+.file-icon-button > .el-icon {
+  width: var(--noobot-msg-file-icon-size);
+  height: var(--noobot-msg-file-icon-size);
+  font-size: var(--noobot-msg-file-icon-size);
+  line-height: 1;
 }
 
 .file-icon-button {
+  box-sizing: border-box;
   width: var(--noobot-msg-file-thumb-size);
   height: var(--noobot-msg-file-thumb-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--noobot-text-strong);
-  background: color-mix(in srgb, var(--noobot-text-accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--noobot-text-accent) 26%, transparent);
+  background: var(--noobot-msg-file-icon-bg);
+  border: 0;
   border-radius: var(--noobot-radius-xs);
 }
 
 .file-icon-button:hover {
-  background: color-mix(in srgb, var(--noobot-text-accent) 18%, transparent);
-  border-color: color-mix(in srgb, var(--noobot-text-accent) 38%, transparent);
+  background: var(--noobot-msg-file-icon-bg);
 }
 
 .file-meta {
@@ -73,6 +93,13 @@
   white-space: nowrap;
   font-size: var(--noobot-msg-caption-font-size);
   color: var(--noobot-msg-file-name);
+  line-height: 1.25;
+}
+
+.file-size {
+  font-size: var(--noobot-msg-file-size-font-size);
+  line-height: 1.25;
+  color: var(--noobot-msg-file-size);
 }
 
 .attachment-download-btn {

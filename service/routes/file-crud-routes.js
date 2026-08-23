@@ -9,8 +9,11 @@ import { writeFileAtomic } from "@noobot/platform-compatibility/atomic-file-writ
 import {
   applyFileMutation,
   readFileMutation,
-  resolveFileMutationRoot,
 } from "noobot-agent/file-mutation-service";
+import {
+  createFileMutationDiffPreview,
+  createFileMutationFilePreview,
+} from "@noobot/file-mutation-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { safeJoin } from "#agent/utils";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
@@ -39,6 +42,9 @@ export function registerFileCrudRoutes(
     i18nKeys = {},
     responseBuilders = {},
     allowAbsolutePath = false,
+    resolveMutationRoot = null,
+    trackMutations = false,
+    readMutations = false,
   } = {},
 ) {
   const keys = { ...DEFAULT_I18N_KEYS, ...i18nKeys };
@@ -97,6 +103,15 @@ export function registerFileCrudRoutes(
       return path.resolve(normalizedPath);
     }
     return safeJoin(root, normalizedPath);
+  };
+
+  const resolveRequestMutationRoot = async (req, root) => {
+    if (typeof resolveMutationRoot !== "function") {
+      throw new Error("file mutation session scope resolver is required");
+    }
+    const resolved = await resolveMutationRoot(req, root);
+    if (!String(resolved || "").trim()) throw new Error("file mutation repository root is required");
+    return resolved;
   };
 
   app.get(
@@ -188,69 +203,62 @@ export function registerFileCrudRoutes(
         }
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
-        const result = await applyFileMutation({
-          filePath: absolutePath,
-          logicalPath: relativePath,
-          content,
-          operation: "replace",
-          mutationRoot: resolveFileMutationRoot(root),
-          writeText: (target, value) => writeFileAtomic({
-            filePath: target,
-            content: value,
-            writeFile,
-            rename,
-            remove: rm,
-          }),
+        const writeText = (target, value) => writeFileAtomic({
+          filePath: target,
+          content: value,
+          writeFile,
+          rename,
+          remove: rm,
         });
+        const result = trackMutations
+          ? await applyFileMutation({
+              filePath: absolutePath,
+              logicalPath: relativePath,
+              content,
+              operation: "replace",
+              mutationRoot: await resolveRequestMutationRoot(req, root),
+              writeText,
+            })
+          : (await writeText(absolutePath, content), {
+              ok: true,
+              path: relativePath,
+              isText: true,
+              size: Buffer.byteLength(content, "utf8"),
+              content,
+            });
         res.json(result);
       },
       { fallbackErrorKey: keys.saveFailed },
     ),
   );
 
-  app.get(
-    `${routePrefix}/file-mutations/:mutationId/diff`,
-    ...middlewares,
-    jsonRoute(async (req, res) => {
-      const root = await resolveRootPath(req);
-      const mutation = await readFileMutation({
-        mutationRoot: resolveFileMutationRoot(root),
-        mutationId: req.params.mutationId,
-      });
-      res.json({
-        ok: true,
-        protocol: mutation.protocol,
-        version: mutation.version,
-        mutationId: mutation.mutation.id,
-        path: mutation.mutation.path,
-        diff: mutation.snapshots.diff,
-      });
-    }, { fallbackErrorKey: keys.readFailed }),
-  );
+  if (readMutations === true) {
+    app.get(
+      `${routePrefix}/file-mutations/:mutationId/diff`,
+      ...middlewares,
+      jsonRoute(async (req, res) => {
+        const root = await resolveRootPath(req);
+        const mutation = await readFileMutation({
+          mutationRoot: await resolveRequestMutationRoot(req, root),
+          mutationId: req.params.mutationId,
+        });
+        res.json(createFileMutationDiffPreview(mutation));
+      }, { fallbackErrorKey: keys.readFailed }),
+    );
 
-  app.get(
-    `${routePrefix}/file-mutations/:mutationId/file`,
-    ...middlewares,
-    jsonRoute(async (req, res) => {
-      const root = await resolveRootPath(req);
-      const mutation = await readFileMutation({
-        mutationRoot: resolveFileMutationRoot(root),
-        mutationId: req.params.mutationId,
-      });
-      const after = mutation?.snapshots?.after;
-      const afterMeta = mutation?.mutation?.after;
-      res.json({
-        ok: true,
-        protocol: mutation.protocol,
-        version: mutation.version,
-        mutationId: mutation.mutation.id,
-        path: mutation.mutation.path,
-        isText: afterMeta?.isText === true,
-        size: afterMeta?.size ?? 0,
-        content: typeof after === "string" ? after : "",
-      });
-    }, { fallbackErrorKey: keys.readFailed }),
-  );
+    app.get(
+      `${routePrefix}/file-mutations/:mutationId/file`,
+      ...middlewares,
+      jsonRoute(async (req, res) => {
+        const root = await resolveRootPath(req);
+        const mutation = await readFileMutation({
+          mutationRoot: await resolveRequestMutationRoot(req, root),
+          mutationId: req.params.mutationId,
+        });
+        res.json(createFileMutationFilePreview(mutation));
+      }, { fallbackErrorKey: keys.readFailed }),
+    );
+  }
 
   if (typeof buildDirectoryArchiveFile === "function") {
     app.get(

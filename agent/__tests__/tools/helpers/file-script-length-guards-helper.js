@@ -40,14 +40,23 @@ function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
         },
       },
       userConfig: {},
+      sharedTools,
+      ...runtimeOverrides,
       systemRuntime: {
         userId,
         sessionId: "s-1",
         rootSessionId: "s-1",
         config: {},
+        ...(runtimeOverrides.systemRuntime || {}),
+        sessionDir:
+          runtimeOverrides.systemRuntime?.sessionDir ||
+          path.join(
+            basePath,
+            "runtime",
+            "session",
+            runtimeOverrides.systemRuntime?.sessionId || "s-1",
+          ),
       },
-      sharedTools,
-      ...runtimeOverrides,
     },
     { identity: { userId } },
   );

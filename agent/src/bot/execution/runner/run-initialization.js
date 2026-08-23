@@ -100,6 +100,7 @@ export async function initializeSessionRun({
     userConfig,
     currentSessionModelAlias,
     executionStartIndex,
+    sessionDir,
     runtimeEventListener,
   } = initialized;
   const requestRunConfig = {
@@ -186,6 +187,7 @@ export async function initializeSessionRun({
     sessionLoadState,
     userConfig,
     executionStartIndex,
+    sessionDir,
     runtimeEventListener,
     requestRunConfig,
     scenarioResolvedRunConfig,

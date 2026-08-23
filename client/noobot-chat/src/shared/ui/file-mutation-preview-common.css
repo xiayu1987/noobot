@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+
+.mutation-file-content {
+  overflow: auto;
+  max-height: 26rem;
+  margin: 0;
+  padding: var(--noobot-space-sm);
+  color: var(--noobot-text-main);
+  background: var(--noobot-msg-file-card-bg);
+  font-family: var(--noobot-font-mono, monospace);
+  white-space: pre-wrap;
+}
+
+.mutation-diff-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  max-height: 26rem;
+  overflow: auto;
+  color: var(--noobot-text-main);
+  background: var(--noobot-msg-file-card-bg);
+  font-family: var(--noobot-font-mono, monospace);
+}
+
+.mutation-diff-pane + .mutation-diff-pane { border-left: 1px solid var(--noobot-border-color); }
+.mutation-diff-heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0.45rem 0.75rem;
+  background: var(--noobot-control-bg);
+  color: var(--noobot-text-muted);
+  font-family: var(--noobot-font-sans, sans-serif);
+  font-size: 0.8rem;
+}
+.mutation-diff-line {
+  display: grid;
+  grid-template-columns: 4rem 1.25rem minmax(0, 1fr);
+  min-height: 1.45rem;
+  white-space: pre;
+}
+.mutation-line-number { padding-right: 0.5rem; color: var(--noobot-text-muted); text-align: right; user-select: none; }
+.mutation-line-sign { color: var(--noobot-text-muted); font-weight: 700; text-align: center; user-select: none; }
+.mutation-diff-line code { overflow: hidden; padding: 0 0.5rem; text-overflow: ellipsis; }
+.mutation-diff-line.is-empty { background: var(--noobot-control-bg); }
+.mutation-diff-line.is-added { background: color-mix(in srgb, var(--el-color-success) 16%, var(--noobot-msg-file-card-bg)); }
+.mutation-diff-line.is-added .mutation-line-sign { color: var(--el-color-success); }
+.mutation-diff-line.is-removed { background: color-mix(in srgb, var(--el-color-danger) 16%, var(--noobot-msg-file-card-bg)); }
+.mutation-diff-line.is-removed .mutation-line-sign { color: var(--el-color-danger); }

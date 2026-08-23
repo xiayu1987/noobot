@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import test from "node:test";
 import { filePath as path } from "@noobot/path-resolver";
@@ -110,6 +110,28 @@ test("concurrent workspace initialization serializes template synchronization", 
     );
   } finally {
     await fixture.restore();
+  }
+});
+
+test("workspace mutation locks stay outside the workspace content tree", async () => {
+  const fixture = await createFixture();
+  const mutationLockRoot = `${path.resolve(fixture.workspaceRoot)}.mutation-locks`;
+  try {
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    const workspaceEntries = await readdir(fixture.workspaceRoot);
+    assert.equal(
+      workspaceEntries.some((entry) => entry.endsWith(".mutation-lock")),
+      false,
+    );
+    assert.deepEqual(await readdir(mutationLockRoot), []);
+  } finally {
+    await fixture.restore();
+    await rm(mutationLockRoot, { recursive: true, force: true });
   }
 });
 

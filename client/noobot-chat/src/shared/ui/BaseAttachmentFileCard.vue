@@ -196,7 +196,7 @@ function emitPreview() {
   </div>
 </template>
 
-<style scoped src="./file-card-common.css"></style>
+<style src="./file-card-common.css"></style>
 
 <style scoped>
 .attachment-owner-badge {

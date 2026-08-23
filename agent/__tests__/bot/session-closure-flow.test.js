@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
 
 import { SessionExecutionEngine } from "../../src/bot/session/session-execution-engine.js";
 import { BotManager } from "../../src/bot/index.js";
@@ -29,6 +30,9 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
     async createSession() {},
     async getExecutionBundle() {
       return { logs: [...appendedExecutionLogs] };
+    },
+    async resolveSessionScope({ userId, sessionId }) {
+      return { sessionDir: path.join("/tmp/noobot-test", userId, "runtime", "session", sessionId) };
     },
     async appendExecutionLog(payload = {}) {
       appendedExecutionLogs.push(payload);
@@ -376,6 +380,9 @@ test("continue mode closed-loop: should build continue context and persist paren
     async createSession() {},
     async getExecutionBundle() {
       return { logs: [] };
+    },
+    async resolveSessionScope({ userId, sessionId }) {
+      return { sessionDir: path.join("/tmp/noobot-test", userId, "runtime", "session", sessionId) };
     },
     async appendExecutionLog() {},
     async appendTurn(payload = {}) {

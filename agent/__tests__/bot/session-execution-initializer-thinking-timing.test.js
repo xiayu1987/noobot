@@ -17,13 +17,14 @@ test("initializeRunSessionRuntime persists thinking start before execution begin
       createSession: async () => {},
       upsertTurnTiming: async (payload) => calls.push(payload),
       getExecutionBundle: async () => ({ logs: [] }),
+      resolveSessionScope: async () => ({ sessionDir: "/workspace/u1/runtime/session/s1" }),
       appendExecutionLog: async () => {},
     },
     configService: { loadUserConfig: async () => ({}) },
     workspaceService: { ensureUserWorkspace: async () => "/workspace/u1" },
   });
 
-  await initializer.initializeRunSessionRuntime({
+  const initialized = await initializer.initializeRunSessionRuntime({
     userId: "u1",
     sessionId: "s1",
     parentSessionId: "",
@@ -37,4 +38,5 @@ test("initializeRunSessionRuntime persists thinking start before execution begin
   assert.equal(calls[0].turnScopeId, "turn-1");
   assert.equal(calls[0].thinkingStartedAt, "2026-07-15T14:00:00.000Z");
   assert.ok(calls[0].dialogProcessId);
+  assert.equal(initialized.sessionDir, "/workspace/u1/runtime/session/s1");
 });

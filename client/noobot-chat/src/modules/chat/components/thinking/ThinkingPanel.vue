@@ -23,7 +23,6 @@ const props = defineProps({
   formatTime: { type: Function, default: null },
   formatFileSize: { type: Function, default: null },
   isImageMime: { type: Function, default: null },
-  fileMutationPreviewService: { type: Object, default: null },
 });
 const emit = defineEmits(["open-thinking-details", "panel-visibility-change"]);
 const { translate } = useLocale();
@@ -34,6 +33,9 @@ const shouldLoadThinkingDetail = () =>
   String(props.variant || "panel") === "details" ||
   thinkingOpenNames.value.includes("thinking-panel");
 const panel = useThinkingPanel(props, emit, { shouldLoadThinkingDetail });
+const detailMessageItem = computed(
+  () => panel.loadedThinkingDetail.value?.messageItem || props.messageItem,
+);
 const thinkingIdentity = computed(() =>
   [
     String(props.messageItem?.sessionId || "").trim(),
@@ -107,7 +109,7 @@ const {
   />
   <ThinkingPanelDetails
     v-else-if="hasThinking || loadedThinkingDetail"
-    :message-item="messageItem"
+    :message-item="detailMessageItem"
     :translate="translate"
     :is-running="isMessageRuntimeRunning(messageItem)"
     :grouped-tool-logs="groupedToolLogs"
@@ -115,7 +117,6 @@ const {
     :detail-count="getExecutionLogCount(messageItem)"
     :task-check-receipts="taskCheckReceipts"
     :user-id="userId"
-    :file-mutation-preview-service="fileMutationPreviewService"
     :get-tree-prefix="getThinkingTreePrefix"
     :get-detail-key="getThinkingDetailItemKey"
     :is-expanded="isThinkingDetailExpanded"

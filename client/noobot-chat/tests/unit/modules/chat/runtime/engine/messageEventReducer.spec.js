@@ -521,6 +521,64 @@ describe("reduceMessageEvent", () => {
     ]);
   });
 
+  it("projects every file mutation from a batch tool result", () => {
+    expect(selectCompletedToolArtifacts({
+      toolTimeline: [{
+        tool: "patch_file",
+        toolCallId: "call-patch",
+        resultEvent: { eventId: "result-patch" },
+        result: JSON.stringify({
+            protocol: "noobot.file-mutation-result",
+            mutations: [{ id: "mutation-1", path: "one.txt" }, { id: "mutation-2", path: "two.txt" }],
+          }),
+      }],
+    }).mutations).toEqual([
+      { id: "mutation-1", path: "one.txt" },
+      { id: "mutation-2", path: "two.txt" },
+    ]);
+  });
+
+  it("keeps write and patch mutations in their canonical tool groups", () => {
+    const artifacts = selectCompletedToolArtifacts({
+      toolTimeline: [
+        {
+          tool: "write_file",
+          resultEvent: { eventId: "result-write" },
+          result: JSON.stringify({ mutations: [{ id: "write-1", path: "new.txt" }] }),
+        },
+        {
+          tool: "patch_file",
+          resultEvent: { eventId: "result-patch" },
+          result: JSON.stringify({ mutations: [{ id: "patch-1", path: "changed.txt" }] }),
+        },
+      ],
+    });
+
+    expect(artifacts.writeMutations).toEqual([{ id: "write-1", path: "new.txt" }]);
+    expect(artifacts.patchMutations).toEqual([{ id: "patch-1", path: "changed.txt" }]);
+  });
+
+  it("projects one latest mutation fact for repeated aggregate results", () => {
+    const artifacts = selectCompletedToolArtifacts({
+      toolTimeline: [
+        {
+          tool: "patch_file",
+          resultEvent: { eventId: "result-patch-1" },
+          result: JSON.stringify({ mutations: [{ id: "aggregate-1", path: "changed.txt", aggregate: { revision: 1 } }] }),
+        },
+        {
+          tool: "patch_file",
+          resultEvent: { eventId: "result-patch-2" },
+          result: JSON.stringify({ mutations: [{ id: "aggregate-1", path: "changed.txt", aggregate: { revision: 2 } }] }),
+        },
+      ],
+    });
+
+    expect(artifacts.patchMutations).toEqual([
+      { id: "aggregate-1", path: "changed.txt", aggregate: { revision: 2 } },
+    ]);
+  });
+
   it("keeps authoritative final content immutable against later deltas", () => {
     const target = message();
     expect(

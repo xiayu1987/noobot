@@ -27,8 +27,18 @@ const workspaceMutationCoordinator = new FileMutationCoordinator({
   operationName: "workspaceMutation.refreshLock",
 });
 
-function withWorkspaceMutation(base, operation) {
-  return workspaceMutationCoordinator.run(`${base}.mutation-lock`, operation);
+function resolveWorkspaceMutationLockDir(workspaceRoot, userId) {
+  const normalizedRoot = path.resolve(String(workspaceRoot || "").trim());
+  const normalizedUserId = String(userId || "").trim();
+  if (!normalizedRoot || !normalizedUserId) {
+    throw new TypeError("workspace mutation lock requires workspaceRoot and userId");
+  }
+  const lockRoot = `${normalizedRoot}.mutation-locks`;
+  return path.join(lockRoot, encodeURIComponent(normalizedUserId));
+}
+
+function withWorkspaceMutation(lockDir, operation) {
+  return workspaceMutationCoordinator.run(lockDir, operation);
 }
 
 function resolveTemplateBase(workspaceTemplatePath = "") {
@@ -61,7 +71,11 @@ async function resolveWorkspaceInitPaths({ workspaceRoot, workspaceTemplatePath 
     });
   }
   await mkdir(path.resolve(normalizedWorkspaceRoot), { recursive: true });
-  return { base, templateBase };
+  return {
+    base,
+    templateBase,
+    mutationLockDir: resolveWorkspaceMutationLockDir(normalizedWorkspaceRoot, normalizedUserId),
+  };
 }
 
 function normalizeResetSections(inputSections) {
@@ -102,13 +116,13 @@ export async function ensureUserWorkspaceInitialized({
   workspaceTemplatePath = "",
   userId,
 }) {
-  const { base, templateBase } = await resolveWorkspaceInitPaths({
+  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
     workspaceTemplatePath,
     userId,
   });
 
-  return withWorkspaceMutation(base, async () => {
+  return withWorkspaceMutation(mutationLockDir, async () => {
     let baseExists = true;
     try {
       await access(base);
@@ -140,12 +154,12 @@ export async function resetUserWorkspaceInitialized({
   workspaceTemplatePath = "",
   userId,
 }) {
-  const { base, templateBase } = await resolveWorkspaceInitPaths({
+  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
     workspaceTemplatePath,
     userId,
   });
-  return withWorkspaceMutation(base, async () => {
+  return withWorkspaceMutation(mutationLockDir, async () => {
     await rm(base, { recursive: true, force: true });
     await cp(templateBase, base, { recursive: true, force: true });
     return base;
@@ -158,12 +172,12 @@ export async function resetUserWorkspaceKeepRuntimeInitialized({
   userId,
   resetSections = [],
 }) {
-  const { base, templateBase } = await resolveWorkspaceInitPaths({
+  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
     workspaceTemplatePath,
     userId,
   });
-  return withWorkspaceMutation(base, async () => {
+  return withWorkspaceMutation(mutationLockDir, async () => {
     const sections = normalizeResetSections(resetSections);
     await mkdir(base, { recursive: true });
     const relativePaths = Array.from(
@@ -218,12 +232,12 @@ export async function syncUserWorkspaceFromTemplate({
   workspaceTemplatePath = "",
   userId,
 }) {
-  const { base, templateBase } = await resolveWorkspaceInitPaths({
+  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
     workspaceTemplatePath,
     userId,
   });
-  return withWorkspaceMutation(base, async () => {
+  return withWorkspaceMutation(mutationLockDir, async () => {
     await mkdir(base, { recursive: true });
     await migrateLegacyMemoryFiles(base);
     await syncDirectoryIncremental(templateBase, base);
@@ -237,7 +251,7 @@ export async function ensureUserWorkspaceMissingFilesFromTemplate({
   userId,
   relativePaths = [],
 }) {
-  const { base, templateBase } = await resolveWorkspaceInitPaths({
+  const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
     workspaceTemplatePath,
     userId,
@@ -251,7 +265,7 @@ export async function ensureUserWorkspaceMissingFilesFromTemplate({
     ),
   );
 
-  return withWorkspaceMutation(base, async () => {
+  return withWorkspaceMutation(mutationLockDir, async () => {
     if (!normalizedRelativePaths.length) {
       await mkdir(base, { recursive: true });
       await cp(templateBase, base, {

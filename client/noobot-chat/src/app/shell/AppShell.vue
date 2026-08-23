@@ -509,7 +509,6 @@ const drawerPanels = computed(() =>
     thinkingDetailsAllMessages: thinkingDetailsAllMessages.value,
     thinkingDetailsRuntime: thinkingDetailsRuntime.value,
     thinkingDetailService,
-    fileMutationPreviewService,
     getThinkingDetailsTitle,
     handleWorkspaceReset,
   }),

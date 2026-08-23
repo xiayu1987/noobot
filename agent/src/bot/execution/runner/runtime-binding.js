@@ -69,6 +69,7 @@ export async function bindAgentDispatchRuntime({
   eventListener,
   persistenceContext,
   persistenceScope,
+  sessionDir,
   normalizedMessage,
   requestedAttachments,
   canonicalAttachments,
@@ -93,6 +94,7 @@ export async function bindAgentDispatchRuntime({
   systemRuntime.config.turnScopeId = turnScopeId;
   systemRuntime.persistenceContext = persistenceContext || null;
   systemRuntime.persistenceScope = persistenceScope || null;
+  systemRuntime.sessionDir = String(sessionDir || "").trim();
 
   const modelHost = initializeAgentModelHost({
     runtime: dispatchRuntime,

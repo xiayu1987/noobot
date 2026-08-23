@@ -6,6 +6,7 @@
 import { filePath as path } from "@noobot/path-resolver";
 import { createHash } from "node:crypto";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
+import { compactThinkingTimeline } from "../session-summary-builders/message-summary-projection.js";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import { SESSION_ARTIFACT_FILE_NAMES } from "../session-artifact-files.js";
 import { readJsonWithStorage, writeJsonWithStorage } from "./artifact-json-io.js";
@@ -112,7 +113,7 @@ export async function hydrateSessionSummaryDetails({ storageService, sessionDir,
       }
       return {
         ...message,
-        toolTimeline: detail.toolTimeline,
+        toolTimeline: compactThinkingTimeline(detail.toolTimeline),
         activityTimeline: detail.activityTimeline,
       };
     },
