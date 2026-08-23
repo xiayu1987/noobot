@@ -34,7 +34,8 @@ async function readExisting(filePath) {
     const isText = !buffer.includes(0);
     return { exists: true, buffer, content: isText ? buffer.toString("utf8") : null, isText };
   } catch (error) {
-    if (error?.code === "ENOENT") return { exists: false, buffer: Buffer.alloc(0), content: "", isText: true };
+    if (error?.code === "ENOENT")
+      return { exists: false, buffer: Buffer.alloc(0), content: "", isText: true };
     throw error;
   }
 }
@@ -53,7 +54,7 @@ function aggregateMutationId(scopeId, logicalPath) {
     digestValue.slice(0, 8),
     digestValue.slice(8, 12),
     `4${digestValue.slice(13, 16)}`,
-    `${(Number.parseInt(digestValue.slice(16, 18), 16) & 0x3f | 0x80).toString(16).padStart(2, "0")}${digestValue.slice(18, 20)}`,
+    `${((Number.parseInt(digestValue.slice(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, "0")}${digestValue.slice(18, 20)}`,
     digestValue.slice(20, 32),
   ].join("-");
 }
@@ -123,14 +124,15 @@ async function applyFileMutationInternal({
   const nextContent = content === null ? null : String(content);
   const afterBuffer = nextContent === null ? Buffer.alloc(0) : Buffer.from(nextContent, "utf8");
   const afterIsText = nextContent !== null && !afterBuffer.includes(0);
-  const incrementalDiff = before.isText && (nextContent === null || afterIsText)
-    ? createFileDiff(before.content || "", nextContent === null ? "" : nextContent)
-    : null;
+  const incrementalDiff =
+    before.isText && (nextContent === null || afterIsText)
+      ? createFileDiff(before.content || "", nextContent === null ? "" : nextContent)
+      : null;
   const isAggregate = normalizedOperation === "update";
-  const id = isAggregate ? aggregateMutationId(normalizedScopeId, normalizedLogicalPath) : randomUUID();
-  const existingRecord = isAggregate
-    ? await readOptionalRecord(root, id)
-    : null;
+  const id = isAggregate
+    ? aggregateMutationId(normalizedScopeId, normalizedLogicalPath)
+    : randomUUID();
+  const existingRecord = isAggregate ? await readOptionalRecord(root, id) : null;
   if (rollbackState && typeof rollbackState === "object") {
     rollbackState.before = before;
     rollbackState.record = existingRecord;
@@ -162,9 +164,7 @@ async function applyFileMutationInternal({
   const incrementalDiffEntry = incrementalDiff
     ? { revision, ...incrementalDiff }
     : { revision, diff: null };
-  const diffs = isAggregate
-    ? [...previousDiffs, incrementalDiffEntry]
-    : undefined;
+  const diffs = isAggregate ? [...previousDiffs, incrementalDiffEntry] : undefined;
   const beforeMeta = existingMutation?.before || {
     exists: before.exists,
     isText: before.isText,
@@ -194,7 +194,9 @@ async function applyFileMutationInternal({
     fileName: path.basename(normalizedLogicalPath || filePath),
     before: beforeMeta,
     after: afterMeta,
-    diff: aggregateDiff ? { ...aggregateDiff, snapshotRef: { mutationId: id, section: "diff" } } : null,
+    diff: aggregateDiff
+      ? { ...aggregateDiff, snapshotRef: { mutationId: id, section: "diff" } }
+      : null,
     aggregate,
     sessionScope,
   });
@@ -218,7 +220,9 @@ async function applyFileMutationInternal({
     await writeFile(temporaryRecordPath, JSON.stringify(record), "utf8");
     await rename(temporaryRecordPath, recordPath);
   } catch (error) {
-    await rm(temporaryRecordPath, { force: true }).catch(() => {});
+    await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
+      void cleanupError;
+    });
     if (targetCommitted) {
       try {
         await restoreTarget(filePath, before, { writeText, removeFile });
@@ -275,7 +279,9 @@ export async function rollbackFileMutation({
         await writeFile(temporaryRecordPath, JSON.stringify(restoreState.record), "utf8");
         await rename(temporaryRecordPath, recordPath);
       } finally {
-        await rm(temporaryRecordPath, { force: true }).catch(() => {});
+        await rm(temporaryRecordPath, { force: true }).catch((cleanupError) => {
+          void cleanupError;
+        });
       }
     } else {
       await rm(recordPath, { force: true });
@@ -285,8 +291,9 @@ export async function rollbackFileMutation({
   const before = record?.snapshots?.before;
   const beforeMeta = record?.mutations?.[0]?.before;
   if (beforeMeta?.exists === true && typeof before === "string") await writeText(filePath, before);
-  else await removeFile(filePath).catch((error) => {
-    if (error?.code !== "ENOENT") throw error;
-  });
+  else
+    await removeFile(filePath).catch((error) => {
+      if (error?.code !== "ENOENT") throw error;
+    });
   await rm(path.join(root, `${String(mutationId).trim()}.json`), { force: true });
 }
