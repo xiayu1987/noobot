@@ -1,6 +1,6 @@
 {
   "name": "@noobot/session-protocol",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "private": true,
   "type": "module",
   "description": "Canonical Noobot session aggregate, command, event and policy protocol",

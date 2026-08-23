@@ -1,6 +1,6 @@
 {
   "name": "@noobot/session-repair",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "private": true,
   "type": "module",
   "description": "Explicit offline migrations into the canonical Noobot Session protocol",

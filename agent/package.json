@@ -1,6 +1,6 @@
 {
   "name": "noobot-agent",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "private": true,
   "type": "module",
   "main": "src/index.js",
@@ -77,8 +77,8 @@
     "zod": "^4.4.3",
     "@noobot/plugin-runtime": "file:../plugin-runtime",
     "@noobot/plugin-protocol": "file:../plugin-protocol",
-    "@noobot/path-resolver": "file:../path-resolver"
-    ,"@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
+    "@noobot/path-resolver": "file:../path-resolver",
+    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
   },
   "optionalDependencies": {
     "@mozilla/readability": "^0.6.0",
