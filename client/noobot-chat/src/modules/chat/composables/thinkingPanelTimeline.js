@@ -27,8 +27,8 @@ import {
 } from "../model/thinkingDetailCache.js";
 import {
   selectToolTimelineCount,
-  selectToolTimelineLogWindow,
   selectToolTimelineLogs,
+  mergeToolTimelines,
   selectLatestTaskCheckReceipt,
   selectTaskCheckReceipts,
 } from "../runtime/engine/toolTimeline.js";
@@ -61,10 +61,22 @@ export function useThinkingTimeline(
       : [];
     const lastTool = toolTimeline.at(-1) || {};
     const lastActivity = activityTimeline.at(-1) || {};
+    const toolFactVersion = toolTimeline
+      .map((entry = {}) => ({
+        key: entry.key || entry.toolCallId || entry.tool_call_id || "",
+        tool: entry.tool || "",
+        args: entry.args,
+        result: entry.result,
+        call: entry.call?.eventId || "",
+        resultEvent: entry.resultEvent?.eventId || "",
+      }))
+      .map((entry) => JSON.stringify(entry))
+      .join(";");
     return [
       Number(message?.messageEventState?.lastSequence || 0),
       toolTimeline.length,
       String(lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || lastTool?.eventId || ""),
+      toolFactVersion,
       activityTimeline.length,
       String(lastActivity?.eventId || lastActivity?.id || ""),
     ].join(":");
@@ -115,9 +127,10 @@ export function useThinkingTimeline(
     const projection = {
       ...messageItem,
       ...(canonicalDialogProcessId ? { dialogProcessId: canonicalDialogProcessId } : {}),
-      toolTimeline: merge(
-        "toolTimeline",
-        (item) => item?.key || item?.toolCallId || item?.tool_call_id,
+      toolTimeline: mergeToolTimelines(
+        ...roundMessages.map((candidate) =>
+          Array.isArray(candidate?.toolTimeline) ? candidate.toolTimeline : [],
+        ),
       ),
       activityTimeline: merge("activityTimeline", (item) => item?.eventId || item?.id),
     };
@@ -228,14 +241,23 @@ export function useThinkingTimeline(
   }
 
   function projectExecutionTimeline(activityLogs = [], toolLogs = []) {
-    const allLogs = mergeOrderedTimelineLogs(activityLogs, toolLogs);
+    // Canonical tool lifecycle facts are projected from toolTimeline. The
+    // activity stream may contain an earlier presentation of the same event;
+    // retaining it creates duplicate, non-convergent summaries after replay.
+    const nonToolActivityLogs = activityLogs.filter(
+      (logItem = {}) =>
+        !["tool_call", "tool_result", "tool_call_start", "tool_call_end"].includes(
+          String(logItem.event || logItem.type || logItem.eventType || "").trim(),
+        ),
+    );
+    const allLogs = mergeOrderedTimelineLogs(nonToolActivityLogs, toolLogs);
     const visibleLogs = allLogs
       .filter((logItem) => !isGuidanceAnalysisResponseLog(logItem))
       .filter((logItem) => !isMainModelContentLog(logItem))
       .map((logItem) => sanitizeExecutionLogForDisplay(logItem))
       .filter(Boolean);
     return {
-      activityLogs,
+      activityLogs: nonToolActivityLogs,
       toolLogs,
       allLogs,
       visibleLogs,
@@ -259,9 +281,9 @@ export function useThinkingTimeline(
   const currentToolTimelineLogs = computed(() =>
     String(props.variant || "panel") === "details"
       ? selectToolTimelineLogs(timelineMessage(props.messageItem), { includeDetail: false })
-      : selectToolTimelineLogWindow(timelineMessage(props.messageItem), {
-          limit: EXECUTION_LOG_DISPLAY_LIMIT,
-        }),
+      : selectToolTimelineLogs(timelineMessage(props.messageItem)).slice(
+          -EXECUTION_LOG_DISPLAY_LIMIT,
+        ),
   );
   const currentExecutionTimelineProjection = computed(() =>
     projectExecutionTimeline(currentActivityTimelineLogs.value, currentToolTimelineLogs.value),

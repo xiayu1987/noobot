@@ -339,6 +339,43 @@ export async function readAttachmentIndex(userId, sessionId, attachmentSource) {
   ));
 }
 
+async function findFileMutationRecords(directory) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const records = [];
+  for (const entry of entries) {
+    const child = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "file-mutations") {
+        const names = (await fs.readdir(child, { withFileTypes: true }))
+          .filter((item) => item.isFile() && item.name.endsWith(".json"))
+          .map((item) => item.name)
+          .sort();
+        records.push(...await Promise.all(names.map((name) => readJson(path.join(child, name)))));
+      } else {
+        records.push(...await findFileMutationRecords(child));
+      }
+    }
+  }
+  return records;
+}
+
+export async function readFileMutationRecords(userId, sessionId, { rootSessionId = "" } = {}) {
+  const scopeId = String(rootSessionId || sessionId || "").trim();
+  if (!scopeId) return [];
+  const roots = [
+    sessionRoot(userId, scopeId),
+    path.join(workspaceRoot(), userId, "runtime/workflow/session", scopeId),
+  ];
+  const records = (await Promise.all(roots.map((root) => findFileMutationRecords(root)))).flat();
+  return records;
+}
+
 export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, { timeoutMs = 15000 } = {}) {
   const deadline = Date.now() + timeoutMs;
   let events = [];

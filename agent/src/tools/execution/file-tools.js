@@ -19,6 +19,10 @@ import {
   projectToolPathRef,
   resolveAuthorizedUserWorkspaceFilePath,
 } from "../core/check-tool-input.js";
+import {
+  FILE_MUTATION_PROTOCOL,
+  FILE_MUTATION_VERSION,
+} from "@noobot/file-mutation-protocol";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
@@ -826,6 +830,8 @@ export function createFileTool({ agentContext }) {
           );
       return toToolJsonResult(TOOL_NAME.PATCH_FILE, {
         ok: true,
+        protocol: FILE_MUTATION_PROTOCOL,
+        version: FILE_MUTATION_VERSION,
         format: normalizedFormat,
         strip: normalizedFormat === "unified_diff" ? resolvedStrip : undefined,
         dryRun: dryRun === true,

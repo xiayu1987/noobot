@@ -118,10 +118,7 @@ function projectToolTimelineLog({ entry = {}, facet = {}, kind = "", includeDeta
   if (!facet || typeof facet !== "object") return null;
   const isCall = kind === "call";
   const canonicalDetail = isCall ? entry?.args : entry?.result;
-  const persistedSummary = text(facet.summary);
-  const summary =
-    persistedSummary ||
-    projectToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
+  const summary = projectToolOperationSummary(entry.tool, canonicalDetail, { result: !isCall });
   const failed =
     !isCall &&
     isToolResultFailure({
@@ -189,7 +186,10 @@ function buildToolLogProjectionState(timeline = []) {
 }
 
 function toolLogProjectionState(timeline = []) {
-  return toolLogProjectionStates.get(timeline) || buildToolLogProjectionState(timeline);
+  // Timelines are updated in place as lifecycle facets arrive. A permanent
+  // cache keyed only by the array identity would retain an obsolete
+  // projection after a later facet supplies canonical args or results.
+  return buildToolLogProjectionState(timeline);
 }
 
 function updateToolLogProjection(timeline = [], envelope = {}) {

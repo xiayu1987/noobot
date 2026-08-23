@@ -23,13 +23,14 @@ import {
   readSessionExecutionEventTree,
   waitForModelInvocationTraces,
 } from "../helpers/persistence-audit.js";
+import { registerSuiteSession } from "../suite-session-cleanup.js";
 
 const E2E_MODEL_ALIAS = "gpt_5_4";
 
 export async function installE2eModelPreferences(pageOrContext) {
   await pageOrContext.addInitScript((modelAlias) => {
-    const setInitialValue = (key, value) => {
-      if (localStorage.getItem(key) === null) localStorage.setItem(key, value);
+    const setInitialValue = (key, value, { force = false } = {}) => {
+      if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
     };
     const scenarioModels = { full: modelAlias, programming: modelAlias, text: modelAlias };
     const scenarioSelections = Object.fromEntries(
@@ -54,7 +55,7 @@ export async function installE2eModelPreferences(pageOrContext) {
         },
       ]),
     );
-    setInitialValue("noobot_selected_model", modelAlias);
+    setInitialValue("noobot_selected_model", modelAlias, { force: true });
     setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels));
     setInitialValue(
       "noobot_selected_model_selection_by_scenario_v2",
@@ -180,21 +181,8 @@ async function auditSessionSummaryPersistence({ userId, sessionId, expectation, 
   });
 }
 
-async function deleteTestSession({ request, apiKey, userId, sessionId }) {
-  const response = await request.delete(
-    `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
-    { headers: { "x-api-key": apiKey } },
-  );
-  const result = await response.json();
-  if (!response.ok() || result?.ok !== true) {
-    throw new Error(
-      `PBE Session cleanup failed (${response.status()}): ${String(result?.error || "unknown error")}`,
-    );
-  }
-}
-
 export const test = artifactTest.extend({
-  noobot: async ({ page, request }, use, testInfo) => {
+  noobot: async ({ page }, use, testInfo) => {
     const credentials = readE2eCredentials();
     const policy = modelObservationPolicyForTitle(testInfo.title);
     await installE2eModelPreferences(page);
@@ -234,8 +222,7 @@ export const test = artifactTest.extend({
         failures.push(error);
       }
       try {
-        await deleteTestSession({
-          request,
+        await registerSuiteSession({
           apiKey: connectConfig.apiKey,
           userId: credentials.userId,
           sessionId,
