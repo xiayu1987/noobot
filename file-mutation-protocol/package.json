@@ -1,9 +1,14 @@
 {
   "name": "@noobot/file-mutation-protocol",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "private": true,
   "type": "module",
   "description": "Canonical file mutation result and diff protocol",
-  "exports": { ".": "./src/index.js", "./package.json": "./package.json" },
-  "scripts": { "test": "node --test __tests__/*.test.js" }
+  "exports": {
+    ".": "./src/index.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  }
 }

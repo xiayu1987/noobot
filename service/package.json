@@ -1,6 +1,6 @@
 {
   "name": "noobot-service",
-  "version": "4.2.2",
+  "version": "4.2.3",
   "type": "module",
   "imports": {
     "#agent/config": "./deps/agent-config.js",
@@ -75,8 +75,8 @@
     "@noobot/plugin-runtime": "file:../plugin-runtime",
     "@noobot/plugin-protocol": "file:../plugin-protocol",
     "@noobot/event-protocol": "file:../event-protocol",
-    "@noobot/platform-compatibility": "file:../platform-compatibility"
-    ,"@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
+    "@noobot/platform-compatibility": "file:../platform-compatibility",
+    "@noobot/file-mutation-protocol": "file:../file-mutation-protocol"
   },
   "overrides": {
     "systeminformation": "^5.31.7"
