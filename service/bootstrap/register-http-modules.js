@@ -55,6 +55,7 @@ export async function registerHttpModules(
     resetUserWorkspace: (...args) => bot?.resetUserWorkspace?.(...args),
     syncUserWorkspace: (...args) => bot?.syncUserWorkspace?.(...args),
     getWorkspacePath: (...args) => bot?.getWorkspacePath?.(...args),
+    resolveSessionScope: (...args) => bot?.session?.resolveSessionScope?.(...args),
   };
 
   const loadUserConfigForUser = async (userId = "") => {

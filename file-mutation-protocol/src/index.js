@@ -5,7 +5,7 @@
  */
 
 export const FILE_MUTATION_PROTOCOL = "noobot.file-mutation-result";
-export const FILE_MUTATION_VERSION = 1;
+export const FILE_MUTATION_VERSION = 2;
 
 function linesOf(value = "") {
   const lines = String(value).split("\n");
@@ -42,26 +42,96 @@ export function createFileDiff(before = "", after = "") {
   return { format: "git-lines-v1", additions, deletions, changedLines: additions + deletions, lines: rows };
 }
 
-export function createFileMutationResult({ id, operation, path, fileName, before, after, diff, updatedAt }) {
+export function createFileMutationResult({
+  id,
+  operation,
+  path,
+  fileName,
+  before,
+  after,
+  diff,
+  aggregate = null,
+  sessionScope = null,
+  updatedAt,
+}) {
   const { lines: _lines, ...diffSummary } = diff || {};
+  const mutation = {
+    id,
+    operation,
+    path,
+    fileName,
+    before,
+    after,
+    diff: diff ? diffSummary : null,
+    aggregate: aggregate || null,
+    ...(sessionScope && typeof sessionScope === "object" ? { sessionScope } : {}),
+    updatedAt: updatedAt || new Date().toISOString(),
+  };
   return {
     protocol: FILE_MUTATION_PROTOCOL,
     version: FILE_MUTATION_VERSION,
     ok: true,
-    mutation: {
-      id,
-      operation,
-      path,
-      fileName,
-      before,
-      after,
-      diff: diff ? diffSummary : null,
-      updatedAt: updatedAt || new Date().toISOString(),
-    },
+    mutations: [mutation],
   };
 }
 
 export function assertFileMutationResult(value) {
-  if (!value || value.protocol !== FILE_MUTATION_PROTOCOL || value.version !== FILE_MUTATION_VERSION || !value.mutation?.id) throw new TypeError("invalid file mutation result");
+  const mutations = value?.mutations;
+  if (
+    !value ||
+    value.protocol !== FILE_MUTATION_PROTOCOL ||
+    value.version !== FILE_MUTATION_VERSION ||
+    !Array.isArray(mutations) ||
+    !mutations.length ||
+    mutations.some((mutation) => {
+      if (!mutation?.id) return true;
+      const aggregate = mutation.aggregate;
+      if (aggregate === null || aggregate === undefined) return false;
+      return (
+        !aggregate ||
+        !String(aggregate.scopeId || "").trim() ||
+        !String(aggregate.path || "").trim() ||
+        !Number.isInteger(aggregate.revision) ||
+        aggregate.revision < 1 ||
+        !Number.isInteger(aggregate.diffCount) ||
+        aggregate.diffCount < 1
+      );
+    })
+  ) {
+    throw new TypeError("invalid file mutation result");
+  }
   return value;
+}
+
+function canonicalMutation(value) {
+  assertFileMutationResult(value);
+  return value.mutations[0];
+}
+
+export function createFileMutationDiffPreview(value) {
+  const mutation = canonicalMutation(value);
+  return {
+    ok: true,
+    protocol: value.protocol,
+    version: value.version,
+    mutationId: mutation.id,
+    path: mutation.path,
+    diff: value.snapshots?.diff || null,
+  };
+}
+
+export function createFileMutationFilePreview(value) {
+  const mutation = canonicalMutation(value);
+  const after = value.snapshots?.after;
+  const afterMeta = mutation.after || {};
+  return {
+    ok: true,
+    protocol: value.protocol,
+    version: value.version,
+    mutationId: mutation.id,
+    path: mutation.path,
+    isText: afterMeta.isText === true,
+    size: afterMeta.size ?? 0,
+    content: typeof after === "string" ? after : "",
+  };
 }

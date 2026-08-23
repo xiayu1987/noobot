@@ -7,6 +7,7 @@ import { isSuperAdminRole, resolveConfiguredSuperUserId } from "#agent/utils";
 import path from "node:path";
 import { access, mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { registerFileCrudRoutes } from "./file-crud-routes.js";
+import { resolveFileMutationRoot } from "noobot-agent/file-mutation-service";
 import { buildWorkspaceTree } from "../services/workspace-tree-service.js";
 import { buildDirectoryArchiveFile } from "../services/zip-service.js";
 import { createJsonRouteWrapper } from "./route-wrapper.js";
@@ -32,6 +33,7 @@ async function listWorkspaceUserDirs(root = "", globalConfig = {}) {
   for (const entry of entries) {
     const userId = String(entry?.name || "").trim();
     if (!entry.isDirectory() || !userId || userId.startsWith(".")) continue;
+    if (userId.endsWith(".mutation-lock") || userId.endsWith(".mutation-locks")) continue;
     if (RESERVED_WORKSPACE_ROOT_DIRS.has(userId)) continue;
     try {
       await access(path.join(root, userId, "config.json"));
@@ -219,6 +221,35 @@ export function registerWorkspaceRoutes(
     buildWorkspaceTree,
     buildDirectoryArchiveFile,
     translateText,
+    trackMutations: false,
+    readMutations: true,
+    resolveMutationRoot: async (req) => {
+      const userId = String(req?.params?.userId || "").trim();
+      const sessionId = String(req?.query?.sessionId || req?.body?.sessionId || "").trim();
+      const parentSessionId = String(
+        req?.query?.parentSessionId ||
+          req?.body?.parentSessionId ||
+          "",
+      ).trim();
+      const scopeId = String(req?.query?.scopeId || req?.body?.scopeId || "").trim();
+      const relativeDir = String(req?.query?.relativeDir || req?.body?.relativeDir || "").trim();
+      const allowedRoot = String(req?.query?.allowedRoot || req?.body?.allowedRoot || "").trim();
+      if (!userId || !sessionId) throw new Error("session id is required for file mutations");
+      const scopeValues = [scopeId, relativeDir, allowedRoot];
+      const hasPersistenceScope = scopeValues.some(Boolean);
+      if (hasPersistenceScope && !scopeValues.every(Boolean)) {
+        throw new Error("complete session persistence scope is required for file mutations");
+      }
+      const scope = await workspaceService.resolveSessionScope({
+        userId,
+        sessionId,
+        parentSessionId,
+        ...(hasPersistenceScope
+          ? { persistenceScope: { scopeId, parentSessionId, relativeDir, allowedRoot } }
+          : {}),
+      });
+      return resolveFileMutationRoot(scope?.sessionDir);
+    },
     i18nKeys: {
       treeFailed: "",
       readFailed: "",
@@ -317,6 +348,7 @@ export function registerWorkspaceRoutes(
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/workspace-all",
     resolveRootPath: workspaceRootPath,
+    trackMutations: false,
     middleware: [requireApiKey, requireSuperAdmin],
     buildWorkspaceTree,
     buildDirectoryArchiveFile,

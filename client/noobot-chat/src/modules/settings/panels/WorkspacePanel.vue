@@ -13,7 +13,6 @@ import {
   getWorkspaceAllFileApi,
   getWorkspaceAllTreeApi,
   getWorkspaceFileApi,
-  getWorkspaceFileMutationDiffApi,
   postResetAllWorkspaceApi,
   postSyncAllWorkspaceApi,
   postResetWorkspaceApi,
@@ -55,11 +54,6 @@ const activePath = ref("");
 const activePathSource = ref("user");
 const activePathType = ref("");
 const content = ref("");
-const mutation = ref(null);
-const mutationDiff = ref(null);
-const mutationPreviewTab = ref("file");
-const loadingMutationDiff = ref(false);
-const mutationDiffError = ref("");
 const isTextFile = ref(true);
 const editorInputRef = ref(null);
 const systemParamCatalog = ref([]);
@@ -232,9 +226,6 @@ async function openFile(node, source = "user") {
     activePathType.value = "file";
     isTextFile.value = data.isText !== false;
     content.value = data.content || "";
-    mutation.value = null;
-    mutationDiff.value = null;
-    mutationPreviewTab.value = "file";
   } catch (error) {
     ElMessage.error(error.message || translate("settings.readFileFailed"));
   } finally {
@@ -266,36 +257,12 @@ async function saveFile() {
           );
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || translate("settings.saveFileFailed"));
-    mutation.value = data.mutation || null;
-    mutationDiff.value = null;
-    mutationPreviewTab.value = "file";
     ElMessage.success(translate("settings.saveSuccess"));
     await refreshAll();
   } catch (error) {
     ElMessage.error(error.message || translate("settings.saveFileFailed"));
   } finally {
     saving.value = false;
-  }
-}
-
-async function selectMutationPreviewTab(tab = "file") {
-  mutationPreviewTab.value = tab;
-  if (tab !== "diff" || !mutation.value?.id || mutationDiff.value || loadingMutationDiff.value) return;
-  loadingMutationDiff.value = true;
-  mutationDiffError.value = "";
-  try {
-    const response = await getWorkspaceFileMutationDiffApi({
-      userId: props.userId,
-      mutationId: mutation.value.id,
-      allWorkspace: activePathSource.value === "all",
-    }, { fetcher: authFetch });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || translate("settings.readFileFailed"));
-    mutationDiff.value = data.diff || null;
-  } catch (error) {
-    mutationDiffError.value = error.message || translate("settings.readFileFailed");
-  } finally {
-    loadingMutationDiff.value = false;
   }
 }
 
@@ -571,13 +538,7 @@ watch(
       :loading-file="loadingFile"
       :editor-actions="editorActions"
       :translate="translate"
-      :mutation="mutation"
-      :mutation-diff="mutationDiff"
-      :mutation-preview-tab="mutationPreviewTab"
-      :loading-mutation-diff="loadingMutationDiff"
-      :mutation-diff-error="mutationDiffError"
       @editor-action="handleEditorAction"
-      @mutation-preview-tab="selectMutationPreviewTab"
     />
 
     <WorkspaceResetDialog

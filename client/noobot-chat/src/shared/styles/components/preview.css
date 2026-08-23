@@ -4,12 +4,12 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: min(1280px, calc(100vw - 48px));
-  max-width: 100%;
-  height: min(900px, calc(100dvh - 48px));
-  max-height: 100%;
+  width: 92vw;
+  max-width: calc(100vw - 48px);
+  height: 90dvh;
+  max-height: calc(100dvh - 48px);
   margin: 0;
-  background: var(--noobot-panel-bg);
+  background: var(--noobot-preview-bg);
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-sm);
 }
@@ -70,6 +70,20 @@
   height: 100%;
   min-height: 0;
   max-height: none;
+}
+
+.generated-file-preview-dialog .mutation-file-content,
+.generated-file-preview-dialog .mutation-diff-split {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.generated-file-preview-dialog .el-dialog__body {
+  display: flex;
+  flex-direction: column;
 }
 
 .attachment-preview-dialog .el-dialog__title,

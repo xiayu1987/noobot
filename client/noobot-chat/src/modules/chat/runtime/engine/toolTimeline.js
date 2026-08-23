@@ -261,15 +261,29 @@ export function selectCompletedToolArtifacts(message = {}) {
   const logs = completedEntries
     .map((item) => projectToolTimelineLog({ entry: item, facet: item.resultEvent, kind: "result" }))
     .filter(Boolean);
-  const mutations = completedEntries.flatMap((item) => {
-    const result = parseToolResultObject(item?.resultEvent?.result);
-    const mutation = result?.mutation;
-    return mutation && typeof mutation === "object" && mutation.id ? [mutation] : [];
+  const mutationMaps = {
+    all: new Map(),
+    write: new Map(),
+    patch: new Map(),
+  };
+  completedEntries.forEach((item) => {
+    const result = parseToolResultObject(item?.result);
+    const mutations = (Array.isArray(result?.mutations) ? result.mutations : []).filter(
+      (mutation) => mutation && typeof mutation === "object" && mutation.id,
+    );
+    const tool = text(item?.tool);
+    mutations.forEach((mutation) => {
+      mutationMaps.all.set(mutation.id, mutation);
+      if (tool === "write_file") mutationMaps.write.set(mutation.id, mutation);
+      if (tool === "patch_file") mutationMaps.patch.set(mutation.id, mutation);
+    });
   });
   return {
     resultCount: completedEntries.length,
     logs,
-    mutations,
+    mutations: [...mutationMaps.all.values()],
+    writeMutations: [...mutationMaps.write.values()],
+    patchMutations: [...mutationMaps.patch.values()],
     attachments: completedEntries.flatMap((item) => {
       const eventAttachments = item?.resultEvent?.attachments;
       return canonicalAttachments(eventAttachments);

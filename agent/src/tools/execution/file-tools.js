@@ -48,6 +48,7 @@ import {
   classifyResourceRisk,
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
+import { getSessionIdsFromAgentContext } from "../../context/agent-context-accessor.js";
 import {
   applyFileMutation,
   resolveFileMutationRoot,
@@ -94,6 +95,10 @@ function mutationLogicalPath(pathRef) {
     throw new TypeError("file mutation requires a projected file path");
   }
   return projected.path;
+}
+
+function resolveRuntimeFileMutationRoot(runtime = {}) {
+  return resolveFileMutationRoot(runtime?.systemRuntime?.sessionDir);
 }
 
 function buildPatchFailurePayload({ error, original = "", pathRef = null } = {}) {
@@ -190,6 +195,7 @@ async function preparePatchExecution({
 
 export function createFileTool({ agentContext }) {
   const runtime = agentContext?.bindings?.runtime || {};
+  const mutationScopeId = getSessionIdsFromAgentContext(agentContext).turnScopeId;
   const abortSignal = runtime?.abortSignal || null;
   const workspaceIo = createWorkspaceIoExecutor({
     executionPolicy: resolveToolExecutionPolicy({
@@ -391,7 +397,8 @@ export function createFileTool({ agentContext }) {
         logicalPath: mutationLogicalPath(pathRef),
         content,
         operation: "replace",
-        mutationRoot: resolveFileMutationRoot(runtime.basePath),
+        mutationRoot: resolveRuntimeFileMutationRoot(runtime),
+        sessionScope: runtime?.systemRuntime?.persistenceScope || null,
         writeText: (target, value) => workspaceIo.writeText(target, value),
       });
       const resource = await registerResource({
@@ -748,44 +755,55 @@ export function createFileTool({ agentContext }) {
       }
       const mutations = [];
       const mutationByPath = new Map();
+      const rollbackStateByMutationId = new Map();
       if (!dryRun) {
-        const mutationRoot = resolveFileMutationRoot(runtime.basePath);
+        const mutationRoot = resolveRuntimeFileMutationRoot(runtime);
         try {
           for (const plan of writePlans) {
+            const rollbackState = {};
             const mutation = await applyFileMutation({
               filePath: plan.filePath,
               logicalPath: mutationLogicalPath(plan.pathRef),
               content: plan.content,
               operation: "update",
+              scopeId: mutationScopeId,
               mutationRoot,
+              sessionScope: runtime?.systemRuntime?.persistenceScope || null,
+              rollbackState,
               writeText: (target, value) => workspaceIo.writeText(target, value),
               removeFile: (target) => workspaceIo.remove(target),
             });
             mutations.push(mutation);
             mutationByPath.set(plan.filePath, mutation);
+            rollbackStateByMutationId.set(mutation.mutations[0].id, rollbackState);
           }
           for (const plan of deletePlans) {
             if (writePlans.some((item) => item.filePath === plan.filePath)) continue;
+            const rollbackState = {};
             const mutation = await applyFileMutation({
               filePath: plan.filePath,
               logicalPath: mutationLogicalPath(plan.pathRef),
               operation: "delete",
               mutationRoot,
+              sessionScope: runtime?.systemRuntime?.persistenceScope || null,
+              rollbackState,
               writeText: (target, value) => workspaceIo.writeText(target, value),
               removeFile: (target) => workspaceIo.remove(target),
             });
             mutations.push(mutation);
             mutationByPath.set(plan.filePath, mutation);
+            rollbackStateByMutationId.set(mutation.mutations[0].id, rollbackState);
           }
         } catch (error) {
           for (const mutation of mutations.toReversed()) {
             const plan = [...writePlans, ...deletePlans].find(
-              (item) => mutationByPath.get(item.filePath)?.mutation?.id === mutation.mutation.id,
+              (item) => mutationByPath.get(item.filePath)?.mutations?.[0]?.id === mutation.mutations[0]?.id,
             );
             if (!plan) continue;
             await rollbackFileMutation({
               mutationRoot,
-              mutationId: mutation.mutation.id,
+              mutationId: mutation.mutations[0].id,
+              restoreState: rollbackStateByMutationId.get(mutation.mutations[0].id),
               filePath: plan.filePath,
               writeText: (target, value) => workspaceIo.writeText(target, value),
               removeFile: (target) => workspaceIo.remove(target),
@@ -821,15 +839,15 @@ export function createFileTool({ agentContext }) {
           ...writePlans.map((item, index) => ({
             path: projectToolPathRef(item.pathRef),
             action: "write",
-            mutation: mutationByPath.get(item.filePath)?.mutation || null,
+            mutation: mutationByPath.get(item.filePath)?.mutations?.[0] || null,
           })),
           ...deletePlans.map((item, index) => ({
             path: projectToolPathRef(item.pathRef),
             action: "delete",
-            mutation: mutationByPath.get(item.filePath)?.mutation || null,
+            mutation: mutationByPath.get(item.filePath)?.mutations?.[0] || null,
           })),
         ],
-        mutations: mutations.map((item) => item.mutation),
+        mutations: mutations.flatMap((item) => item.mutations || []),
         resources,
       });
     },

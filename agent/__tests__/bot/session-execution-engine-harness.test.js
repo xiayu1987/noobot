@@ -309,6 +309,9 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     async getExecutionBundle() {
       return { logs: executionLogs };
     },
+    async resolveSessionScope({ userId, sessionId }) {
+      return { sessionDir: path.join(tempRoot, userId, "runtime", "session", sessionId) };
+    },
     async appendExecutionLog(payload = {}) {
       executionLogs.push(payload);
     },
@@ -372,6 +375,10 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     agentRunner: async ({ agentContext, currentUserMessage }) => {
       capturedRuntime = agentContext?.bindings?.runtime || null;
       capturedAgentUserMessage = currentUserMessage.content;
+      assert.equal(
+        capturedRuntime.systemRuntime.sessionDir,
+        path.join(tempRoot, "u1", "runtime", "session", sessionId),
+      );
       assert.equal(currentUserMessage.messageUid, "sm_turn-scope-smoke");
       const messages = [currentUserMessage];
       await capturedRuntime.hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, {

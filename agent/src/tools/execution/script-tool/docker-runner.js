@@ -131,6 +131,7 @@ export async function runDockerCommand({
   lockWaitTimeoutMs = DEFAULT_DOCKER_LOCK_WAIT_TIMEOUT_MS,
   runner = run,
   abortSignal = null,
+  runnerOptions = {},
 }) {
   const built = buildDockerCommand({ userRoot, userId, command, isolation, workdir });
   let result = null;
@@ -139,9 +140,16 @@ export async function runDockerCommand({
       containerName: built.containerName,
       task: async () => {
         await ensureDockerContainer(built);
-        return runner({ command: built.executable, args: built.execArgs }, workspace, timeout, abortSignal, {
-          onTerminate: () => terminateDockerExecution(built),
-        });
+        return runner(
+          { command: built.executable, args: built.execArgs },
+          workspace,
+          timeout,
+          abortSignal,
+          {
+            ...runnerOptions,
+            onTerminate: () => terminateDockerExecution(built),
+          },
+        );
       },
       lockWaitTimeoutMs,
       abortSignal,

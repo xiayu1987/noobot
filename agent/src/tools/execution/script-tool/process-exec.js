@@ -12,6 +12,7 @@ import { SCRIPT_EXECUTION_MODE } from "./constants.js";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { resolveCommandShell, TOOL_EXECUTION_VIEW } from "@noobot/execution-isolation-protocol";
+import { resolveSessionGeneratedDataRoot } from "../../../session/session-generated-data.js";
 import {
   decodeCommandOutput,
   resolveCommandLookupExecutable,
@@ -22,6 +23,13 @@ import {
 const FOREGROUND_CAPTURE_BYTES = LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const FOREGROUND_PREVIEW_BYTES = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 const FORCE_KILL_GRACE_MS = TIME_THRESHOLDS.tools.processForceKillGraceMs;
+
+function resolveOutputDir(sessionDir, kind) {
+  return path.join(
+    resolveSessionGeneratedDataRoot(sessionDir, kind),
+    `${Date.now()}-${randomUUID()}`,
+  );
+}
 
 function resolveProcessCommand(command) {
   if (command && typeof command === "object" && !Array.isArray(command)) {
@@ -60,7 +68,10 @@ function appendCapture(chunks, chunk, state, maxBytes) {
 }
 
 export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = path.join(cwd, ".execute-script-foreground", `${Date.now()}-${randomUUID()}`);
+  const outputDir = resolveOutputDir(
+    options?.generatedDataRoot,
+    "executeScriptForeground",
+  );
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
   const stderrPath = path.join(outputDir, "stderr.txt");
@@ -211,7 +222,10 @@ function pipeReadableToWritable(readable, writable, onChunk = null) {
 }
 
 export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = path.join(cwd, ".execute-script-background", `${Date.now()}-${randomUUID()}`);
+  const outputDir = resolveOutputDir(
+    options?.generatedDataRoot,
+    "executeScriptBackground",
+  );
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
   const stderrPath = path.join(outputDir, "stderr.txt");

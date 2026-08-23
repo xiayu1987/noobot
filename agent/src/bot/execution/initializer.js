@@ -79,6 +79,13 @@ export class SessionExecutionInitializer {
         persistenceContext,
       }))?.logs?.length || 0;
 
+    const sessionScope = await this.session.resolveSessionScope({
+      userId,
+      sessionId: usedSessionId,
+      parentSessionId,
+      persistenceContext,
+    });
+
     const runtimeEventListener = createExecutionEventListener({
       sessionManager: this.session,
       userId,
@@ -106,6 +113,7 @@ export class SessionExecutionInitializer {
       userConfig,
       currentSessionModelAlias: String(sessionBundle?.session?.modelAlias || "").trim(),
       executionStartIndex,
+      sessionDir: sessionScope.sessionDir,
       runtimeEventListener,
     };
   }

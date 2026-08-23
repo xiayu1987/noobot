@@ -151,6 +151,7 @@ export function registerConfigAndTemplateRoutes(
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/admin/template",
     resolveRootPath: templateRootPath,
+    trackMutations: false,
     middleware: [requireApiKey, requireSuperAdmin],
     buildWorkspaceTree,
     translateText,

@@ -27,6 +27,10 @@ import {
 } from "./session-location-resolver.js";
 import { randomUUID } from "node:crypto";
 import { AttachmentService } from "../artifacts/index.js";
+export {
+  SESSION_GENERATED_DATA_DIRS,
+  resolveSessionGeneratedDataRoot,
+} from "./session-generated-data.js";
 
 function createNow(now = null) {
   if (typeof now === "function") return now;
@@ -331,6 +335,10 @@ export function createSessionFacade(runtime = {}) {
 
     async getSessionBundle(payload = {}) {
       return sessionCrudService.getSessionBundle(payload);
+    },
+
+    async resolveSessionScope(payload = {}) {
+      return sessionCrudService.resolveSessionScope(bindPersistenceScope(payload));
     },
 
     async resolveTurnTerminalState(payload = {}) {

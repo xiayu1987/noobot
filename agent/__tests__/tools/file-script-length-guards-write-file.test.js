@@ -161,9 +161,9 @@ test("write_file: successful output uses the canonical mutation result", async (
   assert.equal(runnerResult.success, true);
   assert.equal(runnerResult.transferEnvelopes?.length || 0, 0);
   assert.equal(result.protocol, "noobot.file-mutation-result");
-  assert.ok(result.mutation?.id);
-  assert.equal(result.mutation.path, "runtime/ops_workdir/result.md");
-  assert.equal(result.mutation.after.size, 8);
+  assert.ok(result.mutations?.[0]?.id);
+  assert.equal(result.mutations[0].path, "runtime/ops_workdir/result.md");
+  assert.equal(result.mutations[0].after.size, 8);
   assert.equal("outputArtifacts" in result, false);
   assert.equal(
     await fs.readFile(path.join(basePath, "runtime/ops_workdir/result.md"), "utf8"),

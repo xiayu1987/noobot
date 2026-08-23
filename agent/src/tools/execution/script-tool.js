@@ -127,6 +127,8 @@ export function createScriptTool({ agentContext }) {
       const shouldIncludeLineNumbers = includeLineNumbers === true;
       const timeout = BUILTIN_THRESHOLDS.executeScript.scriptTimeoutMs;
       const abortSignal = toolConfig?.signal || null;
+      const generatedDataRoot = String(runtime?.systemRuntime?.sessionDir || "").trim();
+      if (!generatedDataRoot) throw new Error("session directory is required for script output");
       const identity = toolConfig?.configurable?.transferIdentity;
       if (!identity || typeof identity !== "object") {
         throw new Error("semantic_transfer_script_identity_required");
@@ -150,8 +152,12 @@ export function createScriptTool({ agentContext }) {
       if (!sandboxEnabled) {
         const runResult =
           requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND
-            ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal)
-            : await run(normalizedCommand, workspace, timeout, abortSignal);
+            ? await runFileBacked(normalizedCommand, workspace, timeout, abortSignal, {
+                generatedDataRoot,
+              })
+            : await run(normalizedCommand, workspace, timeout, abortSignal, {
+                generatedDataRoot,
+              });
         if (requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND) {
           return toolFileBackedExecResult(
             "local",
@@ -208,6 +214,7 @@ export function createScriptTool({ agentContext }) {
         workdir: pathContext.currentDirectory,
         lockWaitTimeoutMs,
         abortSignal,
+        runnerOptions: { generatedDataRoot },
         runner: requestedExecutionMode === SCRIPT_EXECUTION_MODE.BACKGROUND ? runFileBacked : run,
       });
       extra = {

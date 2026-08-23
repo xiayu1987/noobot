@@ -39,6 +39,8 @@
   --noobot-msg-bubble-pad-x: 14px;
   --noobot-msg-corner-accent-radius: 8px;
   --noobot-msg-file-thumb-size: 34px;
+  --noobot-msg-file-icon-size: 18px;
+  --noobot-msg-file-card-min-height: 42px;
   --noobot-msg-icon-btn-size: 30px;
   --noobot-msg-inline-icon-btn-size: 34px;
   --noobot-msg-disclosure-icon-size: 16px;
@@ -63,7 +65,7 @@ html.dark,
   --noobot-msg-tag-text: var(--noobot-text-secondary);
   --noobot-msg-error-bg: var(--el-color-danger-dark-2);
   --noobot-msg-error-text: var(--el-color-danger-light-3);
-  --noobot-msg-file-card-bg: var(--noobot-panel-bg);
+  --noobot-msg-file-card-bg: var(--noobot-surface-sidebar);
   --noobot-msg-file-card-border: var(--noobot-panel-border);
   --noobot-msg-file-icon-bg: var(--noobot-control-bg);
   --noobot-msg-file-name: var(--noobot-text-main);

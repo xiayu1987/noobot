@@ -119,6 +119,20 @@ export class SessionCrudService {
     return { exists: true, session, task: task || null };
   }
 
+  async resolveSessionScope({
+    userId = "",
+    sessionId = "",
+    parentSessionId = "",
+    persistenceContext = null,
+  } = {}) {
+    return this.sessionRepo.resolveSessionScope(
+      userId,
+      sessionId,
+      parentSessionId,
+      persistenceContext,
+    );
+  }
+
   async getSessionData({ userId, sessionId }) {
     const normalizedSessionId = String(sessionId || "").trim();
     const sessionBundle = await this.getSessionBundle({
