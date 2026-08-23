@@ -1,6 +1,6 @@
 {
   "name": "@noobot/execution-isolation-protocol",
-  "version": "4.2.3",
+  "version": "4.2.4",
   "private": true,
   "type": "module",
   "main": "src/index.js",
