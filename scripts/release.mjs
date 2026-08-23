@@ -64,10 +64,9 @@ async function assertCleanWorkingTree() {
   const status = await gitOutput(["status", "--porcelain"]);
   if (status) {
     throw new Error(
-      [
-        "Working tree is not clean. Commit or stash existing changes before release.",
-        status,
-      ].join("\n"),
+      ["Working tree is not clean. Commit or stash existing changes before release.", status].join(
+        "\n",
+      ),
     );
   }
 }
@@ -123,6 +122,8 @@ async function main() {
   await assertTagDoesNotExist(tagName, args.remote);
 
   console.log(`[release] preparing ${tagName} on ${branch}`);
+  console.log("[release] running quality checks");
+  await runOrPrint("npm", ["run", "check:quality"], args);
   console.log("[release] running full repository regression");
   await runOrPrint("npm", ["test"], args);
   if (!args.dryRun) await assertCleanWorkingTree();
