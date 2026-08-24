@@ -207,7 +207,7 @@ Session 日志 WebSocket：
 
 ### 3.6 模型提供方（`providers.<alias>`）
 
-可直接复制的当前模型配置维护在 [`docs/model-library.json`](docs/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
+可直接复制的当前模型配置维护在 [`model-protocol/model-library.json`](model-protocol/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
 
 | 键名                                                                       | 类型        | 说明                                                  |
 | -------------------------------------------------------------------------- | ----------- | ----------------------------------------------------- |

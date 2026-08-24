@@ -207,7 +207,7 @@ Current plugin defaults in repo:
 
 ### 3.6 Providers (`providers.<alias>`)
 
-Copy-ready current model entries are maintained in [`docs/model-library.json`](docs/model-library.json). Runtime capability checks still use only the provider entry copied into the active configuration.
+Copy-ready current model entries are maintained in [`model-protocol/model-library.json`](model-protocol/model-library.json). Runtime capability checks still use only the provider entry copied into the active configuration.
 
 | Key                                                                        | Type        | Description                                                         |
 | -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------- |
