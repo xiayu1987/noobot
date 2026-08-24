@@ -5,7 +5,18 @@
 -->
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { Connection, Delete, Link, Plus, RefreshLeft } from "@element-plus/icons-vue";
+import {
+  CircleCheckFilled,
+  CircleCloseFilled,
+  Connection,
+  Delete,
+  Link,
+  Loading,
+  Plus,
+  RefreshLeft,
+  SwitchButton,
+  WarningFilled,
+} from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   connectUserConnector,
@@ -207,12 +218,22 @@ watch(() => [props.connected, props.userId], refresh);
       <div v-for="connector in connectors" :key="connector.connectorId" class="connector-row">
         <span class="connector-identity">
           <strong>{{ connector.name }}</strong>
-          <small>{{ connector.type }} / {{ connector.subType }}</small>
+          <small class="connector-meta">
+            <span>{{ connector.type }} / {{ connector.subType }}</span>
+            <el-icon
+              class="connector-status-icon"
+              :class="`is-${connector.status}`"
+              :title="translate(`connectors.status.${connector.status}`)"
+              :aria-label="translate(`connectors.status.${connector.status}`)"
+            >
+              <CircleCheckFilled v-if="connector.status === 'connected'" />
+              <Loading v-else-if="connector.status === 'connecting'" class="is-loading" />
+              <WarningFilled v-else-if="connector.status === 'error'" />
+              <CircleCloseFilled v-else />
+            </el-icon>
+          </small>
         </span>
         <span class="connector-row-actions">
-          <el-tag size="small" :type="connector.status === 'connected' ? 'success' : 'info'">{{
-            translate(`connectors.status.${connector.status}`)
-          }}</el-tag>
           <el-button
             text
             circle
@@ -222,7 +243,7 @@ watch(() => [props.connected, props.userId], refresh);
                 : translate('connectors.connect')
             "
             @click="setConnection(connector, connector.status !== 'connected')"
-            ><el-icon><Link /></el-icon
+            ><el-icon><SwitchButton v-if="connector.status === 'connected'" /><Link v-else /></el-icon
           ></el-button>
           <el-button
             text
@@ -321,6 +342,10 @@ watch(() => [props.connected, props.userId], refresh);
   justify-content: space-between;
   gap: 8px;
 }
+.connector-row {
+  flex-direction: column;
+  align-items: stretch;
+}
 .manager-title {
   gap: 6px;
   font-weight: 650;
@@ -344,28 +369,74 @@ watch(() => [props.connected, props.userId], refresh);
 }
 .connector-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
   margin-top: 8px;
 }
 .connector-row {
-  padding: 7px 4px;
+  padding: 10px;
+  border: 1px solid var(--noobot-panel-border);
+  border-radius: 6px;
+  background: var(--noobot-panel-bg);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease;
+}
+.connector-row:hover {
+  border-color: var(--noobot-border-primary);
+  background: var(--noobot-surface-soft-hover);
 }
 .connector-identity {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
+  gap: 2px;
+  align-items: start;
 }
 .connector-identity strong,
 .connector-identity small {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.connector-identity strong {
+  color: var(--noobot-text-strong);
+  font-size: 13px;
+  line-height: 1.35;
+}
 .connector-identity small {
   color: var(--noobot-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.connector-meta {
+  display: flex !important;
+  align-items: center;
+  gap: 5px;
+}
+.connector-status-icon {
+  flex: none;
+  font-size: 12px;
+}
+.connector-status-icon.is-connected {
+  color: var(--noobot-status-success);
+}
+.connector-status-icon.is-connecting {
+  color: var(--noobot-text-accent);
+}
+.connector-status-icon.is-error {
+  color: var(--noobot-status-error);
+}
+.connector-status-icon.is-disconnected {
+  color: var(--noobot-text-muted);
 }
 .connector-row-actions {
+  width: 100%;
+  padding-top: 6px;
+  border-top: 1px solid var(--noobot-border-weak);
   gap: 2px;
   flex: none;
+  justify-content: flex-end;
 }
 .type-grid {
   display: grid;
