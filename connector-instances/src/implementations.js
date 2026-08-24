@@ -12,7 +12,11 @@ import {
   releasePostgresConnection,
   releaseSqliteConnection,
 } from "./database/index.js";
-import { executeSshCommand, closeSshChannel } from "./terminal/ssh-connector-channel.js";
+import {
+  executeSshCommand,
+  closeSshChannel,
+  closeSshConnectorChannels,
+} from "./terminal/ssh-connector-channel.js";
 import { executeEmailOperation } from "./email/index.js";
 import {
   MYSQL_DEFINITION,
@@ -23,6 +27,11 @@ import {
 } from "./definitions.js";
 
 const command = (request = {}) => String(request?.input?.command || "").trim();
+const requiredSessionId = (value = "") => {
+  const sessionId = String(value || "").trim();
+  if (!sessionId) throw new TypeError("connector sessionId is required");
+  return sessionId;
+};
 const outputResult = (result = {}) => ({
   ok: result.ok === true,
   output: {
@@ -88,15 +97,16 @@ const ssh = {
     });
     return { ok: result.ok === true, code: result.code, message: result.stderr };
   },
-  access: async ({ handle, connector, request }) =>
+  access: async ({ handle, connector, request, context }) =>
     outputResult(
       await executeSshCommand({
         command: command(request),
         connectionInfo: connector.parameters,
-        channelKey: handle.channelKey,
+        channelKey: `${handle.channelKey}::${requiredSessionId(context?.sessionId)}`,
       }),
     ),
   dispose: async ({ handle }) => {
+    closeSshConnectorChannels({ connectorKey: handle.channelKey });
     closeSshChannel({ channelKey: handle.channelKey });
   },
 };

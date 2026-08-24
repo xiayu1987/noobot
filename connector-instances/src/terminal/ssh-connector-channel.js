@@ -3,6 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
+
 const SSH_COMMAND_TIMEOUT_MS = 30000;
 
 function resolveSshConnection(connectionInfo = {}) {
@@ -25,7 +27,7 @@ async function importSsh2() {
   }
 }
 
-const sshClientStates = new Map();
+const sshShellStates = new Map();
 
 function requireChannelKey(channelKey = "") {
   const key = String(channelKey || "").trim();
@@ -36,7 +38,7 @@ function requireChannelKey(channelKey = "") {
 function resetSshState(key = "", expectedState = null) {
   const normalizedKey = String(key || "").trim();
   if (!normalizedKey) return;
-  const state = sshClientStates.get(normalizedKey);
+  const state = sshShellStates.get(normalizedKey);
   if (!state) return;
   if (expectedState && state !== expectedState) return;
   const failures = [];
@@ -45,14 +47,14 @@ function resetSshState(key = "", expectedState = null) {
   } catch (error) {
     failures.push(error);
   }
-  sshClientStates.delete(normalizedKey);
+  sshShellStates.delete(normalizedKey);
   if (failures.length) throw new AggregateError(failures, "SSH channel cleanup failed");
 }
 
-async function ensureSshClientState({ channelKey = "", connectionInfo = {} } = {}) {
+async function ensureSshShellState({ channelKey = "", connectionInfo = {} } = {}) {
   const key = requireChannelKey(channelKey);
-  const cached = sshClientStates.get(key);
-  if (cached?.ready === true && cached?.client) {
+  const cached = sshShellStates.get(key);
+  if (cached?.ready === true && cached?.client && cached?.stream) {
     return cached;
   }
   if (cached?.readyPromise) {
@@ -73,12 +75,13 @@ async function ensureSshClientState({ channelKey = "", connectionInfo = {} } = {
   const state = {
     key,
     client: null,
+    stream: null,
     ready: false,
     queue: Promise.resolve(),
     lastUsedAt: Date.now(),
     readyPromise: null,
   };
-  sshClientStates.set(key, state);
+  sshShellStates.set(key, state);
   state.readyPromise = new Promise((resolve, reject) => {
     const client = new Client();
     state.client = client;
@@ -88,10 +91,19 @@ async function ensureSshClientState({ channelKey = "", connectionInfo = {} } = {
     };
     client
       .on("ready", () => {
-        state.ready = true;
-        state.readyPromise = null;
-        state.lastUsedAt = Date.now();
-        resolve(state);
+        client.shell((error, stream) => {
+          if (error) {
+            fail(error);
+            return;
+          }
+          state.stream = stream;
+          state.ready = true;
+          state.readyPromise = null;
+          state.lastUsedAt = Date.now();
+          stream.on("close", () => resetSshState(key, state));
+          stream.on("error", () => resetSshState(key, state));
+          resolve(state);
+        });
       })
       .on("error", (error) => fail(error))
       .on("close", () => resetSshState(key, state))
@@ -107,15 +119,20 @@ async function ensureSshClientState({ channelKey = "", connectionInfo = {} } = {
   return state.readyPromise;
 }
 
+function buildCommandEnvelope(command = "", marker = "") {
+  return `set +e\n${String(command || "")}\nprintf "\\n${marker}%s\\n" "$?"\n`;
+}
+
 function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
-    if (!state?.client || !state?.ready) {
-      reject(new Error("ssh client not ready"));
+    if (!state?.stream || !state?.ready) {
+      reject(new Error("ssh shell not ready"));
       return;
     }
     let stdout = "";
     let stderr = "";
-    let stream = null;
+    const marker = `__NOOBOT_DONE_${randomUUID()}__`;
+    const stream = state.stream;
     let settled = false;
     let timer = null;
     const done = (result = null, error = null) => {
@@ -129,6 +146,18 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
     };
     const onStdout = (chunk) => {
       stdout += String(chunk || "");
+      const markerIndex = stdout.lastIndexOf(marker);
+      if (markerIndex < 0) return;
+      const suffix = stdout.slice(markerIndex + marker.length);
+      const lineEnd = suffix.search(/\r?\n/);
+      if (lineEnd < 0) return;
+      const code = Number(suffix.slice(0, lineEnd).trim());
+      done({
+        ok: code === 0,
+        code: Number.isFinite(code) ? code : 1,
+        stdout: stdout.slice(0, markerIndex).trim(),
+        stderr: String(stderr || "").trim(),
+      });
     };
     const onStderr = (chunk) => {
       stderr += String(chunk || "");
@@ -140,26 +169,11 @@ function runSshCommand(state, command = "", timeoutMs = SSH_COMMAND_TIMEOUT_MS) 
       resetSshState(state.key, state);
     }, effectiveTimeoutMs);
 
+    stream.on("data", onStdout);
+    stream.stderr?.on?.("data", onStderr);
     try {
-      state.client.exec(command, (error, nextStream) => {
-        if (error) {
-          done(null, error);
-          return;
-        }
-        stream = nextStream;
-        stream.on("data", onStdout);
-        stream.stderr?.on?.("data", onStderr);
-        stream.on("error", (streamError) => done(null, streamError));
-        stream.on("close", (code, signal) => {
-          const exitCode = Number.isInteger(code) ? code : 1;
-          const signalMessage = signal ? `ssh command terminated by ${signal}` : "";
-          done({
-            ok: exitCode === 0,
-            code: exitCode,
-            stdout: stdout.trim(),
-            stderr: [String(stderr || "").trim(), signalMessage].filter(Boolean).join("\n"),
-          });
-        });
+      stream.write(buildCommandEnvelope(command, marker), (error) => {
+        if (error) done(null, error);
       });
     } catch (error) {
       done(null, error);
@@ -179,7 +193,7 @@ export async function executeSshCommand({
 
   try {
     const conn = resolveSshConnection(connectionInfo);
-    const state = await ensureSshClientState({
+    const state = await ensureSshShellState({
       channelKey,
       connectionInfo: conn,
     });
@@ -201,7 +215,19 @@ export async function executeSshCommand({
 
 export function closeSshChannel({ channelKey = "" } = {}) {
   const key = requireChannelKey(channelKey);
-  if (!sshClientStates.has(key)) return false;
+  if (!sshShellStates.has(key)) return false;
   resetSshState(key);
   return true;
+}
+
+export function closeSshConnectorChannels({ connectorKey = "" } = {}) {
+  const prefix = `${String(connectorKey || "").trim()}::`;
+  if (prefix === "::") return 0;
+  let closedCount = 0;
+  for (const key of [...sshShellStates.keys()]) {
+    if (!key.startsWith(prefix)) continue;
+    resetSshState(key);
+    closedCount += 1;
+  }
+  return closedCount;
 }

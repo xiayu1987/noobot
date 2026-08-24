@@ -100,7 +100,10 @@ export function createConnectorAccessTool({ agentContext }) {
         const result = await assertConnectorAccessPort(connectorAccessPort).access({
           userId,
           request: { connectorId, operation, input },
-          context: { artifactSink: createArtifactSink(runtime) },
+          context: {
+            artifactSink: createArtifactSink(runtime),
+            sessionId: String(runtime?.systemRuntime?.sessionId || "").trim(),
+          },
         });
         return toToolJsonResult(
           TOOL_NAME.ACCESS_CONNECTOR,
