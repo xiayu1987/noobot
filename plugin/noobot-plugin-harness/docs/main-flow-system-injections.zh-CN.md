@@ -1,5 +1,7 @@
 # Harness 插件主流程 System 消息注入清单
 
+[English](./main-flow-system-injections.md) | 中文
+
 本文档盘点 `noobot-plugin-harness` 会写入主流程模型上下文的消息注入路径，重点记录会进入 `ctx.messages`、`messageBlocks.system` 或 `agentContext.payload.messages.system` 的 system 消息。Separate model 内部临时构造的 system 消息不计入本清单。
 
 ## 注入机制
@@ -18,31 +20,31 @@ Harness 插件当前主要通过以下路径向主流程注入消息：
 
 下表只列“固定代码路径会写入主流程 system block / agent system”的消息。Separate model 请求内部构造的 system / constraint / workflow_policy 消息不计入。
 
-| 流程 / 触发点 | 注入角色 | 注入消息 / 标记 | 内容概要 | 实际注入标识 |
-|---|---:|---|---|---|
-| 全局 Harness policy，`before_llm_call`，runtime 内部 `globalBootstrap` | system | `[HARNESS_POLICY_SELECTION]` | 当前 scenario、policy_prompt、i18n_key、policy_source，以及对应场景策略正文 | `harness_prompt:noobot-harness-policy` |
-| 全局 final response，`before_final_output` | system | `noobot-harness-final-response` | 最终回复约束/保护类 system prompt | `harness_prompt:noobot-harness-final-response` |
-| Planning 初始规划，`before_llm_call`，inject 模式 | system | `planning_context_summary` | 规划输入上下文摘要：latestUserGoal、operationDirectory、sceneTools、toolAllowlist 等 | `planning_context_summary` |
-| Planning 初始规划，`before_llm_call`，inject 模式 | system | `planning_plan_checklist_context` | `<!-- harness-plan-checklist-context -->` 当前完整计划清单/当前任务目标 | `planning_plan_checklist_context` |
-| Planning 初始规划，`before_llm_call`，inject 模式 | system | `planning_tool_context` | 规划可用工具、工具白名单、场景工具信息 | `planning_tool_context` |
-| Planning 结果应用后 | system | `<!-- noobot-harness-current-task-goal -->` | `[CURRENT_TASK_GOAL]` 当前任务目标 | `CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE` |
-| Guidance summary，`before_llm_call`，inject 模式 | system | `guidance_summary_checklist` | `<!-- harness-plan-checklist-context -->` 当前完整计划清单 | `guidance_summary_checklist` |
-| Guidance summary，`before_llm_call`，inject 模式，有历史 summary 时 | system | `guidance_summary_previous_summary` | 上一次 summary 上下文 | `guidance_summary_previous_summary` |
-| Guidance plan revision/refinement，`before_llm_call`，inject 模式 | system | `planning_revision_checklist` | `<!-- harness-plan-checklist-context -->` 当前完整计划清单 | `planning_revision_checklist` |
-| Phase acceptance，`before_llm_call`，inject 模式，有完整 summary 时 | system | summary reports marker | 最新完整 summary report 上下文 | `acceptance_prompt` |
-| Phase acceptance，`before_llm_call`，inject 模式 | system | main plan context marker | 验收用主计划上下文 | `acceptance_prompt` |
-| Phase acceptance，`before_llm_call`，inject 模式，有历史 phase reports 时 | system | phase acceptance reports marker | 历史阶段验收报告 | `acceptance_prompt` |
-| Acceptance semantic validation，`before_llm_call`，inject 模式 | system | `acceptance_main_plan_context` | 语义验收用主计划上下文 | `acceptance_main_plan_context` |
-| Acceptance semantic validation，`before_llm_call`，inject 模式，有 phase reports 时 | system | `acceptance_phase_report` | 阶段验收报告上下文 | `acceptance_phase_report` |
+| 流程 / 触发点                                                                       | 注入角色 | 注入消息 / 标记                             | 内容概要                                                                             | 实际注入标识                                   |
+| ----------------------------------------------------------------------------------- | -------: | ------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| 全局 Harness policy，`before_llm_call`，runtime 内部 `globalBootstrap`              |   system | `[HARNESS_POLICY_SELECTION]`                | 当前 scenario、policy_prompt、i18n_key、policy_source，以及对应场景策略正文          | `harness_prompt:noobot-harness-policy`         |
+| 全局 final response，`before_final_output`                                          |   system | `noobot-harness-final-response`             | 最终回复约束/保护类 system prompt                                                    | `harness_prompt:noobot-harness-final-response` |
+| Planning 初始规划，`before_llm_call`，inject 模式                                   |   system | `planning_context_summary`                  | 规划输入上下文摘要：latestUserGoal、operationDirectory、sceneTools、toolAllowlist 等 | `planning_context_summary`                     |
+| Planning 初始规划，`before_llm_call`，inject 模式                                   |   system | `planning_plan_checklist_context`           | `<!-- harness-plan-checklist-context -->` 当前完整计划清单/当前任务目标              | `planning_plan_checklist_context`              |
+| Planning 初始规划，`before_llm_call`，inject 模式                                   |   system | `planning_tool_context`                     | 规划可用工具、工具白名单、场景工具信息                                               | `planning_tool_context`                        |
+| Planning 结果应用后                                                                 |   system | `<!-- noobot-harness-current-task-goal -->` | `[CURRENT_TASK_GOAL]` 当前任务目标                                                   | `CURRENT_TASK_GOAL_INJECTED_MESSAGE_TYPE`      |
+| Guidance summary，`before_llm_call`，inject 模式                                    |   system | `guidance_summary_checklist`                | `<!-- harness-plan-checklist-context -->` 当前完整计划清单                           | `guidance_summary_checklist`                   |
+| Guidance summary，`before_llm_call`，inject 模式，有历史 summary 时                 |   system | `guidance_summary_previous_summary`         | 上一次 summary 上下文                                                                | `guidance_summary_previous_summary`            |
+| Guidance plan revision/refinement，`before_llm_call`，inject 模式                   |   system | `planning_revision_checklist`               | `<!-- harness-plan-checklist-context -->` 当前完整计划清单                           | `planning_revision_checklist`                  |
+| Phase acceptance，`before_llm_call`，inject 模式，有完整 summary 时                 |   system | summary reports marker                      | 最新完整 summary report 上下文                                                       | `acceptance_prompt`                            |
+| Phase acceptance，`before_llm_call`，inject 模式                                    |   system | main plan context marker                    | 验收用主计划上下文                                                                   | `acceptance_prompt`                            |
+| Phase acceptance，`before_llm_call`，inject 模式，有历史 phase reports 时           |   system | phase acceptance reports marker             | 历史阶段验收报告                                                                     | `acceptance_prompt`                            |
+| Acceptance semantic validation，`before_llm_call`，inject 模式                      |   system | `acceptance_main_plan_context`              | 语义验收用主计划上下文                                                               | `acceptance_main_plan_context`                 |
+| Acceptance semantic validation，`before_llm_call`，inject 模式，有 phase reports 时 |   system | `acceptance_phase_report`                   | 阶段验收报告上下文                                                                   | `acceptance_phase_report`                      |
 
 ## 动态 System 注入
 
 以下路径也可能写入主流程 system，但不是固定流程 prompt；它们取决于 capability handler 返回的 takeover/directive。
 
-| 路径 | 注入角色 | 内容概要 | 目标 |
-|---|---:|---|---|
-| `messageTakeover` / `systemMessageTakeover` | system | `<!-- ${id} -->` + takeover content | `ctx.messages` 的 system block，或 `agentContext.payload.messages.system` |
-| `memoryTakeover` | system | `<!-- harness-memory-takeover -->` 或自定义 marker + memory note | `agentContext.payload.messages.system` |
+| 路径                                        | 注入角色 | 内容概要                                                         | 目标                                                                      |
+| ------------------------------------------- | -------: | ---------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `messageTakeover` / `systemMessageTakeover` |   system | `<!-- ${id} -->` + takeover content                              | `ctx.messages` 的 system block，或 `agentContext.payload.messages.system` |
+| `memoryTakeover`                            |   system | `<!-- harness-memory-takeover -->` 或自定义 marker + memory note | `agentContext.payload.messages.system`                                    |
 
 ## 不计入本清单的 System 消息
 
@@ -56,15 +58,15 @@ Harness 插件当前主要通过以下路径向主流程注入消息：
 
 以下流程也会向主流程注入 `user` 消息。它们不会进入 system block，但会影响主流程上下文顺序和缓存前缀。
 
-| 流程 | user 消息 |
-|---|---|
-| Planning 初始规划 | `planning_task`、`planning_responsibility_constraint` |
-| Guidance 普通指导 | `guidance_failure:*` |
-| Guidance summary | `guidance_summary_prompt`、`guidance_summary_responsibility_constraint` |
-| Planning revision/refinement | `planning_revision_prompt` / `planning_refinement_prompt`，以及对应 responsibility |
-| Phase acceptance | phase acceptance request、responsibility |
-| Acceptance semantic validation | `acceptance_semantic_validation_request`、`acceptance_responsibility_constraint` |
-| Separate model relay | `separate_model_relay:*`，通常是 separate model 输出转回主流程 |
+| 流程                           | user 消息                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| Planning 初始规划              | `planning_task`、`planning_responsibility_constraint`                              |
+| Guidance 普通指导              | `guidance_failure:*`                                                               |
+| Guidance summary               | `guidance_summary_prompt`、`guidance_summary_responsibility_constraint`            |
+| Planning revision/refinement   | `planning_revision_prompt` / `planning_refinement_prompt`，以及对应 responsibility |
+| Phase acceptance               | phase acceptance request、responsibility                                           |
+| Acceptance semantic validation | `acceptance_semantic_validation_request`、`acceptance_responsibility_constraint`   |
+| Separate model relay           | `separate_model_relay:*`，通常是 separate model 输出转回主流程                     |
 
 ## 与模型缓存排查相关的重点
 
