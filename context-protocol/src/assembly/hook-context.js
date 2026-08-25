@@ -66,9 +66,14 @@ export function createModelContext({
   messages = null,
   messageBlocks = null,
   activeTurnIdentity = null,
+  checkpointRevision = 0,
   onCanonicalMessageAdded = null,
   onMutationConsumed = null,
 } = {}) {
+  const normalizedCheckpointRevision = Number(checkpointRevision);
+  if (!Number.isInteger(normalizedCheckpointRevision) || normalizedCheckpointRevision < 0) {
+    throw new TypeError("modelContext checkpointRevision must be a non-negative integer");
+  }
   const explicitBlocks = normalizeBlocks(messageBlocks);
   const blocks =
     explicitBlocks || (Array.isArray(messages) ? resolveInitialBlocks(messages) : null);
@@ -86,6 +91,7 @@ export function createModelContext({
   if (!blocks && !resolvedMessages) return null;
   const modelContext = {
     protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
+    checkpointRevision: normalizedCheckpointRevision,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
     // When blocks are explicit, hydrate their entity identities before
     // materializing the flat projection. Hydrating the flat list first would
@@ -131,6 +137,8 @@ export function validateHookContextProtocol(context = {}, { point = "" } = {}) {
     else {
       if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION)
         warnings.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
+      if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0)
+        warnings.push("modelContext.checkpointRevision must be a non-negative integer");
       const activeTurnIdentity = modelContext.activeTurnIdentity;
       if (
         activeTurnIdentity != null &&

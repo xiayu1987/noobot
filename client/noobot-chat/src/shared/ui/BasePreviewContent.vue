@@ -77,11 +77,7 @@ watch(
 <template>
   <div class="preview-body noobot-preview-surface" v-loading="resolvedLoading">
     <div v-if="showCopyActions" class="preview-copy-actions">
-      <el-tooltip
-        :content="translate('message.copyFormat')"
-        placement="top"
-        :show-after="300"
-      >
+      <el-tooltip :content="translate('message.copyFormat')" placement="top" :show-after="300">
         <el-button
           size="small"
           class="noobot-flat-inline-icon-btn"
@@ -91,11 +87,7 @@ watch(
           <el-icon><CopyDocument /></el-icon>
         </el-button>
       </el-tooltip>
-      <el-tooltip
-        :content="translate('message.copyText')"
-        placement="top"
-        :show-after="300"
-      >
+      <el-tooltip :content="translate('message.copyText')" placement="top" :show-after="300">
         <el-button
           size="small"
           class="noobot-flat-inline-icon-btn"
@@ -106,7 +98,9 @@ watch(
         </el-button>
       </el-tooltip>
     </div>
-    <div v-if="resolvedError" class="preview-error noobot-error-surface is-preview">{{ resolvedError }}</div>
+    <div v-if="resolvedError" class="preview-error noobot-error-surface is-preview">
+      {{ resolvedError }}
+    </div>
     <img
       v-else-if="resolvedPreviewMode === 'image' && resolvedPreviewUrl"
       :src="resolvedPreviewUrl"
@@ -144,7 +138,9 @@ watch(
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px 24px;
-  transition: padding 0.3s ease, max-height 0.3s ease;
+  transition:
+    padding 0.3s ease,
+    max-height 0.3s ease;
 }
 
 .preview-body::-webkit-scrollbar {

@@ -94,6 +94,7 @@ export async function dispatchAgentTurn({
     : [];
   const dispatchModelContext = createModelContext({
     messages: dispatchContextMessages,
+    checkpointRevision: Math.max(0, Number(dispatchRuntime?.summaryCheckpointRevision) || 0),
     activeTurnIdentity: {
       dialogProcessId: String(dialogProcessId || "").trim(),
       turnScopeId: String(resolvedTurnScopeId || "").trim(),

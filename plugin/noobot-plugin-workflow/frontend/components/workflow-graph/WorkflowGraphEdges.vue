@@ -99,7 +99,7 @@ onMounted(async () => {
 
 watch(
   () =>
-    `${Number(props.width || 0)}|${Number(props.height || 0)}|${(Array.isArray(props.segments) ? props.segments.length : 0)}`,
+    `${Number(props.width || 0)}|${Number(props.height || 0)}|${Array.isArray(props.segments) ? props.segments.length : 0}`,
   async () => {
     await nextTick();
     draw();

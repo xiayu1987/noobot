@@ -40,6 +40,7 @@ export function createAgentContextBuildEnvelope({
   execution = {},
   messageBlocks = {},
   contextBuild = {},
+  checkpointRevision = 0,
 } = {}) {
   const normalizedIdentity = normalizeAgentContextIdentity(identity);
   const blocks = {
@@ -64,6 +65,7 @@ export function createAgentContextBuildEnvelope({
     },
     modelContext: {
       protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
+      checkpointRevision,
       activeTurnIdentity: {
         dialogProcessId: normalizedIdentity.dialogProcessId,
         turnScopeId: normalizedIdentity.turnScopeId,

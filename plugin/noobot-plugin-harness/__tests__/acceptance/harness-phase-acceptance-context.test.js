@@ -313,7 +313,7 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   const historyUserIndex = indexOf(/history-user-first/);
   const historyAssistantIndex = indexOf(/history-assistant-latest/);
   const toolCallIndex = messages.findIndex(
-    (item = {}) => item.role === "assistant" && item.tool_calls?.[0]?.id === "call-ctx",
+    (item = {}) => item.role === "user" && /Tool call:/.test(String(item.content || "")),
   );
   const toolResultIndex = messages.findIndex((item = {}) =>
     String(item.content || "").includes('"stdout":"/workspace"'),
@@ -327,9 +327,8 @@ test("model-context rules 2: phase acceptance separate model uses six ordered co
   assert.equal(messages[agentSystemIndex]?.role, "system");
   assert.equal(messages[historyUserIndex]?.role, "user");
   assert.equal(messages[historyAssistantIndex]?.role, "assistant");
-  assert.equal(messages[toolCallIndex]?.role, "assistant");
-  assert.equal(messages[toolResultIndex]?.role, "tool");
-  assert.equal(messages[toolResultIndex]?.tool_call_id, "call-ctx");
+  assert.equal(messages[toolCallIndex]?.role, "user");
+  assert.equal(messages[toolResultIndex]?.role, "assistant");
   assert.equal(messages[summaryIndex]?.role, "user");
   assert.equal(messages[planIndex]?.role, "user");
   assert.equal(messages[phaseReportIndex]?.role, "user");

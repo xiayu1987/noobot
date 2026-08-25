@@ -12,7 +12,11 @@ const props = defineProps({
 });
 const { translate } = useWorkflowLocale();
 
-const normalizedStatus = computed(() => String(props.status || "").trim().toLowerCase());
+const normalizedStatus = computed(() =>
+  String(props.status || "")
+    .trim()
+    .toLowerCase(),
+);
 
 const statusLabel = computed(() => {
   if (normalizedStatus.value === "success") return translate("workflow.statusSuccess");

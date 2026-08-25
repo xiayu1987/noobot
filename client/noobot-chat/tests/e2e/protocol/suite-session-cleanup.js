@@ -36,17 +36,30 @@ export default class SuiteSessionCleanupReporter {
   async onEnd(result) {
     const records = await readRegistry();
     if (result.status !== "passed" || records.length === 0) return;
-    const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060").replace(/\/$/, "");
+    const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060").replace(
+      /\/$/,
+      "",
+    );
     const context = await playwrightRequest.newContext({ baseURL });
     try {
+      const apiKeyByUserId = new Map();
       for (const record of records) {
+        const userId = String(record?.userId || "").trim();
+        const apiKey = String(record?.apiKey || "").trim();
+        if (userId && apiKey) apiKeyByUserId.set(userId, apiKey);
+      }
+      for (const record of records) {
+        const userId = String(record?.userId || "").trim();
+        const apiKey = apiKeyByUserId.get(userId) || "";
         const response = await context.delete(
-          `/api/internal/session/${encodeURIComponent(record.userId)}/${encodeURIComponent(record.sessionId)}`,
-          { headers: { "x-api-key": record.apiKey } },
+          `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(record.sessionId)}`,
+          { headers: { "x-api-key": apiKey } },
         );
         const payload = await response.json();
         if (!response.ok() || payload?.ok !== true) {
-          throw new Error(`Suite Session cleanup failed (${response.status()}): ${String(payload?.error || "unknown error")}`);
+          throw new Error(
+            `Suite Session cleanup failed (${response.status()}): ${String(payload?.error || "unknown error")}`,
+          );
         }
       }
     } finally {

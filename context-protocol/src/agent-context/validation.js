@@ -51,6 +51,9 @@ export function validateAgentContextEnvelope(context = {}) {
     if (Number(modelContext.protocolVersion) !== MODEL_CONTEXT_PROTOCOL_VERSION) {
       errors.push(`modelContext.protocolVersion must equal ${MODEL_CONTEXT_PROTOCOL_VERSION}`);
     }
+    if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0) {
+      errors.push("modelContext.checkpointRevision must be a non-negative integer");
+    }
     const active = modelContext.activeTurnIdentity || {};
     if (String(active.dialogProcessId || "").trim() !== identityResult.identity.dialogProcessId) {
       errors.push(

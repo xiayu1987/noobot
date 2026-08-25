@@ -21,30 +21,28 @@ const emit = defineEmits(["click"]);
 const { translate } = useWorkflowLocale();
 
 function normalizeText(value = "") {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function isStartName(value = "") {
   const normalized = normalizeText(value);
   if (!normalized) return false;
-  return (
-    normalized === "start" ||
-    normalized === normalizeText(translate("workflow.stateStart"))
-  );
+  return normalized === "start" || normalized === normalizeText(translate("workflow.stateStart"));
 }
 
 function isEndName(value = "") {
   const normalized = normalizeText(value);
   if (!normalized) return false;
-  return (
-    normalized === "end" ||
-    normalized === normalizeText(translate("workflow.stateEnd"))
-  );
+  return normalized === "end" || normalized === normalizeText(translate("workflow.stateEnd"));
 }
 
 function isStateNode(nodeItem = {}, boundaryType = "") {
   if (boundaryType) return true;
-  const type = String(nodeItem?.type || "").trim().toLowerCase();
+  const type = String(nodeItem?.type || "")
+    .trim()
+    .toLowerCase();
   if (type === "state") return true;
   return Number(nodeItem?.nodeType) === 0;
 }
@@ -52,7 +50,9 @@ function isStateNode(nodeItem = {}, boundaryType = "") {
 function resolveStateTypeKey(nodeItem = {}, boundaryType = "") {
   if (boundaryType === "start") return "start";
   if (boundaryType === "end") return "end";
-  const nodeId = String(nodeItem?.nodeId || nodeItem?.id || "").trim().toLowerCase();
+  const nodeId = String(nodeItem?.nodeId || nodeItem?.id || "")
+    .trim()
+    .toLowerCase();
   const nodeName = String(nodeItem?.nodeName || nodeItem?.name || "");
   const stateType = Number(nodeItem?.stateType);
   if (stateType === 1 || nodeId === "end" || isEndName(nodeName)) return "end";
@@ -100,7 +100,9 @@ function handleClick(nodeItem = {}, clickable = true) {
     :style="styleObj"
     @click="handleClick(nodeItem, clickable)"
   >
-    <div v-if="isActionNode(nodeItem, boundaryType)" class="workflow-node-index">{{ nodeIndex + 1 }}</div>
+    <div v-if="isActionNode(nodeItem, boundaryType)" class="workflow-node-index">
+      {{ nodeIndex + 1 }}
+    </div>
     <div
       v-else-if="isStateNode(nodeItem, boundaryType)"
       class="workflow-node-state-icon"
@@ -114,7 +116,11 @@ function handleClick(nodeItem = {}, clickable = true) {
     </div>
     <div class="workflow-node-main">
       <div class="workflow-node-name">
-        {{ nodeItem?.nodeName || nodeItem?.nodeId || translate("workflow.nodeFallback", { index: nodeIndex + 1 }) }}
+        {{
+          nodeItem?.nodeName ||
+          nodeItem?.nodeId ||
+          translate("workflow.nodeFallback", { index: nodeIndex + 1 })
+        }}
       </div>
       <div
         v-if="!boundaryType && Number(nodeItem?.parallelWave || 0) > 0"
@@ -128,7 +134,12 @@ function handleClick(nodeItem = {}, clickable = true) {
         }}
       </div>
       <div
-        v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
+        v-if="
+          !boundaryType &&
+          isActionNode(nodeItem, boundaryType) &&
+          Array.isArray(nodeItem?.actionNodeStates) &&
+          nodeItem.actionNodeStates.length
+        "
         class="workflow-node-runtime-hint"
       >
         {{ translate("workflow.runtimeState") }}
@@ -139,18 +150,21 @@ function handleClick(nodeItem = {}, clickable = true) {
           })
         }}
       </div>
-      <div
-        v-if="!boundaryType && isStateNode(nodeItem, boundaryType)"
-        class="workflow-node-kind"
-      >
+      <div v-if="!boundaryType && isStateNode(nodeItem, boundaryType)" class="workflow-node-kind">
         {{ resolveStateTypeLabel(nodeItem, boundaryType) }}
       </div>
     </div>
     <WorkflowGraphStatusBadge v-if="!boundaryType" :status="nodeItem?._status || 'pending'" />
     <span
-      v-if="!boundaryType && isActionNode(nodeItem, boundaryType) && Array.isArray(nodeItem?.actionNodeStates) && nodeItem.actionNodeStates.length"
+      v-if="
+        !boundaryType &&
+        isActionNode(nodeItem, boundaryType) &&
+        Array.isArray(nodeItem?.actionNodeStates) &&
+        nodeItem.actionNodeStates.length
+      "
       class="workflow-node-expand-icon"
-    >↗</span>
+      >↗</span
+    >
   </div>
 </template>
 
@@ -185,7 +199,11 @@ function handleClick(nodeItem = {}, clickable = true) {
 .workflow-node.is-state-node {
   border-radius: var(--workflow-node-radius-md);
   padding-inline: var(--workflow-node-space-md);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, var(--noobot-status-success) 6%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 94%,
+    var(--noobot-status-success) 6%
+  );
   border-color: color-mix(
     in srgb,
     var(--noobot-status-success) 34%,
@@ -201,7 +219,11 @@ function handleClick(nodeItem = {}, clickable = true) {
 
 .workflow-node.is-state-node.state-branch,
 .workflow-node.is-state-node.state-merge {
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 92%, rgb(var(--workflow-accent-rgb)) 8%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 92%,
+    rgb(var(--workflow-accent-rgb)) 8%
+  );
   border-color: rgba(var(--workflow-accent-rgb), 0.45);
 }
 
@@ -234,15 +256,31 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node.boundary-start {
-  background: color-mix(in srgb, var(--noobot-status-success) 12%, var(--noobot-msg-assistant-bg) 88%);
-  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, var(--noobot-msg-assistant-border) 64%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-status-success) 12%,
+    var(--noobot-msg-assistant-bg) 88%
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-status-success) 36%,
+    var(--noobot-msg-assistant-border) 64%
+  );
   border-radius: var(--noobot-radius-pill);
   clip-path: none;
 }
 
 .workflow-node.boundary-end {
-  background: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 12%, var(--noobot-msg-assistant-bg) 88%);
-  border-color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 40%, var(--noobot-msg-assistant-border) 60%);
+  background: color-mix(
+    in srgb,
+    rgb(var(--workflow-accent-rgb)) 12%,
+    var(--noobot-msg-assistant-bg) 88%
+  );
+  border-color: color-mix(
+    in srgb,
+    rgb(var(--workflow-accent-rgb)) 40%,
+    var(--noobot-msg-assistant-border) 60%
+  );
   border-radius: var(--noobot-radius-pill);
   clip-path: none;
 }
@@ -266,7 +304,11 @@ function handleClick(nodeItem = {}, clickable = true) {
 }
 
 .workflow-node-state-icon {
-  background: color-mix(in srgb, rgb(var(--workflow-success-rgb)) 74%, var(--noobot-base-white) 26%);
+  background: color-mix(
+    in srgb,
+    rgb(var(--workflow-success-rgb)) 74%,
+    var(--noobot-base-white) 26%
+  );
 }
 
 .workflow-node-state-icon.state-icon-branch,
@@ -322,13 +364,21 @@ function handleClick(nodeItem = {}, clickable = true) {
   font-size: 10px;
   line-height: 1.3;
   color: color-mix(in srgb, var(--noobot-status-success) 74%, var(--noobot-text-secondary) 26%);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 82%, var(--noobot-status-success) 18%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 82%,
+    var(--noobot-status-success) 18%
+  );
 }
 
 .workflow-node.state-branch .workflow-node-kind,
 .workflow-node.state-merge .workflow-node-kind {
   color: color-mix(in srgb, rgb(var(--workflow-accent-rgb)) 82%, var(--noobot-text-secondary) 18%);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 82%, rgb(var(--workflow-accent-rgb)) 18%);
+  background: color-mix(
+    in srgb,
+    var(--noobot-msg-assistant-bg) 82%,
+    rgb(var(--workflow-accent-rgb)) 18%
+  );
 }
 
 @media (max-width: 480px) {

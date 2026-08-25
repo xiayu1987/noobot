@@ -11,7 +11,6 @@ import {
   PROMPT_ENVELOPE,
   appendCapabilityLog,
   appendCapabilityModelTraceLog,
-  buildCapabilityModelMessages,
   ensureHarnessBucket,
   extractRawTextContent,
   invokeCapabilityModel,
@@ -184,12 +183,7 @@ export async function runPhaseAcceptanceBySeparateModel(
         prompt: "",
         messages: buildPhaseAcceptanceMessages({
           locale,
-          agentMessages: buildCapabilityModelMessages({
-            locale,
-            agentMessages,
-            constraints: [],
-            task: "",
-          }),
+          agentMessages,
           summaryReportsContents,
           planContextContent,
           phaseReportsContents,
@@ -319,17 +313,12 @@ export async function ensurePhaseAcceptanceBeforeFinalAcceptance(ctx = {}, meta 
         prompt: "",
         messages: buildPhaseAcceptanceMessages({
           locale,
-          agentMessages: buildCapabilityModelMessages({
-            locale,
-            agentMessages: filterHistoricalSummaryRelayMessages(
-              resolveCapabilityModelMessages(meta, {
-                ctx,
-                purpose: "phase_acceptance_before_final",
-              }),
-            ),
-            constraints: [],
-            task: "",
-          }),
+          agentMessages: filterHistoricalSummaryRelayMessages(
+            resolveCapabilityModelMessages(meta, {
+              ctx,
+              purpose: "phase_acceptance_before_final",
+            }),
+          ),
           summaryReportsContents,
           planContextContent,
           phaseReportsContents,

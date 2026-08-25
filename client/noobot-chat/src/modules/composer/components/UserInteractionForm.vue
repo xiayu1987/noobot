@@ -77,8 +77,12 @@ watch(
 <template>
   <div v-if="request" class="interaction-card noobot-surface-card">
     <div class="interaction-head">
-      <span class="interaction-badge noobot-soft-badge">{{ translate("composer.pendingConfirm") }}</span>
-      <div class="interaction-title">{{ request.content || translate("composer.confirmOrSupplement") }}</div>
+      <span class="interaction-badge noobot-soft-badge">{{
+        translate("composer.pendingConfirm")
+      }}</span>
+      <div class="interaction-title">
+        {{ request.content || translate("composer.confirmOrSupplement") }}
+      </div>
     </div>
 
     <el-form
@@ -95,7 +99,10 @@ watch(
         <el-input
           :ref="index === 0 ? setFirstInputRef : null"
           v-model="formData[fieldItem.name]"
-          :placeholder="fieldItem.description || translate('composer.inputField', { field: fieldItem.displayName || fieldItem.name })"
+          :placeholder="
+            fieldItem.description ||
+            translate('composer.inputField', { field: fieldItem.displayName || fieldItem.name })
+          "
         />
       </el-form-item>
     </el-form>

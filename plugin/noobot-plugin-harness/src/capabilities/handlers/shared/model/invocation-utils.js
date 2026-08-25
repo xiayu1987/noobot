@@ -3,15 +3,18 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { validateModelResponse } from "@noobot/model-protocol";
+import { MODEL_CONTEXT_SEQUENCE_POLICY, validateModelResponse } from "@noobot/model-protocol";
+import {
+  AUXILIARY_SEQUENCE_MESSAGE_KIND,
+  declareAuxiliarySequenceIdentity,
+} from "@noobot/context-protocol/assembly/auxiliary-sequence";
 import { ensureHarnessBucket } from "../bucket-utils.js";
 import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.js";
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
-import { resolveIncrementalCapabilityMessages } from "./incremental-message-cache.js";
-import { markMessageAsProtocol } from "./message-metadata.js";
+import { resolveAuxiliarySnapshotMessages } from "./auxiliary-snapshot-store.js";
 
 function buildAuxiliaryModelNoScriptMessage(ctx = {}) {
-  return markMessageAsProtocol(
+  return declareAuxiliarySequenceIdentity(
     {
       role: "system",
       content: translateI18nText(
@@ -19,7 +22,10 @@ function buildAuxiliaryModelNoScriptMessage(ctx = {}) {
         HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.AUXILIARY_MODEL_NO_SCRIPT_CONSTRAINT,
       ),
     },
-    "harness:auxiliary-model-no-script-constraint",
+    {
+      kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.STABLE_PROTOCOL,
+      key: "harness:auxiliary-model-no-script-constraint",
+    },
   );
 }
 
@@ -59,15 +65,21 @@ export async function invokeCapabilityModel({
   if (typeof invoker !== "function") return null;
   if (isHarnessAgentTurnEnded(ctx)) return null;
   const payload = invokePayload && typeof invokePayload === "object" ? { ...invokePayload } : {};
-  const runtimeMessages = [
-    buildAuxiliaryModelNoScriptMessage(ctx),
-    ...resolveIncrementalCapabilityMessages({
-      ctx,
-      purpose: purpose || payload.purpose,
-      messages: Array.isArray(payload.messages) ? payload.messages : [],
+  const runtimeMessages = resolveAuxiliarySnapshotMessages({
+    ctx,
+    purpose: purpose || payload.purpose,
+    messages: [
+      buildAuxiliaryModelNoScriptMessage(ctx),
+      ...(Array.isArray(payload.messages) ? payload.messages : []),
+    ],
+  });
+  const response = validateModelResponse(
+    await invoker({
+      ...payload,
+      messages: runtimeMessages,
+      contextSequencePolicy: MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
     }),
-  ];
-  const response = validateModelResponse(await invoker({ ...payload, messages: runtimeMessages }));
+  );
   if (!String(response.output.text || "").trim()) {
     throw new TypeError(
       `harness capability model returned empty output: ${purpose || payload.purpose || "unknown"}`,

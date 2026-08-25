@@ -21,14 +21,23 @@ const stepView = computed(() => {
     { key: "completing", title: translate("composer.completing") },
     {
       key: terminal,
-      title: terminal === "stopped"
-        ? translate("composer.turnStopped")
-        : terminal === "error"
-          ? translate("composer.turnFailed")
-          : translate("composer.turnCompleted"),
+      title:
+        terminal === "stopped"
+          ? translate("composer.turnStopped")
+          : terminal === "error"
+            ? translate("composer.turnFailed")
+            : translate("composer.turnCompleted"),
     },
   ];
-  const activeByState = { requesting: 0, sending: 1, completing: 2, stopping: 2, completed: 4, stopped: 4, error: 4 };
+  const activeByState = {
+    requesting: 0,
+    sending: 1,
+    completing: 2,
+    stopping: 2,
+    completed: 4,
+    stopped: 4,
+    error: 4,
+  };
   return {
     steps,
     active: activeByState[props.statusStepState] ?? 0,
@@ -111,7 +120,6 @@ const stepView = computed(() => {
   color: var(--noobot-thinking-muted);
   letter-spacing: 0.5px;
 }
-
 
 .message-status-steps :deep(.el-step__head.is-success .el-step__icon),
 .message-status-steps :deep(.el-step__head.is-finish .el-step__icon) {

@@ -208,9 +208,7 @@ export async function copyMarkdownRichAsHtmlPage(rawHtmlContent = "") {
     '<svg style="max-width: 100%; height: auto; display: block; margin: 0 auto;" ',
   );
   rawHtml = `<div class="markdown-export-container">${rawHtml}</div>`;
-  const normalizedHtmlContent = applyInlineStylesForCopy(
-    stripBackgroundStylesFromHtml(rawHtml),
-  );
+  const normalizedHtmlContent = applyInlineStylesForCopy(stripBackgroundStylesFromHtml(rawHtml));
 
   let htmlPageContent = buildHtmlDocumentForCopy(normalizedHtmlContent);
 

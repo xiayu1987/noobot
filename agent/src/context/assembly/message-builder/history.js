@@ -6,6 +6,7 @@
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
 import { filterCurrentTurnMessagesFromHistory } from "@noobot/context-protocol/policy/block";
 import {
+  deriveContextMessageProjectionId,
   projectContextMessageIdentityMetadata,
   resolveContextMessageRole,
   resolveContextToolCallId,
@@ -36,6 +37,27 @@ export function filterCurrentTurnUserMessageFromHistory(
   });
 }
 
+function hasMaterializedUserMeta(messages = [], index = 0, sourceMessage = {}) {
+  const sourceId = String(
+    sourceMessage?.messageUid ||
+      sourceMessage?.noobotMessageId ||
+      sourceMessage?.additional_kwargs?.noobotMessageId ||
+      sourceMessage?.lc_kwargs?.noobotMessageId ||
+      "",
+  ).trim();
+  if (!sourceId) return false;
+  const meta = messages[index + 1];
+  if (!meta || !isDerivedUserMetaMessage(meta)) return false;
+  const metaId = String(
+    meta?.messageUid ||
+      meta?.noobotMessageId ||
+      meta?.additional_kwargs?.noobotMessageId ||
+      meta?.lc_kwargs?.noobotMessageId ||
+      "",
+  ).trim();
+  return metaId === deriveContextMessageProjectionId(sourceId, "user_meta");
+}
+
 export function buildHistoryMessages({
   effectiveHistoryMessages = [],
   runtime = {},
@@ -43,6 +65,7 @@ export function buildHistoryMessages({
   allowMessageAttachments = true,
 } = {}) {
   const history = [];
+  const consumedMetaIndexes = new Set();
   const knownHistoryToolCallIds = new Set();
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
@@ -53,7 +76,8 @@ export function buildHistoryMessages({
       if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
     }
   }
-  for (const msg of effectiveHistoryMessages) {
+  for (const [messageIndex, msg] of effectiveHistoryMessages.entries()) {
+    if (consumedMetaIndexes.has(messageIndex)) continue;
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (isDerivedUserMetaMessage(msg)) continue;
     const role = resolveContextMessageRole(msg);
@@ -110,13 +134,33 @@ export function buildHistoryMessages({
       );
       continue;
     }
-    if (shouldBuildUserMetaForHistoryMessage(msg, runtime)) {
+    const materializedMeta = hasMaterializedUserMeta(effectiveHistoryMessages, messageIndex, msg);
+    if (shouldBuildUserMetaForHistoryMessage(msg, runtime) && !materializedMeta) {
       history.push(
         ...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
           allowFallbackAttachments: false,
           allowFallbackIdentity: false,
           allowMessageAttachments,
           allowFallbackRoundIdentity: false,
+        }),
+      );
+    } else if (materializedMeta) {
+      const metaIndex = messageIndex + 1;
+      const meta = effectiveHistoryMessages[metaIndex];
+      consumedMetaIndexes.add(metaIndex);
+      history.push(
+        new HumanMessage({
+          content: buildHumanMessageContent(msg),
+          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+        }),
+        new HumanMessage({
+          content: buildHumanMessageContent(meta),
+          // A snapshot already contains the authoritative user_meta projection.
+          // Preserve its identity/type so the next resume does not re-materialize it.
+          additional_kwargs: {
+            ...projectContextMessageIdentityMetadata(meta),
+            noobotInternalMessageType: "user_meta",
+          },
         }),
       );
     } else {

@@ -21,7 +21,10 @@ function getWorkflowSemanticModel() {
 }
 
 function getModelMetaText(modelItem = {}) {
-  return [modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "", modelItem.model]
+  return [
+    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
+    modelItem.model,
+  ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join(" · ");
@@ -60,13 +63,19 @@ function onWorkflowSemanticModelChange(value = "") {
         >
           <div class="model-option-content">
             <span class="model-option-label">{{ modelItem.label }}</span>
-            <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{ getModelMetaText(modelItem) }}</span>
-            <span v-if="modelItem.description" class="model-option-description">{{ modelItem.description }}</span>
+            <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
+              getModelMetaText(modelItem)
+            }}</span>
+            <span v-if="modelItem.description" class="model-option-description">{{
+              modelItem.description
+            }}</span>
           </div>
         </el-option>
       </el-select>
     </label>
-    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("modelExtension.empty") }}</span>
+    <span v-if="!hasModelOptions" class="plugin-empty-text">{{
+      translate("modelExtension.empty")
+    }}</span>
   </div>
 </template>
 
@@ -76,9 +85,18 @@ function onWorkflowSemanticModelChange(value = "") {
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border, var(--el-border-color)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 18%,
+      var(--noobot-panel-border, var(--el-border-color))
+    );
   border-radius: var(--noobot-radius-lg);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 94%, var(--el-color-primary));
+  background: color-mix(
+    in srgb,
+    var(--noobot-surface-sidebar, var(--el-bg-color)) 94%,
+    var(--el-color-primary)
+  );
 }
 
 .plugin-model-title {
@@ -101,9 +119,14 @@ function onWorkflowSemanticModelChange(value = "") {
   gap: 7px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%,
+    transparent
+  );
 }
 
 .plugin-model-label {
@@ -122,16 +145,28 @@ function onWorkflowSemanticModelChange(value = "") {
   height: 38px;
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%,
+    var(--el-color-primary)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 78%,
+    transparent
+  );
   transition:
     background-color 0.18s ease,
-    border-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 50%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
 }
 
 .composer-select :deep(.el-select__selected-item),

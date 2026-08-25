@@ -50,9 +50,7 @@ import {
   shouldSaveSummaryToAttachment,
   transferSummaryInjectionMessage,
 } from "./summary-manager.js";
-import {
-  parseSummaryOverviewAndDetailFromText,
-} from "../shared/plan/summary-text-protocol.js";
+import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import {
   buildGuidanceSummaryPromptText,
@@ -70,7 +68,6 @@ import {
   resolveOperationDirectoryContext,
 } from "../shared/operation-directory.js";
 import { applyDynamicPolicyPromptFromText } from "../shared/workflow/dynamic-policy-prompt.js";
-import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/model/incremental-message-cache.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -535,7 +532,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);
-    clearIncrementalCapabilityMessageCacheForContext(ctx);
     const checkpointRequestedMessageCount = Array.isArray(
       state?.pending?.summaryCheckpointMessageIds,
     )
