@@ -7,7 +7,6 @@ import fs from "node:fs";
 import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
-  assertConfigParamsDocumentKeys,
   collectConfigTemplateKeys,
   DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   ensureModelProviderInConfigFile,
@@ -127,7 +126,8 @@ export function createDesktopConfigManager({
         fs.rmSync(targetPath, { recursive: true, force: true });
         continue;
       }
-      if (sourceStat.isDirectory()) removeStaleTemplateEntries({ from: sourcePath, to: targetPath });
+      if (sourceStat.isDirectory())
+        removeStaleTemplateEntries({ from: sourcePath, to: targetPath });
     }
   }
 
@@ -399,10 +399,9 @@ export function createDesktopConfigManager({
   function saveConfigParamValues({ workspaceRootPath, values = {} } = {}) {
     const filePath = path.join(workspaceRootPath, "config-params.json");
     const current = normalizeConfigParamsDocument(readJsonFile(filePath, {}) || {});
-    const incoming = assertConfigParamsDocumentKeys(
-      { values: isPlainObject(values) ? values : {} },
-      Object.keys(current.values),
-    );
+    const incoming = normalizeConfigParamsDocument({
+      values: isPlainObject(values) ? values : {},
+    });
     const next = normalizeConfigParamsDocument({
       values: { ...current.values, ...incoming.values },
       descriptions: current.descriptions,

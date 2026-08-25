@@ -105,22 +105,11 @@ function normalizeExplicitConfigParamKeys(keys = []) {
 }
 
 export function assertConfigParamsDocumentKeys(document = {}, keys = []) {
-  const normalizedDocument = normalizeConfigParamsDocument(document);
-  const allowedKeys = new Set(normalizeExplicitConfigParamKeys(keys));
-  const documentKeys = new Set([
-    ...Object.keys(normalizedDocument.values),
-    ...Object.keys(normalizedDocument.descriptions),
-  ]);
-  const unknownKeys = Array.from(documentKeys)
-    .filter((key) => !allowedKeys.has(key))
-    .sort((left, right) => left.localeCompare(right));
-  if (unknownKeys.length) {
-    throw new AgentConfigProtocolError(`unknown config param key: ${unknownKeys[0]}`, {
-      code: CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT,
-      details: { field: "values", keys: unknownKeys },
-    });
-  }
-  return normalizedDocument;
+  // Template keys select values during resolution; they do not constrain the
+  // parameter document. Normalize the document to enforce syntax and duplicate
+  // detection while preserving valid user-defined keys.
+  void keys;
+  return normalizeConfigParamsDocument(document);
 }
 
 export function synchronizeConfigParamsDocument({ document = {}, keys = [] } = {}) {
@@ -128,12 +117,19 @@ export function synchronizeConfigParamsDocument({ document = {}, keys = [] } = {
   const authoritativeKeys = normalizeExplicitConfigParamKeys(keys).sort((left, right) =>
     left.localeCompare(right),
   );
+  const knownKeys = new Set([
+    ...Object.keys(normalizedDocument.values),
+    ...Object.keys(normalizedDocument.descriptions),
+  ]);
+  const outputKeys = [...new Set([...authoritativeKeys, ...knownKeys])].sort((left, right) =>
+    left.localeCompare(right),
+  );
   return {
     values: Object.fromEntries(
-      authoritativeKeys.map((key) => [key, normalizedDocument.values[key] || ""]),
+      outputKeys.map((key) => [key, normalizedDocument.values[key] || ""]),
     ),
     descriptions: Object.fromEntries(
-      authoritativeKeys.map((key) => [key, normalizedDocument.descriptions[key] || ""]),
+      outputKeys.map((key) => [key, normalizedDocument.descriptions[key] || ""]),
     ),
   };
 }

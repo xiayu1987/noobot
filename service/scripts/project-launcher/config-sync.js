@@ -49,10 +49,13 @@ export async function ensureAgentProxyConfig({ serviceRoot } = {}) {
 
 export async function upsertConfigParams({
   workspaceRootAbsolutePath,
+  configParamsFilePath = "",
   entries = {},
   overwriteKeys = [],
 } = {}) {
-  const filePath = path.join(workspaceRootAbsolutePath, "config-params.json");
+  const filePath =
+    String(configParamsFilePath || "").trim() ||
+    path.join(workspaceRootAbsolutePath, "config-params.json");
   const currentPayload = normalizeConfigParamsDocument((await readJsonRelaxed(filePath, {})) || {});
   const values = { ...currentPayload.values };
   const descriptions = { ...currentPayload.descriptions };
@@ -361,4 +364,24 @@ export async function ensureWorkspaceConfigParamsCatalog({
     entries,
     overwriteKeys: Object.keys(explicitEntries || {}),
   });
+
+  for (const userId of await collectWorkspaceUserIds({ workspaceRootAbsolutePath })) {
+    const userConfigPath = path.join(workspaceRootAbsolutePath, userId, "config.json");
+    const userExamplePath = path.join(workspaceRootAbsolutePath, userId, "config.example.json");
+    const userDocuments = [
+      await readJsonRelaxed(globalConfigPath, {}),
+      await readJsonRelaxed(path.join(workspaceTemplateAbsolutePath, "config.json"), {}),
+      await readJsonRelaxed(path.join(workspaceTemplateAbsolutePath, "config.example.json"), {}),
+      await readJsonRelaxed(userConfigPath, {}),
+      await readJsonRelaxed(userExamplePath, {}),
+    ];
+    const userEntries = Object.fromEntries(
+      collectConfigTemplateKeys(...userDocuments).map((key) => [key, ""]),
+    );
+    await upsertConfigParams({
+      workspaceRootAbsolutePath,
+      configParamsFilePath: path.join(workspaceRootAbsolutePath, userId, "config-params.json"),
+      entries: userEntries,
+    });
+  }
 }
