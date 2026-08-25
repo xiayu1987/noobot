@@ -5,7 +5,11 @@
  */
 
 import { safeStr, safeNum } from "../shared/utils/shared-utils.js";
-import { attachmentIdentityKey, projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  attachmentIdentityKey,
+  formatAttachmentIdentityRef,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -64,6 +68,18 @@ export function projectCanonicalAttachmentIdentities(attachments = [], expectedS
   return attachments.map((attachmentItem) =>
     projectCanonicalAttachmentIdentity(attachmentItem, expectedSessionId),
   );
+}
+
+export function projectAttachmentMetaForModel(attachmentItem = {}) {
+  const identity = projectCanonicalAttachmentIdentity(attachmentItem);
+  const hasSize = attachmentItem.size !== undefined && attachmentItem.size !== null;
+  const size = hasSize ? Number(attachmentItem.size) : Number.NaN;
+  return {
+    attachmentRef: formatAttachmentIdentityRef(identity),
+    ...(safeStr(attachmentItem.name) ? { name: safeStr(attachmentItem.name) } : {}),
+    ...(safeStr(attachmentItem.mimeType) ? { mimeType: safeStr(attachmentItem.mimeType) } : {}),
+    ...(Number.isFinite(size) ? { size } : {}),
+  };
 }
 
 export function canonicalAttachmentIdentityKey(attachmentItem = {}) {

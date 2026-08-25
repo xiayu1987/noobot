@@ -162,7 +162,7 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "Run a Node.js function body with injected Playwright, LibreOffice, FFmpeg/FFprobe, and file capabilities for web processing, document conversion, and media normalization. output:// artifacts return as attachments; task-local values and output names cannot cross calls or serve as workspace paths. Pass only complete attachment identities to later tools.",
+      text: "Run a Node.js function with browser, document, media, and file capabilities. output:// artifacts become attachments; pass only attachmentRef across tools.",
     },
     params: {
       script_body: {
@@ -171,15 +171,15 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
-        text: "Array of read-only input objects. Every item must be { source: logicalWorkspacePathOrCompleteAttachmentIdentity }; do not pass strings directly. files.input(index) is only the Native Script execution token; never pass output:// or temp:// across tool calls.",
+        text: "Read-only inputs shaped as { source: logicalPathOrAttachmentRef }. output:// and temp:// cannot cross calls.",
       },
       filePath: {
         key: "tools.nativeScript.fieldFilePath",
         text: "When source is a string, it is a logical workspace or authorized host file path.",
       },
-      attachmentIdentity: {
-        key: "tools.nativeScript.fieldAttachmentIdentity",
-        text: "An attachment object must contain the complete attachmentId, sessionId, and attachmentSource identity.",
+      attachmentRef: {
+        key: "tools.nativeScript.fieldAttachmentRef",
+        text: "Use the context attachmentRef unchanged.",
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",

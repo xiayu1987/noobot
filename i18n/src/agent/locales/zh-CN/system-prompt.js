@@ -43,8 +43,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "用户工作区目录",
     workspaceDirectoryDescriptions: {
       runtime: "运行时数据根目录",
-      "runtime/attach":
-        "附件 workspace 逻辑目录；权威分层为 runtime/attach/scoped/<sessionId>/<attachmentSource>/。查找或审计时使用该 workspace 相对路径；跨工具传递附件时使用完整附件身份，不拼接物理文件路径。",
+      "runtime/attach": "附件目录；附件操作原样使用 attachmentRef。",
       "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
       "runtime/ops_workdir": "脚本执行与中间工作区",
@@ -72,7 +71,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "当前为 sandbox 模式；workspace 逻辑路径与系统运行环境中列出的额外挂载目标可用于所有文件相关工具。挂载路径受全局配置的只读属性和路径策略统一约束。",
       hostWorkspaceView: "当前为 host 模式；workspace 类工具使用服务工作区视角。",
       taskLocalView:
-        "execute_native_script 的 task-local 仅本次调用有效，输出 name 不是路径；跨工具只传结果中的完整附件身份，不得拼接 workspace 或 host 路径。",
+        "execute_native_script 的 task-local 仅本次调用有效；跨工具原样传递 attachmentRef。",
       superUserHost:
         "可使用 Windows（如 C:\\\\dir）、macOS/Linux（如 /Users、/home）等 host 绝对路径。",
       regularHost:

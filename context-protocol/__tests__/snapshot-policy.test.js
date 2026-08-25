@@ -10,6 +10,7 @@ import {
   createModelContextSnapshot,
   hydrateModelContextSnapshot,
   projectSnapshotIncrementalToContinuation,
+  restoreSnapshotUserAttachmentFactsFromSessionAuthority,
   serializeContextMessage,
 } from "../src/policy/snapshot.js";
 
@@ -132,6 +133,103 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
     Array(5).fill(secondTurn),
   );
   assert.equal(restored.messageBlocks.incremental[1].content, userMetaContent);
-  assert.notEqual(continuedSnapshotMessages[1].content, userMetaContent);
-  assert.match(continuedSnapshotMessages[1].content, /"dialogProcessId": "dialog-second"/);
+  assert.equal(continuedSnapshotMessages[1].content, userMetaContent);
+});
+
+test("snapshot attachment facts come only from matching Session authority", () => {
+  const derivedMeta = {
+    type: "human",
+    content: "[User Metadata]",
+    additional_kwargs: {
+      noobotMessageId: "source-user::user_meta",
+      frontendUserMessage: true,
+      noobotInternalMessageType: "user_meta",
+    },
+  };
+  const restored = restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+    {
+      system: [{ type: "system", content: "system" }],
+      history: [
+        {
+          type: "human",
+          content: "source",
+          additional_kwargs: {
+            noobotMessageId: "source-user",
+            frontendUserMessage: true,
+          },
+        },
+      ],
+      incremental: [derivedMeta],
+    },
+    [
+      {
+        role: "user",
+        messageUid: "source-user",
+        attachments: [{ attachmentId: "attachment-authority" }],
+      },
+    ],
+  );
+
+  assert.deepEqual(restored.history[0].attachments, [{ attachmentId: "attachment-authority" }]);
+  assert.equal(restored.incremental[0], derivedMeta);
+});
+
+test("persisted snapshot user sources require canonical identity", () => {
+  assert.throws(
+    () =>
+      restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+        {
+          incremental: [{ type: "human", content: "source", frontendUserMessage: true }],
+        },
+        [],
+      ),
+    /requires canonical message identity/,
+  );
+});
+
+test("snapshot restoration requires the Session authority message collection", () => {
+  assert.throws(
+    () => restoreSnapshotUserAttachmentFactsFromSessionAuthority({}),
+    /Session authority messages must be an array/,
+  );
+});
+
+test("persisted snapshot user sources must exist in Session authority", () => {
+  assert.throws(
+    () =>
+      restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+        {
+          incremental: [
+            {
+              type: "human",
+              content: "source",
+              messageUid: "missing-user",
+              frontendUserMessage: true,
+            },
+          ],
+        },
+        [],
+      ),
+    /missing from Session authority: missing-user/,
+  );
+});
+
+test("snapshot user source identity cannot resolve to another Session role", () => {
+  assert.throws(
+    () =>
+      restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+        {
+          incremental: [
+            {
+              type: "human",
+              content: "source",
+              messageUid: "source-user",
+              frontendUserMessage: true,
+            },
+          ],
+        },
+        [{ role: "assistant", messageUid: "source-user" }],
+      ),
+    /conflicts with Session authority role: source-user/,
+  );
 });

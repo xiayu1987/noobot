@@ -166,8 +166,7 @@ test("composeSystemInfoSections describes the active workspace execution view", 
   assert.equal(superHostText.includes("Super user"), true);
   assert.equal(superHostText.includes("Host mode is active"), true);
   assert.equal(superHostText.includes("task-local paths last for one call"), true);
-  assert.equal(superHostText.includes("output names are not paths"), true);
-  assert.equal(superHostText.includes("never construct workspace or host paths"), true);
+  assert.equal(superHostText.includes("pass attachmentRef unchanged across tools"), true);
 });
 
 test("composeSystemInfoSections uses attachments as attachment context", () => {
@@ -178,10 +177,28 @@ test("composeSystemInfoSections uses attachments as attachment context", () => {
   });
 
   const joined = sections.join("\n\n");
-  assert.equal(joined.includes("input_att"), true);
+  assert.equal(joined.includes("attachment:v1:s1/user/input_att"), true);
+  assert.equal(joined.includes('\"attachmentId\"'), false);
+  assert.equal(joined.includes('\"sessionId\"'), false);
+  assert.equal(joined.includes('\"attachmentSource\"'), false);
 });
 
-test("attachment context documents the workspace layout and keeps identity authoritative", () => {
+test("attachment context preserves a zero-byte size fact", () => {
+  const sections = composeSystemInfoSections({
+    locale: "en-US",
+    attachments: [
+      {
+        attachmentId: "empty",
+        sessionId: "s1",
+        attachmentSource: "user",
+        size: 0,
+      },
+    ],
+  });
+  assert.equal(sections.join("\n").includes('"size": 0'), true);
+});
+
+test("attachment context exposes one authoritative model reference", () => {
   const sections = composeSystemInfoSections({
     locale: "en-US",
     systemPrompt: "base",
@@ -190,9 +207,8 @@ test("attachment context documents the workspace layout and keeps identity autho
   });
 
   const joined = sections.join("\n\n");
-  assert.equal(joined.includes("input_att"), true);
-  assert.equal(joined.includes("runtime/attach/scoped/<sessionId>/<attachmentSource>/"), true);
-  assert.equal(joined.includes("workspace-relative path for search or audit"), true);
-  assert.equal(joined.includes("complete attachment identity for cross-tool transfer"), true);
+  assert.equal(joined.includes("attachment:v1:s1/user/input_att"), true);
+  assert.equal(joined.includes("runtime/attach/scoped/"), false);
+  assert.equal(joined.includes("Attachment directory; use attachmentRef unchanged."), true);
   assert.equal(joined.includes("/workspace/"), false);
 });

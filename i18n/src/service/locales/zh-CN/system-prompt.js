@@ -43,8 +43,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "用户工作区目录",
     workspaceDirectoryDescriptions: {
       runtime: "运行时数据根目录",
-      "runtime/attach":
-        "附件 workspace 逻辑目录；权威分层为 runtime/attach/scoped/<sessionId>/<attachmentSource>/。查找或审计时使用该 workspace 相对路径；跨工具传递附件时使用完整附件身份，不拼接物理文件路径。",
+      "runtime/attach": "附件目录；附件操作原样使用 attachmentRef。",
       "runtime/connectors": "连接器运行与历史信息（如 connector-history.json）",
       "runtime/session": "会话与执行记录",
       "runtime/ops_workdir": "脚本执行与中间工作区",

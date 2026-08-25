@@ -3,7 +3,10 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { parseAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  ATTACHMENT_IDENTITY_REF_PREFIX,
+  parseAttachmentIdentityRef,
+} from "@noobot/attachment-protocol";
 import { filePath as path, resolvePathRef } from "@noobot/path-resolver";
 import { stat } from "node:fs/promises";
 import { z } from "zod";
@@ -12,23 +15,16 @@ import { getBasePathFromAgentContext } from "../../context/agent-context-accesso
 import { resolveAuthorizedUserWorkspaceFilePath } from "./check-tool-input.js";
 import { registerResource } from "./resource-broker.js";
 
-export const attachmentIdentitySchema = z
-  .object({
-    attachmentId: z.string().min(1),
-    sessionId: z.string().min(1),
-    attachmentSource: z.string().min(1),
-  })
-  .strict();
-
-export function createFileSourceSchema({ filePathDescription, attachmentIdentityDescription } = {}) {
+export function createFileSourceSchema({ filePathDescription, attachmentRefDescription } = {}) {
   return z
-    .union([
-      z.string().min(1).describe(filePathDescription || "Logical file path."),
-      attachmentIdentitySchema.describe(
-        attachmentIdentityDescription || "Complete attachment identity.",
-      ),
-    ])
-    .describe("Logical file path or complete attachment identity.");
+    .string()
+    .min(1)
+    .describe(
+      [
+        filePathDescription || "Logical file path.",
+        attachmentRefDescription || "Canonical attachment reference.",
+      ].join(" "),
+    );
 }
 
 export function createFileInputSchema(options = {}) {
@@ -42,12 +38,13 @@ export async function resolveFileInput({
   capability,
   mustExist = true,
 } = {}) {
-  const attachmentIdentity =
-    source && typeof source === "object" && !Array.isArray(source)
-      ? parseAttachmentIdentity(source)
-      : null;
+  if (typeof source !== "string") throw new TypeError(`${fieldName} source must be a string`);
+  const normalizedSource = source.trim();
+  const attachmentIdentity = normalizedSource.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)
+    ? parseAttachmentIdentityRef(normalizedSource)
+    : null;
   let sourceAttachmentMeta = null;
-  let authorizationInput = attachmentIdentity ? "" : String(source || "").trim();
+  let authorizationInput = attachmentIdentity ? "" : normalizedSource;
   if (!attachmentIdentity && !authorizationInput)
     throw new TypeError(`${fieldName} source is required`);
   if (attachmentIdentity) {
@@ -77,7 +74,7 @@ export async function resolveFileInput({
   if (!mustExist && !(await stat(executionPath).catch(() => null))) {
     return {
       executionPath,
-      displayInput: attachmentIdentity || String(source || "").trim(),
+      displayInput: normalizedSource,
       resourceRef: null,
       pathRef: resolution.pathRef,
       sourceAttachmentMeta,
@@ -95,7 +92,7 @@ export async function resolveFileInput({
   return {
     executionPath,
     displayInput: sourceAttachmentMeta
-      ? attachmentIdentity
+      ? normalizedSource
       : String(resourceRef.logical?.path || authorizationInput || "").trim(),
     resourceRef,
     pathRef: sourceAttachmentMeta

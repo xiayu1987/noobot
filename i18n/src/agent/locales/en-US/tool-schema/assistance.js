@@ -116,20 +116,20 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "Use a multimodal model to extract content from one or more images, binary documents, audio files, or videos and save the result. Plain text, JSON, CSV, code, logs, and tool-result attachments must be read with read_file or resource chunk reading and must not use this tool. Each input source is a logical file path or complete attachment identity.",
+      text: "Parse images, binary documents, audio, or video and save the result. Use read_file for text. source accepts a logical path or attachmentRef.",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "One or more images, binary documents, audio files, or videos that require model extraction; directly readable text inputs are not accepted. Each item contains a logical file path or complete attachment identity.",
+        text: "Images, binary documents, audio, or video to parse; each item uses a logical path or attachmentRef.",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
         text: "When source is a string, it is a logical file path resolved by the server.",
       },
-      attachmentIdentity: {
-        key: "tools.multimodalParse.fieldAttachmentIdentity",
-        text: "An attachment object must contain attachmentId, sessionId, and attachmentSource.",
+      attachmentRef: {
+        key: "tools.multimodalParse.fieldAttachmentRef",
+        text: "Use the context attachmentRef unchanged.",
       },
       model_name: {
         key: "tools.multimodalParse.fieldModelName",

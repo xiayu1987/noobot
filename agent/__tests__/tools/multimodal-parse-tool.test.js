@@ -186,19 +186,9 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
     await tool.invoke(
       {
         inputs: [
-          {
-            source: { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "user" },
-          },
-          {
-            source: { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
-          },
-          {
-            source: {
-              attachmentId: "source-3",
-              sessionId: "session-1",
-              attachmentSource: "model",
-            },
-          },
+          { source: "attachment:v1:session-1/user/source-1" },
+          { source: "attachment:v1:session-1/user/source-2" },
+          { source: "attachment:v1:session-1/model/source-3" },
         ],
         prompt: "Extract the invoice",
       },
@@ -236,10 +226,10 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   assert.equal(result.summary.source_attachment_backwritten_count, 2);
   assert.equal(result.summary.input_file_count, 3);
   assert.deepEqual(result.summary.input_modalities, ["image", "document"]);
-  assert.deepEqual(result.summary.source_attachment_identities, [
-    { attachmentId: "source-1", sessionId: "session-1", attachmentSource: "user" },
-    { attachmentId: "source-2", sessionId: "session-1", attachmentSource: "user" },
-    { attachmentId: "source-3", sessionId: "session-1", attachmentSource: "model" },
+  assert.deepEqual(result.summary.source_attachment_refs, [
+    "attachment:v1:session-1/user/source-1",
+    "attachment:v1:session-1/user/source-2",
+    "attachment:v1:session-1/model/source-3",
   ]);
   assert.equal(result.summary.saved_attachment_count, 1);
 });
@@ -307,7 +297,7 @@ test("multimodal_parse parses a workspace file without source-attachment backwri
   assert.equal(modelCalled, true);
   assert.equal(linkCalled, false);
   assert.equal(result.ok, true);
-  assert.deepEqual(result.summary.source_attachment_identities, []);
+  assert.deepEqual(result.summary.source_attachment_refs, []);
   assert.equal(result.summary.source_attachment_backwritten_count, 0);
 });
 

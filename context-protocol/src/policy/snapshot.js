@@ -4,6 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import {
+  CONTEXT_MESSAGE_ROLE,
+  readContextMessageField,
+  resolveContextMessageFlags,
+  resolveContextMessageId,
+  resolveContextMessageRole,
+} from "../message/codec.js";
+
 const SNAPSHOT_VERSION = 2;
 const IDENTITY_FIELDS = [
   "userId",
@@ -203,6 +211,68 @@ export function hydrateModelContextSnapshot(
   };
 }
 
+function indexAuthoritativeSessionMessages(messages) {
+  if (!Array.isArray(messages)) {
+    throw new TypeError("Session authority messages must be an array");
+  }
+  const indexed = new Map();
+  for (const message of messages) {
+    const messageUid = String(message?.messageUid || "").trim();
+    if (!messageUid) {
+      throw new Error("Session authority message requires messageUid");
+    }
+    if (indexed.has(messageUid)) {
+      throw new Error(`duplicate Session authority messageUid: ${messageUid}`);
+    }
+    indexed.set(messageUid, message);
+  }
+  return indexed;
+}
+
+function isPersistedFrontendUserSource(message = {}) {
+  return (
+    resolveContextMessageRole(message) === CONTEXT_MESSAGE_ROLE.USER &&
+    resolveContextMessageFlags(message).frontendUser &&
+    !readContextMessageField(message, "noobotInternalMessageType")
+  );
+}
+
+export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+  messageBlocks = {},
+  authoritativeMessages,
+) {
+  const authorityByMessageUid = indexAuthoritativeSessionMessages(authoritativeMessages);
+  const restore = (messages) =>
+    (Array.isArray(messages) ? messages : []).map((message) => {
+      if (!isPersistedFrontendUserSource(message)) return message;
+      const messageUid = resolveContextMessageId(message);
+      if (!messageUid) {
+        throw new Error("Persisted snapshot user source requires canonical message identity");
+      }
+      const authoritative = authorityByMessageUid.get(messageUid);
+      if (!authoritative) {
+        throw new Error(`Snapshot user source is missing from Session authority: ${messageUid}`);
+      }
+      if (resolveContextMessageRole(authoritative) !== CONTEXT_MESSAGE_ROLE.USER) {
+        throw new Error(
+          `Snapshot user source conflicts with Session authority role: ${messageUid}`,
+        );
+      }
+      if (authoritative.attachments !== undefined && !Array.isArray(authoritative.attachments)) {
+        throw new TypeError(`Session authority attachments must be an array: ${messageUid}`);
+      }
+      return {
+        ...message,
+        attachments: cloneJson(authoritative.attachments || []),
+      };
+    });
+  return {
+    system: Array.isArray(messageBlocks?.system) ? messageBlocks.system : [],
+    history: restore(messageBlocks?.history),
+    incremental: restore(messageBlocks?.incremental),
+  };
+}
+
 function clearNestedIdentity(message = {}, fields = []) {
   for (const holder of [
     message?.additional_kwargs,
@@ -212,37 +282,6 @@ function clearNestedIdentity(message = {}, fields = []) {
     if (!holder || typeof holder !== "object" || Array.isArray(holder)) continue;
     for (const field of fields) delete holder[field];
   }
-}
-
-function rebindUserMetaContent(message = {}, identity = {}) {
-  const internalType = String(
-    message?.noobotInternalMessageType ||
-      message?.additional_kwargs?.noobotInternalMessageType ||
-      message?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
-      "",
-  ).trim();
-  if (internalType !== "user_meta") return;
-  if (typeof message?.content !== "string") {
-    throw new Error("Continued user_meta message requires structured JSON content");
-  }
-  const start = message.content.indexOf("{");
-  const end = message.content.lastIndexOf("}");
-  if (start < 0 || end < start) {
-    throw new Error("Continued user_meta message requires structured JSON content");
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(message.content.slice(start, end + 1));
-  } catch {
-    throw new Error("Continued user_meta message requires structured JSON content");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Continued user_meta message requires structured JSON content");
-  }
-  for (const field of [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]) {
-    parsed[field] = identity[field];
-  }
-  message.content = `${message.content.slice(0, start)}${JSON.stringify(parsed, null, 2)}${message.content.slice(end + 1)}`;
 }
 
 export function projectSnapshotIncrementalToContinuation(messages = [], identity = {}) {
@@ -261,7 +300,6 @@ export function projectSnapshotIncrementalToContinuation(messages = [], identity
     clearNestedIdentity(message, [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]);
     for (const field of SESSION_IDENTITY_FIELDS) message[field] = current[field];
     for (const field of ROUND_IDENTITY_FIELDS) message[field] = current[field];
-    rebindUserMetaContent(message, current);
     return message;
   });
 }

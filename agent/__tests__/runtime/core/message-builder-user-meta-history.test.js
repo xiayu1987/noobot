@@ -175,19 +175,10 @@ test("buildContextMessageBlocks builds user_meta with source info for historical
   const metaPayload = JSON.parse(metaContent.match(/\n([\s\S]*)\n\[\//)?.[1] || "{}");
   assert.deepEqual(metaPayload.attachments, [
     {
-      attachmentId: "att-history-1",
+      attachmentRef: "attachment:v1:s-history/user/att-history-1",
       name: "history.md",
       mimeType: "text/markdown",
-      attachmentSource: "user",
-      sessionId: "s-history",
-      path: "",
-      relativePath: "runtime/attach/scoped/s-history/user/att-history-1.md",
-      sandboxPath: "/workspace/primary-user/runtime/attach/scoped/s-history/user/att-history-1.md",
-      downloadUrl: "",
-      previewUrl: "",
-      transferFilePath: "",
       size: 42,
-      isSandbox: true,
     },
   ]);
 });

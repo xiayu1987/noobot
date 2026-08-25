@@ -14,8 +14,8 @@ import { createPersistedCurrentUserMessage } from "./message-builder-current-use
 
 const human = (value = {}) => ({
   role: "user",
+  ...value,
   content: value.content ?? "",
-  ...(value.additional_kwargs ? { additional_kwargs: value.additional_kwargs } : {}),
 });
 const assistant = (value = {}) => ({
   role: "assistant",
@@ -226,6 +226,11 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
   const history = [
     human({
       content: "测试所有工具",
+      userName: "admin",
+      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+      dialogProcessId: stoppedDialogProcessId,
+      turnScopeId: stoppedTurnScopeId,
+      attachments: [snapshotAttachment],
       additional_kwargs: {
         dialogProcessId: stoppedDialogProcessId,
         turnScopeId: stoppedTurnScopeId,
@@ -300,8 +305,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
   assert.equal(historicalMeta.turnScopeId, stoppedTurnScopeId);
   assert.equal(historicalMeta.sessionId, "4c18984a-b55c-4dae-86c0-6da2577b6fb5");
   assert.deepEqual(
-    historicalMeta.attachments.map((item) => item.attachmentId),
-    ["attachment-a"],
+    historicalMeta.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:4c18984a-b55c-4dae-86c0-6da2577b6fb5/user/attachment-a"],
   );
 
   assert.equal(
@@ -327,8 +332,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
   assert.equal(currentMeta.dialogProcessId, currentDialogProcessId);
   assert.equal(currentMeta.turnScopeId, currentTurnScopeId);
   assert.deepEqual(
-    currentMeta.attachments.map((item) => item.attachmentId),
-    ["attachment-current"],
+    currentMeta.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:4c18984a-b55c-4dae-86c0-6da2577b6fb5/user/attachment-current"],
   );
   assert.deepEqual(blocks.messages, [...blocks.system, ...blocks.history, ...blocks.incremental]);
 });
@@ -362,6 +367,11 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
   const history = [
     human({
       content: "添加附件发送后编辑重发",
+      userName: "admin",
+      sessionId: "1ec8e12c-6c66-4f93-b4dc-57680c5c627a",
+      dialogProcessId: firstResendDialogProcessId,
+      turnScopeId: firstResendTurnScopeId,
+      attachments: [attachmentB],
       additional_kwargs: {
         dialogProcessId: firstResendDialogProcessId,
         turnScopeId: firstResendTurnScopeId,
@@ -459,16 +469,16 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
   );
 
   assert.deepEqual(
-    firstResendMeta?.attachments.map((item) => item.attachmentId),
-    ["cd0cad-docx-b"],
+    firstResendMeta?.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:1ec8e12c-6c66-4f93-b4dc-57680c5c627a/user/cd0cad-docx-b"],
   );
   assert.deepEqual(
-    firstStopMeta?.attachments.map((item) => item.attachmentId),
-    ["529cda-docx-a"],
+    firstStopMeta?.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:1ec8e12c-6c66-4f93-b4dc-57680c5c627a/user/529cda-docx-a"],
   );
   assert.deepEqual(
-    currentMeta?.attachments.map((item) => item.attachmentId),
-    ["e71b20-png-c"],
+    currentMeta?.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:1ec8e12c-6c66-4f93-b4dc-57680c5c627a/user/e71b20-png-c"],
   );
   assert.notDeepEqual(firstResendMeta?.attachments, currentMeta?.attachments);
   assert.equal(firstResendMeta?.turnScopeId, firstResendTurnScopeId);
@@ -481,6 +491,11 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
   const history = [
     human({
       content: "测试所有工具",
+      userName: "admin",
+      sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+      dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
+      turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
+      attachments: [],
       additional_kwargs: {
         dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
         turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
@@ -520,7 +535,14 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
       {
         userId: "admin",
         resumeFromStoppedSnapshot: true,
-        userMessageAttachments: [{ attachmentId: "current-attachment", name: "current.txt" }],
+        userMessageAttachments: [
+          {
+            attachmentId: "current-attachment",
+            sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+            attachmentSource: "user",
+            name: "current.txt",
+          },
+        ],
         systemRuntime: {
           sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
           dialogProcessId: "dlg-current-first-continue",
@@ -535,7 +557,14 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
         sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
         dialogProcessId: "dlg-current-first-continue",
         turnScopeId: "client-turn:current:first-continue",
-        attachments: [{ attachmentId: "current-attachment", name: "current.txt" }],
+        attachments: [
+          {
+            attachmentId: "current-attachment",
+            sessionId: "4c18984a-b55c-4dae-86c0-6da2577b6fb5",
+            attachmentSource: "user",
+            name: "current.txt",
+          },
+        ],
       }),
     },
   );
@@ -561,8 +590,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
   assert.equal(incrementalMetaPayload.dialogProcessId, "dlg-current-first-continue");
   assert.equal(incrementalMetaPayload.turnScopeId, "client-turn:current:first-continue");
   assert.deepEqual(
-    incrementalMetaPayload.attachments.map((item) => item.attachmentId),
-    ["current-attachment"],
+    incrementalMetaPayload.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:4c18984a-b55c-4dae-86c0-6da2577b6fb5/user/current-attachment"],
   );
   assert.deepEqual(blocks.messages, [...blocks.system, ...blocks.history, ...blocks.incremental]);
 });

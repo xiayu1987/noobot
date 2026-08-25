@@ -10,7 +10,7 @@ import { isFatalError } from "../../shared/errors/index.js";
 import {
   parseToolOutputArtifacts,
   stripToolOutputArtifacts,
-  stripInternalResourceFields,
+  projectToolResultForModel,
   toToolJsonResult,
 } from "../../tools/core/tool-json-result.js";
 import { assertNotAborted, isAbortError, resolveAbortStopType } from "../utils/error-utils.js";
@@ -569,7 +569,7 @@ async function finalizeToolExecution(state) {
     ],
     "resourceId",
   );
-  state.toolResultText = stripInternalResourceFields(state.toolResultText);
+  state.toolResultText = projectToolResultForModel(state.toolResultText);
   await runToolHook(state, HOOK_POINT.AGENT.AFTER_TOOL_CALL, {
     status: failureState.success ? "success" : "error",
     ...completedToolTiming(state),

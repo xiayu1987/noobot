@@ -20,7 +20,10 @@ import {
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
-import { projectAttachmentIdentity } from "@noobot/attachment-protocol";
+import {
+  formatAttachmentIdentityRef,
+  projectAttachmentIdentity,
+} from "@noobot/attachment-protocol";
 import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
@@ -86,10 +89,7 @@ export function createMultimodalParseTool({ agentContext }) {
         .array(
           createFileInputSchema({
             filePathDescription: tTool(runtime, "tools.multimodalParse.fieldFilePath"),
-            attachmentIdentityDescription: tTool(
-              runtime,
-              "tools.multimodalParse.fieldAttachmentIdentity",
-            ),
+            attachmentRefDescription: tTool(runtime, "tools.multimodalParse.fieldAttachmentRef"),
           }),
         )
         .min(1)
@@ -274,9 +274,11 @@ export function createMultimodalParseTool({ agentContext }) {
           model: { alias: modelSpec.alias || "", name: modelSpec.model || "" },
           summary: {
             input_modalities: requiredModalities,
-            source_attachment_identities: sourceAttachmentMetas
+            source_attachment_refs: sourceAttachmentMetas
               .filter((attachment) => attachment !== null && attachment !== undefined)
-              .map(projectAttachmentIdentity),
+              .map((attachment) =>
+                formatAttachmentIdentityRef(projectAttachmentIdentity(attachment)),
+              ),
             source_attachment_backwritten_count: updatedSourceAttachments.length,
             input_file_count: inputFiles.length,
             total_file_size_bytes: totalFileSizeBytes,

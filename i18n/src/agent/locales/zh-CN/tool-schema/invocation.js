@@ -157,7 +157,7 @@ export const INVOCATION_TOOL_SCHEMA = {
   execute_native_script: {
     description: {
       key: "tools.nativeScript.description",
-      text: "执行注入 Playwright、LibreOffice、FFmpeg/FFprobe 和文件能力的 Node.js 函数体，用于网页处理、文档转换和媒体规范化。output:// 产物返回为附件；task-local 与输出 name 不能跨调用或当作 workspace 路径，后续只传完整附件身份。",
+      text: "执行具备浏览器、文档、媒体和文件能力的 Node.js 函数。output:// 产物返回附件；跨工具只传 attachmentRef。",
     },
     params: {
       script_body: {
@@ -166,15 +166,15 @@ export const INVOCATION_TOOL_SCHEMA = {
       },
       inputs: {
         key: "tools.nativeScript.fieldInputs",
-        text: "只读输入对象数组，每项格式必须为 { source: workspace逻辑路径或完整附件身份 }，不能直接传字符串。files.input(index) 只属于本次原生脚本执行；禁止跨工具传 output:// 或 temp://。",
+        text: "只读输入，每项为 { source: 逻辑路径或 attachmentRef }。output://、temp:// 不能跨调用。",
       },
       filePath: {
         key: "tools.nativeScript.fieldFilePath",
         text: "source 为字符串时，表示逻辑工作区路径或已授权的宿主文件路径。",
       },
-      attachmentIdentity: {
-        key: "tools.nativeScript.fieldAttachmentIdentity",
-        text: "附件身份必须包含完整的 attachmentId、sessionId 和 attachmentSource。",
+      attachmentRef: {
+        key: "tools.nativeScript.fieldAttachmentRef",
+        text: "原样使用上下文中的 attachmentRef。",
       },
       arguments: {
         key: "tools.nativeScript.fieldArguments",

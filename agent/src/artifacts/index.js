@@ -12,6 +12,7 @@ export {
   normalizeAttachmentTurnScopeMeta,
   projectCanonicalAttachmentIdentity,
   projectCanonicalAttachmentIdentities,
+  projectAttachmentMetaForModel,
   canonicalAttachmentIdentityKey,
   assertCanonicalAttachments,
 } from "./meta-ops.js";

@@ -67,9 +67,7 @@ test("execute_script: ordinary users require sandbox isolation", async () => {
   );
   assert.match(sandboxTools.find((item) => item?.name === "execute_script").description, /bash/);
 });
-import {
-  run,
-} from "../../src/tools/execution/script-tool/process-exec.js";
+import { run } from "../../src/tools/execution/script-tool/process-exec.js";
 import { enqueueDockerContainerTask } from "../../src/tools/execution/script-tool/docker-queue.js";
 import { resolveToolExecutionPolicy } from "@noobot/execution-isolation-protocol";
 
@@ -385,13 +383,17 @@ test("execute_script: 大 stdout 通过 foreground 原文件 semantic-transfer �
     sessionId: "s-script-large-output",
   });
   const result = parseToolResult(runnerResult.toolResultText);
-  const stdoutFile = result.transferEnvelopes[0].payload.attachments.find(
+  const stdoutFile = runnerResult.transferEnvelopes[0].payload.attachments.find(
     (item) => item.name === "execute-script-stdout.txt",
   );
 
   assert.equal(result.ok, true);
   assert.equal(result.outputOverflow, true);
   assert.equal(result.overflowed, undefined);
+  assert.deepEqual(result.attachmentRefs, [
+    "attachment:v1:s-script-large-output/model/att-script-output-1",
+  ]);
+  assert.equal(result.transferEnvelopes, undefined);
   assert.equal(savedArtifacts.length, 1);
   assert.equal(savedArtifacts[0].content.length, outputLength);
   assert.equal(stdoutFile.size, outputLength);

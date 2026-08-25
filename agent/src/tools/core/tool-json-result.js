@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 import { Buffer } from "node:buffer";
+import { formatAttachmentIdentityRef } from "@noobot/attachment-protocol";
+import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import { projectAttachmentMetaForModel } from "../../artifacts/meta-ops.js";
 import { isPlainObject } from "../../shared/utils/shared-utils.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 
@@ -95,10 +98,35 @@ export function stripToolOutputArtifacts(toolResultText = "") {
   return JSON.stringify(publicResult);
 }
 
-// ResourceRef is the runtime/audit identity.  It is deliberately removed at
-// the single model-result boundary so tools can share it without adding a new
-// protocol the model has to learn.
-export function stripInternalResourceFields(toolResultText = "") {
+function projectCanonicalAttachmentFields(value) {
+  if (!isPlainObject(value)) return null;
+  const { attachmentId, sessionId, attachmentSource } = value;
+  const fields = [attachmentId, sessionId, attachmentSource];
+  const hasAttachmentIdentityField = attachmentId !== undefined || attachmentSource !== undefined;
+  if (!hasAttachmentIdentityField) return null;
+  if (fields.some((field) => !normalizeString(field))) {
+    throw new Error("incomplete_attachment_identity");
+  }
+  if (Object.hasOwn(value, "attachmentRef")) {
+    throw new Error("mixed_attachment_identity_representations");
+  }
+  return projectAttachmentMetaForModel(value);
+}
+
+function attachmentRefsFromTransferEnvelopes(value) {
+  const refs = normalizeTransferEnvelopes(value).flatMap((envelope) =>
+    envelope.payload.mode === "attachment"
+      ? envelope.payload.attachments.map((attachment) =>
+          formatAttachmentIdentityRef(attachment.identity),
+        )
+      : [],
+  );
+  return Array.from(new Set(refs));
+}
+
+// Runtime resources and transfer envelopes remain internal. The model sees
+// one canonical attachmentRef representation at this boundary.
+export function projectToolResultForModel(toolResultText = "") {
   let source;
   try {
     source = JSON.parse(String(toolResultText || ""));
@@ -109,9 +137,29 @@ export function stripInternalResourceFields(toolResultText = "") {
   const visit = (value) => {
     if (Array.isArray(value)) return value.map(visit);
     if (!isPlainObject(value)) return value;
+    const attachmentProjection = projectCanonicalAttachmentFields(value);
+    if (attachmentProjection) return visit(attachmentProjection);
+    if (Object.hasOwn(value, "transferEnvelopes") && Object.hasOwn(value, "attachmentRefs")) {
+      throw new Error("mixed_attachment_transfer_representations");
+    }
+    if (Object.hasOwn(value, "identity") && Object.hasOwn(value, "attachmentRef")) {
+      throw new Error("mixed_attachment_identity_representations");
+    }
     const out = {};
     for (const [key, child] of Object.entries(value)) {
       if (key === "resources" || key === "input_resources" || key === "resourceId") continue;
+      if (key === "transferEnvelopes") {
+        const attachmentRefs = attachmentRefsFromTransferEnvelopes(child);
+        if (attachmentRefs.length) out.attachmentRefs = attachmentRefs;
+        continue;
+      }
+      if (key === "identity") {
+        const projectedIdentity = projectCanonicalAttachmentFields(child);
+        if (projectedIdentity) {
+          out.attachmentRef = projectedIdentity.attachmentRef;
+          continue;
+        }
+      }
       out[key] = visit(child);
     }
     return out;

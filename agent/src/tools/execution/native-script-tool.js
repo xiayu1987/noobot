@@ -239,10 +239,7 @@ export function createNativeScriptTool({ agentContext }) {
         .array(
           createFileInputSchema({
             filePathDescription: tTool(runtime, "tools.nativeScript.fieldFilePath"),
-            attachmentIdentityDescription: tTool(
-              runtime,
-              "tools.nativeScript.fieldAttachmentIdentity",
-            ),
+            attachmentRefDescription: tTool(runtime, "tools.nativeScript.fieldAttachmentRef"),
           }),
         )
         .optional()

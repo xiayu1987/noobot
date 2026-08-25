@@ -143,7 +143,7 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
   assert.equal(blocks.incremental[0]?.content, "resume question");
   const meta = blocks.incremental[1]?.content || "";
   assert.match(meta, /\[用户元信息\]/);
-  assert.match(meta, /"attachmentId": "att-1"/);
+  assert.match(meta, /"attachmentRef": "attachment:v1:s1\/user\/att-1"/);
   assert.match(meta, /"name": "resume.txt"/);
   assert.match(meta, /"dialogProcessId": "dlg-resume-new"/);
   assert.match(meta, /"turnScopeId": "turn-resume-new"/);
@@ -156,7 +156,13 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         userId: "admin",
         resumeFromStoppedSnapshot: true,
         userMessageAttachments: [
-          { attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" },
+          {
+            attachmentId: "att-resume",
+            sessionId: "s1",
+            attachmentSource: "user",
+            name: "resume.png",
+            mimeType: "image/png",
+          },
         ],
         systemRuntime: {
           sessionId: "s1",
@@ -189,7 +195,15 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
         dialogProcessId: "dlg-current",
         turnScopeId: "turn-current",
         parentDialogProcessId: "dlg-stopped",
-        attachments: [{ attachmentId: "att-resume", name: "resume.png", mimeType: "image/png" }],
+        attachments: [
+          {
+            attachmentId: "att-resume",
+            sessionId: "s1",
+            attachmentSource: "user",
+            name: "resume.png",
+            mimeType: "image/png",
+          },
+        ],
       }),
     },
   );
@@ -203,7 +217,10 @@ test("buildContextMessageBlocks reads restored stopped snapshot messages from un
   );
   assert.equal(blocks.incremental[0]?.content, "resume user input");
   assert.match(String(blocks.incremental[1]?.content || ""), /\[用户元信息\]/);
-  assert.match(String(blocks.incremental[1]?.content || ""), /"attachmentId": "att-resume"/);
+  assert.match(
+    String(blocks.incremental[1]?.content || ""),
+    /"attachmentRef": "attachment:v1:s1\/user\/att-resume"/,
+  );
   const contents = blocks.messages.map((message) => message?.content);
   assert.equal(contents[0], "[HARNESS_POLICY_SELECTION]\nsnapshot policy");
   assert.equal(contents[1], "snapshot history user");

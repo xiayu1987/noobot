@@ -23,18 +23,21 @@ function parseUserMeta(content) {
   return JSON.parse(json);
 }
 
+function userAttachment(attachmentId, sessionId, metadata = {}) {
+  return { attachmentId, sessionId, attachmentSource: "user", ...metadata };
+}
+
 test("buildContextMessages uses current runtime userMessageAttachments in user meta", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       {
         userId: "admin",
         userMessageAttachments: [
-          {
-            attachmentId: "att-a",
+          userAttachment("att-a", "session-a", {
             name: "AI 体系现状概览.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             size: 1407731,
-          },
+          }),
         ],
         attachments: [],
         systemRuntime: {
@@ -48,12 +51,11 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
     {
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
         attachments: [
-          {
-            attachmentId: "att-a",
+          userAttachment("att-a", "session-a", {
             name: "AI 体系现状概览.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             size: 1407731,
-          },
+          }),
         ],
       }),
     },
@@ -63,7 +65,7 @@ test("buildContextMessages uses current runtime userMessageAttachments in user m
   assert.ok(metaMessage);
   const meta = parseUserMeta(metaMessage.content);
   assert.equal(meta.attachments.length, 1);
-  assert.equal(meta.attachments[0].attachmentId, "att-a");
+  assert.equal(meta.attachments[0].attachmentRef, "attachment:v1:session-a/user/att-a");
   assert.equal(meta.attachments[0].name, "AI 体系现状概览.docx");
 });
 
@@ -120,11 +122,10 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
       {
         userId: "admin",
         userMessageAttachments: [
-          {
-            attachmentId: "current-user-input",
+          userAttachment("current-user-input", "session-a", {
             name: "current.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          },
+          }),
         ],
         attachments: [{ attachmentId: "tool-output", name: "tool.txt", mimeType: "text/plain" }],
         systemRuntime: {
@@ -138,11 +139,10 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
     {
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
         attachments: [
-          {
-            attachmentId: "current-user-input",
+          userAttachment("current-user-input", "session-a", {
             name: "current.docx",
             mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          },
+          }),
         ],
       }),
     },
@@ -152,7 +152,10 @@ test("buildContextMessages uses only userMessageAttachments as current user atta
   assert.ok(metaMessage);
   const meta = parseUserMeta(metaMessage.content);
   assert.equal(meta.attachments.length, 1);
-  assert.equal(meta.attachments[0].attachmentId, "current-user-input");
+  assert.equal(
+    meta.attachments[0].attachmentRef,
+    "attachment:v1:session-a/user/current-user-input",
+  );
 });
 
 test("buildContextMessages does not use fallback meta attachments as current user attachments", () => {
@@ -196,7 +199,7 @@ test("buildContextMessages does not use fallback meta attachments as current use
   assert.deepEqual(meta.attachments, []);
 });
 
-test("buildContextMessages preserves rich attachment fields in user meta", () => {
+test("buildContextMessages projects only model attachment metadata", () => {
   const richAttachment = {
     attachmentId: "att-rich",
     name: "AI 体系现状概览.docx",
@@ -239,14 +242,12 @@ test("buildContextMessages preserves rich attachment fields in user meta", () =>
   const meta = parseUserMeta(metaMessage.content);
   assert.equal(meta.attachments.length, 1);
   const attachment = meta.attachments[0];
-  assert.equal(attachment.attachmentId, "att-rich");
-  assert.equal(attachment.sessionId, "session-rich");
-  assert.equal(attachment.path.includes("att-rich"), true);
-  assert.equal(attachment.relativePath.includes("att-rich"), true);
-  assert.equal(attachment.sandboxPath.includes("att-rich"), true);
-  assert.equal(attachment.previewUrl, "/preview/att-rich");
-  assert.equal(attachment.downloadUrl, "/download/att-rich");
-  assert.equal(attachment.transferFilePath.includes("att-rich"), true);
+  assert.deepEqual(attachment, {
+    attachmentRef: "attachment:v1:session-rich/user/att-rich",
+    name: "AI 体系现状概览.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    size: 1407731,
+  });
 });
 
 test("buildContextMessages does not copy current-turn attachments into historical user metadata", () => {
@@ -255,7 +256,10 @@ test("buildContextMessages does not copy current-turn attachments into historica
     sessionId: "session-a",
     turnScopeId: "turn-latest",
     userMessageAttachments: [
-      { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+      userAttachment("latest-only", "session-a", {
+        name: "latest.docx",
+        mimeType: "application/docx",
+      }),
     ],
   };
   const attachmentFreeHistory = buildHumanMessagesForUser(
@@ -270,7 +274,12 @@ test("buildContextMessages does not copy current-turn attachments into historica
       role: "user",
       content: "historical attachment",
       turnScopeId: "turn-2",
-      attachments: [{ attachmentId: "history-only", name: "history.txt", mimeType: "text/plain" }],
+      attachments: [
+        userAttachment("history-only", "session-a", {
+          name: "history.txt",
+          mimeType: "text/plain",
+        }),
+      ],
     },
     fallbackMeta,
     { allowFallbackAttachments: false },
@@ -280,8 +289,8 @@ test("buildContextMessages does not copy current-turn attachments into historica
   const historyMeta = parseUserMeta(attachedHistory[1].content);
   assert.deepEqual(emptyMeta.attachments, []);
   assert.deepEqual(
-    historyMeta.attachments.map((item) => item.attachmentId),
-    ["history-only"],
+    historyMeta.attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:session-a/user/history-only"],
   );
   assert.notStrictEqual(emptyMeta.attachments, historyMeta.attachments);
 });
@@ -292,7 +301,10 @@ test("buildContextMessages keeps complete metadata per historical user turn with
       {
         userId: "current-admin",
         userMessageAttachments: [
-          { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+          userAttachment("latest-only", "current-session", {
+            name: "latest.docx",
+            mimeType: "application/docx",
+          }),
         ],
         systemRuntime: {
           sessionId: "current-session",
@@ -347,7 +359,10 @@ test("buildContextMessages keeps complete metadata per historical user turn with
         dialogProcessId: "current-dialog",
         turnScopeId: "current-turn",
         attachments: [
-          { attachmentId: "latest-only", name: "latest.docx", mimeType: "application/docx" },
+          userAttachment("latest-only", "current-session", {
+            name: "latest.docx",
+            mimeType: "application/docx",
+          }),
         ],
       }),
     },
@@ -381,8 +396,8 @@ test("buildContextMessages keeps complete metadata per historical user turn with
   assert.equal(metas[2].dialogProcessId, "current-dialog");
   assert.equal(metas[2].turnScopeId, "current-turn");
   assert.deepEqual(
-    metas[2].attachments.map((item) => item.attachmentId),
-    ["latest-only"],
+    metas[2].attachments.map((item) => item.attachmentRef),
+    ["attachment:v1:current-session/user/latest-only"],
   );
 });
 
@@ -410,7 +425,10 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
       dialogProcessId: "dialog-3",
       turnScopeId: "turn-3",
       attachments: [
-        { attachmentId: "last-turn-only", name: "last.docx", mimeType: "application/docx" },
+        userAttachment("last-turn-only", "current-session", {
+          name: "last.docx",
+          mimeType: "application/docx",
+        }),
       ],
     },
   ];
@@ -453,12 +471,12 @@ test("buildContextMessages rebuilds metadata beside every legacy stopped/resend 
     ],
   );
   assert.deepEqual(
-    historicalMetas.map((meta) => meta.attachments.map((item) => item.attachmentId)),
-    [[], [], ["last-turn-only"]],
+    historicalMetas.map((meta) => meta.attachments.map((item) => item.attachmentRef)),
+    [[], [], ["attachment:v1:current-session/user/last-turn-only"]],
   );
 });
 
-test("buildContextMessages discards restored user_meta projections before rebuilding", () => {
+test("buildContextMessages discards classified user_meta without inferring from user text", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       {
@@ -501,17 +519,21 @@ test("buildContextMessages discards restored user_meta projections before rebuil
   assert.equal(messages.filter((message) => message?.content === "hello").length, 1);
   assert.equal(
     messages.filter((message) => String(message?.content || "").startsWith("[用户元信息]")).length,
+    2,
+  );
+  assert.equal(
+    messages.filter((message) => message?.content === "[用户元信息]\n{}\n[/用户元信息]").length,
     1,
   );
 });
 
-test("buildContextMessages restores stopped source attachments by exact turn identity", () => {
+test("buildContextMessages ignores derived metadata and uses stopped source facts", () => {
   const messages = buildContextMessages(
     createTestAgentExecutionScope(
       {
         resumeFromStoppedSnapshot: true,
         userId: "admin",
-        userMessageAttachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+        userMessageAttachments: [userAttachment("attachment-b", "s1", { name: "continue.docx" })],
         systemRuntime: {
           sessionId: "s1",
           dialogProcessId: "dialog-continue",
@@ -525,6 +547,12 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
             {
               type: "human",
               content: "parse attachment",
+              userName: "admin",
+              sessionId: "s1",
+              parentSessionId: "parent-1",
+              parentDialogProcessId: "parent-dialog-1",
+              turnScopeId: "turn-stopped",
+              attachments: [userAttachment("attachment-a", "s1", { name: "stopped.docx" })],
               additional_kwargs: {
                 dialogProcessId: "dialog-stopped",
                 turnScopeId: "turn-stopped",
@@ -534,7 +562,7 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
             {
               type: "human",
               content:
-                '[用户元信息]\n{"userName":"admin","sessionId":"s1","parentSessionId":"parent-1","dialogProcessId":"dialog-stopped","parentDialogProcessId":"parent-dialog-1","turnScopeId":"turn-stopped","attachments":[{"attachmentId":"attachment-a","name":"stopped.docx"}]}\n[/用户元信息]',
+                '[用户元信息]\n{"userName":"wrong","attachments":[{"attachmentRef":"attachment:v1:wrong/user/wrong"}]}\n[/用户元信息]',
               additional_kwargs: {
                 dialogProcessId: "dialog-stopped",
                 turnScopeId: "turn-stopped",
@@ -551,7 +579,7 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
         sessionId: "s1",
         dialogProcessId: "dialog-continue",
         turnScopeId: "turn-continue",
-        attachments: [{ attachmentId: "attachment-b", name: "continue.docx" }],
+        attachments: [userAttachment("attachment-b", "s1", { name: "continue.docx" })],
       }),
     },
   );
@@ -578,7 +606,7 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
         dialogProcessId,
         parentDialogProcessId,
         turnScopeId,
-        attachmentIds: attachments.map((attachment) => attachment.attachmentId),
+        attachmentRefs: attachments.map((attachment) => attachment.attachmentRef),
       }),
     ),
     [
@@ -589,7 +617,7 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
         dialogProcessId: "dialog-stopped",
         parentDialogProcessId: "parent-dialog-1",
         turnScopeId: "turn-stopped",
-        attachmentIds: ["attachment-a"],
+        attachmentRefs: ["attachment:v1:s1/user/attachment-a"],
       },
       {
         userName: "admin",
@@ -598,7 +626,7 @@ test("buildContextMessages restores stopped source attachments by exact turn ide
         dialogProcessId: "dialog-continue",
         parentDialogProcessId: "",
         turnScopeId: "turn-continue",
-        attachmentIds: ["attachment-b"],
+        attachmentRefs: ["attachment:v1:s1/user/attachment-b"],
       },
     ],
   );

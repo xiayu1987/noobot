@@ -24,9 +24,6 @@ import {
   buildHumanMessagesForUser,
   shouldBuildUserMetaForHistoryMessage,
   isDerivedUserMetaMessage,
-  buildRestoredUserMetaIndex,
-  buildRestorableUserMetaKeys,
-  normalizeRestoredUserSource,
 } from "./user-meta.js";
 
 export function filterCurrentTurnUserMessageFromHistory(
@@ -47,8 +44,6 @@ export function buildHistoryMessages({
 } = {}) {
   const history = [];
   const knownHistoryToolCallIds = new Set();
-  const restoredUserMetaIndex = buildRestoredUserMetaIndex(effectiveHistoryMessages, runtime);
-  const restorableUserMetaKeys = buildRestorableUserMetaKeys(effectiveHistoryMessages, runtime);
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
@@ -58,10 +53,9 @@ export function buildHistoryMessages({
       if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
     }
   }
-  for (const sourceMessage of effectiveHistoryMessages) {
-    const msg = normalizeRestoredUserSource(sourceMessage, restoredUserMetaIndex);
+  for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
-    if (isDerivedUserMetaMessage(msg, runtime)) continue;
+    if (isDerivedUserMetaMessage(msg)) continue;
     const role = resolveContextMessageRole(msg);
     if (role === MESSAGE_ROLE.SYSTEM) {
       history.push(
@@ -116,7 +110,7 @@ export function buildHistoryMessages({
       );
       continue;
     }
-    if (shouldBuildUserMetaForHistoryMessage(msg, runtime, { restorableUserMetaKeys })) {
+    if (shouldBuildUserMetaForHistoryMessage(msg, runtime)) {
       history.push(
         ...buildHumanMessagesForUser(runtime, msg, fallbackUserMeta, {
           allowFallbackAttachments: false,

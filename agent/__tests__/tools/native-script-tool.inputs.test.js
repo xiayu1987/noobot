@@ -16,8 +16,9 @@ import {
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import { resolveFileInput } from "../../src/tools/core/file-input.js";
 
-test("execute_native_script accepts a complete model attachment identity", async () => {
+test("execute_native_script resolves a canonical attachment reference", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-attachment-input-"));
   const attachmentPath = path.join(
     basePath,
@@ -62,15 +63,7 @@ test("execute_native_script accepts a complete model attachment identity", async
   const result = JSON.parse(
     await tool.invoke(
       {
-        inputs: [
-          {
-            source: {
-              attachmentId: "model-source",
-              sessionId: "session-1",
-              attachmentSource: "model",
-            },
-          },
-        ],
+        inputs: [{ source: "attachment:v1:session-1/model/model-source" }],
         script_body: `
 const source = await files.input(0);
 const target = await output.file("copied.txt");
@@ -82,6 +75,46 @@ await files.writeText(target, await files.readText(source));
   );
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.output_file_count, 1);
+});
+
+test("execute_native_script rejects model-authored attachment identity objects", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-invalid-identity-"));
+  const [tool] = createNativeScriptTool({
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+  });
+
+  await assert.rejects(
+    tool.invoke(
+      {
+        inputs: [
+          {
+            source: {
+              attachmentId: "model-source",
+              sessionId: "wrong-session",
+              attachmentSource: "model",
+            },
+          },
+        ],
+        script_body: "return null;",
+      },
+      { configurable: { transferIdentity: IDENTITY } },
+    ),
+    /Expected string|expected string/i,
+  );
+});
+
+test("file input resolver rejects non-string sources at its own boundary", async () => {
+  await assert.rejects(
+    resolveFileInput({
+      source: {
+        attachmentId: "model-source",
+        sessionId: "wrong-session",
+        attachmentSource: "model",
+      },
+      fieldName: "inputs",
+    }),
+    /inputs source must be a string/,
+  );
 });
 
 test("execute_native_script accepts a logical workspace path", async () => {
@@ -221,4 +254,3 @@ await files.writeText(target, await files.readText(input));
   assert.equal(result.output_file_count, 1);
   assert.equal("path_view" in result, false);
 });
-
