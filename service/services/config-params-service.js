@@ -11,7 +11,6 @@ import {
   writeRoutedRuntimeEvent,
 } from "@noobot/runtime-events";
 import {
-  assertConfigParamsDocumentKeys,
   buildConfigParamCatalog as buildProtocolConfigParamCatalog,
   collectConfigTemplateKeys as scanConfigTemplateKeys,
   normalizeConfigParamsDocument,
@@ -162,12 +161,6 @@ export function createConfigParamsService({
     values = {},
     extraKeys = [],
   } = {}) {
-    if (Array.isArray(keys)) {
-      assertConfigParamsDocumentKeys(
-        { values, descriptions },
-        [...keys, ...(Array.isArray(extraKeys) ? extraKeys : [])],
-      );
-    }
     return buildProtocolConfigParamCatalog({
       keys: Array.isArray(keys) ? keys : [],
       descriptions,

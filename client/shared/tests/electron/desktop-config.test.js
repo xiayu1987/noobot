@@ -540,7 +540,7 @@ test("packaged desktop startup removes retired nodes from existing user configs"
   }
 });
 
-test("packaged desktop startup removes config params absent from current templates", async () => {
+test("packaged desktop startup preserves config params absent from current templates", async () => {
   const fixture = await createFixture();
   try {
     const globalExamplePath = path.join(
@@ -586,22 +586,27 @@ test("packaged desktop startup removes config params absent from current templat
     });
 
     assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")), {
-      values: { ACTIVE_API_KEY: "preserved" },
-      descriptions: { ACTIVE_API_KEY: "active" },
+      values: { ACTIVE_API_KEY: "preserved", RETIRED_API_KEY: "stale" },
+      descriptions: { ACTIVE_API_KEY: "active", RETIRED_API_KEY: "retired" },
     });
     const globalConfig = JSON.parse(await readFile(globalConfigPath, "utf8"));
     assert.equal(globalConfig.tools, undefined);
     assert.deepEqual(state.missingParams, []);
-    assert.throws(
-      () =>
-        manager.saveConfigParamValues({
-          workspaceRootPath: state.workspaceRootPath,
-          values: { RETIRED_API_KEY: "must-not-return" },
-        }),
-      /unknown config param key: RETIRED_API_KEY/,
-    );
+    manager.saveConfigParamValues({
+      workspaceRootPath: state.workspaceRootPath,
+      values: { RETIRED_API_KEY: "user-defined" },
+    });
     assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")).values, {
       ACTIVE_API_KEY: "preserved",
+      RETIRED_API_KEY: "user-defined",
+    });
+    manager.saveConfigParamValues({
+      workspaceRootPath: state.workspaceRootPath,
+      values: { ACTIVE_API_KEY: "updated" },
+    });
+    assert.deepEqual(JSON.parse(await readFile(configParamsPath, "utf8")).values, {
+      ACTIVE_API_KEY: "updated",
+      RETIRED_API_KEY: "user-defined",
     });
   } finally {
     await fixture.restore();

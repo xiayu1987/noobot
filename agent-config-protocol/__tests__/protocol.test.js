@@ -414,7 +414,7 @@ test("config params document rejects ambiguous, invalid, and unknown facts", () 
   }
 });
 
-test("config params document keys must be a closed subset of template keys", () => {
+test("config params document preserves valid keys outside the current template", () => {
   assert.deepEqual(
     assertConfigParamsDocumentKeys(
       {
@@ -428,15 +428,13 @@ test("config params document keys must be a closed subset of template keys", () 
       descriptions: { API_KEY: "Credential" },
     },
   );
-  assert.throws(
-    () => assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
-    (error) =>
-      error?.code === CONFIG_ERROR_CODE.INVALID_PARAM_DOCUMENT &&
-      error?.details?.keys?.[0] === "UNUSED_KEY",
+  assert.deepEqual(
+    assertConfigParamsDocumentKeys({ values: { UNUSED_KEY: "value" } }, ["API_KEY"]),
+    { values: { UNUSED_KEY: "value" }, descriptions: { UNUSED_KEY: "" } },
   );
 });
 
-test("config params synchronization projects stored values onto authoritative template keys", () => {
+test("config params synchronization preserves stored keys and adds template keys", () => {
   assert.deepEqual(
     synchronizeConfigParamsDocument({
       document: {
@@ -446,8 +444,8 @@ test("config params synchronization projects stored values onto authoritative te
       keys: ["NEW_KEY", "ACTIVE_KEY"],
     }),
     {
-      values: { ACTIVE_KEY: "preserved", NEW_KEY: "" },
-      descriptions: { ACTIVE_KEY: "active", NEW_KEY: "" },
+      values: { ACTIVE_KEY: "preserved", NEW_KEY: "", RETIRED_KEY: "removed" },
+      descriptions: { ACTIVE_KEY: "active", NEW_KEY: "", RETIRED_KEY: "retired" },
     },
   );
 });

@@ -38,16 +38,14 @@ function createService({ existingPayload = { values: {}, descriptions: {} } } = 
   return { service, writes };
 }
 
-test("config scope rejects unknown params before persistence", async () => {
+test("config scope persists valid user-defined params outside the current template", async () => {
   const { service, writes } = createService();
-  await assert.rejects(
-    service.writeScopedConfigParams({
-      req: { query: { scope: "system" } },
-      values: { UNUSED_KEY: "value" },
-    }),
-    /unknown config param key: UNUSED_KEY/,
-  );
-  assert.deepEqual(writes, []);
+  const result = await service.writeScopedConfigParams({
+    req: { query: { scope: "system" } },
+    values: { UNUSED_KEY: "value" },
+  });
+  assert.deepEqual(result.payload.values, { UNUSED_KEY: "value" });
+  assert.deepEqual(writes, [{ values: { UNUSED_KEY: "value" }, descriptions: {} }]);
 });
 
 test("config scope persists params from the authoritative template catalog", async () => {

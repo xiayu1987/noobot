@@ -177,11 +177,14 @@ test("config-params-service delegates document and catalog semantics to the prot
       { key: "REGION", description: "Region" },
     ],
   );
-  assert.throws(
-    () => service.buildConfigParamCatalog({
+  assert.deepEqual(
+    service.buildConfigParamCatalog({
       keys: ["API_KEY"],
       values: { UNUSED_KEY: "value" },
     }),
-    /unknown config param key: UNUSED_KEY/,
+    [
+      { key: "API_KEY", description: "" },
+      { key: "UNUSED_KEY", description: "" },
+    ],
   );
 });
