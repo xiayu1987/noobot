@@ -31,7 +31,7 @@ export function useAppShellPseudoRoute({
   mobileChatNavigatorVisible,
   chatNavigatorVisible,
   isSuperAdmin,
-  closeAllDrawers,
+  closeAllPanels,
   closeMobileSidebar,
   openMobileSidebar,
   openWorkspaceRaw,
@@ -45,7 +45,7 @@ export function useAppShellPseudoRoute({
   selectSession,
 } = {}) {
   function closeAllPseudoPanels() {
-    closeAllDrawers?.();
+    closeAllPanels?.();
     closeMobileSidebar?.();
     closeComposerMorePanel?.();
     closeThinkingDetailsPanel?.();
