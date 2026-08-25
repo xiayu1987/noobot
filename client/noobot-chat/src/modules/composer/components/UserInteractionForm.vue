@@ -129,7 +129,7 @@ watch(
   top: 10px;
   bottom: 10px;
   width: 4px;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 var(--noobot-radius-xs) var(--noobot-radius-xs) 0;
   background: var(--noobot-text-accent);
   box-shadow: none;
 }

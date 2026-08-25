@@ -77,13 +77,8 @@ function onWorkflowSemanticModelChange(value = "") {
   gap: 12px;
   padding: 14px;
   border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border, var(--el-border-color)));
-  border-radius: 16px;
-  background:
-    linear-gradient(
-      135deg,
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 95%, var(--el-fill-color-light)),
-      color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 88%, var(--el-color-primary))
-    );
+  border-radius: var(--noobot-radius-lg);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 94%, var(--el-color-primary));
 }
 
 .plugin-model-title {
@@ -107,7 +102,7 @@ function onWorkflowSemanticModelChange(value = "") {
   min-width: 0;
   padding: 10px;
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
-  border-radius: 13px;
+  border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%, transparent);
 }
 
@@ -126,7 +121,7 @@ function onWorkflowSemanticModelChange(value = "") {
   min-height: 38px;
   height: 38px;
   box-sizing: border-box;
-  border-radius: 12px;
+  border-radius: var(--noobot-radius-md);
   background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
   border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
   transition:

@@ -169,7 +169,7 @@ function handleToggle() {
   white-space: pre-wrap;
   word-break: break-word;
   border-radius: var(--noobot-thinking-log-detail-radius);
-  background: var(--noobot-thinking-detail-background, rgba(127, 127, 127, 0.08));
+  background: var(--noobot-thinking-detail-background, var(--noobot-panel-muted));
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
@@ -237,7 +237,7 @@ function handleToggle() {
   margin-left: 6px;
   padding: 1px 5px;
   border-radius: var(--noobot-thinking-log-event-radius);
-  background: var(--noobot-thinking-detail-background, rgba(127, 127, 127, 0.08));
+  background: var(--noobot-thinking-detail-background, var(--noobot-panel-muted));
   color: var(--noobot-thinking-muted);
   font-size: 0.9em;
   font-weight: 600;

@@ -491,7 +491,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   margin-bottom: 12px;
   padding: 10px;
   border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
 }
 .workflow-execution-directory__title {
   margin-bottom: 8px;
@@ -505,7 +505,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 .workflow-execution-directory__stop {
   border: 1px solid var(--el-color-danger);
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   padding: 4px 10px;
   color: var(--el-color-danger);
   background: transparent;
@@ -532,7 +532,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 }
 .workflow-execution-directory__item {
   border: 1px solid var(--noobot-msg-assistant-border);
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   padding: 5px 10px;
   color: var(--noobot-text-main);
   background: var(--noobot-panel-bg);
@@ -550,7 +550,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 .workflow-runtime-panel {
   border: 1px solid
     color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, rgb(var(--workflow-accent-rgb)) 22%);
-  border-radius: 12px;
+  border-radius: var(--noobot-radius-md);
   padding: 12px;
   margin-bottom: 14px;
   background: color-mix(
@@ -590,9 +590,9 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-state-box {
   border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 86%, transparent 14%);
-  border-radius: 10px;
+  border-radius: var(--noobot-radius-sm);
   padding: 10px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, #000 2%);
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 98%, var(--noobot-base-black) 2%);
 }
 
 .workflow-runtime-state-title {
@@ -623,8 +623,8 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
   padding: 7px 9px;
   margin-top: 7px;
   border: 1px solid color-mix(in srgb, var(--noobot-msg-assistant-border) 78%, transparent 22%);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, #000 4%);
+  border-radius: var(--noobot-radius-xs);
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 96%, var(--noobot-base-black) 4%);
   color: var(--noobot-text-primary);
   text-align: left;
   cursor: pointer;
@@ -662,11 +662,11 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
 
 .workflow-runtime-step-status {
   flex: 0 0 auto;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   padding: 2px 7px;
   font-size: 11px;
   color: var(--noobot-text-secondary);
-  background: rgba(127, 127, 127, 0.12);
+  background: color-mix(in srgb, var(--noobot-text-muted) 12%, transparent);
 }
 
 .workflow-runtime-step-box.success .workflow-runtime-step-status {

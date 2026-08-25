@@ -375,7 +375,7 @@ watch(() => [props.connected, props.userId], refresh);
 .connector-row {
   padding: 10px;
   border: 1px solid var(--noobot-panel-border);
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-xs);
   background: var(--noobot-panel-bg);
   transition:
     border-color 160ms ease,
