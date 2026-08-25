@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { projectAuxiliaryHistoryMessages } from "../src/assembly/auxiliary-history.js";
 
-test("auxiliary history preserves canonical tool call and matching result evidence", () => {
+test("auxiliary history projects tool evidence into the observer perspective", () => {
   const messages = projectAuxiliaryHistoryMessages([
     { role: "user", content: "run it" },
     {
@@ -24,9 +24,11 @@ test("auxiliary history preserves canonical tool call and matching result eviden
     },
     { role: "tool", tool_call_id: "call-1", content: '{"ok":true}' },
   ]);
-  assert.deepEqual(messages.map((message) => message.role), ["user", "assistant", "tool"]);
-  assert.equal(messages[1].tool_calls[0].id, "call-1");
-  assert.equal(messages[2].tool_call_id, "call-1");
+  assert.deepEqual(
+    messages.map((message) => message.role),
+    ["user", "user", "assistant"],
+  );
+  assert.match(messages[1].content, /read_file/);
   assert.equal(messages[2].content, '{"ok":true}');
 });
 
@@ -45,9 +47,11 @@ test("auxiliary history keeps a pending tool call without inventing a result", (
     {
       role: "assistant",
       content: "",
-      tool_calls: [{ id: "pending", type: "function", function: { name: "search", arguments: "{}" } }],
+      tool_calls: [
+        { id: "pending", type: "function", function: { name: "search", arguments: "{}" } },
+      ],
     },
   ]);
   assert.equal(messages.length, 1);
-  assert.equal(messages[0].tool_calls[0].id, "pending");
+  assert.match(messages[0].content, /search/);
 });

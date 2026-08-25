@@ -59,13 +59,17 @@ function isSummaryRelayMessage(message = {}) {
       }),
     )
     .filter(Boolean);
-  return content.startsWith("[harness:summary]") ||
+  return (
+    content.startsWith("[harness:summary]") ||
     relayPrefixes.some((prefix) => content.startsWith(prefix)) ||
-    /^\[from harness external model output\/summary\]/i.test(content);
+    /^\[from harness external model output\/summary\]/i.test(content)
+  );
 }
 
 export function filterHistoricalSummaryRelayMessages(messages = []) {
-  return (Array.isArray(messages) ? messages : []).filter((message) => !isSummaryRelayMessage(message));
+  return (Array.isArray(messages) ? messages : []).filter(
+    (message) => !isSummaryRelayMessage(message),
+  );
 }
 
 export function resolveAcceptanceMainPlanContext(
@@ -106,14 +110,13 @@ export function resolveAcceptanceMainPlanContext(
     totalGoal,
     taskOwner,
     nextPhase,
-    taskChecklist:
-      checklistFromFinalMainPlan.length
-        ? checklistFromFinalMainPlan
-        : checklistFromPayload.length
-          ? checklistFromPayload
-          : Array.isArray(bucket?.taskChecklist)
-            ? bucket.taskChecklist
-            : [],
+    taskChecklist: checklistFromFinalMainPlan.length
+      ? checklistFromFinalMainPlan
+      : checklistFromPayload.length
+        ? checklistFromPayload
+        : Array.isArray(bucket?.taskChecklist)
+          ? bucket.taskChecklist
+          : [],
     planText: String(promptPayload?.planText || "").trim(),
     currentTaskGoal: resolveCurrentTaskGoalText({
       ctx,
@@ -197,24 +200,36 @@ export function appendPhaseAcceptanceReport(bucket = {}, content = "", { planTex
   return report;
 }
 
-export function buildFinalOutputFallbackPhaseAcceptanceText(locale = LOCALE.ZH_CN, bucket = {}, state = {}) {
+export function buildFinalOutputFallbackPhaseAcceptanceText(
+  locale = LOCALE.ZH_CN,
+  bucket = {},
+  state = {},
+) {
   const checklistCount = Array.isArray(bucket?.taskChecklist) ? bucket.taskChecklist.length : 0;
   const signalCount = Number(state?.signals?.successfulToolCount || 0);
-  return translateI18nText(locale, HARNESS_I18N_KEYSET.ACCEPTANCE_VALIDATION.PHASE_FINAL_OUTPUT_FALLBACK, {
-    checklistCount,
-    successfulToolCount: signalCount,
-  });
+  return translateI18nText(
+    locale,
+    HARNESS_I18N_KEYSET.ACCEPTANCE_VALIDATION.PHASE_FINAL_OUTPUT_FALLBACK,
+    {
+      checklistCount,
+      successfulToolCount: signalCount,
+    },
+  );
 }
 
 function isSystemLikeRole(role = "") {
-  const normalized = String(role || "").trim().toLowerCase();
+  const normalized = String(role || "")
+    .trim()
+    .toLowerCase();
   return normalized === "system" || normalized === "developer";
 }
 
 export function pushRoleMessage(ctx = {}, messages = [], role = "system", content = "") {
   const normalizedContent = String(content || "").trim();
   if (!Array.isArray(messages) || !normalizedContent) return false;
-  const requestedRole = String(role || "system").trim().toLowerCase();
+  const requestedRole = String(role || "system")
+    .trim()
+    .toLowerCase();
   const normalizedRole = requestedRole === "user" ? "user" : requestedRole || "system";
   appendMessage(
     ctx,
@@ -264,11 +279,10 @@ export function buildAcceptancePromptParts({
         data: { latestCompleteSummaryText: resolveLatestCompleteSummaryText({ bucket, ctx }) },
       })
     : [];
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const requestContent = phase
     ? buildPhaseAcceptanceRequestPromptText({
         locale,
@@ -317,28 +331,18 @@ export function buildPhaseAcceptanceMessages({
   dynamicPolicyPrompt = "",
 } = {}) {
   const hasRequest = String(requestContent || "").trim();
-  const normalizedAgentMessages = Array.isArray(agentMessages) ? agentMessages : [];
-  const agentSystemMessages = normalizedAgentMessages.filter((message = {}) =>
-    isSystemLikeRole(message?.role),
-  );
-  const agentConversationMessages = normalizedAgentMessages.filter((message = {}) =>
-    !isSystemLikeRole(message?.role),
-  );
-  const systemMessages = [
-    ...agentSystemMessages,
-    ...(hasRequest && String(protocolContent || "").trim()
-      ? [{ role: "system", content: String(protocolContent || "").trim() }]
-      : []),
-    ...(hasRequest && String(workflowPolicyPrompt || "").trim()
-      ? [{ role: "system", content: String(workflowPolicyPrompt || "").trim() }]
-      : []),
-  ];
-  const userMessages = [
-    ...(Array.isArray(summaryReportsContents) ? summaryReportsContents : []),
-    planContextContent,
-    ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
-    requestContent,
-    hasRequest
+  return buildCapabilityProtocolModelMessages({
+    locale,
+    agentMessages,
+    contextMessages: [
+      ...(Array.isArray(summaryReportsContents) ? summaryReportsContents : []),
+      planContextContent,
+      ...(Array.isArray(phaseReportsContents) ? phaseReportsContents : []),
+      requestContent,
+    ],
+    protocolPrompt: hasRequest ? protocolContent : "",
+    workflowPolicyPrompt: hasRequest ? workflowPolicyPrompt : "",
+    responsibilityPrompt: hasRequest
       ? buildWorkflowResponsibilityConstraintUserPrompt(locale, "phase_acceptance", {
           programmingMode,
           textMode,
@@ -346,13 +350,5 @@ export function buildPhaseAcceptanceMessages({
           includeWorkflowPolicy: false,
         })
       : "",
-  ]
-    .map((content) => String(content || "").trim())
-    .filter(Boolean)
-    .map((content) => ({ role: "user", content }));
-  return [
-    ...systemMessages,
-    ...agentConversationMessages,
-    ...userMessages,
-  ];
+  });
 }

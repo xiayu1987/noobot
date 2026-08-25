@@ -6,10 +6,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useWorkflowLocale } from "../../i18n/index.js";
-import {
-  BaseEmptyHint,
-  BaseZoomControls,
-} from "noobot-chat/plugin-api/ui";
+import { BaseEmptyHint, BaseZoomControls } from "noobot-chat/plugin-api/ui";
 import WorkflowGraphNode from "./WorkflowGraphNode.vue";
 import WorkflowGraphEdges from "./WorkflowGraphEdges.vue";
 import { resolveWorkflowDialogProcessId } from "../../utils/workflowDialogProcessId.js";
@@ -36,7 +33,9 @@ function resolveDialogProcessId(item = {}) {
   return resolveWorkflowDialogProcessId(item);
 }
 
-const isCompactGraph = computed(() => Number(hostWidth.value || 0) > 0 && Number(hostWidth.value || 0) <= 480);
+const isCompactGraph = computed(
+  () => Number(hostWidth.value || 0) > 0 && Number(hostWidth.value || 0) <= 480,
+);
 const nodeHeight = computed(() => (isCompactGraph.value ? 54 : 58));
 const nodeGapY = computed(() => (isCompactGraph.value ? 16 : 22));
 const parallelRailWidth = computed(() => {
@@ -59,7 +58,9 @@ const nodeWidth = computed(() => {
 
 const normalizedNodes = computed(() => {
   const baseNodes = (Array.isArray(props.nodes) ? props.nodes : []).map((nodeItem = {}, index) => {
-    const status = String(nodeItem?.status || nodeItem?._status || "").trim().toLowerCase();
+    const status = String(nodeItem?.status || nodeItem?._status || "")
+      .trim()
+      .toLowerCase();
     const resolvedStatus = status || "pending";
     const dialogProcessId = resolveDialogProcessId(nodeItem);
     const sessionId = String(nodeItem?.sessionId || "").trim();
@@ -91,11 +92,15 @@ const normalizedNodes = computed(() => {
   if (!baseNodes.length) return [];
 
   const hasStartBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || item?.id || "").trim().toLowerCase();
+    const nodeId = String(item?.nodeId || item?.id || "")
+      .trim()
+      .toLowerCase();
     return Number(item?.stateType) === 0 && nodeId === "start";
   });
   const hasEndBoundary = baseNodes.some((item) => {
-    const nodeId = String(item?.nodeId || item?.id || "").trim().toLowerCase();
+    const nodeId = String(item?.nodeId || item?.id || "")
+      .trim()
+      .toLowerCase();
     return Number(item?.stateType) === 1 && nodeId === "end";
   });
 
@@ -105,7 +110,9 @@ const normalizedNodes = computed(() => {
   }, 0);
 
   const allFinished = baseNodes.every((item) => {
-    const status = String(item?._status || "").trim().toLowerCase();
+    const status = String(item?._status || "")
+      .trim()
+      .toLowerCase();
     return status === "success" || status === "failed" || status === "error";
   });
 
@@ -210,7 +217,10 @@ function buildTopologyRows(nodes = [], flowtos = []) {
     });
   }
 
-  let fallbackRank = Math.max(0, ...Array.from(rankById.values()).map((value) => Number(value || 0)));
+  let fallbackRank = Math.max(
+    0,
+    ...Array.from(rankById.values()).map((value) => Number(value || 0)),
+  );
   for (const id of nodeById.keys()) {
     if (visited.has(id)) continue;
     fallbackRank += 1;
@@ -244,18 +254,16 @@ const layoutRows = computed(() => {
   const topologyRows = buildTopologyRows(normalizedNodes.value, props.flowtos);
   if (topologyRows.length) return topologyRows;
 
-  const sorted = normalizedNodes.value
-    .slice()
-    .sort((left, right) => {
-      const lt = Number(left?.transition);
-      const rt = Number(right?.transition);
-      const hasLt = Number.isFinite(lt);
-      const hasRt = Number.isFinite(rt);
-      if (hasLt && hasRt && lt !== rt) return lt - rt;
-      if (hasLt && !hasRt) return -1;
-      if (!hasLt && hasRt) return 1;
-      return Number(left?._index || 0) - Number(right?._index || 0);
-    });
+  const sorted = normalizedNodes.value.slice().sort((left, right) => {
+    const lt = Number(left?.transition);
+    const rt = Number(right?.transition);
+    const hasLt = Number.isFinite(lt);
+    const hasRt = Number.isFinite(rt);
+    if (hasLt && hasRt && lt !== rt) return lt - rt;
+    if (hasLt && !hasRt) return -1;
+    if (!hasLt && hasRt) return 1;
+    return Number(left?._index || 0) - Number(right?._index || 0);
+  });
   const rows = [];
   const waveMap = new Map();
   for (const nodeItem of sorted) {
@@ -317,7 +325,11 @@ function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
   const selected = String(dialogProcessId || "").trim();
   if (!selected) return false;
   if (resolveDialogProcessId(nodeItem) === selected) return true;
-  if (Array.isArray(nodeItem?._stepDialogProcessIds) && nodeItem._stepDialogProcessIds.includes(selected)) return true;
+  if (
+    Array.isArray(nodeItem?._stepDialogProcessIds) &&
+    nodeItem._stepDialogProcessIds.includes(selected)
+  )
+    return true;
   for (const stateBox of resolveRuntimeBoxes(nodeItem)) {
     for (const stepItem of Array.isArray(stateBox?.steps) ? stateBox.steps : []) {
       if (resolveDialogProcessId(stepItem) === selected) return true;
@@ -326,15 +338,23 @@ function nodeContainsDialogProcessId(nodeItem = {}, dialogProcessId = "") {
   return false;
 }
 
-
 const graphHeight = computed(() => {
   const nodeCount = Math.max(1, flattenedNodes.value.length);
-  return paddingTop.value + paddingBottom.value + nodeCount * nodeHeight.value + Math.max(0, nodeCount - 1) * nodeGapY.value;
+  return (
+    paddingTop.value +
+    paddingBottom.value +
+    nodeCount * nodeHeight.value +
+    Math.max(0, nodeCount - 1) * nodeGapY.value
+  );
 });
 
-const graphWidth = computed(() => paddingLeft.value + paddingRight.value + parallelRailWidth.value * 2 + nodeWidth.value);
+const graphWidth = computed(
+  () => paddingLeft.value + paddingRight.value + parallelRailWidth.value * 2 + nodeWidth.value,
+);
 
-const stageWidth = computed(() => Math.max(hostWidth.value, graphWidth.value, nodeWidth.value + 24));
+const stageWidth = computed(() =>
+  Math.max(hostWidth.value, graphWidth.value, nodeWidth.value + 24),
+);
 
 const positionedNodes = computed(() => {
   const positioned = [];
@@ -360,12 +380,15 @@ const positionedNodes = computed(() => {
   return positioned;
 });
 
-const effectiveSelectedDialogProcessId = computed(
-  () => String(props.selectedDialogProcessId || innerSelectedDialogProcessId.value || "").trim(),
+const effectiveSelectedDialogProcessId = computed(() =>
+  String(props.selectedDialogProcessId || innerSelectedDialogProcessId.value || "").trim(),
 );
 
-const selectedNode = computed(() =>
-  positionedNodes.value.find((nodeItem) => nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId.value)) || null,
+const selectedNode = computed(
+  () =>
+    positionedNodes.value.find((nodeItem) =>
+      nodeContainsDialogProcessId(nodeItem, effectiveSelectedDialogProcessId.value),
+    ) || null,
 );
 
 const hostStyle = computed(() => ({
@@ -405,7 +428,9 @@ function resolveStatusClass(nodeItem = {}) {
 }
 
 function isActionNode(nodeItem = {}) {
-  const type = String(nodeItem?.type || "").trim().toLowerCase();
+  const type = String(nodeItem?.type || "")
+    .trim()
+    .toLowerCase();
   if (type) return type === "action";
   return Number(nodeItem?.nodeType) === 2;
 }
@@ -420,7 +445,12 @@ function buildCenterSegment({ fromNode = {}, toNode = {}, highlighted = false } 
   };
 }
 
-function buildSideRailSegment({ fromNode = {}, toNode = {}, side = "left", highlighted = false } = {}) {
+function buildSideRailSegment({
+  fromNode = {},
+  toNode = {},
+  side = "left",
+  highlighted = false,
+} = {}) {
   const fromLeftX = Number(fromNode?._x || 0);
   const toLeftX = Number(toNode?._x || 0);
   const fromRightX = fromLeftX + nodeWidth.value;
@@ -476,11 +506,13 @@ const edgeSegments = computed(() => {
       const fromRow = Number(fromNode?._rowIndex ?? -1);
       const toRow = Number(toNode?._rowIndex ?? -1);
       const minRow = Math.min(fromRow, toRow);
-      segments.push(buildWorkflowEdgeSegment({
-        fromNode,
-        toNode,
-        highlighted: selectedRowIndex >= 0 && minRow >= 0 && minRow < selectedRowIndex,
-      }));
+      segments.push(
+        buildWorkflowEdgeSegment({
+          fromNode,
+          toNode,
+          highlighted: selectedRowIndex >= 0 && minRow >= 0 && minRow < selectedRowIndex,
+        }),
+      );
     }
     return segments;
   }
@@ -488,11 +520,13 @@ const edgeSegments = computed(() => {
   for (let rowIndex = 0; rowIndex < positionedNodes.value.length - 1; rowIndex += 1) {
     const fromNode = positionedNodes.value[rowIndex];
     const toNode = positionedNodes.value[rowIndex + 1];
-    segments.push(buildWorkflowEdgeSegment({
-      fromNode,
-      toNode,
-      highlighted: selectedRowIndex >= 0 && rowIndex < selectedRowIndex,
-    }));
+    segments.push(
+      buildWorkflowEdgeSegment({
+        fromNode,
+        toNode,
+        highlighted: selectedRowIndex >= 0 && rowIndex < selectedRowIndex,
+      }),
+    );
   }
   return segments;
 });
@@ -584,8 +618,6 @@ function handleStepClick(stepItem = {}) {
           :segments="edgeSegments"
         />
 
-
-
         <WorkflowGraphNode
           v-for="(nodeItem, nodeIndex) in positionedNodes"
           :key="`${String(nodeItem?.nodeId || resolveDialogProcessId(nodeItem) || nodeItem?.sessionId || '')}-${nodeIndex}`"
@@ -617,7 +649,6 @@ function handleStepClick(stepItem = {}) {
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -654,7 +685,6 @@ function handleStepClick(stepItem = {}) {
   position: relative;
   z-index: 0;
 }
-
 
 .workflow-minimap {
   position: absolute;

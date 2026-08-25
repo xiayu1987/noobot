@@ -243,7 +243,8 @@ watch(() => [props.connected, props.userId], refresh);
                 : translate('connectors.connect')
             "
             @click="setConnection(connector, connector.status !== 'connected')"
-            ><el-icon><SwitchButton v-if="connector.status === 'connected'" /><Link v-else /></el-icon
+            ><el-icon
+              ><SwitchButton v-if="connector.status === 'connected'" /><Link v-else /></el-icon
           ></el-button>
           <el-button
             text

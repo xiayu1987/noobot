@@ -27,6 +27,7 @@ import {
 } from "../helpers/model-message-assertions.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 const HARNESS_COMPLETION_TIMEOUT_MS = 780000;
 const HARNESS_AUDIT_TIMEOUT_MS = 120000;
@@ -60,6 +61,63 @@ function capabilityEvents(records = []) {
   return records.flatMap((record) =>
     Array.isArray(record?.capabilityLogs) ? record.capabilityLogs : [],
   );
+}
+
+function hasSameCheckpointGrowth(records = []) {
+  const flows = new Map();
+  for (const trace of records) {
+    const invocation = trace.data?.invocation || {};
+    const key = [
+      invocation.sessionId,
+      invocation.dialogProcessId,
+      invocation.flow,
+      invocation.purpose,
+      invocation.domain,
+    ].join("|");
+    const flow = flows.get(key) || [];
+    flow.push(trace);
+    flows.set(key, flow);
+  }
+  return [...flows.values()].some((flow) => {
+    flow.sort(
+      (left, right) =>
+        Number(left.data?.invocationSequence || 0) - Number(right.data?.invocationSequence || 0),
+    );
+    return flow.some((current, index) => {
+      if (index === 0) return false;
+      const previous = flow[index - 1];
+      return (
+        Number(current.data?.context?.summaryCheckpointRevision || 0) ===
+          Number(previous.data?.context?.summaryCheckpointRevision || 0) &&
+        Number(current.data?.messages?.count || 0) > Number(previous.data?.messages?.count || 0)
+      );
+    });
+  });
+}
+
+function assertAuxiliaryObserverProjection(mainMessages = [], auxiliaryTraces = []) {
+  const auxiliaryPreview = auxiliaryTraces.flatMap((trace) => trace.data?.messages?.preview || []);
+  expect(
+    mainMessages.some((message) => message.role === "assistant" && message.tool_calls?.length),
+    "main lane must contain canonical tool-call increments",
+  ).toBe(true);
+  expect(
+    mainMessages.some((message) => message.role === "tool"),
+    "main lane must contain canonical tool-result increments",
+  ).toBe(true);
+  expect(
+    auxiliaryPreview.some(
+      (message) =>
+        message.role === "user" && /tool call:/i.test(String(message.contentPreview || "")),
+    ),
+    "auxiliary lane must project a canonical main-lane tool call as observer user context",
+  ).toBe(true);
+  expect(
+    auxiliaryPreview.some(
+      (message) => message.role === "assistant" && Number(message.contentLength || 0) > 0,
+    ),
+    "auxiliary lane must project a canonical main-lane tool result as observer assistant context",
+  ).toBe(true);
 }
 
 function toolResultName(message = {}) {
@@ -280,10 +338,13 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   const modelTraces = modelInvocationTraces(
     await readSessionExecutionEventTree(noobot.userId, noobot.sessionId),
   ).filter((record) => record.turnScopeId === send.identity.turnScopeId);
+  const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
   const prefixAudit = assertModelInvocationTraceSet(modelTraces, {
     rootSessionId: noobot.sessionId,
   });
   const mainPrefixAudit = auditModelPrefixStability(modelTraces.filter(isMainAgentModelInvocation));
+  const capabilityModelTraces = modelTraces.filter((record) => !isMainAgentModelInvocation(record));
+  const capabilityPrefixAudit = auditModelPrefixStability(capabilityModelTraces);
   const mainModelTraces = modelTraces.filter(isMainAgentModelInvocation);
   for (const trace of mainModelTraces) {
     expect(trace.data.messages.roles.system).toBeGreaterThan(0);
@@ -295,6 +356,26 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   expect(mainPrefixAudit.violations).toEqual([]);
   expect(mainPrefixAudit.stableComparisonCount).toBeGreaterThan(0);
   expect(mainPrefixAudit.checkpointRewriteCount).toBeGreaterThan(0);
+  expect(hasSameCheckpointGrowth(mainModelTraces), "main model context must grow append-only").toBe(
+    true,
+  );
+  expect(
+    capabilityModelTraces.every(
+      (trace) =>
+        trace.data?.invocation?.contextSequencePolicy ===
+        MODEL_CONTEXT_SEQUENCE_POLICY.CHECKPOINT_APPEND_ONLY,
+    ),
+    "every Harness auxiliary request must use the checkpoint append-only protocol",
+  ).toBe(true);
+  expect(capabilityPrefixAudit.violations).toEqual([]);
+  expect(capabilityPrefixAudit.checkedFlowCount).toBeGreaterThan(0);
+  expect(capabilityPrefixAudit.stableComparisonCount).toBeGreaterThan(0);
+  expect(capabilityPrefixAudit.checkpointRewriteCount).toBeGreaterThan(0);
+  expect(
+    hasSameCheckpointGrowth(capabilityModelTraces),
+    "Harness auxiliary model context must grow append-only",
+  ).toBe(true);
+  assertAuxiliaryObserverProjection(messages, capabilityModelTraces);
   assertCapabilityPurposesAndMainRelays(modelTraces);
 
   const tracedPurposes = new Set(
@@ -305,7 +386,6 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
   }
 
   const session = await readSessionFact(noobot.userId, noobot.sessionId);
-  const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
   assertCheckpointMessages(
     session,
     messages,

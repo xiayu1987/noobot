@@ -144,6 +144,7 @@ export function createStateBuilder({
     const modelContext = createModelContext({
       messages,
       activeTurnIdentity,
+      checkpointRevision: Math.max(0, Number(runtime?.summaryCheckpointRevision) || 0),
       onCanonicalMessageAdded(message, meta) {
         emitContextIdentityDebug(
           eventListener,

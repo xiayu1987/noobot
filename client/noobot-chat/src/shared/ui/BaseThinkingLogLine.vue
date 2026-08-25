@@ -88,7 +88,8 @@ const resolvedDetail = computed(() => {
       return String(props.detailText || "");
     }
   }
-  const source = props.detailValue === undefined ? contentWithoutEventPrefix.value : props.detailValue;
+  const source =
+    props.detailValue === undefined ? contentWithoutEventPrefix.value : props.detailValue;
   try {
     return typeof source === "string" ? source : JSON.stringify(source, null, 2);
   } catch {
@@ -118,7 +119,10 @@ function handleToggle() {
     <span
       v-if="eventLabel"
       class="base-thinking-log-line__event"
-      :class="[eventClass, { 'is-tool-result-failed': eventClass === 'is-tool-result' && tone === 'error' }]"
+      :class="[
+        eventClass,
+        { 'is-tool-result-failed': eventClass === 'is-tool-result' && tone === 'error' },
+      ]"
       :title="eventLabel"
       :aria-label="eventLabel"
       :data-icon-kind="eventVisual.key"

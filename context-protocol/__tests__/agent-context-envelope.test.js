@@ -25,6 +25,7 @@ function createEnvelope(overrides = {}) {
     execution: { caller: "user", flags: {} },
     modelContext: {
       protocolVersion: 2,
+      checkpointRevision: 0,
       activeTurnIdentity: { dialogProcessId: "d1", turnScopeId: "t1" },
       messageBlocks: { system: [], history: [], incremental: [] },
     },

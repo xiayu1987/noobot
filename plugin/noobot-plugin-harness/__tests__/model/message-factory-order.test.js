@@ -11,9 +11,9 @@ import { buildCapabilityProtocolModelMessages } from "../../src/capabilities/han
 test("capability protocol model messages keep system block before agent conversation", () => {
   const messages = buildCapabilityProtocolModelMessages({
     agentMessages: [
-      { role: "user", content: "current user" },
-      { role: "system", content: "agent system" },
-      { role: "assistant", content: "history assistant" },
+      { role: "user", content: "current user", messageUid: "m1" },
+      { role: "system", content: "agent system", messageUid: "m2" },
+      { role: "assistant", content: "history assistant", messageUid: "m3" },
     ],
     contextMessages: ["planning context"],
     protocolPrompt: "planning protocol",

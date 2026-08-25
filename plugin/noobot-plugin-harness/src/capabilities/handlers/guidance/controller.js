@@ -16,9 +16,7 @@ import {
   shouldSkipAnalysisForTrailingToolCallContent,
 } from "./deps.js";
 import { isSummaryCompletionMarked } from "../model-response-parser.js";
-import {
-  parseSummaryOverviewAndDetailFromText,
-} from "../shared/plan/summary-text-protocol.js";
+import { parseSummaryOverviewAndDetailFromText } from "../shared/plan/summary-text-protocol.js";
 import {
   maybeInjectPlanUpdatePrompt,
   maybeCapturePlanUpdateByInject,
@@ -45,7 +43,6 @@ import { appendCapabilityLog } from "../shared/attachment-log-utils.js";
 import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pattern.js";
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
-import { clearIncrementalCapabilityMessageCacheForContext } from "../shared/model/incremental-message-cache.js";
 
 const GUIDANCE_EVENTS = WORKFLOW_PARAMS.logging.events.guidance;
 const GUIDANCE_DECISION = WORKFLOW_PARAMS.guidance.decisions;
@@ -464,7 +461,6 @@ export function createGuidanceHandler({ shouldProcessPrimaryToolHooks }) {
         }
         recordLatestSummaryFullText(ctx, rawSummaryText);
         const summaryText = applySummaryText(ctx, summaryOverviewText);
-        clearIncrementalCapabilityMessageCacheForContext(ctx);
         if (!isSummaryCompletionMarked(summaryText, locale)) {
           appendCapabilityLog(ctx, {
             domain: CAPABILITY_DOMAIN.GUIDANCE,

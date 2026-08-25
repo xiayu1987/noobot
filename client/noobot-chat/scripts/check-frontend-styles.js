@@ -24,7 +24,10 @@ const tokenLocations = [
 const violations = [];
 const checks = [
   ["transition: all is forbidden", /\btransition(?:-property)?\s*:\s*all\b/i],
-  ["literal border radius must use a design token", /\bborder-radius\s*:\s*[^;\n}]*(?:\d+px|999px)/i],
+  [
+    "literal border radius must use a design token",
+    /\bborder-radius\s*:\s*[^;\n}]*(?:\d+px|999px)/i,
+  ],
   ["literal hex color must be declared in a token location", /#[0-9a-f]{3,8}\b/i],
   ["literal rgb color must be declared in a token location", /\brgba?\(\s*\d/i],
 ];
@@ -44,7 +47,11 @@ function inspectFile(filePath) {
   lines.forEach((line, index) => {
     for (const [message, pattern] of checks) {
       if (!pattern.test(line)) continue;
-      if ((message.includes("color") || message.includes("radius")) && isTokenDeclaration(filePath, line)) continue;
+      if (
+        (message.includes("color") || message.includes("radius")) &&
+        isTokenDeclaration(filePath, line)
+      )
+        continue;
       violations.push(`${path.relative(repoRoot, filePath)}:${index + 1}: ${message}`);
     }
   });
@@ -55,7 +62,8 @@ function inspectDirectory(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const filePath = path.join(directory, entry.name);
     if (entry.isDirectory()) inspectDirectory(filePath);
-    else if (entry.isFile() && inspectedExtensions.has(path.extname(entry.name).toLowerCase())) inspectFile(filePath);
+    else if (entry.isFile() && inspectedExtensions.has(path.extname(entry.name).toLowerCase()))
+      inspectFile(filePath);
   }
 }
 

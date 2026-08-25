@@ -97,6 +97,46 @@ test("failed summary transaction leaves canonical memory and persisted messages 
   assert.deepEqual(runtime.currentTurnMessages.toArray(), messages);
 });
 
+test("uncommitted summary receipt publishes no checkpoint runtime facts", async () => {
+  const messages = [{ messageUid: "sm_1", role: "assistant", content: "M1" }];
+  const runtime = {
+    summaryCheckpointRevision: 2,
+    summaryCheckpointPersistedMessageUids: ["prior"],
+    currentTurnMessages: createCurrentTurnMessagesStore(messages),
+    activeMessageContext: createModelContext({
+      checkpointRevision: 2,
+      messageBlocks: { system: [], history: [], incremental: messages },
+    }),
+  };
+  await assert.rejects(
+    commitSummaryCheckpoint({
+      session: {
+        async commitTurnSummaryCheckpoint() {
+          return { committed: false, checkpointRevision: 3 };
+        },
+      },
+      turnPersister: { async appendAgentMessages() {} },
+      runtime,
+      userId: "u1",
+      sessionId: "s1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      summaryCompletion: { summarizedMessageIds: ["sm_1"] },
+    }),
+    /did not commit/,
+  );
+  assert.equal(runtime.summaryCheckpointRevision, 2);
+  assert.equal(runtime.activeMessageContext.checkpointRevision, 2);
+  assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["prior"]);
+  assert.deepEqual(
+    runtime.currentTurnMessages.toArray().map((message) => ({
+      messageUid: message.messageUid,
+      summarized: message.summarized === true,
+    })),
+    [{ messageUid: "sm_1", summarized: false }],
+  );
+});
+
 test("summary checkpoint atomically marks persisted scope and context control prompts", async () => {
   const persistedMessage = { messageUid: "sm_1", role: "assistant", content: "M1" };
   const phasePrompt = {
@@ -230,11 +270,16 @@ test("summary completion never falls back to content identity", async () => {
 });
 
 test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint API is available", async () => {
+  const messages = [
+    { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
+    { messageUid: "sm_2", role: "assistant", content: "M2" },
+  ];
   const runtime = {
-    currentTurnMessages: createCurrentTurnMessagesStore([
-      { messageUid: "sm_1", role: "assistant", content: "M1", summarized: true },
-      { messageUid: "sm_2", role: "assistant", content: "M2" },
-    ]),
+    currentTurnMessages: createCurrentTurnMessagesStore(messages),
+    activeMessageContext: createModelContext({
+      checkpointRevision: 0,
+      messageBlocks: { system: [], history: [], incremental: messages },
+    }),
   };
   let checkpointPayload = null;
   const result = await commitSummaryCheckpoint({
@@ -258,6 +303,7 @@ test("summary checkpoint uses exact persistent UIDs when the scoped checkpoint A
   assert.deepEqual(checkpointPayload.summarizedMessageUids, ["sm_1"]);
   assert.equal(checkpointPayload.expectedCheckpointRevision, undefined);
   assert.equal(runtime.summaryCheckpointRevision, 4);
+  assert.equal(runtime.activeMessageContext.checkpointRevision, 4);
   assert.deepEqual(runtime.summaryCheckpointPersistedMessageUids, ["sm_1", "sm_2"]);
   assert.deepEqual(
     runtime.currentTurnMessages.toArray().map((message) => message.messageUid),

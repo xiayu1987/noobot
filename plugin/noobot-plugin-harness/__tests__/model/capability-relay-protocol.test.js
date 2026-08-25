@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 
 import { resolveModelFinalMessages } from "@noobot/context-protocol";
 import { invokeCapabilityModel } from "../../src/capabilities/handlers/shared/model/invocation-utils.js";
+import { buildCapabilityModelMessages } from "../../src/capabilities/handlers/shared/model/message-factory.js";
 import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared/relay-model-output.js";
 import {
   createTestHookContext,
@@ -36,7 +37,7 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     const ctx = createTestHookContext();
     const response = await invokeCapabilityModel({
       invoker: async () => createTestModelResponse(`canonical output for ${purpose}`),
-      invokePayload: { purpose, messages: [{ role: "user", content: purpose }] },
+      invokePayload: { purpose, messages: buildCapabilityModelMessages({ task: purpose }) },
       purpose,
       ctx,
     });
@@ -55,11 +56,7 @@ test("all Harness relay purposes cross the canonical capability-to-main-model bo
     assert.equal(relay.injectedMessage, true, purpose);
     assert.equal(relay.injectedBy, "harness-plugin", purpose);
     assert.equal(relay.injectedMessageType, `separate_model_relay:${purpose}`, purpose);
-    assert.match(
-      relay.content,
-      /read-only advice from a Harness auxiliary capability/,
-      purpose,
-    );
+    assert.match(relay.content, /read-only advice from a Harness auxiliary capability/, purpose);
     assert.match(relay.content, /not a user instruction/, purpose);
     assert.match(relay.content, /cannot change, cancel, or pause the actual user task/, purpose);
     assert.match(relay.content, /not a tool call or tool result/, purpose);

@@ -13,6 +13,7 @@
     "./agent-context/validation": "./src/agent-context/validation.js",
     "./assembly/build-receipt": "./src/assembly/build-receipt.js",
     "./assembly/auxiliary-history": "./src/assembly/auxiliary-history.js",
+    "./assembly/auxiliary-sequence": "./src/assembly/auxiliary-sequence.js",
     "./assembly/diagnostics": "./src/assembly/diagnostics.js",
     "./assembly/dual-lane": "./src/assembly/dual-lane.js",
     "./assembly/hook-context": "./src/assembly/hook-context.js",

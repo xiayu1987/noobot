@@ -68,7 +68,10 @@ const guidanceAnalysisIntensity = computed({
 });
 
 function getModelMetaText(modelItem = {}) {
-  return [modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "", modelItem.model]
+  return [
+    modelItem.alias && modelItem.alias !== modelItem.label ? modelItem.alias : "",
+    modelItem.model,
+  ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
     .join(" · ");
@@ -80,9 +83,10 @@ function onHarnessStepModelChange(stepKey = "", value = "") {
   if (isHarnessStepModelDisabled(key)) return;
   const nextValue = String(value || "").trim();
   const currentConfig = pluginConfig.value;
-  const currentStepModels = currentConfig?.stepModels && typeof currentConfig.stepModels === "object"
-    ? currentConfig.stepModels
-    : {};
+  const currentStepModels =
+    currentConfig?.stepModels && typeof currentConfig.stepModels === "object"
+      ? currentConfig.stepModels
+      : {};
   const nextStepModels = { ...currentStepModels };
   if (nextValue) nextStepModels[key] = nextValue;
   else delete nextStepModels[key];
@@ -103,13 +107,13 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
   if (key === "guidance") return;
   const enabled = value !== false;
   const currentHarness = pluginConfig.value;
-  const currentProfile = currentHarness.capabilityProfile && typeof currentHarness.capabilityProfile === "object"
-    ? currentHarness.capabilityProfile
-    : {};
+  const currentProfile =
+    currentHarness.capabilityProfile && typeof currentHarness.capabilityProfile === "object"
+      ? currentHarness.capabilityProfile
+      : {};
   const nextProfile = { ...currentProfile };
-  const nextCapability = nextProfile[key] && typeof nextProfile[key] === "object"
-    ? { ...nextProfile[key] }
-    : {};
+  const nextCapability =
+    nextProfile[key] && typeof nextProfile[key] === "object" ? { ...nextProfile[key] } : {};
   nextCapability.enabled = enabled;
   if (Object.keys(nextCapability).length) nextProfile[key] = nextCapability;
   else delete nextProfile[key];
@@ -119,20 +123,22 @@ function onHarnessCapabilityEnabledChange(capabilityKey = "", value = true) {
 function onGuidanceAnalysisIntensityChange(value = 10) {
   const turnsThreshold = mapGuidanceAnalysisIntensityToTurnsThreshold(value);
   const currentHarness = pluginConfig.value;
-  const currentGuidance = currentHarness.guidance && typeof currentHarness.guidance === "object"
-    ? currentHarness.guidance
-    : {};
-  const currentAnalysis = currentGuidance.analysis && typeof currentGuidance.analysis === "object"
-    ? currentGuidance.analysis
-    : {};
+  const currentGuidance =
+    currentHarness.guidance && typeof currentHarness.guidance === "object"
+      ? currentHarness.guidance
+      : {};
+  const currentAnalysis =
+    currentGuidance.analysis && typeof currentGuidance.analysis === "object"
+      ? currentGuidance.analysis
+      : {};
   patchPluginConfig({
     ...currentHarness,
     guidance: {
-        ...currentGuidance,
-        analysis: {
-          ...currentAnalysis,
-          turnsThreshold,
-        },
+      ...currentGuidance,
+      analysis: {
+        ...currentAnalysis,
+        turnsThreshold,
+      },
     },
   });
 }
@@ -156,11 +162,7 @@ function isHarnessStepModelDisabled(stepKey = "") {
       <p class="plugin-model-description">{{ translate("modelExtension.description") }}</p>
     </div>
     <div class="plugin-model-grid">
-      <div
-        v-for="stepItem in HARNESS_MODEL_STEPS"
-        :key="stepItem.key"
-        class="plugin-model-field"
-      >
+      <div v-for="stepItem in HARNESS_MODEL_STEPS" :key="stepItem.key" class="plugin-model-field">
         <span class="plugin-model-label">{{ stepItem.label }}</span>
         <el-radio-group
           v-if="canToggleHarnessCapability(stepItem.key)"
@@ -170,7 +172,9 @@ function isHarnessStepModelDisabled(stepKey = "") {
           @update:model-value="onHarnessCapabilityEnabledChange(stepItem.key, $event)"
         >
           <el-radio-button :value="true">{{ translate("modelExtension.enabled") }}</el-radio-button>
-          <el-radio-button :value="false">{{ translate("modelExtension.disabled") }}</el-radio-button>
+          <el-radio-button :value="false">{{
+            translate("modelExtension.disabled")
+          }}</el-radio-button>
         </el-radio-group>
         <div
           v-else-if="stepItem.key === 'guidance'"
@@ -204,9 +208,11 @@ function isHarnessStepModelDisabled(stepKey = "") {
           :filterable="false"
           popper-class="noobot-composer-select-popper noobot-model-select-popper"
           :disabled="isHarnessStepModelDisabled(stepItem.key)"
-          :placeholder="stepItem.key === 'acceptance' && !isHarnessCapabilityEnabled(stepItem.key)
-            ? translate('modelExtension.acceptanceModelDisabled')
-            : translate('modelExtension.placeholder')"
+          :placeholder="
+            stepItem.key === 'acceptance' && !isHarnessCapabilityEnabled(stepItem.key)
+              ? translate('modelExtension.acceptanceModelDisabled')
+              : translate('modelExtension.placeholder')
+          "
           class="composer-select model-select noobot-model-select-control"
           @update:model-value="onHarnessStepModelChange(stepItem.key, $event)"
         >
@@ -218,14 +224,20 @@ function isHarnessStepModelDisabled(stepKey = "") {
           >
             <div class="model-option-content">
               <span class="model-option-label">{{ modelItem.label }}</span>
-              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{ getModelMetaText(modelItem) }}</span>
-              <span v-if="modelItem.description" class="model-option-description">{{ modelItem.description }}</span>
+              <span v-if="getModelMetaText(modelItem)" class="model-option-meta">{{
+                getModelMetaText(modelItem)
+              }}</span>
+              <span v-if="modelItem.description" class="model-option-description">{{
+                modelItem.description
+              }}</span>
             </div>
           </el-option>
         </el-select>
       </div>
     </div>
-    <span v-if="!hasModelOptions" class="plugin-empty-text">{{ translate("modelExtension.empty") }}</span>
+    <span v-if="!hasModelOptions" class="plugin-empty-text">{{
+      translate("modelExtension.empty")
+    }}</span>
   </div>
 </template>
 
@@ -235,9 +247,18 @@ function isHarnessStepModelDisabled(stepKey = "") {
   flex-direction: column;
   gap: 12px;
   padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 18%, var(--noobot-panel-border, var(--el-border-color)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 18%,
+      var(--noobot-panel-border, var(--el-border-color))
+    );
   border-radius: var(--noobot-radius-lg);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 94%, var(--el-color-primary));
+  background: color-mix(
+    in srgb,
+    var(--noobot-surface-sidebar, var(--el-bg-color)) 94%,
+    var(--el-color-primary)
+  );
 }
 
 .plugin-model-title {
@@ -266,9 +287,14 @@ function isHarnessStepModelDisabled(stepKey = "") {
   gap: 7px;
   min-width: 0;
   padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 64%, transparent);
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 88%,
+    transparent
+  );
 }
 
 .plugin-model-label {
@@ -313,10 +339,19 @@ function isHarnessStepModelDisabled(stepKey = "") {
   height: 28px;
   padding: 0 9px;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 22%,
+      var(--noobot-panel-border, var(--el-border-color))
+    );
   border-radius: var(--noobot-radius-xs);
   color: var(--noobot-text-secondary, var(--el-text-color-regular));
-  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-control-bg, var(--el-bg-color)));
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 6%,
+    var(--noobot-control-bg, var(--el-bg-color))
+  );
   font-size: 12px;
 }
 
@@ -329,9 +364,18 @@ function isHarnessStepModelDisabled(stepKey = "") {
   min-height: 28px;
   padding: 0 8px;
   box-sizing: border-box;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 22%, var(--noobot-panel-border, var(--el-border-color)));
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--el-color-primary) 22%,
+      var(--noobot-panel-border, var(--el-border-color))
+    );
   border-radius: var(--noobot-radius-xs);
-  background: color-mix(in srgb, var(--el-color-primary) 6%, var(--noobot-control-bg, var(--el-bg-color)));
+  background: color-mix(
+    in srgb,
+    var(--el-color-primary) 6%,
+    var(--noobot-control-bg, var(--el-bg-color))
+  );
 }
 
 .plugin-guidance-analysis-title {
@@ -378,16 +422,28 @@ function isHarnessStepModelDisabled(stepKey = "") {
   height: 38px;
   box-sizing: border-box;
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%, var(--el-color-primary));
-  border-color: color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 78%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 94%,
+    var(--el-color-primary)
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--noobot-panel-border, var(--el-border-color)) 78%,
+    transparent
+  );
   transition:
     background-color 0.18s ease,
-    border-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .composer-select :deep(.el-select__wrapper.is-focused),
 .composer-select :deep(.el-select__wrapper:hover) {
-  border-color: color-mix(in srgb, var(--el-color-primary) 50%, var(--noobot-panel-border, var(--el-border-color)));
+  border-color: color-mix(
+    in srgb,
+    var(--el-color-primary) 50%,
+    var(--noobot-panel-border, var(--el-border-color))
+  );
 }
 
 .composer-select :deep(.el-select__selected-item),

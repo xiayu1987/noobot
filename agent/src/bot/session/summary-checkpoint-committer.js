@@ -209,8 +209,11 @@ export async function commitSummaryCheckpoint({
     summarizedMessageUids,
     retainedMessageUids: [...retainedCheckpointEvidenceIds],
   });
-  if (checkpointResult && Number.isFinite(Number(checkpointResult.checkpointRevision))) {
-    runtime.summaryCheckpointRevision = Number(checkpointResult.checkpointRevision);
+  const committedCheckpointRevision = Number(checkpointResult?.checkpointRevision);
+  const markedCount = Number(checkpointResult?.markedCount) || 0;
+  const committed = checkpointResult?.committed === true || checkpointResult?.deduplicated === true;
+  if (!committed) {
+    throw new Error("summary checkpoint transaction did not commit");
   }
   if (persistedMessageUids.length) {
     runtime.summaryCheckpointPersistedMessageUids = [
@@ -222,8 +225,12 @@ export async function commitSummaryCheckpoint({
       ]),
     ];
   }
-  const markedCount = Number(checkpointResult?.markedCount) || 0;
-  const committed = checkpointResult?.committed === true || checkpointResult?.deduplicated === true;
+  if (Number.isFinite(committedCheckpointRevision)) {
+    runtime.summaryCheckpointRevision = committedCheckpointRevision;
+    if (runtime?.activeMessageContext && typeof runtime.activeMessageContext === "object") {
+      runtime.activeMessageContext.checkpointRevision = committedCheckpointRevision;
+    }
+  }
   emitEvent(eventListener, "summary_checkpoint_committed", {
     source: String(normalizedSummaryCompletion?.source || "").trim(),
     requestedMessageCount: Array.isArray(normalizedSummaryCompletion?.summarizedMessageIds)
@@ -236,9 +243,6 @@ export async function commitSummaryCheckpoint({
     preservedCheckpointEvidenceMessageUids: [...retainedCheckpointEvidenceIds].sort(),
     exactCheckpoint: true,
   });
-  if (!committed) {
-    throw new Error("summary checkpoint transaction did not commit");
-  }
 
   const currentTurnMarker = createSummaryMarker();
   currentTurnMessages.updateWhere(

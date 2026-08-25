@@ -95,22 +95,62 @@ function assertToolEvidenceAlignment(messages = []) {
   }
 }
 
+function formatToolCallForObserver(toolCalls = []) {
+  return toolCalls
+    .map((call = {}) => {
+      const fn = call.function && typeof call.function === "object" ? call.function : call;
+      const name = String(fn.name || "tool").trim();
+      const args =
+        typeof fn.arguments === "string"
+          ? fn.arguments
+          : JSON.stringify(fn.arguments ?? call.args ?? {});
+      return `Tool call: ${name}(${args})`;
+    })
+    .join("\n");
+}
+
 export function projectAuxiliaryHistoryMessages(
   sourceMessages = [],
-  { decorateMessage = null } = {},
+  { decorateMessage = null, projectObserverPerspective = true, formatToolCall = null } = {},
 ) {
   if (!Array.isArray(sourceMessages)) {
     throw new TypeError("auxiliary history sourceMessages must be an array");
   }
-  const projected = sourceMessages
+  const entries = sourceMessages
     .map((sourceMessage, index) => {
       const normalized = normalizeMessage(sourceMessage);
       if (!normalized) return null;
-      return typeof decorateMessage === "function"
-        ? decorateMessage(normalized, sourceMessage, index)
-        : normalized;
+      return { message: normalized, sourceMessage, index };
     })
     .filter(Boolean);
-  assertToolEvidenceAlignment(projected);
-  return projected;
+  const normalizedMessages = entries.map(({ message }) => message);
+  assertToolEvidenceAlignment(normalizedMessages);
+  const projected = projectObserverPerspective
+    ? normalizedMessages.map((message) => {
+        if (message.role === "tool") {
+          return {
+            role: "assistant",
+            content: message.content,
+            ...(message.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
+          };
+        }
+        if (
+          message.role === "assistant" &&
+          Array.isArray(message.tool_calls) &&
+          message.tool_calls.length
+        ) {
+          const content =
+            typeof formatToolCall === "function"
+              ? formatToolCall(message.tool_calls)
+              : formatToolCallForObserver(message.tool_calls);
+          return { role: "user", content };
+        }
+        return message;
+      })
+    : normalizedMessages;
+  return projected.map((message, index) =>
+    typeof decorateMessage === "function"
+      ? decorateMessage(message, entries[index].sourceMessage, entries[index].index)
+      : message,
+  );
 }

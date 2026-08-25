@@ -9,34 +9,38 @@ import {
 } from "@noobot/context-protocol/assembly/dual-lane";
 import { projectAuxiliaryHistoryMessages } from "@noobot/context-protocol/assembly/auxiliary-history";
 import {
-  buildContentOriginKey,
-  MESSAGE_ORIGIN_KIND,
-  markMessageAsContext,
-  markMessageAsProtocol,
-  resolveRawMessageSourceId,
-  resolveMessageOriginKey,
-} from "./message-metadata.js";
+  AUXILIARY_SEQUENCE_MESSAGE_KIND,
+  declareAuxiliarySequenceIdentity,
+} from "@noobot/context-protocol/assembly/auxiliary-sequence";
+import { resolveContextMessageId } from "@noobot/context-protocol/message/codec";
 
-function markContextOriginFromNormalized(message = {}, normalized = {}) {
-  const originKey =
-    resolveMessageOriginKey(normalized, MESSAGE_ORIGIN_KIND.CONTEXT) ||
-    buildContentOriginKey({
-      prefix: "rewritten-context",
-      role: message?.role,
-      content: message?.content,
-    });
-  return markMessageAsContext(message, originKey);
+function markContextMessage(message = {}, source = {}) {
+  const sourceMessageId = resolveContextMessageId(source);
+  if (!sourceMessageId) {
+    throw new TypeError("Harness auxiliary Context message requires canonical message identity");
+  }
+  Object.defineProperty(message, "noobotMessageId", {
+    value: sourceMessageId,
+    enumerable: false,
+    configurable: true,
+  });
+  return declareAuxiliarySequenceIdentity(message, {
+    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
+    key: sourceMessageId,
+  });
 }
 
-function markProtocolMessage(message = {}, prefix = "protocol") {
-  return markMessageAsProtocol(
-    message,
-    buildContentOriginKey({
-      prefix,
-      role: message?.role,
-      content: message?.content,
-    }),
-  );
+function markStableProtocolMessage(message = {}, key = "") {
+  return declareAuxiliarySequenceIdentity(message, {
+    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.STABLE_PROTOCOL,
+    key,
+  });
+}
+
+function markRequestMessage(message = {}) {
+  return declareAuxiliarySequenceIdentity(message, {
+    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST,
+  });
 }
 
 function normalizeModelMessageRole(role = "", fallback = "user") {
@@ -73,14 +77,10 @@ export function buildCapabilityModelMessages({
   const normalizedPostTaskSystemMessages = normalizeTextList(postTaskSystemMessages);
   const normalizedPostTaskMessages = normalizeTextList(postTaskMessages);
   const flattenedAgentMessages = projectAuxiliaryHistoryMessages(agentMessages, {
-    decorateMessage: (normalized, source) => {
-      const sourceMessageId = resolveRawMessageSourceId(source);
-      if (sourceMessageId) markMessageAsContext(normalized, sourceMessageId);
-      return markContextOriginFromNormalized(normalized, source);
-    },
+    decorateMessage: (normalized, source) => markContextMessage(normalized, source),
   });
-  const constraintMessages = normalizeTextList(constraints).map((content) =>
-    markProtocolMessage({ role: "system", content }, "constraint"),
+  const constraintMessages = normalizeTextList(constraints).map((content, index) =>
+    markStableProtocolMessage({ role: "system", content }, `constraint:${index}`),
   );
   const protocolSystemMessages = [...constraintMessages];
   const taskMessages = [];
@@ -88,14 +88,27 @@ export function buildCapabilityModelMessages({
   const resolvedPostTaskRole = normalizeModelMessageRole(postTaskRole, resolvedTaskRole);
   if (normalizedTask) {
     const target = isSystemLikeRole(resolvedTaskRole) ? protocolSystemMessages : taskMessages;
-    target.push(markProtocolMessage({ role: resolvedTaskRole, content: normalizedTask }, "task"));
+    target.push(
+      isSystemLikeRole(resolvedTaskRole)
+        ? markStableProtocolMessage({ role: resolvedTaskRole, content: normalizedTask }, "task")
+        : markRequestMessage({ role: resolvedTaskRole, content: normalizedTask }),
+    );
   }
-  for (const content of normalizedPostTaskSystemMessages) {
-    protocolSystemMessages.push(markProtocolMessage({ role: "system", content }, "post-system"));
+  for (const [index, content] of normalizedPostTaskSystemMessages.entries()) {
+    protocolSystemMessages.push(
+      markStableProtocolMessage({ role: "system", content }, `post-system:${index}`),
+    );
   }
-  for (const content of normalizedPostTaskMessages) {
+  for (const [index, content] of normalizedPostTaskMessages.entries()) {
     const target = isSystemLikeRole(resolvedPostTaskRole) ? protocolSystemMessages : taskMessages;
-    target.push(markProtocolMessage({ role: resolvedPostTaskRole, content }, "post-message"));
+    target.push(
+      isSystemLikeRole(resolvedPostTaskRole)
+        ? markStableProtocolMessage(
+            { role: resolvedPostTaskRole, content },
+            `post-message:${index}`,
+          )
+        : markRequestMessage({ role: resolvedPostTaskRole, content }),
+    );
   }
   return buildDualLaneModelContext({
     lane: MODEL_CONTEXT_LANE.AUXILIARY,
