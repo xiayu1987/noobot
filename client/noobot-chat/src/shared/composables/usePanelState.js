@@ -54,9 +54,14 @@ export function usePanelState() {
 
   function closeAllDrawers() {
     workspaceVisible.value = false;
-    connectorVisible.value = false;
     userSettingsVisible.value = false;
     configParamsVisible.value = false;
+    if (isMobile.value) connectorVisible.value = false;
+  }
+
+  function closeAllPanels() {
+    closeAllDrawers();
+    connectorVisible.value = false;
   }
 
   function openWorkspace() {
@@ -105,6 +110,7 @@ export function usePanelState() {
     closeMobileSidebar,
     openMobileSidebar,
     closeAllDrawers,
+    closeAllPanels,
     openWorkspace,
     openConnectors,
     openUserSettings,

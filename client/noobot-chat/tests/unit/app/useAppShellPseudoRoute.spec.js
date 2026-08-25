@@ -34,7 +34,7 @@ function createRouteHarness() {
     mobileChatNavigatorVisible: ref(false),
     chatNavigatorVisible,
     isSuperAdmin: ref(false),
-    closeAllDrawers: vi.fn(),
+    closeAllPanels: vi.fn(),
     closeMobileSidebar: vi.fn(),
     closeComposerMorePanel: vi.fn(),
     closeThinkingDetailsPanel: vi.fn(),
