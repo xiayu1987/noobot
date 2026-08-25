@@ -43,7 +43,7 @@ const statusClass = computed(() => {
   --workflow-failed-rgb: 199, 59, 59;
   --workflow-running-rgb: 122, 75, 244;
   --workflow-pending-rgb: 127, 127, 127;
-  border-radius: 999px;
+  border-radius: var(--noobot-radius-pill);
   padding: 2px 6px;
   font-size: 10px;
   border: 1px solid transparent;

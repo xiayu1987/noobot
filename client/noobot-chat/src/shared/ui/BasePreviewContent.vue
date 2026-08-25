@@ -252,7 +252,7 @@ watch(
   margin: 16px 0;
   padding: 12px 16px;
   color: var(--noobot-preview-text);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--noobot-radius-xs) var(--noobot-radius-xs) 0;
   font-style: italic;
 }
 .preview-markdown :deep(blockquote p:last-child) {

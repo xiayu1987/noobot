@@ -14,34 +14,15 @@
   --noobot-radius-lg: 16px;
   --noobot-radius-xl: 22px;
   --noobot-radius-shell: 30px;
+  --noobot-radius-pill: 999px;
   --startup-bg-root: var(--startup-color-ink-950);
-  --startup-bg-shell:
-    radial-gradient(circle at 16% 10%, rgba(56, 189, 248, 0.3), transparent 30%),
-    radial-gradient(circle at 88% 18%, rgba(129, 140, 248, 0.3), transparent 34%),
-    radial-gradient(circle at 50% 100%, rgba(14, 165, 233, 0.12), transparent 40%),
-    linear-gradient(
-      135deg,
-      var(--startup-color-ink-950) 0%,
-      var(--startup-color-slate-900) 50%,
-      var(--startup-color-gray-900) 100%
-    );
-  --startup-bg-grid:
-    linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
-  --startup-surface-card: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.76));
+  --startup-bg-shell: var(--startup-color-slate-900);
+  --startup-surface-card: color-mix(in srgb, var(--startup-color-slate-900) 90%, transparent);
   --startup-surface-panel: rgba(2, 6, 23, 0.42);
   --startup-surface-control: rgba(2, 6, 23, 0.72);
   --startup-surface-log: rgba(2, 6, 23, 0.64);
-  --startup-surface-dependency: linear-gradient(
-    180deg,
-    rgba(15, 23, 42, 0.72),
-    rgba(2, 6, 23, 0.52)
-  );
-  --startup-surface-dependency-checked: linear-gradient(
-    180deg,
-    rgba(14, 165, 233, 0.18),
-    rgba(2, 6, 23, 0.55)
-  );
+  --startup-surface-dependency: rgba(15, 23, 42, 0.72);
+  --startup-surface-dependency-checked: rgba(14, 165, 233, 0.18);
   --startup-border-card: rgba(148, 163, 184, 0.24);
   --startup-border-panel: rgba(148, 163, 184, 0.18);
   --startup-border-soft: rgba(148, 163, 184, 0.16);
@@ -53,6 +34,11 @@
   --startup-text-muted: var(--startup-color-slate-400);
   --startup-text-accent: var(--startup-color-sky-300);
   --startup-status-running: var(--startup-color-sky-400);
+  --startup-decoration: color-mix(in srgb, var(--startup-color-sky-400) 24%, transparent);
+  --startup-accent-soft: color-mix(in srgb, var(--startup-color-sky-400) 12%, transparent);
+  --startup-accent-border: color-mix(in srgb, var(--startup-color-sky-300) 18%, transparent);
+  --startup-accent-dot: color-mix(in srgb, var(--startup-color-sky-300) 50%, transparent);
+  --startup-scrollbar: color-mix(in srgb, var(--startup-color-slate-400) 35%, transparent);
   color-scheme: dark;
   font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   background: var(--startup-bg-root);
@@ -76,15 +62,6 @@ input {
   color: var(--startup-text-main);
   background: var(--startup-bg-shell);
 }
-.startup-shell::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image: var(--startup-bg-grid);
-  background-size: 36px 36px;
-  mask-image: radial-gradient(circle at center, black, transparent 74%);
-}
 .startup-card {
   position: relative;
   width: min(900px, 100%);
@@ -107,11 +84,11 @@ input {
   width: 58px;
   height: 58px;
   border-radius: var(--noobot-radius-xl);
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.28), rgba(129, 140, 248, 0.22));
+  background: var(--startup-decoration);
 }
 .brand-badge {
-  border-color: rgba(125, 211, 252, 0.18);
-  background: rgba(14, 165, 233, 0.12);
+  border-color: var(--startup-accent-border);
+  background: var(--startup-accent-soft);
   color: var(--startup-text-accent);
   font-weight: 800;
 }
@@ -254,7 +231,7 @@ small {
 .log-panel.el-card {
   margin: 22px 0 0;
   overflow: hidden;
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  border: 1px solid var(--startup-border-soft);
   border-radius: var(--noobot-radius-lg);
   background: var(--startup-surface-log);
   --el-card-padding: 0;
@@ -281,8 +258,8 @@ small {
 .log-dots i {
   width: 6px;
   height: 6px;
-  border-radius: var(--noobot-radius-pill, 999px);
-  background: rgba(125, 211, 252, 0.5);
+  border-radius: var(--noobot-radius-pill);
+  background: var(--startup-accent-dot);
 }
 pre {
   white-space: pre-wrap;
@@ -298,7 +275,7 @@ pre {
     Consolas,
     "Liberation Mono",
     monospace;
-  scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
+  scrollbar-color: var(--startup-scrollbar) transparent;
 }
 @keyframes spin {
   to {

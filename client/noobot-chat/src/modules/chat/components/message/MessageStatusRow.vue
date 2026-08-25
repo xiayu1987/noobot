@@ -85,7 +85,7 @@ const stepView = computed(() => {
   border: none !important;
   border-radius: 50%;
   background-color: var(--noobot-panel-border);
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease;
 }
 
 .message-status-steps :deep(.el-step__icon-inner) {

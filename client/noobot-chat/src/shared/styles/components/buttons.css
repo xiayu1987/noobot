@@ -42,19 +42,7 @@ button,
   border: 1px solid
     color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
   border-radius: var(--noobot-radius-md);
-  background: linear-gradient(
-    135deg,
-    color-mix(
-      in srgb,
-      var(--noobot-surface-sidebar, var(--el-bg-color)) 97%,
-      var(--el-fill-color-light)
-    ),
-    color-mix(
-      in srgb,
-      var(--noobot-surface-sidebar, var(--el-bg-color)) 93%,
-      var(--el-color-primary)
-    )
-  );
+  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 95%, var(--el-color-primary));
 }
 
 .noobot-panel-card {
@@ -66,19 +54,7 @@ button,
       var(--noobot-panel-border, var(--el-border-color))
     );
   border-radius: var(--noobot-radius-lg);
-  background: linear-gradient(
-    135deg,
-    color-mix(
-      in srgb,
-      var(--noobot-panel-bg, var(--el-bg-color-overlay)) 98%,
-      var(--el-color-primary)
-    ),
-    color-mix(
-      in srgb,
-      var(--noobot-surface-sidebar, var(--el-bg-color)) 96%,
-      var(--noobot-cyber-cyan, var(--noobot-base-blue-500))
-    )
-  );
+  background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 97%, var(--el-color-primary));
   box-shadow: var(--noobot-shadow-panel);
 }
 
@@ -470,11 +446,7 @@ button,
 .noobot-primary-pill-action {
   border: 1px solid
     color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 42%, transparent);
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 14%, transparent),
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 6%, transparent)
-  );
+  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent);
   color: var(--noobot-primary, var(--noobot-base-blue-500));
   font-weight: 600;
   filter: none;
@@ -491,20 +463,12 @@ button,
     var(--noobot-primary, var(--noobot-base-blue-500)) 62%,
     transparent
   );
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 20%, transparent),
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent)
-  );
+  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent);
 }
 
 .noobot-primary-pill-action:active {
   filter: none;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent),
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 8%, transparent)
-  );
+  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 12%, transparent);
 }
 
 .noobot-pill-option.el-button {
@@ -554,19 +518,7 @@ button,
     var(--el-color-primary) 72%,
     var(--noobot-panel-border, var(--el-border-color))
   );
-  background: linear-gradient(
-    135deg,
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 92%,
-      var(--noobot-panel-bg, var(--el-bg-color-overlay))
-    ),
-    color-mix(
-      in srgb,
-      var(--el-color-primary) 76%,
-      var(--noobot-cyber-cyan, var(--noobot-base-blue-500))
-    )
-  );
+  background: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
 }
 
 .noobot-pill-option.is-disabled,

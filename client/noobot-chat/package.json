@@ -15,6 +15,7 @@
     "generate:frontend-plugin-entries": "node scripts/generate-frontend-plugin-entries.js",
     "check:plugin-frontend-reverse-deps": "node scripts/check-plugin-frontend-reverse-deps.js",
     "check:frontend-structure": "node scripts/check-frontend-structure.js",
+    "check:frontend-styles": "node scripts/check-frontend-styles.js",
     "test:plugin-frontend-boundary-guard": "node --test scripts/check-plugin-frontend-reverse-deps.test.js",
     "prebuild": "npm run -s generate:frontend-plugin-entries",
     "dev": "vite",
@@ -29,7 +30,7 @@
     "serve:caddy": "bash ./deploy/run-caddy.sh",
     "serve:caddy:restart": "bash ./deploy/restart-caddy.sh",
     "check:i18n-imports": "node ../../scripts/check-i18n-imports.mjs --project=client",
-    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
+    "pretest": "npm run -s generate:frontend-plugin-entries && npm run -s check:frontend-structure && npm run -s check:frontend-styles && npm run -s check:plugin-frontend-reverse-deps && npm run -s test:plugin-frontend-boundary-guard && npm run -s check:i18n-imports"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",

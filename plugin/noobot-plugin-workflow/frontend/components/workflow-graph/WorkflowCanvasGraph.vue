@@ -663,7 +663,7 @@ function handleStepClick(stepItem = {}) {
   border: 1px solid var(--noobot-msg-assistant-border);
   border-radius: var(--workflow-radius-md);
   padding: var(--workflow-space-xs);
-  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, #000 6%);
+  background: color-mix(in srgb, var(--noobot-msg-assistant-bg) 94%, var(--noobot-base-black) 6%);
   opacity: 0.72;
   z-index: 4;
 }
@@ -683,8 +683,8 @@ function handleStepClick(stepItem = {}) {
 .workflow-minimap-node {
   width: 10px;
   height: 6px;
-  border-radius: 3px;
-  background: rgba(127, 127, 127, 0.35);
+  border-radius: var(--workflow-radius-xs);
+  background: color-mix(in srgb, var(--noobot-text-muted) 35%, transparent);
 }
 
 .workflow-minimap-node.success {
