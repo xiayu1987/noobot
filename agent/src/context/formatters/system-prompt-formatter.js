@@ -7,7 +7,7 @@ import { safeNum } from "../../shared/utils/shared-utils.js";
 import { normalizeLocale } from "noobot-i18n/shared";
 import { SYSTEM_PROMPT_FORMATTER_I18N as zhSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/zh-CN/system-prompt";
 import { SYSTEM_PROMPT_FORMATTER_I18N as enSystemPromptFormatterI18n } from "noobot-i18n/agent/locales/en-US/system-prompt";
-import { normalizeAttachmentMetas } from "../../artifacts/index.js";
+import { projectAttachmentMetaForModel } from "../../artifacts/index.js";
 
 function toSystemSection(title, content) {
   return `# ${title}\n${content}`;
@@ -173,8 +173,8 @@ export function composeSystemInfoSections({
     defaultWorkspaceDescription,
   });
   const normalizedPathGuidance = buildPathGuidanceSection(staticInfo, contextPromptI18n);
-  const normalizedAttachmentMetas = normalizeAttachmentMetas(
-    Array.isArray(attachments) ? attachments : [],
+  const normalizedAttachmentMetas = (Array.isArray(attachments) ? attachments : []).map(
+    projectAttachmentMetaForModel,
   );
   return [
     normalizedSystemPrompt,

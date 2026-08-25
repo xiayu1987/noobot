@@ -43,8 +43,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "User workspace directory",
     workspaceDirectoryDescriptions: {
       runtime: "Runtime data root",
-      "runtime/attach":
-        "Attachment workspace logical directory; the authoritative hierarchy is runtime/attach/scoped/<sessionId>/<attachmentSource>/. Use this workspace-relative path for search or audit; use the complete attachment identity for cross-tool transfer instead of constructing a physical file path.",
+      "runtime/attach": "Attachment directory; use attachmentRef unchanged.",
       "runtime/connectors": "Connector runtime/history info (e.g. connector-history.json)",
       "runtime/session": "Session and execution records",
       "runtime/ops_workdir": "Script execution and intermediate workspace",

@@ -43,8 +43,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
     defaultWorkspaceDescription: "User workspace directory",
     workspaceDirectoryDescriptions: {
       runtime: "Runtime data root",
-      "runtime/attach":
-        "Attachment workspace logical directory; the authoritative hierarchy is runtime/attach/scoped/<sessionId>/<attachmentSource>/. Use this workspace-relative path for search or audit; use the complete attachment identity for cross-tool transfer instead of constructing a physical file path.",
+      "runtime/attach": "Attachment directory; use attachmentRef unchanged.",
       "runtime/connectors": "Connector runtime/history info (e.g. connector-history.json)",
       "runtime/session": "Session and execution records",
       "runtime/ops_workdir": "Script execution and intermediate workspace",
@@ -73,7 +72,7 @@ export const SYSTEM_PROMPT_FORMATTER_I18N = {
         "Sandbox mode is active. Workspace logical paths and extra mount targets listed in the system runtime environment are available to every file-related tool. Mount paths are governed uniformly by their global read-only setting and path policy.",
       hostWorkspaceView: "Host mode is active. Workspace tools use the service workspace view.",
       taskLocalView:
-        "execute_native_script task-local paths last for one call, and output names are not paths. Across tools, pass only the complete attachment identity; never construct workspace or host paths.",
+        "execute_native_script task-local paths last for one call; pass attachmentRef unchanged across tools.",
       superUserHost:
         "Super user: host absolute paths are allowed (Windows e.g. C:\\\\dir, macOS/Linux e.g. /Users, /home).",
       regularHost:

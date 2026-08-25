@@ -339,8 +339,22 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
         tools: [],
         runtime: {
           userId: "u1",
-          userMessageAttachments: [{ attachmentId: "att_input", name: "input.png" }],
-          attachments: [{ attachmentId: "att_legacy", name: "legacy.png" }],
+          userMessageAttachments: [
+            {
+              attachmentId: "att_input",
+              sessionId: "s1",
+              attachmentSource: "user",
+              name: "input.png",
+            },
+          ],
+          attachments: [
+            {
+              attachmentId: "att_legacy",
+              sessionId: "s1",
+              attachmentSource: "model",
+              name: "legacy.png",
+            },
+          ],
           systemRuntime: { sessionId: "s1", dialogProcessId: "dp1", turnScopeId: "turn-1" },
         },
       },
@@ -349,7 +363,14 @@ test("buildContextMessageBlocks prefers runtime userMessageAttachments for user 
       currentUserMessage: createPersistedCurrentUserMessage("hello", {
         dialogProcessId: "dp1",
         turnScopeId: "turn-1",
-        attachments: [{ attachmentId: "att_input", name: "input.png" }],
+        attachments: [
+          {
+            attachmentId: "att_input",
+            sessionId: "s1",
+            attachmentSource: "user",
+            name: "input.png",
+          },
+        ],
       }),
     },
   );

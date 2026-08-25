@@ -8,8 +8,26 @@ import { mapAttachmentRecordsToMetas } from "../../artifacts/index.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { loadStoppedModelMessageSnapshot } from "../../runtime/resume/model-message-snapshot-store.js";
 import { resolveAttachments } from "../../context/providers/attachment-resolver.js";
-import { projectSnapshotIncrementalToContinuation } from "@noobot/context-protocol/policy/snapshot";
+import {
+  projectSnapshotIncrementalToContinuation,
+  restoreSnapshotUserAttachmentFactsFromSessionAuthority,
+} from "@noobot/context-protocol/policy/snapshot";
 import { resolveToolBindings } from "@noobot/agent-config-protocol";
+
+async function restoreSnapshotUserAttachmentFacts(engine, identity = {}, messageBlocks = {}) {
+  if (typeof engine?.session?.getSessionContextSource !== "function") {
+    throw new Error("stopped snapshot resume requires authoritative Session messages");
+  }
+  const sessionSource = await engine.session.getSessionContextSource({
+    userId: identity.userId,
+    sessionId: identity.sessionId,
+    parentSessionId: identity.parentSessionId,
+  });
+  return restoreSnapshotUserAttachmentFactsFromSessionAuthority(
+    messageBlocks,
+    sessionSource?.messages,
+  );
+}
 
 export async function prepareTurnInput(engine, { buildContextPayload = {} } = {}) {
   const payload =
@@ -137,15 +155,21 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     contextBuilder,
     payload,
   });
-  const systemMessages = Array.isArray(snapshot?.messageBlocks?.system)
-    ? snapshot.messageBlocks.system
-    : [];
-  const historyMessages = Array.isArray(snapshot?.messageBlocks?.history)
-    ? snapshot.messageBlocks.history
-    : [];
-  const incrementalMessages = Array.isArray(snapshot?.messageBlocks?.incremental)
-    ? snapshot.messageBlocks.incremental
-    : [];
+  const snapshotMessageBlocks = {
+    system: Array.isArray(snapshot?.messageBlocks?.system) ? snapshot.messageBlocks.system : [],
+    history: Array.isArray(snapshot?.messageBlocks?.history) ? snapshot.messageBlocks.history : [],
+    incremental: Array.isArray(snapshot?.messageBlocks?.incremental)
+      ? snapshot.messageBlocks.incremental
+      : [],
+  };
+  const hydratedMessageBlocks = await restoreSnapshotUserAttachmentFacts(
+    engine,
+    identity,
+    snapshotMessageBlocks,
+  );
+  const systemMessages = hydratedMessageBlocks.system;
+  const historyMessages = hydratedMessageBlocks.history;
+  const incrementalMessages = hydratedMessageBlocks.incremental;
   const continuationIdentity = {
     userName: String(payload?.userName || payload?.userId || "").trim(),
     sessionId: String(payload?.sessionId || "").trim(),
@@ -158,15 +182,11 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     incrementalMessages,
     continuationIdentity,
   );
-  const agentContext = await contextBuilder.buildAgentContext(
-    systemMessages,
-    historyMessages,
-    {
-      dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
-      attachments: userMessageAttachments,
-      incrementalMessages: continuedIncrementalMessages,
-    },
-  );
+  const agentContext = await contextBuilder.buildAgentContext(systemMessages, historyMessages, {
+    dialogProcessId: String(payload?.dialogProcessId || identity.dialogProcessId || "").trim(),
+    attachments: userMessageAttachments,
+    incrementalMessages: continuedIncrementalMessages,
+  });
   const scopedAgentContext = {
     ...agentContext,
     bindings: {

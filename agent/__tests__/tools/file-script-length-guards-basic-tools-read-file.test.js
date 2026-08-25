@@ -50,11 +50,13 @@ test("read_file: reads a model attachment through its canonical identity", async
   });
   const readTool = createFileTool({ agentContext }).find((item) => item?.name === "read_file");
 
-  const result = parseToolResult(await readTool.invoke({
-    riskLevel: "low",
-    filePath: identity,
-    includeLineNumbers: false,
-  }));
+  const result = parseToolResult(
+    await readTool.invoke({
+      riskLevel: "low",
+      filePath: "attachment:v1:s-1/model/native-output-1",
+      includeLineNumbers: false,
+    }),
+  );
 
   assert.equal(result.ok, true);
   assert.equal(result.content, "native output");

@@ -115,20 +115,20 @@ export const ASSISTANCE_TOOL_SCHEMA = {
   multimodal_parse: {
     description: {
       key: "tools.multimodalParse.description",
-      text: "使用多模态模型提取一个或多个图片、二进制文档、音频或视频的内容并保存结果。纯文本、JSON、CSV、代码、日志及工具结果附件应通过 read_file 或资源分段读取，禁止使用本工具。每项 source 使用逻辑文件路径或完整附件身份。",
+      text: "解析图片、二进制文档、音频或视频并保存结果。文本类文件使用 read_file。source 使用逻辑路径或 attachmentRef。",
     },
     params: {
       inputs: {
         key: "tools.multimodalParse.fieldInputs",
-        text: "一个或多个需要模型提取的图片、二进制文档、音频或视频输入；不接受可直接读取的文本输入。每项包含逻辑文件路径或完整附件身份。",
+        text: "待解析的图片、二进制文档、音频或视频；每项使用逻辑路径或 attachmentRef。",
       },
       filePath: {
         key: "tools.multimodalParse.fieldFilePath",
         text: "source 为字符串时表示由服务端解析的逻辑文件路径。",
       },
-      attachmentIdentity: {
-        key: "tools.multimodalParse.fieldAttachmentIdentity",
-        text: "附件对象必须包含 attachmentId、sessionId 和 attachmentSource。",
+      attachmentRef: {
+        key: "tools.multimodalParse.fieldAttachmentRef",
+        text: "原样使用上下文中的 attachmentRef。",
       },
       model_name: {
         key: "tools.multimodalParse.fieldModelName",

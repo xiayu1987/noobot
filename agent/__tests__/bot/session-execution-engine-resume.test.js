@@ -131,6 +131,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
         {
           type: "human",
           content: "incremental",
+          messageUid: "source-user",
+          frontendUserMessage: true,
           dialogProcessId: "dialog-stopped",
           turnScopeId: "turn-stopped",
         },
@@ -140,6 +142,29 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
 
   const engine = Object.create(SessionExecutionEngine.prototype);
   engine.globalConfig = { workspaceRoot };
+  engine.session = {
+    async getSessionContextSource() {
+      return {
+        messages: [
+          {
+            role: "user",
+            messageUid: "source-user",
+            content: "incremental",
+            frontendUserMessage: true,
+            attachments: [
+              {
+                attachmentId: "attachment-source",
+                sessionId: "s1",
+                attachmentSource: "user",
+                name: "source.docx",
+                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              },
+            ],
+          },
+        ],
+      };
+    },
+  };
   engine.agentRuntimeFacade = {
     buildRunTurnContext(context) {
       return context;
@@ -196,6 +221,15 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     assert.equal(captured[0].history[0].turnScopeId, "turn-history");
     assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-current");
     assert.equal(captured[0].options.incrementalMessages[0].turnScopeId, "turn-current");
+    assert.deepEqual(captured[0].options.incrementalMessages[0].attachments, [
+      {
+        attachmentId: "attachment-source",
+        sessionId: "s1",
+        attachmentSource: "user",
+        name: "source.docx",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      },
+    ]);
   } finally {
     await fs.rm(workspaceRoot, { recursive: true, force: true });
   }
