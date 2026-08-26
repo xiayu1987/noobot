@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "workflow",
   "name": "noobot-plugin-workflow",
-  "version": "4.2.4",
+  "version": "4.2.5",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
