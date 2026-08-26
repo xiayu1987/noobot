@@ -3,9 +3,13 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
 import { MEMORY_FILE_SPLIT_MAX_CHARS, getMemoryFileSplitMaxChars } from "../constants.js";
+import {
+  ATOMIC_RENAME_RETRY_DELAYS_MS,
+  writeFileAtomic,
+} from "../../shared/storage/atomic-file-write.js";
 import {
   isMissingPersistencePathError,
   readPersistedJsonFile,
@@ -26,7 +30,14 @@ export async function readJson(filePath, fallback = {}) {
 }
 
 export async function writeJson(filePath, payload = {}) {
-  await writeFile(filePath, JSON.stringify(payload, null, 2));
+  await writeFileAtomic({
+    filePath,
+    content: JSON.stringify(payload, null, 2),
+    writeFile,
+    rename,
+    remove: rm,
+    retryDelaysMs: ATOMIC_RENAME_RETRY_DELAYS_MS,
+  });
 }
 
 export async function readText(filePath, fallback = "") {

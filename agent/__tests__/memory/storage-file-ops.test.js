@@ -6,7 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
-import { mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 
@@ -36,6 +36,20 @@ test("readJson distinguishes a missing file from corrupted persisted JSON", asyn
     code: "PERSISTED_JSON_CORRUPTED",
     persistencePath: corruptedPath,
   });
+});
+
+test("writeJson replaces persisted JSON atomically", async () => {
+  const { readJson, writeJson } = await import(buildFreshModuleUrl());
+  const root = await mkdtemp(path.join(tmpdir(), "noobot-memory-json-"));
+  const filePath = path.join(root, "short-memory.json");
+  await writeJson(filePath, { items: [{ sessionId: "s1" }] });
+
+  assert.deepEqual(await readJson(filePath, {}), { items: [{ sessionId: "s1" }] });
+  assert.equal(
+    await readFile(filePath, "utf8"),
+    '{\n  "items": [\n    {\n      "sessionId": "s1"\n    }\n  ]\n}',
+  );
+  assert.deepEqual((await readdir(root)).sort(), ["short-memory.json"]);
 });
 
 test("writeText/readText/appendText supports split part files", async () => {
