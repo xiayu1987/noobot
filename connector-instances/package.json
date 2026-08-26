@@ -1,6 +1,6 @@
 {
   "name": "@noobot/connector-instances",
-  "version": "4.2.4",
+  "version": "4.2.5",
   "private": true,
   "type": "module",
   "main": "src/index.js",
