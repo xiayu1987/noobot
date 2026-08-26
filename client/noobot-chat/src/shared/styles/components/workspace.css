@@ -1,10 +1,10 @@
 .noobot-workspace-layout {
   display: grid;
   grid-template-columns: 280px 1fr;
-  gap: 14px;
+  gap: var(--noobot-space-lg);
   height: 100%;
   min-height: 0;
-  padding: 2px 2px 16px;
+  padding: 2px 2px var(--noobot-space-xl);
   box-sizing: border-box;
 }
 
@@ -12,7 +12,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--noobot-space-md) var(--noobot-space-xl);
 }
 
 .noobot-workspace-layout .panel-title {
@@ -29,7 +29,7 @@
 .noobot-workspace-layout .tree-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   justify-content: flex-end;
 }
 
@@ -42,13 +42,13 @@
   align-items: center;
   min-width: 0;
   flex: 1;
-  margin-right: 16px;
+  margin-right: var(--noobot-space-xl);
 }
 
 .noobot-workspace-layout .active-file {
   font-size: var(--noobot-font-size-md);
   color: var(--noobot-text-secondary);
-  padding: 4px 10px;
+  padding: 4px var(--noobot-space-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -57,14 +57,14 @@
 
 .noobot-workspace-layout .editor-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   flex-shrink: 0;
 }
 
 .noobot-workspace-layout .desktop-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .noobot-workspace-layout .mobile-actions {
@@ -84,25 +84,25 @@
   justify-content: center;
   color: var(--noobot-text-muted);
   text-align: center;
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
   font-size: var(--noobot-font-size-base);
 }
 
 .noobot-workspace-layout .empty-icon {
   font-size: var(--noobot-font-size-lg);
-  margin-bottom: 16px;
+  margin-bottom: var(--noobot-space-xl);
   opacity: 0.3;
 }
 
 .settings-tabs {
   height: calc(100vh - 80px);
   box-sizing: border-box;
-  padding: 10px 14px 0;
+  padding: var(--noobot-space-sm) var(--noobot-space-lg) 0;
 }
 
 .settings-tabs .el-tabs__header,
 .thinking-details-tabs .el-tabs__header {
-  margin: 0 0 14px;
+  margin: 0 0 var(--noobot-space-lg);
 }
 
 .settings-tabs .el-tabs__nav-wrap::after,
@@ -113,8 +113,8 @@
 
 .settings-tabs .el-tabs__item,
 .thinking-details-tabs .el-tabs__item {
-  height: 38px;
-  padding: 0 14px;
+  height: var(--noobot-control-height-lg);
+  padding: 0 var(--noobot-space-lg);
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
@@ -235,7 +235,7 @@
 
 .noobot-workspace-layout .custom-tree {
   background: transparent;
-  padding: 8px;
+  padding: var(--noobot-space-xs);
   color: var(--noobot-text-main);
   --el-tree-node-hover-bg-color: var(--noobot-panel-muted);
   --el-tree-text-color: var(--noobot-text-main);
@@ -243,7 +243,7 @@
 }
 
 .noobot-workspace-layout .custom-tree .el-tree-node__content {
-  height: 32px;
+  height: var(--noobot-control-icon-size);
   border-radius: var(--noobot-radius-xs);
   margin-bottom: 2px;
 }
@@ -256,7 +256,7 @@
 .noobot-workspace-layout .tree-node {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   font-size: var(--noobot-font-size-md);
 }
 
@@ -274,14 +274,14 @@
 .noobot-workspace-layout .users-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: var(--noobot-space-sm);
+  padding: var(--noobot-space-md);
 }
 
 .noobot-workspace-layout .user-row {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--noobot-space-sm);
 }
 
 .noobot-workspace-layout .row-header {
@@ -335,7 +335,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 14px;
+  padding: 0 var(--noobot-space-lg);
   background: transparent;
   border-bottom: 1px solid color-mix(in srgb, var(--noobot-divider) 70%, transparent);
 }
@@ -359,7 +359,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--noobot-space-xs);
-  padding: 12px;
+  padding: var(--noobot-space-md);
   background: color-mix(in srgb, var(--noobot-surface-sidebar) 54%, transparent);
   border: 1px solid color-mix(in srgb, var(--noobot-border-weak) 70%, transparent);
   border-radius: var(--noobot-radius-md);
@@ -394,7 +394,7 @@
   border-color: var(--noobot-panel-border);
   box-shadow: none;
   border-radius: 0 0 var(--noobot-radius-lg) var(--noobot-radius-lg);
-  padding: 16px;
+  padding: var(--noobot-space-xl);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
@@ -428,7 +428,7 @@
     grid-template-columns: 1fr;
     height: auto;
     min-height: auto;
-    gap: 12px;
+    gap: var(--noobot-space-md);
     padding: 0;
     overflow: visible;
   }
@@ -476,11 +476,11 @@
     position: static;
     inset: auto;
     min-height: 96px;
-    padding: 16px 0;
+    padding: var(--noobot-space-xl) 0;
   }
 
   .noobot-workspace-layout .panel-head {
-    padding: 0 12px;
+    padding: 0 var(--noobot-space-md);
   }
 
   .noobot-workspace-layout .active-file {

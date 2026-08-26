@@ -1,13 +1,26 @@
 :root {
+  --noobot-radius-none: 0;
   --noobot-radius-xs: 8px;
   --noobot-radius-sm: 10px;
   --noobot-radius-md: 12px;
   --noobot-radius-lg: 16px;
   --noobot-radius-pill: 999px;
   --noobot-space-xs: 8px;
+  --noobot-space-2xs: 4px;
+  --noobot-space-3xs: 2px;
   --noobot-space-sm: 10px;
   --noobot-space-md: 12px;
   --noobot-space-lg: 14px;
+  --noobot-space-xl: 16px;
+  --noobot-space-2xl: 24px;
+  --noobot-control-height-sm: 30px;
+  --noobot-control-height-md: 34px;
+  --noobot-control-height-lg: 38px;
+  --noobot-control-icon-size: 32px;
+  --noobot-control-icon-size-sm: 28px;
+  --noobot-line-height-tight: 1.3;
+  --noobot-line-height-body: 1.6;
+  --noobot-line-height-loose: 1.7;
   --noobot-msg-shadow-card: none;
   --noobot-msg-shadow-card-hover: none;
 }
