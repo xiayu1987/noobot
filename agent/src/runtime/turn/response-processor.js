@@ -67,6 +67,9 @@ export async function processToolResults({
         userId: executionIdentity.userId,
         sessionId: executionIdentity.sessionId,
         parentSessionId: executionIdentity.parentSessionId,
+        dialogProcessId: executionIdentity.dialogProcessId,
+        turnScopeId: executionIdentity.turnScopeId,
+        executionId: runtime?.systemRuntime?.executionId || "",
         runtime,
         agentContext: modelState?.agentContext || null,
       });

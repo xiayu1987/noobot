@@ -46,31 +46,33 @@ test("workflow hook injects upstream node result attachments into downstream sub
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=a type=action name="节点A" task="执行A"',
-          'NODE id=branch type=state stateType=branch name="并发分叉"',
-          'NODE id=b type=action name="节点B" task="执行B"',
-          'NODE id=c type=action name="节点C" task="执行C"',
-          'NODE id=merge type=state stateType=merge name="汇聚"',
-          'NODE id=branch2 type=state stateType=branch name="汇聚后并发分叉"',
-          'NODE id=d type=action name="节点D" task="执行D"',
-          'NODE id=e type=action name="节点E" task="执行E"',
-          'NODE id=end type=state stateType=end name="结束"',
-          "EDGE from=start to=a",
-          "EDGE from=a to=branch",
-          "EDGE from=branch to=b",
-          "EDGE from=branch to=c",
-          "EDGE from=b to=merge",
-          "EDGE from=c to=merge",
-          "EDGE from=merge to=branch2",
-          "EDGE from=branch2 to=d",
-          "EDGE from=branch2 to=e",
-          "EDGE from=d to=end",
-          "EDGE from=e to=end",
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=a type=action name="节点A" task="执行A"',
+            'NODE id=branch type=state stateType=branch name="并发分叉"',
+            'NODE id=b type=action name="节点B" task="执行B"',
+            'NODE id=c type=action name="节点C" task="执行C"',
+            'NODE id=merge type=state stateType=merge name="汇聚"',
+            'NODE id=branch2 type=state stateType=branch name="汇聚后并发分叉"',
+            'NODE id=d type=action name="节点D" task="执行D"',
+            'NODE id=e type=action name="节点E" task="执行E"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=a",
+            "EDGE from=a to=branch",
+            "EDGE from=branch to=b",
+            "EDGE from=branch to=c",
+            "EDGE from=b to=merge",
+            "EDGE from=c to=merge",
+            "EDGE from=merge to=branch2",
+            "EDGE from=branch2 to=d",
+            "EDGE from=branch2 to=e",
+            "EDGE from=d to=end",
+            "EDGE from=e to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async (payload = {}) => {
         const systemMessages = await payload.systemMessageFactory?.({
@@ -130,10 +132,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /上游工作流节点结果附件/);
   assert.match(nodeBSystem, /节点A/);
-  assert.match(
-    nodeBSystem,
-    /attachment:v1:s-upstream\/model\/att-1/,
-  );
+  assert.match(nodeBSystem, /attachment:v1:s-upstream\/model\/att-1/);
   assert.match(nodeCSystem, /节点A/);
 
   const nodeDSystem = String(callByNodeName.get("节点D")?.systemMessages?.[0] || "");
@@ -166,20 +165,22 @@ test("workflow hook injects one upstream action attachments into multiple direct
       maxParallelNodeAgents: WORKFLOW_PLUGIN_DEFAULTS.DEFAULT_MAX_PARALLEL_NODE_AGENTS,
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=a type=action name="节点A" task="执行A"',
-          'NODE id=b type=action name="节点B" task="执行B"',
-          'NODE id=c type=action name="节点C" task="执行C"',
-          'NODE id=end type=state stateType=end name="结束"',
-          "EDGE from=start to=a",
-          "EDGE from=a to=b",
-          "EDGE from=a to=c",
-          "EDGE from=b to=end",
-          "EDGE from=c to=end",
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=a type=action name="节点A" task="执行A"',
+            'NODE id=b type=action name="节点B" task="执行B"',
+            'NODE id=c type=action name="节点C" task="执行C"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=a",
+            "EDGE from=a to=b",
+            "EDGE from=a to=c",
+            "EDGE from=b to=end",
+            "EDGE from=c to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async (payload = {}) => {
         const systemMessages = await payload.systemMessageFactory?.({
@@ -237,13 +238,7 @@ test("workflow hook injects one upstream action attachments into multiple direct
   const nodeBSystem = String(callByNodeName.get("节点B")?.systemMessages?.[0] || "");
   const nodeCSystem = String(callByNodeName.get("节点C")?.systemMessages?.[0] || "");
   assert.match(nodeBSystem, /节点A/);
-  assert.match(
-    nodeBSystem,
-    /attachment:v1:s-fanout\/model\/fanout-att-1/,
-  );
+  assert.match(nodeBSystem, /attachment:v1:s-fanout\/model\/fanout-att-1/);
   assert.match(nodeCSystem, /节点A/);
-  assert.match(
-    nodeCSystem,
-    /attachment:v1:s-fanout\/model\/fanout-att-1/,
-  );
+  assert.match(nodeCSystem, /attachment:v1:s-fanout\/model\/fanout-att-1/);
 });
