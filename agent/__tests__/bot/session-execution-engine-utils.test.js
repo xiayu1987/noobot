@@ -71,7 +71,8 @@ test("session-execution-engine-utils normalizes plugin messages from plain and l
     injectedMessage: true,
     injectedBy: "agentPlugin",
     injectedMessageType: "planning",
-    frontendUserMessage: true,
+    messageOrigin: "natural",
+    userMetaMaterialized: true,
     dialogProcessId: "d1",
     turnScopeId: "t1",
   });
@@ -84,7 +85,8 @@ test("session-execution-engine-utils normalizes plugin messages from plain and l
   assert.equal(normalized.injectedMessage, true);
   assert.equal(normalized.injectedBy, "agentPlugin");
   assert.equal(normalized.injectedMessageType, "planning");
-  assert.equal(normalized.frontendUserMessage, true);
+  assert.equal(normalized.messageOrigin, "natural");
+  assert.equal(normalized.userMetaMaterialized, true);
   assert.equal(normalized.dialogProcessId, "d1");
   assert.equal(normalized.turnScopeId, "t1");
   assert.equal(normalized.additional_kwargs.noobotMessageId, "am_runtime");
@@ -116,7 +118,8 @@ test("session-execution-engine-utils applies normalized message flags", () => {
       injectedBy: "botPlugin",
       injectedMessageType: "system",
       additional_kwargs: {
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     },
   });
@@ -125,7 +128,8 @@ test("session-execution-engine-utils applies normalized message flags", () => {
   assert.equal(applied.injectedMessage, true);
   assert.equal(applied.injectedBy, "botPlugin");
   assert.equal(applied.injectedMessageType, "system");
-  assert.equal(applied.frontendUserMessage, true);
+  assert.equal(applied.messageOrigin, "natural");
+  assert.equal(applied.userMetaMaterialized, true);
 });
 
 test("session-execution-engine-utils resolves transfer envelopes and preferred attachments", () => {

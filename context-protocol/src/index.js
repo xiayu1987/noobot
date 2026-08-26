@@ -25,6 +25,7 @@ export * from "./policy/context.js";
 export * from "./policy/injected-message.js";
 export * from "./policy/message.js";
 export * from "./policy/snapshot.js";
+export * from "./policy/user-meta-backwrite.js";
 export * from "./policy/summary.js";
 export * from "./policy/terminal-history.js";
 export * from "./policy/turn-completion.js";

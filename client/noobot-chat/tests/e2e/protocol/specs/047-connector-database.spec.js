@@ -128,9 +128,11 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
 
   let releaseSelectionWrite = null;
   try {
-    await expect(overview.locator(".connector-row", { hasText: connectorName })).toContainText(
-      /已连接|connected/i,
-    );
+    const connectorRow = overview.locator(".connector-row", { hasText: connectorName });
+    await expect(connectorRow.locator(".connector-status-icon.is-connected")).toBeVisible();
+    await expect(
+      connectorRow.locator('[aria-label="已连接"], [aria-label="Connected"]'),
+    ).toBeVisible();
 
     await noobot.page.locator(".composer-icon-btn").first().click();
     const connectorOption = noobot.page.locator(".connector-option", { hasText: connectorName });

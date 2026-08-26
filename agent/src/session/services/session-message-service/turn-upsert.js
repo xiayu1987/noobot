@@ -41,13 +41,19 @@ function resolveUserName(input) {
 
 function buildTurnEntity(service, session, resolvedParentSessionId, input) {
   const task = resolveTaskFields(session, input);
+  const hasPresentation = typeof input.chatPresentation === "boolean";
+  const chatPresentation = hasPresentation
+    ? input.chatPresentation
+    : input.type === "context_control"
+      ? false
+      : undefined;
   return normalizeMessageEntity(
     {
       role: input.role,
       messageUid: input.messageUid || "",
       messageId: input.messageId || "",
       ...optionalStringField("presentationMessageId", input.presentationMessageId),
-      ...(input.role === "assistant" ? { chatPresentation: input.chatPresentation === true } : {}),
+      ...(chatPresentation === undefined ? {} : { chatPresentation }),
       content: input.content,
       type: input.type || "",
       userName: resolveUserName(input),
@@ -69,7 +75,10 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       noobotInternalMessageType: normalizedString(input.noobotInternalMessageType),
       injectedBy: normalizedString(input.injectedBy),
       injectedMessageType: normalizedString(input.injectedMessageType),
-      frontendUserMessage: input.frontendUserMessage === true,
+      messageOrigin: String(input.messageOrigin || "")
+        .trim()
+        .toLowerCase(),
+      userMetaMaterialized: input.userMetaMaterialized === true,
       pluginMessage: input.pluginMessage === true,
       pluginMeta: resolvePluginMeta(input.pluginMeta),
       transferEnvelopes: Array.isArray(input.transferEnvelopes) ? input.transferEnvelopes : [],

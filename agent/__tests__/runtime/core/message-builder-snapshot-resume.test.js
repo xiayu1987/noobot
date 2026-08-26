@@ -40,7 +40,8 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
       additional_kwargs: {
         dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
         turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     }),
     human({
@@ -48,7 +49,8 @@ test("buildContextMessageBlocks replays 71ad4373 stopped snapshot without tool o
       additional_kwargs: {
         dialogProcessId: "71ad4373-b422-4b80-9dfd-4f2e05725bea",
         turnScopeId: "client-turn:mrhx43wd:2hhjjdfx",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         noobotInternalMessageType: "user_meta",
       },
     }),
@@ -148,7 +150,8 @@ test("buildContextMessageBlocks resume keeps tool pairing, single user_meta and 
       additional_kwargs: {
         dialogProcessId: realDialogProcessId,
         turnScopeId: realTurnScopeId,
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     }),
     assistant({
@@ -234,7 +237,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first continue from 4c1898
       additional_kwargs: {
         dialogProcessId: stoppedDialogProcessId,
         turnScopeId: stoppedTurnScopeId,
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     }),
     human({
@@ -375,7 +379,8 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
       additional_kwargs: {
         dialogProcessId: firstResendDialogProcessId,
         turnScopeId: firstResendTurnScopeId,
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     }),
     human({
@@ -403,7 +408,8 @@ test("buildContextMessageBlocks keeps resumed incremental user identity and scop
       additional_kwargs: {
         dialogProcessId: "dlg-1ec8e12c-first-stop",
         turnScopeId: "client-turn:mriksgyb:first-stop",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         attachments: [attachmentA],
       },
     }),
@@ -499,7 +505,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
       additional_kwargs: {
         dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
         turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
       },
     }),
     human({
@@ -519,7 +526,8 @@ test("buildContextMessageBlocks rebuilds user_meta on first stopped snapshot res
       additional_kwargs: {
         dialogProcessId: "c42bd1ae-8ab5-4aef-b0fb-852f8834c56c",
         turnScopeId: "client-turn:mrhzx8pp:w0y57ren",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         noobotInternalMessageType: "user_meta",
       },
     }),

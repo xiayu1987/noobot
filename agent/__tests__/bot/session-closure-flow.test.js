@@ -55,8 +55,8 @@ test("service -> bot -> agent -> toolchain -> return -> persist: should form ful
         dialogProcessId: payload.dialogProcessId,
         parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: payload.frontendUserMessage === true,
-        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        messageOrigin: payload.messageOrigin || "natural",
+        userMetaMaterialized: payload.userMetaMaterialized === true,
         attachments: [],
       };
       persistedTurns.push(userMessage);
@@ -403,8 +403,8 @@ test("continue mode closed-loop: should build continue context and persist paren
         dialogProcessId: payload.dialogProcessId,
         parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: payload.frontendUserMessage === true,
-        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        messageOrigin: payload.messageOrigin || "natural",
+        userMetaMaterialized: payload.userMetaMaterialized === true,
         attachments: payload.attachments || [],
       };
       persistedTurns.push(userMessage);

@@ -47,15 +47,17 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
       semanticPrompt: "emit workflow dsl",
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=act type=action name="节点A" task="请输出：节点A执行完成"',
-          'NODE id=end type=state stateType=end name="结束"',
-          "EDGE from=start to=act",
-          "EDGE from=act to=end",
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A" task="请输出：节点A执行完成"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=act",
+            "EDGE from=act to=end",
+            "END",
+          ].join("\n"),
+        },
         traces: [{ id: "semantic_trace_1" }],
       }),
       subSessionRunner: async (payload = {}) => {
@@ -247,7 +249,7 @@ test("workflow hook uses injected sub-session strategy and marks workflow messag
     workflowTurnMessage?.pluginMeta?.payload?.execution?.nodeAgentRuns?.[0]?.status,
     undefined,
   );
-  assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.status, undefined);
+  assert.equal(workflowTurnMessage?.pluginMeta?.payload?.nodeSessions?.[0]?.status, "succeeded");
 });
 
 test("workflow hook propagates semantic transfer envelopes for node result artifacts", async () => {
@@ -269,15 +271,17 @@ test("workflow hook propagates semantic transfer envelopes for node result artif
       semanticModel: "qwen3_6_plus",
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=act type=action name="节点A" task="请输出节点结果"',
-          'NODE id=end type=state stateType=end name="结束"',
-          "EDGE from=start to=act",
-          "EDGE from=act to=end",
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A" task="请输出节点结果"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=act",
+            "EDGE from=act to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async (payload = {}) => ({
         lifecycle: {
@@ -377,15 +381,17 @@ test("workflow hook routes final attachment summary composition through semantic
       semanticModel: "qwen3_6_plus",
       resolveModelMessages: () => [],
       capabilityModelInvoker: async () => ({
-        output: { text: [
-          "WORKFLOW_DSL/1",
-          'NODE id=start type=state stateType=start name="开始"',
-          'NODE id=act type=action name="节点A" task="请输出节点结果"',
-          'NODE id=end type=state stateType=end name="结束"',
-          "EDGE from=start to=act",
-          "EDGE from=act to=end",
-          "END",
-        ].join("\n") },
+        output: {
+          text: [
+            "WORKFLOW_DSL/1",
+            'NODE id=start type=state stateType=start name="开始"',
+            'NODE id=act type=action name="节点A" task="请输出节点结果"',
+            'NODE id=end type=state stateType=end name="结束"',
+            "EDGE from=start to=act",
+            "EDGE from=act to=end",
+            "END",
+          ].join("\n"),
+        },
       }),
       subSessionRunner: async (payload = {}) => ({
         lifecycle: {
@@ -446,7 +452,6 @@ test("workflow hook routes final attachment summary composition through semantic
         },
       },
     },
-
   });
   const dispatchOutcome = await beforeDispatch.handler(ctx);
 

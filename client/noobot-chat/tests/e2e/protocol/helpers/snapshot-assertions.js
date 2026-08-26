@@ -19,13 +19,27 @@ function isPlainObject(value) {
 }
 
 export function assertModelMessageSnapshot(snapshot) {
-  expect(snapshot.version).toBe(2);
+  expect(snapshot.version).toBe(3);
   expect(snapshot.sessionId).toBeTruthy();
   expect(snapshot.dialogProcessId).toBeTruthy();
   expect(snapshot.turnScopeId).toBeTruthy();
   for (const name of ["system", "history", "incremental"]) {
     expect(Array.isArray(snapshot.messageBlocks?.[name])).toBe(true);
     for (const block of snapshot.messageBlocks[name]) expect(isPlainObject(block)).toBe(true);
+  }
+  expect(Array.isArray(snapshot.userMetaBackwrites)).toBe(true);
+  const backwriteIds = new Set();
+  const backwriteRelations = new Set();
+  for (const backwrite of snapshot.userMetaBackwrites) {
+    expect(isPlainObject(backwrite)).toBe(true);
+    expect(String(backwrite.backwriteId || "").trim()).toBeTruthy();
+    expect(String(backwrite.userMetaMessageUid || "").trim()).toBeTruthy();
+    expect(String(backwrite.attachmentRef || "").trim()).toBeTruthy();
+    expect(backwriteIds.has(backwrite.backwriteId)).toBe(false);
+    backwriteIds.add(backwrite.backwriteId);
+    const relation = `${backwrite.userMetaMessageUid}::${backwrite.attachmentRef}`;
+    expect(backwriteRelations.has(relation)).toBe(false);
+    backwriteRelations.add(relation);
   }
   expect(Date.parse(snapshot.updatedAt)).toBeGreaterThanOrEqual(Date.parse(snapshot.createdAt));
 }
@@ -80,7 +94,9 @@ export function assertSerializedModelMessageSnapshot(snapshot) {
     const callId = String(message.tool_call_id || "").trim();
     expect(callId).toBeTruthy();
     expect(declaredToolCallIds.has(callId), `orphan snapshot tool result ${callId}`).toBe(true);
-    expect(completedToolCallIds.has(callId), `duplicate snapshot tool result ${callId}`).toBe(false);
+    expect(completedToolCallIds.has(callId), `duplicate snapshot tool result ${callId}`).toBe(
+      false,
+    );
     completedToolCallIds.add(callId);
   }
   expect(completedToolCallIds).toEqual(declaredToolCallIds);
@@ -101,22 +117,17 @@ export function assertSnapshotRecoveryInModelInput({ snapshot, continuation, tra
   const recoveredBlocks = {
     system: hydrated.messageBlocks.system,
     history: hydrated.messageBlocks.history,
-    incremental: projectSnapshotIncrementalToContinuation(
-      hydrated.messageBlocks.incremental,
-      {
-        userName: snapshot.userId,
-        sessionId: snapshot.sessionId,
-        parentSessionId: snapshot.parentSessionId,
-        parentDialogProcessId: "",
-        dialogProcessId: String(trace.dialogProcessId || "").trim(),
-        turnScopeId: String(trace.turnScopeId || "").trim(),
-      },
-    ),
+    incremental: projectSnapshotIncrementalToContinuation(hydrated.messageBlocks.incremental, {
+      userName: snapshot.userId,
+      sessionId: snapshot.sessionId,
+      parentSessionId: snapshot.parentSessionId,
+      parentDialogProcessId: "",
+      dialogProcessId: String(trace.dialogProcessId || "").trim(),
+      turnScopeId: String(trace.turnScopeId || "").trim(),
+    }),
   };
   expect(recoveredBlocks.history).toEqual(hydrated.messageBlocks.history);
-  const expected = fingerprintDiagnosticMessages(
-    composeMessagesFromBlocks(recoveredBlocks),
-  );
+  const expected = fingerprintDiagnosticMessages(composeMessagesFromBlocks(recoveredBlocks));
   const actual = trace.data?.messages?.fingerprints || [];
   expect(actual.slice(0, expected.fingerprints.length)).toEqual(expected.fingerprints);
   expect(actual.length).toBeGreaterThan(expected.fingerprints.length);

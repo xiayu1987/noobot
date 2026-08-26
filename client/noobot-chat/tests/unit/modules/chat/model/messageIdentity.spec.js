@@ -45,70 +45,95 @@ describe("messageIdentity", () => {
   });
 
   it("treats frontend user markers as user messages when role is missing", () => {
-    expect(getMessageRole({
-      content: "original user prompt",
-      additional_kwargs: { frontendUserMessage: true },
-    })).toBe("user");
+    expect(
+      getMessageRole({
+        content: "original user prompt",
+        additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+      }),
+    ).toBe("user");
   });
 
   it("matches same message round by turn scope before dialog id", () => {
-    expect(isSameMessageRound(
-      { turnScopeId: "client-1", dialogProcessId: "dp-1" },
-      { turnScopeId: "client-1", dialogProcessId: "dp-2" },
-    )).toBe(true);
-    expect(isSameMessageRound(
-      { turnScopeId: "client-1", dialogProcessId: "dp-1" },
-      { turnScopeId: "client-2", dialogProcessId: "dp-1" },
-    )).toBe(false);
+    expect(
+      isSameMessageRound(
+        { turnScopeId: "client-1", dialogProcessId: "dp-1" },
+        { turnScopeId: "client-1", dialogProcessId: "dp-2" },
+      ),
+    ).toBe(true);
+    expect(
+      isSameMessageRound(
+        { turnScopeId: "client-1", dialogProcessId: "dp-1" },
+        { turnScopeId: "client-2", dialogProcessId: "dp-1" },
+      ),
+    ).toBe(false);
   });
 
   it("normalizes workflow-node turn scope keys for persisted/runtime matching", () => {
-    expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1"))
-      .toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
-    expect(getMessageTurnScopeId({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }))
-      .toBe("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1");
-    expect(getMessageTurnScopeIdKey({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }))
-      .toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
-    expect(isSameMessageRound(
-      { turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1" },
-      { turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" },
-    )).toBe(true);
+    expect(normalizeTurnScopeIdKey("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1")).toBe(
+      "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1",
+    );
+    expect(
+      getMessageTurnScopeId({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }),
+    ).toBe("workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1");
+    expect(
+      getMessageTurnScopeIdKey({ turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" }),
+    ).toBe("workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1");
+    expect(
+      isSameMessageRound(
+        { turnScopeId: "workflow-node_client-turn_mrudsmuf_wa7re7tl_a1_1" },
+        { turnScopeId: "workflow-node:client-turn_mrudsmuf_wa7re7tl_a1_1" },
+      ),
+    ).toBe(true);
   });
 
   it("does not treat user and assistant in the same turn scope as the same message", () => {
-    expect(isSameMessageIdentity(
-      { role: "assistant", turnScopeId: "client-turn:1", content: "answer" },
-      { role: "user", turnScopeId: "client-turn:1", content: "question" },
-    )).toBe(false);
-    expect(isSameMessageIdentity(
-      { role: "assistant", turnScopeId: "client-turn:1", content: "answer" },
-      { role: "assistant", turnScopeId: "client-turn:1", content: "streaming answer" },
-    )).toBe(true);
+    expect(
+      isSameMessageIdentity(
+        { role: "assistant", turnScopeId: "client-turn:1", content: "answer" },
+        { role: "user", turnScopeId: "client-turn:1", content: "question" },
+      ),
+    ).toBe(false);
+    expect(
+      isSameMessageIdentity(
+        { role: "assistant", turnScopeId: "client-turn:1", content: "answer" },
+        { role: "assistant", turnScopeId: "client-turn:1", content: "streaming answer" },
+      ),
+    ).toBe(true);
   });
 
   it("matches explicit assistant scopes without falling back to dialog id", () => {
-    expect(isSameExplicitMessageTurn(
-      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-    )).toBe(true);
-    expect(isSameExplicitMessageTurn(
-      { role: "assistant", dialogProcessId: "dp-1" },
-      { role: "assistant", dialogProcessId: "dp-1" },
-    )).toBe(false);
+    expect(
+      isSameExplicitMessageTurn(
+        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+      ),
+    ).toBe(true);
+    expect(
+      isSameExplicitMessageTurn(
+        { role: "assistant", dialogProcessId: "dp-1" },
+        { role: "assistant", dialogProcessId: "dp-1" },
+      ),
+    ).toBe(false);
   });
 
   it("blocks assistant attachment collection when explicit turn identity is missing", () => {
-    expect(shouldCollectAttachmentsFromMessage(
-      { role: "assistant", dialogProcessId: "dp-1" },
-      { role: "assistant", dialogProcessId: "dp-1" },
-    )).toBe(false);
-    expect(shouldCollectAttachmentsFromMessage(
-      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-      { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
-    )).toBe(true);
-    expect(shouldCollectAttachmentsFromMessage(
-      { role: "assistant", dialogProcessId: "dp-1" },
-      { role: "tool", dialogProcessId: "dp-1" },
-    )).toBe(true);
+    expect(
+      shouldCollectAttachmentsFromMessage(
+        { role: "assistant", dialogProcessId: "dp-1" },
+        { role: "assistant", dialogProcessId: "dp-1" },
+      ),
+    ).toBe(false);
+    expect(
+      shouldCollectAttachmentsFromMessage(
+        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+        { role: "assistant", dialogProcessId: "dp-1", turnScopeId: "client-1" },
+      ),
+    ).toBe(true);
+    expect(
+      shouldCollectAttachmentsFromMessage(
+        { role: "assistant", dialogProcessId: "dp-1" },
+        { role: "tool", dialogProcessId: "dp-1" },
+      ),
+    ).toBe(true);
   });
 });

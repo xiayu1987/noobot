@@ -67,10 +67,11 @@ test("commitTurn persists internal run origin without frontend user identity", a
     content: "internal task",
     turnScopeId: "internal-turn:1",
     commandId: "internal-turn:1",
-    frontendUserMessage: false,
+    messageOrigin: "internal",
+    userMetaMaterialized: false,
   });
-  assert.equal(result.userMessage.frontendUserMessage, undefined);
   assert.equal(result.userMessage.messageOrigin, "internal");
+  assert.equal(result.userMessage.userMetaMaterialized, false);
 });
 
 test("commitTurn assigns an immutable logical dialog ordinal", async () => {

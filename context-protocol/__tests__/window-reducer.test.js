@@ -162,7 +162,8 @@ test("explicit blocks hydrate one stable identity for projections with the same 
     ...legacyUser("same text", "dialog-current", "turn-current"),
     additional_kwargs: {
       turnScopeId: "turn-current",
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       noobotMessageId: "am_current",
     },
   };

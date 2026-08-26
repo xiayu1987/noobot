@@ -23,8 +23,11 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
     if (!text(input.content)) errors.push("accepted_user_message_content_required");
     if (!text(event.turnScopeId)) errors.push("accepted_user_message_turn_scope_required");
     if (!text(event.dialogProcessId)) errors.push("accepted_user_message_dialog_required");
-    if (typeof input.frontendUserMessage !== "boolean") {
-      errors.push("accepted_user_message_origin_required");
+    const messageOrigin = String(input.messageOrigin || "")
+      .trim()
+      .toLowerCase();
+    if (!["natural", "internal"].includes(messageOrigin)) {
+      errors.push("accepted_message_origin_required");
     }
   }
   return {
@@ -36,7 +39,10 @@ export function validateTurnAcceptanceUserMessage(event = {}) {
             content: text(input.content),
             messageId: text(input.messageId),
             parentDialogProcessId: text(input.parentDialogProcessId),
-            frontendUserMessage: input.frontendUserMessage,
+            messageOrigin: String(input.messageOrigin || "")
+              .trim()
+              .toLowerCase(),
+            userMetaMaterialized: input.userMetaMaterialized === true,
           }
         : null,
     errors,

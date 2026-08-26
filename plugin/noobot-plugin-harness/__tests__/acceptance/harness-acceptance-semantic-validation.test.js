@@ -108,7 +108,8 @@ test("harness acceptance semantic validation uses separate model when enabled", 
           {
             role: "user",
             content: "用户原始需求：执行核心任务",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
             dialogProcessId: "dp-history",
           },
           {
@@ -282,10 +283,7 @@ test("harness acceptance semantic validation failure does not block active accep
     pending: 0,
   });
   assert.equal(result.acceptance.semanticValidation, undefined);
-  assert.equal(
-    agentContext.payload.harness.lastAcceptanceReport.semanticValidation,
-    undefined,
-  );
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation, undefined);
   assert.equal(
     agentContext.payload.harness.logs.acceptance.some(
       (log) => log.event === "phase_acceptance_failed",

@@ -101,27 +101,27 @@ test("buildCapabilityModelMessages keeps regular messages unchanged", () => {
   ]);
 });
 
-test("buildCapabilityModelMessages keeps frontendUserMessage for unchanged messages", () => {
+test("buildCapabilityModelMessages keeps natural-user metadata for unchanged messages", () => {
   const output = buildCapabilityModelMessages({
     locale: "zh-CN",
     agentMessages: [
       source({
         role: "user",
         content: "u1",
-        frontendUserMessage: true,
-        additional_kwargs: { frontendUserMessage: true },
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
+        additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
       }),
       source({
         role: "assistant",
         content: "a1",
-        frontendUserMessage: true,
       }),
     ],
   });
 
   assert.deepEqual(output, [
-    { role: "user", content: "u1", frontendUserMessage: true },
-    { role: "assistant", content: "a1", frontendUserMessage: true },
+    { role: "user", content: "u1", messageOrigin: "natural" },
+    { role: "assistant", content: "a1" },
   ]);
 });
 
@@ -132,7 +132,6 @@ test("buildCapabilityModelMessages keeps one authoritative tool execution pair",
       source({
         role: "assistant",
         content: "",
-        frontendUserMessage: true,
         tool_calls: [
           { id: "call_1", function: { name: "execute_script", arguments: '{"command":"pwd"}' } },
         ],

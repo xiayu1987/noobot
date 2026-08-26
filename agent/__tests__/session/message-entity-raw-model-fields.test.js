@@ -17,6 +17,7 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
   });
 
   assert.equal(normalized.noobotInternalMessageType, "noobot.phase_summary_prompt");
+  assert.equal(normalized.chatPresentation, false);
   assert.equal("additional_kwargs" in normalized, false);
 });
 
@@ -194,7 +195,8 @@ test("normalizeMessageEntity preserves message-scoped user identity for history 
     dialogProcessId: "dialog-history",
     parentDialogProcessId: "parent-dialog-history",
     turnScopeId: "turn-history",
-    frontendUserMessage: true,
+    messageOrigin: "natural",
+    userMetaMaterialized: true,
   });
 
   assert.equal(normalized.userName, "admin");
@@ -203,7 +205,8 @@ test("normalizeMessageEntity preserves message-scoped user identity for history 
   assert.equal(normalized.dialogProcessId, "dialog-history");
   assert.equal(normalized.parentDialogProcessId, "parent-dialog-history");
   assert.equal(normalized.turnScopeId, "turn-history");
-  assert.equal(normalized.frontendUserMessage, true);
+  assert.equal(normalized.messageOrigin, "natural");
+  assert.equal(normalized.userMetaMaterialized, true);
 });
 
 test("normalizeMessageEntity ignores legacy attachment mirror fields", () => {

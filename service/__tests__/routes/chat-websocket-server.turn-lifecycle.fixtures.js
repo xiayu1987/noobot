@@ -166,8 +166,8 @@ export function createAuthoritativeBot({ persistSummary = true, failureAt = "" }
           dialogProcessId: input.dialogProcessId,
           parentDialogProcessId: String(input.userMessage?.parentDialogProcessId || ""),
           turnScopeId: input.turnScopeId,
-          frontendUserMessage: input.userMessage?.frontendUserMessage === true,
-          messageOrigin: "user",
+          messageOrigin: input.userMessage?.messageOrigin || "natural",
+          userMetaMaterialized: input.userMessage?.userMetaMaterialized === true,
           attachments: [],
         };
         userMessages.set(input.turnScopeId, userMessage);

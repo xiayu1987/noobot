@@ -20,7 +20,7 @@ export async function runWorkflowExecutionStage({
 } = {}) {
   phaseTracker.start(WORKFLOW_PHASES.WORKFLOW_EXECUTION);
   throwIfWorkflowAborted(ctx);
-  const { execution, nodeAgentRuns, instanceId } = await runWorkflowExecution({
+  const { execution, nodeAgentRuns, nodeStateSnapshot, instanceId } = await runWorkflowExecution({
     hookManager,
     options,
     ctx,
@@ -50,6 +50,7 @@ export async function runWorkflowExecutionStage({
   return {
     execution,
     nodeAgentRuns,
+    nodeStateSnapshot,
     instanceId,
   };
 }

@@ -132,7 +132,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
           type: "human",
           content: "incremental",
           messageUid: "source-user",
-          frontendUserMessage: true,
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
           dialogProcessId: "dialog-stopped",
           turnScopeId: "turn-stopped",
         },
@@ -150,7 +151,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
             role: "user",
             messageUid: "source-user",
             content: "incremental",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
             attachments: [
               {
                 attachmentId: "attachment-source",
@@ -219,8 +221,8 @@ test("stopped snapshot resume restores system as the same task-state fact", asyn
     );
     assert.equal(captured[0].history[0].dialogProcessId, "dialog-history");
     assert.equal(captured[0].history[0].turnScopeId, "turn-history");
-    assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-current");
-    assert.equal(captured[0].options.incrementalMessages[0].turnScopeId, "turn-current");
+    assert.equal(captured[0].options.incrementalMessages[0].dialogProcessId, "dialog-stopped");
+    assert.equal(captured[0].options.incrementalMessages[0].turnScopeId, "turn-stopped");
     assert.deepEqual(captured[0].options.incrementalMessages[0].attachments, [
       {
         attachmentId: "attachment-source",

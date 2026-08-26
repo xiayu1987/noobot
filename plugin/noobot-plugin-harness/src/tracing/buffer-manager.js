@@ -3,15 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  updateManifestCached,
-  appendJsonlBuffered,
-  writeJson,
-} from "../store/store.js";
-import {
-  isHarnessPromptAlreadyInjected,
-  injectSystemMessages,
-} from "../prompt/prompt-injector.js";
+import { updateManifestCached, appendJsonlBuffered, writeJson } from "../store/store.js";
+import { isHarnessPromptAlreadyInjected, injectSystemMessages } from "../prompt/prompt-injector.js";
 import { nowIso, safeError } from "../data/record-builders.js";
 import {
   HARNESS_ENGINEERING_CAPABILITIES,
@@ -30,9 +23,7 @@ import {
   buildTraceEvent,
   buildTracePromptRecord,
 } from "./event-builder.js";
-import {
-  normalizeFsmState,
-} from "../fsm/transitions.js";
+import { normalizeFsmState } from "../fsm/transitions.js";
 import { resolveDialogProcessIdFromContext } from "../capabilities/handlers/shared/runtime/dialog-process-id.js";
 import {
   HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD,
@@ -59,9 +50,7 @@ function resolveHarnessBucket(ctx = {}) {
 }
 
 function resolvePolicyPromptScopeId(ctx = {}) {
-  return String(
-    ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId || "",
-  ).trim();
+  return String(ctx?.turnScopeId || ctx?.agentContext?.context?.identity?.turnScopeId || "").trim();
 }
 
 function resolvePolicyPromptState(ctx = {}) {
@@ -184,13 +173,11 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
     fsmStatus: normalizeFsmState(current.fsmStatus),
     startedAt: current.startedAt || ctx.startedAt || nowIso(),
     updatedAt: nowIso(),
-    capabilities:
-      current.capabilities ||
-      {
-        domains: HARNESS_ENGINEERING_CAPABILITIES,
-        profile: resolveCapabilityProfile(options.capabilityProfile),
-        hookMap: capabilityRuntime?.hookMap || {},
-      },
+    capabilities: current.capabilities || {
+      domains: HARNESS_ENGINEERING_CAPABILITIES,
+      profile: resolveCapabilityProfile(options.capabilityProfile),
+      hookMap: capabilityRuntime?.hookMap || {},
+    },
     paths: resolvedPaths,
     ...current,
     ...patch,
@@ -201,7 +188,14 @@ function mergeManifest(current, ctx, patch, options, capabilityRuntime, paths = 
   return next;
 }
 
-export async function updateManifest(paths, ctx = {}, patch = {}, options = {}, capabilityRuntime = null, plugin = {}) {
+export async function updateManifest(
+  paths,
+  ctx = {},
+  patch = {},
+  options = {},
+  capabilityRuntime = null,
+  plugin = {},
+) {
   if (!paths) return;
   await updateManifestCached(
     paths,
@@ -228,42 +222,48 @@ export async function injectPrompt(point, ctx, options, plugin = {}) {
       ? "noobot-harness-final-response"
       : "noobot-harness-policy";
   const locale = resolveHarnessLocale(ctx);
-  const resolveDefaultPrompt = () => (point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
-    ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
-    : buildDefaultPolicyPrompt(locale, ctx, options));
+  const resolveDefaultPrompt = () =>
+    point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT
+      ? translateI18nText(locale, HARNESS_I18N_KEYSET.SYSTEM_PROMPT.FINAL_RESPONSE)
+      : buildDefaultPolicyPrompt(locale, ctx, options);
   const configuredPrompt = String(
     point === HOOK_POINT.AGENT.BEFORE_FINAL_OUTPUT ? options.finalResponseText : options.promptText,
   ).trim();
   const content = configuredPrompt || resolveDefaultPrompt();
   if (!content) return;
-  const activeDynamicPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL
-    ? resolveActiveDynamicPolicyPromptFromContext(ctx)
-    : null;
-  const refreshPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
+  const activeDynamicPolicyPrompt =
+    point === HOOK_POINT.AGENT.BEFORE_LLM_CALL
+      ? resolveActiveDynamicPolicyPromptFromContext(ctx)
+      : null;
+  const refreshPolicyPrompt =
+    point === HOOK_POINT.AGENT.BEFORE_LLM_CALL &&
     shouldRefreshPolicyPromptForDynamicChange(ctx, activeDynamicPolicyPrompt);
 
-  const currentMessages = ctx?.modelContext?.protocolVersion === 2 && Array.isArray(ctx.modelContext.messages)
-    ? ctx.modelContext.messages
-    : [];
+  const currentMessages =
+    ctx?.modelContext?.protocolVersion === 3 && Array.isArray(ctx.modelContext.messages)
+      ? ctx.modelContext.messages
+      : [];
   const alreadyInCurrentMessages = isHarnessPromptAlreadyInjected(currentMessages, id);
   if (alreadyInCurrentMessages && point !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) return;
 
   const isPolicyPrompt = point === HOOK_POINT.AGENT.BEFORE_LLM_CALL;
   const injected = injectSystemMessages(ctx, {
     skipIds: new Set(),
-    prompts: [{
-      id,
-      content,
-      priority: options.promptPriority,
-      mode: refreshPolicyPrompt ? "replace" : "after_system",
-      messageBlockPolicy: isPolicyPrompt
-        ? {
-            [HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD]: HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
-            [HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD]: true,
-            [HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD]: "policy",
-          }
-        : null,
-    }],
+    prompts: [
+      {
+        id,
+        content,
+        priority: options.promptPriority,
+        mode: refreshPolicyPrompt ? "replace" : "after_system",
+        messageBlockPolicy: isPolicyPrompt
+          ? {
+              [HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_FIELD]: HARNESS_MESSAGE_BLOCK_POLICY_SCOPE_SYSTEM,
+              [HARNESS_MESSAGE_BLOCK_POLICY_PRESERVE_FIELD]: true,
+              [HARNESS_MESSAGE_BLOCK_POLICY_SLOT_FIELD]: "policy",
+            }
+          : null,
+      },
+    ],
     systemBlockIds: isPolicyPrompt ? new Set([id]) : new Set(),
     syncMessageBlocksSystem: isPolicyPrompt,
     persistToCurrentTurn: !isPolicyPrompt,
@@ -312,9 +312,9 @@ export async function traceHook(point, ctx, options, plugin = {}) {
     options.jsonlFlushIntervalMs,
     { reason: flushReason },
   );
-  const capabilityTraceLogs = (Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []).filter(
-    (log) => log?.event === "capability_model_trace",
-  );
+  const capabilityTraceLogs = (
+    Array.isArray(event.capabilityLogs) ? event.capabilityLogs : []
+  ).filter((log) => log?.event === "capability_model_trace");
   for (const log of capabilityTraceLogs) {
     await appendJsonlBuffered(
       paths.capabilityTraces,
@@ -365,7 +365,8 @@ export async function traceHook(point, ctx, options, plugin = {}) {
         state: fsm.state,
         updatedAt: nowIso(),
         lastPoint: point,
-        rejectedTransition: fsm.rejected === true ? { attemptedState: fsm.attempted, at: nowIso() } : null,
+        rejectedTransition:
+          fsm.rejected === true ? { attemptedState: fsm.attempted, at: nowIso() } : null,
         resumedFromCheckpoint: fsm.resumed === true,
       },
       updatedAt: nowIso(),

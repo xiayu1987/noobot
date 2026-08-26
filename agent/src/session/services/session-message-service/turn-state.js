@@ -90,8 +90,10 @@ function materializeAcceptedUserMessage({
       dialogProcessId: String(event.dialogProcessId || "").trim(),
       parentDialogProcessId: input.parentDialogProcessId,
       turnScopeId: String(event.turnScopeId || "").trim(),
-      frontendUserMessage: input.frontendUserMessage,
-      messageOrigin: input.frontendUserMessage ? "user" : "internal",
+      messageOrigin: String(input.messageOrigin || "")
+        .trim()
+        .toLowerCase(),
+      userMetaMaterialized: input.userMetaMaterialized === true,
       attachments: [],
       turnCommit: {
         action: String(event.action || "send").trim(),

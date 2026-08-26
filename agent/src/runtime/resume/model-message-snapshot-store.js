@@ -148,6 +148,7 @@ export async function saveStoppedModelMessageSnapshot({
   identity = {},
   messages = [],
   messageBlocks = {},
+  userMetaBackwrites = [],
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
   if (
@@ -171,7 +172,11 @@ export async function saveStoppedModelMessageSnapshot({
     )
       return null;
   }
-  const snapshot = createModelContextSnapshot({ identity: normalizedIdentity, messageBlocks });
+  const snapshot = createModelContextSnapshot({
+    identity: normalizedIdentity,
+    messageBlocks,
+    userMetaBackwrites,
+  });
   const filePath = snapshotPath(normalizedIdentity, globalConfig);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(snapshot, null, 2), "utf8");
@@ -227,6 +232,7 @@ export async function saveStoppedModelMessageSnapshotCandidate({
       identity,
       messages: candidate.messages,
       messageBlocks: candidate.messageBlocks,
+      userMetaBackwrites: candidate.userMetaBackwrites,
     });
     if (!snapshot) {
       const result = buildSnapshotPersistenceResult({

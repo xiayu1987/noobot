@@ -120,7 +120,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   assert.match(nodeSystemMessages, /合同\.pdf/);
   assert.match(
     nodeSystemMessages,
-    /\{"attachmentId":"att-user-1","sessionId":"s-input-att","attachmentSource":"user"\}/,
+    /attachment:v1:s-input-att\/user\/att-user-1/,
   );
   assert.doesNotMatch(nodeSystemMessages, /workspace|attachments\/s-input-att/);
 

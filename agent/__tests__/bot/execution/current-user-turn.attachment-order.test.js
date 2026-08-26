@@ -47,8 +47,8 @@ function committedUserMessage() {
     dialogProcessId: "dp1",
     parentDialogProcessId: "",
     turnScopeId: "t1",
-    frontendUserMessage: true,
-    messageOrigin: "user",
+    messageOrigin: "natural",
+    userMetaMaterialized: true,
     attachments: [],
   };
 }

@@ -12,9 +12,10 @@ import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noo
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
-    ? ctx.modelContext.messageBlocks
-    : {};
+  const blocks =
+    ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+      ? ctx.modelContext.messageBlocks
+      : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -27,7 +28,6 @@ const capabilityRuntimeWithBootstrap = {
     await payload?.harness?.globalBootstrap?.();
   },
 };
-
 
 test("createRegisterHarnessHooks leaves plain messages un-compacted without message blocks", async () => {
   const handlers = new Map();
@@ -65,14 +65,17 @@ test("createRegisterHarnessHooks leaves plain messages un-compacted without mess
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = createTestHookContext({}, {
-    messages: [
-      { role: "system", content: "system context" },
-      { role: "user", content: "h1" },
-      { role: "user", content: "h2" },
-      { role: "user", content: "h3" },
-    ],
-  });
+  const ctx = createTestHookContext(
+    {},
+    {
+      messages: [
+        { role: "system", content: "system context" },
+        { role: "user", content: "h1" },
+        { role: "user", content: "h2" },
+        { role: "user", content: "h3" },
+      ],
+    },
+  );
   await handlers.get("agent.before_llm_call")(ctx);
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -95,7 +98,11 @@ test("createRegisterHarnessHooks composes by system history incremental message 
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      appendMessage(ctx, { role: "user", content: "injected incremental" }, { block: "incremental" });
+      appendMessage(
+        ctx,
+        { role: "user", content: "injected incremental" },
+        { block: "incremental" },
+      );
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -120,18 +127,21 @@ test("createRegisterHarnessHooks composes by system history incremental message 
   const frontendUser = {
     role: "user",
     content: "real user message",
-    additional_kwargs: { frontendUserMessage: true },
+    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
   };
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system context" }],
-      history: [
-        { role: "user", content: "history-1", dialogProcessId: "history-dp" },
-        { role: "assistant", content: "history-2", dialogProcessId: "history-dp" },
-      ],
-      incremental: [frontendUser],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [
+          { role: "user", content: "history-1", dialogProcessId: "history-dp" },
+          { role: "assistant", content: "history-2", dialogProcessId: "history-dp" },
+        ],
+        incremental: [frontendUser],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
@@ -178,20 +188,29 @@ test("createRegisterHarnessHooks keeps compacted messageBlocks as single-store v
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system" }],
-      history: [],
-      incremental: [
-        { role: "assistant", content: "", tool_calls: [{ id: "call_1", function: { name: "write_file" } }] },
-        { role: "tool", content: "{\"ok\":true}", tool_call_id: "call_1" },
-      ],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system" }],
+        history: [],
+        incremental: [
+          {
+            role: "assistant",
+            content: "",
+            tool_calls: [{ id: "call_1", function: { name: "write_file" } }],
+          },
+          { role: "tool", content: '{"ok":true}', tool_call_id: "call_1" },
+        ],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
-  const toolCallMessage = ctx.modelContext.messages.find((message) => Array.isArray(message?.tool_calls));
+  const toolCallMessage = ctx.modelContext.messages.find((message) =>
+    Array.isArray(message?.tool_calls),
+  );
   assert.ok(toolCallMessage);
   assert.equal(ctx.modelContext.messageBlocks.incremental[0], toolCallMessage);
   assert.ok(toolCallMessage.additional_kwargs.noobotMessageId);
@@ -237,13 +256,16 @@ test("createRegisterHarnessHooks ignores messages outside agent-provided message
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system" }],
-      history: [{ role: "user", content: "history", dialogProcessId: "history-dp" }],
-      incremental: [{ role: "user", content: "current" }],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system" }],
+        history: [{ role: "user", content: "history", dialogProcessId: "history-dp" }],
+        incremental: [{ role: "user", content: "current" }],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 

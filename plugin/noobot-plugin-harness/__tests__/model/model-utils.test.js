@@ -67,7 +67,7 @@ test("resolveCapabilityModelMessages preserves authoritative resolver output wit
         ],
       },
     },
-    { ctx: { modelContext: { protocolVersion: 2 } } },
+    { ctx: { modelContext: { protocolVersion: 3 } } },
   );
   assert.deepEqual(
     resolved.map((item) => item.content),
@@ -92,7 +92,7 @@ test("resolveCapabilityModelMessages delegates the authoritative modelContext to
     {
       ctx: {
         modelContext: {
-          protocolVersion: 2,
+          protocolVersion: 3,
           messageBlocks: {
             history: [{ role: "user", content: "history-from-block" }],
             incremental: [{ role: "assistant", content: "incremental-from-block" }],
@@ -464,7 +464,7 @@ test("resolveCapabilityModelMessages does not filter resolver output or use payl
     {
       ctx: {
         modelContext: {
-          protocolVersion: 2,
+          protocolVersion: 3,
           messageBlocks: { system: [], history: [], incremental: [] },
         },
       },

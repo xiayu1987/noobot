@@ -219,7 +219,8 @@ test("toConversationMessages preserves model payload fields and attachments", ()
       injectedMessage: true,
       injectedBy: "harness-plugin",
       injectedMessageType: "separate_model_relay:planning",
-      frontendUserMessage: true,
+      messageOrigin: "internal",
+      userMetaMaterialized: false,
       pluginMessage: true,
       rawModelContent: [{ type: "text", text: "raw" }],
       modelAdditionalKwargs: { k: 1 },
@@ -240,7 +241,8 @@ test("toConversationMessages preserves model payload fields and attachments", ()
   assert.equal(output[0].injectedMessage, true);
   assert.equal(output[0].injectedBy, "harness-plugin");
   assert.equal(output[0].injectedMessageType, "separate_model_relay:planning");
-  assert.equal(output[0].frontendUserMessage, true);
+  assert.equal(output[0].messageOrigin, "internal");
+  assert.equal(output[0].userMetaMaterialized, false);
   assert.equal(output[0].pluginMessage, true);
   assert.deepEqual(output[0].modelAdditionalKwargs, { k: 1 });
   assert.deepEqual(output[0].modelResponseMetadata, { finish_reason: "tool_calls" });

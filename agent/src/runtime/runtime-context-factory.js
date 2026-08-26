@@ -63,6 +63,7 @@ export function createRuntimeContext({
     currentTurnMessages: createCurrentTurnMessagesStore(),
     currentTurnTasks: createCurrentTurnTasksStore(),
     userMessageAttachments: Array.isArray(userMessageAttachments) ? userMessageAttachments : [],
+    userMetaBackwrites: [],
     attachments: [],
   };
 }

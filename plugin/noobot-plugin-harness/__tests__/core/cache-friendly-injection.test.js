@@ -16,9 +16,10 @@ import {
 } from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
-    ? ctx.modelContext.messageBlocks
-    : {};
+  const blocks =
+    ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+      ? ctx.modelContext.messageBlocks
+      : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -98,16 +99,19 @@ test("dynamic harness system injections compose before history", async () => {
   const currentUser = {
     role: "user",
     content: "current user",
-    additional_kwargs: { frontendUserMessage: true },
+    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
   };
-  const ctx = createTestHookContext({}, {
-    messages: [system, history, currentUser],
-    messageBlocks: {
-      system: [system],
-      history: [history],
-      incremental: [currentUser],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messages: [system, history, currentUser],
+      messageBlocks: {
+        system: [system],
+        history: [history],
+        incremental: [currentUser],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
@@ -132,7 +136,7 @@ test("planning preserves typed base system context while adding harness prompts"
   const currentUser = {
     role: "user",
     content: "complete the task",
-    additional_kwargs: { frontendUserMessage: true },
+    additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
   };
   const ctx = createTestHookContext(
     {
@@ -195,7 +199,7 @@ test("main model incremental context keeps unsummarized same-type harness relays
   };
   const tool = {
     role: "tool",
-    content: "{\"toolName\":\"read_file\",\"ok\":true}",
+    content: '{"toolName":"read_file","ok":true}',
     tool_call_id: "call-1",
   };
   const relayTwo = {
@@ -215,7 +219,7 @@ test("main model incremental context keeps unsummarized same-type harness relays
     [
       "[来自harness外部模型输出/guidance]\nfirst guidance",
       "",
-      "{\"toolName\":\"read_file\",\"ok\":true}",
+      '{"toolName":"read_file","ok":true}',
       "[来自harness外部模型输出/guidance]\nsecond guidance",
     ],
   );
@@ -229,7 +233,7 @@ test("main model incremental context keeps unsummarized same-type harness relays
     afterSummary.map((item) => item.content),
     [
       "",
-      "{\"toolName\":\"read_file\",\"ok\":true}",
+      '{"toolName":"read_file","ok":true}',
       "[来自harness外部模型输出/guidance]\nsecond guidance",
     ],
   );

@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -12,7 +11,10 @@ import { mkdir } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
-import { withTempWorkspace, canonicalMessages } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  withTempWorkspace,
+  canonicalMessages,
+} from "./session-repository-boundary.summaries.fixtures.js";
 
 test("session display summary materializes the active Turn presentation in the zero-event window", () => {
   const summary = buildSessionDisplaySummary({
@@ -24,7 +26,8 @@ test("session display summary materializes the active Turn presentation in the z
         content: "resend request",
         messageUid: "sm-active-user",
         messageId: "sm-active-user",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         turnScopeId: "turn-active",
       },
     ],
@@ -71,26 +74,31 @@ test("session display summary materializes the active Turn presentation in the z
 test("session display summary materializes stopped Turn details on its stable presentation", () => {
   const summary = buildSessionDisplaySummary({
     sessionId: "stopped-turn-session",
-    messages: [{
-      role: "user",
-      type: "message",
-      content: "run tools",
-      messageId: "stopped-user",
-      turnScopeId: "turn-stopped",
-    }, {
-      role: "assistant",
-      type: "tool_call",
-      chatPresentation: false,
-      presentationMessageId: "presentation-stopped",
-      turnScopeId: "turn-stopped",
-      dialogProcessId: "dialog-stopped",
-      toolTimeline: [{
-        key: "call:stopped",
-        toolCallId: "stopped",
-        call: { eventId: "call-stopped", sequence: 1 },
-        resultEvent: { eventId: "result-stopped", sequence: 2 },
-      }],
-    }],
+    messages: [
+      {
+        role: "user",
+        type: "message",
+        content: "run tools",
+        messageId: "stopped-user",
+        turnScopeId: "turn-stopped",
+      },
+      {
+        role: "assistant",
+        type: "tool_call",
+        chatPresentation: false,
+        presentationMessageId: "presentation-stopped",
+        turnScopeId: "turn-stopped",
+        dialogProcessId: "dialog-stopped",
+        toolTimeline: [
+          {
+            key: "call:stopped",
+            toolCallId: "stopped",
+            call: { eventId: "call-stopped", sequence: 1 },
+            resultEvent: { eventId: "result-stopped", sequence: 2 },
+          },
+        ],
+      },
+    ],
     turnLifecycle: {
       activeTurnScopeId: "",
       turns: {

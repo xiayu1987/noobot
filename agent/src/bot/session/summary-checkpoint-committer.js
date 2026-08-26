@@ -14,6 +14,7 @@ import {
   collectLatestCheckpointEvidenceMessageIndexes,
   hasCheckpointBoundaryToolCall,
 } from "@noobot/context-protocol/policy/summary";
+import { applyPendingUserMetaBackwrites } from "../../context/assembly/message-builder/user-meta-backwrite.js";
 
 function isSummarized(message = {}) {
   return message?.summarized === true || message?.lc_kwargs?.summarized === true;
@@ -242,6 +243,20 @@ export async function commitSummaryCheckpoint({
     markedMessageCount: Number(markedCount) || 0,
     preservedCheckpointEvidenceMessageUids: [...retainedCheckpointEvidenceIds].sort(),
     exactCheckpoint: true,
+  });
+
+  // The summary checkpoint is the commit boundary for deferred user_meta
+  // projections. Apply each pending attachment result to its original
+  // snapshot projection before summarized incremental messages are pruned.
+  await applyPendingUserMetaBackwrites(runtime, {
+    turnPersister,
+    userId,
+    sessionId,
+    parentSessionId,
+    dialogProcessId,
+    turnScopeId,
+    persistenceContext,
+    eventListener,
   });
 
   const currentTurnMarker = createSummaryMarker();

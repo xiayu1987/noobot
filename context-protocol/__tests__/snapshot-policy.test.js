@@ -41,7 +41,7 @@ test("snapshot policy preserves block boundaries and message protocol fields", (
   });
   const hydrated = hydrateModelContextSnapshot(snapshot, identity);
 
-  assert.equal(snapshot.version, 2);
+  assert.equal(snapshot.version, 3);
   assert.deepEqual(hydrated.messageBlocks.history[0].tool_calls, [{ id: "call", name: "tool" }]);
   assert.deepEqual(hydrated.messageBlocks.history[0].custom, { value: 1 });
   assert.equal(hydrated.messageBlocks.incremental[0].tool_call_id, "call");
@@ -130,7 +130,7 @@ test("continued snapshot recovery preserves stored facts and rebinds only increm
       dialogProcessId: message.dialogProcessId,
       turnScopeId: message.turnScopeId,
     })),
-    Array(5).fill(secondTurn),
+    [...Array(4).fill(firstTurn), secondTurn],
   );
   assert.equal(restored.messageBlocks.incremental[1].content, userMetaContent);
   assert.equal(continuedSnapshotMessages[1].content, userMetaContent);
@@ -142,7 +142,8 @@ test("snapshot attachment facts come only from matching Session authority", () =
     content: "[User Metadata]",
     additional_kwargs: {
       noobotMessageId: "source-user::user_meta",
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       noobotInternalMessageType: "user_meta",
     },
   };
@@ -155,7 +156,8 @@ test("snapshot attachment facts come only from matching Session authority", () =
           content: "source",
           additional_kwargs: {
             noobotMessageId: "source-user",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
           },
         },
       ],
@@ -179,7 +181,14 @@ test("persisted snapshot user sources require canonical identity", () => {
     () =>
       restoreSnapshotUserAttachmentFactsFromSessionAuthority(
         {
-          incremental: [{ type: "human", content: "source", frontendUserMessage: true }],
+          incremental: [
+            {
+              type: "human",
+              content: "source",
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
+            },
+          ],
         },
         [],
       ),
@@ -204,7 +213,8 @@ test("persisted snapshot user sources must exist in Session authority", () => {
               type: "human",
               content: "source",
               messageUid: "missing-user",
-              frontendUserMessage: true,
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
             },
           ],
         },
@@ -224,7 +234,8 @@ test("snapshot user source identity cannot resolve to another Session role", () 
               type: "human",
               content: "source",
               messageUid: "source-user",
-              frontendUserMessage: true,
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
             },
           ],
         },

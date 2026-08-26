@@ -19,9 +19,10 @@ function withModelContext(ctx = {}) {
 }
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
-    ? ctx.modelContext.messageBlocks
-    : {};
+  const blocks =
+    ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+      ? ctx.modelContext.messageBlocks
+      : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -118,7 +119,10 @@ test("capability runtime keeps planning first without blocking later before_llm_
   const results = await runtime.runHook("agent.before_llm_call", ctx, {});
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
-  assert.deepEqual(results.map((item = {}) => item.capability), ["planning", "guidance", "acceptance"]);
+  assert.deepEqual(
+    results.map((item = {}) => item.capability),
+    ["planning", "guidance", "acceptance"],
+  );
 });
 
 test("capability runtime does not block guidance when plan text exists but captured flag is stale", async () => {
@@ -188,7 +192,9 @@ test("capability runtime delegates before_llm_call messages to agent resolver", 
           ...resolverCtx.modelContext.messageBlocks.system,
           ...resolverCtx.modelContext.messageBlocks.history,
           { role: "assistant", content: "h2" },
-          ...resolverCtx.modelContext.messageBlocks.incremental.filter((item) => item?.role === "user"),
+          ...resolverCtx.modelContext.messageBlocks.incremental.filter(
+            (item) => item?.role === "user",
+          ),
         ];
       },
     },
@@ -215,18 +221,29 @@ test("capability runtime filters summarized messages from incremental blocks by 
     messageBlocks: {
       system: [{ role: "system", content: "sys" }],
       history: [
-        { role: "assistant", content: "summarized-history", summarized: true, dialogProcessId: "d1" },
+        {
+          role: "assistant",
+          content: "summarized-history",
+          summarized: true,
+          dialogProcessId: "d1",
+        },
         { role: "assistant", content: "active-history", dialogProcessId: "d1" },
       ],
       incremental: [
         { role: "assistant", content: "summarized-incremental", summarized: true },
         { role: "tool", content: "summarized-tool", lc_kwargs: { summarized: true } },
-        { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
+        {
+          role: "user",
+          content: "current user",
+          additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+        },
       ],
     },
   });
 
-  await runtime.runHook("agent.before_llm_call", ctx, { harness: { resolveModelMessages: resolveFromBlocks } });
+  await runtime.runHook("agent.before_llm_call", ctx, {
+    harness: { resolveModelMessages: resolveFromBlocks },
+  });
 
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
@@ -255,7 +272,11 @@ test("capability runtime does not let resolver reintroduce summarized messages",
       history: [],
       incremental: [
         summarized,
-        { role: "user", content: "current user", additional_kwargs: { frontendUserMessage: true } },
+        {
+          role: "user",
+          content: "current user",
+          additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+        },
       ],
     },
   });
@@ -342,23 +363,35 @@ test("capability runtime keeps repeated unsummarized guidance across tool rounds
   await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
   });
-  appendMessage(ctx, {
-    role: "assistant",
-    content: "",
-    tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
-  }, { block: "incremental" });
-  appendMessage(ctx, {
-    role: "tool",
-    content: "tool result",
-    tool_call_id: "call-1",
-  }, { block: "incremental" });
-  appendMessage(ctx, {
-    role: "user",
-    content: "second guidance",
-    injectedMessage: true,
-    injectedBy: "harness-plugin",
-    injectedMessageType: "separate_model_relay:guidance",
-  }, { block: "incremental" });
+  appendMessage(
+    ctx,
+    {
+      role: "assistant",
+      content: "",
+      tool_calls: [{ id: "call-1", name: "read_file", args: {}, type: "tool_call" }],
+    },
+    { block: "incremental" },
+  );
+  appendMessage(
+    ctx,
+    {
+      role: "tool",
+      content: "tool result",
+      tool_call_id: "call-1",
+    },
+    { block: "incremental" },
+  );
+  appendMessage(
+    ctx,
+    {
+      role: "user",
+      content: "second guidance",
+      injectedMessage: true,
+      injectedBy: "harness-plugin",
+      injectedMessageType: "separate_model_relay:guidance",
+    },
+    { block: "incremental" },
+  );
 
   await runtime.runHook("agent.before_llm_call", ctx, {
     harness: { resolveModelMessages: resolveFromBlocks },
@@ -391,7 +424,8 @@ test("capability runtime preserves history and incremental user messages in bloc
         { role: "system", content: "sys" },
         {
           role: "system",
-          content: "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+          content:
+            "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
         },
       ],
       history: [
@@ -413,7 +447,8 @@ test("capability runtime preserves history and incremental user messages in bloc
           dialogProcessId: "d-current",
           additional_kwargs: {
             turnScopeId: "client-turn:current",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
             noobotMessageId: "am_current_user",
           },
         },
@@ -422,7 +457,11 @@ test("capability runtime preserves history and incremental user messages in bloc
           content: "[用户元信息]\n{}",
           additional_kwargs: { turnScopeId: "client-turn:current" },
         },
-        { role: "user", content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试" },
+        {
+          role: "user",
+          content:
+            "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+        },
       ],
     },
     agentContext: {
@@ -475,7 +514,11 @@ test("capability runtime does not remove same-text user from a different turn", 
         {
           role: "user",
           content: "全仓回归测试",
-          additional_kwargs: { turnScopeId: "client-turn:current", frontendUserMessage: true },
+          additional_kwargs: {
+            turnScopeId: "client-turn:current",
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
+          },
         },
         {
           role: "user",
@@ -504,7 +547,6 @@ test("capability runtime does not remove same-text user from a different turn", 
 
   assert.deepEqual(userTextIndexes, [1, 3]);
 });
-
 
 test("capability runtime keeps later flows running when one flow fails", async () => {
   const calls = [];
@@ -536,7 +578,11 @@ test("capability runtime keeps later flows running when one flow fails", async (
       },
     },
   };
-  const results = await runtime.runHook("agent.before_llm_call", withModelContext({ agentContext, messages: [] }), {});
+  const results = await runtime.runHook(
+    "agent.before_llm_call",
+    withModelContext({ agentContext, messages: [] }),
+    {},
+  );
 
   assert.deepEqual(calls, ["planning", "guidance", "acceptance"]);
   assert.equal(results[0]?.status, "error");
@@ -544,7 +590,9 @@ test("capability runtime keeps later flows running when one flow fails", async (
   assert.equal(results[1]?.capability, "guidance");
   assert.equal(results[2]?.capability, "acceptance");
   assert.equal(
-    agentContext.payload.harness.logs.planning.some((item = {}) => item.event === "capability_flow_failed"),
+    agentContext.payload.harness.logs.planning.some(
+      (item = {}) => item.event === "capability_flow_failed",
+    ),
     true,
   );
 });

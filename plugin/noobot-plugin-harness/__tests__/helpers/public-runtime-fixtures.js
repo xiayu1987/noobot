@@ -228,7 +228,7 @@ export function ensureTestHookContext(ctx = {}) {
   stampRoundIdentity(ctx.messages);
   stampRoundIdentity(ctx.messageBlocks?.history);
   stampRoundIdentity(ctx.messageBlocks?.incremental);
-  if (ctx.modelContext?.protocolVersion !== 2) {
+  if (ctx.modelContext?.protocolVersion !== 3) {
     const explicitMessageBlocks =
       ctx.messageBlocks ||
       (!ctx.messageStore && !Array.isArray(ctx.messages)
@@ -315,8 +315,8 @@ export function createTestHookManager() {
 export function createTestResolveModelMessages() {
   return ({ ctx = {} } = {}) => {
     const modelContext = ctx?.modelContext;
-    if (modelContext?.protocolVersion !== 2) {
-      throw new Error("test model resolver requires modelContext protocolVersion=2");
+    if (modelContext?.protocolVersion !== 3) {
+      throw new Error("test model resolver requires modelContext protocolVersion=3");
     }
     const blocks = modelContext.messageBlocks;
     if (!blocks || typeof blocks !== "object") {

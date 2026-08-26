@@ -30,7 +30,7 @@ test("Turn acceptance owns exactly one authoritative user-message rule", () => {
     action: "send",
     turnScopeId: "turn-1",
     dialogProcessId: "dialog-1",
-    userMessage: { content: "hello", frontendUserMessage: true },
+    userMessage: { content: "hello", messageOrigin: "natural", userMetaMaterialized: true },
   });
   assert.equal(accepted.valid, true);
   assert.equal(accepted.materialize, true);

@@ -163,15 +163,20 @@ function applyMessageInjection(target, message) {
 }
 
 function applyMessagePresentation(target, message) {
-  if (message?.frontendUserMessage === true) target.frontendUserMessage = true;
   const origin = String(message?.messageOrigin || "")
     .trim()
     .toLowerCase();
-  if (origin === "user" || origin === "internal") target.messageOrigin = origin;
+  if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
+  if (target.role === "user") target.userMetaMaterialized = message?.userMetaMaterialized === true;
   const presentationMessageId = String(message?.presentationMessageId || "").trim();
   if (presentationMessageId) target.presentationMessageId = presentationMessageId;
   if (typeof message?.chatPresentation === "boolean") {
     target.chatPresentation = message.chatPresentation;
+  } else if (target.type === "context_control") {
+    // Context-control messages are model-only by protocol. Keep the
+    // invariant when normalizing artifacts written before the field was
+    // persisted by the turn message service.
+    target.chatPresentation = false;
   }
   if (Array.isArray(message?.activityTimeline)) target.activityTimeline = message.activityTimeline;
   if (Array.isArray(message?.toolTimeline)) target.toolTimeline = message.toolTimeline;

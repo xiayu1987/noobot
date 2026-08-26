@@ -167,6 +167,9 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     identity,
     snapshotMessageBlocks,
   );
+  const restoredUserMetaBackwrites = Array.isArray(snapshot?.userMetaBackwrites)
+    ? snapshot.userMetaBackwrites
+    : [];
   const systemMessages = hydratedMessageBlocks.system;
   const historyMessages = hydratedMessageBlocks.history;
   const incrementalMessages = hydratedMessageBlocks.incremental;
@@ -189,6 +192,13 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
   });
   const scopedAgentContext = {
     ...agentContext,
+    context: {
+      ...(agentContext?.context || {}),
+      modelContext: {
+        ...(agentContext?.context?.modelContext || {}),
+        userMetaBackwrites: restoredUserMetaBackwrites,
+      },
+    },
     bindings: {
       ...(agentContext?.bindings || {}),
       tools: resolveToolBindings({
@@ -202,6 +212,7 @@ export async function prepareStoppedSnapshotResumeTurnExecution(
     abortSignal,
   );
   const runtime = getRuntimeFromAgentContext(runtimeAgentContext);
+  runtime.userMetaBackwrites = restoredUserMetaBackwrites;
   runtime.resumeFromStoppedSnapshot = true;
   runtime.resumedStoppedSnapshotIdentity = identity;
   return {

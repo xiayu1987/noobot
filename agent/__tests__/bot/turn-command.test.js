@@ -14,15 +14,23 @@ import {
 
 test("turn command keeps existing-session context separate from continue action", () => {
   const send = createTurnCommand({
-    userId: "u1", sessionId: "s1", dialogProcessId: "dp", turnScopeId: "turn",
-    message: "next", runConfig: { commandId: "send-1" },
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp",
+    turnScopeId: "turn",
+    message: "next",
+    runConfig: { commandId: "send-1" },
   });
   assert.equal(send.type, "send");
   assert.equal(send.sourceIdentity, null);
 
   const continued = createTurnCommand({
-    userId: "u1", sessionId: "s1", dialogProcessId: "dp-new", turnScopeId: "turn-new",
-    message: "continue", runConfig: {
+    userId: "u1",
+    sessionId: "s1",
+    dialogProcessId: "dp-new",
+    turnScopeId: "turn-new",
+    message: "continue",
+    runConfig: {
       resumeFromStoppedSnapshot: true,
       resumeDialogProcessId: "dp-old",
       resumeTurnScopeId: "turn-old",
@@ -33,7 +41,10 @@ test("turn command keeps existing-session context separate from continue action"
   assert.equal(payload.resumeDialogProcessId, "dp-old");
   assert.equal(payload.resumeTurnScopeId, "turn-old");
   assert.equal(continued.type, "continue");
-  assert.deepEqual(continued.sourceIdentity, { dialogProcessId: "dp-old", turnScopeId: "turn-old" });
+  assert.deepEqual(continued.sourceIdentity, {
+    dialogProcessId: "dp-old",
+    turnScopeId: "turn-old",
+  });
 });
 
 test("turn command carries the frontend user message identity into persistence", () => {
@@ -64,5 +75,6 @@ test("turn command separates external user turns from backend-owned internal run
   });
   const payload = toCommitTurnPayload(internal);
   assert.equal(internal.origin, "internal");
-  assert.equal(payload.frontendUserMessage, false);
+  assert.equal(payload.messageOrigin, "internal");
+  assert.equal(payload.userMetaMaterialized, false);
 });

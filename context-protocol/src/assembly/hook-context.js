@@ -7,6 +7,7 @@ import { canonicalizeMessageStore } from "../message/store.js";
 import { attachModelContextRuntime } from "./model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 import { HOOK_PROTOCOL_VERSION } from "@noobot/hook-protocol";
+import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
 
 function asObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
@@ -67,6 +68,7 @@ export function createModelContext({
   messageBlocks = null,
   activeTurnIdentity = null,
   checkpointRevision = 0,
+  userMetaBackwrites = [],
   onCanonicalMessageAdded = null,
   onMutationConsumed = null,
 } = {}) {
@@ -93,6 +95,7 @@ export function createModelContext({
     protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
     checkpointRevision: normalizedCheckpointRevision,
     activeTurnIdentity: normalizeActiveTurnIdentity(activeTurnIdentity),
+    userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
     // When blocks are explicit, hydrate their entity identities before
     // materializing the flat projection. Hydrating the flat list first would
     // assign two ids to legacy copies of the same scoped message and prevent

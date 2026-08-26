@@ -388,9 +388,9 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 ### PBE-028：Workflow + Harness 带附件统一协议
 
-步骤：选择 Workflow + Harness，上传固定附件，要求一个 Workflow 子 Session 读取其精确内容并自然完成；读取插件事件、根 Session 附件索引、子 Session 模型调用和子 Session 附件索引。
+步骤：选择 Workflow + Harness，上传固定附件，要求一个 Workflow 子 Session 读取其精确内容并自然完成；随后在同一根 Session 发起第二个 Workflow Turn，让一个子节点按顺序三次读取不存在的文件，每次等待真实失败结果后再继续；读取插件事件、根 Session 附件索引、子 Session 模型调用和子 Session 附件索引。
 
-断言：根 Session 只有一个 canonical 用户附件；Workflow 子 Session 通过规范 Session transfer 获得独立 child attachmentId，名称和来源保持一致且所有权切换为子 Session；子 agent 产生文件，根 model 附件索引同时包含 `workflow_node_agent_result` 和 `workflow_completed_attachment_summary`，前端 assistant 文件卡名称集合与索引完全一致，刷新后保持一致；Workflow 与 Harness 的 runtime/execution 插件身份闭合；根生命周期自然完成。
+断言：根 Session 只有一个 canonical 用户附件；Workflow 子 Session 通过规范 Session transfer 获得独立 child attachmentId，名称和来源保持一致且所有权切换为子 Session；子 agent 产生文件，根 model 附件索引同时包含 `workflow_node_agent_result` 和 `workflow_completed_attachment_summary`，前端 assistant 文件卡名称集合与索引完全一致，刷新后保持一致；第二个 Turn 必须有三个真实失败的 `read_file` 结果、一次 `help_tool_failure_prompted(failureCount=3, threshold=3)` 和一个 `noobot.help_tool_failure_prompt` 权威控制消息；控制消息保持 `chatPresentation=false`，不进入主界面或节点抽屉，节点终态来自权威 lifecycle；Workflow 与 Harness 的 runtime/execution 插件身份闭合；两个根生命周期均自然完成。
 
 ### PBE-029：统一 Session 协议闭环审计
 

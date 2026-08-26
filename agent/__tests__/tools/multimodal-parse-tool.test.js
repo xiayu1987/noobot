@@ -57,6 +57,8 @@ test("multimodal_parse preserves attachment names and backwrites every user sour
   const runtime = {
     basePath,
     userId: "admin",
+    currentUserMessageUid: "user-source",
+    currentUserMessageOrigin: "natural",
     runtimeModel: "parse-model",
     globalConfig: {
       multimodal: {

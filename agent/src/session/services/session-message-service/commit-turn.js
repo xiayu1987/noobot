@@ -39,7 +39,8 @@ export async function commitTurn(payload = {}) {
     messageId = "",
     resumeDialogProcessId = "",
     resumeTurnScopeId = "",
-    frontendUserMessage = true,
+    messageOrigin = "natural",
+    userMetaMaterialized = false,
     persistenceContext = null,
   } = payload;
   if (!userId || !sessionId) {
@@ -164,8 +165,10 @@ export async function commitTurn(payload = {}) {
           dialogProcessId: String(dialogProcessId || "").trim(),
           parentDialogProcessId: String(parentDialogProcessId || "").trim(),
           turnScopeId: normalizedTurnScopeId,
-          frontendUserMessage: frontendUserMessage === true,
-          messageOrigin: frontendUserMessage === true ? "user" : "internal",
+          messageOrigin: String(messageOrigin || "")
+            .trim()
+            .toLowerCase(),
+          userMetaMaterialized: userMetaMaterialized === true,
           attachments: [],
           turnCommit: {
             action: normalizedAction,
