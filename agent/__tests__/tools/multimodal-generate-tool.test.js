@@ -142,7 +142,13 @@ test("multimodal_generate: model configuration is the only image API type author
     modelPort: {
       async invoke(request) {
         modelRequest = request;
-        return { result: { rawText: "", imageArtifacts: [], output: [] } };
+        return {
+          result: {
+            rawText: "",
+            imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
+            output: [],
+          },
+        };
       },
     },
   };
@@ -196,7 +202,13 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
     modelPort: {
       async invoke(request) {
         modelRequest = request;
-        return { result: { rawText: "", imageArtifacts: [], output: [] } };
+        return {
+          result: {
+            rawText: "",
+            imageArtifacts: [{ fileName: "generated.png", b64Json: "AA==", url: "" }],
+            output: [],
+          },
+        };
       },
     },
   };
@@ -219,6 +231,41 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
   assert.equal(result.ok, true);
   assert.equal(modelRequest.model.alias, modelAlias);
   assert.equal(modelRequest.operation.options.apiType, "openai_responses");
+});
+
+test("multimodal_generate: Responses completion without an image artifact is a failure", async () => {
+  const runtime = {
+    globalConfig: {
+      providers: {
+        image_model: {
+          enabled: true,
+          used_for_conversation: false,
+          api_key: "test-key",
+          base_url: "https://models.example.com/v1",
+          model: "image-model",
+          format: "openai_compatible",
+          multimodal_generation: {
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "openai_responses",
+            },
+          },
+        },
+      },
+    },
+    userConfig: {},
+    modelPort: {
+      async invoke() {
+        return { result: { rawText: "prompt only", imageArtifacts: [], output: [] } };
+      },
+    },
+  };
+  const tool = getMultimodalGenerateTool(runtime);
+  await assert.rejects(
+    tool.invoke({ generation_content: "draw a bird", model_name: "image_model" }),
+    (error) => error?.code === "RECOVERABLE_MULTIMODAL_GENERATE_FAILED",
+  );
 });
 
 test("multimodal_generate: images_async polls task endpoint without websocket handshake", async () => {

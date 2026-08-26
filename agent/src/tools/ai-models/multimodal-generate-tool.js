@@ -413,6 +413,19 @@ export function createMultimodalGenerateTool({ agentContext }) {
         const imageArtifacts = Array.isArray(generationResult?.imageArtifacts)
           ? generationResult.imageArtifacts
           : [];
+        if (!imageArtifacts.length) {
+          throw recoverableToolError(tMultimodal(runtime, "generateFailed"), {
+            code: ERROR_CODE.RECOVERABLE_MULTIMODAL_GENERATE_FAILED,
+            details: buildFailureDetails({
+              message: "Image generation completed without an image_generation_call result",
+              modelAlias: String(resolvedModelSpec?.alias || "").trim(),
+              model: String(resolvedModelSpec?.model || "").trim(),
+              generationApiType,
+              effectiveImageSize,
+              modelSpec: resolvedModelSpec || {},
+            }),
+          });
+        }
         const generatedAttachments = [];
         for (const imageArtifact of imageArtifacts) {
           const resolvedBase64 =

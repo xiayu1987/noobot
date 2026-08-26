@@ -410,8 +410,12 @@ export async function executeOpenAiOperation({
           },
         ],
         tools: [
-          { type: "image_generation", size: String(operation.options.size || "1024x1024").trim() },
+          {
+            type: "image_generation",
+            size: String(operation.options.size || "1024x1024").trim(),
+          },
         ],
+        tool_choice: "required",
       },
       { signal: signal || undefined },
     );
