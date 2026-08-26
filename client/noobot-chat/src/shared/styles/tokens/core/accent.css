@@ -1,11 +1,6 @@
 :root {
-  --noobot-cyber-cyan: var(--noobot-base-blue-500);
-  --noobot-cyber-pink: var(--noobot-base-blue-500);
-  --noobot-cyber-cyan-soft: color-mix(in srgb, var(--noobot-base-blue-400) 18%, transparent);
-  --noobot-cyber-cyan-border: color-mix(in srgb, var(--noobot-base-blue-400) 52%, transparent);
-  --noobot-cyber-pink-soft: color-mix(in srgb, var(--noobot-base-blue-500) 12%, transparent);
-  --noobot-cyber-glow-sm: 0 0 10px color-mix(in srgb, var(--el-color-primary) 32%, transparent);
-  --noobot-cyber-glow-md: 0 0 20px color-mix(in srgb, var(--el-color-primary) 38%, transparent);
-  --noobot-cyber-glow-mix: 0 0 12px color-mix(in srgb, var(--noobot-cyber-cyan) 34%, transparent), 0 0 24px color-mix(in srgb, var(--noobot-cyber-pink) 22%, transparent);
-  --noobot-cyber-gradient: var(--noobot-base-blue-400);
+  --noobot-accent: var(--noobot-base-blue-500);
+  --noobot-accent-hover: var(--noobot-base-blue-600);
+  --noobot-accent-soft: color-mix(in srgb, var(--noobot-accent) 12%, transparent);
+  --noobot-accent-border: color-mix(in srgb, var(--noobot-accent) 72%, transparent);
 }

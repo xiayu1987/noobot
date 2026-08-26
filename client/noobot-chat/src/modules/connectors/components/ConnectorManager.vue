@@ -327,8 +327,8 @@ watch(() => [props.connected, props.userId], refresh);
 <style scoped>
 .connector-manager {
   min-width: 0;
-  padding: 10px;
-  border-top: 1px solid var(--noobot-border-color);
+  padding: var(--noobot-space-sm);
+  border-top: 1px solid var(--noobot-panel-border);
 }
 .manager-header,
 .connector-row,
@@ -341,14 +341,14 @@ watch(() => [props.connected, props.userId], refresh);
 .manager-header,
 .connector-row {
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 .connector-row {
   flex-direction: column;
   align-items: stretch;
 }
 .manager-title {
-  gap: 6px;
+  gap: var(--noobot-space-2xs);
   font-weight: 650;
 }
 .manager-title .el-tag {
@@ -370,11 +370,11 @@ watch(() => [props.connected, props.userId], refresh);
 }
 .connector-list {
   display: grid;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--noobot-space-xs);
+  margin-top: var(--noobot-space-xs);
 }
 .connector-row {
-  padding: 10px;
+  padding: var(--noobot-space-sm);
   border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-xs);
   background: var(--noobot-panel-bg);
@@ -402,12 +402,12 @@ watch(() => [props.connected, props.userId], refresh);
 }
 .connector-identity strong {
   color: var(--noobot-text-strong);
-  font-size: 13px;
+  font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
 }
 .connector-identity small {
   color: var(--noobot-text-secondary);
-  font-size: 11px;
+  font-size: var(--noobot-font-size-xs);
   line-height: 1.35;
 }
 .connector-meta {

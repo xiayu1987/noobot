@@ -1,8 +1,9 @@
 :root {
-  --noobot-preview-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 92%, var(--noobot-base-black));
+  --noobot-preview-bg: var(--noobot-panel-bg);
   --noobot-preview-text: var(--noobot-text-main);
   --noobot-preview-border: var(--noobot-panel-border);
-  --noobot-preview-danger-bg: color-mix(in srgb, var(--noobot-base-red-500) 16%, var(--noobot-base-black));
-  --noobot-preview-danger-text: color-mix(in srgb, var(--noobot-base-red-500) 34%, var(--noobot-base-white));
-  --noobot-preview-danger-border: color-mix(in srgb, var(--noobot-base-red-500) 48%, var(--noobot-base-slate-700));
+  --noobot-preview-danger-bg: var(--noobot-danger-soft);
+  --noobot-preview-danger-text: var(--noobot-status-error);
+  --noobot-preview-danger-border: color-mix(in srgb, var(--noobot-status-error) 48%, var(--noobot-panel-border));
+  --noobot-preview-media-bg: var(--noobot-base-black);
 }

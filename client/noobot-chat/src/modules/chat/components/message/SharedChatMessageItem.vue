@@ -552,7 +552,7 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <el-tabs v-if="hasMessageArtifacts" v-model="artifactTab" class="message-artifact-tabs">
+    <el-tabs v-if="hasMessageArtifacts" v-model="artifactTab" class="message-artifact-tabs noobot-tabs">
       <el-tab-pane v-if="artifactAttachments.length" :label="translate('message.artifactAttachments')" name="attachments">
         <BaseFileCardList>
           <BaseAttachmentFileCard
@@ -689,6 +689,7 @@ function toggleAssistantContent() {
   width: 100%;
   border-radius: var(--noobot-radius-xs);
   background: transparent;
+  border: 1px solid transparent;
 }
 .message-artifact-tabs {
   margin-top: var(--noobot-space-md);
@@ -699,11 +700,6 @@ function toggleAssistantContent() {
 }
 .message-artifact-tabs :deep(.el-tabs__header) { margin-bottom: var(--noobot-space-md); }
 .message-artifact-tabs :deep(.el-tabs__nav-wrap) { padding-inline: var(--noobot-space-xs); }
-.message-artifact-tabs :deep(.el-tabs__item) {
-  box-sizing: border-box;
-  height: 36px;
-  line-height: 36px;
-}
 .message-artifact-tabs :deep(.el-tabs__content) {
   padding: var(--noobot-space-xs);
   background: var(--noobot-msg-file-card-bg);
@@ -717,14 +713,13 @@ function toggleAssistantContent() {
 @keyframes message-runtime-panels-glow {
   0%,
   100% {
-    box-shadow:
-      0 3px 12px color-mix(in srgb, var(--el-color-primary) 14%, transparent),
-      0 0 6px color-mix(in srgb, var(--el-color-primary) 10%, transparent);
+    border-color: var(--noobot-runtime-border);
+    box-shadow: var(--noobot-runtime-glow);
   }
   50% {
-    box-shadow:
-      0 4px 16px color-mix(in srgb, var(--el-color-primary) 22%, transparent),
-      0 0 12px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+    border-color: color-mix(in srgb, var(--noobot-accent) 64%, var(--noobot-panel-border));
+    box-shadow: 0 0 12px color-mix(in srgb, var(--noobot-accent) 32%, transparent);
   }
 }
+
 </style>

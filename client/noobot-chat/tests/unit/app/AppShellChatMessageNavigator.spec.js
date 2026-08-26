@@ -294,7 +294,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain("top: 18px;");
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !chatNavigatorVisible }\"");
     expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
-    expect(appShellLayoutSource).toContain("width: 44px;");
+    expect(appShellLayoutSource).toContain(
+      "width: var(--noobot-side-panel-collapsed-width);",
+    );
   });
 
   it("keeps the navigator polished and the mobile trigger reachable", () => {

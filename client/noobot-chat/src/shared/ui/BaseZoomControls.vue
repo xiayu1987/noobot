@@ -50,11 +50,11 @@ defineEmits(["zoom-in", "zoom-out", "zoom-reset"]);
   background: color-mix(
     in srgb,
     var(--noobot-msg-assistant-bg) 96%,
-    rgb(var(--workflow-accent-rgb, 109, 74, 255)) 4%
+    var(--noobot-accent) 4%
   );
   border-radius: var(--noobot-radius-xs);
   cursor: pointer;
-  color: var(--noobot-text-primary);
+  color: var(--noobot-text-main);
 }
 
 .base-zoom-btn {

@@ -112,13 +112,13 @@ watch(
   max-height: min(70vh, 560px);
   overflow: auto;
   padding: 10px 12px;
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-  --el-anchor-marker-bg-color: var(--el-color-primary);
+  color: var(--noobot-text-main);
+  --el-anchor-marker-bg-color: var(--noobot-accent);
   --el-anchor-bg-color: transparent;
-  --el-anchor-text-color: var(--noobot-text-secondary, var(--el-text-color-secondary));
+  --el-anchor-text-color: var(--noobot-text-secondary);
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent)
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 20%, transparent);
+  scrollbar-color: color-mix(in srgb, var(--noobot-accent) 30%, transparent)
+    color-mix(in srgb, var(--noobot-panel-border) 20%, transparent);
   box-sizing: border-box;
 }
 
@@ -129,7 +129,7 @@ watch(
 .chat-message-navigator__empty {
   display: block;
   padding: 8px 4px;
-  color: var(--noobot-text-secondary, var(--el-text-color-secondary));
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xs);
   text-align: center;
 }
@@ -157,10 +157,10 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--noobot-text-secondary, var(--el-text-color-secondary));
-  background: var(--noobot-fill-soft, var(--el-fill-color-lighter));
+  color: var(--noobot-text-secondary);
+  background: var(--noobot-surface-soft);
   border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+    color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   transition:
@@ -207,6 +207,7 @@ watch(
 
 .chat-message-navigator__item.is-user .chat-message-navigator__role {
   background: var(--noobot-msg-user-avatar);
+  color: var(--noobot-msg-user-avatar-text);
 }
 
 .chat-message-navigator__content {
@@ -224,31 +225,31 @@ watch(
   width: 3px;
   height: 14px;
   border-radius: var(--noobot-radius-pill);
-  background: var(--el-anchor-marker-bg-color, var(--el-color-primary));
+  background: var(--noobot-accent);
   opacity: 0;
   transform: translateY(-50%);
   transition: opacity 0.18s ease;
 }
 
 :deep(.el-anchor__link:hover) {
-  color: var(--noobot-text-main, var(--el-text-color-primary));
-  background: var(--noobot-fill-hover, var(--el-fill-color-light));
+  color: var(--noobot-text-main);
+  background: var(--noobot-surface-soft-hover);
   border-color: color-mix(
     in srgb,
-    var(--el-color-primary) 24%,
-    var(--noobot-panel-border, var(--el-border-color))
+    var(--noobot-accent) 24%,
+    var(--noobot-panel-border)
   );
   transform: translateX(2px);
 }
 
 :deep(.el-anchor__item.is-current .el-anchor__link),
 :deep(.el-anchor__link.is-current) {
-  color: var(--noobot-text-strong, var(--el-text-color-primary));
-  background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));
+  color: var(--noobot-text-strong);
+  background: var(--noobot-surface-primary-soft);
   border-color: color-mix(
     in srgb,
-    var(--el-color-primary) 42%,
-    var(--noobot-panel-border, var(--el-border-color))
+    var(--noobot-accent) 42%,
+    var(--noobot-panel-border)
   );
   font-weight: 700;
 }
@@ -264,10 +265,10 @@ watch(
     padding: 8px 10px;
     border-color: color-mix(
       in srgb,
-      var(--noobot-panel-border, var(--el-border-color)) 58%,
+      var(--noobot-panel-border) 58%,
       transparent
     );
-    background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color)) 96%, transparent);
+    background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent);
   }
 
   :deep(.el-anchor__link) {

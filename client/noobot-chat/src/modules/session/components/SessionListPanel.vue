@@ -358,7 +358,7 @@ watch(
   width: 32px;
   height: 32px;
   border-radius: var(--noobot-radius-xs);
-  background: var(--noobot-surface-soft-hover);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -369,7 +369,7 @@ watch(
 }
 
 .session-item.active .session-icon-wrapper {
-  background: var(--noobot-btn-primary-bg);
+  background: transparent;
   color: var(--noobot-text-strong);
   box-shadow: none;
 }

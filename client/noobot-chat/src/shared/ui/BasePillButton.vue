@@ -36,6 +36,7 @@ defineEmits(["click"]);
 }
 
 .base-pill-btn:hover {
-  filter: brightness(1.08);
+  background: var(--noobot-surface-soft-hover);
+  color: var(--noobot-text-strong);
 }
 </style>

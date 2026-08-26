@@ -230,7 +230,7 @@ watch(
 </script>
 <template>
   <BaseTabPanelBody class="thinking-details-panel"
-    ><el-tabs v-model="activeDetailTab" class="thinking-details-tabs"
+    ><el-tabs v-model="activeDetailTab" class="thinking-details-tabs noobot-tabs"
       ><el-tab-pane
         :label="translate('message.executionRecords', { count: detailCount })"
         :name="DETAIL_TAB.EXECUTION"

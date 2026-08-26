@@ -366,7 +366,7 @@ watch(
 </script>
 
 <template>
-  <el-tabs v-model="activeTab" class="settings-tabs">
+  <el-tabs v-model="activeTab" class="settings-tabs noobot-tabs">
     <el-tab-pane :label="translate('settings.userSettings')" name="users">
       <SettingsJsonListEditorLayout
         v-model="usersJsonText"

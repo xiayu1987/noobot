@@ -16,6 +16,6 @@ defineProps({
 <style scoped>
 .base-meta-label {
   font-size: var(--noobot-msg-meta-font-size);
-  color: var(--noobot-thinking-muted, var(--noobot-text-secondary));
+  color: var(--noobot-thinking-muted);
 }
 </style>

@@ -70,23 +70,6 @@ const collapseValue = computed({
   padding: 0 var(--noobot-space-md) var(--noobot-space-md);
 }
 
-.base-thinking-collapse :deep(.el-tabs__header) {
-  margin-bottom: 8px;
-}
-
-.base-thinking-collapse :deep(.el-tabs__item) {
-  color: var(--noobot-thinking-tab);
-  font-size: var(--noobot-msg-meta-font-size);
-}
-
-.base-thinking-collapse :deep(.el-tabs__item.is-active) {
-  color: var(--noobot-thinking-tab-active);
-}
-
-.base-thinking-collapse :deep(.el-tabs__active-bar) {
-  background: var(--noobot-thinking-tab-bar);
-}
-
 .base-thinking-footer {
   display: flex;
   justify-content: flex-end;
