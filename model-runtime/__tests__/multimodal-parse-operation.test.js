@@ -68,6 +68,7 @@ test("Responses image generation sends the prompt through the canonical input fi
       },
     ],
     tools: [{ type: "image_generation", size: "1024x1024" }],
+    tool_choice: "required",
   });
 });
 
