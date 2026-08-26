@@ -161,8 +161,8 @@ defineExpose({
 
 .attachment-remove-btn:hover,
 .attachment-remove-btn:focus-visible {
-  color: var(--el-color-danger);
-  background: color-mix(in srgb, var(--el-color-danger) 10%, transparent);
+  color: var(--noobot-status-error);
+  background: color-mix(in srgb, var(--noobot-status-error) 10%, transparent);
   outline: none;
 }
 

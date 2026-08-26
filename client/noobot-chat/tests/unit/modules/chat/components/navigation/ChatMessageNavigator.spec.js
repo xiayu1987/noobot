@@ -23,19 +23,19 @@ describe("ChatMessageNavigator theme colors", () => {
   });
 
   it("uses theme-aware item container colors for base, hover, and current states", () => {
-    expect(navigatorSource).toContain("background: var(--noobot-fill-soft, var(--el-fill-color-lighter));");
-    expect(navigatorSource).toContain("color: var(--noobot-text-secondary, var(--el-text-color-secondary));");
-    expect(navigatorSource).toContain("background: var(--noobot-fill-hover, var(--el-fill-color-light));");
-    expect(navigatorSource).toContain("color: var(--noobot-text-main, var(--el-text-color-primary));");
-    expect(navigatorSource).toContain("background: var(--noobot-surface-primary-soft, var(--el-color-primary-light-9));");
-    expect(navigatorSource).toContain("color: var(--noobot-text-strong, var(--el-text-color-primary));");
+    expect(navigatorSource).toContain("background: var(--noobot-surface-soft);");
+    expect(navigatorSource).toContain("color: var(--noobot-text-secondary);");
+    expect(navigatorSource).toContain("background: var(--noobot-surface-soft-hover);");
+    expect(navigatorSource).toContain("color: var(--noobot-text-main);");
+    expect(navigatorSource).toContain("background: var(--noobot-surface-primary-soft);");
+    expect(navigatorSource).toContain("color: var(--noobot-text-strong);");
   });
 
   it("renders the current marker on the active link instead of Element Plus absolute marker", () => {
     expect(navigatorSource).toContain(":marker=\"false\"");
     expect(navigatorSource).toContain(":deep(.el-anchor__link::before)");
     expect(navigatorSource).toContain(":deep(.el-anchor__item.is-current .el-anchor__link::before)");
-    expect(navigatorSource).toContain("background: var(--el-anchor-marker-bg-color, var(--el-color-primary));");
+    expect(navigatorSource).toContain("background: var(--noobot-accent);");
     expect(navigatorSource).toContain("transform: translateY(-50%);");
   });
 });

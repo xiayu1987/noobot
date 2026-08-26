@@ -100,40 +100,8 @@
   padding: var(--noobot-space-sm) var(--noobot-space-lg) 0;
 }
 
-.settings-tabs .el-tabs__header,
-.thinking-details-tabs .el-tabs__header {
-  margin: 0 0 var(--noobot-space-lg);
-}
-
-.settings-tabs .el-tabs__nav-wrap::after,
-.thinking-details-tabs .el-tabs__nav-wrap::after {
-  height: 1px;
-  background: color-mix(in srgb, var(--noobot-divider) 68%, transparent);
-}
-
-.settings-tabs .el-tabs__item,
-.thinking-details-tabs .el-tabs__item {
-  height: var(--noobot-control-height-lg);
-  padding: 0 var(--noobot-space-lg);
-  color: var(--noobot-text-secondary);
-  font-size: var(--noobot-font-size-md);
-  font-weight: 500;
-}
-
-.settings-tabs .el-tabs__item.is-active,
-.thinking-details-tabs .el-tabs__item.is-active {
-  color: var(--noobot-text-main);
-}
-
-.settings-tabs .el-tabs__active-bar,
-.thinking-details-tabs .el-tabs__active-bar {
-  height: 2px;
-  border-radius: var(--noobot-radius-pill);
-  background: var(--noobot-text-main);
-}
-
 .settings-tabs .el-tabs__content {
-  height: calc(100% - 44px);
+  height: calc(100% - 52px);
 }
 
 .settings-tabs .el-tab-pane {
@@ -178,6 +146,8 @@
 }
 
 .noobot-workspace-layout .icon-btn {
+  border: 0;
+  background: transparent;
   color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-xl);
   padding: 4px 8px;
@@ -312,7 +282,7 @@
 .noobot-workspace-layout .row-input .el-input__wrapper:hover,
 .noobot-workspace-layout .row-input .el-input__wrapper.is-focus {
   background: var(--noobot-panel-bg);
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 34%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-accent) 34%, transparent);
 }
 
 .noobot-workspace-layout .row-input .el-input__inner {
@@ -331,7 +301,7 @@
 }
 
 .noobot-workspace-head {
-  height: 46px;
+  height: var(--noobot-panel-header-height);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -371,7 +341,7 @@
 
 .noobot-list-row:hover {
   background: color-mix(in srgb, var(--noobot-panel-bg) 82%, transparent);
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 24%, var(--noobot-border-weak));
+  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-border-weak));
 }
 
 .noobot-editor-textarea {

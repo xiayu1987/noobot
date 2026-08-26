@@ -12,7 +12,7 @@
 }
 
 .composer:focus-within {
-  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
+  border-color: var(--noobot-accent-border);
   box-shadow: var(--noobot-focus-ring);
 }
 

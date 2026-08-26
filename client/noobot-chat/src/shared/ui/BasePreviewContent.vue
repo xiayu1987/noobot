@@ -76,11 +76,11 @@ watch(
 
 <template>
   <div class="preview-body noobot-preview-surface" v-loading="resolvedLoading">
-    <div v-if="showCopyActions" class="preview-copy-actions">
+    <div v-if="showCopyActions" class="preview-copy-actions noobot-copy-actions">
       <el-tooltip :content="translate('message.copyFormat')" placement="top" :show-after="300">
         <el-button
           size="small"
-          class="noobot-flat-inline-icon-btn"
+          class="noobot-flat-inline-icon-btn noobot-copy-button"
           :aria-label="translate('message.copyFormat')"
           @click="emitCopyMarkdownRich"
         >
@@ -90,7 +90,7 @@ watch(
       <el-tooltip :content="translate('message.copyText')" placement="top" :show-after="300">
         <el-button
           size="small"
-          class="noobot-flat-inline-icon-btn"
+          class="noobot-flat-inline-icon-btn noobot-copy-button"
           :aria-label="translate('message.copyText')"
           @click="emit('copy-markdown-text')"
         >
@@ -164,7 +164,6 @@ watch(
 
 .preview-copy-actions {
   display: flex;
-  gap: var(--noobot-space-sm);
   justify-content: flex-end;
   margin-bottom: var(--noobot-space-xl);
   padding-bottom: var(--noobot-space-md);

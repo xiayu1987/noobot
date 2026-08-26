@@ -217,7 +217,7 @@ watch(
 </script>
 
 <template>
-  <el-tabs v-model="activeScope" class="settings-tabs" @tab-change="onScopeChanged">
+  <el-tabs v-model="activeScope" class="settings-tabs noobot-tabs" @tab-change="onScopeChanged">
     <el-tab-pane
       v-for="scopeItem in visibleScopes"
       :key="scopeItem.name"
@@ -282,7 +282,7 @@ watch(
 
 .dark-btn:hover:not(:disabled) {
   background: var(--noobot-panel-muted);
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan) 35%, var(--noobot-panel-border));
+  border-color: color-mix(in srgb, var(--noobot-accent) 35%, var(--noobot-panel-border));
   color: var(--noobot-text-strong);
 }
 

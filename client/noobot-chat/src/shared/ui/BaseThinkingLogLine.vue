@@ -173,7 +173,7 @@ function handleToggle() {
   white-space: pre-wrap;
   word-break: break-word;
   border-radius: var(--noobot-thinking-log-detail-radius);
-  background: var(--noobot-thinking-detail-background, var(--noobot-panel-muted));
+  background: var(--noobot-thinking-detail-background);
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
@@ -203,10 +203,10 @@ function handleToggle() {
   font-size: 15px;
 }
 .base-thinking-log-line__event.is-tool-call {
-  color: var(--el-color-primary);
+  color: var(--noobot-status-running);
 }
 .base-thinking-log-line__event.is-tool-result {
-  color: var(--el-color-success);
+  color: var(--noobot-status-success);
 }
 .base-thinking-log-line__event.is-tool-result-failed {
   color: var(--noobot-status-error);
@@ -231,9 +231,7 @@ function handleToggle() {
   white-space: nowrap;
 }
 .base-thinking-log-line__tool-name {
-  font-family:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+  font-family: var(--noobot-font-mono);
   font-weight: 600;
 }
 .base-thinking-log-line__risk {
@@ -241,13 +239,13 @@ function handleToggle() {
   margin-left: 6px;
   padding: 1px 5px;
   border-radius: var(--noobot-thinking-log-event-radius);
-  background: var(--noobot-thinking-detail-background, var(--noobot-panel-muted));
+  background: var(--noobot-thinking-detail-background);
   color: var(--noobot-thinking-muted);
   font-size: 0.9em;
   font-weight: 600;
 }
 .base-thinking-log-line__risk.is-medium {
-  color: var(--el-color-warning);
+  color: var(--noobot-status-warning);
 }
 .base-thinking-log-line__risk.is-high,
 .base-thinking-log-line__risk.is-critical {

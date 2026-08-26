@@ -445,7 +445,7 @@ defineExpose({
   width: 236px;
   max-width: 24vw;
   padding: var(--noobot-space-md);
-  backdrop-filter: blur(14px);
+  background: var(--noobot-panel-bg);
   transition:
     width 0.18s ease,
     padding 0.18s ease,
@@ -471,8 +471,8 @@ defineExpose({
 }
 
 .chat-message-nav-panel.is-collapsed {
-  width: 44px;
-  max-width: 44px;
+  width: var(--noobot-side-panel-collapsed-width);
+  max-width: var(--noobot-side-panel-collapsed-width);
   padding: var(--noobot-space-xs);
 }
 
@@ -480,7 +480,7 @@ defineExpose({
   width: 236px;
   max-width: 24vw;
   padding: var(--noobot-space-md);
-  backdrop-filter: blur(14px);
+  background: var(--noobot-panel-bg);
   transition:
     width 0.18s ease,
     padding 0.18s ease,
@@ -488,8 +488,8 @@ defineExpose({
 }
 
 .connector-overview-panel.is-collapsed {
-  width: 44px;
-  max-width: 44px;
+  width: var(--noobot-side-panel-collapsed-width);
+  max-width: var(--noobot-side-panel-collapsed-width);
   padding: var(--noobot-space-xs);
 }
 
@@ -541,8 +541,8 @@ defineExpose({
   height: var(--noobot-control-icon-size-sm);
   place-items: center;
   border-radius: var(--noobot-radius-sm);
-  color: var(--el-color-primary);
-  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  color: var(--noobot-text-accent);
+  background: var(--noobot-accent-soft);
   font-weight: 700;
 }
 
@@ -550,13 +550,14 @@ defineExpose({
   flex: 0 0 auto;
   padding: 0;
   border: 0;
+  background: transparent;
   cursor: pointer;
   font: inherit;
 }
 
 .chat-message-nav-icon-button:hover,
 .chat-message-nav-icon-button:focus-visible {
-  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 18%, transparent);
   outline: none;
 }
 
@@ -584,8 +585,8 @@ defineExpose({
   top: calc(56px + 16px + env(safe-area-inset-top));
   right: calc(16px + env(safe-area-inset-right));
   z-index: 2001;
-  width: 44px;
-  height: 44px;
+  width: var(--noobot-control-height-xl);
+  height: var(--noobot-control-height-xl);
   pointer-events: auto;
   user-select: none;
 }
@@ -601,8 +602,8 @@ defineExpose({
   top: calc(56px + 68px + env(safe-area-inset-top));
   right: calc(16px + env(safe-area-inset-right));
   z-index: 2001;
-  width: 44px;
-  height: 44px;
+  width: var(--noobot-control-height-xl);
+  height: var(--noobot-control-height-xl);
 }
 
 @media (max-width: 960px) {

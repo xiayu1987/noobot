@@ -89,6 +89,7 @@ const { translate } = useLocale();
 
 .base-message-avatar.is-user {
   background: var(--noobot-msg-user-avatar);
+  color: var(--noobot-msg-user-avatar-text);
 }
 
 .base-message-assistant-icon {

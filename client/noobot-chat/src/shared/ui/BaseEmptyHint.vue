@@ -16,7 +16,7 @@ defineProps({
 <style scoped>
 .base-empty-hint {
   font-size: var(--noobot-font-size-sm);
-  color: var(--noobot-thinking-muted, var(--noobot-text-secondary));
+  color: var(--noobot-thinking-muted);
   padding: 6px 2px 2px;
 }
 </style>

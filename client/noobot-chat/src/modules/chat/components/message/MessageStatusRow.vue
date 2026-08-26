@@ -131,22 +131,20 @@ const stepView = computed(() => {
 }
 
 .message-status-steps :deep(.el-step__head.is-process .el-step__icon) {
-  background-color: var(--el-color-primary);
-  box-shadow: 0 0 8px 1px color-mix(in srgb, var(--el-color-primary) 60%, transparent);
+  background-color: var(--noobot-status-running);
   transform: scale(1.2);
 }
 .message-status-steps.is-running :deep(.el-step__head.is-process .el-step__icon) {
   width: 8px !important;
   height: 8px !important;
-  animation: dot-glow 1.25s ease-in-out infinite alternate;
+  animation: dot-pulse 1.25s ease-in-out infinite alternate;
 }
 .message-status-steps :deep(.el-step__title.is-process) {
-  color: var(--el-color-primary);
+  color: var(--noobot-status-running);
   font-weight: 600 !important;
 }
 .message-status-steps.is-running :deep(.el-step__title.is-process) {
   letter-spacing: 0.65px;
-  text-shadow: 0 0 12px color-mix(in srgb, var(--el-color-primary) 36%, transparent);
 }
 
 .message-status-steps.is-error :deep(.el-step__head.is-error .el-step__icon) {
@@ -163,13 +161,11 @@ const stepView = computed(() => {
   color: var(--noobot-status-warning);
 }
 
-@keyframes dot-glow {
+@keyframes dot-pulse {
   0% {
-    box-shadow: 0 0 3px 0 color-mix(in srgb, var(--el-color-primary) 50%, transparent);
     transform: scale(1.15);
   }
   100% {
-    box-shadow: 0 0 12px 4px color-mix(in srgb, var(--el-color-primary) 80%, transparent);
     transform: scale(1.42);
   }
 }

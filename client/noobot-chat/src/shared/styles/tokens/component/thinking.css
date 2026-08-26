@@ -1,15 +1,13 @@
 :root {
   --noobot-thinking-log-detail-radius: 4px;
   --noobot-thinking-log-event-radius: 3px;
-  --noobot-thinking-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 88%, var(--noobot-base-black));
+  --noobot-thinking-detail-background: var(--noobot-panel-muted);
   --noobot-thinking-header: var(--noobot-text-secondary);
   --noobot-thinking-text: var(--noobot-text-main);
   --noobot-thinking-muted: var(--noobot-text-muted);
-  --noobot-thinking-event: var(--noobot-text-main);
   --noobot-thinking-line-border: var(--noobot-divider);
   --noobot-thinking-tool-border: var(--noobot-divider);
   --noobot-thinking-tab: var(--noobot-text-secondary);
   --noobot-thinking-tab-active: var(--noobot-text-main);
   --noobot-thinking-tab-bar: var(--noobot-border-primary);
-  --noobot-thinking-running-shadow: 0 4px 18px color-mix(in srgb, var(--el-color-primary) 30%, transparent), 0 0 12px color-mix(in srgb, var(--el-color-primary) 24%, transparent);
 }

@@ -19,14 +19,14 @@ defineProps({
 
 <style scoped>
 .base-note-block {
-  border-left: 2px solid var(--noobot-thinking-tool-border, var(--noobot-panel-border));
+  border-left: 2px solid var(--noobot-thinking-tool-border);
   padding-left: var(--noobot-space-sm);
   margin-bottom: 10px;
 }
 
 .base-note-block__title {
   font-size: var(--noobot-msg-meta-font-size);
-  color: var(--noobot-thinking-muted, var(--noobot-text-secondary));
+  color: var(--noobot-thinking-muted);
   margin-bottom: 4px;
 }
 
@@ -34,7 +34,7 @@ defineProps({
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--noobot-thinking-text, var(--noobot-text-main));
+  color: var(--noobot-thinking-text);
   font: inherit;
   line-height: 1.5;
 }

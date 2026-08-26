@@ -421,8 +421,8 @@ defineExpose({
 .composer-wrapper.is-file-dragging .composer {
   border-color: color-mix(
     in srgb,
-    var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 58%,
-    var(--noobot-panel-border, var(--noobot-panel-border))
+    var(--noobot-accent) 58%,
+    var(--noobot-panel-border)
   );
   box-shadow: var(--noobot-focus-ring);
 }
@@ -488,7 +488,7 @@ defineExpose({
   font-size: var(--noobot-font-size-md);
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: var(--noobot-text-strong, var(--noobot-text-strong));
+  color: var(--noobot-text-strong);
 }
 
 .more-collapse-btn {
@@ -497,13 +497,13 @@ defineExpose({
   padding: 0 10px;
   border-radius: var(--noobot-radius-pill);
   border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--noobot-panel-border)) 70%, transparent);
+    color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
   background: color-mix(
     in srgb,
-    var(--noobot-surface-sidebar, var(--noobot-base-white)) 78%,
+    var(--noobot-surface-sidebar) 78%,
     transparent
   );
-  color: var(--noobot-text-main, var(--noobot-text-strong));
+  color: var(--noobot-text-main);
   box-shadow: none;
   display: inline-flex;
   align-items: center;
@@ -513,10 +513,10 @@ defineExpose({
 .more-collapse-btn:hover {
   background: color-mix(
     in srgb,
-    var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 10%,
-    var(--noobot-surface-sidebar, var(--noobot-base-white))
+    var(--noobot-accent) 10%,
+    var(--noobot-surface-sidebar)
   );
-  color: var(--noobot-text-strong, var(--noobot-text-strong));
+  color: var(--noobot-text-strong);
 }
 
 .more-panel-content {

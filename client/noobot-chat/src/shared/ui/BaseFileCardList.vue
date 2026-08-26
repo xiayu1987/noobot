@@ -17,6 +17,6 @@
   gap: 2px;
   margin-top: var(--noobot-space-md);
   padding-top: var(--noobot-space-sm);
-  border-top: 1px dashed color-mix(in srgb, var(--noobot-cyber-cyan) 35%, transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--noobot-accent) 35%, transparent);
 }
 </style>

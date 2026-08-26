@@ -209,6 +209,8 @@ defineExpose({ focusTextarea });
   gap: 8px;
   padding: 16px;
   transition: box-shadow 0.3s ease;
+  background: var(--noobot-panel-bg);
+  border-color: var(--noobot-panel-border);
 }
 
 .monotonic-edit-card:hover {
@@ -223,7 +225,7 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-edit-title {
-  color: var(--el-text-color-primary);
+  color: var(--noobot-text-strong);
   font-size: var(--noobot-font-size-xl);
   font-weight: 600;
   line-height: 1.4;
@@ -231,7 +233,7 @@ defineExpose({ focusTextarea });
 
 .monotonic-edit-subtitle {
   margin-top: 4px;
-  color: var(--el-text-color-secondary);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
   line-height: 1.4;
 }
@@ -247,6 +249,8 @@ defineExpose({ focusTextarea });
   height: 26px;
   line-height: 26px;
   white-space: nowrap;
+  background: transparent;
+  border-color: transparent;
 }
 
 .monotonic-mode-tag :deep(.el-tag__content) {
@@ -274,8 +278,8 @@ defineExpose({ focusTextarea });
 .monotonic-edit-textarea :deep(.el-textarea__inner) {
   padding: 14px 16px;
   border-radius: var(--noobot-radius-xs);
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
+  color: var(--noobot-text-main);
+  background: var(--noobot-control-bg);
   border: none;
   font-size: var(--noobot-font-size-base);
   line-height: 1.6;
@@ -283,11 +287,11 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
-  background: var(--el-fill-color);
+  background: var(--noobot-surface-soft-hover);
 }
 
 .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
-  background: var(--el-bg-color);
+  background: var(--noobot-surface-soft-hover);
 }
 
 .monotonic-edit-attachments {
@@ -305,7 +309,7 @@ defineExpose({ focusTextarea });
 .monotonic-attachment-title {
   font-size: var(--noobot-font-size-base);
   font-weight: 600;
-  color: var(--el-text-color-regular);
+  color: var(--noobot-text-main);
 }
 
 .monotonic-attachment-stats {
@@ -315,15 +319,18 @@ defineExpose({ focusTextarea });
 
 .stat-tag {
   border: none;
+  background: transparent;
   font-weight: 500;
 }
 
 .monotonic-attachment-empty {
   padding: 16px;
+  background: var(--noobot-control-bg);
+  border-color: var(--noobot-panel-border);
 }
 
 .monotonic-attachment-empty :deep(.el-empty__description p) {
-  color: var(--el-text-color-secondary);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
 }
 
@@ -341,10 +348,14 @@ defineExpose({ focusTextarea });
   padding: 10px 12px;
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
   position: relative;
+  background: var(--noobot-control-bg);
+  border-color: var(--noobot-panel-border);
 }
 
 .monotonic-attachment-item:hover {
   box-shadow: none;
+  background: var(--noobot-attachment-hover-bg);
+  border-color: var(--noobot-attachment-hover-border);
 }
 
 .monotonic-attachment-preview,
@@ -360,11 +371,11 @@ defineExpose({ focusTextarea });
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  color: var(--noobot-attachment-icon-text);
+  background: transparent;
   font-size: var(--noobot-font-size-xs);
   font-weight: bold;
-  border: 1px solid var(--el-color-primary-light-8);
+  border: 1px solid var(--noobot-attachment-icon-border);
 }
 
 .monotonic-attachment-meta {
@@ -379,7 +390,7 @@ defineExpose({ focusTextarea });
 .monotonic-attachment-name {
   font-size: var(--noobot-font-size-md);
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--noobot-text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -389,7 +400,7 @@ defineExpose({ focusTextarea });
   display: flex;
   align-items: center;
   font-size: var(--noobot-font-size-sm);
-  color: var(--el-text-color-secondary);
+  color: var(--noobot-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -400,11 +411,12 @@ defineExpose({ focusTextarea });
   padding: 0 6px;
   font-size: var(--noobot-font-size-2xs);
   border: none;
+  background: transparent;
 }
 
 .dot {
   margin: 0 4px;
-  color: var(--el-text-color-placeholder);
+  color: var(--noobot-text-muted);
 }
 
 .desc-text {
@@ -419,8 +431,8 @@ defineExpose({ focusTextarea });
   height: 28px;
   border-radius: 50%;
   border: none;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-secondary);
+  background: var(--noobot-surface-soft);
+  color: var(--noobot-text-secondary);
   cursor: pointer;
   opacity: 0;
   transform: scale(0.9);
@@ -433,8 +445,8 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-attachment-remove:hover {
-  background: var(--el-color-danger);
-  color: white;
+  background: var(--noobot-status-error);
+  color: var(--noobot-text-on-danger);
 }
 
 .monotonic-file-input {
@@ -449,9 +461,9 @@ defineExpose({ focusTextarea });
   width: 100%;
   padding: 12px;
   border-radius: var(--noobot-radius-sm);
-  border: 1px dashed var(--el-border-color-dark);
+  border: 1px dashed var(--noobot-panel-border);
   background: transparent;
-  color: var(--el-text-color-regular);
+  color: var(--noobot-text-main);
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
   cursor: pointer;
@@ -459,15 +471,15 @@ defineExpose({ focusTextarea });
 }
 
 .monotonic-add-attachment-btn:hover:not(:disabled) {
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--noobot-border-primary);
+  color: var(--noobot-text-accent);
+  background: var(--noobot-attachment-icon-bg);
 }
 
 .monotonic-add-attachment-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-  border-color: var(--el-border-color-lighter);
+  border-color: var(--noobot-panel-border);
 }
 
 .monotonic-edit-footer {
@@ -475,14 +487,14 @@ defineExpose({ focusTextarea });
   align-items: center;
   justify-content: space-between;
   padding-top: 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--noobot-panel-border);
 }
 
 .monotonic-edit-tip {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--el-text-color-secondary);
+  color: var(--noobot-text-secondary);
   font-size: var(--noobot-font-size-md);
 }
 
@@ -506,70 +518,6 @@ defineExpose({ focusTextarea });
   justify-content: center;
   gap: 6px;
   line-height: 1;
-}
-
-:root[data-theme="dark"] .monotonic-edit-card,
-html.dark .monotonic-edit-card,
-.dark .monotonic-edit-card {
-  background: var(--noobot-panel-bg);
-  border-color: var(--noobot-panel-border);
-}
-
-:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner),
-html.dark .monotonic-edit-textarea :deep(.el-textarea__inner),
-.dark .monotonic-edit-textarea :deep(.el-textarea__inner) {
-  color: var(--noobot-text-main);
-  background: var(--noobot-control-bg);
-}
-
-:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
-html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover),
-.dark .monotonic-edit-textarea :deep(.el-textarea__inner:hover) {
-  background: var(--noobot-surface-soft-hover);
-}
-
-:root[data-theme="dark"] .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
-html.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus),
-.dark .monotonic-edit-textarea :deep(.el-textarea__inner:focus) {
-  background: var(--noobot-surface-soft-hover);
-}
-
-:root[data-theme="dark"] .monotonic-attachment-empty,
-html.dark .monotonic-attachment-empty,
-.dark .monotonic-attachment-empty,
-:root[data-theme="dark"] .monotonic-attachment-item,
-html.dark .monotonic-attachment-item,
-.dark .monotonic-attachment-item {
-  background: var(--noobot-control-bg);
-  border-color: var(--noobot-panel-border);
-}
-
-:root[data-theme="dark"] .monotonic-attachment-item:hover,
-html.dark .monotonic-attachment-item:hover,
-.dark .monotonic-attachment-item:hover {
-  background: var(--noobot-attachment-hover-bg);
-  border-color: var(--noobot-attachment-hover-border);
-}
-
-:root[data-theme="dark"] .monotonic-attachment-icon,
-html.dark .monotonic-attachment-icon,
-.dark .monotonic-attachment-icon {
-  background: var(--noobot-attachment-icon-bg);
-  border-color: var(--noobot-attachment-icon-border);
-  color: var(--noobot-attachment-icon-text);
-}
-
-:root[data-theme="dark"] .monotonic-add-attachment-btn:hover:not(:disabled),
-html.dark .monotonic-add-attachment-btn:hover:not(:disabled),
-.dark .monotonic-add-attachment-btn:hover:not(:disabled) {
-  background: var(--noobot-attachment-icon-bg);
-  border-color: var(--noobot-border-primary);
-}
-
-:root[data-theme="dark"] .monotonic-edit-footer,
-html.dark .monotonic-edit-footer,
-.dark .monotonic-edit-footer {
-  border-top-color: var(--noobot-footer-border);
 }
 
 @media (max-width: 640px) {
@@ -599,7 +547,7 @@ html.dark .monotonic-edit-footer,
   .monotonic-attachment-remove {
     opacity: 1;
     transform: scale(1);
-    background: var(--el-fill-color-darker);
+    background: var(--noobot-surface-soft-hover);
   }
 }
 </style>

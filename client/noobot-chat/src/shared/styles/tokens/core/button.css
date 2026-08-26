@@ -4,16 +4,16 @@
   --noobot-btn-transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
   --noobot-btn-disabled-opacity: 0.6;
 
-  --noobot-btn-soft-bg: color-mix(in srgb, var(--noobot-base-white) 3%, transparent);
-  --noobot-btn-soft-bg-hover: color-mix(in srgb, var(--noobot-base-white) 8%, transparent);
-  --noobot-btn-soft-border: color-mix(in srgb, var(--noobot-base-white) 10%, transparent);
-  --noobot-btn-soft-text: var(--noobot-base-slate-300);
+  --noobot-btn-soft-bg: var(--noobot-surface-soft);
+  --noobot-btn-soft-bg-hover: var(--noobot-surface-soft-hover);
+  --noobot-btn-soft-border: var(--noobot-panel-border);
+  --noobot-btn-soft-text: var(--noobot-text-secondary);
 
-  --noobot-btn-primary-bg: var(--noobot-base-blue-500);
-  --noobot-btn-primary-hover-opacity: 0.9;
+  --noobot-btn-primary-bg: var(--noobot-accent);
+  --noobot-btn-primary-bg-hover: var(--noobot-accent-hover);
 
-  --noobot-btn-secondary-bg: color-mix(in srgb, var(--noobot-surface-sidebar) 90%, var(--noobot-base-blue-500));
-  --noobot-btn-secondary-bg-hover: color-mix(in srgb, var(--noobot-surface-sidebar) 82%, var(--noobot-base-blue-500));
-  --noobot-btn-secondary-border: color-mix(in srgb, var(--noobot-base-slate-500) 20%, var(--noobot-base-blue-500));
-  --noobot-btn-secondary-text: var(--noobot-text-strong);
+  --noobot-btn-secondary-bg: var(--noobot-control-bg);
+  --noobot-btn-secondary-bg-hover: var(--noobot-surface-soft-hover);
+  --noobot-btn-secondary-border: var(--noobot-panel-border);
+  --noobot-btn-secondary-text: var(--noobot-text-main);
 }

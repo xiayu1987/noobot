@@ -16,7 +16,6 @@
   padding: var(--noobot-space-lg) var(--noobot-space-xl);
   border-bottom: 1px solid var(--noobot-divider);
   background: var(--noobot-panel-head-bg);
-  backdrop-filter: blur(10px);
   color: var(--noobot-text-strong);
 }
 

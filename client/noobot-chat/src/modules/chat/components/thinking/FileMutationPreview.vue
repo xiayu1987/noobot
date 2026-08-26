@@ -126,7 +126,7 @@ async function openCompactPreview(mutation) {
     <el-select v-if="mutations.length > 1" v-model="selectedIndex" class="mutation-select" size="small">
       <el-option v-for="(mutation, index) in mutations" :key="mutation.id" :label="mutation.path" :value="index" />
     </el-select>
-    <el-tabs :model-value="activeTab" @tab-change="changeTab">
+    <el-tabs :model-value="activeTab" class="noobot-tabs" @tab-change="changeTab">
       <el-tab-pane :label="translate('message.mutationPreviewFile')" :name="tabs.FILE">
         <el-skeleton v-if="loading" :rows="5" animated />
         <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
@@ -160,9 +160,9 @@ async function openCompactPreview(mutation) {
 <style src="../../../../shared/ui/file-mutation-preview-common.css"></style>
 
 <style scoped>
-.file-mutation-preview { margin-top: 1rem; border-top: 1px solid var(--noobot-border-color); padding-top: .75rem; }
+.file-mutation-preview { margin-top: var(--noobot-space-xl); border-top: 1px solid var(--noobot-panel-border); padding-top: var(--noobot-space-sm); }
 .file-mutation-preview.is-compact { margin-top: 0; border-top: 0; padding-top: 0; }
 .mutation-select { width: min(100%, 28rem); margin-bottom: .5rem; }
 .mutation-file-item { color: inherit; text-align: left; cursor: pointer; }
-.mutation-file-item:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 1px; }
+.mutation-file-item:focus-visible { outline: 2px solid var(--noobot-accent); outline-offset: 1px; }
 </style>

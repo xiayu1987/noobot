@@ -183,7 +183,7 @@ const { translate } = useLocale();
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: var(--noobot-sidebar-header-height);
   box-sizing: border-box;
 }
 
@@ -220,10 +220,8 @@ const { translate } = useLocale();
 .brand-text {
   font-size: var(--noobot-font-size-xl);
   font-weight: 800;
-  background: var(--noobot-cyber-gradient);
-  -webkit-background-clip: text;
-  color: transparent;
-  letter-spacing: 0.5px;
+  color: var(--noobot-text-accent);
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -287,7 +285,7 @@ const { translate } = useLocale();
 
 .custom-input :deep(.el-input__inner) {
   color: var(--noobot-text-main);
-  height: 36px;
+  height: var(--noobot-control-icon-size-lg);
 }
 
 .input-icon {
@@ -318,7 +316,7 @@ const { translate } = useLocale();
 .new-chat-btn {
   flex: 1 1 0;
   min-width: 0;
-  height: 36px;
+  height: var(--noobot-control-icon-size-lg);
   border-radius: var(--noobot-radius-xs);
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -328,7 +326,7 @@ const { translate } = useLocale();
   background: color-mix(in srgb, var(--noobot-btn-primary-bg) 88%, var(--noobot-panel-bg));
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 22%, transparent);
   box-shadow: none;
-  color: var(--noobot-base-white);
+  color: var(--noobot-text-on-accent);
   transition:
     color 0.2s ease,
     background-color 0.2s ease,
@@ -349,12 +347,12 @@ const { translate } = useLocale();
 }
 
 .tail-btn {
-  flex: 0 0 36px;
-  width: 36px;
-  height: 36px;
+  flex: 0 0 var(--noobot-control-icon-size-lg);
+  width: var(--noobot-control-icon-size-lg);
+  height: var(--noobot-control-icon-size-lg);
   border-radius: var(--noobot-radius-xs);
-  background: var(--noobot-btn-soft-bg);
-  border: 1px solid var(--noobot-btn-soft-border);
+  background: transparent;
+  border: 0;
   color: var(--noobot-btn-soft-text);
   padding: 0;
   display: inline-flex;
@@ -383,13 +381,14 @@ const { translate } = useLocale();
   cursor: default;
   pointer-events: none;
   color: var(--noobot-text-muted);
-  background: var(--noobot-panel-muted);
+  background: transparent;
+  border: 0;
 }
 
 .status-btn.connected {
   color: var(--noobot-status-success);
-  background: color-mix(in srgb, var(--noobot-status-success) 16%, var(--noobot-panel-bg));
-  border-color: color-mix(in srgb, var(--noobot-status-success) 36%, transparent);
+  background: transparent;
+  border: 0;
 }
 
 .status-icon {

@@ -38,7 +38,7 @@ function handleRowKeydown(event) {
 <template>
   <div
     v-if="visible"
-    class="assistant-copy-actions"
+    class="assistant-copy-actions noobot-copy-actions"
     role="button"
     tabindex="0"
     :aria-expanded="contentExpanded"
@@ -61,7 +61,7 @@ function handleRowKeydown(event) {
     >
       <el-button
         size="small"
-        class="noobot-flat-inline-icon-btn"
+        class="noobot-flat-inline-icon-btn noobot-copy-button"
         :aria-label="translate('message.copyFormat')"
         @click.stop="handleCopyRich"
       >
@@ -75,7 +75,7 @@ function handleRowKeydown(event) {
     >
       <el-button
         size="small"
-        class="noobot-flat-inline-icon-btn"
+        class="noobot-flat-inline-icon-btn noobot-copy-button"
         :aria-label="translate('message.copyText')"
         @click.stop="handleCopyText"
       >
@@ -91,7 +91,6 @@ function handleRowKeydown(event) {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: var(--noobot-space-xs);
   width: 100%;
   margin-bottom: 16px;
   padding: 0 0 12px var(--noobot-space-xs);

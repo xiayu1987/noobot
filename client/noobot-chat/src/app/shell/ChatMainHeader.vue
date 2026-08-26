@@ -144,7 +144,7 @@ function handleHeaderAction(command = "") {
 
 <style scoped>
 .chat-header {
-  min-height: 64px;
+  min-height: var(--noobot-header-height);
   padding: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xs);
   display: flex;
   flex-direction: column;
@@ -156,7 +156,7 @@ function handleHeaderAction(command = "") {
 }
 
 .chat-header-main {
-  height: 46px;
+  height: var(--noobot-panel-header-height);
   display: flex;
   align-items: center;
   gap: var(--noobot-space-sm);
@@ -201,8 +201,8 @@ function handleHeaderAction(command = "") {
 }
 
 .settings-btn {
-  width: 36px;
-  min-width: 36px;
+  width: var(--noobot-control-icon-size-lg);
+  min-width: var(--noobot-control-icon-size-lg);
   padding: 0;
 }
 
@@ -256,7 +256,7 @@ function handleHeaderAction(command = "") {
   }
 
   .chat-header {
-    min-height: 56px;
+    min-height: var(--noobot-header-height-mobile);
     padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
     gap: var(--noobot-space-2xs);
   }

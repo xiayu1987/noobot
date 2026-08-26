@@ -4,14 +4,7 @@ body,
   margin: 0;
   width: 100%;
   height: 100%;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Arial,
-    sans-serif;
+  font-family: var(--noobot-font-sans);
 }
 
 body {
@@ -25,7 +18,7 @@ body {
 }
 
 *::selection {
-  background: color-mix(in srgb, var(--noobot-cyber-cyan) 28%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   color: var(--noobot-text-strong);
 }
 

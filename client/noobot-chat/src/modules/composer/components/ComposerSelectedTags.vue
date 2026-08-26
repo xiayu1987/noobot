@@ -83,24 +83,24 @@ function onRemoveUpload(draftAttachmentId) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
+  color: var(--noobot-text-secondary);
   padding: 4px 14px;
   font-size: var(--noobot-font-size-md);
   font-weight: 500;
 }
 
 .selected-scenario-name {
-  border-color: color-mix(in srgb, var(--el-color-primary) 28%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-accent) 28%, transparent);
 }
 
 .selected-plugin-name {
-  border-color: color-mix(in srgb, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)) 32%, transparent);
-  background: color-mix(in srgb, var(--noobot-cyber-cyan, var(--noobot-base-blue-500)) 10%, transparent);
+  border-color: color-mix(in srgb, var(--noobot-accent) 32%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 10%, transparent);
 }
 
 .selected-attachment-name {
-  border-color: color-mix(in srgb, var(--noobot-text-muted, var(--noobot-text-muted)) 28%, transparent);
-  background: color-mix(in srgb, var(--noobot-fill-soft, var(--noobot-fill-soft)) 78%, var(--noobot-base-blue-500, var(--noobot-base-blue-500)));
+  border-color: color-mix(in srgb, var(--noobot-text-muted) 28%, transparent);
+  background: color-mix(in srgb, var(--noobot-surface-soft) 78%, var(--noobot-accent));
   padding-right: 6px;
 }
 
@@ -117,14 +117,14 @@ function onRemoveUpload(draftAttachmentId) {
   min-width: 20px;
   padding: 0;
   border: 0;
-  color: var(--noobot-text-secondary, var(--noobot-text-secondary));
+  color: var(--noobot-text-secondary);
   flex: 0 0 auto;
 }
 
 .selected-attachment-remove-btn:hover,
 .selected-attachment-remove-btn:focus-visible {
-  color: var(--el-color-danger);
-  background: color-mix(in srgb, var(--el-color-danger) 10%, transparent);
+  color: var(--noobot-status-error);
+  background: color-mix(in srgb, var(--noobot-status-error) 10%, transparent);
   outline: none;
 }
 

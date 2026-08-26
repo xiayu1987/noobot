@@ -40,9 +40,9 @@ button,
 .noobot-soft-card {
   box-sizing: border-box;
   border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border, var(--el-border-color)) 56%, transparent);
+    color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   border-radius: var(--noobot-radius-md);
-  background: color-mix(in srgb, var(--noobot-surface-sidebar, var(--el-bg-color)) 95%, var(--el-color-primary));
+  background: var(--noobot-panel-bg);
 }
 
 .noobot-panel-card {
@@ -50,38 +50,38 @@ button,
   border: 1px solid
     color-mix(
       in srgb,
-      var(--el-color-primary) 16%,
-      var(--noobot-panel-border, var(--el-border-color))
+      var(--noobot-accent) 16%,
+      var(--noobot-panel-border)
     );
-  border-radius: var(--noobot-radius-lg);
-  background: color-mix(in srgb, var(--noobot-panel-bg, var(--el-bg-color-overlay)) 97%, var(--el-color-primary));
+  border-radius: var(--noobot-radius-md);
+  background: var(--noobot-panel-bg);
   box-shadow: var(--noobot-shadow-panel);
 }
 
 .noobot-overlay-card {
   box-sizing: border-box;
-  background: var(--noobot-overlay-solid-bg);
+  background: var(--noobot-panel-bg);
   border: 1px solid var(--noobot-overlay-border);
   outline: 1px solid var(--noobot-overlay-outline);
-  border-radius: var(--noobot-radius-lg);
+  border-radius: var(--noobot-radius-md);
   box-shadow: var(--noobot-shadow-overlay);
 }
 
 .noobot-overlay-card-header {
-  background: var(--noobot-overlay-head-bg);
+  background: var(--noobot-panel-head-bg);
   border-bottom: 1px solid var(--noobot-overlay-border);
 }
 
 .noobot-composer-surface {
   box-sizing: border-box;
-  background: var(--noobot-surface-sidebar, var(--noobot-base-white));
+  background: var(--noobot-surface-sidebar);
   border: 1px solid
     color-mix(
       in srgb,
-      var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 24%,
-      var(--noobot-panel-border, var(--noobot-panel-border))
+      var(--noobot-accent) 24%,
+      var(--noobot-panel-border)
     );
-  border-radius: var(--noobot-radius-lg);
+  border-radius: var(--noobot-radius-md);
   box-shadow: none;
   transition:
     border-color 0.25s ease,
@@ -89,7 +89,7 @@ button,
 }
 
 .noobot-composer-surface:focus-within {
-  border-color: color-mix(in srgb, var(--noobot-base-blue-500) 36%, transparent);
+  border-color: var(--noobot-accent-border);
   box-shadow: var(--noobot-focus-ring);
 }
 
@@ -97,16 +97,16 @@ button,
   border: 1px dashed
     color-mix(
       in srgb,
-      var(--noobot-base-blue-500, var(--noobot-base-blue-500)) 62%,
-      var(--noobot-panel-border, var(--noobot-panel-border))
+      var(--noobot-accent) 62%,
+      var(--noobot-panel-border)
     );
   border-radius: var(--noobot-radius-lg);
   background: color-mix(
     in srgb,
-    var(--noobot-surface-sidebar, var(--noobot-base-white)) 88%,
-    var(--noobot-base-blue-500, var(--noobot-base-blue-500))
+    var(--noobot-surface-sidebar) 88%,
+    var(--noobot-accent)
   );
-  color: var(--noobot-text-strong, var(--noobot-text-strong));
+  color: var(--noobot-text-strong);
 }
 
 .noobot-surface-card {
@@ -155,33 +155,33 @@ button,
 .noobot-soft-badge.is-primary {
   color: color-mix(
     in srgb,
-    var(--el-color-primary) 78%,
-    var(--noobot-base-white, var(--noobot-base-white))
+    var(--noobot-accent) 78%,
+    var(--noobot-text-strong)
   );
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 14%, transparent);
 }
 
 .noobot-soft-badge.is-plugin,
 .noobot-soft-badge.is-warning {
   color: color-mix(
     in srgb,
-    var(--el-color-warning) 80%,
-    var(--noobot-base-white, var(--noobot-base-white))
+    var(--noobot-status-warning) 80%,
+    var(--noobot-text-strong)
   );
-  border: 1px solid color-mix(in srgb, var(--el-color-warning) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-warning) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-status-warning) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-status-warning) 14%, transparent);
 }
 
 .noobot-soft-badge.is-recognized,
 .noobot-soft-badge.is-success {
   color: color-mix(
     in srgb,
-    var(--el-color-success) 82%,
-    var(--noobot-base-white, var(--noobot-base-white))
+    var(--noobot-status-success) 82%,
+    var(--noobot-text-strong)
   );
-  border: 1px solid color-mix(in srgb, var(--el-color-success) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-success) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-status-success) 35%, transparent);
+  background: color-mix(in srgb, var(--noobot-status-success) 14%, transparent);
 }
 
 .noobot-inline-pill {
@@ -202,7 +202,7 @@ button,
 }
 
 .noobot-selectable-row:hover {
-  background: color-mix(in srgb, var(--el-color-primary) 8%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 8%, transparent);
 }
 
 .noobot-message-avatar {
@@ -213,7 +213,7 @@ button,
 }
 
 .noobot-message-bubble {
-  border-radius: var(--noobot-radius-lg);
+  border-radius: var(--noobot-radius-md);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 62%, transparent);
   box-shadow: none;
   backdrop-filter: none;
@@ -224,7 +224,7 @@ button,
 }
 
 .noobot-message-bubble:hover {
-  border-color: color-mix(in srgb, var(--el-color-primary) 24%, var(--noobot-panel-border));
+  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
   box-shadow: none;
 }
 
@@ -404,10 +404,10 @@ button,
   gap: var(--noobot-space-2xs);
   min-height: var(--noobot-control-height-sm);
   padding: 0 12px;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--noobot-panel-border);
   border-radius: var(--noobot-radius-pill);
-  color: var(--el-text-color-regular);
-  background: var(--el-bg-color-overlay);
+  color: var(--noobot-text-main);
+  background: var(--noobot-control-bg);
   box-shadow: none;
   cursor: pointer;
   font-size: var(--noobot-font-size-md);
@@ -421,20 +421,19 @@ button,
 }
 
 .noobot-chip-action-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
   box-shadow: none;
 }
 
 .noobot-chip-action-btn.is-primary:hover:not(:disabled) {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-7);
+  color: var(--noobot-text-accent);
+  background: var(--noobot-accent-soft);
+  border-color: var(--noobot-border-primary);
 }
 
 .noobot-chip-action-btn.is-danger:hover:not(:disabled) {
-  color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
-  border-color: var(--el-color-danger-light-7);
+  color: var(--noobot-status-error);
+  background: var(--noobot-danger-soft);
+  border-color: color-mix(in srgb, var(--noobot-status-error) 42%, transparent);
 }
 
 .noobot-chip-action-btn:disabled {
@@ -445,9 +444,9 @@ button,
 
 .noobot-primary-pill-action {
   border: 1px solid
-    color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 42%, transparent);
-  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 10%, transparent);
-  color: var(--noobot-primary, var(--noobot-base-blue-500));
+    color-mix(in srgb, var(--noobot-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 10%, transparent);
+  color: var(--noobot-accent);
   font-weight: 600;
   filter: none;
   transition:
@@ -460,15 +459,15 @@ button,
   filter: none;
   border-color: color-mix(
     in srgb,
-    var(--noobot-primary, var(--noobot-base-blue-500)) 62%,
+    var(--noobot-accent) 62%,
     transparent
   );
-  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 16%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 16%, transparent);
 }
 
 .noobot-primary-pill-action:active {
   filter: none;
-  background: color-mix(in srgb, var(--noobot-primary, var(--noobot-base-blue-500)) 12%, transparent);
+  background: color-mix(in srgb, var(--noobot-accent) 12%, transparent);
 }
 
 .noobot-pill-option.el-button {
@@ -488,67 +487,67 @@ button,
 }
 
 .noobot-pill-option.el-button--default {
-  color: var(--noobot-text-main, var(--el-text-color-primary));
+  color: var(--noobot-text-main);
   border-color: color-mix(
     in srgb,
-    var(--noobot-panel-border, var(--el-border-color)) 82%,
+    var(--noobot-panel-border) 82%,
     transparent
   );
-  background: var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  background: var(--noobot-control-bg);
 }
 
 .noobot-pill-option.el-button--default:hover,
 .noobot-pill-option.el-button--default:focus {
-  color: var(--el-color-primary);
+  color: var(--noobot-text-accent);
   border-color: color-mix(
     in srgb,
-    var(--el-color-primary) 48%,
-    var(--noobot-panel-border, var(--el-border-color))
+    var(--noobot-accent) 48%,
+    var(--noobot-panel-border)
   );
   background: color-mix(
     in srgb,
-    var(--el-color-primary) 9%,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay)))
+    var(--noobot-accent) 9%,
+    var(--noobot-control-bg)
   );
 }
 
 .noobot-pill-option.el-button--primary {
   border-color: color-mix(
     in srgb,
-    var(--el-color-primary) 72%,
-    var(--noobot-panel-border, var(--el-border-color))
+    var(--noobot-accent) 72%,
+    var(--noobot-panel-border)
   );
-  background: color-mix(in srgb, var(--el-color-primary) 88%, var(--noobot-panel-bg, var(--el-bg-color-overlay)));
+  background: color-mix(in srgb, var(--noobot-accent) 88%, var(--noobot-panel-bg));
 }
 
 .noobot-pill-option.is-disabled,
 .noobot-pill-option.is-disabled:hover,
 .noobot-pill-option.is-disabled:focus {
-  color: var(--noobot-text-muted, var(--el-text-color-placeholder));
+  color: var(--noobot-text-muted);
   border-color: color-mix(
     in srgb,
-    var(--noobot-panel-border, var(--el-border-color)) 58%,
+    var(--noobot-panel-border) 58%,
     transparent
   );
   background: color-mix(
     in srgb,
-    var(--noobot-control-bg, var(--noobot-panel-bg, var(--el-bg-color-overlay))) 72%,
+    var(--noobot-control-bg) 72%,
     transparent
   );
   box-shadow: none;
 }
 
 .noobot-floating-action-btn.el-button {
-  border: 1px solid color-mix(in srgb, var(--el-color-primary) 24%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-accent) 24%, transparent);
   background: var(--noobot-panel-bg);
-  color: var(--el-color-primary);
+  color: var(--noobot-text-accent);
 }
 
 .noobot-flat-icon-btn,
 .noobot-flat-inline-icon-btn {
   border-radius: var(--noobot-radius-sm);
-  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 60%, transparent);
-  background: var(--noobot-panel-muted);
+  border: 0;
+  background: transparent;
   color: var(--noobot-text-main);
   display: inline-flex;
   align-items: center;
@@ -560,6 +559,27 @@ button,
     border-color 0.2s ease,
     color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+.noobot-copy-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.noobot-copy-actions > *,
+.noobot-copy-actions .el-button {
+  margin-left: 0 !important;
+}
+
+.noobot-copy-button {
+  width: var(--noobot-control-icon-size-sm);
+  height: var(--noobot-control-icon-size-sm);
+  min-width: var(--noobot-control-icon-size-sm);
+  min-height: var(--noobot-control-icon-size-sm);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .noobot-flat-icon-btn {
@@ -576,7 +596,6 @@ button,
 .noobot-flat-inline-icon-btn:hover {
   background: var(--noobot-panel-muted);
   color: var(--noobot-text-main);
-  border-color: color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
   box-shadow: none;
 }
 
@@ -592,17 +611,20 @@ button,
   color: var(--noobot-text-strong);
 }
 
+/* Icon-only controls stay visually quiet until hovered. */
+.noobot-flat-soft-btn.settings-btn,
+.noobot-flat-soft-btn.mobile-menu-btn,
+.noobot-flat-soft-btn.collapse-btn,
+.noobot-flat-soft-btn.status-btn {
+  border: 0;
+  background: transparent;
+}
+
 .noobot-action-btn.noobot-flat-soft-btn,
-.noobot-action-btn.noobot-flat-icon-btn,
-.noobot-action-btn.noobot-flat-inline-icon-btn,
-.el-button.noobot-flat-soft-btn,
-.el-button.noobot-flat-icon-btn,
-.el-button.noobot-flat-inline-icon-btn {
+.el-button.noobot-flat-soft-btn {
   border-color: color-mix(in srgb, var(--noobot-panel-border) 42%, transparent);
 }
 
-.attachment-download-btn.noobot-flat-icon-btn,
-.attachment-preview-btn.noobot-flat-icon-btn,
 .connector-toggle-btn.noobot-flat-soft-btn,
 .workspace-btn.noobot-flat-soft-btn,
 .dark-btn.noobot-flat-soft-btn,
@@ -612,14 +634,26 @@ button,
   color: var(--noobot-text-strong);
 }
 
+.attachment-download-btn.noobot-flat-icon-btn,
+.attachment-preview-btn.noobot-flat-icon-btn {
+  border: 0;
+  background: transparent;
+}
+
 .attachment-download-btn.noobot-flat-icon-btn:hover,
+.attachment-preview-btn.noobot-flat-icon-btn:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--noobot-text-main);
+}
+
 .connector-toggle-btn.noobot-flat-soft-btn:hover,
 .workspace-btn.noobot-flat-soft-btn:hover,
 .dark-btn.noobot-flat-soft-btn:hover,
 .collapse-btn.noobot-flat-soft-btn:hover {
   border-color: color-mix(in srgb, var(--noobot-panel-border) 18%, transparent);
-  background: color-mix(in srgb, var(--noobot-panel-muted) 88%, transparent);
-  color: var(--noobot-base-white);
+  background: color-mix(in srgb, var(--noobot-panel-muted) 72%, transparent);
+  color: var(--noobot-text-on-accent);
 }
 
 .attachment-download-btn.noobot-flat-icon-btn .el-icon,
@@ -634,8 +668,8 @@ button,
   flex: 0 0 32px;
   width: var(--noobot-control-icon-size);
   height: var(--noobot-control-icon-size);
-  background: var(--noobot-btn-soft-bg);
-  border: 1px solid var(--noobot-btn-soft-border);
+  background: transparent;
+  border: 0;
   padding: 0;
   color: var(--noobot-btn-soft-text);
   display: inline-flex;
@@ -647,4 +681,9 @@ button,
 
 .noobot-tail-btn .el-icon {
   margin: 0;
+}
+
+.noobot-tail-btn:hover:not(:disabled) {
+  background: var(--noobot-panel-muted);
+  border-color: transparent;
 }
