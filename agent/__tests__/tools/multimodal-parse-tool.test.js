@@ -8,7 +8,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createMultimodalParseTool } from "../../src/tools/ai-models/multimodal-parse-tool.js";
+import {
+  buildModelAttachment,
+  createMultimodalParseTool,
+} from "../../src/tools/ai-models/multimodal-parse-tool.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 import { createEventEnvelope } from "@noobot/event-protocol";
 
@@ -19,6 +22,29 @@ const TRANSFER_IDENTITY = Object.freeze({
   turnScopeId: "turn:test-multimodal-parse",
   runId: "run:test-multimodal-parse",
   producer: { type: "tool", id: "call:test-multimodal-parse" },
+});
+
+test("multimodal_parse rasterizes SVG input for image-model protocols", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-multimodal-parse-svg-"));
+  const inputPath = path.join(basePath, "visible.svg");
+  await fs.writeFile(
+    inputPath,
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">VISIBLE</text></svg>',
+    "utf8",
+  );
+
+  const attachment = await buildModelAttachment({
+    filePath: inputPath,
+    mimeType: "image/svg+xml",
+    runtime: {},
+  });
+  assert.equal(attachment.mimeType, "image/png");
+  assert.equal(attachment.fileName, "visible.png");
+  assert.match(attachment.data, /^data:image\/png;base64,/);
+  assert.deepEqual(
+    Buffer.from(attachment.data.split(",", 2)[1], "base64").subarray(0, 8),
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
 });
 
 test("multimodal_parse preserves attachment names and backwrites every user source", async () => {

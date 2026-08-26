@@ -145,6 +145,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         `所有文件合计必须小于 ${Number(params.maxSizeMB || 50)} MB`,
       "tools.multimodalParse.directTextUnsupported": (params = {}) =>
         `以下输入是可直接读取的文本，不属于多模态解析范围：${String(params.inputs || "").trim()}。请使用 read_file 或资源分段读取。`,
+      "tools.multimodalParse.svgRasterizerUnavailable":
+        "当前环境缺少 SVG 图像转换能力，无法将 SVG 交给多模态模型解析。",
       "tools.multimodalParse.defaultPrompt":
         "请完整解析所有文件内容，保留原始结构和关键信息，按文件区分内容，不要编造内容。",
       "tools.multimodalParse.modelNotFound": "未找到已启用多模态解析的模型",
