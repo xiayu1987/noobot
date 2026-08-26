@@ -137,7 +137,7 @@ watch(
   max-height: 68vh;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 24px;
+  padding: var(--noobot-space-xl) var(--noobot-space-2xl);
   transition:
     padding 0.3s ease,
     max-height 0.3s ease;
@@ -159,15 +159,15 @@ watch(
 }
 
 .preview-error {
-  padding: 12px;
+  padding: var(--noobot-space-md);
 }
 
 .preview-copy-actions {
   display: flex;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   justify-content: flex-end;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
+  margin-bottom: var(--noobot-space-xl);
+  padding-bottom: var(--noobot-space-md);
   border-bottom: 1px solid var(--noobot-divider);
 }
 
@@ -200,26 +200,26 @@ watch(
   color: var(--noobot-preview-text);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: var(--noobot-font-size-base);
-  line-height: 1.6;
+  line-height: var(--noobot-line-height-body);
 }
 
 .preview-markdown {
   color: var(--noobot-preview-text);
   font-size: var(--noobot-font-size-lg);
-  line-height: 1.7;
+  line-height: var(--noobot-line-height-loose);
   word-wrap: break-word;
 }
 
 .preview-markdown :deep(p) {
   margin-top: 0;
-  margin-bottom: 16px;
+  margin-bottom: var(--noobot-space-xl);
 }
 .preview-markdown :deep(a) {
 }
 .preview-markdown :deep(a:hover) {
 }
 .preview-markdown :deep(hr) {
-  margin: 24px 0;
+  margin: var(--noobot-space-2xl) 0;
 }
 
 .preview-markdown :deep(h1),
@@ -228,8 +228,8 @@ watch(
 .preview-markdown :deep(h4),
 .preview-markdown :deep(h5),
 .preview-markdown :deep(h6) {
-  margin-top: 24px;
-  margin-bottom: 16px;
+  margin-top: var(--noobot-space-2xl);
+  margin-bottom: var(--noobot-space-xl);
 }
 .preview-markdown :deep(h1) {
   font-size: var(--noobot-font-size-lg);
@@ -245,8 +245,8 @@ watch(
 }
 
 .preview-markdown :deep(blockquote) {
-  margin: 16px 0;
-  padding: 12px 16px;
+  margin: var(--noobot-space-xl) 0;
+  padding: var(--noobot-space-md) var(--noobot-space-xl);
   color: var(--noobot-preview-text);
   border-radius: 0 var(--noobot-radius-xs) var(--noobot-radius-xs) 0;
   font-style: italic;
@@ -258,14 +258,14 @@ watch(
 .preview-markdown :deep(ul),
 .preview-markdown :deep(ol) {
   margin-top: 0;
-  margin-bottom: 16px;
+  margin-bottom: var(--noobot-space-xl);
   padding-left: 2em;
 }
 .preview-markdown :deep(li) {
-  margin: 4px 0;
+  margin: var(--noobot-space-2xs) 0;
 }
 .preview-markdown :deep(li > p) {
-  margin-top: 16px;
+  margin-top: var(--noobot-space-xl);
 }
 .preview-markdown :deep(ul li::marker) {
 }
@@ -278,20 +278,20 @@ watch(
 }
 
 .preview-markdown :deep(pre) {
-  padding: 12px;
-  margin-bottom: 16px;
+  padding: var(--noobot-space-md);
+  margin-bottom: var(--noobot-space-xl);
 }
 .preview-markdown :deep(pre code) {
   font-size: var(--noobot-font-size-sm);
 }
 
 .preview-markdown :deep(table) {
-  margin-bottom: 16px;
+  margin-bottom: var(--noobot-space-xl);
   font-size: var(--noobot-font-size-base);
 }
 .preview-markdown :deep(th),
 .preview-markdown :deep(td) {
-  padding: 10px 14px;
+  padding: var(--noobot-space-sm) var(--noobot-space-lg);
 }
 .preview-markdown :deep(th) {
   color: var(--noobot-preview-text);
@@ -304,7 +304,7 @@ watch(
 
 .preview-markdown :deep(.mermaid) {
   margin: 20px 0;
-  padding: 12px;
+  padding: var(--noobot-space-md);
   overflow-x: auto;
   display: flex;
   justify-content: center;
@@ -315,6 +315,6 @@ watch(
   display: block;
 }
 .preview-markdown :deep(.mermaid-render-error) {
-  padding: 12px;
+  padding: var(--noobot-space-md);
 }
 </style>

@@ -1,5 +1,5 @@
 :root {
-  --noobot-btn-radius: 8px;
+  --noobot-btn-radius: var(--noobot-radius-xs);
   --noobot-btn-font-weight: 600;
   --noobot-btn-transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
   --noobot-btn-disabled-opacity: 0.6;

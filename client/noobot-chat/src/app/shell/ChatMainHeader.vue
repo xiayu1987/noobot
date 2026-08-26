@@ -145,11 +145,11 @@ function handleHeaderAction(command = "") {
 <style scoped>
 .chat-header {
   min-height: 64px;
-  padding: 10px 24px 8px;
+  padding: var(--noobot-space-sm) var(--noobot-space-2xl) var(--noobot-space-xs);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   background: var(--noobot-surface-sidebar);
   border-bottom: 1px solid var(--noobot-border-weak);
   z-index: 10;
@@ -159,18 +159,18 @@ function handleHeaderAction(command = "") {
   height: 46px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
 }
 
 .mobile-menu-btn {
   display: none;
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
-  min-height: 34px;
-  max-width: 34px;
-  max-height: 34px;
-  flex: 0 0 34px;
+  width: var(--noobot-control-height-md);
+  height: var(--noobot-control-height-md);
+  min-width: var(--noobot-control-height-md);
+  min-height: var(--noobot-control-height-md);
+  max-width: var(--noobot-control-height-md);
+  max-height: var(--noobot-control-height-md);
+  flex: 0 0 var(--noobot-control-height-md);
   padding: 0;
   line-height: 1;
   aspect-ratio: 1 / 1;
@@ -197,7 +197,7 @@ function handleHeaderAction(command = "") {
 .desktop-header-actions {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
 }
 
 .settings-btn {
@@ -228,7 +228,7 @@ function handleHeaderAction(command = "") {
 .head-sub {
   font-size: var(--noobot-font-size-sm);
   color: var(--noobot-text-secondary);
-  margin-top: 2px;
+  margin-top: var(--noobot-space-3xs);
 }
 
 @media (max-width: 768px) {
@@ -258,7 +258,7 @@ function handleHeaderAction(command = "") {
   .chat-header {
     min-height: 56px;
     padding: 0 max(12px, env(safe-area-inset-left)) 0 max(12px, env(safe-area-inset-right));
-    gap: 6px;
+    gap: var(--noobot-space-2xs);
   }
 
   .chat-header-main {

@@ -444,7 +444,7 @@ defineExpose({
 .chat-message-nav-panel {
   width: 236px;
   max-width: 24vw;
-  padding: 12px;
+  padding: var(--noobot-space-md);
   backdrop-filter: blur(14px);
   transition:
     width 0.18s ease,
@@ -460,7 +460,7 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 10px;
+  gap: var(--noobot-space-sm);
   max-height: calc(100% - 36px);
   pointer-events: none;
 }
@@ -473,13 +473,13 @@ defineExpose({
 .chat-message-nav-panel.is-collapsed {
   width: 44px;
   max-width: 44px;
-  padding: 8px;
+  padding: var(--noobot-space-xs);
 }
 
 .connector-overview-panel {
   width: 236px;
   max-width: 24vw;
-  padding: 12px;
+  padding: var(--noobot-space-md);
   backdrop-filter: blur(14px);
   transition:
     width 0.18s ease,
@@ -490,14 +490,14 @@ defineExpose({
 .connector-overview-panel.is-collapsed {
   width: 44px;
   max-width: 44px;
-  padding: 8px;
+  padding: var(--noobot-space-xs);
 }
 
 .connector-overview-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   color: var(--noobot-text-main);
 }
 
@@ -518,8 +518,8 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--noobot-space-xs);
+  margin-bottom: var(--noobot-space-xs);
   color: var(--noobot-text-main);
 }
 
@@ -531,14 +531,14 @@ defineExpose({
 .chat-message-nav-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--noobot-space-xs);
   min-width: 0;
 }
 
 .chat-message-nav-icon {
   display: inline-grid;
-  width: 28px;
-  height: 28px;
+  width: var(--noobot-control-icon-size-sm);
+  height: var(--noobot-control-icon-size-sm);
   place-items: center;
   border-radius: var(--noobot-radius-sm);
   color: var(--el-color-primary);
@@ -564,7 +564,7 @@ defineExpose({
   display: inline-flex;
   font-size: var(--noobot-font-size-md);
   font-weight: 700;
-  line-height: 1.2;
+  line-height: var(--noobot-line-height-tight);
 }
 
 .chat-message-nav-count {

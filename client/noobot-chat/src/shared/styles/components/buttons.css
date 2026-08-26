@@ -187,7 +187,7 @@ button,
 .noobot-inline-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--noobot-space-2xs);
   border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 46%, transparent);
   border-radius: var(--noobot-radius-pill);
   background: color-mix(in srgb, var(--noobot-panel-muted) 76%, transparent);
@@ -401,8 +401,8 @@ button,
 .noobot-chip-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
+  gap: var(--noobot-space-2xs);
+  min-height: var(--noobot-control-height-sm);
   padding: 0 12px;
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--noobot-radius-pill);
@@ -632,8 +632,8 @@ button,
 
 .noobot-tail-btn {
   flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
+  width: var(--noobot-control-icon-size);
+  height: var(--noobot-control-icon-size);
   background: var(--noobot-btn-soft-bg);
   border: 1px solid var(--noobot-btn-soft-border);
   padding: 0;

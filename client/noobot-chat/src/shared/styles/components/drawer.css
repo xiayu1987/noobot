@@ -13,7 +13,7 @@
 .workspace-drawer .el-drawer__header,
 .noobot-side-drawer__header {
   margin-bottom: 0;
-  padding: 14px 16px;
+  padding: var(--noobot-space-lg) var(--noobot-space-xl);
   border-bottom: 1px solid var(--noobot-divider);
   background: var(--noobot-panel-head-bg);
   backdrop-filter: blur(10px);
@@ -31,7 +31,7 @@
 .workspace-drawer .el-drawer__body,
 .noobot-side-drawer__body {
   background: var(--noobot-panel-bg);
-  padding: 8px;
+  padding: var(--noobot-space-xs);
   box-sizing: border-box;
   overflow: auto;
   overflow-x: hidden;

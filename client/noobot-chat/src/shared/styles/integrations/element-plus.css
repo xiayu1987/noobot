@@ -89,7 +89,7 @@
 .noobot-settings-dropdown .el-dropdown-menu {
   background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent);
   border: 1px solid var(--noobot-panel-border);
-  padding: 4px;
+  padding: var(--noobot-space-xs);
 }
 
 .noobot-settings-dropdown .el-dropdown-menu__item {
@@ -171,11 +171,11 @@
 
   .el-button,
   .noobot-action-btn {
-    min-height: 34px;
+    min-height: var(--noobot-control-height-md);
   }
 
   .el-input__wrapper,
   .el-select__wrapper {
-    min-height: 34px;
+    min-height: var(--noobot-control-height-md);
   }
 }

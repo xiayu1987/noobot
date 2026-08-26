@@ -82,7 +82,7 @@
 .file-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--noobot-space-2xs);
   min-width: 0;
 }
 
