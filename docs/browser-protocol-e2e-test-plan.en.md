@@ -234,7 +234,10 @@ authority.
 
 - PBE-027 closes Manifest V2 activation and runtime/execution-event identities.
 - PBE-028 transfers one attachment from root to Workflow child through canonical Session transfer,
-  validates child ownership and root result attachments, refresh projection, and natural completion.
+  validates child ownership and root result attachments, refresh projection, and natural completion;
+  then runs a second Workflow Turn whose child performs three sequential real failed `read_file`
+  calls and verifies the internal Harness failure prompt remains non-presentational while the
+  authoritative node lifecycle is terminal.
 - PBE-029 audits the complete Session protocol through send, stop, resend variants, Continue,
   manifests, journals, runtime/execution events, and stopped snapshots. Only canonical identity,
   revision, sequence, and version fields are permitted.

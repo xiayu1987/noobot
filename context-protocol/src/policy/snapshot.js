@@ -11,21 +11,15 @@ import {
   resolveContextMessageId,
   resolveContextMessageRole,
 } from "../message/codec.js";
+import { normalizeUserMetaBackwrites } from "./user-meta-backwrite.js";
 
-const SNAPSHOT_VERSION = 2;
+const SNAPSHOT_VERSION = 3;
 const IDENTITY_FIELDS = [
   "userId",
   "sessionId",
   "parentSessionId",
   "dialogProcessId",
   "turnScopeId",
-];
-const ROUND_IDENTITY_FIELDS = ["dialogProcessId", "turnScopeId"];
-const SESSION_IDENTITY_FIELDS = [
-  "userName",
-  "sessionId",
-  "parentSessionId",
-  "parentDialogProcessId",
 ];
 const SERIALIZATION_KEYS = new Set([
   "lc",
@@ -163,6 +157,7 @@ export function composeMessagesFromBlocks(blocks = {}) {
 export function createModelContextSnapshot({
   identity = {},
   messageBlocks = {},
+  userMetaBackwrites = [],
   now = new Date().toISOString(),
 } = {}) {
   const normalizedIdentity = normalizeSnapshotIdentity(identity);
@@ -178,6 +173,7 @@ export function createModelContextSnapshot({
     updatedAt: now,
     messageBlocks: blocks,
     messages: serializeList(composeMessagesFromBlocks(messageBlocks)),
+    userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
   };
 }
 
@@ -195,6 +191,9 @@ export function hydrateModelContextSnapshot(
   identity = {},
   { deserializeMessage = (message) => message } = {},
 ) {
+  if (Number(snapshot?.version) !== SNAPSHOT_VERSION) {
+    throw new Error(`Stopped model message snapshot version must equal ${SNAPSHOT_VERSION}`);
+  }
   assertModelContextSnapshotIdentity(snapshot, identity);
   const hydrate = (messages) =>
     (Array.isArray(messages) ? messages : [])
@@ -208,6 +207,7 @@ export function hydrateModelContextSnapshot(
       incremental: hydrate(snapshot?.messageBlocks?.incremental),
     },
     messages: hydrate(snapshot?.messages),
+    userMetaBackwrites: normalizeUserMetaBackwrites(snapshot?.userMetaBackwrites || []),
   };
 }
 
@@ -232,7 +232,7 @@ function indexAuthoritativeSessionMessages(messages) {
 function isPersistedFrontendUserSource(message = {}) {
   return (
     resolveContextMessageRole(message) === CONTEXT_MESSAGE_ROLE.USER &&
-    resolveContextMessageFlags(message).frontendUser &&
+    resolveContextMessageFlags(message).naturalUser &&
     !readContextMessageField(message, "noobotInternalMessageType")
   );
 }
@@ -273,33 +273,14 @@ export function restoreSnapshotUserAttachmentFactsFromSessionAuthority(
   };
 }
 
-function clearNestedIdentity(message = {}, fields = []) {
-  for (const holder of [
-    message?.additional_kwargs,
-    message?.lc_kwargs,
-    message?.lc_kwargs?.additional_kwargs,
-  ]) {
-    if (!holder || typeof holder !== "object" || Array.isArray(holder)) continue;
-    for (const field of fields) delete holder[field];
-  }
-}
-
 export function projectSnapshotIncrementalToContinuation(messages = [], identity = {}) {
-  const current = Object.fromEntries(
-    [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS].map((field) => [
-      field,
-      String(identity?.[field] || "").trim(),
-    ]),
-  );
-  if (!current.dialogProcessId || !current.turnScopeId) {
+  const currentDialogProcessId = String(identity?.dialogProcessId || "").trim();
+  const currentTurnScopeId = String(identity?.turnScopeId || "").trim();
+  if (!currentDialogProcessId || !currentTurnScopeId) {
     throw new Error("Continuation projection requires dialogProcessId and turnScopeId");
   }
-  return (Array.isArray(messages) ? messages : []).map((source) => {
-    if (!source || typeof source !== "object") return source;
-    const message = cloneJson(source);
-    clearNestedIdentity(message, [...SESSION_IDENTITY_FIELDS, ...ROUND_IDENTITY_FIELDS]);
-    for (const field of SESSION_IDENTITY_FIELDS) message[field] = current[field];
-    for (const field of ROUND_IDENTITY_FIELDS) message[field] = current[field];
-    return message;
-  });
+  // A stopped snapshot is an immutable model-input prefix. The continuation
+  // identity belongs to the new natural user message appended after it; old
+  // messages and user_meta projections retain their original facts.
+  return (Array.isArray(messages) ? messages : []).map((source) => cloneJson(source));
 }

@@ -219,11 +219,9 @@ export function createRunner({
       dialogProcessId: payload.dialogProcessId,
       parentDialogProcessId: payload.parentDialogProcessId,
       turnScopeId: payload.turnScopeId,
-      frontendUserMessage:
-        sourceUserMessage.frontendUserMessage ?? payload.frontendUserMessage === true,
-      messageOrigin:
-        sourceUserMessage.messageOrigin ||
-        (payload.frontendUserMessage === true ? "user" : "internal"),
+      messageOrigin: sourceUserMessage.messageOrigin ?? payload.messageOrigin ?? "natural",
+      userMetaMaterialized:
+        sourceUserMessage.userMetaMaterialized ?? payload.userMetaMaterialized === true,
       attachments: [],
     };
     committedUserMessages.set(messageUid, userMessage);
@@ -266,8 +264,8 @@ export function createRunner({
         parentSessionId: payload.parentSessionId,
         dialogProcessId: payload.dialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: true,
-        messageOrigin: "user",
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         attachments: payload.attachments || [],
       },
     };

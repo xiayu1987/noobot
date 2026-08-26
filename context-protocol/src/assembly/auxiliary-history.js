@@ -6,6 +6,7 @@
 
 import {
   resolveContextMessageRole,
+  resolveContextMessageOrigin,
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
@@ -46,14 +47,7 @@ function normalizeMessage(message = {}) {
       content,
       ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
     };
-    if (
-      message?.frontendUserMessage === true ||
-      message?.additional_kwargs?.frontendUserMessage === true ||
-      message?.lc_kwargs?.frontendUserMessage === true ||
-      message?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
-    ) {
-      normalized.frontendUserMessage = true;
-    }
+    if (resolveContextMessageOrigin(message) === "natural") normalized.messageOrigin = "natural";
     return normalized;
   }
   if (role === "tool") {
@@ -63,14 +57,7 @@ function normalizeMessage(message = {}) {
   }
   if (!content) return null;
   const normalized = { role, content };
-  if (
-    message?.frontendUserMessage === true ||
-    message?.additional_kwargs?.frontendUserMessage === true ||
-    message?.lc_kwargs?.frontendUserMessage === true ||
-    message?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
-  ) {
-    normalized.frontendUserMessage = true;
-  }
+  if (resolveContextMessageOrigin(message) === "natural") normalized.messageOrigin = "natural";
   return normalized;
 }
 
@@ -131,7 +118,9 @@ export function projectAuxiliaryHistoryMessages(
           return {
             role: "assistant",
             content: message.content,
-            ...(message.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
+            ...(resolveContextMessageOrigin(message) === "natural"
+              ? { messageOrigin: "natural" }
+              : {}),
           };
         }
         if (

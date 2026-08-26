@@ -36,7 +36,8 @@ test("user-stopped history ignores summary flags and projects only user, latest 
     message({
       messageUid: "user-1",
       content: "原始问题",
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       summarized: true,
     }),
     message({
@@ -114,7 +115,14 @@ test("user-stopped history ignores summary flags and projects only user, latest 
 for (const terminalStatus of ["error", "timeout"]) {
   test(`${terminalStatus} history projects the authoritative explanation as assistant`, () => {
     const result = projectTerminalHistoryMessages({
-      messages: [message({ messageUid: "user-1", content: "原始问题", frontendUserMessage: true })],
+      messages: [
+        message({
+          messageUid: "user-1",
+          content: "原始问题",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        }),
+      ],
       terminalStatuses: [
         status({
           status: terminalStatus,
@@ -136,7 +144,12 @@ for (const terminalStatus of ["error", "timeout"]) {
 
 test("completed rounds remain untouched for summarized filtering by the history reducer", () => {
   const source = [
-    message({ messageUid: "user-1", content: "question", frontendUserMessage: true }),
+    message({
+      messageUid: "user-1",
+      content: "question",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    }),
     message({ messageUid: "answer-1", role: "assistant", content: "answer", summarized: true }),
   ];
   const result = projectTerminalHistoryMessages({
@@ -149,7 +162,12 @@ test("completed rounds remain untouched for summarized filtering by the history 
 
 test("latest injected selection is scoped independently to each terminal dialog", () => {
   const source = [
-    message({ messageUid: "u1", content: "q1", frontendUserMessage: true }),
+    message({
+      messageUid: "u1",
+      content: "q1",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    }),
     message({
       messageUid: "g1",
       content: "g1",
@@ -160,7 +178,8 @@ test("latest injected selection is scoped independently to each terminal dialog"
     message({
       messageUid: "u2",
       content: "q2",
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       dialogProcessId: "dialog-2",
       turnScopeId: "turn-2",
     }),
@@ -199,7 +218,9 @@ test("terminal status requires its authoritative explanation", () => {
   assert.throws(
     () =>
       projectTerminalHistoryMessages({
-        messages: [message({ messageUid: "user-1", frontendUserMessage: true })],
+        messages: [
+          message({ messageUid: "user-1", messageOrigin: "natural", userMetaMaterialized: true }),
+        ],
         terminalStatuses: [status({ description: "" })],
       }),
     /requires an explanation description/,
@@ -220,13 +241,13 @@ test("terminal history fails closed when the terminal identity has no canonical 
   );
 });
 
-test("terminal history still fails closed when a materialized round lacks its canonical frontend user message", () => {
+test("terminal history still fails closed when a materialized round lacks its canonical natural user message", () => {
   assert.throws(
     () =>
       projectTerminalHistoryMessages({
         messages: [message({ messageUid: "tool-1", role: "tool" })],
         terminalStatuses: [status()],
       }),
-    /missing its canonical frontend user message/,
+    /missing its canonical natural user message/,
   );
 });

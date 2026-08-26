@@ -96,8 +96,8 @@ export function resolveModelFinalMessages({
 }
 
 export function materializeModelContext(context = {}) {
-  if (Number(context?.protocolVersion) !== 2) {
-    throw new Error("materializeModelContext requires modelContext protocolVersion=2");
+  if (Number(context?.protocolVersion) !== 3) {
+    throw new Error("materializeModelContext requires modelContext protocolVersion=3");
   }
   const blocks =
     context?.messageBlocks && typeof context.messageBlocks === "object"

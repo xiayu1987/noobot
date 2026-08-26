@@ -31,7 +31,7 @@ import {
 } from "./runtime.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 import {
-  formatAttachmentIdentityJson,
+  formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
 
@@ -49,7 +49,7 @@ export function buildWorkflowInputAttachmentSystemMessage({
           item?.fileName ||
           tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
       ).trim();
-      return `- ${label}: ${formatAttachmentIdentityJson(projectAttachmentIdentity(item))}`;
+      return `- ${label}: ${formatAttachmentIdentityRef(projectAttachmentIdentity(item))}`;
     })
     .filter(Boolean);
   if (!lines.length) return "";
@@ -195,7 +195,7 @@ function appendUpstreamAttachmentLines(lines, result, nodeLabel, ctx, locale) {
       file?.name ||
         tWorkflow(locale, WORKFLOW_I18N_KEYSET.INPUT.DEFAULT_LABEL, { index: index + 1 }),
     ).trim();
-    lines.push(`- ${nodeLabel} / ${label}: ${formatAttachmentIdentityJson(file?.identity)}`);
+    lines.push(`- ${nodeLabel} / ${label}: ${formatAttachmentIdentityRef(file?.identity)}`);
   }
 }
 

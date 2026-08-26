@@ -82,7 +82,7 @@ test("inject refinement-only flow consumes refinement attempts", async () => {
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: beforeCtx, meta });
   const afterCtx = {
     modelContext: beforeCtx.modelContext,
-    contextProtocolVersion: 2,
+    contextProtocolVersion: 3,
     ai: { content: "ADD 1.1 细化步骤A" },
     agentContext,
   };

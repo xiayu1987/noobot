@@ -91,7 +91,8 @@ test("buildContextMessageBlocks appends resume user message meta with attachment
           {
             role: "user",
             content: "snapshot user",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
             dialogProcessId: "dlg-stopped",
             turnScopeId: "turn-stopped",
             attachments: [],
@@ -332,7 +333,8 @@ test("buildContextMessageBlocks removes current turn user residue from history",
   assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
   assert.equal(blocks.history.length, 3);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
-  assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.messageOrigin, "natural");
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.userMetaMaterialized, true);
   assert.equal(
     blocks.incremental[0]?.additional_kwargs?.turnScopeId,
     "client-turn:mqrt1icf:lxcfigpr",
@@ -377,7 +379,8 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
             messageUid: "sm_current_user_fixture",
             role: "user",
             content: "全仓回归测试",
-            frontendUserMessage: true,
+            messageOrigin: "natural",
+            userMetaMaterialized: true,
             dialogProcessId: "dlg-current",
             turnScopeId: "client-turn:current",
           },
@@ -398,7 +401,8 @@ test("buildContextMessageBlocks does not duplicate frontend current user already
 
   assert.equal(visibleContents.filter((content) => content === "全仓回归测试").length, 1);
   assert.equal(blocks.incremental[0]?.content, "全仓回归测试");
-  assert.equal(blocks.incremental[0]?.additional_kwargs?.frontendUserMessage, true);
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.messageOrigin, "natural");
+  assert.equal(blocks.incremental[0]?.additional_kwargs?.userMetaMaterialized, true);
   assert.equal(blocks.incremental[0]?.additional_kwargs?.turnScopeId, "client-turn:current");
   assert.equal(blocks.incremental[1]?.additional_kwargs?.noobotInternalMessageType, "user_meta");
 });

@@ -11,6 +11,7 @@ import {
   resolveMessageDialogProcessId,
   resolveMessageRole,
 } from "./message.js";
+import { resolveContextMessageOrigin } from "../message/codec.js";
 
 export const TERMINAL_HISTORY_STATUS = Object.freeze({
   USER_STOPPED: "user_stopped",
@@ -60,7 +61,7 @@ function normalizeTerminalStatus(status = {}) {
 function isOriginalUserMessage(message = {}) {
   return (
     resolveMessageRole(message) === "user" &&
-    message?.frontendUserMessage === true &&
+    resolveContextMessageOrigin(message) === "natural" &&
     !isInjectedMessage(message)
   );
 }
@@ -155,7 +156,7 @@ export function projectTerminalHistoryMessages({ messages = [], terminalStatuses
     const originalUser = scoped.find(isOriginalUserMessage);
     if (!originalUser) {
       throw new Error(
-        `terminal history round is missing its canonical frontend user message: ${status.turnScopeId}`,
+        `terminal history round is missing its canonical natural user message: ${status.turnScopeId}`,
       );
     }
     projected.push(projectTerminalSourceMessage(originalUser));

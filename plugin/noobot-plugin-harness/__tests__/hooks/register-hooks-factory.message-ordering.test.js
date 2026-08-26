@@ -12,7 +12,10 @@ import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noo
 import { createTestHookContext } from "../helpers/public-runtime-fixtures.js";
 
 function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object" ? ctx.modelContext.messageBlocks : {};
+  const blocks =
+    ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object"
+      ? ctx.modelContext.messageBlocks
+      : {};
   return resolveMainModelFinalMessages({
     systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
     historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
@@ -25,7 +28,6 @@ const capabilityRuntimeWithBootstrap = {
     await payload?.harness?.globalBootstrap?.();
   },
 };
-
 
 test("createRegisterHarnessHooks keeps message block order and lets incremental current user win", async () => {
   const handlers = new Map();
@@ -70,7 +72,8 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     role: "user",
     content: "全仓回归测试",
     additional_kwargs: {
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       turnScopeId: "client-turn:current",
     },
   };
@@ -79,20 +82,23 @@ test("createRegisterHarnessHooks keeps message block order and lets incremental 
     content: "[用户元信息]\n{}",
     additional_kwargs: { turnScopeId: "client-turn:current" },
   };
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system context" }],
-      history: [
-        { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
-        staleCurrentUser,
-      ],
-      incremental: [
-        currentUser,
-        userMeta,
-        { role: "user", content: "[来自harness外部模型输出/planning]\nplan" },
-      ],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [
+          { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
+          staleCurrentUser,
+        ],
+        incremental: [
+          currentUser,
+          userMeta,
+          { role: "user", content: "[来自harness外部模型输出/planning]\nplan" },
+        ],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
@@ -126,7 +132,8 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
         ctx,
         {
           role: "user",
-          content: "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+          content:
+            "[来自harness外部模型输出/planning]\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
         },
         { block: "incremental" },
       );
@@ -155,7 +162,8 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     role: "user",
     content: "全仓回归测试",
     additional_kwargs: {
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
       turnScopeId: "client-turn:current",
     },
   };
@@ -164,26 +172,30 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     content: "[用户元信息]\n{}",
     additional_kwargs: { turnScopeId: "client-turn:current" },
   };
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [
-        { role: "system", content: "system context" },
-        {
-          role: "system",
-          content: "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
-        },
-      ],
-      history: [
-        { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
-        {
-          role: "user",
-          content: "全仓回归测试",
-          additional_kwargs: { turnScopeId: "client-turn:current" },
-        },
-      ],
-      incremental: [currentUser, userMeta],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [
+          { role: "system", content: "system context" },
+          {
+            role: "system",
+            content:
+              "<!-- noobot-harness-current-task-goal -->\n[CURRENT_TASK_GOAL]\n对 `/project` 执行全仓回归测试",
+          },
+        ],
+        history: [
+          { role: "assistant", content: "上一轮回答", dialogProcessId: "history-dp" },
+          {
+            role: "user",
+            content: "全仓回归测试",
+            additional_kwargs: { turnScopeId: "client-turn:current" },
+          },
+        ],
+        incremental: [currentUser, userMeta],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
@@ -200,12 +212,20 @@ test("createRegisterHarnessHooks keeps message block order after prompt injectio
     ctx.modelContext.messages.map((item) => item.content),
     [
       "system context",
-      ["<!-- noobot-harness-current-task-goal -->", "[CURRENT_TASK_GOAL]", "对 `/project` 执行全仓回归测试"].join("\n"),
+      [
+        "<!-- noobot-harness-current-task-goal -->",
+        "[CURRENT_TASK_GOAL]",
+        "对 `/project` 执行全仓回归测试",
+      ].join("\n"),
       "上一轮回答",
       "全仓回归测试",
       "全仓回归测试",
       "[用户元信息]\n{}",
-      ["[来自harness外部模型输出/planning]", "[CURRENT_TASK_GOAL]", "对 `/project` 执行全仓回归测试"].join("\n"),
+      [
+        "[来自harness外部模型输出/planning]",
+        "[CURRENT_TASK_GOAL]",
+        "对 `/project` 执行全仓回归测试",
+      ].join("\n"),
     ],
   );
 });
@@ -225,7 +245,11 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     emitHarnessHookProgress: () => {},
     shouldInjectPromptAtPoint: () => true,
     injectPrompt: async (_point, ctx) => {
-      appendMessage(ctx, { role: "user", content: "current harness prompt" }, { block: "incremental" });
+      appendMessage(
+        ctx,
+        { role: "user", content: "current harness prompt" },
+        { block: "incremental" },
+      );
     },
     traceHook: async () => ({ fsmState: "planning", fsmRejected: false }),
   });
@@ -247,44 +271,47 @@ test("createRegisterHarnessHooks preserves unsummarized history messages between
     plugin: { name: "noobot-plugin-harness", version: "0.1.0" },
   });
 
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system context" }],
-      history: [
-        {
-          role: "user",
-          content: "下一步",
-          summarized: false,
-          dialogProcessId: "history-dp",
-        },
-        {
-          role: "user",
-          content: "[来自harness外部模型输出/planning]\nplan",
-          summarized: false,
-          dialogProcessId: "history-dp",
-        },
-        {
-          role: "user",
-          content: "[来自harness外部模型输出/planning_followup]\nfollowup",
-          summarized: false,
-          dialogProcessId: "history-dp",
-        },
-        {
-          role: "assistant",
-          content: "assistant answer",
-          summarized: false,
-          dialogProcessId: "history-dp",
-        },
-      ],
-      incremental: [
-        {
-          role: "user",
-          content: "current user",
-          additional_kwargs: { frontendUserMessage: true },
-        },
-      ],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system context" }],
+        history: [
+          {
+            role: "user",
+            content: "下一步",
+            summarized: false,
+            dialogProcessId: "history-dp",
+          },
+          {
+            role: "user",
+            content: "[来自harness外部模型输出/planning]\nplan",
+            summarized: false,
+            dialogProcessId: "history-dp",
+          },
+          {
+            role: "user",
+            content: "[来自harness外部模型输出/planning_followup]\nfollowup",
+            summarized: false,
+            dialogProcessId: "history-dp",
+          },
+          {
+            role: "assistant",
+            content: "assistant answer",
+            summarized: false,
+            dialogProcessId: "history-dp",
+          },
+        ],
+        incremental: [
+          {
+            role: "user",
+            content: "current user",
+            additional_kwargs: { messageOrigin: "natural", userMetaMaterialized: true },
+          },
+        ],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 
@@ -349,29 +376,33 @@ test("createRegisterHarnessHooks can recover current-turn harness injections aft
     { role: "assistant", content: "tool burst 2" },
     { role: "assistant", content: "tool burst 3" },
   ];
-  const ctx = createTestHookContext({
-    dialogProcessId: "dlg-current",
-  }, {
-    messageBlocks: {
-      system: [system],
-      history: [],
-      incremental: [harnessInjection, ...noisyMessages],
+  const ctx = createTestHookContext(
+    {
+      dialogProcessId: "dlg-current",
     },
-  });
+    {
+      messageBlocks: {
+        system: [system],
+        history: [],
+        incremental: [harnessInjection, ...noisyMessages],
+      },
+    },
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
   assert.deepEqual(
     ctx.modelContext.messages.map((item) => item.content),
-    ["system context", "harness current-turn injection", "tool burst 1", "tool burst 2", "tool burst 3"],
-  );
-  assert.deepEqual(
-    ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
     [
+      "system context",
       "harness current-turn injection",
       "tool burst 1",
       "tool burst 2",
       "tool burst 3",
     ],
+  );
+  assert.deepEqual(
+    ctx.modelContext.messageBlocks.incremental.map((item) => item.content),
+    ["harness current-turn injection", "tool burst 1", "tool burst 2", "tool burst 3"],
   );
 
   for (const message of noisyMessages) {
@@ -424,21 +455,24 @@ test("createRegisterHarnessHooks keeps multiple empty assistant tool-call messag
     content: "",
     tool_calls: [{ id: "call_a", type: "function", function: { name: "execute_script" } }],
   };
-  const tool1 = { role: "tool", content: "{\"ok\":false}", tool_call_id: "call_a" };
+  const tool1 = { role: "tool", content: '{"ok":false}', tool_call_id: "call_a" };
   const assistant2 = {
     role: "assistant",
     content: "",
     tool_calls: [{ id: "call_b", type: "function", function: { name: "execute_script" } }],
   };
-  const tool2 = { role: "tool", content: "{\"ok\":false}", tool_call_id: "call_b" };
+  const tool2 = { role: "tool", content: '{"ok":false}', tool_call_id: "call_b" };
 
-  const ctx = createTestHookContext({}, {
-    messageBlocks: {
-      system: [{ role: "system", content: "system" }],
-      history: [],
-      incremental: [assistant1, tool1, assistant2, tool2],
+  const ctx = createTestHookContext(
+    {},
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "system" }],
+        history: [],
+        incremental: [assistant1, tool1, assistant2, tool2],
+      },
     },
-  });
+  );
 
   await handlers.get("agent.before_llm_call")(ctx);
 

@@ -45,7 +45,9 @@ function cloneMessage(message = {}) {
 function requireCheckpointRevision(value) {
   const revision = Number(value);
   if (!Number.isInteger(revision) || revision < 0) {
-    throw new TypeError("auxiliary model context checkpointRevision must be a non-negative integer");
+    throw new TypeError(
+      "auxiliary model context checkpointRevision must be a non-negative integer",
+    );
   }
   return revision;
 }
@@ -109,11 +111,15 @@ function validateCurrentContext(current = {}) {
       continue;
     }
     if (identity?.kind !== AUXILIARY_SEQUENCE_MESSAGE_KIND.STABLE_PROTOCOL) {
-      throw new TypeError("auxiliary system/history message requires context or stable protocol identity");
+      throw new TypeError(
+        "auxiliary system/history message requires context or stable protocol identity",
+      );
     }
   }
   for (const message of incremental) {
-    if (resolveAuxiliarySequenceIdentity(message)?.kind !== AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST) {
+    if (
+      resolveAuxiliarySequenceIdentity(message)?.kind !== AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST
+    ) {
       throw new TypeError("auxiliary incremental message requires request identity");
     }
   }
@@ -124,7 +130,10 @@ function cloneSnapshot(revision, messages) {
   return Object.freeze({ checkpointRevision: revision, messages: messages.map(cloneMessage) });
 }
 
-export function advanceAuxiliaryModelContext({ previousSnapshot = null, currentContext = {} } = {}) {
+export function advanceAuxiliaryModelContext({
+  previousSnapshot = null,
+  currentContext = {},
+} = {}) {
   const { revision, system, history, incremental } = validateCurrentContext(currentContext);
   const currentMessages = [...system, ...history, ...incremental];
   if (!previousSnapshot || Number(previousSnapshot.checkpointRevision) !== revision) {

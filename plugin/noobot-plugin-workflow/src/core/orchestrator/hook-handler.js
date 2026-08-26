@@ -6,10 +6,7 @@
 
 import { HOOK_POINT } from "@noobot/hook-protocol";
 import { executeWorkflowText } from "../../workflow/adapter.js";
-import {
-  isWorkflowAbortError,
-  throwIfWorkflowAborted,
-} from "../hooks/runtime.js";
+import { isWorkflowAbortError, throwIfWorkflowAborted } from "../hooks/runtime.js";
 import { createPhaseTracker } from "../hooks/phase.js";
 import { persistWorkflowPlanningDialog } from "../hooks/persistence.js";
 import { prepareWorkflowPlanningMessage } from "./planning-message.js";
@@ -112,7 +109,7 @@ export async function handleBeforeAgentDispatch({
       planningNodeSessions,
     });
 
-    const { execution, nodeAgentRuns } = await runWorkflowExecutionStage({
+    const { execution, nodeAgentRuns, nodeStateSnapshot } = await runWorkflowExecutionStage({
       hookManager,
       options,
       ctx,
@@ -134,6 +131,7 @@ export async function handleBeforeAgentDispatch({
       phaseTracker,
       retryMeta,
       nodeAgentRuns,
+      nodeStateSnapshot,
       planningPersistResult,
     });
 

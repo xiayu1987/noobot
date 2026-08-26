@@ -16,8 +16,8 @@ export function createPersistedCurrentUserMessage(content, overrides = {}) {
     dialogProcessId: "dlg-current",
     parentDialogProcessId: "",
     turnScopeId: "turn-current",
-    frontendUserMessage: true,
-    messageOrigin: "user",
+    messageOrigin: "natural",
+    userMetaMaterialized: true,
     attachments: [],
     ...overrides,
   };

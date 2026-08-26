@@ -82,7 +82,7 @@ export function prepareTestTurnExecution(modelState = {}, loopState = {}, identi
   if (!runtime || typeof runtime !== "object") {
     throw new Error("test Turn execution requires modelState.runtime");
   }
-  if (loopState.modelContext?.protocolVersion !== 2) {
+  if (loopState.modelContext?.protocolVersion !== 3) {
     loopState.modelContext = createModelContext({
       messageStore: loopState.messageStore || null,
       messages: Array.isArray(loopState.messages) ? loopState.messages : null,

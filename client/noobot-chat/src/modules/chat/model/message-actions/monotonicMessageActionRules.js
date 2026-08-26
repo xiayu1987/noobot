@@ -26,10 +26,9 @@ export function normalizeMessageRole(messageItem = {}) {
   if (explicitRole === "function") return "tool";
   if (explicitRole) return explicitRole;
   if (
-    messageItem?.frontendUserMessage === true ||
-    messageItem?.additional_kwargs?.frontendUserMessage === true ||
-    messageItem?.lc_kwargs?.frontendUserMessage === true ||
-    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+    String(messageItem?.messageOrigin || "")
+      .trim()
+      .toLowerCase() === "natural"
   )
     return "user";
   return "";

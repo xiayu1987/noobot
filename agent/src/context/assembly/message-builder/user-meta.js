@@ -14,7 +14,9 @@ import {
   deriveContextMessageProjectionId as deriveMessageProjectionId,
   readContextMessageField,
   resolveContextMessageDialogProcessId,
+  resolveContextMessageOrigin,
   resolveContextMessageRole,
+  resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
 
 export function resolveAttachments(msg = {}, fallbackAttachments = []) {
@@ -97,16 +99,13 @@ export function buildHumanMessagesForUser(
   } = {},
 ) {
   const contentText = buildHumanMessageContent(msg);
-  const isFrontendUserMessage = msg?.frontendUserMessage === true;
+  const isNaturalUserMessage = resolveContextMessageOrigin(msg) === "natural";
   const identityKwargs = projectContextMessageIdentityMetadata(msg);
   const userMetaMessageId = deriveMessageProjectionId(identityKwargs.noobotMessageId, "user_meta");
-  const contentMessage = isFrontendUserMessage
+  const contentMessage = isNaturalUserMessage
     ? new HumanMessage({
         content: contentText,
-        additional_kwargs: {
-          ...identityKwargs,
-          frontendUserMessage: true,
-        },
+        additional_kwargs: identityKwargs,
       })
     : new HumanMessage({
         content: contentText,
@@ -130,24 +129,15 @@ export function buildHumanMessagesForUser(
 
 export function shouldBuildUserMetaForHistoryMessage(msg = {}, runtime = {}) {
   if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.USER) return false;
-  const kwargs = msg?.additional_kwargs || msg?.lc_kwargs?.additional_kwargs || {};
-  if (
-    String(msg?.messageOrigin || kwargs?.messageOrigin || "")
-      .trim()
-      .toLowerCase() === "internal"
-  )
-    return false;
+  const messageOrigin = resolveContextMessageOrigin(msg);
+  const injectedMessage = readContextMessageField(msg, "injectedMessage").toLowerCase() === "true";
+  const pluginMessage = readContextMessageField(msg, "pluginMessage").toLowerCase() === "true";
+  const injectedMessageType = readContextMessageField(msg, "injectedMessageType");
+  if (messageOrigin === "internal") return false;
   if (msg?.phaseSummaryMemory === true) return false;
-  if (
-    msg?.injectedMessage === true ||
-    kwargs?.injectedMessage === true ||
-    msg?.pluginMessage === true ||
-    kwargs?.pluginMessage === true
-  )
-    return false;
-  if (String(msg?.injectedMessageType || kwargs?.injectedMessageType || "").trim()) return false;
-  if (msg?.frontendUserMessage === true) return true;
-  return Boolean(resolveContextMessageDialogProcessId(msg) && resolveMessageTurnScopeId(msg));
+  if (injectedMessage || pluginMessage) return false;
+  if (injectedMessageType) return false;
+  return messageOrigin === "natural" && resolveContextUserMetaMaterialized(msg);
 }
 
 export function isDerivedUserMetaMessage(msg = {}) {
@@ -162,4 +152,36 @@ export function resolveMessageTurnScopeId(msg = {}) {
       msg?.lc_kwargs?.additional_kwargs?.turnScopeId ||
       "",
   ).trim();
+}
+
+function parseUserMetaPayload(content = "") {
+  const source = String(content || "");
+  const jsonStart = source.indexOf("{");
+  const jsonEnd = source.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart) {
+    throw new Error("user_meta content does not contain a JSON payload");
+  }
+  const payload = JSON.parse(source.slice(jsonStart, jsonEnd + 1));
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("user_meta payload must be an object");
+  }
+  return { source, jsonStart, jsonEnd, payload };
+}
+
+export function appendUserMetaParsedResult(content = "", result = {}) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    throw new TypeError("user_meta parsed result must be an object");
+  }
+  const parsed = parseUserMetaPayload(content);
+  const currentResults = Array.isArray(parsed.payload.parsedResults)
+    ? parsed.payload.parsedResults
+    : [];
+  const resultRef = String(result.sourceAttachmentRef || "").trim();
+  if (!resultRef) throw new TypeError("user_meta parsed result requires sourceAttachmentRef");
+  const nextResults = currentResults.filter(
+    (item) => String(item?.sourceAttachmentRef || "").trim() !== resultRef,
+  );
+  nextResults.push({ ...result });
+  parsed.payload.parsedResults = nextResults;
+  return `${parsed.source.slice(0, parsed.jsonStart)}${JSON.stringify(parsed.payload, null, 2)}${parsed.source.slice(parsed.jsonEnd + 1)}`;
 }

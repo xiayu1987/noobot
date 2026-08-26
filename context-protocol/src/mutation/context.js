@@ -12,6 +12,7 @@ import {
   replaceMessageProjection,
   replaceMessages,
   writeMessageBlocks,
+  updateMessageById,
 } from "../message/store.js";
 import {
   commitModelContextRevision,
@@ -30,6 +31,7 @@ export const CONTEXT_MUTATION_TYPES = Object.freeze({
   MARK_SUMMARIZED: "context.messages.mark-summarized",
   PRUNE_SUMMARIZED_INCREMENTAL: "context.incremental.prune-summarized",
   REMOVE_MESSAGES_BY_ID: "context.messages.remove-by-id",
+  UPDATE_MESSAGE_BY_ID: "context.message.update-by-id",
 });
 
 let nextCommandSequence = 1;
@@ -99,6 +101,9 @@ export function dispatchContextMutation(document, command = {}) {
     case CONTEXT_MUTATION_TYPES.REMOVE_MESSAGES_BY_ID:
       value = removeMessagesByIds(document, payload.messageIds);
       break;
+    case CONTEXT_MUTATION_TYPES.UPDATE_MESSAGE_BY_ID:
+      value = updateMessageById(document, payload.messageId, payload.patch);
+      break;
     default:
       throw new TypeError(`unsupported context mutation command: ${command.commandType}`);
   }
@@ -145,5 +150,12 @@ export function pruneContextSummarizedIncremental(document) {
 export function removeContextMessagesByIds(document, messageIds) {
   return executeContextMutation(document, CONTEXT_MUTATION_TYPES.REMOVE_MESSAGES_BY_ID, {
     messageIds,
+  }).value;
+}
+
+export function updateContextMessageById(document, messageId, patch = {}) {
+  return executeContextMutation(document, CONTEXT_MUTATION_TYPES.UPDATE_MESSAGE_BY_ID, {
+    messageId,
+    patch,
   }).value;
 }

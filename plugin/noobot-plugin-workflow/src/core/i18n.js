@@ -109,14 +109,14 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUserRawAttachmentsTitle: "# 用户原始附件",
     workflowCurrentNodeLine: "当前节点：{name}",
     workflowInputAttachmentsSystemHint:
-      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。每项都提供可直接用于文件工具参数的完整附件身份对象；必须原样使用，不得根据名称或 ID 构造。",
+      "以下附件由工作流规划绑定到当前节点，来自本轮用户输入。每项都提供文件工具唯一接受的完整 canonical identityRef 字符串；必须原样作为工具参数传入，不得传 JSON、路径或根据名称和 ID 构造。",
     workflowUpstreamNodeFallback: "上游节点",
     workflowSubAgentFailureFallback: "子 agent 执行失败",
     workflowFailureLineWithTask: "- {nodeLabel}（任务：{task}）: {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# 上游工作流节点结果附件",
     workflowUpstreamHint:
-      "以下信息来自直接上游动作节点。每个附件提供可直接用于文件工具参数的完整附件身份对象；必须原样使用。若上游失败且无附件，请继续可完成部分并说明影响。",
+      "以下信息来自直接上游动作节点。每个附件都提供文件工具唯一接受的完整 canonical identityRef 字符串；必须原样作为工具参数传入。若上游失败且无附件，请继续可完成部分并说明影响。",
     workflowUpstreamFailureTitle: "## 上游失败节点",
     workflowUpstreamResultTitle: "## 上游结果附件",
     workflowNodeResultTitle: "# 工作流节点执行结果",
@@ -173,14 +173,14 @@ const WORKFLOW_I18N_TEXT = Object.freeze({
     workflowUserRawAttachmentsTitle: "# Original user attachments",
     workflowCurrentNodeLine: "Current node: {name}",
     workflowInputAttachmentsSystemHint:
-      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Each item contains the complete attachment identity object accepted directly by file tools. Use it verbatim; never construct one from a name or ID.",
+      "The following attachments are bound to the current node by workflow planning and come from this turn's user input. Each item is the complete canonical identityRef string accepted by file tools. Pass it verbatim as the tool argument; never pass JSON or a path, or construct one from a name or ID.",
     workflowUpstreamNodeFallback: "Upstream node",
     workflowSubAgentFailureFallback: "Sub-agent execution failed",
     workflowFailureLineWithTask: "- {nodeLabel} (task: {task}): {message}",
     workflowFailureLineWithoutTask: "- {nodeLabel}: {message}",
     workflowUpstreamAttachmentsTitle: "# Upstream workflow node result attachments",
     workflowUpstreamHint:
-      "The following information comes from direct upstream action nodes. Each attachment contains the complete identity object accepted directly by file tools; use it verbatim. If upstream failed without an attachment, continue the completable part and state the impact.",
+      "The following information comes from direct upstream action nodes. Each attachment is the complete canonical identityRef string accepted by file tools. Pass it verbatim as the tool argument. If upstream failed without an attachment, continue the completable part and state the impact.",
     workflowUpstreamFailureTitle: "## Upstream failed nodes",
     workflowUpstreamResultTitle: "## Upstream result attachments",
     workflowNodeResultTitle: "# Workflow node execution result",

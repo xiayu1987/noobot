@@ -15,10 +15,13 @@ import {
 } from "../src/assembly/auxiliary-sequence.js";
 
 function context(message, id) {
-  return declareAuxiliarySequenceIdentity({ ...message, messageUid: id }, {
-    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
-    key: id,
-  });
+  return declareAuxiliarySequenceIdentity(
+    { ...message, messageUid: id },
+    {
+      kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
+      key: id,
+    },
+  );
 }
 
 function stable(message, key) {
@@ -29,9 +32,12 @@ function stable(message, key) {
 }
 
 function request(content) {
-  return declareAuxiliarySequenceIdentity({ role: "user", content }, {
-    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST,
-  });
+  return declareAuxiliarySequenceIdentity(
+    { role: "user", content },
+    {
+      kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST,
+    },
+  );
 }
 
 function current(checkpointRevision, { system = [], history = [], incremental = [] } = {}) {
@@ -48,11 +54,10 @@ test("auxiliary sequence establishes a baseline without an in-memory snapshot", 
   });
   assert.equal(transition.rebuilt, true);
   assert.equal(transition.snapshot.checkpointRevision, 2);
-  assert.deepEqual(transition.messages.map((message) => message.content), [
-    "protocol",
-    "u1",
-    "request-1",
-  ]);
+  assert.deepEqual(
+    transition.messages.map((message) => message.content),
+    ["protocol", "u1", "request-1"],
+  );
 });
 
 test("auxiliary sequence appends canonical Context evidence and the current request", () => {
@@ -83,14 +88,10 @@ test("auxiliary sequence appends canonical Context evidence and the current requ
     }),
   });
   assert.equal(second.rebuilt, false);
-  assert.deepEqual(second.messages.map((message) => message.content), [
-    "protocol",
-    "u1",
-    "request-1",
-    "",
-    "result",
-    "request-2",
-  ]);
+  assert.deepEqual(
+    second.messages.map((message) => message.content),
+    ["protocol", "u1", "request-1", "", "result", "request-2"],
+  );
   assert.equal(second.messages[3].tool_calls[0].id, "call-1");
   assert.equal(second.messages[4].tool_call_id, "call-1");
 });
@@ -110,14 +111,20 @@ test("auxiliary sequence rebuilds only from the authoritative context after chec
     }),
   });
   assert.equal(second.rebuilt, true);
-  assert.deepEqual(second.messages.map((message) => message.content), ["summary", "new request"]);
+  assert.deepEqual(
+    second.messages.map((message) => message.content),
+    ["summary", "new request"],
+  );
 });
 
 test("auxiliary sequence rejects Context messages without canonical identity", () => {
-  const unidentified = declareAuxiliarySequenceIdentity({ role: "user", content: "fact" }, {
-    kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
-    key: "claimed",
-  });
+  const unidentified = declareAuxiliarySequenceIdentity(
+    { role: "user", content: "fact" },
+    {
+      kind: AUXILIARY_SEQUENCE_MESSAGE_KIND.CONTEXT,
+      key: "claimed",
+    },
+  );
   assert.throws(
     () =>
       advanceAuxiliaryModelContext({

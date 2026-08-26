@@ -78,8 +78,10 @@ function emitCurrentUserIdentityDebug({
       ).trim(),
       canonicalMessageId: canonicalMessageId(currentUserMessage),
       role: String(currentUserMessage?.role || "").trim(),
-      frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
-      messageOrigin: String(currentUserMessage?.messageOrigin || "").trim(),
+      messageOrigin: String(currentUserMessage?.messageOrigin || "")
+        .trim()
+        .toLowerCase(),
+      userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
       contentLength: String(currentUserMessage?.content || "").length,
       attachmentCount: Array.isArray(currentUserMessage?.attachments)
         ? currentUserMessage.attachments.length

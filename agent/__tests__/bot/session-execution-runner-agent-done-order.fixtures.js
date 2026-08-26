@@ -19,10 +19,7 @@ import {
 } from "../../src/runtime/lifecycle/state-machine.js";
 import { loadStoppedModelMessageSnapshot } from "../../src/runtime/resume/model-message-snapshot-store.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import {
-  createEventEnvelope,
-  EVENT_FAMILY,
-} from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -42,7 +39,14 @@ export function createRunner({
   const defaultRuntime = runtime || { attachmentMetas: [] };
   let authorityEventSequence = 0;
   const sessionManager = {
-    async commitMessageEvent({ sessionId, turnScopeId, messageId, commandId, correlationId, payload }) {
+    async commitMessageEvent({
+      sessionId,
+      turnScopeId,
+      messageId,
+      commandId,
+      correlationId,
+      payload,
+    }) {
       authorityEventSequence += 1;
       return {
         committed: true,
@@ -119,11 +123,11 @@ export function createRunner({
       const prepared = prepareAgentTurnExecution
         ? await prepareAgentTurnExecution(payload)
         : await (async () => {
-        const agentContext = createTestAgentExecutionScope(defaultRuntime, {
-          identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
-        });
-        return { agentContext, runtimeAgentContext: agentContext };
-      })();
+            const agentContext = createTestAgentExecutionScope(defaultRuntime, {
+              identity: { dialogProcessId: "dialog-1", turnScopeId: "turn-default" },
+            });
+            return { agentContext, runtimeAgentContext: agentContext };
+          })();
       const preparedRuntime = prepared?.runtimeAgentContext?.bindings?.runtime;
       if (preparedRuntime && typeof preparedRuntime === "object") {
         preparedRuntime.sessionManager = preparedRuntime.sessionManager || sessionManager;
@@ -149,8 +153,8 @@ export function createRunner({
           dialogProcessId: payload.dialogProcessId,
           parentDialogProcessId: payload.parentDialogProcessId,
           turnScopeId: payload.turnScopeId,
-          frontendUserMessage: payload.frontendUserMessage === true,
-          messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+          messageOrigin: payload.messageOrigin || "natural",
+          userMetaMaterialized: payload.userMetaMaterialized === true,
           attachments: payload.attachments || [],
         },
       };

@@ -525,7 +525,8 @@ async function commitDetachedStart(lifecycle, startedAt, request, identity, runC
       content: String(request.message || "").trim(),
       messageId: String(runConfig?.userMessageId || "").trim(),
       parentDialogProcessId: identity.parentDialogProcessId,
-      frontendUserMessage: false,
+      messageOrigin: "internal",
+      userMetaMaterialized: false,
     },
   });
   await lifecycle.commit({

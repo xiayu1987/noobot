@@ -98,7 +98,11 @@ describe("useChatEngine.send-stream", () => {
     expect(stream.mock.calls[1][0].identity).toEqual(stream.mock.calls[0][0].identity);
     expect(activeSession.value.messages).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ role: RoleEnum.USER, frontendUserMessage: true }),
+        expect.objectContaining({
+          role: RoleEnum.USER,
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        }),
         expect.objectContaining({ role: RoleEnum.ASSISTANT }),
       ]),
     );

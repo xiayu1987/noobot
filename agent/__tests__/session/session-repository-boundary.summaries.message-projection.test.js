@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -18,7 +17,8 @@ test("session display summary projects persisted messageUid as canonical message
         role: "user",
         content: "persisted user",
         messageUid: "sm-persisted-user",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         turnScopeId: "turn-identity",
       },
     ],

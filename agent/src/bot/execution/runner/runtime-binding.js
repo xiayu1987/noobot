@@ -45,7 +45,10 @@ function projectUserPresentationMessage({
     type: String(currentUserMessage?.type || "message").trim(),
     content: String(currentUserMessage?.content || ""),
     attachments: projectPresentationAttachments(currentUserMessage?.attachments),
-    frontendUserMessage: currentUserMessage?.frontendUserMessage === true,
+    messageOrigin: String(currentUserMessage?.messageOrigin || "")
+      .trim()
+      .toLowerCase(),
+    userMetaMaterialized: currentUserMessage?.userMetaMaterialized === true,
     ts: currentUserMessage?.ts,
   };
 }
@@ -95,6 +98,10 @@ export async function bindAgentDispatchRuntime({
   systemRuntime.persistenceContext = persistenceContext || null;
   systemRuntime.persistenceScope = persistenceScope || null;
   systemRuntime.sessionDir = String(sessionDir || "").trim();
+  dispatchRuntime.currentUserMessageUid = String(currentUserMessage?.messageUid || "").trim();
+  dispatchRuntime.currentUserMessageOrigin = String(currentUserMessage?.messageOrigin || "")
+    .trim()
+    .toLowerCase();
 
   const modelHost = initializeAgentModelHost({
     runtime: dispatchRuntime,

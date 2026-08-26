@@ -222,6 +222,9 @@ export function createStateBuilder({
       ...activeTurnIdentity,
       messages: modelContext.messages,
       messageBlocks: modelContext.messageBlocks,
+      userMetaBackwrites: Array.isArray(modelContext.userMetaBackwrites)
+        ? modelContext.userMetaBackwrites
+        : [],
     };
     const sourceMessageUid = String(currentUserMessage?.messageUid || "").trim();
     const modelMessageIds = modelContext.messages.map(canonicalMessageId).filter(Boolean);

@@ -90,7 +90,8 @@ export function buildMessageSummary(message = {}) {
     "injectedMessage",
     "injectedBy",
     "injectedMessageType",
-    "frontendUserMessage",
+    "messageOrigin",
+    "userMetaMaterialized",
     "chatPresentation",
     "presentationMessageId",
     "isMonotonic",
@@ -126,8 +127,9 @@ export function buildThinkingDetailCountByMessage(messages = []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const key = String(item?.eventId || item?.id || "").trim();
       const existingIndex = key
-        ? facts.activityTimeline.findIndex((entry) =>
-            String(entry?.eventId || entry?.id || "").trim() === key)
+        ? facts.activityTimeline.findIndex(
+            (entry) => String(entry?.eventId || entry?.id || "").trim() === key,
+          )
         : -1;
       if (existingIndex >= 0) facts.activityTimeline[existingIndex] = item;
       else facts.activityTimeline.push(item);
@@ -136,8 +138,10 @@ export function buildThinkingDetailCountByMessage(messages = []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const key = String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim();
       const existingIndex = key
-        ? facts.toolTimeline.findIndex((entry) =>
-            String(entry?.key || entry?.toolCallId || entry?.tool_call_id || "").trim() === key)
+        ? facts.toolTimeline.findIndex(
+            (entry) =>
+              String(entry?.key || entry?.toolCallId || entry?.tool_call_id || "").trim() === key,
+          )
         : -1;
       if (existingIndex >= 0) {
         facts.toolTimeline[existingIndex] = { ...facts.toolTimeline[existingIndex], ...item };

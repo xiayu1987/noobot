@@ -33,6 +33,7 @@
     "./policy/snapshot": "./src/policy/snapshot.js",
     "./policy/summary": "./src/policy/summary.js",
     "./policy/terminal-history": "./src/policy/terminal-history.js",
+    "./policy/user-meta-backwrite": "./src/policy/user-meta-backwrite.js",
     "./policy/turn-completion": "./src/policy/turn-completion.js",
     "./policy/window": "./src/policy/window.js",
     "./task/check": "./src/task/check.js",

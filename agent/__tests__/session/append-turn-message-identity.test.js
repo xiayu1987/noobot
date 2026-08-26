@@ -65,6 +65,34 @@ test("appendTurns persists the canonical internal control message type", async (
   });
 
   assert.equal(session.messages[0].noobotInternalMessageType, "noobot.phase_summary_prompt");
+  assert.equal(session.messages[0].chatPresentation, false);
+});
+
+test("appendTurns leaves natural user presentation unspecified and visible", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [{
+      messageUid: "sm_natural",
+      role: "user",
+      type: "message",
+      content: "hello",
+      dialogProcessId: "dp",
+      turnScopeId: "t",
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
+    }],
+  });
+
+  assert.equal("chatPresentation" in session.messages[0], false);
 });
 
 test("appendTurn updates an existing message with the same authoritative messageId", async () => {

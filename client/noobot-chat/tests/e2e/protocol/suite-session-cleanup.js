@@ -9,6 +9,28 @@ import { request as playwrightRequest } from "@playwright/test";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
 
+async function deleteSessionWithAdmissionRetry(context, { userId, sessionId, apiKey }) {
+  const endpoint = `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`;
+  for (;;) {
+    const response = await context.delete(endpoint, { headers: { "x-api-key": apiKey } });
+    const payload = await response.json();
+    if (response.ok() && payload?.ok === true) return;
+    if (response.status() !== 429) {
+      throw new Error(
+        `Suite Session cleanup failed (${response.status()}): ${String(payload?.error || "unknown error")}`,
+      );
+    }
+    const retryAfterSeconds = Number(
+      response.headers()["retry-after"] || payload?.retryAfterSeconds || 1,
+    );
+    const delayMs = Math.max(
+      1000,
+      Number.isFinite(retryAfterSeconds) ? retryAfterSeconds * 1000 : 1000,
+    );
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+
 async function readRegistry() {
   if (!registryPath) return [];
   try {
@@ -35,7 +57,13 @@ export async function registerSuiteSession(record) {
 export default class SuiteSessionCleanupReporter {
   async onEnd(result) {
     const records = await readRegistry();
-    if (result.status !== "passed" || records.length === 0) return;
+    if (
+      process.env.NOOBOT_E2E_FULL_SUITE !== "1" ||
+      result.status !== "passed" ||
+      records.length === 0
+    ) {
+      return;
+    }
     const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060").replace(
       /\/$/,
       "",
@@ -51,16 +79,11 @@ export default class SuiteSessionCleanupReporter {
       for (const record of records) {
         const userId = String(record?.userId || "").trim();
         const apiKey = apiKeyByUserId.get(userId) || "";
-        const response = await context.delete(
-          `/api/internal/session/${encodeURIComponent(userId)}/${encodeURIComponent(record.sessionId)}`,
-          { headers: { "x-api-key": apiKey } },
-        );
-        const payload = await response.json();
-        if (!response.ok() || payload?.ok !== true) {
-          throw new Error(
-            `Suite Session cleanup failed (${response.status()}): ${String(payload?.error || "unknown error")}`,
-          );
-        }
+        await deleteSessionWithAdmissionRetry(context, {
+          userId,
+          sessionId: record.sessionId,
+          apiKey,
+        });
       }
     } finally {
       await context.dispose();

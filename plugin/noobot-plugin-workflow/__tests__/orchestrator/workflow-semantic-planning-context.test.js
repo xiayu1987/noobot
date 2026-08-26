@@ -48,16 +48,14 @@ function resolveTestModelMessages({ ctx = {} } = {}) {
   ];
 }
 
-test("workflow semantic context preserves canonical tool execution evidence", () => {
+test("workflow semantic context projects canonical tool evidence for the observer", () => {
   const messages = resolveWorkflowSemanticContextMessages({
     options: {
       resolveModelMessages: () => [
         {
           role: "assistant",
           content: "",
-          tool_calls: [
-            { id: "call-workflow", function: { name: "read_file", arguments: "{}" } },
-          ],
+          tool_calls: [{ id: "call-workflow", function: { name: "read_file", arguments: "{}" } }],
         },
         {
           role: "tool",
@@ -68,10 +66,10 @@ test("workflow semantic context preserves canonical tool execution evidence", ()
     },
     ctx: {},
   });
-  assert.equal(messages[0].role, "assistant");
-  assert.equal(messages[0].tool_calls[0].id, "call-workflow");
-  assert.equal(messages[1].role, "tool");
-  assert.equal(messages[1].tool_call_id, "call-workflow");
+  assert.equal(messages[0].role, "user");
+  assert.equal(messages[0].content, "Tool call: read_file({})");
+  assert.equal(messages[1].role, "assistant");
+  assert.equal(messages[1].content, '{"ok":true}');
 });
 
 test("workflow semantic planning passes conversation context before current user task", async () => {
@@ -90,19 +88,27 @@ test("workflow semantic planning passes conversation context before current user
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=act type=action name="节点A" task="执行当前请求"',
-            'NODE id=end type=state stateType=end name="结束"',
-            'EDGE from=start to=act',
-            'EDGE from=act to=end',
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=act type=action name="节点A" task="执行当前请求"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=act",
+              "EDGE from=act to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-node-session-context",
         dialogProcessId: "wf_node_dialog_context",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -123,7 +129,12 @@ test("workflow semantic planning passes conversation context before current user
       messages: [
         { role: "user", content: "前文：我要处理报销审批" },
         { role: "assistant", content: "已记录报销审批背景" },
-        { role: "user", content: "请基于前文生成工作流", frontendUserMessage: true },
+        {
+          role: "user",
+          content: "请基于前文生成工作流",
+          messageOrigin: "natural",
+          userMetaMaterialized: true,
+        },
       ],
     }),
   });
@@ -148,8 +159,6 @@ test("workflow semantic planning passes conversation context before current user
   assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请基于前文生成工作流/);
 });
 
-
-
 test("workflow semantic planning uses the authoritative resolver when the flat projection is empty", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -166,19 +175,27 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=act type=action name="节点A" task="执行当前请求"',
-            'NODE id=end type=state stateType=end name="结束"',
-            'EDGE from=start to=act',
-            'EDGE from=act to=end',
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=act type=action name="节点A" task="执行当前请求"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=act",
+              "EDGE from=act to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-node-session-context-blocks",
         dialogProcessId: "wf_node_dialog_context_blocks",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -223,8 +240,6 @@ test("workflow semantic planning uses the authoritative resolver when the flat p
   assert.match(semanticMessages.at(-1)?.content || "", /当前用户消息:\n请根据上下文继续生成工作流/);
 });
 
-
-
 test("workflow semantic planning includes current available tools like harness planning", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -241,19 +256,27 @@ test("workflow semantic planning includes current available tools like harness p
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
-            'NODE id=end type=state stateType=end name="结束"',
-            'EDGE from=start to=act',
-            'EDGE from=act to=end',
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=act",
+              "EDGE from=act to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-node-session-tools",
         dialogProcessId: "wf_node_dialog_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -298,8 +321,6 @@ test("workflow semantic planning includes current available tools like harness p
   assert.doesNotMatch(semanticTask, /当前可用工具/);
 });
 
-
-
 test("workflow semantic planning reads available tools from the canonical agentContext", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -316,19 +337,27 @@ test("workflow semantic planning reads available tools from the canonical agentC
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
-            'NODE id=end type=state stateType=end name="结束"',
-            'EDGE from=start to=act',
-            'EDGE from=act to=end',
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=act type=action name="生成报告" task="使用 search_docs 查询资料后生成报告"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=act",
+              "EDGE from=act to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-node-session-runtime-tools",
         dialogProcessId: "wf_node_dialog_runtime_tools",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -368,8 +397,6 @@ test("workflow semantic planning reads available tools from the canonical agentC
   assert.match(String(availableToolsMessage?.content || ""), /write_file/);
 });
 
-
-
 test("workflow semantic planning reads authoritative modelContext history", async () => {
   const hookManager = createMockBotHookManager();
   const registerWorkflowHooks = createRegisterWorkflowHooks();
@@ -386,19 +413,27 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
       capabilityModelInvoker: async (payload = {}) => {
         invokerCalls.push(payload);
         return {
-          output: { text: [
-            "WORKFLOW_DSL/1",
-            'NODE id=start type=state stateType=start name="开始"',
-            'NODE id=act type=action name="节点A" task="执行当前请求"',
-            'NODE id=end type=state stateType=end name="结束"',
-            'EDGE from=start to=act',
-            'EDGE from=act to=end',
-            "END",
-          ].join("\n") },
+          output: {
+            text: [
+              "WORKFLOW_DSL/1",
+              'NODE id=start type=state stateType=start name="开始"',
+              'NODE id=act type=action name="节点A" task="执行当前请求"',
+              'NODE id=end type=state stateType=end name="结束"',
+              "EDGE from=start to=act",
+              "EDGE from=act to=end",
+              "END",
+            ].join("\n"),
+          },
         };
       },
       subSessionRunner: async (payload = {}) => ({
-        lifecycle: { executionId: payload?.strategy?.executionId || payload?.metadata?.executionId, executionKind: "agent", state: "completed", revision: 4, sequence: 4 },
+        lifecycle: {
+          executionId: payload?.strategy?.executionId || payload?.metadata?.executionId,
+          executionKind: "agent",
+          state: "completed",
+          revision: 4,
+          sequence: 4,
+        },
         sessionId: "wf-node-session-runtime-history",
         dialogProcessId: "wf_node_dialog_runtime_history",
         result: { answer: "done", messages: [{ role: "assistant", content: "done" }] },
@@ -415,9 +450,9 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
     dialogProcessId: "d1",
     userMessage: "请结合上下文生成工作流",
     runConfig: { locale: "zh-CN" },
-    contextProtocolVersion: 2,
+    contextProtocolVersion: 3,
     modelContext: {
-      protocolVersion: 2,
+      protocolVersion: 3,
       messages: [
         { role: "user", content: "历史背景：审批流程包含财务复核" },
         { role: "assistant", content: "已记录财务复核约束" },
@@ -452,5 +487,8 @@ test("workflow semantic planning reads authoritative modelContext history", asyn
   assert.equal(semanticMessages[historyUserIndex]?.role, "user");
   assert.equal(semanticMessages[historyUserIndex + 1]?.role, "assistant");
   assert.equal(semanticMessages[historyUserIndex + 1]?.content, "已记录财务复核约束");
-  assert.match(String(semanticMessages.at(-1)?.content || ""), /当前用户消息:\n请结合上下文生成工作流/);
+  assert.match(
+    String(semanticMessages.at(-1)?.content || ""),
+    /当前用户消息:\n请结合上下文生成工作流/,
+  );
 });

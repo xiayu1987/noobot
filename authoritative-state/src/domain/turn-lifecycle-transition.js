@@ -110,7 +110,8 @@ function requestHashFor(request) {
             content: String(input.userMessage.content || "").trim(),
             messageId: clean(input.userMessage.messageId),
             parentDialogProcessId: clean(input.userMessage.parentDialogProcessId),
-            frontendUserMessage: input.userMessage.frontendUserMessage === true,
+            messageOrigin: input.userMessage.messageOrigin,
+            userMetaMaterialized: input.userMessage.userMetaMaterialized === true,
           }
         : null,
     executionState: clean(input.executionState),

@@ -34,41 +34,46 @@ export function prepareChatSend({
   const text = explicitText || input.value.trim();
   input.value = "";
 
-  const filesToSend = Array.isArray(attachmentFiles) ? [...attachmentFiles] : [...uploadFiles.value];
+  const filesToSend = Array.isArray(attachmentFiles)
+    ? [...attachmentFiles]
+    : [...uploadFiles.value];
   const sessionId = String(activeSession.value?.sessionId || "");
-  const resolvedUserAttachments = Array.isArray(userAttachments) ? [...userAttachments] : filesToSend.map((fileItem) => {
-    const clientAttachmentId = String(
-      fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
-    ).trim();
-    return {
-      ...(clientAttachmentId ? { clientAttachmentId } : {}),
-      name: fileItem.name,
-      mimeType: fileItem.mimeType,
-      size: fileItem.size,
-      previewUrl: isImageMime(fileItem.mimeType || "")
-        ? URL.createObjectURL(fileItem.raw)
-        : "",
-    };
-  });
+  const resolvedUserAttachments = Array.isArray(userAttachments)
+    ? [...userAttachments]
+    : filesToSend.map((fileItem) => {
+        const clientAttachmentId = String(
+          fileItem?.clientAttachmentId || fileItem?.draftAttachmentId || "",
+        ).trim();
+        return {
+          ...(clientAttachmentId ? { clientAttachmentId } : {}),
+          name: fileItem.name,
+          mimeType: fileItem.mimeType,
+          size: fileItem.size,
+          previewUrl: isImageMime(fileItem.mimeType || "") ? URL.createObjectURL(fileItem.raw) : "",
+        };
+      });
   const userMessage = reuseExistingUserTurn
-    ? (activeSession.value?.messages || []).find((message) => (
-      String(message?.messageId || "").trim() === String(userMessageId || "").trim()
-    ))
+    ? (activeSession.value?.messages || []).find(
+        (message) => String(message?.messageId || "").trim() === String(userMessageId || "").trim(),
+      )
     : appendMessage(RoleEnum.USER, text || translate("chat.uploadOnly"), resolvedUserAttachments, {
-      id: userMessageId,
-      messageId: userMessageId,
-      sessionId,
-      turnScopeId: normalizedTurnScopeId,
-      frontendUserMessage: true,
-    });
+        id: userMessageId,
+        messageId: userMessageId,
+        sessionId,
+        turnScopeId: normalizedTurnScopeId,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
+      });
   if (userMessage && normalizedTurnScopeId) {
     userMessage.turnScopeId = normalizedTurnScopeId;
   }
   if (userMessage && Array.isArray(userAttachments)) {
-    userMessage.attachments = resolvedUserAttachments.length === 0
-      ? []
-      : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments)
-        .map((attachment) => ({ ...attachment }));
+    userMessage.attachments =
+      resolvedUserAttachments.length === 0
+        ? []
+        : mergeAttachments(userMessage.attachments || [], resolvedUserAttachments).map(
+            (attachment) => ({ ...attachment }),
+          );
   }
   if (
     [
@@ -85,9 +90,7 @@ export function prepareChatSend({
     sessionId,
     turnScopeId: normalizedTurnScopeId,
   });
-  const resolvedTurnStartedAtMs = Number(turnStartedAtMs) > 0
-    ? Number(turnStartedAtMs)
-    : nowMs();
+  const resolvedTurnStartedAtMs = Number(turnStartedAtMs) > 0 ? Number(turnStartedAtMs) : nowMs();
   const thinkingStartedAt = toIsoTime(resolvedTurnStartedAtMs);
   applyConversationState(
     {

@@ -28,7 +28,7 @@ import {
   waitForPluginExecutionEvents,
   waitForPluginRuntimeEvents,
 } from "../helpers/persistence-audit.js";
-import { waitForCommand } from "../helpers/scenario-assertions.js";
+import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
@@ -298,6 +298,106 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     )
     .toEqual(generatedNames);
   assertNoForbiddenErrors(protocolCapture.console);
+
+  const failurePathPrefix = `runtime/ops_workdir/pbe-028-missing-${Date.now()}`;
+  const beforeFailureSend = commandsForSession(protocolCapture, noobot.sessionId).length;
+  await sendMessage(
+    noobot.page,
+    uniquePrompt(
+      testInfo,
+      [
+        "create one Workflow child node named failure-check; it must call read_file exactly three times in order",
+        `use these three nonexistent paths: ${failurePathPrefix}-1.txt, ${failurePathPrefix}-2.txt, ${failurePathPrefix}-3.txt`,
+        "wait for each real failed result before the next call; do not call any other business tool and finish after the third failure",
+      ].join(" "),
+    ),
+  );
+  const failureSend = await waitForCommand(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.send",
+    beforeFailureSend,
+  );
+  await waitForNaturalCompletion({
+    page: noobot.page,
+    capture: protocolCapture,
+    sessionId: noobot.sessionId,
+    turnScopeId: failureSend.identity.turnScopeId,
+    timeoutMs: 420000,
+  });
+
+  const failureEvents = await waitForSessionExecutionEventTree(
+    noobot.userId,
+    noobot.sessionId,
+    (records) =>
+      records.filter(
+        (record) =>
+          record.parentSessionId === noobot.sessionId &&
+          record.event === "tool_call_end" &&
+          record.data?.tool === "read_file" &&
+          record.data?.success === false,
+      ).length >= 3,
+  );
+  const failedReads = failureEvents.filter(
+    (record) =>
+      record.parentSessionId === noobot.sessionId &&
+      record.event === "tool_call_end" &&
+      record.data?.tool === "read_file" &&
+      record.data?.success === false,
+  );
+  expect(failedReads).toHaveLength(3);
+  expect(new Set(failedReads.map((record) => record.sessionId)).size).toBe(1);
+  expect(new Set(failedReads.map((record) => record.turnScopeId)).size).toBe(1);
+  expect(new Set(failedReads.map((record) => record.turnScopeId))).toEqual(
+    new Set([failedReads[0].turnScopeId]),
+  );
+  expect(
+    failedReads.every((record) => {
+      try {
+        const result = JSON.parse(String(record.data?.result || "{}"));
+        return result.ok === false && result.status === "failed";
+      } catch {
+        return false;
+      }
+    }),
+  ).toBe(true);
+
+  const failureChildSessionId = failedReads[0].sessionId;
+  const helpPrompts = failureEvents.filter(
+    (record) =>
+      record.sessionId === failureChildSessionId &&
+      record.turnScopeId === failedReads[0].turnScopeId &&
+      record.event === "help_tool_failure_prompted",
+  );
+  expect(helpPrompts).toHaveLength(1);
+  expect(helpPrompts[0].data).toMatchObject({ failureCount: 3, threshold: 3 });
+
+  const controlMessages = failureEvents.filter(
+    (record) =>
+      record.sessionId === failureChildSessionId &&
+      record.event === "agent.contextIdentity.canonicalMessageAdded" &&
+      record.data?.internalType === "noobot.help_tool_failure_prompt",
+  );
+  expect(controlMessages).toHaveLength(1);
+
+  const failureNode = noobot.page
+    .locator(".workflow-node:not(.is-state-node)")
+    .filter({ hasText: "failure-check" })
+    .last();
+  await expect(failureNode).toBeVisible();
+  await expect(failureNode).toContainText("Success");
+  await failureNode.click();
+  const drawer = noobot.page.locator(".workflow-node-session-drawer:visible");
+  await expect(drawer).toBeVisible();
+  const runtimeStep = drawer.locator(".workflow-runtime-step-box:not(:disabled)").last();
+  await expect(runtimeStep).toBeVisible();
+  await runtimeStep.click();
+  await expect(drawer).toContainText("failure-check");
+  await expect(drawer).toContainText("read_file");
+  await expect(drawer).not.toContainText("工具调用已连续失败 3 次");
+  await expect(drawer).not.toContainText("No node session content");
+  await expect(drawer).not.toContainText("等待节点会话");
+  await expect(noobot.page.locator("body")).not.toContainText("工具调用已连续失败 3 次");
 });
 
 test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预览下载", async ({

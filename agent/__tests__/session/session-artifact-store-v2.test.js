@@ -253,7 +253,8 @@ test("session artifacts group interleaved messages by logical dialog without cha
         content: "a user",
         dialogProcessId: "a",
         turnScopeId: "turn-a",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         ts: "2026-01-01T00:00:00Z",
       },
       {
@@ -261,7 +262,8 @@ test("session artifacts group interleaved messages by logical dialog without cha
         content: "b user",
         dialogProcessId: "b",
         turnScopeId: "turn-b",
-        frontendUserMessage: true,
+        messageOrigin: "natural",
+        userMetaMaterialized: true,
         ts: "2026-01-01T00:01:00Z",
       },
       {

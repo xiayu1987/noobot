@@ -333,8 +333,8 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
         dialogProcessId: payload.dialogProcessId,
         parentDialogProcessId: payload.parentDialogProcessId,
         turnScopeId: payload.turnScopeId,
-        frontendUserMessage: payload.frontendUserMessage === true,
-        messageOrigin: payload.frontendUserMessage === true ? "user" : "internal",
+        messageOrigin: payload.messageOrigin || "natural",
+        userMetaMaterialized: payload.userMetaMaterialized === true,
         attachments: payload.attachments || [],
       };
       persistedTurns.push(userMessage);
@@ -418,8 +418,10 @@ test("runSession smoke writes harness artifacts through full execution pipeline"
     };
     return {
       ...builder,
-      buildInitialContext: (payload) => bindSessionManager(() => builder.buildInitialContext(payload)),
-      buildContinueContext: (payload) => bindSessionManager(() => builder.buildContinueContext(payload)),
+      buildInitialContext: (payload) =>
+        bindSessionManager(() => builder.buildInitialContext(payload)),
+      buildContinueContext: (payload) =>
+        bindSessionManager(() => builder.buildContinueContext(payload)),
     };
   };
 

@@ -45,7 +45,8 @@ function firstSend(commandId, turnScopeId = "turn-1") {
     userMessage: {
       content: "persist me before execution",
       messageId: `user-message-${turnScopeId}`,
-      frontendUserMessage: true,
+      messageOrigin: "natural",
+      userMetaMaterialized: true,
     },
     expectedRevision: 0,
     createSessionIfAbsent: true,

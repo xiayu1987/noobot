@@ -12,6 +12,7 @@ import {
   createAttachmentLifecycleEvent,
   findAttachmentRelation,
   projectAttachmentIdentity,
+  formatAttachmentIdentityRef,
 } from "@noobot/attachment-protocol";
 import { EVENT_FAMILY } from "@noobot/event-protocol";
 import { normalizeParentSessionId } from "@noobot/session-protocol";
@@ -23,6 +24,7 @@ import { TRANSFER_SOURCE } from "@noobot/semantic-transfer-protocol";
 import { MIME_TYPE } from "../../shared/constants/index.js";
 import { updateRuntimeUserMessageAttachment } from "../../artifacts/index.js";
 import { emitEvent } from "../../events/index.js";
+import { queueUserMetaBackwrite } from "../../context/assembly/message-builder/user-meta-backwrite.js";
 import {
   ARTIFACT_GENERATION_SOURCE,
   TOOL_ATTACHMENT_SOURCE,
@@ -137,6 +139,18 @@ export async function backwriteParsedAttachment({
   await emitEvent(runtime?.eventListener || null, "authority_event_committed", {
     envelope: committed.envelope,
     persistenceScope: runtime?.systemRuntime?.persistenceScope || null,
+  });
+  queueUserMetaBackwrite(runtime, {
+    attachmentRef: formatAttachmentIdentityRef(sourceIdentity),
+    result: {
+      sourceAttachmentRef: formatAttachmentIdentityRef(sourceIdentity),
+      parsedAttachmentRef: formatAttachmentIdentityRef(
+        relation?.targetIdentity || projectAttachmentIdentity(parsedAttachment),
+      ),
+      ...(relation?.name ? { name: relation.name } : {}),
+      ...(relation?.mimeType ? { mimeType: relation.mimeType } : {}),
+      ...(Number.isSafeInteger(Number(relation?.size)) ? { size: Number(relation.size) } : {}),
+    },
   });
   return updated;
 }

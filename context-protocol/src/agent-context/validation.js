@@ -54,6 +54,9 @@ export function validateAgentContextEnvelope(context = {}) {
     if (!Number.isInteger(modelContext.checkpointRevision) || modelContext.checkpointRevision < 0) {
       errors.push("modelContext.checkpointRevision must be a non-negative integer");
     }
+    if (!Array.isArray(modelContext.userMetaBackwrites)) {
+      errors.push("modelContext.userMetaBackwrites must be an array");
+    }
     const active = modelContext.activeTurnIdentity || {};
     if (String(active.dialogProcessId || "").trim() !== identityResult.identity.dialogProcessId) {
       errors.push(

@@ -132,7 +132,7 @@ test("workflow hook injects upstream node result attachments into downstream sub
   assert.match(nodeBSystem, /节点A/);
   assert.match(
     nodeBSystem,
-    /\{"attachmentId":"att-1","sessionId":"s-upstream","attachmentSource":"model"\}/,
+    /attachment:v1:s-upstream\/model\/att-1/,
   );
   assert.match(nodeCSystem, /节点A/);
 
@@ -239,11 +239,11 @@ test("workflow hook injects one upstream action attachments into multiple direct
   assert.match(nodeBSystem, /节点A/);
   assert.match(
     nodeBSystem,
-    /\{"attachmentId":"fanout-att-1","sessionId":"s-fanout","attachmentSource":"model"\}/,
+    /attachment:v1:s-fanout\/model\/fanout-att-1/,
   );
   assert.match(nodeCSystem, /节点A/);
   assert.match(
     nodeCSystem,
-    /\{"attachmentId":"fanout-att-1","sessionId":"s-fanout","attachmentSource":"model"\}/,
+    /attachment:v1:s-fanout\/model\/fanout-att-1/,
   );
 });

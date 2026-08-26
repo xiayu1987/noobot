@@ -37,12 +37,17 @@ function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function hasFrontendUserMarker(messageItem = {}) {
-  return Boolean(
-    messageItem?.frontendUserMessage === true ||
-      messageItem?.additional_kwargs?.frontendUserMessage === true ||
-      messageItem?.lc_kwargs?.frontendUserMessage === true ||
-      messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+function hasNaturalUserMarker(messageItem = {}) {
+  return (
+    String(
+      messageItem?.messageOrigin ||
+        messageItem?.additional_kwargs?.messageOrigin ||
+        messageItem?.lc_kwargs?.messageOrigin ||
+        messageItem?.lc_kwargs?.additional_kwargs?.messageOrigin ||
+        "",
+    )
+      .trim()
+      .toLowerCase() === "natural"
   );
 }
 
@@ -61,9 +66,7 @@ function getLangChainMessageKind(messageItem = {}) {
   if (Array.isArray(messageItem?.id)) idParts.push(...messageItem.id);
   const serializedName = trim(messageItem?.name || messageItem?.lc_name);
   if (serializedName) idParts.push(serializedName);
-  const serializedType = trim(
-    messageItem?.type === "constructor" ? "" : messageItem?.type,
-  );
+  const serializedType = trim(messageItem?.type === "constructor" ? "" : messageItem?.type);
   if (serializedType) idParts.push(serializedType);
   const haystack = idParts.map((part) => lower(part)).join("|");
   if (!haystack) return "";
@@ -92,7 +95,7 @@ export function getMessageInternalType(messageItem = {}) {
       messageItem?.lc_kwargs?.additional_kwargs?.noobotInternalMessageType ||
       messageItem?.lc_kwargs?.additional_kwargs?.internalType ||
       messageItem?.lc_kwargs?.metadata?.noobotInternalMessageType ||
-      messageItem?.lc_kwargs?.metadata?.internalType
+      messageItem?.lc_kwargs?.metadata?.internalType,
   );
 }
 
@@ -101,7 +104,9 @@ export function normalizeTurnOwner(raw = {}) {
   return {
     sessionId: getMessageSessionId(owner) || getMessageSessionId(raw),
     turnScopeId: trim(owner?.turnScopeId),
-    dialogProcessId: trim(owner?.dialogProcessId || owner?.dialog_process_id || raw?.ownerDialogProcessId),
+    dialogProcessId: trim(
+      owner?.dialogProcessId || owner?.dialog_process_id || raw?.ownerDialogProcessId,
+    ),
     role: trim(owner?.role),
   };
 }
@@ -131,7 +136,7 @@ export function getMessageRole(messageItem = {}) {
       messageItem?.sender_role,
   );
   if (explicitRole) return explicitRole;
-  if (hasFrontendUserMarker(messageItem)) return "user";
+  if (hasNaturalUserMarker(messageItem)) return "user";
   return getLangChainMessageKind(messageItem);
 }
 
@@ -206,7 +211,11 @@ export function buildMessageIdentityKey(messageItem = {}) {
 export function hasMessageTurnScopeConflict(leftMessage = {}, rightMessage = {}) {
   const leftTurnScopeId = getMessageTurnScopeId(leftMessage);
   const rightTurnScopeId = getMessageTurnScopeId(rightMessage);
-  return Boolean(leftTurnScopeId && rightTurnScopeId && !areTurnScopeIdsEquivalent(leftTurnScopeId, rightTurnScopeId));
+  return Boolean(
+    leftTurnScopeId &&
+    rightTurnScopeId &&
+    !areTurnScopeIdsEquivalent(leftTurnScopeId, rightTurnScopeId),
+  );
 }
 
 export function hasExplicitMessageIdentity(messageItem = {}) {
@@ -218,7 +227,11 @@ export function isSameMessageIdentity(targetMessage = {}, candidateMessage = {})
   if (targetMessage === candidateMessage) return true;
 
   const targetTurnScopeId = getMessageTurnScopeId(targetMessage);
-  if (!targetTurnScopeId || !areTurnScopeIdsEquivalent(getMessageTurnScopeId(candidateMessage), targetTurnScopeId)) return false;
+  if (
+    !targetTurnScopeId ||
+    !areTurnScopeIdsEquivalent(getMessageTurnScopeId(candidateMessage), targetTurnScopeId)
+  )
+    return false;
   const targetRole = lower(getMessageRole(targetMessage));
   const candidateRole = lower(getMessageRole(candidateMessage));
   return Boolean(targetRole && candidateRole && targetRole === candidateRole);
@@ -251,7 +264,8 @@ export function isSameMessageRound(targetMessage = {}, candidateMessage = {}) {
   if (targetTurnScopeId && candidateTurnScopeId) {
     const targetSessionId = getMessageSessionId(targetMessage);
     const candidateSessionId = getMessageSessionId(candidateMessage);
-    if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId) return false;
+    if (targetSessionId && candidateSessionId && targetSessionId !== candidateSessionId)
+      return false;
     return areTurnScopeIdsEquivalent(targetTurnScopeId, candidateTurnScopeId);
   }
   return false;
@@ -265,7 +279,10 @@ export function isSameExplicitMessageTurn(leftMessage = {}, rightMessage = {}) {
 
 export function shouldCollectAttachmentsFromMessage(targetMessage = {}, candidateMessage = {}) {
   if (candidateMessage === targetMessage) return true;
-  if (getMessageRole(targetMessage) !== "assistant" || getMessageRole(candidateMessage) !== "assistant") {
+  if (
+    getMessageRole(targetMessage) !== "assistant" ||
+    getMessageRole(candidateMessage) !== "assistant"
+  ) {
     return true;
   }
 

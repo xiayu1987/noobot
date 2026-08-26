@@ -77,30 +77,40 @@ function isHarnessRelayMessage(text = "") {
   if (!raw) return false;
   const prefixes = [LOCALE.ZH_CN, LOCALE.EN_US]
     .map((locale) =>
-      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }))
+      translateI18nText(locale, HARNESS_I18N_KEYSET.RELAY.SEPARATE_MODEL_PREFIX, { purpose: "" }),
+    )
     .map((value) => String(value || "").trim())
     .filter(Boolean);
   return prefixes.some((prefix) => raw.startsWith(prefix));
 }
 
 function resolveCompatibleRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "").trim().toLowerCase();
+  const role = String(message?.role || message?.lc_kwargs?.role || "")
+    .trim()
+    .toLowerCase();
   if (role === "human") return "user";
   if (role === "ai") return "assistant";
   if (role) return role;
-  const type = String(message?.type || message?.lc_kwargs?.type || "").trim().toLowerCase();
+  const type = String(message?.type || message?.lc_kwargs?.type || "")
+    .trim()
+    .toLowerCase();
   if (type === "human") return "user";
   if (type === "ai") return "assistant";
   if (type) return type;
   return "";
 }
 
-function isFrontendUserMessage(item = {}) {
+function isNaturalUserMessage(item = {}) {
   return (
-    item?.frontendUserMessage === true ||
-    item?.lc_kwargs?.frontendUserMessage === true ||
-    item?.additional_kwargs?.frontendUserMessage === true ||
-    item?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
+    String(
+      item?.messageOrigin ||
+        item?.lc_kwargs?.messageOrigin ||
+        item?.additional_kwargs?.messageOrigin ||
+        item?.lc_kwargs?.additional_kwargs?.messageOrigin ||
+        "",
+    )
+      .trim()
+      .toLowerCase() === "natural"
   );
 }
 
@@ -110,7 +120,7 @@ function resolveLatestUserTextFromMessages(messageList = [], { preferFrontend = 
     if (isHarnessInjectedMessage(item)) continue;
     const role = resolveCompatibleRole(item);
     if (role !== "user") continue;
-    if (preferFrontend && !isFrontendUserMessage(item)) continue;
+    if (preferFrontend && !isNaturalUserMessage(item)) continue;
     const text = String(extractRawTextContent(item?.content ?? item) || "").trim();
     if (isHarnessRelayMessage(text)) continue;
     if (text) return text;
@@ -135,8 +145,12 @@ export function buildPlanningToolContextPrompt(locale = LOCALE.ZH_CN, ctx = {}, 
 }
 
 export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {}, meta = {}) {
-  const latestUserGoal = resolveLatestUserMessageText(ctx) ||
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
+  const latestUserGoal =
+    resolveLatestUserMessageText(ctx) ||
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
+    );
   const contextSummary = {
     locale,
     turn: Number.isFinite(Number(ctx?.turn)) ? Number(ctx.turn) : undefined,
@@ -153,13 +167,19 @@ export function buildPlanningContextSummaryPrompt(locale = LOCALE.ZH_CN, ctx = {
   ].join("\n");
 }
 
-export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta = {}, options = {}) {
-  const userGoal = resolveLatestUserMessageText(_ctx) ||
-    translateI18nText(locale, HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK);
-  const {
-    programmingMode,
-    textMode,
-  } = resolveScenarioPolicyFlagsFromContext(_ctx, _meta);
+export function buildPlanningPromptBase(
+  locale = LOCALE.ZH_CN,
+  _ctx = {},
+  _meta = {},
+  options = {},
+) {
+  const userGoal =
+    resolveLatestUserMessageText(_ctx) ||
+    translateI18nText(
+      locale,
+      HARNESS_I18N_KEYSET.WORKFLOW_PROMPTS.PLANNING_LATEST_USER_GOAL_FALLBACK,
+    );
+  const { programmingMode, textMode } = resolveScenarioPolicyFlagsFromContext(_ctx, _meta);
   return buildPlanningMainPrompt({
     locale,
     marker: getPlanningPromptMarker(locale),
@@ -172,12 +192,16 @@ export function buildPlanningPromptBase(locale = LOCALE.ZH_CN, _ctx = {}, _meta 
 
 export function resolveLatestUserMessageText(ctx = {}) {
   const messages = resolveModelMessages(ctx);
-  const latestFrontendFromMessages = resolveLatestUserTextFromMessages(messages, { preferFrontend: true });
+  const latestFrontendFromMessages = resolveLatestUserTextFromMessages(messages, {
+    preferFrontend: true,
+  });
   if (latestFrontendFromMessages) return latestFrontendFromMessages;
   const latestFromMessages = resolveLatestUserTextFromMessages(messages);
   if (latestFromMessages) return latestFromMessages;
   const history = resolveModelMessageBlocks(ctx).history;
-  const latestFrontendFromHistory = resolveLatestUserTextFromMessages(history, { preferFrontend: true });
+  const latestFrontendFromHistory = resolveLatestUserTextFromMessages(history, {
+    preferFrontend: true,
+  });
   if (latestFrontendFromHistory) return latestFrontendFromHistory;
   const latestFromHistory = resolveLatestUserTextFromMessages(history);
   if (latestFromHistory) return latestFromHistory;
@@ -206,20 +230,21 @@ export function buildPlanningMessagePlan(
     includeWorkflowPolicy = false,
   } = {},
 ) {
-  const bucket = ctx?.agentContext?.bindings?.extensions?.harness && typeof ctx.agentContext.bindings.extensions.harness === "object"
-    ? ctx.agentContext.bindings.extensions.harness
-    : {};
+  const bucket =
+    ctx?.agentContext?.bindings?.extensions?.harness &&
+    typeof ctx.agentContext.bindings.extensions.harness === "object"
+      ? ctx.agentContext.bindings.extensions.harness
+      : {};
   const planChecklistContent = buildPlanChecklistSystemContent({
     locale,
     planText: bucket?.planText || "",
     bucket,
     ctx,
   });
-  const {
-    programmingMode,
-    textMode,
-    dynamicPolicyPrompt,
-  } = resolveScenarioPolicyFlagsFromContext(ctx, meta);
+  const { programmingMode, textMode, dynamicPolicyPrompt } = resolveScenarioPolicyFlagsFromContext(
+    ctx,
+    meta,
+  );
   const workflowPolicyPrompt = buildScenarioPolicyPromptText(locale, {
     programmingMode,
     textMode,
@@ -283,9 +308,10 @@ export function maybeInjectPlanningPrompt(ctx = {}, meta = {}) {
     injectMessageWithPolicy(ctx, {
       role: messageItem.role,
       content: messageItem.content,
-      injectedMessageType: messageItem.kind === "planning_workflow_policy"
-        ? "workflow_policy"
-        : messageItem.kind || "planning_prompt",
+      injectedMessageType:
+        messageItem.kind === "planning_workflow_policy"
+          ? "workflow_policy"
+          : messageItem.kind || "planning_prompt",
       injectAt: "append",
       avoidBreakToolCallContinuity: true,
     });

@@ -319,7 +319,8 @@ test("buildContextMessages keeps complete metadata per historical user turn with
             {
               role: "user",
               content: "first historical turn",
-              frontendUserMessage: true,
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
               userName: "historical-admin",
               sessionId: "historical-session",
               parentSessionId: "historical-parent-session",
@@ -337,7 +338,8 @@ test("buildContextMessages keeps complete metadata per historical user turn with
             {
               role: "user",
               content: "legacy history missing identity",
-              frontendUserMessage: true,
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
               dialogProcessId: "legacy-dialog",
               turnScopeId: "legacy-turn",
               attachments: [],
@@ -496,7 +498,8 @@ test("buildContextMessages discards classified user_meta without inferring from 
             {
               role: "user",
               content: "hello",
-              frontendUserMessage: true,
+              messageOrigin: "natural",
+              userMetaMaterialized: true,
               dialogProcessId: "dialog-current",
               turnScopeId: "turn-current",
             },
@@ -556,7 +559,8 @@ test("buildContextMessages ignores derived metadata and uses stopped source fact
               additional_kwargs: {
                 dialogProcessId: "dialog-stopped",
                 turnScopeId: "turn-stopped",
-                frontendUserMessage: true,
+                messageOrigin: "natural",
+                userMetaMaterialized: true,
               },
             },
             {
@@ -684,8 +688,8 @@ test("buildContextMessages does not project frontend user metadata for internal 
         sessionId: "child",
         dialogProcessId: "dialog-child",
         turnScopeId: "internal-turn:current",
-        frontendUserMessage: false,
         messageOrigin: "internal",
+        userMetaMaterialized: false,
       }),
     },
   );

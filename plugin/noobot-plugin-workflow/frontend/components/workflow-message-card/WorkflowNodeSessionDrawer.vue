@@ -410,9 +410,11 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             :empty-text="
               viewerLoading
                 ? ''
-                : viewerState === 'pending'
-                  ? translate('workflow.nodeSessionPending')
-                  : translate('workflow.noNodeSessionContent')
+                : displayNodeMessages.length
+                  ? ''
+                  : viewerState === 'pending'
+                    ? translate('workflow.nodeSessionPending')
+                    : translate('workflow.noNodeSessionContent')
             "
             attachment-preview-dialog-class="workflow-session-preview-dialog"
             file-preview-dialog-class="workflow-session-preview-dialog"
@@ -426,7 +428,7 @@ defineEmits(["runtime-step-click", "execution-select", "open-thinking-details"])
             {{ translate("workflow.nodeSessionPending") }}
           </div>
           <BaseEmptyHint
-            v-else-if="selectedRuntimeStep && !viewerLoading"
+            v-else-if="selectedRuntimeStep && !viewerLoading && !displayNodeMessages.length"
             class="workflow-node-empty"
             :text="
               viewerState === 'pending'

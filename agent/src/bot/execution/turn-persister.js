@@ -5,7 +5,11 @@
  */
 
 import { normalizeDialogProcessId, normalizeParentSessionId } from "@noobot/session-protocol";
-import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import {
+  readContextMessageField,
+  resolveContextMessageDialogProcessId,
+  resolveContextUserMetaMaterialized,
+} from "@noobot/context-protocol/message/codec";
 import { emitEvent } from "../../events/index.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
@@ -48,6 +52,12 @@ function filterSessionTransferEnvelopes(transferEnvelopes = []) {
 function resolveMessageAttachments(message = {}) {
   if (Array.isArray(message?.attachments)) return message.attachments;
   return [];
+}
+
+function resolveMessageBooleanField(message = {}, field = "") {
+  return (
+    message?.[field] === true || readContextMessageField(message, field).toLowerCase() === "true"
+  );
 }
 
 function resolveAuthoritativeMessageId(message = {}) {
@@ -140,7 +150,8 @@ function summarizeSessionTurnPayload(fullTurnPayload = {}) {
     injectedMessage: fullTurnPayload.injectedMessage === true,
     injectedBy: fullTurnPayload.injectedBy || "",
     injectedMessageType: fullTurnPayload.injectedMessageType || "",
-    frontendUserMessage: fullTurnPayload.frontendUserMessage === true,
+    messageOrigin: fullTurnPayload.messageOrigin || "",
+    userMetaMaterialized: fullTurnPayload.userMetaMaterialized === true,
     pluginMessage: fullTurnPayload.pluginMessage === true,
     pluginMeta: summarizeObject(fullTurnPayload.pluginMeta),
     isMonotonic: fullTurnPayload.isMonotonic === true,
@@ -224,7 +235,10 @@ function normalizeSessionTurnInput(input = {}) {
     noobotInternalMessageType: valueOrDefault(input.noobotInternalMessageType, ""),
     injectedBy: valueOrDefault(input.injectedBy, ""),
     injectedMessageType: valueOrDefault(input.injectedMessageType, ""),
-    frontendUserMessage: input.frontendUserMessage === true,
+    messageOrigin: String(input.messageOrigin || "")
+      .trim()
+      .toLowerCase(),
+    userMetaMaterialized: input.userMetaMaterialized === true,
     pluginMessage: input.pluginMessage === true,
     pluginMeta: valueOrDefault(input.pluginMeta, null),
     transferEnvelopes: filterSessionTransferEnvelopes(valueOrDefault(input.transferEnvelopes, [])),
@@ -271,7 +285,8 @@ function buildFullTurnPayload(input) {
     noobotInternalMessageType: stringValue(input.noobotInternalMessageType).trim(),
     injectedBy: stringValue(input.injectedBy).trim(),
     injectedMessageType: stringValue(input.injectedMessageType).trim(),
-    frontendUserMessage: input.frontendUserMessage,
+    messageOrigin: input.messageOrigin,
+    userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
     pluginMeta: normalizedOptionalObject(input.pluginMeta),
     ...optionalListField("transferEnvelopes", input.transferEnvelopes),
@@ -374,7 +389,8 @@ function buildTurnPayload(input) {
     noobotInternalMessageType: input.noobotInternalMessageType,
     injectedBy: input.injectedBy,
     injectedMessageType: input.injectedMessageType,
-    frontendUserMessage: input.frontendUserMessage,
+    messageOrigin: input.messageOrigin,
+    userMetaMaterialized: input.userMetaMaterialized,
     pluginMessage: input.pluginMessage,
     pluginMeta: input.pluginMeta,
     ...(input.transferEnvelopes.length ? { transferEnvelopes: input.transferEnvelopes } : {}),
@@ -410,7 +426,9 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     messageUid: stringValue(messageItem?.messageUid).trim(),
     messageId: resolveAuthoritativeMessageId(messageItem),
     presentationMessageId: stringValue(messageItem.presentationMessageId).trim(),
-    chatPresentation: messageItem.chatPresentation === true,
+    ...(typeof messageItem.chatPresentation === "boolean"
+      ? { chatPresentation: messageItem.chatPresentation }
+      : {}),
     content: stringValue(messageItem.content),
     type: stringValue(messageItem.type),
     parentSessionId: input.parentSessionId,
@@ -433,12 +451,13 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     toolName: String(messageItem.toolName ?? "").trim(),
     rawModelContent: normalizedRawModelContent(messageItem.rawModelContent),
     modelAdditionalKwargs: normalizedOptionalObject(messageItem.modelAdditionalKwargs),
-    injectedMessage: messageItem.injectedMessage === true,
-    noobotInternalMessageType: stringValue(messageItem.noobotInternalMessageType).trim(),
-    injectedBy: stringValue(messageItem.injectedBy).trim(),
-    injectedMessageType: stringValue(messageItem.injectedMessageType).trim(),
-    frontendUserMessage: messageItem.frontendUserMessage === true,
-    pluginMessage: messageItem.pluginMessage === true,
+    injectedMessage: resolveMessageBooleanField(messageItem, "injectedMessage"),
+    noobotInternalMessageType: readContextMessageField(messageItem, "noobotInternalMessageType"),
+    injectedBy: readContextMessageField(messageItem, "injectedBy"),
+    injectedMessageType: readContextMessageField(messageItem, "injectedMessageType"),
+    messageOrigin: readContextMessageField(messageItem, "messageOrigin").toLowerCase(),
+    userMetaMaterialized: resolveContextUserMetaMaterialized(messageItem),
+    pluginMessage: resolveMessageBooleanField(messageItem, "pluginMessage"),
     pluginMeta: normalizedOptionalObject(messageItem.pluginMeta),
     transferEnvelopes: arrayValue(messageItem.transferEnvelopes),
     modelResponseMetadata: normalizedOptionalObject(messageItem.modelResponseMetadata),

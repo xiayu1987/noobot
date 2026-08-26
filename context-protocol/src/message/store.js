@@ -381,6 +381,25 @@ export function removeMessagesByIds(holder = {}, messageIds = []) {
   };
 }
 
+export function updateMessageById(holder = {}, messageId = "", patch = {}) {
+  if (!holder || typeof holder !== "object") {
+    throw new TypeError("modelContext document is required");
+  }
+  const normalizedId = String(messageId || "").trim();
+  if (!normalizedId) throw new TypeError("messageId is required");
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new TypeError("message patch must be an object");
+  }
+  const store = canonicalizeMessageStore(holder) || resolveStore(holder);
+  const message = store.byId.get(normalizedId);
+  if (!message) throw new Error(`canonical message not found: ${normalizedId}`);
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) delete message[key];
+    else message[key] = value;
+  }
+  return message;
+}
+
 export function resolveMessagesByIds(holder = {}, ids = []) {
   const store = resolveStore(holder);
   return normalizeList(ids)

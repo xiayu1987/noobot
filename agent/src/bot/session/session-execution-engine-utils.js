@@ -114,8 +114,11 @@ export function applyNormalizedMessageFlags(normalized = {}, messageItem = {}) {
   if (injectedBy) normalized.injectedBy = injectedBy;
   const injectedMessageType = resolveInjectedMessageType(messageItem);
   if (injectedMessageType) normalized.injectedMessageType = injectedMessageType;
-  if (isFrontendUserMessageFlagged(messageItem)) {
-    normalized.frontendUserMessage = true;
+  if (readMessageField(messageItem, "messageOrigin").toLowerCase() === "natural") {
+    normalized.messageOrigin = "natural";
+    normalized.userMetaMaterialized =
+      messageItem?.userMetaMaterialized === true ||
+      readMessageField(messageItem, "userMetaMaterialized").toLowerCase() === "true";
   }
   return normalized;
 }
@@ -149,13 +152,4 @@ export async function persistSnapshotJsonFiles({
     assertSessionWritable,
     ...(typeof now === "function" ? { now } : {}),
   });
-}
-
-function isFrontendUserMessageFlagged(messageItem = {}) {
-  return (
-    messageItem?.frontendUserMessage === true ||
-    messageItem?.lc_kwargs?.frontendUserMessage === true ||
-    messageItem?.additional_kwargs?.frontendUserMessage === true ||
-    messageItem?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true
-  );
 }

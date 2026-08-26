@@ -4,9 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import {
-  normalizeWorkflowTransferPayload,
-} from "../hooks/attachments.js";
+import { normalizeWorkflowTransferPayload } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 
@@ -14,21 +12,38 @@ export function buildWorkflowNodeSessions({
   ctx = {},
   semantic = {},
   nodeAgentRuns = [],
+  nodeStateSnapshot = null,
 } = {}) {
+  const nodeStates = new Map(
+    (Array.isArray(nodeStateSnapshot?.nodes) ? nodeStateSnapshot.nodes : [])
+      .map((item = {}) => [String(item?.nodeExecutionId || "").trim(), item])
+      .filter(([nodeExecutionId]) => nodeExecutionId),
+  );
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
     .map((item = {}) => {
+      const nodeState =
+        nodeStates.get(
+          String(item?.nodeIdentity?.nodeExecutionId || item?.nodeExecutionId || "").trim(),
+        ) || {};
       const semanticNode = resolveSemanticNodeForPendingStep({
         semantic,
         pendingStep: item?.step || {},
       });
       return {
         transition: Number(item?.transition || 0),
+        workflowRunId: String(nodeState?.workflowRunId || item?.workflowRunId || "").trim(),
+        nodeExecutionId: String(nodeState?.nodeExecutionId || item?.nodeExecutionId || "").trim(),
+        commandId: String(nodeState?.commandId || item?.commandId || "").trim(),
+        turnScopeId: String(nodeState?.turnScopeId || item?.turnScopeId || "").trim(),
+        parentSessionId: String(ctx?.sessionId || "").trim(),
         nodeName: String(item?.step?.nodeName || semanticNode?.name || "").trim(),
         nodeId: String(item?.step?.nodeId || semanticNode?.id || "").trim(),
         nodeType: Number.isFinite(Number(item?.step?.nodeType))
           ? Number(item.step.nodeType)
           : undefined,
-        actionNodeStateId: String(item?.actionNodeStateId || item?.step?.actionNodeStateId || "").trim(),
+        actionNodeStateId: String(
+          item?.actionNodeStateId || item?.step?.actionNodeStateId || "",
+        ).trim(),
         stepId: String(item?.stepId || item?.step?.stepId || "").trim(),
         stepIndex: Number.isFinite(Number(item?.stepIndex ?? item?.step?.stepIndex))
           ? Number(item?.stepIndex ?? item?.step?.stepIndex)
@@ -40,14 +55,28 @@ export function buildWorkflowNodeSessions({
             : undefined,
         rootSessionId: String(ctx?.sessionId || "").trim(),
         dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-        sessionId: String(item?.nodeSessionId || "").trim(),
+        agentDialogProcessId: String(
+          nodeState?.agentDialogProcessId || item?.agentDialogProcessId || "",
+        ).trim(),
+        sessionId: String(nodeState?.nodeSessionId || item?.nodeSessionId || "").trim(),
+        activeChildExecutionId: String(nodeState?.activeChildExecutionId || "").trim(),
+        attemptExecutionIds: Array.isArray(nodeState?.attemptExecutionIds)
+          ? nodeState.attemptExecutionIds.map((value) => String(value || "").trim()).filter(Boolean)
+          : [],
+        status: String(nodeState?.status || "").trim(),
+        failure:
+          nodeState?.failure && typeof nodeState.failure === "object" ? nodeState.failure : null,
+        revision: Number(nodeState?.revision || 0),
+        sequence: Number(nodeState?.sequence || 0),
+        eventId: String(nodeState?.eventId || "").trim(),
+        startedAt: String(nodeState?.startedAt || "").trim(),
+        completedAt: String(nodeState?.completedAt || "").trim(),
+        updatedAt: String(nodeState?.updatedAt || "").trim(),
         transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
           ? item.nodeResultTransferEnvelopes
           : [],
         stepFailure:
-          item?.stepFailure && typeof item.stepFailure === "object"
-            ? item.stepFailure
-            : null,
+          item?.stepFailure && typeof item.stepFailure === "object" ? item.stepFailure : null,
         parallelWave: Number(item?.parallelWave || 0),
         waveOrder: Number(item?.waveOrder || 0),
       };
@@ -65,7 +94,10 @@ export function buildWorkflowNodeSessions({
 
 export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : []).flatMap((item = {}) => {
-    if (Array.isArray(item?.nodeResultTransferEnvelopes) && item.nodeResultTransferEnvelopes.length) {
+    if (
+      Array.isArray(item?.nodeResultTransferEnvelopes) &&
+      item.nodeResultTransferEnvelopes.length
+    ) {
       return item.nodeResultTransferEnvelopes;
     }
     return [];
@@ -77,6 +109,7 @@ export function enrichWorkflowPayload({
   ctx = {},
   semantic = {},
   nodeAgentRuns = [],
+  nodeStateSnapshot = null,
   planningPersistResult = null,
 } = {}) {
   workflowPayload.planningDialog = {
@@ -85,7 +118,12 @@ export function enrichWorkflowPayload({
     storagePath: String(planningPersistResult?.outputDir || "").trim(),
     storageFile: String(planningPersistResult?.outputFile || "").trim(),
   };
-  workflowPayload.nodeSessions = buildWorkflowNodeSessions({ ctx, semantic, nodeAgentRuns });
+  workflowPayload.nodeSessions = buildWorkflowNodeSessions({
+    ctx,
+    semantic,
+    nodeAgentRuns,
+    nodeStateSnapshot,
+  });
   workflowPayload.transferEnvelopes = resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns);
   return {
     workflowPayload,

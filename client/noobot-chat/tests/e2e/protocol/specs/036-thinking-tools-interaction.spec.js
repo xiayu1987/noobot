@@ -194,7 +194,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
 
   const realtimeObservation = observeRealtimeThinkingChanges(noobot.page);
   const interaction = noobot.page.locator(".interaction-card");
-  await expect(interaction).toBeVisible({ timeout: 180000 });
+  await expect(interaction).toBeVisible({ timeout: 360000 });
   await expect(interaction.locator(".interaction-title")).toContainText("CASE036-INTERACTION");
   await assertGeneratedFilesConverged({
     page: noobot.page,

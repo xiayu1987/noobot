@@ -64,6 +64,19 @@ export function resolveContextMessageDialogProcessId(message = {}) {
   return readContextMessageField(message, "dialogProcessId");
 }
 
+export function resolveContextMessageOrigin(message = {}) {
+  return readContextMessageField(message, "messageOrigin").toLowerCase();
+}
+
+export function resolveContextUserMetaMaterialized(message = {}) {
+  return (
+    message?.userMetaMaterialized === true ||
+    message?.additional_kwargs?.userMetaMaterialized === true ||
+    message?.lc_kwargs?.userMetaMaterialized === true ||
+    message?.lc_kwargs?.additional_kwargs?.userMetaMaterialized === true
+  );
+}
+
 export function resolveContextMessageTurnScopeId(message = {}) {
   return readContextMessageField(message, "turnScopeId");
 }
@@ -110,11 +123,7 @@ export function resolveContextMessageFlags(message = {}) {
       message?.lc_kwargs?.summarized === true ||
       message?.additional_kwargs?.summarized === true ||
       message?.lc_kwargs?.additional_kwargs?.summarized === true,
-    frontendUser:
-      message?.frontendUserMessage === true ||
-      message?.additional_kwargs?.frontendUserMessage === true ||
-      message?.lc_kwargs?.frontendUserMessage === true ||
-      message?.lc_kwargs?.additional_kwargs?.frontendUserMessage === true,
+    naturalUser: resolveContextMessageOrigin(message) === "natural",
     injected:
       readContextMessageField(message, "injectedMessage").toLowerCase() === "true" ||
       Boolean(readContextMessageField(message, "injectedBy")),
@@ -137,16 +146,17 @@ export function projectContextMessageIdentityMetadata(message = {}) {
   const injectedBy = readContextMessageField(message, "injectedBy");
   const injectedMessageType = readContextMessageField(message, "injectedMessageType");
   const messageOrigin = readContextMessageField(message, "messageOrigin");
+  const userMetaMaterialized = resolveContextUserMetaMaterialized(message);
   return {
     ...(noobotMessageId ? { noobotMessageId } : {}),
     ...(dialogProcessId ? { dialogProcessId } : {}),
     ...(parentDialogProcessId ? { parentDialogProcessId } : {}),
     ...(turnScopeId ? { turnScopeId } : {}),
-    ...(message?.frontendUserMessage === true ? { frontendUserMessage: true } : {}),
+    ...(messageOrigin ? { messageOrigin } : {}),
+    ...(userMetaMaterialized ? { userMetaMaterialized: true } : {}),
     ...(message?.injectedMessage === true ? { injectedMessage: true } : {}),
     ...(injectedBy ? { injectedBy } : {}),
     ...(injectedMessageType ? { injectedMessageType } : {}),
     ...(message?.pluginMessage === true ? { pluginMessage: true } : {}),
-    ...(messageOrigin ? { messageOrigin } : {}),
   };
 }

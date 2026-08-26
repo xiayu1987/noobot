@@ -140,6 +140,16 @@ describe("workflow node message projection", () => {
         sessionId: "child-session",
         turnScopeId: "turn-1",
       },
+      {
+        id: "help-failure-control",
+        role: "user",
+        content: "工具调用已连续失败 3 次。若需要补充外部信息或排查方向，可调用 request_help 工具并传入求助内容。",
+        type: "context_control",
+        noobotInternalMessageType: "noobot.help_tool_failure_prompt",
+        chatPresentation: false,
+        sessionId: "child-session",
+        turnScopeId: "turn-1",
+      },
     ]);
     let messages;
     const wrapper = mount(

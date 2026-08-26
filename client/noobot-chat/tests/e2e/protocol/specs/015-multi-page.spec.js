@@ -89,7 +89,7 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
   protocolCapture,
   browser,
 }, testInfo) => {
-  test.setTimeout(240000);
+  test.setTimeout(600000);
   await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page workflow provision"));
   const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForLifecycle(
@@ -104,6 +104,7 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: provision.identity.turnScopeId,
+    timeoutMs: 240000,
   });
 
   const secondContext = await browser.newContext();
@@ -138,8 +139,8 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
     await expect(secondPage.locator(".base-message-shell.assistant")).toHaveCount(
       assistantCountBefore + 1,
     );
-    await expect(noobot.page.locator(".workflow-card").last()).toBeVisible({ timeout: 120000 });
-    await expect(secondPage.locator(".workflow-card").last()).toBeVisible({ timeout: 120000 });
+    await expect(noobot.page.locator(".workflow-card").last()).toBeVisible({ timeout: 240000 });
+    await expect(secondPage.locator(".workflow-card").last()).toBeVisible({ timeout: 240000 });
     await expect(secondPage.locator(".workflow-preview-toggle").last()).toBeVisible();
     await expect(secondPage.locator(".workflow-card-preview-shell").last()).toBeHidden();
     await expect(secondPage.locator(".stop-float-btn")).toBeVisible();

@@ -12,6 +12,7 @@ import {
 import { normalizeAgentContextIdentity } from "./identity.js";
 import { assertValidAgentContextEnvelope } from "./validation.js";
 import { createContextBuildReceipt } from "../assembly/build-receipt.js";
+import { normalizeUserMetaBackwrites } from "../policy/user-meta-backwrite.js";
 
 function plainObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
@@ -41,6 +42,7 @@ export function createAgentContextBuildEnvelope({
   messageBlocks = {},
   contextBuild = {},
   checkpointRevision = 0,
+  userMetaBackwrites = [],
 } = {}) {
   const normalizedIdentity = normalizeAgentContextIdentity(identity);
   const blocks = {
@@ -66,6 +68,7 @@ export function createAgentContextBuildEnvelope({
     modelContext: {
       protocolVersion: MODEL_CONTEXT_PROTOCOL_VERSION,
       checkpointRevision,
+      userMetaBackwrites: normalizeUserMetaBackwrites(userMetaBackwrites),
       activeTurnIdentity: {
         dialogProcessId: normalizedIdentity.dialogProcessId,
         turnScopeId: normalizedIdentity.turnScopeId,

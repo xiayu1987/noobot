@@ -28,7 +28,11 @@ function buildCurrentContext(ctx = {}, messages = []) {
     if (!identity) throw new TypeError("Harness auxiliary message requires sequence identity");
     if (identity.kind === AUXILIARY_SEQUENCE_MESSAGE_KIND.REQUEST) {
       messageBlocks.incremental.push(message);
-    } else if (String(message?.role || "").trim().toLowerCase() === "system") {
+    } else if (
+      String(message?.role || "")
+        .trim()
+        .toLowerCase() === "system"
+    ) {
       messageBlocks.system.push(message);
     } else {
       messageBlocks.history.push(message);

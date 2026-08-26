@@ -17,7 +17,7 @@ import { createModelContext } from "@noobot/context-protocol";
 function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}) {
   return {
     ...ctx,
-    contextProtocolVersion: 2,
+    contextProtocolVersion: 3,
     modelContext: createModelContext({ messages, messageBlocks }),
   };
 }
@@ -87,12 +87,21 @@ test("harness capability hook can force inject system message in mid hooks", asy
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u5",
-    sessionId: "s5",
-    dialogProcessId: "dp5",
-    calls: [{ name: "wait", args: { seconds: 1 } }],
-  }, { messageBlocks: { system: [{ role: "system", content: "existing system message" }], history: [], incremental: [] } });
+  const ctx = withModelContext(
+    {
+      userId: "u5",
+      sessionId: "s5",
+      dialogProcessId: "dp5",
+      calls: [{ name: "wait", args: { seconds: 1 } }],
+    },
+    {
+      messageBlocks: {
+        system: [{ role: "system", content: "existing system message" }],
+        history: [],
+        incremental: [],
+      },
+    },
+  );
 
   await hookManager.emit("agent.before_tool_calls", ctx);
   assert.equal(ctx.modelContext.messageBlocks.system.length, 2);
@@ -126,38 +135,44 @@ test("harness capability hook can take over and remove agent internal forced mes
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u6",
-    sessionId: "s6",
-    dialogProcessId: "dp6",
-    agentContext: {
-      payload: {
-        harness: {
-          planText: "1. 已有主计划",
-          taskChecklist: [{ index: 1, task: "已有主计划" }],
-          state: {
-            flags: { planningCaptured: true, planningPromptInjected: true },
+  const ctx = withModelContext(
+    {
+      userId: "u6",
+      sessionId: "s6",
+      dialogProcessId: "dp6",
+      agentContext: {
+        payload: {
+          harness: {
+            planText: "1. 已有主计划",
+            taskChecklist: [{ index: 1, task: "已有主计划" }],
+            state: {
+              flags: { planningCaptured: true, planningPromptInjected: true },
+            },
           },
         },
       },
     },
-  }, { messages: [
-      {
-        role: "user",
-        content: "internal retry prompt",
-        additional_kwargs: {
-          noobotInternalMessageType: "tool_choice_required_retry_prompt",
+    {
+      messages: [
+        {
+          role: "user",
+          content: "internal retry prompt",
+          additional_kwargs: {
+            noobotInternalMessageType: "tool_choice_required_retry_prompt",
+          },
         },
-      },
-      { role: "user", content: "real user message" },
-    ] });
+        { role: "user", content: "real user message" },
+      ],
+    },
+  );
 
   await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(ctx.modelContext.messages.length, 2);
   assert.match(String(ctx.modelContext.messages[0]?.content || ""), /harness-replace-retry-prompt/);
   assert.equal(
     ctx.modelContext.messages.some(
-      (msg) => msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
+      (msg) =>
+        msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
     ),
     false,
   );
@@ -186,25 +201,30 @@ test("harness message takeover keeps system context before injected ctx messages
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u7",
-    sessionId: "s7",
-    dialogProcessId: "dp7",
-    agentContext: {
-      payload: {
-        harness: {
-          planText: "1. 已有主计划",
-          taskChecklist: [{ index: 1, task: "已有主计划" }],
-          state: {
-            flags: { planningCaptured: true, planningPromptInjected: true },
+  const ctx = withModelContext(
+    {
+      userId: "u7",
+      sessionId: "s7",
+      dialogProcessId: "dp7",
+      agentContext: {
+        payload: {
+          harness: {
+            planText: "1. 已有主计划",
+            taskChecklist: [{ index: 1, task: "已有主计划" }],
+            state: {
+              flags: { planningCaptured: true, planningPromptInjected: true },
+            },
           },
         },
       },
     },
-  }, { messages: [
-      { role: "system", content: "system context" },
-      { role: "user", content: "real user message" },
-    ] });
+    {
+      messages: [
+        { role: "system", content: "system context" },
+        { role: "user", content: "real user message" },
+      ],
+    },
+  );
 
   await hookManager.emit("agent.before_llm_call", ctx);
   assert.equal(ctx.modelContext.messages[0]?.content, "system context");
@@ -235,26 +255,32 @@ test("harness ctx message takeover writes through message store views", async ()
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u8",
-    sessionId: "s8",
-    dialogProcessId: "dp8",
-    agentContext: {
-      payload: {
-        harness: {
-          planText: "1. 已有主计划",
-          taskChecklist: [{ index: 1, task: "已有主计划" }],
-          state: {
-            flags: { planningCaptured: true, planningPromptInjected: true },
+  const ctx = withModelContext(
+    {
+      userId: "u8",
+      sessionId: "s8",
+      dialogProcessId: "dp8",
+      agentContext: {
+        payload: {
+          harness: {
+            planText: "1. 已有主计划",
+            taskChecklist: [{ index: 1, task: "已有主计划" }],
+            state: {
+              flags: { planningCaptured: true, planningPromptInjected: true },
+            },
           },
         },
       },
     },
-  }, { messages: [{ role: "user", content: "real user message" }], messageBlocks: {
-      system: [],
-      history: [],
-      incremental: [{ role: "user", content: "real user message" }],
-    } });
+    {
+      messages: [{ role: "user", content: "real user message" }],
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [{ role: "user", content: "real user message" }],
+      },
+    },
+  );
 
   await hookManager.emit("agent.before_llm_call", ctx);
 
@@ -291,19 +317,25 @@ test("harness agent system takeover does not write ctx message store", async () 
     },
   );
 
-  const ctx = withModelContext({
-    userId: "u9",
-    sessionId: "s9",
-    dialogProcessId: "dp9",
-    agentContext: { payload: {} },
-  }, { messages: [
-      { role: "system", content: "existing system message" },
-      { role: "user", content: "real user message" },
-    ], messageBlocks: {
-      system: [{ role: "system", content: "existing system message" }],
-      history: [],
-      incremental: [{ role: "user", content: "real user message" }],
-    } });
+  const ctx = withModelContext(
+    {
+      userId: "u9",
+      sessionId: "s9",
+      dialogProcessId: "dp9",
+      agentContext: { payload: {} },
+    },
+    {
+      messages: [
+        { role: "system", content: "existing system message" },
+        { role: "user", content: "real user message" },
+      ],
+      messageBlocks: {
+        system: [{ role: "system", content: "existing system message" }],
+        history: [],
+        incremental: [{ role: "user", content: "real user message" }],
+      },
+    },
+  );
 
   await hookManager.emit("agent.before_tool_calls", ctx);
 
@@ -344,23 +376,14 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
     role: "user",
     content: "<!-- harness-existing-note -->\nexisting takeover note",
   };
-  const ctx = withModelContext({
-    userId: "u10",
-    sessionId: "s10",
-    dialogProcessId: "dp10",
-  }, { messages: [
-      {
-        role: "user",
-        content: "internal retry prompt",
-        additional_kwargs: {
-          noobotInternalMessageType: "tool_choice_required_retry_prompt",
-        },
-      },
-      existingInjected,
-    ], messageBlocks: {
-      system: [],
-      history: [],
-      incremental: [
+  const ctx = withModelContext(
+    {
+      userId: "u10",
+      sessionId: "s10",
+      dialogProcessId: "dp10",
+    },
+    {
+      messages: [
         {
           role: "user",
           content: "internal retry prompt",
@@ -370,7 +393,22 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
         },
         existingInjected,
       ],
-    } });
+      messageBlocks: {
+        system: [],
+        history: [],
+        incremental: [
+          {
+            role: "user",
+            content: "internal retry prompt",
+            additional_kwargs: {
+              noobotInternalMessageType: "tool_choice_required_retry_prompt",
+            },
+          },
+          existingInjected,
+        ],
+      },
+    },
+  );
 
   await hookManager.emit("agent.before_llm_call", ctx);
 
@@ -379,7 +417,8 @@ test("harness ctx message takeover syncs store when removal dedupes injection", 
   assert.ok(ctx.modelContext.messages[0]?.additional_kwargs?.noobotMessageId);
   assert.equal(
     ctx.modelContext.messages.some(
-      (msg) => msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
+      (msg) =>
+        msg?.additional_kwargs?.noobotInternalMessageType === "tool_choice_required_retry_prompt",
     ),
     false,
   );
