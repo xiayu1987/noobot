@@ -52,10 +52,22 @@ async function prepareMigration({ legacyPath, currentPath, render }) {
   return { currentPath, content: `${content}\n` };
 }
 
+async function prepareEmptyShortMemoryRepair(basePath = "") {
+  const currentPath = path.join(basePath, "memory", "short-memory.json");
+  if (!(await pathExists(currentPath))) return null;
+  const content = await readFile(currentPath, "utf8");
+  if (String(content || "").trim()) return null;
+  return {
+    currentPath,
+    content: '{\n  "items": []\n}\n',
+  };
+}
+
 export async function migrateLegacyMemoryFiles(basePath = "") {
   const memoryDir = path.join(basePath, "memory");
   const migrations = (
     await Promise.all([
+      prepareEmptyShortMemoryRepair(basePath),
       prepareMigration({
         legacyPath: path.join(memoryDir, "long-memory.json"),
         currentPath: path.join(memoryDir, "long-memory.md"),

@@ -91,7 +91,7 @@ test("concurrent workspace initialization serializes template synchronization", 
   try {
     await mkdir(fixture.userPath, { recursive: true });
     await writeFile(path.join(fixture.workspaceTemplatePath, "config.example.json"), "{}\n");
-    await writeFile(path.join(fixture.userPath, "config.example.json"), "{\"stale\":true}\n");
+    await writeFile(path.join(fixture.userPath, "config.example.json"), '{"stale":true}\n');
 
     const initialized = await Promise.all(
       Array.from({ length: 20 }, () =>
@@ -161,6 +161,30 @@ test("workspace initialization migrates legacy long memory before template synch
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "long-memory", "metadata.md"), "utf8"),
       'M1 key="style" value="concise"\n',
+    );
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("workspace initialization repairs an empty short-memory document", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(fixture.userPath, { recursive: true });
+    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
+    await writeFile(path.join(fixture.userPath, "memory", "short-memory.json"), "\n");
+
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    assert.deepEqual(
+      JSON.parse(
+        await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
+      ),
+      { items: [] },
     );
   } finally {
     await fixture.restore();
