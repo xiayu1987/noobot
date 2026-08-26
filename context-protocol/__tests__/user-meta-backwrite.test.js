@@ -31,5 +31,8 @@ test("user_meta backwrite rejects duplicate attachment relations", () => {
     attachmentRef: "attachment:v1:s1/user/a1",
     result: { sourceAttachmentRef: "attachment:v1:s1/user/a1" },
   };
-  assert.throws(() => normalizeUserMetaBackwrites([record, record]), /duplicate user_meta backwrite/);
+  assert.throws(
+    () => normalizeUserMetaBackwrites([record, record]),
+    /duplicate user_meta backwrite/,
+  );
 });

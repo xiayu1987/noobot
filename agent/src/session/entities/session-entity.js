@@ -162,14 +162,23 @@ function applyMessageInjection(target, message) {
   if (injectedMessageType) target.injectedMessageType = injectedMessageType;
 }
 
-function applyMessagePresentation(target, message) {
+function applyMessageOrigin(target, message) {
   const origin = String(message?.messageOrigin || "")
     .trim()
     .toLowerCase();
   if (origin === "natural" || origin === "internal") target.messageOrigin = origin;
+}
+
+function applyUserMetaMaterialized(target, message) {
   if (target.role === "user") target.userMetaMaterialized = message?.userMetaMaterialized === true;
+}
+
+function applyPresentationIdentity(target, message) {
   const presentationMessageId = String(message?.presentationMessageId || "").trim();
   if (presentationMessageId) target.presentationMessageId = presentationMessageId;
+}
+
+function applyChatPresentation(target, message) {
   if (typeof message?.chatPresentation === "boolean") {
     target.chatPresentation = message.chatPresentation;
   } else if (target.type === "context_control") {
@@ -178,12 +187,27 @@ function applyMessagePresentation(target, message) {
     // persisted by the turn message service.
     target.chatPresentation = false;
   }
+}
+
+function applyMessageTimelines(target, message) {
   if (Array.isArray(message?.activityTimeline)) target.activityTimeline = message.activityTimeline;
   if (Array.isArray(message?.toolTimeline)) target.toolTimeline = message.toolTimeline;
+}
+
+function applyMessageMonotonicity(target, message) {
   if (message?.isMonotonic === true || message?.monotonic === true) {
     target.isMonotonic = true;
     target.monotonic = true;
   }
+}
+
+function applyMessagePresentation(target, message) {
+  applyMessageOrigin(target, message);
+  applyUserMetaMaterialized(target, message);
+  applyPresentationIdentity(target, message);
+  applyChatPresentation(target, message);
+  applyMessageTimelines(target, message);
+  applyMessageMonotonicity(target, message);
 }
 
 function applyMessageRuntimeFields(target, message) {

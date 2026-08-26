@@ -8,6 +8,87 @@ import { normalizeWorkflowTransferPayload } from "../hooks/attachments.js";
 import { resolveSemanticNodeForPendingStep } from "../hooks/node-agent.js";
 import { resolveWorkflowNodeDialogProcessId } from "../node-dialog-process-id.js";
 
+function text(value) {
+  return String(value || "").trim();
+}
+
+function finiteNumber(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : undefined;
+}
+
+function nodeExecutionId(item = {}) {
+  return text(item?.nodeIdentity?.nodeExecutionId || item?.nodeExecutionId);
+}
+
+function resolveNodeState(nodeStates, item) {
+  return nodeStates.get(nodeExecutionId(item)) || {};
+}
+
+function resolveNodeSemantic(semantic, item) {
+  return resolveSemanticNodeForPendingStep({ semantic, pendingStep: item?.step || {} });
+}
+
+function resolveAttemptExecutionIds(nodeState) {
+  return Array.isArray(nodeState?.attemptExecutionIds)
+    ? nodeState.attemptExecutionIds.map(text).filter(Boolean)
+    : [];
+}
+
+function resolveFailure(value) {
+  return value && typeof value === "object" ? value : null;
+}
+
+function buildNodeSessionRecord({ ctx, item, nodeState, semanticNode }) {
+  const step = item?.step || {};
+  return {
+    transition: Number(item?.transition || 0),
+    workflowRunId: text(nodeState?.workflowRunId || item?.workflowRunId),
+    nodeExecutionId: text(nodeState?.nodeExecutionId || item?.nodeExecutionId),
+    commandId: text(nodeState?.commandId || item?.commandId),
+    turnScopeId: text(nodeState?.turnScopeId || item?.turnScopeId),
+    parentSessionId: text(ctx?.sessionId),
+    nodeName: text(step?.nodeName || semanticNode?.name),
+    nodeId: text(step?.nodeId || semanticNode?.id),
+    nodeType: finiteNumber(step?.nodeType),
+    actionNodeStateId: text(item?.actionNodeStateId || step?.actionNodeStateId),
+    stepId: text(item?.stepId || step?.stepId),
+    stepIndex: finiteNumber(item?.stepIndex ?? step?.stepIndex),
+    type: text(semanticNode?.type),
+    stateType: finiteNumber(semanticNode?.stateType),
+    rootSessionId: text(ctx?.sessionId),
+    dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
+    agentDialogProcessId: text(nodeState?.agentDialogProcessId || item?.agentDialogProcessId),
+    sessionId: text(nodeState?.nodeSessionId || item?.nodeSessionId),
+    activeChildExecutionId: text(nodeState?.activeChildExecutionId),
+    attemptExecutionIds: resolveAttemptExecutionIds(nodeState),
+    status: text(nodeState?.status),
+    failure: resolveFailure(nodeState?.failure),
+    revision: Number(nodeState?.revision || 0),
+    sequence: Number(nodeState?.sequence || 0),
+    eventId: text(nodeState?.eventId),
+    startedAt: text(nodeState?.startedAt),
+    completedAt: text(nodeState?.completedAt),
+    updatedAt: text(nodeState?.updatedAt),
+    transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
+      ? item.nodeResultTransferEnvelopes
+      : [],
+    stepFailure: resolveFailure(item?.stepFailure),
+    parallelWave: Number(item?.parallelWave || 0),
+    waveOrder: Number(item?.waveOrder || 0),
+  };
+}
+
+function hasNodeSessionIdentity(item) {
+  return Boolean(
+    item.dialogProcessId ||
+    item.sessionId ||
+    item.stepId ||
+    item.actionNodeStateId ||
+    item.nodeId ||
+    item.nodeName,
+  );
+}
+
 export function buildWorkflowNodeSessions({
   ctx = {},
   semantic = {},
@@ -21,75 +102,14 @@ export function buildWorkflowNodeSessions({
   );
   return (Array.isArray(nodeAgentRuns) ? nodeAgentRuns : [])
     .map((item = {}) => {
-      const nodeState =
-        nodeStates.get(
-          String(item?.nodeIdentity?.nodeExecutionId || item?.nodeExecutionId || "").trim(),
-        ) || {};
-      const semanticNode = resolveSemanticNodeForPendingStep({
-        semantic,
-        pendingStep: item?.step || {},
+      return buildNodeSessionRecord({
+        ctx,
+        item,
+        nodeState: resolveNodeState(nodeStates, item),
+        semanticNode: resolveNodeSemantic(semantic, item),
       });
-      return {
-        transition: Number(item?.transition || 0),
-        workflowRunId: String(nodeState?.workflowRunId || item?.workflowRunId || "").trim(),
-        nodeExecutionId: String(nodeState?.nodeExecutionId || item?.nodeExecutionId || "").trim(),
-        commandId: String(nodeState?.commandId || item?.commandId || "").trim(),
-        turnScopeId: String(nodeState?.turnScopeId || item?.turnScopeId || "").trim(),
-        parentSessionId: String(ctx?.sessionId || "").trim(),
-        nodeName: String(item?.step?.nodeName || semanticNode?.name || "").trim(),
-        nodeId: String(item?.step?.nodeId || semanticNode?.id || "").trim(),
-        nodeType: Number.isFinite(Number(item?.step?.nodeType))
-          ? Number(item.step.nodeType)
-          : undefined,
-        actionNodeStateId: String(
-          item?.actionNodeStateId || item?.step?.actionNodeStateId || "",
-        ).trim(),
-        stepId: String(item?.stepId || item?.step?.stepId || "").trim(),
-        stepIndex: Number.isFinite(Number(item?.stepIndex ?? item?.step?.stepIndex))
-          ? Number(item?.stepIndex ?? item?.step?.stepIndex)
-          : undefined,
-        type: String(semanticNode?.type || "").trim(),
-        stateType:
-          semanticNode && Number.isFinite(Number(semanticNode?.stateType))
-            ? Number(semanticNode.stateType)
-            : undefined,
-        rootSessionId: String(ctx?.sessionId || "").trim(),
-        dialogProcessId: resolveWorkflowNodeDialogProcessId(item),
-        agentDialogProcessId: String(
-          nodeState?.agentDialogProcessId || item?.agentDialogProcessId || "",
-        ).trim(),
-        sessionId: String(nodeState?.nodeSessionId || item?.nodeSessionId || "").trim(),
-        activeChildExecutionId: String(nodeState?.activeChildExecutionId || "").trim(),
-        attemptExecutionIds: Array.isArray(nodeState?.attemptExecutionIds)
-          ? nodeState.attemptExecutionIds.map((value) => String(value || "").trim()).filter(Boolean)
-          : [],
-        status: String(nodeState?.status || "").trim(),
-        failure:
-          nodeState?.failure && typeof nodeState.failure === "object" ? nodeState.failure : null,
-        revision: Number(nodeState?.revision || 0),
-        sequence: Number(nodeState?.sequence || 0),
-        eventId: String(nodeState?.eventId || "").trim(),
-        startedAt: String(nodeState?.startedAt || "").trim(),
-        completedAt: String(nodeState?.completedAt || "").trim(),
-        updatedAt: String(nodeState?.updatedAt || "").trim(),
-        transferEnvelopes: Array.isArray(item?.nodeResultTransferEnvelopes)
-          ? item.nodeResultTransferEnvelopes
-          : [],
-        stepFailure:
-          item?.stepFailure && typeof item.stepFailure === "object" ? item.stepFailure : null,
-        parallelWave: Number(item?.parallelWave || 0),
-        waveOrder: Number(item?.waveOrder || 0),
-      };
     })
-    .filter(
-      (item) =>
-        item.dialogProcessId ||
-        item.sessionId ||
-        item.stepId ||
-        item.actionNodeStateId ||
-        item.nodeId ||
-        item.nodeName,
-    );
+    .filter(hasNodeSessionIdentity);
 }
 
 export function resolveWorkflowTransferEnvelopesFromNodeRuns(nodeAgentRuns = []) {

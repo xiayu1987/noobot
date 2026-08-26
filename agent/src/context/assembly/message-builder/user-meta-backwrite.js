@@ -33,7 +33,9 @@ export function queueUserMetaBackwrite(
   { attachmentRef = "", result = {}, createdAt = "" } = {},
 ) {
   const sourceMessageUid = String(runtime?.currentUserMessageUid || "").trim();
-  const sourceOrigin = String(runtime?.currentUserMessageOrigin || "").trim().toLowerCase();
+  const sourceOrigin = String(runtime?.currentUserMessageOrigin || "")
+    .trim()
+    .toLowerCase();
   if (!sourceMessageUid || sourceOrigin !== "natural") {
     throw new Error("user_meta backwrite requires the current natural user message");
   }

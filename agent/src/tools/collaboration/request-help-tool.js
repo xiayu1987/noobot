@@ -218,6 +218,17 @@ function resolveHelpModelSpec({
     if (!spec) throw new Error(`configured help model not found: ${configuredHelpModel}`);
     return spec;
   }
+  const activeModel = runtime?.modelHost?.modelSpec || runtime?.modelSpec;
+  const activeModelName = normalizeName(activeModel?.alias || activeModel?.model);
+  if (activeModelName) {
+    const spec = resolveModelSpecByName({
+      modelName: activeModelName,
+      globalConfig,
+      userConfig,
+    });
+    if (!spec) throw new Error(`active help model not found: ${activeModelName}`);
+    return spec;
+  }
   const runtimeModel = normalizeName(runtime?.runtimeModel || "");
   if (runtimeModel) {
     const spec = resolveModelSpecByName({

@@ -245,9 +245,19 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   );
   const events = toolEventsForTurn(records, command.identity.turnScopeId);
   const { calls, results } = assertCanonicalToolPairs(events, EXPECTED_TOOLS);
-  await assertFileMutationArtifacts(noobot.page, records, command.identity.turnScopeId, generatedFilePath);
+  await assertFileMutationArtifacts(
+    noobot.page,
+    records,
+    command.identity.turnScopeId,
+    generatedFilePath,
+  );
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
-  await assertFileMutationArtifacts(noobot.page, records, command.identity.turnScopeId, generatedFilePath);
+  await assertFileMutationArtifacts(
+    noobot.page,
+    records,
+    command.identity.turnScopeId,
+    generatedFilePath,
+  );
   const interactionCall = calls.find((event) => event.data?.tool === "user_interaction");
   const interactionResult = results.find(
     (event) => event.data?.toolCallId === interactionCall.data?.toolCallId,
@@ -303,11 +313,9 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     completedProjectionBeforeRefresh.map(({ event }) => event),
   );
   const detailProjection = await assertThinkingDetailsDrawer(noobot.page, EXPECTED_TOOLS.length);
-  expect(
-    detailProjection
-      .slice(-REALTIME_EXECUTION_WINDOW_SIZE)
-    .map(({ event }) => event),
-  ).toEqual(completedProjectionAfterRefresh.map(({ event }) => event));
+  expect(detailProjection.slice(-REALTIME_EXECUTION_WINDOW_SIZE).map(({ event }) => event)).toEqual(
+    completedProjectionAfterRefresh.map(({ event }) => event),
+  );
 });
 
 test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", async ({

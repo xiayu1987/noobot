@@ -78,6 +78,7 @@ export async function installE2eModelPreferences(pageOrContext) {
 
 async function writeJsonLines(filePath, records) {
   const body = records.map((record) => JSON.stringify(record)).join("\n");
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, body ? `${body}\n` : "", "utf8");
 }
 
@@ -140,6 +141,7 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
   });
   const tracesPath = path.join(outputDir, "model-invocations.jsonl");
   const auditPath = path.join(outputDir, "model-observation-audit.json");
+  await fs.mkdir(outputDir, { recursive: true });
   await writeJsonLines(tracesPath, traces);
   await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
   await testInfo.attach("model-invocations.jsonl", {
@@ -172,6 +174,7 @@ async function auditSessionSummaryPersistence({ userId, sessionId, expectation, 
       failure: String(error?.message || error),
     };
     const auditPath = path.join(outputDir, "session-summary-artifact-audit.json");
+    await fs.mkdir(outputDir, { recursive: true });
     await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
     await testInfo.attach("session-summary-artifact-audit.json", {
       path: auditPath,
@@ -180,6 +183,7 @@ async function auditSessionSummaryPersistence({ userId, sessionId, expectation, 
     throw error;
   }
   const auditPath = path.join(outputDir, "session-summary-artifact-audit.json");
+  await fs.mkdir(outputDir, { recursive: true });
   await fs.writeFile(auditPath, `${JSON.stringify(audit, null, 2)}\n`, "utf8");
   await testInfo.attach("session-summary-artifact-audit.json", {
     path: auditPath,

@@ -118,10 +118,7 @@ test("workflow hook passes planned user attachments to node sub-session", async 
   const nodeSystemMessages = String((subSessionCalls[0]?.systemMessages || []).join("\n\n"));
   assert.match(nodeSystemMessages, /用户原始附件/);
   assert.match(nodeSystemMessages, /合同\.pdf/);
-  assert.match(
-    nodeSystemMessages,
-    /attachment:v1:s-input-att\/user\/att-user-1/,
-  );
+  assert.match(nodeSystemMessages, /attachment:v1:s-input-att\/user\/att-user-1/);
   assert.doesNotMatch(nodeSystemMessages, /workspace|attachments\/s-input-att/);
 
   const semanticPrompt = String(semanticRequestMessages[0]?.content || "");

@@ -238,6 +238,9 @@ function createToolCallExecutionState(options = {}) {
     userId: optionValue(options.userId, ""),
     sessionId: optionValue(options.sessionId, ""),
     parentSessionId: optionValue(options.parentSessionId, ""),
+    dialogProcessId: optionValue(options.dialogProcessId, ""),
+    turnScopeId: optionValue(options.turnScopeId, ""),
+    executionId: optionValue(options.executionId, ""),
     runtime: optionValue(options.runtime, {}),
     agentContext: optionValue(options.agentContext, null),
     toolStartedAtMs,
@@ -445,6 +448,10 @@ function logRecoverableToolError(state, error) {
     error,
     extra: {
       toolName: state.call?.name || "",
+      dialogProcessId: state.dialogProcessId,
+      turnScopeId: state.turnScopeId,
+      executionId: state.executionId,
+      toolCallId: resolveToolCallId(state.call),
       ...(normalizedCause ? { cause: normalizedCause } : {}),
     },
   });
