@@ -146,6 +146,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
         `The combined file size must be smaller than ${Number(params.maxSizeMB || 50)} MB`,
       "tools.multimodalParse.directTextUnsupported": (params = {}) =>
         `The following inputs are directly readable text and are outside multimodal parsing: ${String(params.inputs || "").trim()}. Use read_file or resource chunk reading.`,
+      "tools.multimodalParse.svgRasterizerUnavailable":
+        "The current environment has no SVG rasterizer, so the SVG cannot be parsed by a multimodal model.",
       "tools.multimodalParse.defaultPrompt":
         "Parse all files completely, preserve their original structure and key information, distinguish their contents by file, and do not fabricate content.",
       "tools.multimodalParse.modelNotFound":

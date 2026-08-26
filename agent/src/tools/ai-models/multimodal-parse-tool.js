@@ -24,7 +24,8 @@ import {
   formatAttachmentIdentityRef,
   projectAttachmentIdentity,
 } from "@noobot/attachment-protocol";
-import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE } from "../../shared/constants/index.js";
+import { EXTENSION_TO_MIME, DEFAULT_MIME_TYPE, MIME_TYPE } from "../../shared/constants/index.js";
+import { HAS_SHARP, getSharp } from "../../shared/utils/web/web2img/web2img-config.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { createFileInputSchema, isUserAttachment, resolveFileInput } from "../core/file-input.js";
@@ -48,6 +49,40 @@ function resolveMimeType(filePath = "", sourceAttachment = null) {
     EXTENSION_TO_MIME[path.extname(String(filePath || "")).toLowerCase()] ||
     DEFAULT_MIME_TYPE
   );
+}
+
+function resolveModelFileName(filePath = "", sourceAttachment = null, mimeType = "") {
+  const sourceName = String(sourceAttachment?.name || "").trim() || path.basename(filePath);
+  if (mimeType !== MIME_TYPE.IMAGE_PNG || !/\.svg$/i.test(sourceName)) return sourceName;
+  return sourceName.replace(/\.svg$/i, ".png");
+}
+
+async function buildModelAttachment({
+  filePath,
+  sourceAttachment = null,
+  mimeType = "",
+  runtime = null,
+} = {}) {
+  const sourceData = await readFile(filePath);
+  if (mimeType !== MIME_TYPE.IMAGE_SVG_XML) {
+    return {
+      mimeType,
+      data: `data:${mimeType};base64,${sourceData.toString("base64")}`,
+      fileName: resolveModelFileName(filePath, sourceAttachment, mimeType),
+    };
+  }
+  if (!HAS_SHARP) {
+    throw recoverableToolError(tTool(runtime, "tools.multimodalParse.svgRasterizerUnavailable"), {
+      code: ERROR_CODE.RECOVERABLE_UNSUPPORTED_FILE_TYPE,
+      details: { mimeType, fileName: sourceAttachment?.name || path.basename(filePath) },
+    });
+  }
+  const pngData = await getSharp()(sourceData).png().toBuffer();
+  return {
+    mimeType: MIME_TYPE.IMAGE_PNG,
+    data: `data:${MIME_TYPE.IMAGE_PNG};base64,${pngData.toString("base64")}`,
+    fileName: resolveModelFileName(filePath, sourceAttachment, MIME_TYPE.IMAGE_PNG),
+  };
 }
 
 function resolveConfiguredParseModel({
@@ -203,12 +238,12 @@ export function createMultimodalParseTool({ agentContext }) {
       const inputAttachments = await Promise.all(
         inputFiles.map(async (inputFile, index) => {
           const mimeType = inputMimeTypes[index];
-          return {
+          return buildModelAttachment({
+            filePath: inputFile,
+            sourceAttachment: sourceAttachmentMetas[index],
             mimeType,
-            data: `data:${mimeType};base64,${(await readFile(inputFile)).toString("base64")}`,
-            fileName:
-              String(sourceAttachmentMetas[index]?.name || "").trim() || path.basename(inputFile),
-          };
+            runtime,
+          });
         }),
       );
       const parsePrompt =
@@ -292,3 +327,5 @@ export function createMultimodalParseTool({ agentContext }) {
   });
   return [tool];
 }
+
+export { buildModelAttachment };
