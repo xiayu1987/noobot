@@ -11,10 +11,38 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { promisify } from "node:util";
+import { resolveEnvNamesByFormat } from "../scripts/project-launcher/provider.js";
 
 const execFileAsync = promisify(execFile);
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const launcherPath = path.resolve(testDir, "../scripts/project-launcher.js");
+
+test("project launcher maps model families to their provider credentials", () => {
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "qwen3.7-max"), {
+    apiKeyEnv: "DASHSCOPE_API_KEY",
+    baseUrlEnv: "DASHSCOPE_API_ADDRESS",
+  });
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "kimi-k3"), {
+    apiKeyEnv: "MOONSHOT_API_KEY",
+    baseUrlEnv: "MOONSHOT_API_ADDRESS",
+  });
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "glm-5.3"), {
+    apiKeyEnv: "ZAI_API_KEY",
+    baseUrlEnv: "ZAI_API_ADDRESS",
+  });
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "gemini-3.7-flash"), {
+    apiKeyEnv: "GEMINI_API_KEY",
+    baseUrlEnv: "GEMINI_API_ADDRESS",
+  });
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "deepseek-v4"), {
+    apiKeyEnv: "DEEPSEEK_API_KEY",
+    baseUrlEnv: "DEEPSEEK_API_ADDRESS",
+  });
+  assert.deepEqual(resolveEnvNamesByFormat("openai_compatible", "grok-4.6"), {
+    apiKeyEnv: "XAI_API_KEY",
+    baseUrlEnv: "XAI_API_ADDRESS",
+  });
+});
 
 const minimalGlobalExample = {
   workspace_root: "../workspace",

@@ -291,7 +291,7 @@
       "description": "xAI general-purpose reasoning, coding, and vision model",
       "multimodal_parsing": {
         "enabled": true,
-        "input_modalities": ["image"]
+        "input_modalities": ["image", "video"]
       },
       "multimodal_generation": {
         "support_generation": {
@@ -306,8 +306,7 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.7-max",
-      "format": "dashscope",
-      "preserve_thinking": false,
+      "format": "openai_compatible",
       "description": "Alibaba flagship Qwen model for complex reasoning and agentic work",
       "capabilities": {
         "web_search": true
@@ -329,8 +328,7 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.7-plus",
-      "format": "dashscope",
-      "preserve_thinking": false,
+      "format": "openai_compatible",
       "description": "Alibaba balanced Qwen model for general-purpose reasoning and coding",
       "multimodal_parsing": {
         "enabled": false,
@@ -349,8 +347,7 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.6-flash",
-      "format": "dashscope",
-      "preserve_thinking": false,
+      "format": "openai_compatible",
       "description": "Alibaba fast Qwen model for high-volume and cost-sensitive workloads",
       "multimodal_parsing": {
         "enabled": false,
@@ -369,8 +366,7 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.5-omni-plus",
-      "format": "dashscope",
-      "preserve_thinking": false,
+      "format": "openai_compatible",
       "description": "Alibaba omni model for image, audio, and video understanding",
       "multimodal_parsing": {
         "enabled": true,
@@ -394,6 +390,46 @@
       "multimodal_parsing": {
         "enabled": false,
         "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "glm_5_3": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${ZAI_API_KEY}",
+      "base_url": "${ZAI_API_ADDRESS}",
+      "model": "glm-5.3",
+      "format": "openai_compatible",
+      "reasoning_effort": "low",
+      "description": "Z.AI GLM-5.3 reasoning model (official OpenAI-compatible API)",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
+    "kimi_k3": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${MOONSHOT_API_KEY}",
+      "base_url": "${MOONSHOT_API_ADDRESS}",
+      "model": "kimi-k3",
+      "format": "openai_compatible",
+      "reasoning_effort": "low",
+      "description": "Moonshot Kimi K3 reasoning model (official OpenAI-compatible API)",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
       },
       "multimodal_generation": {
         "support_generation": {

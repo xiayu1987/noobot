@@ -56,7 +56,7 @@ async function initializeGlobalConfigWhenMissing({
   }
 
   const providerAlias = normalizeProviderAlias(answers.modelName);
-  const { apiKeyEnv, baseUrlEnv } = resolveEnvNamesByFormat(answers.format);
+  const { apiKeyEnv, baseUrlEnv } = resolveEnvNamesByFormat(answers.format, answers.modelName);
   const apiKeyTemplateValue = `\${${apiKeyEnv}}`;
   const baseUrlTemplateValue = `\${${baseUrlEnv}}`;
 

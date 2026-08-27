@@ -148,14 +148,6 @@ export function getRuntimeModelDefaultFields(modelSpec = {}) {
   if (
     String(modelSpec.format || "")
       .trim()
-      .toLowerCase() === "dashscope" &&
-    normalizeBoolean(modelSpec.enable_thinking, false)
-  ) {
-    Object.assign(defaults, formatDefaults.qwen_thinking || {});
-  }
-  if (
-    String(modelSpec.format || "")
-      .trim()
       .toLowerCase() === "openai_compatible" &&
     hasOwn(modelSpec, "top_p") &&
     !hasOwn(modelSpec, "temperature")
@@ -214,9 +206,6 @@ export function normalizeRuntimeModelSpec(input = {}) {
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
   Object.assign(defaults, resolveConcreteModelDefaults(out.model));
-  if (out.enable_thinking === true && out.modelFamily === "qwen") {
-    Object.assign(defaults, resolveConcreteModelDefaults("qwen3-thinking"));
-  }
   // OpenAI defines temperature and top_p as alternative sampling controls.
   // Apply this invariant after every default layer so a family default cannot
   // reintroduce temperature when the user selected top_p explicitly.
@@ -243,13 +232,6 @@ export function normalizeRuntimeModelSpec(input = {}) {
     const value = Math.floor(Number(out.max_tokens));
     if (value > 0) out.max_tokens = value;
     else delete out.max_tokens;
-  }
-  if (out.thinking_budget !== undefined) {
-    const value = Math.floor(Number(out.thinking_budget));
-    out.thinking_budget = Number.isFinite(value) ? Math.min(131072, Math.max(0, value)) : 0;
-  }
-  if (out.format === "dashscope") {
-    out.enable_thinking = normalizeBoolean(out.enable_thinking, false);
   }
   return out;
 }

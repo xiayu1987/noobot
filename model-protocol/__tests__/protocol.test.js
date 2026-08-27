@@ -50,7 +50,7 @@ test("model input processing keeps directly readable text out of multimodal pars
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 19);
+  assert.equal(options.length, 21);
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
@@ -66,6 +66,23 @@ test("model library exposes copy-safe provider templates", () => {
     options.some((item) => item.key === "gemini_3_7_flash"),
     true,
   );
+  assert.equal(
+    options.some((item) => item.key === "kimi_k3"),
+    true,
+  );
+  assert.equal(
+    options.some((item) => item.key === "glm_5_3"),
+    true,
+  );
+  assert.equal(resolveModelLibraryProvider("kimi_k3").model, "kimi-k3");
+  assert.equal(resolveModelLibraryProvider("kimi_k3").api_key, "${MOONSHOT_API_KEY}");
+  assert.deepEqual(resolveModelLibraryProvider("kimi_k3").multimodal_parsing.input_modalities, [
+    "image",
+    "video",
+  ]);
+  assert.equal(resolveModelLibraryProvider("glm_5_3").model, "glm-5.3");
+  assert.equal(resolveModelLibraryProvider("glm_5_3").reasoning_effort, "low");
+  assert.equal(resolveModelLibraryProvider("glm_5_3").multimodal_parsing.enabled, false);
   assert.equal(Object.isFrozen(options[0]), true);
 
   const first = resolveModelLibraryProvider("gemini_3_7_flash");
