@@ -30,6 +30,26 @@ const DEFAULT_I18N_KEYS = {
   downloadFailed: "common.downloadWorkspaceFileFailed",
 };
 
+const JSON_DOCUMENT_NAMES = new Set([
+  "config.json",
+  "config.example.json",
+  "config-params.json",
+]);
+
+function validateJsonDocumentWrite(relativePath, content) {
+  if (!JSON_DOCUMENT_NAMES.has(path.basename(relativePath))) return;
+  try {
+    JSON.parse(content);
+  } catch (error) {
+    const parseError = new Error(
+      `${path.basename(relativePath)} parse failed: ${error?.message || String(error)}`,
+    );
+    parseError.status = 400;
+    parseError.errorCode = "INVALID_JSON_DOCUMENT";
+    throw parseError;
+  }
+}
+
 export function registerFileCrudRoutes(
   app,
   {
@@ -201,6 +221,7 @@ export function registerFileCrudRoutes(
           error.status = 413;
           throw error;
         }
+        validateJsonDocumentWrite(relativePath, content);
         const root = await resolveRootPath(req);
         const absolutePath = resolveRequestFilePath(req, root, relativePath);
         const writeText = (target, value) => writeFileAtomic({
