@@ -14,7 +14,7 @@ import {
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 166,
+  clones: 168,
   duplicatedLines: 4410,
   percentage: 1.81962221,
 });
