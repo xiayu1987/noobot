@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import express from "express";
 import os from "node:os";
 import path from "node:path";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { registerFileCrudRoutes } from "../../routes/file-crud-routes.js";
 import { buildWorkspaceTree } from "../../services/workspace-tree-service.js";
 
@@ -157,6 +157,41 @@ test("file-crud-routes: allowAbsolutePath=true 时允许读取和写入 root 外
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
     await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("file-crud-routes: 拒绝写入非法 JSON 配置且保留原文件", async () => {
+  const app = express();
+  app.use(express.json());
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-json-guard-"));
+  const configPath = path.join(tempRoot, "admin", "config.json");
+  await mkdir(path.dirname(configPath), { recursive: true });
+  await writeFile(configPath, '{"valid":true}\n', "utf8");
+  registerFileCrudRoutes(app, {
+    routePrefix: "/internal/workspace/:userId",
+    resolveRootPath: (req) => path.join(tempRoot, String(req?.params?.userId || "").trim()),
+    buildWorkspaceTree: async () => ({ name: "root", children: [] }),
+    translateText: (key) => key,
+  });
+
+  try {
+    await withTestServer(app, async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/internal/workspace/admin/file`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          path: "config.json",
+          content: '{"first":1}{"second":2}',
+        }),
+      });
+      const payload = await response.json();
+      assert.equal(response.status, 400);
+      assert.equal(payload.ok, false);
+      assert.equal(payload.errorCode, "INVALID_JSON_DOCUMENT");
+      assert.equal(await readFile(configPath, "utf8"), '{"valid":true}\n');
+    });
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
   }
 });
 
