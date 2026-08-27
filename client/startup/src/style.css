@@ -9,6 +9,7 @@
   --startup-color-sky-300: #7dd3fc;
   --startup-color-sky-400: #38bdf8;
   --noobot-radius-xs: 8px;
+  --noobot-radius-compact: 6px;
   --noobot-radius-sm: 10px;
   --noobot-radius-md: 12px;
   --noobot-radius-lg: 16px;
@@ -173,7 +174,7 @@ p {
   min-height: 34px;
   height: 34px;
   border: 1px solid var(--startup-border-control);
-  border-radius: 6px;
+  border-radius: var(--noobot-radius-compact);
   background: var(--startup-surface-control);
   box-shadow: none;
   transition: border-color 0.18s ease, background-color 0.18s ease;
@@ -197,7 +198,7 @@ p {
 .startup-system-select-popper.el-select-dropdown {
   overflow: hidden;
   border: 1px solid var(--startup-border-control);
-  border-radius: 8px;
+  border-radius: var(--noobot-radius-xs);
   background: var(--startup-surface-control);
   box-shadow: 0 12px 28px color-mix(in srgb, var(--startup-color-ink-950) 42%, transparent);
 }

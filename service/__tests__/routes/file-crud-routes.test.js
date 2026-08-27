@@ -55,8 +55,7 @@ test("file-crud-routes: 支持基于 req 的根目录解析与自定义 tree 响
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-file-crud-user-test-"));
   registerFileCrudRoutes(app, {
     routePrefix: "/internal/workspace/:userId",
-    resolveRootPath: async (req) =>
-      path.join(tempRoot, String(req?.params?.userId || "").trim()),
+    resolveRootPath: async (req) => path.join(tempRoot, String(req?.params?.userId || "").trim()),
     buildWorkspaceTree: async () => ({ name: "user-root", children: [] }),
     translateText: (key) => key,
     responseBuilders: {
@@ -259,12 +258,14 @@ test("workspace tree excludes workspace mutation control directories", async () 
   try {
     await mkdir(path.join(tempRoot, "admin.mutation-lock", "nested"), { recursive: true });
     await mkdir(path.join(tempRoot, "admin"), { recursive: true });
-    assert.deepEqual(await buildWorkspaceTree(tempRoot), [{
-      label: "admin",
-      path: "admin",
-      type: "dir",
-      children: [],
-    }]);
+    assert.deepEqual(await buildWorkspaceTree(tempRoot), [
+      {
+        label: "admin",
+        path: "admin",
+        type: "dir",
+        children: [],
+      },
+    ]);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
