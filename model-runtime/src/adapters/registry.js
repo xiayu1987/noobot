@@ -3,11 +3,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { openAiCompatibleAdapter } from "./openai-compatible-adapter.js";
-import { dashscopeAdapter } from "./dashscope-adapter.js";
 
-export function createProviderAdapterRegistry(
-  adapters = [dashscopeAdapter, openAiCompatibleAdapter],
-) {
+export function createProviderAdapterRegistry(adapters = [openAiCompatibleAdapter]) {
   const byId = new Map();
   for (const adapter of adapters) {
     if (

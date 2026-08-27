@@ -6,7 +6,6 @@
 
 export const PROVIDER_FORMAT = {
   OPENAI_COMPATIBLE: "openai_compatible",
-  DASHSCOPE: "dashscope",
 };
 
 export const MODEL_PROVIDER_ID = {
@@ -14,13 +13,11 @@ export const MODEL_PROVIDER_ID = {
   ANTHROPIC: "anthropic",
   GEMINI: "gemini",
   DEEPSEEK: "deepseek",
-  DASHSCOPE: "dashscope",
   ZHIPU: "zhipu",
 };
 
 export const MODEL_ADAPTER_ID = {
   OPENAI_COMPATIBLE: "openai-compatible",
-  DASHSCOPE: "dashscope",
 };
 
 export const MCP_SERVER_TYPE = {
@@ -117,7 +114,6 @@ export function normalizeProviderFormat(input = "") {
     .trim()
     .toLowerCase();
   if (value === PROVIDER_FORMAT.OPENAI_COMPATIBLE) return PROVIDER_FORMAT.OPENAI_COMPATIBLE;
-  if (value === PROVIDER_FORMAT.DASHSCOPE) return PROVIDER_FORMAT.DASHSCOPE;
   return "";
 }
 

@@ -72,9 +72,6 @@ function gptVersion(name = "") {
 
 export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   const vendor = operatorId(spec);
-  const format = String(spec.format || "")
-    .trim()
-    .toLowerCase();
   const out = { ...(spec.extra_body || {}) };
   for (const key of [
     "prompt_cache_key",
@@ -127,16 +124,6 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     !(usesOpenAiPromptCacheProtocol(spec) && String(spec.model).toLowerCase().includes("gpt-5"))
   ) {
     out.top_p = spec.top_p;
-  }
-  if (format === "dashscope" || vendor === "alibaba" || vendor === "zhipu") {
-    for (const key of ["top_k", "min_p"]) {
-      if (spec[key] !== undefined) out[key] = spec[key];
-    }
-    if (spec.enable_thinking !== undefined) out.enable_thinking = spec.enable_thinking === true;
-    if (spec.preserve_thinking !== undefined) out.preserve_thinking = spec.preserve_thinking;
-    if (spec.thinking_budget !== undefined) {
-      out.thinking_budget = Math.max(0, Math.floor(Number(spec.thinking_budget) || 0));
-    }
   }
   return out;
 }

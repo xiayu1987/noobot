@@ -82,31 +82,21 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
 
-test("dashscope-compatible adapter applies non-thinking invocation overrides", () => {
+test("legacy DashScope model specs are migrated to OpenAI-compatible invocation", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
     modelSpec: {
       model: "qwen3.6-plus",
-      format: "dashscope",
-      operatorId: "dashscope",
-      adapterId: "dashscope",
+      format: "openai_compatible",
+      operatorId: "generic",
+      adapterId: "openai-compatible",
       base_url: "http://localhost",
-      preserve_thinking: true,
-      thinking_budget: 1024,
     },
   });
-  const bound = bindOpenAiCompatibleTools(
-    client,
-    [sdkTool],
-    {},
-    { preserve_thinking: false, thinking_budget: 0 },
-  );
+  const bound = bindOpenAiCompatibleTools(client, [sdkTool], {}, { reasoning_effort: "low" });
   const params = bound.invocationParams({});
 
-  assert.equal(client.invocationParams({}).preserve_thinking, true);
-  assert.equal(client.invocationParams({}).thinking_budget, 1024);
-  assert.equal(params.preserve_thinking, false);
-  assert.equal(params.thinking_budget, 0);
+  assert.equal(params.reasoning_effort, "low");
 });
 
 test("executor is the single attempt and retry authority", async () => {
@@ -222,6 +212,42 @@ test("non-streaming invocation never enables streaming during semantic retries",
   assert.deepEqual(streamingAttempts, [false, false]);
 });
 
+test("tool calls are not discarded when the provider also returns reasoning", async () => {
+  let calls = 0;
+  const adapter = {
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({
+      bindTools: function bindTools() {
+        return this;
+      },
+      invoke: async () => {
+        calls += 1;
+        return {
+          content: "",
+          additional_kwargs: { reasoning_content: "thinking" },
+          tool_calls: [{ id: "call_tool", name: "write_file", args: {} }],
+        };
+      },
+    }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+  });
+  const response = await port.invoke({
+    invocation,
+    model,
+    messages: [],
+    tools: [sdkTool],
+    options: { streaming: false },
+    policies: { retry: { reasoningOnly: { maxAttempts: 1 } } },
+  });
+  assert.equal(calls, 1);
+  assert.equal(response.output.toolCalls[0].id, "call_tool");
+});
+
 test("executor is the single model context trace authority at each provider attempt", async () => {
   const events = [];
   let attempts = 0;
@@ -279,7 +305,10 @@ test("executor is the single model context trace authority at each provider atte
 
 test("provider registry resolves only the explicit adapter identity", () => {
   const registry = createProviderAdapterRegistry();
-  assert.equal(registry.resolve({ adapterId: "dashscope", format: "dashscope" }).id, "dashscope");
+  assert.throws(
+    () => registry.resolve({ adapterId: "dashscope", format: "openai_compatible" }),
+    /unknown provider adapter/,
+  );
   assert.equal(
     registry.resolve({ adapterId: "openai-compatible", format: "openai_compatible" }).id,
     "openai-compatible",
@@ -291,7 +320,7 @@ test("provider registry resolves only the explicit adapter identity", () => {
   );
   assert.throws(
     () => registry.resolve({ adapterId: "dashscope", format: "openai_compatible" }),
-    /does not support format/,
+    /unknown provider adapter/,
   );
 });
 
@@ -379,7 +408,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
   assert.deepEqual(deepseek, {});
 
   const dashscope = compileProviderModelKwargs({
-    format: "dashscope",
+    format: "openai_compatible",
     operatorId: "dashscope",
     adapterId: "dashscope",
     model: "qwen-max",
@@ -388,11 +417,7 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     thinking_budget: 2000,
     extra_body: { prompt_cache_retention: "leak" },
   });
-  assert.deepEqual(dashscope, {
-    enable_thinking: true,
-    preserve_thinking: false,
-    thinking_budget: 2000,
-  });
+  assert.deepEqual(dashscope, {});
 });
 
 test("model defaults follow provider-specific sampling guidance", async () => {
@@ -424,7 +449,7 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
   const qwen = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
-    format: "dashscope",
+    format: "openai_compatible",
     operatorId: "dashscope",
     adapterId: "dashscope",
   });
@@ -434,15 +459,31 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
   const thinking = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
-    format: "dashscope",
+    format: "openai_compatible",
     operatorId: "dashscope",
     adapterId: "dashscope",
     enable_thinking: true,
   });
   assert.deepEqual(
     { temperature: thinking.temperature, top_p: thinking.top_p, top_k: thinking.top_k },
-    { temperature: 0.6, top_p: 0.95, top_k: 20 },
+    { temperature: 0.7, top_p: 0.8, top_k: 20 },
   );
+});
+
+test("reasoning effort remains controlled by model configuration", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const spec = normalizeRuntimeModelSpec({
+    model: "ZHIPU/GLM-5.3",
+    format: "openai_compatible",
+    preserve_thinking: false,
+    enable_thinking: false,
+    thinking_budget: 0,
+    reasoning_effort: "medium",
+  });
+  assert.equal(spec.reasoning_effort, "medium");
+  assert.equal(spec.enable_thinking, false);
+  assert.equal(spec.preserve_thinking, false);
+  assert.equal(spec.thinking_budget, 0);
 });
 
 test("multimodal generation transport remains an explicit configured fact", async () => {
@@ -467,10 +508,7 @@ test("multimodal generation transport remains an explicit configured fact", asyn
       },
     },
   });
-  assert.equal(
-    explicit.multimodal_generation.support_generation.api_type,
-    "openai_responses",
-  );
+  assert.equal(explicit.multimodal_generation.support_generation.api_type, "openai_responses");
 });
 
 test("model identity and defaults layer operator, family, concrete model, then explicit config", async () => {
@@ -489,7 +527,7 @@ test("model identity and defaults layer operator, family, concrete model, then e
 
   const explicit = normalizeRuntimeModelSpec({
     model: "qwen3-thinking",
-    format: "dashscope",
+    format: "openai_compatible",
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     enable_thinking: true,
     temperature: 0.2,
@@ -503,12 +541,13 @@ test("model identity and defaults layer operator, family, concrete model, then e
 
   const dashscopeGlm = normalizeRuntimeModelSpec({
     model: "ZHIPU/GLM-5.1",
-    format: "dashscope",
+    format: "openai_compatible",
     base_url: "https://api.zhipu.ai/v4",
   });
-  assert.equal(dashscopeGlm.operatorId, "alibaba");
+  assert.equal(dashscopeGlm.operatorId, "generic");
   assert.equal(dashscopeGlm.modelFamily, "glm");
-  assert.equal(dashscopeGlm.adapterId, "dashscope");
+  assert.equal(dashscopeGlm.adapterId, "openai-compatible");
+  assert.equal(dashscopeGlm.format, "openai_compatible");
 });
 
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
@@ -574,7 +613,11 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
 test("responses API and cache key selection are deterministic", () => {
   assert.equal(resolveUseResponsesApi({ format: "openai_compatible", model: "codex-mini" }), true);
   assert.equal(
-    resolveUseResponsesApi({ format: "dashscope", model: "qwen-max", use_responses_api: true }),
+    resolveUseResponsesApi({
+      format: "openai_compatible",
+      model: "qwen-max",
+      use_responses_api: true,
+    }),
     true,
   );
   assert.equal(resolveUseResponsesApi({ format: "openai_compatible", model: "gpt-5" }), false);

@@ -26,11 +26,44 @@ export function normalizeProviderAlias(modelName = "") {
   return /^[0-9]/.test(normalized) ? `model_${normalized}` : normalized;
 }
 
-export function resolveEnvNamesByFormat(format = "") {
-  if (format === "dashscope") {
+export function resolveEnvNamesByFormat(format = "", modelName = "") {
+  const model = String(modelName || "")
+    .trim()
+    .toLowerCase();
+  if (/\bqwen|qianwen\b/.test(model)) {
     return {
       apiKeyEnv: "DASHSCOPE_API_KEY",
       baseUrlEnv: "DASHSCOPE_API_ADDRESS",
+    };
+  }
+  if (/\bkimi\b|\bmoonshot\b/.test(model)) {
+    return {
+      apiKeyEnv: "MOONSHOT_API_KEY",
+      baseUrlEnv: "MOONSHOT_API_ADDRESS",
+    };
+  }
+  if (/\bglm\b|\bzhipu\b|\bz\.ai\b/.test(model)) {
+    return {
+      apiKeyEnv: "ZAI_API_KEY",
+      baseUrlEnv: "ZAI_API_ADDRESS",
+    };
+  }
+  if (/\bgemini\b|\bgoogle\b/.test(model)) {
+    return {
+      apiKeyEnv: "GEMINI_API_KEY",
+      baseUrlEnv: "GEMINI_API_ADDRESS",
+    };
+  }
+  if (/\bdeepseek\b/.test(model)) {
+    return {
+      apiKeyEnv: "DEEPSEEK_API_KEY",
+      baseUrlEnv: "DEEPSEEK_API_ADDRESS",
+    };
+  }
+  if (/\bgrok\b|\bxai\b|\bx\.ai\b/.test(model)) {
+    return {
+      apiKeyEnv: "XAI_API_KEY",
+      baseUrlEnv: "XAI_API_ADDRESS",
     };
   }
   return {
@@ -82,24 +115,6 @@ export function buildProviderFromTemplate({
         support_scope: [],
       },
     };
-  }
-
-  if (format === "dashscope") {
-    if (!hasOwnProperty(baseProvider, "enable_thinking")) {
-      baseProvider.enable_thinking = false;
-    }
-    if (!hasOwnProperty(baseProvider, "preserve_thinking")) {
-      baseProvider.preserve_thinking = false;
-    }
-    if (!hasOwnProperty(baseProvider, "thinking_budget")) {
-      baseProvider.thinking_budget = 0;
-    }
-    if (hasOwnProperty(baseProvider, "reasoning_effort")) {
-      delete baseProvider.reasoning_effort;
-    }
-    if (hasOwnProperty(baseProvider, "tool_reasoning_effort")) {
-      delete baseProvider.tool_reasoning_effort;
-    }
   }
 
   return baseProvider;

@@ -112,7 +112,9 @@ export function createModelRequestExecutor({
                   "X-Plugin-Purpose": invocation.purpose,
                   "X-Plugin-Domain": invocation.domain,
                   ...(invocation.sessionId ? { "X-Plugin-Session-Id": invocation.sessionId } : {}),
-                  ...(invocation.parentSessionId ? { parentSessionid: invocation.parentSessionId } : {}),
+                  ...(invocation.parentSessionId
+                    ? { parentSessionid: invocation.parentSessionId }
+                    : {}),
                   ...(requestBase.options.headers || {}),
                 },
                 signal: requestBase.options.signal,
@@ -279,7 +281,10 @@ export function createModelRequestExecutor({
           });
           continue;
         }
-        if (classifyReasoningOnly(result.value)) {
+        // A provider may include reasoning alongside a valid tool call. Tool
+        // calls are actionable model output and must reach the tool runner;
+        // only responses with no tool calls can be retried as reasoning-only.
+        if (classifyReasoningOnly(result.value) && output.toolCalls.length === 0) {
           if (semanticAttempts < retry.reasoningOnly.maxAttempts) {
             attempts.push({
               attempt: totalAttempts,

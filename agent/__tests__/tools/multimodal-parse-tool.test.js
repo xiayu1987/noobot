@@ -369,7 +369,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
         "parse-model": {
           enabled: true,
           model: "qwen3.5-omni-plus",
-          format: "dashscope",
+          format: "openai_compatible",
           multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },
         },
       },

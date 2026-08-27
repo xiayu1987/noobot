@@ -4,20 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
-import { normalizeProviderFormat, PROVIDER_FORMAT } from "@noobot/agent-config-protocol";
-
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
-  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
-  if (providerFormat === PROVIDER_FORMAT.OPENAI_COMPATIBLE) {
-    return { reasoning_effort: modelSpec?.tool_reasoning_effort || "low" };
-  }
-  if (providerFormat === PROVIDER_FORMAT.DASHSCOPE) {
-    return {
-      preserve_thinking: false,
-      thinking_budget: 0,
-    };
-  }
-  return {};
+  return {
+    reasoning_effort: modelSpec?.tool_reasoning_effort || modelSpec?.reasoning_effort || "low",
+  };
 }
 export function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -33,36 +23,10 @@ export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", m
   const normalizedToolChoice = String(toolChoice || "")
     .trim()
     .toLowerCase();
-  const providerFormat = normalizeProviderFormat(modelSpec?.format || "");
-  const hasEnableThinkingConfig = Object.prototype.hasOwnProperty.call(
-    modelSpec || {},
-    "enable_thinking",
-  );
-  const modelEnableThinking =
-    hasEnableThinkingConfig && typeof modelSpec?.enable_thinking === "boolean"
-      ? modelSpec.enable_thinking
-      : undefined;
   if (normalizedToolChoice === "required") {
-    return {
-      enable_thinking: false,
-      preserve_thinking: false,
-      thinking_budget: 0,
-    };
+    return { reasoning_effort: "low" };
   }
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) {
-    if (providerFormat === PROVIDER_FORMAT.DASHSCOPE && modelEnableThinking !== true) {
-      return {
-        enable_thinking: false,
-        preserve_thinking: false,
-        thinking_budget: 0,
-      };
-    }
-    return {};
-  }
-  return {
-    enable_thinking: false,
-    preserve_thinking: false,
-    thinking_budget: 0,
-  };
+  if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) return {};
+  return { reasoning_effort: "low" };
 }

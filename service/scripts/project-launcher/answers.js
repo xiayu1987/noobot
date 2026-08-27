@@ -78,7 +78,13 @@ export async function askInteractiveQuestions(cliOptions = {}) {
     output: process.stdout,
   });
 
-  async function ask({ locale = "zh", label, defaultValue = "", required = false, validator = null } = {}) {
+  async function ask({
+    locale = "zh",
+    label,
+    defaultValue = "",
+    required = false,
+    validator = null,
+  } = {}) {
     while (true) {
       const suffix = defaultValue ? t(locale, "defaultSuffix", { value: defaultValue }) : "";
       const answer = (await rl.question(`${label}${suffix}: `)).trim();
@@ -90,7 +96,9 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       if (typeof validator === "function") {
         const validationResult = validator(value);
         if (validationResult !== true) {
-          console.log(typeof validationResult === "string" ? validationResult : t(locale, "invalidInput"));
+          console.log(
+            typeof validationResult === "string" ? validationResult : t(locale, "invalidInput"),
+          );
           continue;
         }
       }
@@ -105,10 +113,12 @@ export async function askInteractiveQuestions(cliOptions = {}) {
     options = [],
     defaultValue = "",
   } = {}) {
-    const normalizedOptions = (Array.isArray(options) ? options : []).map((item) => ({
-      value: String(item?.value || "").trim(),
-      label: String(item?.label || item?.value || "").trim(),
-    })).filter((item) => item.value);
+    const normalizedOptions = (Array.isArray(options) ? options : [])
+      .map((item) => ({
+        value: String(item?.value || "").trim(),
+        label: String(item?.label || item?.value || "").trim(),
+      }))
+      .filter((item) => item.value);
     const optionMap = new Map(normalizedOptions.map((item) => [item.value, item.value]));
     const indexMap = new Map(normalizedOptions.map((item, idx) => [String(idx + 1), item.value]));
     const defaultNormalized = String(defaultValue || "").trim();
@@ -166,10 +176,7 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       locale: setupLocale,
       title: t(setupLocale, "chooseFormat"),
       hint: t(setupLocale, "chooseFormatHint"),
-      options: [
-        { value: "openai_compatible", label: "OpenAI-compatible API" },
-        { value: "dashscope", label: "DashScope" },
-      ],
+      options: [{ value: "openai_compatible", label: "OpenAI-compatible API" }],
       defaultValue: "openai_compatible",
     });
     const modelName = await ask({
