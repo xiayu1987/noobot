@@ -371,6 +371,21 @@ test("current config migration preserves active tool and runtime configuration",
   assert.deepEqual(migrateConfigFileToCurrentProtocol(config), config);
 });
 
+test("config migration normalizes persisted provider transport to the canonical format", () => {
+  const migrated = migrateConfigFileToCurrentProtocol({
+    providers: {
+      qwen: {
+        model: "qwen3.5-omni-plus",
+        format: "dashscope",
+        api_key: "${DASHSCOPE_API_KEY}",
+      },
+    },
+  });
+  assert.equal(migrated.providers.qwen.format, "openai_compatible");
+  assert.equal(migrated.providers.qwen.api_key, "${DASHSCOPE_API_KEY}");
+  assert.deepEqual(migrateConfigFileToCurrentProtocol(migrated), migrated);
+});
+
 test("config params document is the only values, descriptions, and catalog authority", () => {
   const document = normalizeConfigParamsDocument({
     values: { api_key: " key ", empty: "  " },
