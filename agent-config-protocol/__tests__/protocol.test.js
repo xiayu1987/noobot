@@ -386,6 +386,52 @@ test("config migration does not infer a replacement for an unsupported provider 
   assert.deepEqual(migrateConfigFileToCurrentProtocol(source), source);
 });
 
+test("config migration preserves an explicit DashScope GLM provider", () => {
+  const source = {
+    providers: {
+      glm_5_3: {
+        enabled: true,
+        used_for_conversation: true,
+        api_key: "${DASHSCOPE_API_KEY}",
+        base_url: "${DASHSCOPE_API_ADDRESS}",
+        model: "ZHIPU/GLM-5.3",
+        format: "openai_compatible",
+      },
+    },
+  };
+  assert.deepEqual(migrateConfigFileToCurrentProtocol(source), source);
+});
+
+test("config repair preserves an explicit DashScope GLM provider over the library default", () => {
+  const explicitProvider = {
+    enabled: true,
+    used_for_conversation: true,
+    api_key: "${DASHSCOPE_API_KEY}",
+    base_url: "${DASHSCOPE_API_ADDRESS}",
+    model: "ZHIPU/GLM-5.3",
+    format: "openai_compatible",
+  };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template: {
+      default_provider: "glm_5_3",
+      providers: {
+        ["glm_5_3"]: {
+          ...explicitProvider,
+          api_key: "${ZAI_API_KEY}",
+          base_url: "${ZAI_API_ADDRESS}",
+          model: "glm-5.3",
+        },
+      },
+    },
+    target: {
+      default_provider: "glm_5_3",
+      providers: { ["glm_5_3"]: explicitProvider },
+    },
+  });
+  assert.deepEqual(repaired.document.providers["glm_5_3"], explicitProvider);
+});
+
 test("config params document is the only values, descriptions, and catalog authority", () => {
   const document = normalizeConfigParamsDocument({
     values: { api_key: " key ", empty: "  " },
@@ -467,11 +513,11 @@ test("config params synchronization preserves stored keys and adds template keys
 
 test("template resolution has one explicit source order and unresolved policy", () => {
   const lookup = createConfigValueLookup(
-    { API_KEY: "environment" },
     { API_KEY: "params", REGION: "cn" },
+    { API_KEY: "environment" },
   );
   assert.deepEqual(resolveConfigTemplates({ key: "${API_KEY}", region: "${REGION}" }, { lookup }), {
-    key: "environment",
+    key: "params",
     region: "cn",
   });
   assert.equal(

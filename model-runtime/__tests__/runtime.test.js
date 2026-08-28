@@ -132,6 +132,30 @@ test("executor is the single attempt and retry authority", async () => {
   assert.equal(result.execution.attemptCount, 2);
 });
 
+test("executor observation protocol cannot be overridden with model credentials", async () => {
+  const events = [];
+  const adapter = {
+    id: "openai-compatible",
+    formats: ["openai_compatible"],
+    classifyError: () => ({ retryable: false }),
+    createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
+  };
+  const port = createModelRequestExecutor({
+    registry: { resolve: () => adapter },
+    credentialPort: { resolve: () => "secret" },
+    observationPort: { emit: (type, data) => events.push({ type, data }) },
+  });
+  await port.invoke({
+    invocation,
+    model: { ...model, api_key: "should-never-be-observed", base_url: "https://example.com/v1" },
+    messages: [],
+  });
+  for (const event of events.filter(({ type }) => type.startsWith("model.invocation."))) {
+    assert.equal("api_key" in event.data.model, false);
+    assert.equal("base_url" in event.data.model, false);
+  }
+});
+
 test("tool-call mismatch streaming downgrade is one-way within an invocation", async () => {
   const streamingAttempts = [];
   let calls = 0;
@@ -301,6 +325,20 @@ test("executor is the single model context trace authority at each provider atte
   assert.equal(traces[0].data.messages.count, 1);
   assert.equal(traces[0].data.messages.missingMessageIdCount, 0);
   assert.match(traces[0].data.messages.sequenceHash, /^[a-f0-9]{64}$/);
+  const invocationEvents = events.filter(({ type }) => type.startsWith("model.invocation."));
+  assert.ok(invocationEvents.length > 0);
+  for (const { data } of invocationEvents) {
+    assert.deepEqual(data.model, {
+      alias: "primary",
+      model: model.model,
+      format: model.format,
+      operatorId: model.operatorId,
+      modelFamily: "",
+      adapterId: "openai-compatible",
+    });
+    assert.equal("api_key" in data.model, false);
+    assert.equal("base_url" in data.model, false);
+  }
 });
 
 test("provider registry resolves only the explicit adapter identity", () => {

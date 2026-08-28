@@ -83,10 +83,14 @@ export function createGlobalConfigBuilder({
       globalConfigPath,
       loadOptions,
     };
-    const migrationResult = await applyConfigMigrations({ config: rawConfig, migrations: normalizedMigrations, context: buildContext });
+    const migrationResult = await applyConfigMigrations({
+      config: rawConfig,
+      migrations: normalizedMigrations,
+      context: buildContext,
+    });
     const migratedRawConfig = normalizeConfiguredModelProviders(migrationResult.config || {});
     const resolvedConfig = resolveConfigTemplatesFn(migratedRawConfig, {
-      lookup: createConfigValueLookup(env, configParams),
+      lookup: createConfigValueLookup(configParams, env),
     });
     const warnings = await validateEffectiveConfig({
       rawConfig: migratedRawConfig,

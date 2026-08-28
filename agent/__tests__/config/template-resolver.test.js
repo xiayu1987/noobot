@@ -6,10 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  createConfigValueLookup,
-  resolveConfigTemplates,
-} from "@noobot/agent-config-protocol";
+import { createConfigValueLookup, resolveConfigTemplates } from "@noobot/agent-config-protocol";
 
 test("createConfigValueLookup: 应按来源优先级生成大写参数查询", () => {
   const lookup = createConfigValueLookup({ Token: "t1" }, { Api_Key: "k1" });
@@ -17,7 +14,7 @@ test("createConfigValueLookup: 应按来源优先级生成大写参数查询", (
   assert.equal(lookup("TOKEN"), "t1");
 });
 
-test("resolveConfigTemplates: 应优先使用 env，再回退到 configParams", () => {
+test("resolveConfigTemplates: 应按调用方声明的来源顺序解析", () => {
   const out = resolveConfigTemplates(
     {
       provider: {
@@ -26,14 +23,16 @@ test("resolveConfigTemplates: 应优先使用 env，再回退到 configParams", 
         region: "${REGION}",
       },
     },
-    { lookup: createConfigValueLookup(
-      { API_KEY: "env-key", TOKEN: "env-token" },
-      { API_KEY: "param-key", REGION: "cn" },
-    ) },
+    {
+      lookup: createConfigValueLookup(
+        { API_KEY: "primary-key", REGION: "cn" },
+        { API_KEY: "fallback-key", TOKEN: "fallback-token" },
+      ),
+    },
   );
 
-  assert.equal(out.provider.apiKey, "env-key");
-  assert.equal(out.provider.token, "env-token");
+  assert.equal(out.provider.apiKey, "primary-key");
+  assert.equal(out.provider.token, "fallback-token");
   assert.equal(out.provider.region, "cn");
 });
 
