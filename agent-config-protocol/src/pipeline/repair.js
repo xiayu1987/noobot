@@ -5,6 +5,7 @@
  */
 import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
+  resolveModelLibraryProvider,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
@@ -184,7 +185,53 @@ function repairContractNode({ contract, template, target, path, changes }) {
   return output;
 }
 
+function repairUnknownProvider({ target, path, changes }) {
+  if (!isPlainObject(target)) return clone(target);
+  const properties = MODEL_PROVIDER_CONFIG_CONTRACT.properties;
+  const output = {};
+  for (const [key, value] of Object.entries(target)) {
+    const childContract = properties[key];
+    if (!childContract) {
+      recordChange(
+        changes,
+        [...path, key],
+        CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
+        "unsupported_provider_node",
+      );
+      continue;
+    }
+    if (validatesContract(value, childContract)) {
+      output[key] = clone(value);
+      continue;
+    }
+    recordChange(
+      changes,
+      [...path, key],
+      CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL,
+      "invalid_provider_node_without_default",
+    );
+  }
+  return output;
+}
+
 function repairCollectionEntry({ collectionPath, template, target, path, changes }) {
+  // Provider aliases are user-owned model configurations and their key must
+  // survive repair. Known aliases can still use the library as the structural
+  // default; unknown aliases retain their identity while unsupported child
+  // nodes are removed because no canonical replacement facts exist for them.
+  if (collectionPath === "providers" && template === undefined) {
+    const libraryTemplate = resolveModelLibraryProvider(path.at(-1));
+    if (libraryTemplate) {
+      return repairContractNode({
+        contract: MODEL_PROVIDER_CONFIG_CONTRACT,
+        template: libraryTemplate,
+        target,
+        path,
+        changes,
+      });
+    }
+    return repairUnknownProvider({ target, path, changes });
+  }
   const contract =
     collectionPath === "providers"
       ? MODEL_PROVIDER_CONFIG_CONTRACT
@@ -321,7 +368,10 @@ function setValueAt(root, path, value) {
 }
 
 function providerSupportsReference(provider, requirement) {
-  if (!isPlainObject(provider) || provider.enabled === false) return false;
+  if (!isPlainObject(provider) || !validatesContract(provider, MODEL_PROVIDER_CONFIG_CONTRACT)) {
+    return false;
+  }
+  if (provider.enabled === false) return false;
   if (requirement === "conversation") return provider.used_for_conversation !== false;
   if (requirement.startsWith("parse:")) {
     return supportsModelMultimodalParsing(provider, [requirement.slice("parse:".length)]);
