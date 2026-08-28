@@ -28,52 +28,61 @@ import { registerSuiteSession } from "../suite-session-cleanup.js";
 const E2E_MODEL_ALIAS = "gpt_5_4";
 
 export async function installE2eModelPreferences(pageOrContext) {
-  await pageOrContext.addInitScript((modelAlias) => {
-    const setInitialValue = (key, value, { force = false } = {}) => {
-      if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
-    };
-    const scenarioModels = { full: modelAlias, programming: modelAlias, text: modelAlias };
-    const scenarioSelections = Object.fromEntries(
-      Object.entries(scenarioModels).map(([scenario, value]) => [
-        scenario,
-        { value, source: "user" },
-      ]),
-    );
-    const pluginModels = Object.fromEntries(
-      Object.keys(scenarioModels).map((scenario) => [
-        scenario,
-        {
-          harness: {
-            stepModels: {
-              planning: modelAlias,
-              guidance: modelAlias,
-              acceptance: modelAlias,
-              default: modelAlias,
+  const e2eUserId = readE2eCredentials().userId;
+  await pageOrContext.addInitScript(
+    ({ modelAlias, userId }) => {
+      const setInitialValue = (key, value, { force = false } = {}) => {
+        if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
+      };
+      const scenarioModels = { full: modelAlias, programming: modelAlias, text: modelAlias };
+      const scenarioSelections = Object.fromEntries(
+        Object.entries(scenarioModels).map(([scenario, value]) => [
+          scenario,
+          { value, source: "user" },
+        ]),
+      );
+      const pluginModels = Object.fromEntries(
+        Object.keys(scenarioModels).map((scenario) => [
+          scenario,
+          {
+            harness: {
+              stepModels: {
+                planning: modelAlias,
+                guidance: modelAlias,
+                acceptance: modelAlias,
+                default: modelAlias,
+              },
             },
+            workflow: { semanticModel: modelAlias },
           },
-          workflow: { semanticModel: modelAlias },
-        },
-      ]),
-    );
-    setInitialValue("noobot_selected_model", modelAlias, { force: true });
-    setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels), {
-      force: true,
-    });
-    setInitialValue(
-      "noobot_selected_model_selection_by_scenario_v2",
-      JSON.stringify(scenarioSelections),
-      { force: true },
-    );
-    setInitialValue("noobot_plugin_model_config_by_scenario_v2", JSON.stringify(pluginModels), {
-      force: true,
-    });
-    setInitialValue("noobot_bot_scenario", "full");
-    setInitialValue(
-      "noobot_memory_model_by_scenario_v1",
-      JSON.stringify({ __default__: modelAlias, ...scenarioModels }),
-      { force: true },
-    );
-  }, E2E_MODEL_ALIAS);
+        ]),
+      );
+      setInitialValue("noobot_selected_model", modelAlias, { force: true });
+      setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels), {
+        force: true,
+      });
+      setInitialValue(
+        "noobot_selected_model_selection_by_scenario_v2",
+        JSON.stringify(scenarioSelections),
+        { force: true },
+      );
+      setInitialValue("noobot_plugin_model_config_by_scenario_v2", JSON.stringify(pluginModels), {
+        force: true,
+      });
+      setInitialValue("noobot_bot_scenario", "full");
+      setInitialValue(
+        "noobot_memory_model_by_scenario_v1",
+        JSON.stringify({ __default__: modelAlias, ...scenarioModels }),
+        { force: true },
+      );
+      const pluginBaselineKey = "noobot_e2e_plugin_baseline_initialized";
+      if (sessionStorage.getItem(pluginBaselineKey) !== "1") {
+        localStorage.setItem(`noobot_selected_plugins:${encodeURIComponent(userId)}`, "[]");
+        sessionStorage.setItem(pluginBaselineKey, "1");
+      }
+    },
+    { modelAlias: E2E_MODEL_ALIAS, userId: e2eUserId },
+  );
 }
 
 async function writeJsonLines(filePath, records) {

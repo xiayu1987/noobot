@@ -47,7 +47,7 @@ test("buildTools: multimodal_parse requires configured parsing capability", asyn
   );
 });
 
-test("buildTools: execute_native_script requires explicit global enablement", async () => {
+test("buildTools: execute_native_script uses the effective global and user configuration", async () => {
   const disabled = await buildTools(createContext());
   assert.equal(
     disabled.some((tool) => tool?.name === "execute_native_script"),
@@ -66,6 +66,17 @@ test("buildTools: execute_native_script requires explicit global enablement", as
     "riskLevel",
     "script_body",
   ]);
+
+  const userDisabled = await buildTools(
+    createContext({
+      globalConfig: { tools: { execute_native_script: { enabled: true } } },
+      userConfig: { tools: { execute_native_script: { enabled: false } } },
+    }),
+  );
+  assert.equal(
+    userDisabled.some((item) => item?.name === "execute_native_script"),
+    false,
+  );
 });
 
 test("buildTools: 重组后应注册关键工具", async () => {

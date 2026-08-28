@@ -75,7 +75,8 @@ export async function observeRealtimeThinkingChanges(page) {
 
 export async function assertRealtimeToolDetails(shell, expectedLineCount) {
   await expect(shell.locator(".thinking-analysis-block").first()).not.toBeEmpty();
-  const toolLines = shell.locator(".base-thinking-log-line.is-tool");
+  const logStream = shell.locator(".thinking-realtime-log-stream");
+  const toolLines = logStream.locator("[data-tool-log-key] .base-thinking-log-line.is-tool");
   await expect(toolLines).toHaveCount(expectedLineCount);
   await expect(toolLines.locator(".base-thinking-log-line__event.is-tool-call")).toHaveCount(
     expectedLineCount / 2,
@@ -83,8 +84,16 @@ export async function assertRealtimeToolDetails(shell, expectedLineCount) {
   await expect(toolLines.locator(".base-thinking-log-line__event.is-tool-result")).toHaveCount(
     expectedLineCount / 2,
   );
-  for (let index = 0; index < expectedLineCount; index += 1) {
-    const line = toolLines.nth(index);
+  const toolLogKeys = await logStream
+    .locator("[data-tool-log-key]")
+    .evaluateAll((nodes) => nodes.map((node) => String(node.dataset.toolLogKey || "")));
+  expect(toolLogKeys).toHaveLength(expectedLineCount);
+  expect(new Set(toolLogKeys).size).toBe(expectedLineCount);
+  for (const toolLogKey of toolLogKeys) {
+    const line = logStream
+      .locator(`[data-tool-log-key=${JSON.stringify(toolLogKey)}]`)
+      .locator(".base-thinking-log-line.is-tool");
+    await expect(line, `tool log left realtime window: ${toolLogKey}`).toHaveCount(1);
     await expect(line.locator(".base-thinking-log-line__event")).toHaveClass(
       /\bis-tool-(?:call|result)\b/,
     );

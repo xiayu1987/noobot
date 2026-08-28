@@ -11,7 +11,6 @@ const PROVIDER_IDS = new Set([
   "gemini",
   "deepseek",
   "alibaba",
-  "dashscope",
   "zhipu",
   "generic",
 ]);

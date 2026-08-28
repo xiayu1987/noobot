@@ -7,7 +7,7 @@ import {
   BUILTIN_THRESHOLDS,
   hasOwnConfigKey,
   mergeConfig,
-  normalizeBooleanLike,
+  normalizeBoolean,
   normalizeTimeMs,
   resolveRunConfigValue,
   resolveTimeMs,
@@ -32,8 +32,7 @@ function resolveRunTimeoutMs(rawValue) {
 }
 
 function resolveConfigRunTimeoutMs(config = {}) {
-  const source =
-    config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  const source = config && typeof config === "object" && !Array.isArray(config) ? config : {};
   const hasCanonical = Object.prototype.hasOwnProperty.call(source, "runTimeoutMs");
   if (!hasCanonical) return undefined;
   return resolveTimeMs(source, {
@@ -44,7 +43,11 @@ function resolveConfigRunTimeoutMs(config = {}) {
   });
 }
 
-export async function resolveEffectiveRunTimeoutMs({ bot: _bot, userId: _userId = "", runConfig = {} } = {}) {
+export async function resolveEffectiveRunTimeoutMs({
+  bot: _bot,
+  userId: _userId = "",
+  runConfig = {},
+} = {}) {
   const runConfigTimeoutMs = resolveConfigRunTimeoutMs(runConfig);
   if (runConfigTimeoutMs !== undefined && runConfigTimeoutMs !== null) {
     return resolveRunTimeoutMs(runConfigTimeoutMs);
@@ -60,7 +63,7 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
       runConfig: runConfigSource,
       config: {},
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     });
   }
@@ -73,7 +76,7 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
       runConfig: {},
       config: globalConfig,
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     });
   }
@@ -103,13 +106,15 @@ export async function resolveEffectiveStreamingEnabled({ bot, userId = "", runCo
     runConfig: {},
     config: effectiveConfig,
     key: "streaming",
-    normalize: (value) => normalizeBooleanLike(value, false),
+    normalize: (value) => normalizeBoolean(value, false),
     fallback: false,
   });
 }
 
 export function isPluginDebugEnabled() {
-  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "").trim().toLowerCase();
+  const value = String(process.env.NOOBOT_PLUGIN_DEBUG || "")
+    .trim()
+    .toLowerCase();
   return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
@@ -118,9 +123,7 @@ export function summarizePluginConfig(plugins = {}) {
   return Object.fromEntries(
     Object.entries(plugins).map(([key, value]) => [
       key,
-      value && typeof value === "object"
-        ? { enabled: value.enabled, mode: value.mode }
-        : value,
+      value && typeof value === "object" ? { enabled: value.enabled, mode: value.mode } : value,
     ]),
   );
 }

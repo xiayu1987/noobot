@@ -52,7 +52,8 @@ const executionLogSignature = computed(() => {
     !isToolLogWindowDebugEnabled() &&
     !isStateMachineDebugEnabled() &&
     !isThinkingReplayDebugEnabled()
-  ) return "disabled";
+  )
+    return "disabled";
   const logs = Array.isArray(props.executionLogs) ? props.executionLogs : [];
   const last = logs.at(-1) || {};
   return [
@@ -78,8 +79,7 @@ function detailKey(logItem = {}) {
 }
 function isExpandable(logItem = {}) {
   return Boolean(
-    detailKey(logItem) &&
-      (String(logItem.detailText || "") || logItem.detailValue !== undefined),
+    detailKey(logItem) && (String(logItem.detailText || "") || logItem.detailValue !== undefined),
   );
 }
 watch(
@@ -167,7 +167,11 @@ watch(
         /><BaseNoteBlock :content="taskCheckReceipt.abstract" />
       </div>
       <div class="thinking-realtime-log-stream">
-        <div v-for="logItem in executionLogs" :key="executionLogKey(logItem)">
+        <div
+          v-for="logItem in executionLogs"
+          :key="executionLogKey(logItem)"
+          :data-tool-log-key="isToolLog(logItem) ? executionLogKey(logItem) : undefined"
+        >
           <BaseThinkingLogLine
             :event-text="logItem.event"
             :content-text="logItem.text"

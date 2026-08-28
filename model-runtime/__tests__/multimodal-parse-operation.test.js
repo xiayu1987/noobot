@@ -5,7 +5,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { executeOpenAiOperation } from "../src/adapters/openai-capability-adapter.js";
-import { dashscopeAdapter } from "../src/adapters/dashscope-adapter.js";
 import { IMAGE_GENERATION_API_TYPE, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 
 test("Web Search reads text from the canonical Responses output items", async () => {
@@ -211,71 +210,4 @@ test("multimodal parse maps video to an OpenAI Responses API file input", async 
     file_data: "data:video/mp4;base64,AQ==",
     filename: "a.mp4",
   });
-});
-
-test("dashscope adapter parses images through Chat Completions", async () => {
-  let request;
-  await dashscopeAdapter.executeOperation({
-    modelSpec: {
-      model: "qwen3.5-plus",
-      format: "dashscope",
-      base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    },
-    credential: "key",
-    operation: {
-      kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
-      input: {
-        prompt: "extract",
-        attachments: [
-          { mimeType: "image/png", data: "data:image/png;base64,AA==", fileName: "a.png" },
-        ],
-      },
-      options: {},
-    },
-    openAiClientFactory: () => ({
-      chat: {
-        completions: {
-          create: async (value) => {
-            request = value;
-            return { choices: [{ message: { content: "parsed" } }] };
-          },
-        },
-      },
-    }),
-  });
-  assert.equal(request.model, "qwen3.5-plus");
-  assert.equal(request.messages[0].content[1].type, "image_url");
-});
-
-test("dashscope adapter maps audio and video with provider-native content blocks", async () => {
-  let request;
-  await dashscopeAdapter.executeOperation({
-    modelSpec: { model: "qwen3.5-omni-plus", format: "dashscope" },
-    credential: "key",
-    operation: {
-      kind: MODEL_OPERATION_KIND.MULTIMODAL_PARSE,
-      input: {
-        prompt: "parse media",
-        attachments: [
-          { mimeType: "audio/wav", data: "data:audio/wav;base64,AQ==", fileName: "a.wav" },
-          { mimeType: "video/mp4", data: "data:video/mp4;base64,Ag==", fileName: "b.mp4" },
-        ],
-      },
-      options: {},
-    },
-    openAiClientFactory: () => ({
-      chat: {
-        completions: {
-          create: async (value) => {
-            request = value;
-            return { choices: [{ message: { content: "parsed" } }] };
-          },
-        },
-      },
-    }),
-  });
-  assert.deepEqual(request.messages[0].content.slice(1), [
-    { type: "audio_url", audio_url: { url: "data:audio/wav;base64,AQ==" } },
-    { type: "video_url", video_url: { url: "data:video/mp4;base64,Ag==" } },
-  ]);
 });

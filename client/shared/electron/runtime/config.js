@@ -8,12 +8,14 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import {
   applyPrimaryModelReferencesToConfigFile,
   collectConfigTemplateKeys,
-  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  CONFIG_DOCUMENT_SCOPE,
+  CONFIG_REPAIR_ACTION,
   ensureModelProviderInConfigFile,
   migrateConfigFileToCurrentProtocol,
   normalizeConfigParamsDocument,
+  repairConfigDocument,
+  summarizeConfigRepairReport,
   synchronizeConfigParamsDocument,
-  synchronizeConfigFileFromTemplate,
 } from "@noobot/agent-config-protocol";
 import { listModelLibraryOptions } from "@noobot/model-protocol";
 
@@ -34,9 +36,38 @@ export function createDesktopConfigManager({
     }
   }
 
+  function readJsonFileForRepair(filePath) {
+    const raw = fs.readFileSync(filePath, "utf8");
+    try {
+      return JSON.parse(raw);
+    } catch {
+      const invalidBackupPath = `${filePath}.invalid-${Date.now()}.json`;
+      fs.renameSync(filePath, invalidBackupPath);
+      appendDesktopLog(
+        `[main:config-repair] action=${CONFIG_REPAIR_ACTION.RESTORE_INVALID_DOCUMENT}; invalid JSON preserved at ${invalidBackupPath}; restored=${filePath}`,
+      );
+      return {};
+    }
+  }
+
   function writeJsonFile(filePath, payload) {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      fs.writeFileSync(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+      fs.renameSync(temporaryPath, filePath);
+    } catch (error) {
+      fs.rmSync(temporaryPath, { force: true });
+      throw error;
+    }
+  }
+
+  function logConfigRepairReport(filePath, report = {}) {
+    const summary = summarizeConfigRepairReport(report);
+    if (!summary.changed) return;
+    appendDesktopLog(
+      `[main:config-repair] file=${filePath}; changes=${summary.changeCount}; actions=${JSON.stringify(summary.actionCounts)}`,
+    );
   }
 
   function assertFileExists(filePath, label) {
@@ -409,17 +440,28 @@ export function createDesktopConfigManager({
     writeJsonFile(filePath, next);
   }
 
-  function syncJsonFileIncremental({ templateFilePath, targetFilePath } = {}) {
+  function syncJsonFileIncremental({
+    templateFilePath,
+    targetFilePath,
+    scope = CONFIG_DOCUMENT_SCOPE.USER,
+  } = {}) {
     const templateJson = readJsonFile(templateFilePath, null);
     if (!isPlainObject(templateJson)) return false;
     const targetExists = fs.existsSync(targetFilePath);
-    const targetJson = targetExists ? readJsonFile(targetFilePath, {}) : {};
-    const merged = synchronizeConfigFileFromTemplate({
+    const targetJson = targetExists ? readJsonFileForRepair(targetFilePath) : {};
+    const repair = repairConfigDocument({
+      scope,
       template: templateJson,
       target: targetJson,
     });
-    if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
+    const merged = repair.document;
+    if (
+      !targetExists ||
+      !fs.existsSync(targetFilePath) ||
+      JSON.stringify(targetJson) !== JSON.stringify(merged)
+    ) {
       writeJsonFile(targetFilePath, merged);
+      logConfigRepairReport(targetFilePath, repair.report);
       return true;
     }
     return false;
@@ -434,11 +476,17 @@ export function createDesktopConfigManager({
       if (!entry.isDirectory()) continue;
       for (const fileName of ["config.json", "config.example.json"]) {
         const filePath = path.join(workspaceRootPath, entry.name, fileName);
-        const payload = readJsonFile(filePath, null);
-        if (!isPlainObject(payload)) continue;
-        const synchronized = synchronizeConfigFileFromTemplate({ template, target: payload });
-        if (JSON.stringify(payload) !== JSON.stringify(synchronized)) {
+        if (!fs.existsSync(filePath)) continue;
+        const payload = readJsonFileForRepair(filePath);
+        const repair = repairConfigDocument({
+          scope: CONFIG_DOCUMENT_SCOPE.USER,
+          template,
+          target: payload,
+        });
+        const synchronized = repair.document;
+        if (!fs.existsSync(filePath) || JSON.stringify(payload) !== JSON.stringify(synchronized)) {
           writeJsonFile(filePath, synchronized);
+          logConfigRepairReport(filePath, repair.report);
         }
       }
     }
@@ -464,15 +512,16 @@ export function createDesktopConfigManager({
     if (!isPlainObject(exampleConfig))
       throw new Error(`invalid global config example: ${examplePath}`);
     const isFirstGlobalConfig = !fs.existsSync(targetPath);
-    const currentConfig = isFirstGlobalConfig ? {} : readJsonFile(targetPath, {});
+    const currentConfig = isFirstGlobalConfig ? {} : readJsonFileForRepair(targetPath);
     const hasConfiguredExecutionIsolationMode = Boolean(
       String(currentConfig?.security?.execution_isolation?.mode || "").trim(),
     );
-    const mergedConfig = synchronizeConfigFileFromTemplate({
+    const globalRepair = repairConfigDocument({
+      scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
       template: exampleConfig,
       target: currentConfig,
-      excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
     });
+    const mergedConfig = globalRepair.document;
     mergedConfig.workspace_root = workspaceRootPath;
     mergedConfig.workspace_template_path = workspaceTemplatePath;
     if (!hasConfiguredExecutionIsolationMode)
@@ -482,6 +531,7 @@ export function createDesktopConfigManager({
       JSON.stringify(currentConfig) !== JSON.stringify(mergedConfig)
     ) {
       writeJsonFile(targetPath, mergedConfig);
+      logConfigRepairReport(targetPath, globalRepair.report);
       appendDesktopLog(
         `[main:config] synced global config from example: ${examplePath} -> ${targetPath}`,
       );
@@ -498,6 +548,7 @@ export function createDesktopConfigManager({
       syncJsonFileIncremental({
         templateFilePath: templateExamplePath,
         targetFilePath: templateConfigPath,
+        scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
       });
     }
     if (!isJsonObjectFile(templateExamplePath))

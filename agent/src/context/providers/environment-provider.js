@@ -10,7 +10,7 @@ import {
   SECURITY_RISK_LEVEL,
   normalizeSecurityRiskLevel,
 } from "@noobot/security-assessment-protocol";
-import { hasOwnConfigKey, normalizeBooleanLike } from "../../config/index.js";
+import { hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
 
 export function resolveRuntimeBasePath({ userId = "", globalConfig = {} } = {}) {
@@ -71,7 +71,7 @@ export function buildDynamicInfo({
       SECURITY_RISK_LEVEL.LOW,
     ),
     ...(hasOwnConfigKey(runConfig, "streaming")
-      ? { streaming: normalizeBooleanLike(runConfig?.streaming, false) }
+      ? { streaming: normalizeBoolean(runConfig?.streaming, false) }
       : {}),
     ...(toolPolicy ? { toolPolicy } : {}),
     selectedConnectorIds,

@@ -70,12 +70,12 @@ function createFakeModelPort() {
   };
 }
 
-const DASHSCOPE_MODEL = Object.freeze({
-  alias: "dashscope-test",
+const QWEN_MODEL = Object.freeze({
+  alias: "qwen-test",
   model: "qwen-max",
-  format: "dashscope",
-  providerId: "dashscope",
-  adapterId: "dashscope",
+  format: "openai_compatible",
+  operatorId: "alibaba",
+  adapterId: "openai-compatible",
   preserve_thinking: true,
   thinking_budget: 4096,
 });
@@ -94,7 +94,7 @@ function createGlobalConfig() {
   return {
     mcpServers: {
       fake: {
-        type: "streamable_http",
+        type: "streamableHttp",
         baseUrl: "https://mcp.example.test/rpc",
         isActive: true,
       },
@@ -102,7 +102,7 @@ function createGlobalConfig() {
   };
 }
 
-test("executeMcpTask sends the resolved DashScope ModelSpec through the host ModelPort", async () => {
+test("executeMcpTask sends the resolved Qwen ModelSpec through the host ModelPort", async () => {
   const modelPort = createFakeModelPort();
 
   const result = await executeMcpTask({
@@ -110,11 +110,11 @@ test("executeMcpTask sends the resolved DashScope ModelSpec through the host Mod
     mcpName: "fake",
     task: "do it",
     fetchImpl: createMcpFetch(),
-    runtime: { modelPort, modelSpec: DASHSCOPE_MODEL },
+    runtime: { modelPort, modelSpec: QWEN_MODEL },
   });
 
   assert.equal(result.ok, true);
-  assert.equal(modelPort.invocations[0].model, DASHSCOPE_MODEL);
+  assert.equal(modelPort.invocations[0].model, QWEN_MODEL);
   assert.equal(modelPort.invocations[0].tools.length, 1);
   assert.equal(modelPort.invocations[0].options.streaming, false);
 });

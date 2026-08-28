@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +69,17 @@ const minimalGlobalExample = {
       base_url: "${OPENAI_API_ADDRESS}",
       model: "example-openai",
       format: "openai_compatible",
+      multimodal_parsing: {
+        enabled: true,
+        input_modalities: ["audio", "document", "image", "video"],
+      },
+      multimodal_generation: {
+        support_generation: {
+          enabled: true,
+          support_scope: ["image"],
+          api_type: "openai_responses",
+        },
+      },
     },
   },
 };
@@ -195,20 +206,20 @@ test("project launcher preserves explicit provider reasoning settings during inc
   assert.equal(globalConfig.providers.selected_model.tool_reasoning_effort, "medium");
 });
 
-test("project launcher resolves camelCase workspace config keys for existing configs", async (t) => {
+test("project launcher resolves canonical snake_case workspace config keys for existing configs", async (t) => {
   const serviceRoot = await makeServiceRoot();
   t.after(() => rm(serviceRoot, { recursive: true, force: true }));
   await writeJson(path.join(serviceRoot, "config", "global.config.json"), {
-    workspaceRoot: "./camel-workspace",
-    workspaceTemplatePath: "./camel-template",
-    superAdmin: {
-      userId: "root-admin",
+    workspace_root: "./canonical-workspace",
+    workspace_template_path: "./canonical-template",
+    super_admin: {
+      user_id: "root-admin",
     },
     preferences: {
       language: "zh-CN",
     },
   });
-  await writeJson(path.join(serviceRoot, "camel-template", "config.example.json"), {
+  await writeJson(path.join(serviceRoot, "canonical-template", "config.example.json"), {
     preferences: {
       language: "zh-CN",
     },
@@ -216,7 +227,10 @@ test("project launcher resolves camelCase workspace config keys for existing con
 
   await runLauncher(serviceRoot);
 
-  assert.equal(await exists(path.join(serviceRoot, "camel-workspace", "config-params.json")), true);
+  assert.equal(
+    await exists(path.join(serviceRoot, "canonical-workspace", "config-params.json")),
+    true,
+  );
   assert.equal(await exists(path.join(serviceRoot, "workspace", "config-params.json")), false);
 });
 
@@ -311,4 +325,33 @@ test("project launcher recursively adds new global nodes without replacing confi
   assert.deepEqual(config.tools.execute_script, { enabled: true });
   assert.equal(config.multimodal.parsing.default_models.document, "example_openai");
   assert.equal(config.multimodal.generation.default_models.image, "example_openai");
+});
+
+test("project launcher preserves malformed global JSON before restoring the template", async (t) => {
+  const serviceRoot = await makeServiceRoot();
+  t.after(() => rm(serviceRoot, { recursive: true, force: true }));
+  const examplePath = path.join(serviceRoot, "config", "global.config.example.json");
+  const example = await readJson(examplePath);
+  example.workspace_root = "./workspace";
+  example.workspace_template_path = "./default-template";
+  await writeJson(examplePath, example);
+  await writeJson(path.join(serviceRoot, "default-template", "config.example.json"), {});
+  const globalConfigPath = path.join(serviceRoot, "config", "global.config.json");
+  await writeFile(globalConfigPath, '{"api_key":"must-not-appear-in-log" trailing', "utf8");
+
+  const result = await runLauncher(serviceRoot);
+
+  const restored = await readJson(globalConfigPath);
+  assert.equal(restored.workspace_root, "./workspace");
+  assert.equal(restored.providers.example_openai.model, "example-openai");
+  const backupName = (await readdir(path.dirname(globalConfigPath))).find((name) =>
+    name.startsWith("global.config.json.invalid-"),
+  );
+  assert.ok(backupName);
+  assert.equal(
+    await readFile(path.join(path.dirname(globalConfigPath), backupName), "utf8"),
+    '{"api_key":"must-not-appear-in-log" trailing',
+  );
+  assert.match(result.stderr, /invalid JSON preserved/);
+  assert.equal(result.stderr.includes("must-not-appear-in-log"), false);
 });

@@ -5,10 +5,7 @@
  */
 import path from "node:path";
 import process from "node:process";
-import {
-  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
-  synchronizeConfigFileFromTemplate,
-} from "@noobot/agent-config-protocol";
+import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
 import { resolveInitializationAnswers } from "./answers.js";
 import {
   parseCliOptions,
@@ -21,6 +18,8 @@ import {
   ensureAgentProxyConfig,
   ensureModelProxyConfig,
   ensureWorkspaceConfigParamsCatalog,
+  logConfigRepairReport,
+  logInvalidConfigBackup,
   syncInitialModelReferencesAcrossTemplateAndUsers,
   syncLanguageAcrossTemplateAndUsers,
   syncTemplateAndUserConfigs,
@@ -38,7 +37,14 @@ import {
   resolveEnvNamesByFormat,
   resolveProviderTemplate,
 } from "./provider.js";
-import { fileExists, isPlainObject, readJsonStrict, writeJson, deepClone } from "./utils.js";
+import {
+  deepClone,
+  fileExists,
+  isPlainObject,
+  readJsonStrict,
+  readJsonWithInvalidBackup,
+  writeJson,
+} from "./utils.js";
 
 async function initializeGlobalConfigWhenMissing({
   globalExamplePath,
@@ -137,18 +143,20 @@ async function syncWhenGlobalConfigExists({
   globalConfigPath,
   serviceRoot,
 } = {}) {
-  const [globalExampleConfig, globalConfig] = await Promise.all([
+  const [globalExampleConfig, globalRead] = await Promise.all([
     readJsonStrict(globalExamplePath, t("zh", "labelGlobalExample")),
-    readJsonStrict(globalConfigPath, t("zh", "labelGlobalConfig")),
+    readJsonWithInvalidBackup(globalConfigPath),
   ]);
+  const globalConfig = globalRead.document;
 
   if (!isPlainObject(globalExampleConfig) || !isPlainObject(globalConfig)) return;
 
-  const mergedGlobal = synchronizeConfigFileFromTemplate({
+  const globalRepair = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     template: globalExampleConfig,
     target: globalConfig,
-    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   });
+  const mergedGlobal = globalRepair.document;
 
   const existingConfigLanguage = String(mergedGlobal?.preferences?.language || "").trim();
   const mergedGlobalLocalized = existingConfigLanguage
@@ -160,6 +168,11 @@ async function syncWhenGlobalConfigExists({
 
   if (JSON.stringify(globalConfig) !== JSON.stringify(mergedGlobalLocalized)) {
     await writeJson(globalConfigPath, mergedGlobalLocalized);
+    logConfigRepairReport({ targetFilePath: globalConfigPath, report: globalRepair.report });
+    logInvalidConfigBackup({
+      targetFilePath: globalConfigPath,
+      invalidBackupPath: globalRead.invalidBackupPath,
+    });
   }
 
   const workspaceRootRelative = resolveConfiguredWorkspaceRoot(mergedGlobalLocalized);

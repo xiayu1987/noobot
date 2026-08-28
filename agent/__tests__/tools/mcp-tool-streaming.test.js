@@ -90,7 +90,7 @@ test("call_mcp_task: 透传父 runConfig 显式 streaming=false 到子 session",
     globalConfig: {
       mcpServers: {
         fake: {
-          type: "streamable_http",
+          type: "streamableHttp",
           baseUrl: "https://mcp.example.test/rpc",
           isActive: true,
         },

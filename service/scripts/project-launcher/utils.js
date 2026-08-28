@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export function isPlainObject(input) {
@@ -52,7 +52,28 @@ export async function readJsonStrict(filePath = "", label = "JSON") {
   }
 }
 
+export async function readJsonWithInvalidBackup(filePath = "") {
+  const raw = await readFile(filePath, "utf8");
+  try {
+    return { document: JSON.parse(raw), invalidBackupPath: "" };
+  } catch {
+    const invalidBackupPath = `${filePath}.invalid-${Date.now()}.json`;
+    await rename(filePath, invalidBackupPath);
+    return {
+      document: {},
+      invalidBackupPath,
+    };
+  }
+}
+
 export async function writeJson(filePath = "", payload = {}) {
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, filePath);
+  } catch (error) {
+    await rm(temporaryPath, { force: true });
+    throw error;
+  }
 }

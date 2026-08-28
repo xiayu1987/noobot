@@ -17,6 +17,7 @@ test("service handler receives the authoritative runtime and its shared fetch", 
   const userId = "service-user";
   const servicesDir = path.join(workspaceRoot, userId, "services");
   await mkdir(servicesDir, { recursive: true });
+  await writeFile(path.join(servicesDir, "package.json"), '{"type":"module"}\n', "utf8");
   await writeFile(
     path.join(servicesDir, "runtime-probe.js"),
     [

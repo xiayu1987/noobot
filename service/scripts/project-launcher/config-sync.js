@@ -7,11 +7,13 @@ import { copyFile, mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import {
   collectConfigTemplateKeys,
-  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
+  CONFIG_DOCUMENT_SCOPE,
+  CONFIG_REPAIR_ACTION,
   normalizeConfigParamKey,
   normalizeConfigParamValues,
   normalizeConfigParamsDocument,
-  synchronizeConfigFileFromTemplate,
+  repairConfigDocument,
+  summarizeConfigRepairReport,
 } from "@noobot/agent-config-protocol";
 import { localizeConfigTextTree, resolveTextLocaleFromConfigLanguage, t } from "./i18n.js";
 import { alignInitialModelReferencesForFile } from "./provider.js";
@@ -22,6 +24,7 @@ import {
   isPlainObject,
   readJsonRelaxed,
   readJsonStrict,
+  readJsonWithInvalidBackup,
   writeJson,
 } from "./utils.js";
 
@@ -85,25 +88,52 @@ export async function syncJsonFileIncremental({
   templateFilePath,
   targetFilePath,
   locale = "zh",
+  scope = CONFIG_DOCUMENT_SCOPE.USER,
 } = {}) {
   const templateJson = await readJsonStrict(templateFilePath, t(locale, "labelTemplateConfig"));
   if (!isPlainObject(templateJson)) return false;
 
   const targetExists = await fileExists(targetFilePath);
-  const targetJson = targetExists
-    ? await readJsonStrict(targetFilePath, t(locale, "labelTargetConfig"))
-    : {};
-  const merged = synchronizeConfigFileFromTemplate({
+  const targetRead = targetExists
+    ? await readJsonWithInvalidBackup(targetFilePath)
+    : { document: {}, invalidBackupPath: "" };
+  const targetJson = targetRead.document;
+  const repair = repairConfigDocument({
+    scope,
     template: templateJson,
     target: targetJson,
-    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
   });
+  const merged = repair.document;
 
-  if (!targetExists || JSON.stringify(targetJson) !== JSON.stringify(merged)) {
+  if (
+    !targetExists ||
+    targetRead.invalidBackupPath ||
+    JSON.stringify(targetJson) !== JSON.stringify(merged)
+  ) {
     await writeJson(targetFilePath, merged);
+    logConfigRepairReport({ targetFilePath, report: repair.report });
+    logInvalidConfigBackup({
+      targetFilePath,
+      invalidBackupPath: targetRead.invalidBackupPath,
+    });
     return true;
   }
   return false;
+}
+
+export function logInvalidConfigBackup({ targetFilePath = "", invalidBackupPath = "" } = {}) {
+  if (!invalidBackupPath) return;
+  console.warn(
+    `[config-repair] action=${CONFIG_REPAIR_ACTION.RESTORE_INVALID_DOCUMENT}; invalid JSON preserved at ${invalidBackupPath}; restored=${targetFilePath}`,
+  );
+}
+
+export function logConfigRepairReport({ targetFilePath = "", report = {} } = {}) {
+  const summary = summarizeConfigRepairReport(report);
+  if (!summary.changed) return;
+  console.log(
+    `[config-repair] file=${targetFilePath}; changes=${summary.changeCount}; actions=${JSON.stringify(summary.actionCounts)}`,
+  );
 }
 
 async function readWorkspaceDirectoryEntries(workspaceRootAbsolutePath) {
@@ -183,12 +213,14 @@ export async function syncTemplateAndUserConfigs({
       templateFilePath: templateExamplePath,
       targetFilePath: templateConfigPath,
       locale,
+      scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
     });
   } else if (templateConfigExists) {
     await syncJsonFileIncremental({
       templateFilePath: templateConfigPath,
       targetFilePath: templateExamplePath,
       locale,
+      scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
     });
   }
 
@@ -213,12 +245,14 @@ export async function syncTemplateAndUserConfigs({
         templateFilePath: templateConfigPath,
         targetFilePath: path.join(userBasePath, "config.json"),
         locale,
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
     } else if (finalTemplateSeedPath) {
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.json"),
         locale,
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
     }
     if (finalTemplateExampleExists) {
@@ -226,12 +260,14 @@ export async function syncTemplateAndUserConfigs({
         templateFilePath: templateExamplePath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
         locale,
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
     } else if (finalTemplateSeedPath) {
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
         locale,
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
     }
   }

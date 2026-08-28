@@ -10,7 +10,7 @@ export {
   createGlobalConfigBuilder,
   hasOwnConfigKey,
   mergeConfig,
-  normalizeBooleanLike,
+  normalizeBoolean,
   normalizeTimeMs,
   resolveBuiltinScenarios,
   resolveLocalizedBuiltinScenarios,

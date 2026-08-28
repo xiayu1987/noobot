@@ -7,7 +7,7 @@ import {
   BUILTIN_THRESHOLDS,
   hasOwnConfigKey,
   mergeConfig,
-  normalizeBooleanLike,
+  normalizeBoolean,
 } from "../../config/index.js";
 import {
   getRuntimeFromAgentContext,
@@ -63,7 +63,7 @@ export function createAgentCollabTool({ agentContext }) {
     ),
     sanitizeOutput: systemRuntime?.config?.sanitizeOutput !== false,
     ...(hasParentStreamingConfig
-      ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
+      ? { streaming: normalizeBoolean(systemRuntime?.config?.streaming, false) }
       : {}),
     selectedConnectorIds: normalizeSelectedConnectorIds(
       systemRuntime?.config?.selectedConnectorIds,

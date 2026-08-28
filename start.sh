@@ -161,7 +161,7 @@ detect_pkg_manager() {
 
 print_missing_dependency_hints() {
   local missing=("$@")
-  [[ "${#missing[@]}" -gt 0 ]] || return
+  [[ "${#missing[@]}" -gt 0 ]] || return 0
 
   local pm
   pm="$(detect_pkg_manager)"

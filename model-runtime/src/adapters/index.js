@@ -3,6 +3,5 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./openai-compatible-adapter.js";
-export * from "./dashscope-adapter.js";
 export * from "./registry.js";
 export * from "./openai-capability-adapter.js";

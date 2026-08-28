@@ -82,7 +82,7 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
 
-test("legacy DashScope model specs are migrated to OpenAI-compatible invocation", () => {
+test("Qwen uses the canonical OpenAI-compatible invocation", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
     modelSpec: {
@@ -407,17 +407,17 @@ test("cache parameters are isolated by interface protocol, model family, and ope
   });
   assert.deepEqual(deepseek, {});
 
-  const dashscope = compileProviderModelKwargs({
+  const alibaba = compileProviderModelKwargs({
     format: "openai_compatible",
-    operatorId: "dashscope",
-    adapterId: "dashscope",
+    operatorId: "alibaba",
+    adapterId: "openai-compatible",
     model: "qwen-max",
     enable_thinking: true,
     preserve_thinking: false,
     thinking_budget: 2000,
     extra_body: { prompt_cache_retention: "leak" },
   });
-  assert.deepEqual(dashscope, {});
+  assert.deepEqual(alibaba, {});
 });
 
 test("model defaults follow provider-specific sampling guidance", async () => {
@@ -450,8 +450,8 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const qwen = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
     format: "openai_compatible",
-    operatorId: "dashscope",
-    adapterId: "dashscope",
+    operatorId: "alibaba",
+    adapterId: "openai-compatible",
   });
   assert.deepEqual(
     { temperature: qwen.temperature, top_p: qwen.top_p, top_k: qwen.top_k, min_p: qwen.min_p },
@@ -460,13 +460,44 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const thinking = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
     format: "openai_compatible",
-    operatorId: "dashscope",
-    adapterId: "dashscope",
+    operatorId: "alibaba",
+    adapterId: "openai-compatible",
     enable_thinking: true,
   });
   assert.deepEqual(
     { temperature: thinking.temperature, top_p: thinking.top_p, top_k: thinking.top_k },
     { temperature: 0.7, top_p: 0.8, top_k: 20 },
+  );
+});
+
+test("runtime model normalization rejects invalid parameter facts instead of converting them", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  assert.throws(
+    () =>
+      normalizeRuntimeModelSpec({
+        model: "gpt-5.6",
+        format: "openai_compatible",
+        temperature: "0.8",
+      }),
+    /temperature must be a number/,
+  );
+  assert.throws(
+    () =>
+      normalizeRuntimeModelSpec({
+        model: "gpt-5.6",
+        format: "openai_compatible",
+        top_p: 2,
+      }),
+    /top_p must be a number between/,
+  );
+  assert.throws(
+    () =>
+      normalizeRuntimeModelSpec({
+        model: "gpt-5.6",
+        format: "openai_compatible",
+        max_tokens: 10.5,
+      }),
+    /max_tokens must be a positive integer/,
   );
 });
 
@@ -518,7 +549,7 @@ test("model identity and defaults layer operator, family, concrete model, then e
     format: "openai_compatible",
     base_url: "https://third-party.example.com/v1",
     modelFamily: "qwen",
-    adapterId: "dashscope",
+    adapterId: "openai-compatible",
   });
   assert.equal(proxiedGpt.operatorId, "generic");
   assert.equal(proxiedGpt.modelFamily, "gpt");
@@ -539,15 +570,15 @@ test("model identity and defaults layer operator, family, concrete model, then e
   assert.equal(explicit.top_p, 0.7);
   assert.equal(explicit.top_k, 20);
 
-  const dashscopeGlm = normalizeRuntimeModelSpec({
+  const proxiedGlm = normalizeRuntimeModelSpec({
     model: "ZHIPU/GLM-5.1",
     format: "openai_compatible",
     base_url: "https://api.zhipu.ai/v4",
   });
-  assert.equal(dashscopeGlm.operatorId, "generic");
-  assert.equal(dashscopeGlm.modelFamily, "glm");
-  assert.equal(dashscopeGlm.adapterId, "openai-compatible");
-  assert.equal(dashscopeGlm.format, "openai_compatible");
+  assert.equal(proxiedGlm.operatorId, "generic");
+  assert.equal(proxiedGlm.modelFamily, "glm");
+  assert.equal(proxiedGlm.adapterId, "openai-compatible");
+  assert.equal(proxiedGlm.format, "openai_compatible");
 });
 
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
