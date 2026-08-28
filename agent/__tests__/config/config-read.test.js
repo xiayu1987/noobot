@@ -149,7 +149,7 @@ test("ConfigService.loadUserConfig: user 为空时应回退读取 workspace/conf
   }
 });
 
-test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空值应回退 workspace", async () => {
+test("ConfigService.loadUserConfig: 应按 user、workspace、env 顺序解析配置参数", async () => {
   const workspaceRoot = await createTempDir();
   const userDir = path.join(workspaceRoot, "primary-user");
   try {
@@ -163,6 +163,7 @@ test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空
             model: "gpt-4o",
             api_key: "${API_KEY}",
             base_url: "${BASE_URL}",
+            env_fallback: "${ENV_ONLY}",
           },
         },
       }),
@@ -189,11 +190,18 @@ test("ConfigService.loadUserConfig: user 非空应优先于 workspace，user 空
       "utf8",
     );
 
-    const service = new ConfigService();
+    const service = new ConfigService({
+      env: {
+        API_KEY: "environment-key",
+        BASE_URL: "https://environment.example.com",
+        ENV_ONLY: "environment-fallback",
+      },
+    });
 
     const loaded = await service.loadUserConfig(userDir);
     assert.equal(loaded.providers?.openai?.api_key, "user-key");
     assert.equal(loaded.providers?.openai?.base_url, "https://workspace.example.com");
+    assert.equal(loaded.providers?.openai?.env_fallback, "environment-fallback");
     assert.equal(loaded.configParams, undefined);
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });

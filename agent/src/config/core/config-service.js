@@ -36,6 +36,10 @@ function parseParamsDocument(rawText, documentName) {
 }
 
 export class ConfigService {
+  constructor({ env = process.env } = {}) {
+    this.env = env;
+  }
+
   async loadUserConfig(basePath) {
     const [rawText, workspaceConfigParamsRawText, userConfigParamsRawText] = await Promise.all([
       readFile(path.join(basePath, "config.json"), "utf8"),
@@ -64,7 +68,7 @@ export class ConfigService {
       userConfigParams.values,
     );
     const resolvedRaw = resolveConfigTemplates(raw, {
-      lookup: createConfigValueLookup(process.env, mergedConfigParams),
+      lookup: createConfigValueLookup(mergedConfigParams, this.env),
     });
     return sanitizeUserConfig(resolvedRaw);
   }

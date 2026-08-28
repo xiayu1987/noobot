@@ -249,7 +249,7 @@ async function main() {
   const workspaceConfigParams = normalizeConfigParamsDocument(workspaceConfigParamsRaw).values;
   const userConfigParams = normalizeConfigParamsDocument(userConfigParamsRaw).values;
   const mergedConfigParams = mergeConfigParamLayers(workspaceConfigParams, userConfigParams);
-  const lookup = createConfigValueLookup(process.env, mergedConfigParams);
+  const lookup = createConfigValueLookup(mergedConfigParams, process.env);
   const globalConfig = resolveConfigTemplates(rawGlobalConfig, {
     lookup,
   });

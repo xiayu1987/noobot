@@ -25,6 +25,17 @@ import { runModelAttempt } from "./attempt-runner.js";
 import { executeTransportRetry } from "./retry-coordinator.js";
 import { createProviderAdapterRegistry } from "../adapters/registry.js";
 
+function projectObservableModel(model = {}) {
+  return Object.freeze({
+    alias: String(model.alias || "").trim(),
+    model: String(model.model || "").trim(),
+    format: String(model.format || "").trim(),
+    operatorId: String(model.operatorId || "").trim(),
+    modelFamily: String(model.modelFamily || "").trim(),
+    adapterId: String(model.adapterId || "").trim(),
+  });
+}
+
 export function createModelRequestExecutor({
   registry = createProviderAdapterRegistry(),
   credentialPort,
@@ -79,8 +90,9 @@ export function createModelRequestExecutor({
           },
         );
       }
+      const observableModel = projectObservableModel(requestBase.model);
       const observe = (type, payload = {}) =>
-        observationPort.emit(type, { invocation, model: requestBase.model, ...payload });
+        observationPort.emit(type, { invocation, ...payload, model: observableModel });
       observe("model.invocation.started");
       if (requestBase.operation.kind !== MODEL_OPERATION_KIND.CHAT) {
         if (typeof adapter.executeOperation !== "function") {

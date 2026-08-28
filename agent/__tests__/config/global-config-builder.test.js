@@ -52,6 +52,28 @@ test("createGlobalConfigBuilder: 支持 source + migrations + validators", async
   assert.deepEqual(built.metadata.warnings, []);
 });
 
+test("createGlobalConfigBuilder: configParams 应优先于环境变量，环境变量仅作回退", async () => {
+  const builder = createGlobalConfigBuilder({
+    source: async () => ({
+      provider: {
+        apiKey: "${API_KEY}",
+        baseUrl: "${BASE_URL}",
+      },
+    }),
+  });
+
+  const built = await builder.build({
+    configParams: { API_KEY: "configured-key" },
+    env: {
+      API_KEY: "environment-key",
+      BASE_URL: "https://environment.example.com",
+    },
+  });
+
+  assert.equal(built.resolvedConfig.provider.apiKey, "configured-key");
+  assert.equal(built.resolvedConfig.provider.baseUrl, "https://environment.example.com");
+});
+
 test("createGlobalConfigBuilder: loadRawConfig(reload=false) 使用缓存副本", async () => {
   let sourceCalled = 0;
   const builder = createGlobalConfigBuilder({
