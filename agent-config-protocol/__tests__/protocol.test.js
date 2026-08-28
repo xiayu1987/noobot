@@ -629,7 +629,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
   assert.equal(first.document.providers.primary.enabled, true);
   assert.equal(first.document.providers.custom.top_p, 0.8);
   assert.equal(first.document.providers.custom.cache_control, false);
-  assert.equal(first.document.providers.incomplete, undefined);
+  assert.deepEqual(first.document.providers.incomplete, { model: "missing-format" });
   assert.equal(first.document.default_provider, "primary");
   assert.deepEqual(first.document.context, { customSection: { enabled: true } });
   assert.deepEqual(first.document.session, {});
@@ -651,7 +651,27 @@ test("config repair enforces defaulted, optional, and system-owned node policies
       },
     },
   });
-  assert.equal(unsupportedFormat.document.providers.removed, undefined);
+  assert.deepEqual(unsupportedFormat.document.providers.removed, { model: "qwen" });
+
+  const repairedKnownLegacy = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template,
+    target: {
+      ...template,
+      providers: {
+        ...template.providers,
+        gpt_5_4: {
+          enabled: true,
+          model: "gpt-5.4",
+          format: "unsupported_transport",
+          api_key: "${CUSTOM_KEY}",
+        },
+      },
+    },
+  });
+  assert.ok(repairedKnownLegacy.document.providers.gpt_5_4);
+  assert.equal(repairedKnownLegacy.document.providers.gpt_5_4.format, "openai_compatible");
+  assert.equal(repairedKnownLegacy.document.providers.gpt_5_4.api_key, "${CUSTOM_KEY}");
 
   const second = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
