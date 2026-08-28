@@ -101,6 +101,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.imagesApiNotEnabledMessage":
         "请在对应平台开通 Images API 权限，或切换到已开通图片生成能力的模型/密钥。",
       "tools.multimodal.modelApiKeyMissing": "模型 API Key 缺失",
+      "tools.multimodal.modelNotFound": (params = {}) =>
+        `未找到已配置的多模态生成模型：${String(params.model || "").trim()}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
         `当前模型不支持多模态生成（图片）：${String(params.model || "").trim()}`,
       "tools.multimodal.multimodalUnsupportedMessage":
