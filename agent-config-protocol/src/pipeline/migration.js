@@ -44,6 +44,15 @@ export function migrateConfigFileToCurrentProtocol(config = {}) {
   if (!isPlainObject(config)) return config;
   const migrated = structuredClone(config);
   for (const segments of RETIRED_CONFIG_PATHS) deletePath(migrated, segments);
+  // The current model protocol has one transport format. Normalize persisted
+  // provider documents at the protocol boundary before runtime validation.
+  if (isPlainObject(migrated.providers)) {
+    for (const provider of Object.values(migrated.providers)) {
+      if (isPlainObject(provider) && provider.format === "dashscope") {
+        provider.format = "openai_compatible";
+      }
+    }
+  }
   return migrated;
 }
 
