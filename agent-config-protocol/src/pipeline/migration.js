@@ -31,7 +31,9 @@ function deletePath(root, segments) {
     node = node[segments[index]];
     if (!isPlainObject(node)) return;
   }
-  delete node[segments[segments.length - 1]];
+  const leafKey = segments[segments.length - 1];
+  if (!Object.prototype.hasOwnProperty.call(node, leafKey)) return;
+  delete node[leafKey];
   for (let index = parents.length - 1; index >= 0; index -= 1) {
     const parent = parents[index];
     const child = parent.node[parent.key];
@@ -44,15 +46,6 @@ export function migrateConfigFileToCurrentProtocol(config = {}) {
   if (!isPlainObject(config)) return config;
   const migrated = structuredClone(config);
   for (const segments of RETIRED_CONFIG_PATHS) deletePath(migrated, segments);
-  // The current model protocol has one transport format. Normalize persisted
-  // provider documents at the protocol boundary before runtime validation.
-  if (isPlainObject(migrated.providers)) {
-    for (const provider of Object.values(migrated.providers)) {
-      if (isPlainObject(provider) && provider.format === "dashscope") {
-        provider.format = "openai_compatible";
-      }
-    }
-  }
   return migrated;
 }
 

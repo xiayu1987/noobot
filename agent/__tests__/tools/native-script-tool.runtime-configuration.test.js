@@ -56,7 +56,7 @@ test("native LibreOffice uses authoritative Office Open XML export filters", () 
   });
 });
 
-test("execute_native_script is absent unless global configuration explicitly enables it", () => {
+test("execute_native_script is absent when effective configuration disables it", () => {
   const runtime = createRuntime("/tmp/noobot-native-disabled", {
     globalConfig: { tools: { execute_native_script: { enabled: false } } },
   });
@@ -65,4 +65,3 @@ test("execute_native_script is absent unless global configuration explicitly ena
     [],
   );
 });
-

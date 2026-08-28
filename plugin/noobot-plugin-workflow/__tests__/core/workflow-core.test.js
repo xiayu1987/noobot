@@ -27,6 +27,8 @@ test("default semantic prompt documents closed state-node constructs", () => {
   assert.match(zh, /stateType=merge 汇聚/);
   assert.match(zh, /branch -> actions -> merge 的闭合并发段/);
   assert.match(zh, /避免悬空 branch 或 merge/);
+  assert.match(zh, /用户明确要求一个 action\/child\/node 完成多步/);
+  assert.match(zh, /不得按步骤拆成多个 action/);
   assert.match(zh, /工具名、参数值、调用次数、顺序和禁止条件必须逐字保留/);
 
   const en = getWorkflowDefaultSemanticPrompt("en-US");
@@ -37,6 +39,8 @@ test("default semantic prompt documents closed state-node constructs", () => {
   assert.match(en, /stateType=merge/);
   assert.match(en, /closed branch -> actions -> merge segment/);
   assert.match(en, /dangling branch or merge/);
+  assert.match(en, /Preserve user-defined node boundaries/);
+  assert.match(en, /keep every step in one action task/);
   assert.match(en, /tool names, argument values, call counts, ordering, and prohibitions/);
   assert.match(en, /preserved verbatim/);
 });
@@ -544,9 +548,7 @@ test("workflow plugin cleans workflow runtime dirs when session is deleted", asy
     });
 
     assert.deepEqual(cleanupResult.deletedRelatedSessionIds, ["workflow-node-session"]);
-    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, [
-      "retained-workflow-node-session",
-    ]);
+    assert.deepEqual(cleanupResult.retainedRelatedSessionIds, ["retained-workflow-node-session"]);
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-delete")));
     await assert.rejects(fs.stat(path.join(tempRoot, "runtime/workflow/session/s-delete")));
     await fs.stat(path.join(tempRoot, "runtime/workflow/planning/s-keep"));

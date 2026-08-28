@@ -11,7 +11,7 @@ import {
   applySessionModelOverride,
   hasOwnConfigKey,
   mergeConfig,
-  normalizeBooleanLike,
+  normalizeBoolean,
   resolveRunConfigValue,
 } from "@noobot/agent-config-protocol";
 
@@ -57,21 +57,21 @@ test("sanitizeUserConfig: 用户不能扩大全局路径策略或子 Agent 深�
   assert.equal(out.tools.delegate_task_async.enabled, false);
 });
 
-test("sanitizeUserConfig: execute_native_script 只能由全局管理员配置", () => {
+test("sanitizeUserConfig: execute_native_script 允许用户覆盖默认启用状态", () => {
   const sanitized = sanitizeUserConfig({
     tools: {
-      execute_native_script: { enabled: true },
+      execute_native_script: { enabled: false },
       read_file: { enabled: false },
     },
   });
-  assert.equal(sanitized.tools.execute_native_script, undefined);
+  assert.equal(sanitized.tools.execute_native_script.enabled, false);
   assert.equal(sanitized.tools.read_file.enabled, false);
 
-  const disabled = mergeConfig(
+  const enabled = mergeConfig(
     { tools: { execute_native_script: { enabled: false } } },
     { tools: { execute_native_script: { enabled: true } } },
   );
-  assert.equal(disabled.tools.execute_native_script.enabled, false);
+  assert.equal(enabled.tools.execute_native_script.enabled, true);
 });
 
 test("mergeConfig: 应按策略深度合并并合并 runtime configParams", () => {
@@ -307,7 +307,7 @@ test("resolveRunConfigValue: 显式 runConfig 值应覆盖配置默认值", () =
       runConfig: { streaming: false },
       config: { streaming: true },
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     }),
     false,
@@ -317,10 +317,10 @@ test("resolveRunConfigValue: 显式 runConfig 值应覆盖配置默认值", () =
       runConfig: { streaming: "true" },
       config: { streaming: false },
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     }),
-    true,
+    false,
   );
 });
 
@@ -330,17 +330,17 @@ test("resolveRunConfigValue: runConfig 未传字段时才复用配置默认值",
       runConfig: {},
       config: { streaming: "true" },
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     }),
-    true,
+    false,
   );
   assert.equal(
     resolveRunConfigValue({
       runConfig: {},
       config: {},
       key: "streaming",
-      normalize: (value) => normalizeBooleanLike(value, false),
+      normalize: (value) => normalizeBoolean(value, false),
       fallback: false,
     }),
     false,

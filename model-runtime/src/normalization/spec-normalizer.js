@@ -22,47 +22,6 @@ export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
     gemini_pro: Object.freeze({ temperature: 1, top_p: 0.95 }),
     nano_banana: Object.freeze({ temperature: 0.5 }),
   }),
-  dashscope: Object.freeze({
-    default: Object.freeze({
-      temperature: 0.7,
-      max_tokens: 10000,
-      thinking_budget: 0,
-    }),
-    qwen: Object.freeze({
-      temperature: 0.7,
-      top_p: 0.8,
-      top_k: 20,
-      min_p: 0,
-      thinking_budget: 0,
-    }),
-    qwen_coder: Object.freeze({
-      temperature: 0.7,
-      top_p: 0.8,
-      top_k: 20,
-      min_p: 0,
-      thinking_budget: 0,
-    }),
-    qwen_omni: Object.freeze({
-      temperature: 0.7,
-      top_p: 0.8,
-      top_k: 20,
-      min_p: 0,
-      thinking_budget: 0,
-    }),
-    qwen_flash: Object.freeze({
-      temperature: 0.7,
-      top_p: 0.8,
-      top_k: 20,
-      min_p: 0,
-      thinking_budget: 0,
-    }),
-    qwen_thinking: Object.freeze({
-      temperature: 0.6,
-      top_p: 0.95,
-      top_k: 20,
-      min_p: 0,
-    }),
-  }),
 });
 
 // Defaults are layered in this order: transport format -> operator -> model
@@ -157,17 +116,6 @@ export function getRuntimeModelDefaultFields(modelSpec = {}) {
   return defaults;
 }
 
-function normalizeBoolean(value, fallback = false) {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["true", "1", "yes", "on"].includes(normalized)) return true;
-    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
-  }
-  return fallback;
-}
-
 function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
   if (/claude|anthropic/.test(model)) return "claude";
@@ -224,14 +172,15 @@ export function normalizeRuntimeModelSpec(input = {}) {
     ["min_p", 0, 1],
   ]) {
     if (out[key] === undefined) continue;
-    const value = Number(out[key]);
-    if (Number.isFinite(value)) out[key] = Math.min(max, Math.max(min, value));
-    else delete out[key];
+    const value = out[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
+      throw new TypeError(`model spec.${key} must be a number between ${min} and ${max}`);
+    }
   }
   if (out.max_tokens !== undefined) {
-    const value = Math.floor(Number(out.max_tokens));
-    if (value > 0) out.max_tokens = value;
-    else delete out.max_tokens;
+    if (!Number.isInteger(out.max_tokens) || out.max_tokens <= 0) {
+      throw new TypeError("model spec.max_tokens must be a positive integer");
+    }
   }
   return out;
 }

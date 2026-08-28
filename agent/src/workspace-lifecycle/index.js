@@ -3,14 +3,25 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { access, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  access,
+  cp,
+  mkdir,
+  readdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { filePath as path } from "@noobot/path-resolver";
-import { synchronizeConfigFileFromTemplate } from "@noobot/agent-config-protocol";
+import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-config-protocol";
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
 import { migrateLegacyMemoryFiles } from "../memory/migration.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
+import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 
 const RESET_SECTION_PATHS = {
   memory: ["memory"],
@@ -111,6 +122,31 @@ async function pathExists(filePath = "") {
   }
 }
 
+async function readConfigDocumentForRepair(filePath) {
+  try {
+    const raw = await readFile(filePath, "utf8");
+    try {
+      return JSON.parse(raw);
+    } catch {
+      await rename(filePath, `${filePath}.invalid-${Date.now()}.json`);
+      return {};
+    }
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw error;
+  }
+}
+
+function writeConfigDocument(filePath, document) {
+  return writeFileAtomic({
+    filePath,
+    content: `${JSON.stringify(document, null, 2)}\n`,
+    writeFile,
+    rename,
+    remove: rm,
+  });
+}
+
 export async function ensureUserWorkspaceInitialized({
   workspaceRoot,
   workspaceTemplatePath = "",
@@ -209,18 +245,18 @@ async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "")
       continue;
     }
     if (!entry.isFile()) continue;
-    if (entry.name === "config.json") {
-      const [templateRaw, userRaw] = await Promise.all([
+    if (["config.json", "config.example.json"].includes(entry.name)) {
+      const [templateRaw, userJson] = await Promise.all([
         readFile(src, "utf8"),
-        readFile(dst, "utf8").catch(() => "{}"),
+        readConfigDocumentForRepair(dst),
       ]);
-      const templateJson = JSON.parse(templateRaw || "{}");
-      const userJson = JSON.parse(userRaw || "{}");
-      const merged = synchronizeConfigFileFromTemplate({
+      const templateJson = JSON.parse(templateRaw);
+      const merged = repairConfigDocument({
+        scope: CONFIG_DOCUMENT_SCOPE.USER,
         template: templateJson,
         target: userJson,
-      });
-      await writeFile(dst, `${JSON.stringify(merged, null, 2)}\n`, "utf8");
+      }).document;
+      await writeConfigDocument(dst, merged);
       continue;
     }
     await cp(src, dst, { force: !preserveExisting, errorOnExist: false });

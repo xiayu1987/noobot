@@ -4,50 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
-import { normalizeTimeMs } from "../normalization/time.js";
 import { sanitizeScenarioConfig } from "./scenario-policy.js";
 import { isPlainObject } from "../utils.js";
+import {
+  CONFIG_NODE_POLICY,
+  CONFIG_PATH_REPRESENTATION,
+  USER_CONFIG_OVERRIDE_POLICY,
+  listConfigNodePathsByPolicy,
+} from "../contract/repair.js";
 
-const USER_OVERRIDE_POLICY = {
-  defaultProvider: "replace",
-  providers: "deep",
-  attachments: "deep",
-  multimodal: "deep",
-  session: "deep",
-  context: "deep",
-  services: "deep",
-  mcpServers: "deep",
-  tools: "deep",
-  scenarios: "scenarios",
-  plugins: "deep",
-  preferences: "deep",
-};
+const USER_CONFIG_SYSTEM_OWNED_PATHS = listConfigNodePathsByPolicy({
+  policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+  representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
+});
 
-const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set(["workspaceRoot", "workspaceTemplatePath"]);
-
-const USER_OVERRIDE_DENY_PATHS = new Set([
-  "attachments.maxFileCount",
-  "attachments.maxFileSizeBytes",
-  "attachments.maxTotalSizeBytes",
-  "attachments.allowedExtensions",
-  "attachments.allowedMimeTypes",
-  "tools.delegate_task_async.waitTimeoutMs",
-  "tools.delegate_task_async.pollIntervalMs",
-  "tools.delegate_task_async.maxSubAgentDepth",
-  "tools.wait_async_task_result.pollIntervalMs",
-  "tools.call_mcp_task.maxToolLoopTurns",
-  "tools.execute_script",
-  "tools.execute_native_script",
-  "tools.task_summary.phaseSummaryLoopTurns",
-  "tools.task_summary.phaseSummaryMessageCharsThreshold",
-  "tools.task_summary.maxToolLoopTurns",
-  "tools.request_help.helpPromptLoopTurns",
-  "tools.request_help.toolFailureHelpCount",
-  "plugins.workflow.timeoutMs",
-  "plugins.workflow.maxAutoTransitions",
-  "plugins.workflow.maxParallelNodeAgents",
-  "plugins.workflow.miniRunnerMaxTurns",
-]);
+const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set(
+  USER_CONFIG_SYSTEM_OWNED_PATHS.filter((path) => !path.includes(".")),
+);
+const USER_OVERRIDE_DENY_PATHS = new Set(
+  USER_CONFIG_SYSTEM_OWNED_PATHS.filter((path) => path.includes(".")),
+);
 
 function stripDeniedPaths(rootKey = "", value) {
   if (!isPlainObject(value)) return value;
@@ -82,17 +58,10 @@ function cloneAllowedValue(key, value) {
   if (USER_OVERRIDE_TOP_LEVEL_DENY_KEYS.has(String(key || ""))) {
     return undefined;
   }
-  const mode = USER_OVERRIDE_POLICY[key];
+  const mode = USER_CONFIG_OVERRIDE_POLICY[key];
   if (!mode) return undefined;
   if (mode === "replace") {
     return typeof value === "string" ? value : undefined;
-  }
-  if (mode === "replace_number") {
-    const normalizedNumber = normalizeTimeMs(value, {
-      fallback: Number.NaN,
-      min: 1,
-    });
-    return Number.isFinite(normalizedNumber) && normalizedNumber > 0 ? normalizedNumber : undefined;
   }
   if (mode === "scenarios") {
     const sanitizedScenarios = sanitizeScenarioConfig(value);
@@ -104,7 +73,7 @@ function cloneAllowedValue(key, value) {
 export function sanitizeUserConfig(input = {}) {
   const src = normalizeKnownConfigKeys(isPlainObject(input) ? input : {});
   const out = {};
-  for (const key of Object.keys(USER_OVERRIDE_POLICY)) {
+  for (const key of Object.keys(USER_CONFIG_OVERRIDE_POLICY)) {
     const value = cloneAllowedValue(key, src[key]);
     if (value === undefined) continue;
     if (isPlainObject(value) && !Object.keys(value).length) continue;

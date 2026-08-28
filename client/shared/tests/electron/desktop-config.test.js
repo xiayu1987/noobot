@@ -41,9 +41,26 @@ async function createFixture() {
         },
       },
       providers: {
-        openai: { model: "gpt", enabled: true, used_for_conversation: true },
+        openai: {
+          model: "gpt",
+          format: "openai_compatible",
+          enabled: true,
+          used_for_conversation: true,
+          multimodal_parsing: {
+            enabled: true,
+            input_modalities: ["audio", "image"],
+          },
+          multimodal_generation: {
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "openai_responses",
+            },
+          },
+        },
         selected: {
           model: "selected-model",
+          format: "openai_compatible",
           enabled: false,
           used_for_conversation: false,
           reasoning_effort: "high",
@@ -62,9 +79,26 @@ async function createFixture() {
     JSON.stringify({
       default_provider: "openai",
       providers: {
-        openai: { model: "gpt", enabled: true, used_for_conversation: true },
+        openai: {
+          model: "gpt",
+          format: "openai_compatible",
+          enabled: true,
+          used_for_conversation: true,
+          multimodal_parsing: {
+            enabled: true,
+            input_modalities: ["audio", "image"],
+          },
+          multimodal_generation: {
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "openai_responses",
+            },
+          },
+        },
         selected: {
           model: "selected-model",
+          format: "openai_compatible",
           enabled: false,
           used_for_conversation: false,
           reasoning_effort: "high",
@@ -531,7 +565,6 @@ test("packaged desktop startup removes retired nodes from existing user configs"
       assert.equal(Object.hasOwn(config, "session"), false);
       assert.deepEqual(config.tools, {
         access_connector: { enabled: true },
-        execute_script: { enabled: true },
         read_file: { enabled: true },
       });
     }
@@ -753,6 +786,45 @@ test("packaged desktop startup removes stale files from the managed workspace te
       userDataPath: fixture.userDataPath,
     });
     await assert.rejects(readFile(stalePath, "utf8"), { code: "ENOENT" });
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("packaged desktop preserves malformed user JSON before restoring it", async () => {
+  const fixture = await createFixture();
+  try {
+    const logLines = [];
+    const existingUserPath = path.join(fixture.userDataPath, "workspace", "broken-user");
+    await mkdir(existingUserPath, { recursive: true });
+    const configPath = path.join(existingUserPath, "config.json");
+    await writeFile(configPath, '{"api_key":"must-not-appear-in-log" trailing', "utf8");
+    const manager = createDesktopConfigManager({
+      repoRoot: fixture.repoRoot,
+      packagedBackendRoot: fixture.packagedBackendRoot,
+      appendDesktopLog: (line) => logLines.push(line),
+    });
+
+    manager.ensureDesktopGlobalConfig({
+      isPackaged: true,
+      userDataPath: fixture.userDataPath,
+    });
+
+    const restored = JSON.parse(await readFile(configPath, "utf8"));
+    assert.equal(restored.default_provider, "openai");
+    const backupName = fs
+      .readdirSync(existingUserPath)
+      .find((name) => name.startsWith("config.json.invalid-"));
+    assert.ok(backupName);
+    assert.equal(
+      await readFile(path.join(existingUserPath, backupName), "utf8"),
+      '{"api_key":"must-not-appear-in-log" trailing',
+    );
+    assert.equal(
+      logLines.some((line) => line.includes("invalid JSON preserved")),
+      true,
+    );
+    assert.equal(logLines.join("\n").includes("must-not-appear-in-log"), false);
   } finally {
     await fixture.restore();
   }

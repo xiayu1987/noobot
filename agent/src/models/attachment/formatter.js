@@ -4,63 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 
-export function buildAttachmentContentBlock({
-  attachment,
-  providerFormat = "openai",
-} = {}) {
+export function buildAttachmentContentBlock({ attachment } = {}) {
   const { type, mimeType, data } = attachment || {};
   if (!type || !data) return null;
 
-  if (providerFormat === "dashscope") {
-    return buildDashscopeAttachmentBlock({ type, mimeType, data });
-  }
   return buildOpenAIAttachmentBlock({ type, mimeType, data });
-}
-
-function buildDashscopeAttachmentBlock({ type, mimeType, data }) {
-  const mediaType = type.split("/")[0];
-  if (mediaType === "image") {
-    const normalizedImageUrl = data.startsWith("data:")
-      ? data
-      : `data:${mimeType};base64,${data}`;
-    return {
-      type: "image_url",
-      image_url: {
-        url: normalizedImageUrl,
-      },
-    };
-  }
-
-  if (mediaType === "audio") {
-    const base64 = data.startsWith("data:") ? data.split(",")[1] || "" : data;
-    const normalizedDataUrl = String(data || "").startsWith("data:")
-      ? String(data || "")
-      : `data:${mimeType};base64,${base64}`;
-    return {
-      type: "input_audio",
-      input_audio: {
-        data: normalizedDataUrl,
-        format: normalizeAudioFormat(mimeType),
-      },
-    };
-  }
-
-  if (mediaType === "video") {
-    const url = data.startsWith("data:")
-      ? data
-      : `data:${mimeType};base64,${data}`;
-    return { type: "video", video: url };
-  }
-
-  return null;
 }
 
 function buildOpenAIAttachmentBlock({ type, mimeType, data }) {
   const mediaType = type.split("/")[0];
   if (mediaType === "image") {
-    const normalizedImageUrl = data.startsWith("data:")
-      ? data
-      : `data:${mimeType};base64,${data}`;
+    const normalizedImageUrl = data.startsWith("data:") ? data : `data:${mimeType};base64,${data}`;
     return {
       type: "image_url",
       image_url: {
@@ -78,9 +32,7 @@ function buildOpenAIAttachmentBlock({ type, mimeType, data }) {
   }
 
   if (mediaType === "video") {
-    const url = data.startsWith("data:")
-      ? data
-      : `data:${mimeType};base64,${data}`;
+    const url = data.startsWith("data:") ? data : `data:${mimeType};base64,${data}`;
     return { type: "video_url", video_url: { url } };
   }
 

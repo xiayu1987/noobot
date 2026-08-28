@@ -33,8 +33,10 @@ import {
   createPluginConfigPlan,
   selectModelAlias,
   resolveMultimodalDefaultModelSelection,
-  DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
-  synchronizeConfigFileFromTemplate,
+  CONFIG_DOCUMENT_SCOPE,
+  CONFIG_NODE_POLICY,
+  CONFIG_REPAIR_ACTION,
+  repairConfigDocument,
 } from "../src/index.js";
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
@@ -371,8 +373,8 @@ test("current config migration preserves active tool and runtime configuration",
   assert.deepEqual(migrateConfigFileToCurrentProtocol(config), config);
 });
 
-test("config migration normalizes persisted provider transport to the canonical format", () => {
-  const migrated = migrateConfigFileToCurrentProtocol({
+test("config migration does not infer a replacement for an unsupported provider transport", () => {
+  const source = {
     providers: {
       qwen: {
         model: "qwen3.5-omni-plus",
@@ -380,10 +382,8 @@ test("config migration normalizes persisted provider transport to the canonical 
         api_key: "${DASHSCOPE_API_KEY}",
       },
     },
-  });
-  assert.equal(migrated.providers.qwen.format, "openai_compatible");
-  assert.equal(migrated.providers.qwen.api_key, "${DASHSCOPE_API_KEY}");
-  assert.deepEqual(migrateConfigFileToCurrentProtocol(migrated), migrated);
+  };
+  assert.deepEqual(migrateConfigFileToCurrentProtocol(source), source);
 });
 
 test("config params document is the only values, descriptions, and catalog authority", () => {
@@ -495,8 +495,9 @@ test("template resolution has one explicit source order and unresolved policy", 
   );
 });
 
-test("config synchronization recursively adds template nodes through one protocol", () => {
-  const synchronized = synchronizeConfigFileFromTemplate({
+test("config repair recursively adds template nodes through one protocol", () => {
+  const synchronized = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
     template: {
       workspace_root: "/template",
       providers: {
@@ -517,15 +518,18 @@ test("config synchronization recursively adds template nodes through one protoco
       workspace_root: "/configured",
       providers: {
         primary: { reasoning_effort: "high" },
-        custom: { model: "custom-model", enabled: true },
+        custom: {
+          model: "custom-model",
+          format: "openai_compatible",
+          enabled: true,
+        },
       },
       tools: {
         obsolete_tool: { enabled: true },
       },
       user_only: true,
     },
-    excludedRootKeys: DEPLOYMENT_OWNED_CONFIG_ROOT_KEYS,
-  });
+  }).document;
 
   assert.deepEqual(synchronized, {
     workspace_root: "/configured",
@@ -536,7 +540,11 @@ test("config synchronization recursively adds template nodes through one protoco
         capabilities: { web_search: true },
       },
       added: { enabled: true },
-      custom: { model: "custom-model", enabled: true },
+      custom: {
+        model: "custom-model",
+        format: "openai_compatible",
+        enabled: true,
+      },
     },
     tools: {
       execute_script: { enabled: true },
@@ -544,6 +552,141 @@ test("config synchronization recursively adds template nodes through one protoco
       delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
     },
   });
+});
+
+test("config repair preserves a valid custom value and restores an invalid value from its template", () => {
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    template: { workspace_root: "/template", workspace_template_path: "/template-default" },
+    target: { workspace_root: { invalid: true }, workspace_template_path: "/custom-template" },
+  });
+
+  assert.equal(repaired.document.workspace_root, "/template");
+  assert.equal(repaired.document.workspace_template_path, "/custom-template");
+  assert.deepEqual(repaired.report.changes, [
+    {
+      path: "workspace_root",
+      action: CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
+      reason: "invalid_node_type",
+    },
+  ]);
+});
+
+test("config repair enforces defaulted, optional, and system-owned node policies", () => {
+  const template = {
+    default_provider: "primary",
+    providers: {
+      primary: {
+        enabled: true,
+        used_for_conversation: true,
+        model: "primary-model",
+        format: "openai_compatible",
+      },
+    },
+    tools: {
+      read_file: { enabled: true },
+      execute_native_script: { enabled: true },
+    },
+  };
+  const first = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template,
+    target: {
+      default_provider: "incomplete",
+      providers: {
+        primary: {
+          enabled: false,
+          used_for_conversation: true,
+          model: "primary-model",
+          format: "openai_compatible",
+          temperature: 0.4,
+        },
+        custom: {
+          enabled: true,
+          model: "custom-model",
+          format: "openai_compatible",
+          top_p: 0.8,
+          cache_control: false,
+        },
+        incomplete: { model: "missing-format" },
+      },
+      tools: {
+        read_file: { enabled: "false" },
+        execute_native_script: { enabled: false },
+      },
+      context: { customSection: { enabled: true } },
+      session: { executionBundleTimeoutMs: "1000" },
+      unknown_root: true,
+    },
+  });
+
+  assert.equal(CONFIG_NODE_POLICY.USER_DEFAULTED, "user_defaulted");
+  assert.equal(CONFIG_NODE_POLICY.USER_OPTIONAL, "user_optional");
+  assert.equal(CONFIG_NODE_POLICY.SYSTEM_OWNED, "system_owned");
+  assert.equal(first.document.tools.read_file.enabled, true);
+  assert.equal(first.document.tools.execute_native_script.enabled, false);
+  assert.equal(first.document.providers.primary.temperature, 0.4);
+  assert.equal(first.document.providers.primary.enabled, true);
+  assert.equal(first.document.providers.custom.top_p, 0.8);
+  assert.equal(first.document.providers.custom.cache_control, false);
+  assert.equal(first.document.providers.incomplete, undefined);
+  assert.equal(first.document.default_provider, "primary");
+  assert.deepEqual(first.document.context, { customSection: { enabled: true } });
+  assert.deepEqual(first.document.session, {});
+  assert.equal(first.document.unknown_root, undefined);
+  assert.equal(
+    first.report.changes.some(({ path }) => path === "tools.execute_native_script"),
+    false,
+  );
+  assert.equal(JSON.stringify(first.report).includes("custom-model"), false);
+
+  const unsupportedFormat = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template,
+    target: {
+      ...template,
+      providers: {
+        ...template.providers,
+        removed: { model: "qwen", format: "dashscope" },
+      },
+    },
+  });
+  assert.equal(unsupportedFormat.document.providers.removed, undefined);
+
+  const second = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template,
+    target: first.document,
+  });
+  assert.equal(second.report.changed, false);
+  assert.deepEqual(second.document, first.document);
+});
+
+test("global repair preserves supported optional runtime nodes without adding missing ones", () => {
+  const template = { preferences: { language: "zh-CN" } };
+  const missing = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    template,
+    target: template,
+  });
+  assert.equal(missing.document.memory, undefined);
+  assert.equal(missing.report.changed, false);
+
+  const configured = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    template,
+    target: {
+      ...template,
+      memory: { summarizeTimeoutMs: 5000, postprocess_async: false },
+      session: { executionBundleTimeoutMs: 3000 },
+    },
+  });
+  assert.deepEqual(configured.document.memory, {
+    summarizeTimeoutMs: 5000,
+    postprocess_async: false,
+  });
+  assert.deepEqual(configured.document.session, { executionBundleTimeoutMs: 3000 });
+  assert.equal(configured.report.changed, false);
 });
 
 test("build, migration, and validation pipeline exposes one result contract", async () => {

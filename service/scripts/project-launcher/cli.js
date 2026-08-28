@@ -5,11 +5,7 @@
  */
 import process from "node:process";
 import { resolveServiceGlobalConfigPath } from "../../services/global-config-source.js";
-import {
-  DEFAULT_TEMPLATE_PATH,
-  DEFAULT_WORKSPACE_ROOT,
-  MODEL_FORMAT_VALUES,
-} from "./constants.js";
+import { DEFAULT_TEMPLATE_PATH, DEFAULT_WORKSPACE_ROOT, MODEL_FORMAT_VALUES } from "./constants.js";
 import { firstNonEmptyString } from "./utils.js";
 
 export function parseCliOptions(argv = []) {
@@ -44,22 +40,22 @@ export function parseCliOptions(argv = []) {
 }
 
 export function resolveConfiguredWorkspaceRoot(config = {}) {
-  return firstNonEmptyString(config?.workspace_root, config?.workspaceRoot, DEFAULT_WORKSPACE_ROOT);
+  return firstNonEmptyString(config?.workspace_root, DEFAULT_WORKSPACE_ROOT);
 }
 
 export function resolveConfiguredWorkspaceTemplatePath(config = {}) {
-  return firstNonEmptyString(
-    config?.workspace_template_path,
-    config?.workspaceTemplatePath,
-    DEFAULT_TEMPLATE_PATH,
-  );
+  return firstNonEmptyString(config?.workspace_template_path, DEFAULT_TEMPLATE_PATH);
 }
 
 export function resolveConfiguredSuperAdminUserId(config = {}) {
-  return firstNonEmptyString(config?.super_admin?.user_id, config?.superAdmin?.userId);
+  return firstNonEmptyString(config?.super_admin?.user_id);
 }
 
-export function resolveLauncherGlobalConfigPath({ serviceRoot, cliOptions = {}, env = process.env } = {}) {
+export function resolveLauncherGlobalConfigPath({
+  serviceRoot,
+  cliOptions = {},
+  env = process.env,
+} = {}) {
   return resolveServiceGlobalConfigPath({
     filePath: cliOptions?.globalConfigPath || "",
     cwd: serviceRoot,
@@ -68,7 +64,9 @@ export function resolveLauncherGlobalConfigPath({ serviceRoot, cliOptions = {}, 
 }
 
 export function normalizeModelFormat(input = "") {
-  const format = String(input || "").trim().toLowerCase();
+  const format = String(input || "")
+    .trim()
+    .toLowerCase();
   if (!format) return "";
   return MODEL_FORMAT_VALUES.has(format) ? format : "";
 }

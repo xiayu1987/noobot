@@ -11,7 +11,7 @@ import {
   BUILTIN_THRESHOLDS,
   hasOwnConfigKey,
   mergeConfig,
-  normalizeBooleanLike,
+  normalizeBoolean,
 } from "../../config/index.js";
 import {
   getSessionIdsFromAgentContext,
@@ -116,7 +116,7 @@ export function createMcpTool({ agentContext }) {
             pluginPolicy: { mode: "none" },
             allowUserInteraction,
             ...(hasParentStreamingConfig
-              ? { streaming: normalizeBooleanLike(systemRuntime?.config?.streaming, false) }
+              ? { streaming: normalizeBoolean(systemRuntime?.config?.streaming, false) }
               : {}),
             selectedConnectorIds: normalizeSelectedConnectorIds(
               runtime?.systemRuntime?.config?.selectedConnectorIds,

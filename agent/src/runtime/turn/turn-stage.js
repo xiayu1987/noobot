@@ -5,7 +5,7 @@
  */
 import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
-import { mergeConfig, normalizeBooleanLike, resolveRunConfigValue } from "../../config/index.js";
+import { mergeConfig, normalizeBoolean, resolveRunConfigValue } from "../../config/index.js";
 import { emitEvent } from "../../events/index.js";
 import { createStreamingCallbacks } from "../../models/runtime/model-manager.js";
 import { resolveNonThinkingCallOverrides } from "./tool-choice-strategy.js";
@@ -22,7 +22,7 @@ function shouldUseFinalStreaming(modelState = {}) {
     runConfig,
     config: effectiveConfig,
     key: "streaming",
-    normalize: (value) => normalizeBooleanLike(value, false),
+    normalize: (value) => normalizeBoolean(value, false),
     fallback: false,
   });
 }

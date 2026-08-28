@@ -7,21 +7,7 @@ import { deepMerge, isPlainObject } from "../utils.js";
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
 import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
 import { sanitizeUserConfig } from "../policy/user-override.js";
-
-const USER_OVERRIDE_POLICY = {
-  defaultProvider: "replace",
-  providers: "deep",
-  attachments: "deep",
-  multimodal: "deep",
-  session: "deep",
-  context: "deep",
-  services: "deep",
-  mcpServers: "deep",
-  tools: "deep",
-  scenarios: "scenarios",
-  plugins: "deep",
-  preferences: "deep",
-};
+import { USER_CONFIG_OVERRIDE_POLICY } from "../contract/repair.js";
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const globalBase = normalizeKnownConfigKeys(
@@ -30,7 +16,7 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const safeUser = sanitizeUserConfig(userConfig);
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
-    const mode = USER_OVERRIDE_POLICY[key];
+    const mode = USER_CONFIG_OVERRIDE_POLICY[key];
     if (key === "scenarios") continue;
     if (mode === "deep") {
       out[key] = deepMerge(globalBase[key], userValue);
@@ -59,17 +45,9 @@ export function hasOwnConfigKey(source = {}, key = "") {
   );
 }
 
-export function normalizeBooleanLike(value, fallback = false) {
+export function normalizeBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = String(value || "")
-      .trim()
-      .toLowerCase();
-    if (["true", "1", "yes", "on"].includes(normalized)) return true;
-    if (["false", "0", "no", "off", ""].includes(normalized)) return false;
-  }
-  return Boolean(fallback);
+  return typeof fallback === "boolean" ? fallback : false;
 }
 
 export function resolveRunConfigValue({

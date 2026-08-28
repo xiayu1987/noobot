@@ -10,10 +10,10 @@ import { resolveBoundToolModelRequestOverrides } from "../../../src/runtime/turn
 import { createBoundLlmToolChoiceInvoker } from "../../../src/runtime/turn/tool-invoke-strategy.js";
 import { maybeInvokeFinalStreamingNoTools } from "../../../src/runtime/turn/turn-stage.js";
 import {
-  bindTestTurnMessageEventDomain,
   createTestTurnMessagesStore,
   prepareTestTurnExecution,
 } from "./turn-runtime-test-helper.js";
+import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
 
 function runFunctionCallLoop(args = {}) {
   prepareTestTurnExecution(args.modelState, args.loopState, "orchestrator-model-overrides");
@@ -102,57 +102,6 @@ function createModelState(modelPort, defaultModelSpec = null) {
   return modelState;
 }
 
-test("bound tool dashscope request overrides disable thinking", () => {
-  assert.deepEqual(
-    resolveBoundToolModelRequestOverrides({
-      format: "dashscope",
-      model: "qwen3.6-plus",
-      preserve_thinking: true,
-      thinking_budget: 4096,
-    }),
-    { preserve_thinking: false, thinking_budget: 0 },
-  );
-});
-
-test("auto tool_choice should apply bound tool dashscope request overrides", async () => {
-  let toolInvokeCount = 0;
-  const tool = {
-    name: "execute_script",
-    async invoke() {
-      toolInvokeCount += 1;
-      return '{"ok":true}';
-    },
-  };
-  const { modelPort, capturedNoToolInvokeOptions } = createToolCallingModelPort([
-    {
-      content: "",
-      tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
-      additional_kwargs: {},
-      response_metadata: {},
-    },
-    {
-      content: "收尾结果",
-      tool_calls: [],
-      additional_kwargs: {},
-      response_metadata: {},
-    },
-  ]);
-
-  const result = await runFunctionCallLoop({
-    modelState: createModelState(modelPort, { format: "dashscope", model: "qwen3.6-plus" }),
-    loopState: createLoopState({ maxTurns: 1, tool }),
-    turn: 1,
-  });
-
-  assert.equal(toolInvokeCount, 1);
-  assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[1]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[1]?.enable_thinking, false);
-  assert.equal(capturedNoToolInvokeOptions[1]?.preserve_thinking, false);
-  assert.equal(capturedNoToolInvokeOptions[1]?.thinking_budget, 0);
-  assert.equal(result.output, "收尾结果");
-});
-
 test("bound tool requests use openai_compatible tool_reasoning_effort when configured", () => {
   assert.deepEqual(
     resolveBoundToolModelRequestOverrides({
@@ -165,14 +114,14 @@ test("bound tool requests use openai_compatible tool_reasoning_effort when confi
   );
 });
 
-test("bound tool requests default openai_compatible reasoning_effort to low", () => {
+test("bound tool requests keep configured reasoning_effort when tool override is absent", () => {
   assert.deepEqual(
     resolveBoundToolModelRequestOverrides({
       format: "openai_compatible",
       model: "gpt-5.5",
       reasoning_effort: "high",
     }),
-    { reasoning_effort: "low" },
+    { reasoning_effort: "high" },
   );
 });
 
@@ -203,7 +152,7 @@ test("bound tool openai_compatible request overrides are passed to invoke option
   });
 
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "low");
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "high");
   assert.equal(result.output, "完成");
 });
 
@@ -216,7 +165,10 @@ test("bound tool overrides use active model spec when it differs from default sp
       response_metadata: {},
     },
   ]);
-  const modelState = createModelState(modelPort, { format: "dashscope", model: "qwen3.6-plus" });
+  const modelState = createModelState(modelPort, {
+    format: "openai_compatible",
+    model: "qwen3.6-plus",
+  });
   modelState.activeModelSpec = {
     format: "openai_compatible",
     model: "gpt-5.5",
@@ -234,7 +186,7 @@ test("bound tool overrides use active model spec when it differs from default sp
 
   await invokeBoundLlmWithToolChoice("auto");
 
-  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "low");
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "high");
   assert.equal(capturedNoToolInvokeOptions[0]?.preserve_thinking, undefined);
   assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
 });
@@ -296,8 +248,8 @@ test("only the final no-tools streaming stage owns delta callbacks", async () =>
   const runtime = {
     runConfig: { streaming: true },
     systemRuntime: {},
+    sessionManager: createCanonicalMessageEventSessionManager(),
   };
-  bindTestTurnMessageEventDomain(runtime, "final-stream-callback-owner");
   const eventListener = {
     onEvent(payload = {}) {
       events.push(payload);
@@ -330,6 +282,7 @@ test("only the final no-tools streaming stage owns delta callbacks", async () =>
     activeModelSpec: {},
     abortSignal: null,
   };
+  prepareTestTurnExecution(modelState, createLoopState(), "final-stream-callback-owner");
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
     adaptedBinding: { bindOptions: { tool_choice: "auto" } },
     boundTools: [{ name: "execute_script" }],
@@ -355,7 +308,11 @@ test("only the final no-tools streaming stage owns delta callbacks", async () =>
   assert.equal(Array.isArray(capturedInvocations[1].options.callbacks), true);
   assert.equal(result.text, "final answer");
   assert.deepEqual(
-    events.filter((item) => item?.event === "llm_delta").map((item) => item.data.text),
+    events
+      .filter((item) => item?.event === "authority_event_committed")
+      .map((item) => item?.data?.envelope?.payload)
+      .filter((payload) => payload?.eventType === "llm_delta")
+      .map((payload) => payload.text),
     ["final ", "answer"],
   );
 });

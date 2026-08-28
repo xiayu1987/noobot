@@ -25,21 +25,6 @@ export const MCP_SERVER_TYPE = {
   SSE: "sse",
 };
 
-export const MCP_SERVER_TYPE_ALIASES = {
-  [MCP_SERVER_TYPE.STREAMABLE_HTTP]: [
-    MCP_SERVER_TYPE.STREAMABLE_HTTP,
-    "streamable_http",
-    "streamable-http",
-    "streamablehttp",
-  ],
-  [MCP_SERVER_TYPE.SSE]: [
-    MCP_SERVER_TYPE.SSE,
-    "serversentevents",
-    "server_sent_events",
-    "server-sent-events",
-  ],
-};
-
 export const DOC2DATA_FORMAT = {
   PNG: "png",
   JPEG: "jpeg",
@@ -132,7 +117,8 @@ export function normalizeModelAdapterId(input = "") {
 }
 
 export function normalizeMcpServerType(input = "") {
-  return normalizeWithAliases(input, MCP_SERVER_TYPE_ALIASES);
+  const value = String(input || "").trim();
+  return Object.values(MCP_SERVER_TYPE).includes(value) ? value : "";
 }
 
 export function normalizeDoc2DataFormat(input = "") {

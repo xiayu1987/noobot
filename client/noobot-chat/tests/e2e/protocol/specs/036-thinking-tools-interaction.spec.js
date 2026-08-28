@@ -170,23 +170,22 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await setHarnessCapability(noobot.page, "Planning", false);
   await setHarnessCapability(noobot.page, "Planning Acceptance", false);
   await setHarnessGuidanceAnalysisIntensity(noobot.page, 9);
-  const generatedFileName = `case036-${testInfo.testId}-${Date.now()}.txt`;
+  const generatedFileName = `case036-${Date.now()}.txt`;
   const generatedFilePath = `runtime/ops_workdir/${generatedFileName}`;
   await sendMessage(
     noobot.page,
     uniquePrompt(
       testInfo,
       [
-        "严格按顺序且每种只调用一次以下七个工具，不得调用任何其他工具：",
-        "只能使用下面列出的七个规范工具名；不得发明、缩写、别名化或调用任何未列出的工具，尤其不得调用 `zz`。",
+        "按顺序各调用一次且只调用以下七个规范工具：",
         `1) write_file 写 ${generatedFilePath}，内容 CASE036-TOOL-CONTENT，overwrite=true，riskLevel=low；`,
         `2) read_file 读取 ${generatedFilePath} 且不显示行号，riskLevel=low；`,
         "3) search 使用 source=text 在文本 CASE036-SEARCH-TARGET 中查 SEARCH-TARGET，riskLevel=low；",
         `4) patch_file 对 ${generatedFileName} 应用这个精确 unified diff，dryRun=false、root=runtime/ops_workdir、strip=1、riskLevel=low：--- a/${generatedFileName} +++ b/${generatedFileName} @@ -1 +1 @@ -CASE036-TOOL-CONTENT +CASE036-PATCH-CONTENT；`,
         "5) execute_script 执行 printf CASE036-SCRIPT，foreground、riskLevel=low；",
         "6) list_skills 使用空参数；",
-        "7) user_interaction 显示 CASE036-INTERACTION，并要求一个必填字段 verificationCode，显示名 Verification Code。不得提前结束，必须执行到这个交互步骤。",
-        "收到交互返回后，最终回复必须同时包含 CASE036-UI-VALUE 和前述 read/search/script 的实际结果。",
+        "7) user_interaction 显示 CASE036-INTERACTION，要求必填 verificationCode，显示名 Verification Code。",
+        "交互返回后回复 CASE036-UI-VALUE 和 read/search/script 的实际结果。",
       ].join(" "),
     ),
   );

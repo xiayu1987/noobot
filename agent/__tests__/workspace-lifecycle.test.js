@@ -22,11 +22,15 @@ async function createFixture() {
   await mkdir(path.join(workspaceTemplatePath, "memory"), { recursive: true });
   await writeFile(
     path.join(workspaceTemplatePath, "config.json"),
-    `${JSON.stringify({ added: true, nested: { fromTemplate: true, preserved: "template" } })}\n`,
+    `${JSON.stringify({ preferences: { added: true, preserved: "template" } })}\n`,
   );
   await writeFile(
     path.join(workspaceTemplatePath, "services", "built-in.js"),
     "export default 'current';\n",
+  );
+  await writeFile(
+    path.join(workspaceTemplatePath, "services", "package.json"),
+    '{"type":"module"}\n',
   );
   await writeFile(path.join(workspaceTemplatePath, "memory", "long-memory.md"), "template\n");
   return {
@@ -45,7 +49,7 @@ test("existing workspace receives managed template updates without replacing use
     await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
     await writeFile(
       path.join(fixture.userPath, "config.json"),
-      `${JSON.stringify({ nested: { preserved: "user" }, userOnly: true })}\n`,
+      `${JSON.stringify({ preferences: { preserved: "user" }, userOnly: true })}\n`,
     );
     await writeFile(
       path.join(fixture.userPath, "services", "built-in.js"),
@@ -65,13 +69,15 @@ test("existing workspace receives managed template updates without replacing use
 
     const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
     assert.deepEqual(config, {
-      added: true,
-      nested: { fromTemplate: true, preserved: "user" },
-      userOnly: true,
+      preferences: { added: true, preserved: "user" },
     });
     assert.equal(
       await readFile(path.join(fixture.userPath, "services", "built-in.js"), "utf8"),
       "export default 'current';\n",
+    );
+    assert.deepEqual(
+      JSON.parse(await readFile(path.join(fixture.userPath, "services", "package.json"), "utf8")),
+      { type: "module" },
     );
     assert.equal(
       await readFile(path.join(fixture.userPath, "services", "user-defined.js"), "utf8"),
@@ -297,10 +303,35 @@ test("explicit workspace sync adds every nested config node through the config p
         added: { enabled: true },
       },
       tools: {
-        execute_script: { enabled: true },
         read_file: { enabled: true },
       },
     });
+  } finally {
+    await fixture.restore();
+  }
+});
+
+test("workspace synchronization preserves invalid config JSON and repairs from the template", async () => {
+  const fixture = await createFixture();
+  try {
+    await mkdir(fixture.userPath, { recursive: true });
+    await writeFile(path.join(fixture.userPath, "config.json"), "{broken");
+
+    await syncUserWorkspaceFromTemplate({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+
+    assert.deepEqual(
+      JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8")),
+      { preferences: { added: true, preserved: "template" } },
+    );
+    assert.equal(
+      (await readdir(fixture.userPath)).filter((name) => name.startsWith("config.json.invalid-"))
+        .length,
+      1,
+    );
   } finally {
     await fixture.restore();
   }

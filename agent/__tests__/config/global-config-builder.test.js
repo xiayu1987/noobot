@@ -146,18 +146,18 @@ test("createGlobalConfigBuilder: derives protocol identities and removes provide
   const builder = createGlobalConfigBuilder({
     source: async () => ({
       providers: {
-        legacy: {
+        configured: {
           model: "gpt-4",
           format: "openai_compatible",
-          providerId: "dashscope",
-          adapterId: "dashscope",
+          providerId: "untrusted-override",
+          adapterId: "untrusted-override",
         },
       },
     }),
   });
 
   const built = await builder.build();
-  assert.equal(built.rawConfig.providers.legacy.providerId, undefined);
-  assert.equal(built.rawConfig.providers.legacy.operatorId, "generic");
-  assert.equal(built.rawConfig.providers.legacy.adapterId, "openai-compatible");
+  assert.equal(built.rawConfig.providers.configured.providerId, undefined);
+  assert.equal(built.rawConfig.providers.configured.operatorId, "generic");
+  assert.equal(built.rawConfig.providers.configured.adapterId, "openai-compatible");
 });
