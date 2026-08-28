@@ -104,17 +104,25 @@ function buildFailureDetails({
   message = "",
   modelAlias = "",
   model = "",
+  requestedModel = "",
   generationApiType = "",
   effectiveImageSize = "",
   modelSpec = {},
   requestUrl = "",
   requestMethod = "",
 } = {}) {
-  const resolvedApiType = generationApiType || resolveGenerationApiType(modelSpec || {});
+  const resolvedApiType =
+    generationApiType ||
+    normalizeGenerationApiType(
+      resolveModelMultimodalCapabilities(modelSpec || {}).generation.apiType,
+    );
   return {
     ...(message ? { message } : {}),
     modelAlias,
     model,
+    ...(String(requestedModel || "").trim()
+      ? { requestedModel: String(requestedModel).trim() }
+      : {}),
     apiType: resolvedApiType,
     callMode: generationApiTypeToCallMode(resolvedApiType),
     baseUrl: describeBaseUrlForDiagnostics(resolveModelBaseUrl(modelSpec || {})),
@@ -333,6 +341,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
     }) => {
       const generationContent = String(generation_content || "").trim();
       let resolvedModelSpec = null;
+      let resolvedModelName = "";
       let generationApiType = "";
       let effectiveImageSize = "";
       if (!generationContent) {
@@ -341,14 +350,26 @@ export function createMultimodalGenerateTool({ agentContext }) {
         });
       }
       try {
-        const { resolvedModelName, resolvedModelSpec: selectedModelSpec } =
-          resolveGenerationModelSpec({
-            modelName: model_name,
-            effectiveConfig,
-            globalConfig,
-            userConfig,
-          });
+        const resolvedSelection = resolveGenerationModelSpec({
+          modelName: model_name,
+          effectiveConfig,
+          globalConfig,
+          userConfig,
+        });
+        resolvedModelName = resolvedSelection.resolvedModelName;
+        const selectedModelSpec = resolvedSelection.resolvedModelSpec;
         resolvedModelSpec = selectedModelSpec;
+        if (!resolvedModelSpec) {
+          throw recoverableToolError(
+            tMultimodal(runtime, "modelNotFound", { model: resolvedModelName }),
+            {
+              code: ERROR_CODE.RECOVERABLE_MODEL_NOT_FOUND,
+              details: {
+                requestedModel: String(resolvedModelName || "").trim(),
+              },
+            },
+          );
+        }
         if (
           !supportsModelMultimodalGeneration(resolvedModelSpec || {}, [
             MODEL_MULTIMODAL_MODALITY.IMAGE,
@@ -420,6 +441,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
               message: "Image generation completed without an image_generation_call result",
               modelAlias: String(resolvedModelSpec?.alias || "").trim(),
               model: String(resolvedModelSpec?.model || "").trim(),
+              requestedModel: resolvedModelName,
               generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
@@ -481,6 +503,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
               message: hintMessage,
               modelAlias,
               model: modelName,
+              requestedModel: resolvedModelName,
               generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
@@ -495,6 +518,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             details: buildFailureDetails({
               modelAlias,
               model: modelName,
+              requestedModel: resolvedModelName,
               generationApiType,
               effectiveImageSize,
               modelSpec: resolvedModelSpec || {},
@@ -513,6 +537,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             message: hintMessage,
             modelAlias,
             model: modelName,
+            requestedModel: resolvedModelName,
             generationApiType,
             effectiveImageSize,
             modelSpec: resolvedModelSpec || {},

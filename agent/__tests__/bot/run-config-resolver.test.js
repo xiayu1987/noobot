@@ -175,6 +175,14 @@ test("resolveScenarioRunConfig should use builtin programming shape and only acc
   assert.deepEqual(resolved.scenarioProfile.services, []);
 });
 
+test("resolveScenarioRunConfig should preserve wildcard context selection for full scenario", () => {
+  const resolver = new RunConfigResolver({ globalConfig: {} });
+  const resolved = resolver.resolveScenarioRunConfig({ scenario: "full" }, {});
+
+  assert.deepEqual(resolved.scenarioProfile.context, ["*"]);
+  assert.deepEqual(resolved.contextPolicy.promptSections, ["*"]);
+});
+
 test("programming and text scenarios expose the selected connector access boundary", () => {
   const resolver = new RunConfigResolver({ globalConfig: {} });
   const sourceTools = [

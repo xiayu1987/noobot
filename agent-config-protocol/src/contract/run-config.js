@@ -32,7 +32,7 @@ export class RunConfigResolver {
 
   mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
     if (!Array.isArray(scenarioItems) || !scenarioItems.length) return [];
-    if (hasWildcard) return [];
+    if (hasWildcard) return ["*"];
     if (!Array.isArray(currentItems) || !currentItems.length) {
       return [...scenarioItems];
     }

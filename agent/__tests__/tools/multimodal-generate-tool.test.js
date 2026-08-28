@@ -10,6 +10,8 @@ import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
 
 import { createMultimodalGenerateTool } from "../../src/tools/ai-models/multimodal-generate-tool.js";
 
+const IMAGE_PROVIDER_BASE_URL = "https://image-provider.example.test";
+
 function getMultimodalGenerateTool(runtime = {}) {
   if (!runtime.modelPort) {
     const executor = createModelRequestExecutor({
@@ -166,6 +168,46 @@ test("multimodal_generate: model configuration is the only image API type author
   assert.equal(modelRequest.operation.options.apiType, "openai_responses");
 });
 
+test("multimodal_generate: an unknown requested model is rejected before capability resolution", async () => {
+  const runtime = {
+    globalConfig: {
+      providers: {
+        configured_image: {
+          enabled: true,
+          used_for_conversation: false,
+          api_key: "test-key",
+          base_url: "https://models.example.com/v1",
+          model: "configured-image",
+          format: "openai_compatible",
+          multimodal_generation: {
+            support_generation: {
+              enabled: true,
+              support_scope: ["image"],
+              api_type: "openai_responses",
+            },
+          },
+        },
+      },
+    },
+    userConfig: {},
+    modelPort: { invoke: async () => ({ result: {} }) },
+  };
+  const tool = getMultimodalGenerateTool(runtime);
+
+  await assert.rejects(
+    tool.invoke({
+      generation_content: "draw a test image",
+      model_name: "gpt-image-1",
+    }),
+    (error) => {
+      assert.equal(error?.code, "RECOVERABLE_MODEL_NOT_FOUND");
+      assert.match(error?.message || "", /gpt-image-1/);
+      assert.equal(error?.details?.requestedModel, "gpt-image-1");
+      return true;
+    },
+  );
+});
+
 test("multimodal_generate: canonical provider merge preserves Windows default image capability", async () => {
   let modelRequest = null;
   const modelAlias = ["gpt", "5", "6", "sol"].join("_");
@@ -177,7 +219,7 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
           enabled: true,
           used_for_conversation: true,
           api_key: "test-key",
-          base_url: "https://api.aicodewith.com/chatgpt/v1",
+          base_url: `${IMAGE_PROVIDER_BASE_URL}/chatgpt/v1`,
           model: "gpt-5.6-sol",
           format: "openai_compatible",
           multimodal_generation: {
@@ -362,7 +404,7 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
   }
 });
 
-test("multimodal_generate: images_async follows official aicodewith root base url example", async () => {
+test("multimodal_generate: images_async uses the configured provider base URL", async () => {
   const requested = [];
   const bodies = [];
   const runtime = {
@@ -372,7 +414,7 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
           enabled: true,
           used_for_conversation: false,
           api_key: "test-key",
-          base_url: "https://api.aicodewith.com",
+          base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2",
           format: "openai_compatible",
           providerId: "gpt_image_2",
@@ -392,7 +434,7 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
       async fetch(url, init = {}) {
         requested.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
         if (init?.body) bodies.push(JSON.parse(String(init.body)));
-        if (String(url || "") === "https://api.aicodewith.com/v1/images/generations") {
+        if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
           return {
             ok: true,
             async text() {
@@ -402,7 +444,7 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
         }
         if (
           String(url || "") ===
-          "https://api.aicodewith.com/v1/tasks/task-unified-1777017804-vskdh190"
+          `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-unified-1777017804-vskdh190`
         ) {
           return {
             ok: true,
@@ -451,8 +493,8 @@ test("multimodal_generate: images_async follows official aicodewith root base ur
   assert.equal(payload.summary.task_id, "task-unified-1777017804-vskdh190");
   assert.equal(payload.summary.generated_image_count, 1);
   assert.deepEqual(requested, [
-    "POST https://api.aicodewith.com/v1/images/generations",
-    "GET https://api.aicodewith.com/v1/tasks/task-unified-1777017804-vskdh190",
+    `POST ${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`,
+    `GET ${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-unified-1777017804-vskdh190`,
     "GET https://cdn.example.com/generated-cat.png",
   ]);
   assert.deepEqual(bodies, [
@@ -477,7 +519,7 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
           enabled: true,
           used_for_conversation: false,
           api_key: "test-key",
-          base_url: "https://api.aicodewith.com/chatgpt/v1",
+          base_url: `${IMAGE_PROVIDER_BASE_URL}/chatgpt/v1`,
           model: "gpt-image-2",
           format: "openai_compatible",
           providerId: "gpt_image_2",
@@ -496,7 +538,7 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
     sharedTools: {
       async fetch(url, init = {}) {
         requestedUrls.push(`${String(init?.method || "GET").toUpperCase()} ${String(url || "")}`);
-        if (String(url || "") === "https://api.aicodewith.com/v1/images/generations") {
+        if (String(url || "") === `${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`) {
           return {
             ok: true,
             async text() {
@@ -526,13 +568,13 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
       assert.equal(error?.code, "RECOVERABLE_MULTIMODAL_GENERATE_FAILED");
       assert.match(error?.message || "", /WebSocket upgrade required/);
       assert.equal(error?.details?.requestMethod, "GET");
-      assert.equal(error?.details?.requestUrl, "https://api.aicodewith.com/v1/tasks/task-426");
+      assert.equal(error?.details?.requestUrl, `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-426`);
       return true;
     },
   );
   assert.deepEqual(requestedUrls, [
-    "POST https://api.aicodewith.com/v1/images/generations",
-    "GET https://api.aicodewith.com/v1/tasks/task-426",
+    `POST ${IMAGE_PROVIDER_BASE_URL}/v1/images/generations`,
+    `GET ${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-426`,
   ]);
 });
 
@@ -545,7 +587,7 @@ test("multimodal_generate: images_async applies official parameter defaults and 
           enabled: true,
           used_for_conversation: false,
           api_key: "test-key",
-          base_url: "https://api.aicodewith.com",
+          base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2-beta",
           format: "openai_compatible",
           providerId: "gpt_image_2",
@@ -616,7 +658,7 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
           enabled: true,
           used_for_conversation: false,
           api_key: "test-key",
-          base_url: "https://api.aicodewith.com",
+          base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2",
           format: "openai_compatible",
           providerId: "gpt_image_2",
@@ -666,7 +708,7 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
       assert.doesNotMatch(error?.message || "", /任务不存在或无权访问/);
       assert.doesNotMatch(error?.message || "", /只能查询自己创建的任务/);
       assert.equal(error?.details?.requestMethod, "GET");
-      assert.equal(error?.details?.requestUrl, "https://api.aicodewith.com/v1/tasks/task-private");
+      assert.equal(error?.details?.requestUrl, `${IMAGE_PROVIDER_BASE_URL}/v1/tasks/task-private`);
       return true;
     },
   );

@@ -101,6 +101,8 @@ export const ASSISTANCE_TOOL_SCHEMA = {
       "tools.multimodal.imagesApiNotEnabledMessage":
         "Enable Images API on your platform, or switch to a model/key with image generation enabled.",
       "tools.multimodal.modelApiKeyMissing": "model api key missing",
+      "tools.multimodal.modelNotFound": (params = {}) =>
+        `configured multimodal generation model not found: ${String(params.model || "").trim()}`,
       "tools.multimodal.multimodalUnsupportedError": (params = {}) =>
         `Current model does not support multimodal image generation: ${String(params.model || "").trim()}`,
       "tools.multimodal.multimodalUnsupportedMessage":
