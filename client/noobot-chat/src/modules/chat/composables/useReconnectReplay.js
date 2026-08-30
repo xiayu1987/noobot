@@ -53,6 +53,7 @@ import {
 import { renderActiveSessionBeforeReplay } from "../runtime/reconnect/hydrationReplay.js";
 import { applyReconnectInteractionRequest } from "../runtime/reconnect/interactionReplay.js";
 import { handleAttachmentLifecycleStreamEvent } from "../runtime/engine/streamHandlers.js";
+import { routeRuntimeStreamEvent } from "../../../extensions/runtime-stream-router.js";
 
 export function useReconnectReplay({
   sessions,
@@ -422,6 +423,15 @@ export function useReconnectReplay({
       applyExecutionChildren,
       applyExecutionTree,
       applyWorkflowRuntimeEvent,
+      applyRuntimeStreamEvent: (envelope, context = {}) =>
+        routeRuntimeStreamEvent(envelope, {
+          ...context,
+          source: context.source || "reconnect",
+          sessionId: String(envelope?.identity?.sessionId || ""),
+          turnScopeId: String(envelope?.identity?.turnScopeId || ""),
+          logRuntimeProjectionDiagnostics: (event, details) =>
+            logWorkflowDiagnostics(event, details),
+        }),
       applyPendingInteraction: (interaction) =>
         applyReconnectInteractionRequest({
           eventData: interaction,

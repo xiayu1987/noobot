@@ -78,8 +78,14 @@
       "http.authenticated"
     ],
     "authenticatedRoutes": [
-      "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId",
-      "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
+      {
+        "method": "GET",
+        "path": "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId"
+      },
+      {
+        "method": "GET",
+        "path": "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId/thinking-detail"
+      }
     ]
   },
   "enabledByDefault": true

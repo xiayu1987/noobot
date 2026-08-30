@@ -10,35 +10,37 @@ const captured = vi.hoisted(() => ({
   activate: null,
   publish: vi.fn(() => []),
   manifest: Object.freeze({
-  protocolVersion: 2,
-  id: "security-boundary-test",
-  name: "security-boundary-test",
-  version: "1.0.0",
-  entries: { frontend: "frontend.js" },
-  contributes: { frontend: { extensions: [] } },
-  requires: {
-    ports: ["frontend.contribute", "authenticated_request"],
-    permissions: ["http.authenticated"],
-    authenticatedRoutes: ["/api/internal/test/:id"],
-  },
-  enabledByDefault: true,
+    protocolVersion: 2,
+    id: "security-boundary-test",
+    name: "security-boundary-test",
+    version: "1.0.0",
+    entries: { frontend: "frontend.js" },
+    contributes: { frontend: { extensions: [] } },
+    requires: {
+      ports: ["frontend.contribute", "authenticated_request"],
+      permissions: ["http.authenticated"],
+      authenticatedRoutes: [{ method: "GET", path: "/api/internal/test/:id" }],
+    },
+    enabledByDefault: true,
   }),
 }));
 
 vi.mock("../../../src/plugins/generated/external-entries.js", () => ({
-  externalFrontendPluginEntries: [{
-    pluginId: captured.manifest.id,
-    name: captured.manifest.name,
-    version: captured.manifest.version,
-    manifest: captured.manifest,
-    module: {
-      activate(context) {
-        captured.contexts.push(context);
-        if (typeof captured.activate === "function") return captured.activate(context);
-        return { protocolVersion: 2, pluginId: captured.manifest.id, surface: "frontend" };
+  externalFrontendPluginEntries: [
+    {
+      pluginId: captured.manifest.id,
+      name: captured.manifest.name,
+      version: captured.manifest.version,
+      manifest: captured.manifest,
+      module: {
+        activate(context) {
+          captured.contexts.push(context);
+          if (typeof captured.activate === "function") return captured.activate(context);
+          return { protocolVersion: 2, pluginId: captured.manifest.id, surface: "frontend" };
+        },
       },
     },
-  }],
+  ],
 }));
 
 vi.mock("../../../src/extensions/extension-registry.js", () => ({
@@ -56,7 +58,7 @@ vi.mock("../../../src/extensions/extension-registry.js", () => ({
 }));
 
 vi.mock("../../../src/infrastructure/http/authenticatedHttpService.js", () => ({
-  createScopedAuthenticatedHttpService: vi.fn(() => Object.freeze({ get: vi.fn() })),
+  createScopedAuthenticatedHttpService: vi.fn(() => Object.freeze({ request: vi.fn() })),
 }));
 
 import {
@@ -91,7 +93,9 @@ describe("external frontend plugin service boundary", () => {
       surface: "frontend",
       dispose,
     });
-    captured.publish.mockImplementationOnce(() => { throw new Error("publication failed"); });
+    captured.publish.mockImplementationOnce(() => {
+      throw new Error("publication failed");
+    });
 
     await expect(registerExternalFrontendPlugins()).rejects.toThrow("publication failed");
     expect(dispose).toHaveBeenCalledTimes(1);
@@ -104,11 +108,12 @@ describe("external frontend plugin service boundary", () => {
       activations += 1;
       if (activations === 1) {
         return new Promise((resolve) => {
-          releaseFirst = () => resolve({
-            protocolVersion: 2,
-            pluginId: captured.manifest.id,
-            surface: "frontend",
-          });
+          releaseFirst = () =>
+            resolve({
+              protocolVersion: 2,
+              pluginId: captured.manifest.id,
+              surface: "frontend",
+            });
         });
       }
       return {
@@ -136,7 +141,9 @@ describe("external frontend plugin service boundary", () => {
       dispose,
     });
     await registerExternalFrontendPlugins();
-    captured.publish.mockImplementationOnce(() => { throw new Error("empty publication failed"); });
+    captured.publish.mockImplementationOnce(() => {
+      throw new Error("empty publication failed");
+    });
 
     await expect(disposeExternalFrontendPlugins()).rejects.toThrow("empty publication failed");
     expect(dispose).not.toHaveBeenCalled();

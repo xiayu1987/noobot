@@ -5,12 +5,119 @@
  */
 import path from "node:path";
 import fs from "node:fs/promises";
+import { createWriteStream, createReadStream } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   buildThinkingDetailPayload,
   iterateExecutionLogs,
   readSessionArtifactSnapshot,
 } from "noobot-agent/session";
 import { HTTP_STATUS } from "noobot-agent/constants";
+import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
+
+const assetIdPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$/;
+const assetVersionPattern = /^[a-f0-9]{64}$/;
+
+function requireAssetToken(value, pattern, label) {
+  const normalized = String(value || "").trim();
+  if (!pattern.test(normalized)) throw new TypeError(`invalid workspace asset ${label}`);
+  return normalized;
+}
+
+function createWorkspaceAssetPort({ bot, pluginId }) {
+  const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
+  const resolveRoot = (userId) => {
+    const workspacePath = String(bot?.getWorkspacePath?.(userId) || "").trim();
+    if (!workspacePath) throw new Error("workspace path not found");
+    return path.resolve(workspacePath, "runtime/plugin-assets", normalizedPluginId);
+  };
+  const resolveVersionPath = (userId, assetId, version) =>
+    path.resolve(
+      resolveRoot(userId),
+      requireAssetToken(assetId, assetIdPattern, "ID"),
+      requireAssetToken(version, assetVersionPattern, "version"),
+    );
+  return Object.freeze({
+    maxFileBytes: LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes,
+    async write({ userId, assetId, source, declaredBytes = 0, validate = null } = {}) {
+      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+      if (!source || typeof source.pipe !== "function") {
+        throw new TypeError("workspace asset source stream is required");
+      }
+      const expectedBytes = Number(declaredBytes);
+      const maximum = LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes;
+      if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > maximum) {
+        const error = new Error("workspace asset content length is invalid");
+        error.statusCode = expectedBytes > maximum ? 413 : 400;
+        throw error;
+      }
+      const assetDir = path.resolve(resolveRoot(userId), normalizedAssetId);
+      await fs.mkdir(assetDir, { recursive: true });
+      const temporaryPath = path.resolve(assetDir, `.upload-${randomUUID()}`);
+      const hash = createHash("sha256");
+      const prefixChunks = [];
+      let prefixBytes = 0;
+      let actualBytes = 0;
+      const meter = new Transform({
+        transform(chunk, _encoding, callback) {
+          actualBytes += chunk.length;
+          if (actualBytes > maximum) {
+            const error = new Error("workspace asset exceeds the configured size limit");
+            error.statusCode = 413;
+            callback(error);
+            return;
+          }
+          if (prefixBytes < 16) {
+            const prefix = chunk.subarray(0, Math.min(chunk.length, 16 - prefixBytes));
+            prefixChunks.push(prefix);
+            prefixBytes += prefix.length;
+          }
+          hash.update(chunk);
+          callback(null, chunk);
+        },
+      });
+      try {
+        await pipeline(source, meter, createWriteStream(temporaryPath, { flags: "wx" }));
+        if (actualBytes !== expectedBytes) {
+          const error = new Error("workspace asset content length mismatch");
+          error.statusCode = 400;
+          throw error;
+        }
+        const prefix = Buffer.concat(prefixChunks);
+        if (typeof validate === "function") validate({ prefix, size: actualBytes });
+        const version = hash.digest("hex");
+        const filePath = path.resolve(assetDir, version);
+        try {
+          await fs.rename(temporaryPath, filePath);
+        } catch (error) {
+          if (error?.code !== "EEXIST") throw error;
+          await fs.rm(temporaryPath, { force: true });
+        }
+        return Object.freeze({ assetId: normalizedAssetId, version, size: actualBytes });
+      } catch (error) {
+        await fs.rm(temporaryPath, { force: true });
+        throw error;
+      }
+    },
+    async read({ userId, assetId, version } = {}) {
+      const filePath = resolveVersionPath(userId, assetId, version);
+      let stats;
+      try {
+        stats = await fs.stat(filePath);
+      } catch (error) {
+        if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return null;
+        throw error;
+      }
+      if (!stats.isFile()) return null;
+      return Object.freeze({
+        size: stats.size,
+        stream: createReadStream(filePath),
+      });
+    },
+  });
+}
 
 async function readSegmentedExecutionLogs({
   workspacePath,
@@ -75,6 +182,11 @@ export function createPluginServicePorts({ bot = null, translateText = null } = 
 
   return Object.freeze({
     http: Object.freeze({ status: HTTP_STATUS }),
+    workspaceAssets: Object.freeze({
+      forPlugin(pluginId) {
+        return createWorkspaceAssetPort({ bot, pluginId });
+      },
+    }),
     sessions: Object.freeze({
       async readWorkflowSnapshot({
         userId,

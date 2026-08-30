@@ -8,12 +8,7 @@ import { ERROR_CODE } from "./constants.js";
 export class NoobotError extends Error {
   constructor(
     message = "",
-    {
-      code = ERROR_CODE.NOOBOT_ERROR,
-      level = "recoverable",
-      cause = undefined,
-      details = {},
-    } = {},
+    { code = ERROR_CODE.NOOBOT_ERROR, level = "recoverable", cause = undefined, details = {} } = {},
   ) {
     super(String(message || ""));
     this.name = "NoobotError";
@@ -44,9 +39,10 @@ export function recoverableToolError(message, options = {}) {
 export function isFatalError(error) {
   return Boolean(
     error?.fatal ||
-      String(error?.level || "").toLowerCase() === "fatal" ||
-      String(error?.code || "").startsWith("FATAL_"),
+    String(error?.level || "").toLowerCase() === "fatal" ||
+    String(error?.code || "").startsWith("FATAL_"),
   );
 }
 
+export * from "./execution-failure.js";
 export * from "./constants.js";

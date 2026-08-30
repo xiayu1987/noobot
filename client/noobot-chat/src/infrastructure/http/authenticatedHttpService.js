@@ -5,32 +5,52 @@
  */
 let authenticatedFetcher = null;
 
-function compileRoutePattern(pattern = "") {
-  const segments = String(pattern || "").split("/").filter(Boolean);
-  if (!segments.length || !String(pattern).startsWith("/api/internal/")) return null;
-  return segments.map((segment) => segment.startsWith(":") ? null : segment);
+function compileRoutePattern(definition = {}) {
+  const method = String(definition?.method || "")
+    .trim()
+    .toUpperCase();
+  const path = String(definition?.path || "").trim();
+  const segments = path.split("/").filter(Boolean);
+  if (!method || !segments.length || !path.startsWith("/api/internal/")) return null;
+  return {
+    method,
+    segments: segments.map((segment) => (segment.startsWith(":") ? null : segment)),
+  };
 }
 
-function matchesRoute(pathname = "", pattern = []) {
-  const segments = String(pathname || "").split("/").filter(Boolean);
-  return segments.length === pattern.length
-    && pattern.every((expected, index) => expected === null || expected === segments[index]);
+function matchesRoute(pathname = "", pattern = {}) {
+  const segments = String(pathname || "")
+    .split("/")
+    .filter(Boolean);
+  return (
+    segments.length === pattern.segments.length &&
+    pattern.segments.every((expected, index) => expected === null || expected === segments[index])
+  );
 }
 
 /** Creates a least-privilege authenticated request capability for one plugin. */
 export function createScopedAuthenticatedHttpService({ routePatterns = [] } = {}) {
   const allowedRoutes = routePatterns.map(compileRoutePattern).filter(Boolean);
   return Object.freeze({
-    get(url = "") {
+    request(url = "", options = {}) {
       if (typeof authenticatedFetcher !== "function") {
         throw new Error("authenticated HTTP service is unavailable");
       }
       const parsed = new URL(String(url || ""), window.location.origin);
-      if (parsed.origin !== window.location.origin
-        || !allowedRoutes.some((pattern) => matchesRoute(parsed.pathname, pattern))) {
-        throw new Error(`authenticated HTTP route is not allowed: ${parsed.pathname}`);
+      const method = String(options?.method || "")
+        .trim()
+        .toUpperCase();
+      if (
+        parsed.origin !== window.location.origin ||
+        !allowedRoutes.some(
+          (pattern) => pattern.method === method && matchesRoute(parsed.pathname, pattern),
+        )
+      ) {
+        throw new Error(
+          `authenticated HTTP route is not allowed: ${method || "<missing>"} ${parsed.pathname}`,
+        );
       }
-      return authenticatedFetcher(`${parsed.pathname}${parsed.search}`, { method: "GET" });
+      return authenticatedFetcher(`${parsed.pathname}${parsed.search}`, { ...options, method });
     },
   });
 }

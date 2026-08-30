@@ -23,6 +23,37 @@ An English demo of a fictional portfolio analysis: Noobot verifies source data, 
 
 ![Noobot tool workflow analyzing a fictional stock portfolio](./docs/assets/noobot-tool-workflow-v2.gif)
 
+### LLM-authored character animation
+
+Describe a movement in plain language and watch Noobot turn it into a validated
+animation protocol, commit it as a Session artifact, and execute it in Three.js.
+This reproducible capture uses the repository's real Three.js runtime and shows
+the complete path from GLB metadata to generated keyframes, playback, and a
+completed animation state:
+
+![Noobot LLM-authored character animation protocol](./docs/assets/noobot-character-animation.gif)
+
+The following GIF is captured from a running Noobot deployment. It includes the
+actual browser connection, Character plugin activation, GLB import, model
+request, `character_animation_generate` tool call, Session artifact commit, and
+Three.js playback through completion. The recorded timeline combines idle,
+wave, jump, walk, and idle clips in one continuous 10-second animation:
+
+![Noobot real character animation runtime](./docs/assets/noobot-character-animation-runtime.gif)
+
+The character animation plugin keeps the model focused on intent rather than
+rendering code. It reads the clips and nodes that actually exist in an imported
+GLB, validates the returned protocol, and lets the browser renderer perform the
+animation. Use the same `animationId` to extend one animation across turns, or
+omit it to create a new Session artifact. The artifact event is the source of
+truth, so the animation can be restored after a refresh.
+
+To create an animation, import a GLB in the Character feature, select one or more
+characters from **More actions**, and ask the model for a movement. The
+`character_animation_generate` tool returns `noobot.animation.protocol` data;
+the plugin validates character IDs, native clip names, timing, positions, and
+keyframes before Three.js renders it.
+
 <details>
 <summary>View the completed analysis</summary>
 

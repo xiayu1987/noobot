@@ -16,6 +16,7 @@ const repoRoot = path.resolve(scriptDir, "..");
 const PROJECT_MANIFEST_FILES = [
   "plugin/noobot-plugin-harness/manifest.json",
   "plugin/noobot-plugin-workflow/manifest.json",
+  "plugin/noobot-plugin-character/manifest.json",
 ];
 
 const PLUGIN_CONSTANT_FILES = [

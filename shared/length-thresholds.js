@@ -71,6 +71,7 @@ const LENGTH_TIERS = deepFreeze({
     attachmentTotal: 30 * MiB,
     responsesFileInput: 50 * MB,
     nativeScriptArtifact: 200 * MiB,
+    workspaceAssetFile: 200 * MiB,
     openVscodeArchive: 500 * MiB,
     libreOfficeTempBaseline: 512 * MiB,
   },
@@ -122,6 +123,7 @@ export const LENGTH_THRESHOLDS = deepFreeze({
   serviceHttp: {
     jsonBodyBytes: 20 * MiB,
     workspaceFileBytes: LENGTH_TIERS.bytes.attachmentFile,
+    workspaceAssetFileBytes: LENGTH_TIERS.bytes.workspaceAssetFile,
   },
 
   installers: {

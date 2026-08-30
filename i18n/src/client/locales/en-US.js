@@ -6,6 +6,9 @@
 export const enUSMessages = {
   common: {
     session: "Session",
+    sessionArtifacts: "Session artifacts",
+    extensionFeatures: "Extension features",
+    collapse: "Collapse",
     currentUser: "User: {userId}",
     openSidebar: "Open sidebar",
     moreActions: "More actions",

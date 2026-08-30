@@ -74,10 +74,9 @@ test("protocol payload reader validates wire identity and returns the canonical 
     }).payload,
     payload,
   );
-  assert.deepEqual(
-    readProtocolEventPayload(envelope, { wireEvent: "message_event" }).errors,
-    ["transport_event_identity_mismatch"],
-  );
+  assert.deepEqual(readProtocolEventPayload(envelope, { wireEvent: "message_event" }).errors, [
+    "transport_event_identity_mismatch",
+  ]);
 });
 
 test("event family declares the exact reducer input projection", () => {
@@ -185,7 +184,10 @@ test("replay interaction records are atomic and complete", () => {
     }),
     false,
   );
-  assert.equal(isPendingInteractionReplay({ identity: { eventType: "delta" }, payload: valid.payload }), false);
+  assert.equal(
+    isPendingInteractionReplay({ identity: { eventType: "delta" }, payload: valid.payload }),
+    false,
+  );
   assert.equal(
     isPendingInteractionReplay({
       ...valid,

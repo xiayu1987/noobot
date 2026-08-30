@@ -298,6 +298,9 @@ export function useChatSession({
     sessionItem = null,
     mainSessionDoc = {},
   } = {}) {
+    const sessionId = String(sessionItem?.sessionId || "").trim();
+    const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
+    if (!isCurrentSession) return;
     hydrateSessionDetailExtensions(
       {
         detail,
@@ -310,9 +313,7 @@ export function useChatSession({
         isTurnRuntimeDeleted,
       },
     );
-    const sessionId = String(sessionItem?.sessionId || "").trim();
     const terminalTurn = null;
-    const isCurrentSession = Boolean(sessionId && sessionId === resolveActiveSessionIdentity());
   }
 
   const { input, uploadFiles, appendUploads, clearUploads, removeUpload, serializeAttachments } =

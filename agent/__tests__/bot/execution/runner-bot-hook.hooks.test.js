@@ -89,7 +89,7 @@ test("SessionExecutionRunner emits bot orchestration hooks", async () => {
       { role: "assistant", content: "history assistant" },
     ],
   );
-  assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 2);
+  assert.equal(beforeDispatchContext?.modelContext?.protocolVersion, 3);
   assert.deepEqual(
     {
       ...beforeDispatchContext?.modelContext?.messageBlocks,
@@ -139,6 +139,37 @@ test("runner failures expose the committed execution lifecycle snapshot", async 
   );
 });
 
+test("runner failure owns lifecycle metadata without mutating an immutable abort reason", async () => {
+  const abortReason = Object.freeze({
+    type: "socket_close",
+    code: 1011,
+    reason: "primary transport failure",
+  });
+  const runner = createRunner({
+    agentRunner: async () => {
+      throw abortReason;
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "task",
+        runConfig: {},
+      }),
+    (error) => {
+      assert.equal(error.message, "primary transport failure");
+      assert.equal(error.cause, abortReason);
+      assert.equal(error.lifecycle?.state, "interrupted");
+      assert.equal(error.lifecycle?.stopType, "socket_close");
+      assert.equal(Object.hasOwn(abortReason, "lifecycle"), false);
+      return true;
+    },
+  );
+});
+
 test("SessionExecutionRunner emits bot error hooks", async () => {
   const botHookManager = createTestBotHookManager();
   const events = [];
@@ -165,4 +196,3 @@ test("SessionExecutionRunner emits bot error hooks", async () => {
   );
   assert.deepEqual(events, ["bot.agent_dispatch_error", "bot.session_run_error"]);
 });
-

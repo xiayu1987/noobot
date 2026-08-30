@@ -13,7 +13,8 @@
     "./turn-snapshot": "./src/turn-snapshot.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-timeline": "./src/tool-timeline.js",
-    "./workflow-runtime-event": "./src/workflow-runtime-event.js"
+    "./workflow-runtime-event": "./src/workflow-runtime-event.js",
+    "./plugin-artifact-event": "./src/plugin-artifact-event.js"
   },
   "scripts": {
     "test": "node --test __tests__/*.test.js"

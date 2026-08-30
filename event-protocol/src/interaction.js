@@ -105,15 +105,12 @@ export function isPendingInteractionReplay(record = {}) {
   const validation = validateInteractionRequestPayload(payload);
   return (
     validation.valid &&
-    normalizeInteractionLifecycle(payload.lifecycle) ===
-      INTERACTION_LIFECYCLE.PENDING
+    normalizeInteractionLifecycle(payload.lifecycle) === INTERACTION_LIFECYCLE.PENDING
   );
 }
 
 export function validateInteractionResponsePayload(data = {}) {
-  const missing = ["requestId", "dialogProcessId"].filter(
-    (key) => !clean(data?.[key]),
-  );
+  const missing = ["requestId", "dialogProcessId"].filter((key) => !clean(data?.[key]));
   return missing.length
     ? { valid: false, reason: "missing_identity", missing }
     : { valid: true, reason: "", missing: [] };

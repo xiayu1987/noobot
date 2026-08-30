@@ -11,7 +11,9 @@ const text = (value) => String(value || "").trim();
 const isRecord = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const select = (source, keys) =>
   Object.freeze(
-    Object.fromEntries(keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]])),
+    Object.fromEntries(
+      keys.filter((key) => source[key] !== undefined).map((key) => [key, source[key]]),
+    ),
   );
 
 export function validateEventEnvelope(value = {}) {
@@ -21,7 +23,10 @@ export function validateEventEnvelope(value = {}) {
   if (Number(value?.protocol?.version) !== EVENT_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
   if (!text(value?.protocol?.family)) errors.push("missing_event_family");
-  if (!Number.isInteger(Number(value?.protocol?.schemaVersion)) || Number(value.protocol.schemaVersion) < 1)
+  if (
+    !Number.isInteger(Number(value?.protocol?.schemaVersion)) ||
+    Number(value.protocol.schemaVersion) < 1
+  )
     errors.push("invalid_schema_version");
   if (!isRecord(value.identity)) errors.push("invalid_identity");
   if (!text(value?.identity?.eventId)) errors.push("missing_event_id");
@@ -77,13 +82,7 @@ export function createEventEnvelope({
         "executionId",
       ]),
       causality: select(causality, ["commandId", "causationId", "correlationId"]),
-      ordering: select(ordering, [
-        "domain",
-        "scopeId",
-        "sequence",
-        "revision",
-        "aggregateVersion",
-      ]),
+      ordering: select(ordering, ["domain", "scopeId", "sequence", "revision", "aggregateVersion"]),
       producer: select(producer, ["type", "id"]),
       occurredAt: text(occurredAt),
       payload,

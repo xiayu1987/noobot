@@ -9,6 +9,7 @@ import {
   PLUGIN_SURFACE,
   requireDeclaredPluginHook,
   requireDeclaredPluginHookEmission,
+  requireDeclaredPluginTool,
   serializePluginContributionIdentity,
 } from "@noobot/plugin-protocol";
 import {
@@ -30,6 +31,7 @@ import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runn
 import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
+import { commitPluginArtifact } from "./plugin-artifact-committer.js";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
@@ -235,6 +237,7 @@ export class RunConfigPluginPreparer {
       normalizeStringArray: (input) => this.normalizeStringArray(input),
     });
     const configuredPlugins = { ...plainObject(runConfig?.plugins) };
+    const pluginTools = [];
     for (const entry of entries) {
       const options = this.resolveOptions({ entry, userId, runConfig, userConfig });
       configuredPlugins[entry.pluginId] = options;
@@ -297,6 +300,31 @@ export class RunConfigPluginPreparer {
               path: ["policy", "patch"],
               value: (patch) => policy.patch(patch),
             },
+            [PLUGIN_HOST_PORT.ARTIFACTS_COMMIT]: {
+              path: ["artifacts", "commit"],
+              value: (artifact, toolContext) =>
+                commitPluginArtifact({ pluginId: entry.pluginId, artifact, toolContext }),
+            },
+            [PLUGIN_HOST_PORT.TOOLS_REGISTER]: {
+              path: ["tools", "register"],
+              value: (toolId, factory) => {
+                const declaration = requireDeclaredPluginTool(entry.manifest, toolId);
+                if (typeof factory !== "function")
+                  throw new TypeError(`plugin tool factory is required: ${toolId}`);
+                if (pluginTools.some((item) => item.id === declaration.id)) {
+                  throw new Error(`duplicate plugin tool: ${declaration.id}`);
+                }
+                const contribution = {
+                  id: declaration.id,
+                  name: declaration.name,
+                  factory,
+                  pluginId: entry.pluginId,
+                };
+                pluginTools.push(contribution);
+                transaction.stage({ type: "tool", toolId: declaration.id });
+                return contribution;
+              },
+            },
           },
         }),
     });
@@ -324,6 +352,7 @@ export class RunConfigPluginPreparer {
           }
         : {}),
       plugins: configuredPlugins,
+      pluginTools,
     };
   }
 }

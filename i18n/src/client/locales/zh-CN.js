@@ -6,6 +6,9 @@
 export const zhCNMessages = {
   common: {
     session: "会话",
+    sessionArtifacts: "Session 产物",
+    extensionFeatures: "扩展功能",
+    collapse: "收起",
     currentUser: "当前用户：{userId}",
     openSidebar: "打开侧栏",
     moreActions: "更多操作",

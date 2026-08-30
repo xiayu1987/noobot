@@ -24,7 +24,7 @@ describe("Workflow frontend registration", () => {
         MESSAGE_CARD_PRE: "message.card.pre",
         RUNTIME_STREAM_ROUTE: "runtime.stream.route",
       },
-      services: { authenticatedRequest: { get: vi.fn() } },
+      services: { authenticatedRequest: { request: vi.fn() } },
     });
 
     const receipt = contributions.map(({ point, contribution }) => ({
@@ -39,13 +39,43 @@ describe("Workflow frontend registration", () => {
     ]);
   });
 
+  it("uses the declared authenticated GET capability for workflow details", async () => {
+    const contributions = [];
+    const request = vi.fn(() => Promise.resolve({ ok: true }));
+    await activate({
+      contributeExtension: (point, contribution) => contributions.push({ point, contribution }),
+      extensionPoints: {
+        COMPOSER_OPTIONS_MODEL: "composer.options.model",
+        MESSAGE_CARD_PRE: "message.card.pre",
+        RUNTIME_STREAM_ROUTE: "runtime.stream.route",
+      },
+      services: { authenticatedRequest: { request } },
+    });
+    const card = contributions.find(({ point }) => point === "message.card.pre")?.contribution;
+    const service = card.resolveProps({ userId: "admin", messageItem: {} }).workflowSessionService;
+
+    await service.getDetail({
+      userId: "admin",
+      sessionId: "session-1",
+      dialogProcessId: "dialog-1",
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      "/api/internal/workflow/session/admin/session-1/dialog-1",
+      { method: "GET" },
+    );
+  });
+
   it("routes node diagnostics to the parent session and preserves node identity", () => {
     const logWorkflowDiagnostics = vi.fn();
-    logWorkflowDiagnostics("frontend.workflowNodeDetail.displayProjected", routeWorkflowDiagnosticsPayload("parent-session", {
-      sessionId: "node-session",
-      traceId: "trace-1",
-      messageCount: 2,
-    }));
+    logWorkflowDiagnostics(
+      "frontend.workflowNodeDetail.displayProjected",
+      routeWorkflowDiagnosticsPayload("parent-session", {
+        sessionId: "node-session",
+        traceId: "trace-1",
+        messageCount: 2,
+      }),
+    );
 
     expect(logWorkflowDiagnostics).toHaveBeenCalledWith(
       "frontend.workflowNodeDetail.displayProjected",
@@ -60,15 +90,18 @@ describe("Workflow frontend registration", () => {
 
   it("keeps the parent identity without adding a redundant nodeSessionId", () => {
     const logWorkflowDiagnostics = vi.fn();
-    logWorkflowDiagnostics("frontend.workflowRender.cardUpdated", routeWorkflowDiagnosticsPayload("parent-session", {
+    logWorkflowDiagnostics(
+      "frontend.workflowRender.cardUpdated",
+      routeWorkflowDiagnosticsPayload("parent-session", {
+        sessionId: "parent-session",
+        traceId: "trace-2",
+      }),
+    );
+
+    expect(logWorkflowDiagnostics).toHaveBeenCalledWith("frontend.workflowRender.cardUpdated", {
       sessionId: "parent-session",
       traceId: "trace-2",
-    }));
-
-    expect(logWorkflowDiagnostics).toHaveBeenCalledWith(
-      "frontend.workflowRender.cardUpdated",
-      { sessionId: "parent-session", traceId: "trace-2" },
-    );
+    });
   });
 
   it("contributes one plugin-runtime projector with canonical record semantics", async () => {
@@ -81,9 +114,11 @@ describe("Workflow frontend registration", () => {
         SESSION_DETAIL_HYDRATOR: "session.detail.hydrator",
         RUNTIME_STREAM_ROUTE: "runtime.stream.route",
       },
-      services: { authenticatedRequest: { get: vi.fn() } },
+      services: { authenticatedRequest: { request: vi.fn() } },
     });
-    const runtime = contributions.find(({ point }) => point === "runtime.stream.route")?.contribution;
+    const runtime = contributions.find(
+      ({ point }) => point === "runtime.stream.route",
+    )?.contribution;
     const projector = runtime?.provide?.()?.[0];
     const applyWorkflowRuntimeEvent = vi.fn(() => ({ applied: true }));
     const logRuntimeProjectionDiagnostics = vi.fn();
@@ -112,11 +147,13 @@ describe("Workflow frontend registration", () => {
       },
     });
 
-    expect(projector({
-      envelope,
-      descriptor: { family: EVENT_FAMILY.WORKFLOW_RUNTIME },
-      context: { source: "live", applyWorkflowRuntimeEvent, logRuntimeProjectionDiagnostics },
-    })).toBe(true);
+    expect(
+      projector({
+        envelope,
+        descriptor: { family: EVENT_FAMILY.WORKFLOW_RUNTIME },
+        context: { source: "live", applyWorkflowRuntimeEvent, logRuntimeProjectionDiagnostics },
+      }),
+    ).toBe(true);
     expect(applyWorkflowRuntimeEvent).toHaveBeenCalledWith(envelope, { source: "live" });
     expect(logRuntimeProjectionDiagnostics).toHaveBeenCalledWith(
       "frontend.workflowRuntime.projectorReduced",

@@ -102,7 +102,9 @@ export function usePseudoRoute({
   }
 
   function buildRouteFromCurrentState(patch = {}) {
-    const currentRoute = resolveActiveRoute();
+    const currentRoute = initialPseudoRouteApplied.value
+      ? resolveActiveRoute()
+      : parseFromLocation();
     return normalizeRoute({
       sessionId: hasOwn(patch, "sessionId") ? patch.sessionId : currentRoute.sessionId,
       panel: hasOwn(patch, "panel") ? patch.panel : currentRoute.panel,

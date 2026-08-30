@@ -35,6 +35,11 @@ import {
   WORKFLOW_RUNTIME_EVENT,
 } from "./workflow-runtime-event.js";
 import { validateTurnSnapshotEnvelope } from "./turn-snapshot.js";
+import {
+  PLUGIN_ARTIFACT_EVENT,
+  PLUGIN_ARTIFACT_FAMILY,
+  validatePluginArtifactEnvelope,
+} from "./plugin-artifact-event.js";
 
 export const EVENT_AUTHORITY = Object.freeze({ AUTHORITATIVE: "authoritative" });
 export const EVENT_REDUCER_TARGET = Object.freeze({
@@ -44,6 +49,7 @@ export const EVENT_REDUCER_TARGET = Object.freeze({
   INTERACTION: "interaction",
   MESSAGE: "message",
   WORKFLOW: "workflow",
+  PLUGIN_ARTIFACT: "plugin_artifact",
 });
 export const EVENT_REDUCER_INPUT = Object.freeze({
   ENVELOPE: "envelope",
@@ -62,6 +68,7 @@ export const EVENT_FAMILY = Object.freeze({
   INTERACTION_RESPONSE: "interaction.response",
   MESSAGE_TIMELINE: "message.timeline",
   WORKFLOW_RUNTIME: "workflow.runtime",
+  PLUGIN_ARTIFACT: PLUGIN_ARTIFACT_FAMILY,
 });
 
 const domainResult = (result, fallback = "invalid_domain_payload") => {
@@ -192,6 +199,15 @@ const descriptors = Object.freeze(
       reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
       validateEnvelope: validateWorkflowRuntimeEnvelope,
       validatePayload: () => ({ valid: true, errors: [] }),
+    },
+    {
+      family: EVENT_FAMILY.PLUGIN_ARTIFACT,
+      wireEvents: [PLUGIN_ARTIFACT_EVENT],
+      reducerTarget: EVENT_REDUCER_TARGET.PLUGIN_ARTIFACT,
+      reducerInput: EVENT_REDUCER_INPUT.ENVELOPE,
+      validateEnvelope: validatePluginArtifactEnvelope,
+      validatePayload: () => ({ valid: true, errors: [] }),
+      sessionArtifact: true,
     },
   ].map((descriptor) =>
     Object.freeze({

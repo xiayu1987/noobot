@@ -12,8 +12,16 @@ import {
 
 test("agent host loads Manifest V2 plugins from the authoritative runtime", async () => {
   const bundle = await createSessionPluginRuntimeBundle();
-  assert.deepEqual([...bundle.loadedPlugins.registry.keys()].sort(), ["harness", "workflow"]);
-  assert.deepEqual(bundle.pluginRuntime.pluginIds.slice().sort(), ["harness", "workflow"]);
+  assert.deepEqual([...bundle.loadedPlugins.registry.keys()].sort(), [
+    "character",
+    "harness",
+    "workflow",
+  ]);
+  assert.deepEqual(bundle.pluginRuntime.pluginIds.slice().sort(), [
+    "character",
+    "harness",
+    "workflow",
+  ]);
   assert.equal(bundle.pluginRuntime.surface, "agent");
 });
 

@@ -11,7 +11,8 @@ const text = (value) => String(value || "").trim();
 
 export function countCanonicalToolTimelineEvents(timeline = []) {
   return (Array.isArray(timeline) ? timeline : []).reduce(
-    (count, entry = {}) => count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
+    (count, entry = {}) =>
+      count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
     0,
   );
 }
@@ -20,8 +21,10 @@ export function countCanonicalThinkingDetailEvents({
   toolTimeline = [],
   activityTimeline = [],
 } = {}) {
-  return countCanonicalToolTimelineEvents(toolTimeline) +
-    (Array.isArray(activityTimeline) ? activityTimeline.length : 0);
+  return (
+    countCanonicalToolTimelineEvents(toolTimeline) +
+    (Array.isArray(activityTimeline) ? activityTimeline.length : 0)
+  );
 }
 
 export function isCanonicalToolMessageEvent(envelope = {}) {
@@ -67,9 +70,10 @@ export function applyCanonicalToolTimelineEvent(
   const key = `call:${toolCallId}`;
   const next = Array.isArray(timeline) ? timeline : [];
   const indexedPosition = indexByKey instanceof Map ? indexByKey.get(key) : undefined;
-  const index = Number.isInteger(indexedPosition) && next[indexedPosition]?.key === key
-    ? indexedPosition
-    : next.findIndex((item) => item.key === key);
+  const index =
+    Number.isInteger(indexedPosition) && next[indexedPosition]?.key === key
+      ? indexedPosition
+      : next.findIndex((item) => item.key === key);
   if (index >= 0 && indexByKey instanceof Map) indexByKey.set(key, index);
   const current = index >= 0 ? next[index] : { key, toolCallId };
   const eventFact = createToolEventFact(envelope);

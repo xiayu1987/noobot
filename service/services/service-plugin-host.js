@@ -55,11 +55,13 @@ function createRouteGeneration({ context = {} } = {}) {
     router,
     routes,
     stage(entry, routeId, handler) {
-      if (typeof handler !== "function") throw new TypeError(`plugin route handler is required: ${routeId}`);
+      if (typeof handler !== "function")
+        throw new TypeError(`plugin route handler is required: ${routeId}`);
       const route = requireDeclaredPluginRoute(entry.manifest, routeId);
       for (const routePath of route.paths) {
         const endpoint = `${route.method} ${routePath}`;
-        if (endpointKeys.has(endpoint)) throw new Error(`duplicate plugin route endpoint: ${endpoint}`);
+        if (endpointKeys.has(endpoint))
+          throw new Error(`duplicate plugin route endpoint: ${endpoint}`);
         endpointKeys.add(endpoint);
       }
       routes.push(Object.freeze({ entry, route, handler }));
@@ -68,7 +70,8 @@ function createRouteGeneration({ context = {} } = {}) {
     commit() {
       for (const { route, handler } of routes) {
         const register = router[String(route.method || "").toLowerCase()];
-        if (typeof register !== "function") throw new Error(`service does not support route method ${route.method}`);
+        if (typeof register !== "function")
+          throw new Error(`service does not support route method ${route.method}`);
         for (const routePath of route.paths) register.call(router, routePath, jsonRoute(handler));
       }
       return router;
@@ -110,8 +113,10 @@ export function createServicePluginHost({
   }
 
   function mountDispatcher(app) {
-    if (!app || typeof app.use !== "function") throw new TypeError("service plugin host requires an Express application");
-    if (mountedApp && mountedApp !== app) throw new Error("service plugin host cannot mount on multiple applications");
+    if (!app || typeof app.use !== "function")
+      throw new TypeError("service plugin host requires an Express application");
+    if (mountedApp && mountedApp !== app)
+      throw new Error("service plugin host cannot mount on multiple applications");
     if (!mountedApp) {
       app.use((req, res, next) => activeRouter(req, res, next));
       mountedApp = app;
@@ -138,7 +143,9 @@ export function createServicePluginHost({
       assertLifecycleOwnership(operationGeneration);
       for (const record of runtime.lifecycleEvents || []) reportPluginEvent(record);
       if (runtime.errors?.length) {
-        throw new Error(`service plugin runtime failed: ${runtime.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`);
+        throw new Error(
+          `service plugin runtime failed: ${runtime.errors.map((item) => `${item.pluginId}: ${item.message}`).join("; ")}`,
+        );
       }
       const candidateHooks = createHookManager();
       const generation = createRouteGeneration({ context });
@@ -156,56 +163,65 @@ export function createServicePluginHost({
             },
           });
         },
-        hostFactory: (entry, transaction) => createPluginHostFacade({
-          entry,
-          capabilityAdapters: {
-            [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
-              path: ["hooks", "register"],
-              value(point, handler, options = {}) {
-                const declaration = requireDeclaredPluginHook(
-                  entry.manifest,
-                  PLUGIN_SURFACE.SERVICE,
-                  point,
-                  options?.id,
-                );
-                const unregister = candidateHooks.on(point, handler, {
-                  ...options,
-                  id: serializePluginContributionIdentity({ pluginId: entry.pluginId, surface: entry.surface, localId: declaration.id }),
-                });
-                transaction.stage({
-                  type: "hook",
-                  point: declaration.point,
-                  registrationId: declaration.id,
-                  unregister,
-                });
-                return unregister;
+        hostFactory: (entry, transaction) =>
+          createPluginHostFacade({
+            entry,
+            capabilityAdapters: {
+              [PLUGIN_HOST_PORT.HOOKS_REGISTER]: {
+                path: ["hooks", "register"],
+                value(point, handler, options = {}) {
+                  const declaration = requireDeclaredPluginHook(
+                    entry.manifest,
+                    PLUGIN_SURFACE.SERVICE,
+                    point,
+                    options?.id,
+                  );
+                  const unregister = candidateHooks.on(point, handler, {
+                    ...options,
+                    id: serializePluginContributionIdentity({
+                      pluginId: entry.pluginId,
+                      surface: entry.surface,
+                      localId: declaration.id,
+                    }),
+                  });
+                  transaction.stage({
+                    type: "hook",
+                    point: declaration.point,
+                    registrationId: declaration.id,
+                    unregister,
+                  });
+                  return unregister;
+                },
+              },
+              [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
+                path: ["hooks", "emit"],
+                value(point, payload, options) {
+                  requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.SERVICE, point);
+                  return candidateHooks.emit(point, payload, options);
+                },
+              },
+              [PLUGIN_HOST_PORT.ROUTES_BIND]: {
+                path: ["routes", "bind"],
+                value: (routeId, handler) => {
+                  const result = generation.stage(entry, routeId, handler);
+                  transaction.stage({ type: "route", routeId });
+                  return result;
+                },
+              },
+              [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: {
+                path: ["ports", "sessions"],
+                value: context?.ports?.sessions,
+              },
+              [PLUGIN_HOST_PORT.SERVICE_WORKSPACE_ASSETS]: {
+                path: ["ports", "workspaceAssets"],
+                value: context?.ports?.workspaceAssets?.forPlugin?.(entry.pluginId),
+              },
+              [PLUGIN_HOST_PORT.SERVICE_HTTP_STATUS]: {
+                path: ["ports", "http"],
+                value: context?.ports?.http,
               },
             },
-            [PLUGIN_HOST_PORT.HOOKS_EMIT]: {
-              path: ["hooks", "emit"],
-              value(point, payload, options) {
-                requireDeclaredPluginHookEmission(entry.manifest, PLUGIN_SURFACE.SERVICE, point);
-                return candidateHooks.emit(point, payload, options);
-              },
-            },
-            [PLUGIN_HOST_PORT.ROUTES_BIND]: {
-              path: ["routes", "bind"],
-              value: (routeId, handler) => {
-                const result = generation.stage(entry, routeId, handler);
-                transaction.stage({ type: "route", routeId });
-                return result;
-              },
-            },
-            [PLUGIN_HOST_PORT.SERVICE_SESSIONS_READ]: {
-              path: ["ports", "sessions"],
-              value: context?.ports?.sessions,
-            },
-            [PLUGIN_HOST_PORT.SERVICE_HTTP_STATUS]: {
-              path: ["ports", "http"],
-              value: context?.ports?.http,
-            },
-          },
-        }),
+          }),
       });
       let candidateRouter;
       try {
@@ -246,19 +262,32 @@ export function createServicePluginHost({
     },
 
     async getPluginDiagnostics({ refresh = false } = {}) {
-      const runtime = refresh ? await load({ refresh: true }) : (activeRuntime || await load());
+      const runtime = refresh ? await load({ refresh: true }) : activeRuntime || (await load());
       return buildNoobotPluginDiagnostics(runtime);
     },
 
-    async emitAfterSessionDelete({ bot = null, userId = "", sessionId = "", deletedSessionIds = [], remainingSessionIds = [] } = {}) {
+    async emitAfterSessionDelete({
+      bot = null,
+      userId = "",
+      sessionId = "",
+      deletedSessionIds = [],
+      remainingSessionIds = [],
+    } = {}) {
       if (!activeScope) throw new Error("service plugins must be activated during HTTP startup");
-      const basePath = bot && typeof bot.getWorkspacePath === "function" ? String(bot.getWorkspacePath(userId) || "").trim() : "";
+      const basePath =
+        bot && typeof bot.getWorkspacePath === "function"
+          ? String(bot.getWorkspacePath(userId) || "").trim()
+          : "";
       if (!basePath) return collectSessionDeletionHookResult();
       const hookResult = await activeHookManager.emit(HOOK_POINT.SERVICE.AFTER_SESSION_DELETE, {
         userId: String(userId || "").trim(),
         sessionId: String(sessionId || "").trim(),
-        deletedSessionIds: Array.isArray(deletedSessionIds) ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
-        remainingSessionIds: Array.isArray(remainingSessionIds) ? remainingSessionIds.map((id) => String(id || "").trim()).filter(Boolean) : [],
+        deletedSessionIds: Array.isArray(deletedSessionIds)
+          ? deletedSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+          : [],
+        remainingSessionIds: Array.isArray(remainingSessionIds)
+          ? remainingSessionIds.map((id) => String(id || "").trim()).filter(Boolean)
+          : [],
         basePath,
         executionScope: "primary",
       });
@@ -273,7 +302,11 @@ export function createServicePluginHost({
       const pendingOperation = activationPromise;
       disposalPromise = (async () => {
         if (pendingOperation) {
-          try { await pendingOperation; } catch { /* Disposal owns final cleanup. */ }
+          try {
+            await pendingOperation;
+          } catch {
+            /* Disposal owns final cleanup. */
+          }
         }
         const scope = activeScope;
         activeScope = null;

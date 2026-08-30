@@ -8,7 +8,7 @@ import { buildSessionDisplayMessages } from "./display-message-list.js";
 import { buildSessionDisplayStats } from "./display-summary-stats.js";
 import { attachSessionToolArtifacts } from "./display-tool-artifacts.js";
 
-export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 24;
+export const SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION = 25;
 export const SESSION_DETAIL_MESSAGE_PROJECTION = "canonical-presentation";
 
 export function isSessionDisplaySummaryPayload(payload = null, sessionId = "") {
@@ -78,6 +78,9 @@ export function buildSessionDisplaySummary(session = {}) {
     aggregateVersion: session.aggregateVersion,
     turnTimings,
     turnLifecycleSnapshot: buildTurnLifecycleSnapshot(context),
+    sessionArtifactEvents: Array.isArray(session.sessionArtifactEvents)
+      ? session.sessionArtifactEvents
+      : [],
     messages: displayMessages,
     stats: buildSessionDisplayStats({ messages, displayMessages, ...toolArtifactStats }),
   };

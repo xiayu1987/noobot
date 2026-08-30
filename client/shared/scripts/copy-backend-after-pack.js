@@ -15,6 +15,7 @@ const requiredBackendRuntimeFiles = [
   "node_modules/express/package.json",
   "plugin/noobot-plugin-harness/manifest.json",
   "plugin/noobot-plugin-workflow/manifest.json",
+  "plugin/noobot-plugin-character/manifest.json",
   "service/config/global.config.example.json",
   "user-template/default-user/config.example.json",
 ];

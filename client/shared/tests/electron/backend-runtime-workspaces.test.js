@@ -29,6 +29,7 @@ test("desktop backend runtime follows the complete production workspace dependen
     "model-proxy",
     "plugin/noobot-plugin-harness",
     "plugin/noobot-plugin-workflow",
+    "plugin/noobot-plugin-character",
   ]) {
     assert.equal(runtimeWorkspaces.includes(requiredWorkspace), true, requiredWorkspace);
   }

@@ -4,20 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import {
-  createEventEnvelope,
-  validateProtocolEvent,
-} from "@noobot/event-protocol";
+import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
 
 const text = (value) => String(value || "").trim();
 
-function nextSequence(outbox = [], domain = "", scopeId = "") {
-  return normalizeAuthorityEventOutbox(outbox).reduce((maximum, item) => {
-    const ordering = item?.envelope?.ordering;
-    if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
-    return Math.max(maximum, Number(ordering.sequence) || 0);
-  }, 0) + 1;
+function nextSequence(outbox = [], artifactEvents = [], domain = "", scopeId = "") {
+  const envelopes = [
+    ...normalizeAuthorityEventOutbox(outbox).map((item) => item.envelope),
+    ...(Array.isArray(artifactEvents) ? artifactEvents : []),
+  ];
+  return (
+    envelopes.reduce((maximum, envelope) => {
+      const ordering = envelope?.ordering;
+      if (ordering?.domain !== domain || ordering?.scopeId !== scopeId) return maximum;
+      return Math.max(maximum, Number(ordering.sequence) || 0);
+    }, 0) + 1
+  );
 }
 
 export async function commitAuthorityEvent({
@@ -77,7 +80,12 @@ export async function commitAuthorityEvent({
           ...ordering,
           domain: orderingDomain,
           scopeId: orderingScopeId,
-          sequence: nextSequence(session.authorityEventOutbox, orderingDomain, orderingScopeId),
+          sequence: nextSequence(
+            session.authorityEventOutbox,
+            session.sessionArtifactEvents,
+            orderingDomain,
+            orderingScopeId,
+          ),
           aggregateVersion: actualVersion + 1,
         },
         producer,
@@ -97,13 +105,14 @@ export async function commitAuthorityEvent({
           delivery: { status: "pending", attempts: 0, lastAttemptAt: "", deliveredAt: "" },
         },
       ];
+      if (validation.descriptor?.sessionArtifact === true) {
+        session.sessionArtifactEvents = [...(session.sessionArtifactEvents || []), envelope];
+      }
       session.updatedAt = occurredAt;
-      const saved = await this.sessionRepo.save(
-        owner.userId,
-        session,
-        resolvedParentSessionId,
-        { expectedAggregateVersion: actualVersion, persistenceContext },
-      );
+      const saved = await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {
+        expectedAggregateVersion: actualVersion,
+        persistenceContext,
+      });
       return {
         committed: true,
         envelope,

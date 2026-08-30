@@ -11,3 +11,4 @@ export * from "./interaction.js";
 export * from "./turn-snapshot.js";
 export * from "./tool-presentation.js";
 export * from "./tool-timeline.js";
+export * from "./plugin-artifact-event.js";

@@ -11,15 +11,13 @@ import {
   BOT_MANAGE_LOG_SOURCE,
   SESSION_ASYNC_STATUS,
 } from "../../config/constants.js";
-import {
-  isAbortError,
-  isUserStopAbort,
-} from "../../../shared/utils/error-utils.js";
+import { isAbortError, isUserStopAbort } from "../../../shared/utils/error-utils.js";
 import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortType,
 } from "@noobot/session-protocol/execution-abort";
 import { syncLifecycleRuntimeState } from "../../../runtime/lifecycle/state-machine.js";
+import { createExecutionFailure } from "../../../shared/errors/index.js";
 
 export async function handleSessionRunFailure({
   error,
@@ -73,15 +71,12 @@ export async function handleSessionRunFailure({
     lifecycle?.fail?.({ error });
   }
   syncLifecycleRuntimeState(lifecycleRuntime, lifecycle);
-  if (error && typeof error === "object" && lifecycle?.snapshot) {
-    error.lifecycle = lifecycle.snapshot;
-  }
+  const executionFailure = createExecutionFailure(error, lifecycle?.snapshot || null);
   await runBotRuntimeHook({
     runtime: {
       eventListener: resolvedRuntimeEventListener,
       botHookManager:
-        resolvedRunConfig?.botHookManager &&
-        typeof resolvedRunConfig.botHookManager === "object"
+        resolvedRunConfig?.botHookManager && typeof resolvedRunConfig.botHookManager === "object"
           ? resolvedRunConfig.botHookManager
           : null,
       abortSignal: resolvedRunConfig?.abortSignal || null,
@@ -95,7 +90,7 @@ export async function handleSessionRunFailure({
         dialogProcessId: resolvedDialogProcessId,
         caller,
       },
-      { message, runConfig: resolvedRunConfig, error },
+      { message, runConfig: resolvedRunConfig, error: executionFailure },
     ),
     eventListener: resolvedRuntimeEventListener,
   });
@@ -104,16 +99,13 @@ export async function handleSessionRunFailure({
     sessionId,
     parentSessionId,
     patch: {
-      status: userStopped
-        ? SESSION_ASYNC_STATUS.USER_STOPPED
-        : SESSION_ASYNC_STATUS.FAILED,
+      status: userStopped ? SESSION_ASYNC_STATUS.USER_STOPPED : SESSION_ASYNC_STATUS.FAILED,
       endedAt: now(),
-      error:
-        userStopped
-          ? tSystem("ws.dialogStoppedByUser")
-          : aborted
-            ? resolveExecutionAbortMessage({ error, abortSignal })
-            : error?.message || String(error),
+      error: userStopped
+        ? tSystem("ws.dialogStoppedByUser")
+        : aborted
+          ? resolveExecutionAbortMessage({ error, abortSignal })
+          : executionFailure.message,
       result: null,
     },
   });
@@ -124,8 +116,8 @@ export async function handleSessionRunFailure({
       parentSessionId,
       source: BOT_MANAGE_LOG_SOURCE.RUN_SESSION,
       event: BOT_MANAGE_LOG_EVENT.RUN_SESSION_FAILED,
-      error,
+      error: executionFailure,
     });
   }
-  throw error;
+  throw executionFailure;
 }

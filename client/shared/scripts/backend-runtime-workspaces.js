@@ -12,6 +12,7 @@ export const DESKTOP_BACKEND_ENTRY_WORKSPACES = Object.freeze([
   "model-proxy",
   "plugin/noobot-plugin-harness",
   "plugin/noobot-plugin-workflow",
+  "plugin/noobot-plugin-character",
 ]);
 
 async function readPackageJson(filePath) {

@@ -31,6 +31,7 @@ export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;
   await pageOrContext.addInitScript(
     ({ modelAlias, userId }) => {
+      if (location.protocol !== "http:" && location.protocol !== "https:") return;
       const setInitialValue = (key, value, { force = false } = {}) => {
         if (force || localStorage.getItem(key) === null) localStorage.setItem(key, value);
       };
