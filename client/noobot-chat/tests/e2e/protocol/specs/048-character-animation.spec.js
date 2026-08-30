@@ -128,6 +128,64 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
       height: expect.any(Number),
     });
   expect(await canvas.evaluate((node) => node.width * node.height)).toBeGreaterThan(0);
+  await expect(card.getByRole("button", { name: /重新播放|Replay/ })).toBeVisible();
+  await expect(card.getByRole("button", { name: /导出图片|Export image/ })).toBeVisible();
+  await expect(card.getByRole("button", { name: /导出视频|Export video/ })).toBeVisible();
+  const resizeLeft = artifactPanel.getByTestId("session-artifact-panel-resize-left");
+  const resizeBottom = artifactPanel.getByTestId("session-artifact-panel-resize-bottom");
+  const resizeCornerLeft = artifactPanel.getByTestId("session-artifact-panel-resize-corner-left");
+  await expect(resizeLeft).toBeVisible();
+  await expect(resizeBottom).toBeVisible();
+  await expect(resizeCornerLeft).toBeVisible();
+  const panelBeforeDrag = await artifactPanel.boundingBox();
+  await expect(page.getByTestId("session-artifact-panel-reset")).toBeVisible();
+  const leftHandleBefore = await resizeLeft.boundingBox();
+  await page.mouse.move(
+    (leftHandleBefore?.x || 0) + (leftHandleBefore?.width || 0) / 2,
+    (leftHandleBefore?.y || 0) + (leftHandleBefore?.height || 0) / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move((leftHandleBefore?.x || 0) - 80, (leftHandleBefore?.y || 0) + 12);
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await artifactPanel.boundingBox())?.width || 0)
+    .toBeGreaterThan((panelBeforeDrag?.width || 0) + 40);
+
+  const panelBeforeHeightDrag = await artifactPanel.boundingBox();
+  const bottomHandleBefore = await resizeBottom.boundingBox();
+  await page.mouse.move(
+    (bottomHandleBefore?.x || 0) + (bottomHandleBefore?.width || 0) / 2,
+    (bottomHandleBefore?.y || 0) + (bottomHandleBefore?.height || 0) / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move((bottomHandleBefore?.x || 0) + 12, (bottomHandleBefore?.y || 0) + 80);
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await artifactPanel.boundingBox())?.height || 0)
+    .toBeGreaterThan((panelBeforeHeightDrag?.height || 0) + 40);
+
+  const panelBeforeRatioDrag = await artifactPanel.boundingBox();
+  const ratioHandleBefore = await resizeCornerLeft.boundingBox();
+  const canvasBeforeRatioDrag = await canvas.boundingBox();
+  await page.mouse.move(
+    (ratioHandleBefore?.x || 0) + (ratioHandleBefore?.width || 0) / 2,
+    (ratioHandleBefore?.y || 0) + (ratioHandleBefore?.height || 0) / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move((ratioHandleBefore?.x || 0) - 80, (ratioHandleBefore?.y || 0) + 80);
+  const canvasDuringRatioDrag = await canvas.boundingBox();
+  expect(canvasDuringRatioDrag?.width).toBe(canvasBeforeRatioDrag?.width);
+  expect(canvasDuringRatioDrag?.height).toBe(canvasBeforeRatioDrag?.height);
+  await page.mouse.up();
+  const panelAfterRatioDrag = await artifactPanel.boundingBox();
+  expect((panelAfterRatioDrag?.width || 0) / (panelAfterRatioDrag?.height || 1)).toBeCloseTo(
+    (panelBeforeRatioDrag?.width || 0) / (panelBeforeRatioDrag?.height || 1),
+    1,
+  );
+  await page.getByTestId("session-artifact-panel-reset").click();
+  await expect
+    .poll(async () => (await artifactPanel.boundingBox())?.width || 0)
+    .toBeLessThanOrEqual((panelAfterRatioDrag?.width || 0) - 20);
 
   // A genuinely independent mobile browser has no localStorage or IndexedDB
   // from the importing desktop. It must restore the GLB from the authenticated

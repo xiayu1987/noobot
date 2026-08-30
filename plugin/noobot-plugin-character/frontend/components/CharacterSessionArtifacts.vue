@@ -7,7 +7,11 @@
 import CharacterAnimationCard from "./CharacterAnimationCard.vue";
 import { animationRuntimeState } from "../runtime/animationState.js";
 
-defineProps({ sessionId: { type: String, default: "" } });
+const props = defineProps({
+  sessionId: { type: String, default: "" },
+  panelResizing: { type: Boolean, default: false },
+  panelResizeRevision: { type: Number, default: 0 },
+});
 </script>
 
 <template>
@@ -19,6 +23,8 @@ defineProps({ sessionId: { type: String, default: "" } });
       v-for="card in animationRuntimeState.cards"
       :key="card.animationId"
       :card="card"
+      :suspend-resize="props.panelResizing"
+      :resize-revision="props.panelResizeRevision"
     />
   </section>
 </template>
@@ -27,5 +33,7 @@ defineProps({ sessionId: { type: String, default: "" } });
 .character-session-artifacts {
   display: grid;
   gap: var(--noobot-space-sm);
+  min-height: 300px;
+  height: 100%;
 }
 </style>

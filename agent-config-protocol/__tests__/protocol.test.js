@@ -222,6 +222,31 @@ test("custom_only is not widened by programming scenario requirements", () => {
   );
 });
 
+test("scenario filtering preserves activated plugin tools and keeps deny authoritative", () => {
+  const tools = resolveToolBindings({
+    sourceTools: [{ name: "read_file" }, { name: "character_animation_generate" }],
+    runConfig: {
+      scenario: "programming",
+      pluginTools: [{ name: "character_animation_generate" }],
+      toolPolicy: { denyToolNames: [] },
+    },
+  });
+  assert.deepEqual(
+    tools.map(({ name }) => name),
+    ["read_file", "character_animation_generate"],
+  );
+
+  const denied = resolveToolBindings({
+    sourceTools: [{ name: "character_animation_generate" }],
+    runConfig: {
+      scenario: "programming",
+      pluginTools: [{ name: "character_animation_generate" }],
+      toolPolicy: { denyToolNames: ["character_animation_generate"] },
+    },
+  });
+  assert.deepEqual(denied, []);
+});
+
 test("run config resolver uses the canonical default scenario and intersects explicit policy", () => {
   const resolver = new RunConfigResolver({
     globalConfig: {
