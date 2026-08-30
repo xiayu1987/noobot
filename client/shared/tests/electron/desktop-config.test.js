@@ -11,7 +11,7 @@ import { clientFilePath as path } from "../../path-resolver.js";
 import test from "node:test";
 import { createDesktopConfigManager } from "../../electron/runtime/config.js";
 
-async function createFixture() {
+export async function createFixture() {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "noobot-desktop-config-"));
   const repoRoot = path.join(rootDir, "repo");
   const packagedBackendRoot = path.join(rootDir, "resources", "backend");
@@ -793,17 +793,14 @@ test("packaged desktop startup removes stale files from the managed workspace te
     });
     const stalePath = path.join(
       fixture.userDataPath,
-      "user-template",
-      "default-user",
-      "services",
-      "retired-handler.js",
+      "user-template/default-user/services/retired-handler.js",
     );
     await manager.ensureDesktopGlobalConfig({
       isPackaged: true,
       userDataPath: fixture.userDataPath,
     });
     await writeFile(stalePath, "export default 'retired';\n");
-    await rm(path.join(fixture.packagedBackendRoot, "user-template", "default-user", "services"), {
+    await rm(path.join(fixture.packagedBackendRoot, "user-template/default-user/services"), {
       recursive: true,
       force: true,
     });
@@ -812,45 +809,6 @@ test("packaged desktop startup removes stale files from the managed workspace te
       userDataPath: fixture.userDataPath,
     });
     await assert.rejects(readFile(stalePath, "utf8"), { code: "ENOENT" });
-  } finally {
-    await fixture.restore();
-  }
-});
-
-test("packaged desktop preserves malformed user JSON before restoring it", async () => {
-  const fixture = await createFixture();
-  try {
-    const logLines = [];
-    const existingUserPath = path.join(fixture.userDataPath, "workspace", "broken-user");
-    await mkdir(existingUserPath, { recursive: true });
-    const configPath = path.join(existingUserPath, "config.json");
-    await writeFile(configPath, '{"api_key":"must-not-appear-in-log" trailing', "utf8");
-    const manager = createDesktopConfigManager({
-      repoRoot: fixture.repoRoot,
-      packagedBackendRoot: fixture.packagedBackendRoot,
-      appendDesktopLog: (line) => logLines.push(line),
-    });
-
-    manager.ensureDesktopGlobalConfig({
-      isPackaged: true,
-      userDataPath: fixture.userDataPath,
-    });
-
-    const restored = JSON.parse(await readFile(configPath, "utf8"));
-    assert.equal(restored.default_provider, "openai");
-    const backupName = fs
-      .readdirSync(existingUserPath)
-      .find((name) => name.startsWith("config.json.invalid-"));
-    assert.ok(backupName);
-    assert.equal(
-      await readFile(path.join(existingUserPath, backupName), "utf8"),
-      '{"api_key":"must-not-appear-in-log" trailing',
-    );
-    assert.equal(
-      logLines.some((line) => line.includes("invalid JSON preserved")),
-      true,
-    );
-    assert.equal(logLines.join("\n").includes("must-not-appear-in-log"), false);
   } finally {
     await fixture.restore();
   }
