@@ -223,14 +223,19 @@ function validateTopLevelFields(command, commandType, errors) {
   }
 }
 
-export function validateAgentCommand(command) {
-  const errors = [];
-  if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
+function validateCommandHeader(command, errors) {
   if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION)
     errors.push("unsupported_protocol_version");
   const commandType = clean(command.commandType).toLowerCase();
   if (!COMMAND_TYPE_SET.has(commandType)) errors.push("unsupported_command_type");
   if (!clean(command.commandId)) errors.push("missing_command_id");
+  return commandType;
+}
+
+export function validateAgentCommand(command) {
+  const errors = [];
+  if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
+  const commandType = validateCommandHeader(command, errors);
   validateTopLevelFields(command, commandType, errors);
   validateIdentity(command, errors);
 
@@ -347,11 +352,7 @@ export function validateAgentCommand(command) {
 export function validateAgentCommandEnvelope(command) {
   const errors = [];
   if (!isObject(command)) return { valid: false, errors: ["command_not_object"] };
-  if (Number(command.protocolVersion) !== AGENT_TRANSPORT_PROTOCOL_VERSION)
-    errors.push("unsupported_protocol_version");
-  const commandType = clean(command.commandType).toLowerCase();
-  if (!COMMAND_TYPE_SET.has(commandType)) errors.push("unsupported_command_type");
-  if (!clean(command.commandId)) errors.push("missing_command_id");
+  validateCommandHeader(command, errors);
   validateIdentity(command, errors);
   return { valid: errors.length === 0, errors };
 }

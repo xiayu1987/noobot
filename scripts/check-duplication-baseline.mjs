@@ -11,12 +11,13 @@ import {
   FIRST_PARTY_IGNORED_GLOBS,
   getFirstPartySourceRoots,
 } from "./quality/source-inventory.mjs";
+import { mergeDuplicationIgnoreGlobs } from "./quality/duplication-config.mjs";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const baseline = Object.freeze({
-  clones: 168,
-  duplicatedLines: 4410,
-  percentage: 1.81962221,
+  clones: 141,
+  duplicatedLines: 3646,
+  percentage: 1.47099762,
 });
 
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-duplication-"));
@@ -31,7 +32,7 @@ try {
     `${JSON.stringify(
       {
         ...baseConfig,
-        ignore: FIRST_PARTY_IGNORED_GLOBS,
+        ignore: mergeDuplicationIgnoreGlobs(baseConfig.ignore, FIRST_PARTY_IGNORED_GLOBS),
         output: reportDirectory,
         reporters: ["json"],
         silent: true,
