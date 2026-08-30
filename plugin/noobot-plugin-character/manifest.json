@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "character",
   "name": "noobot-plugin-character",
-  "version": "4.2.7",
+  "version": "4.2.8",
   "description": "Import animated GLB characters and render LLM-generated animation protocols with Three.js.",
   "entries": {
     "agent": "src/entries/agent.js",
