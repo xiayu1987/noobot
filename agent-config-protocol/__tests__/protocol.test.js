@@ -587,9 +587,17 @@ test("config repair recursively adds template nodes through one protocol", () =>
       },
       added: { enabled: true },
       custom: {
+        api_key: "${OPENAI_API_KEY}",
+        base_url: "${OPENAI_API_ADDRESS}",
+        description: "Generic OpenAI-compatible fallback model",
         model: "custom-model",
         format: "openai_compatible",
         enabled: true,
+        used_for_conversation: true,
+        multimodal_parsing: { enabled: false, input_modalities: [] },
+        multimodal_generation: {
+          support_generation: { enabled: false, support_scope: [] },
+        },
       },
     },
     tools: {
@@ -672,11 +680,12 @@ test("config repair enforces defaulted, optional, and system-owned node policies
   assert.equal(first.document.tools.read_file.enabled, true);
   assert.equal(first.document.tools.execute_native_script.enabled, false);
   assert.equal(first.document.providers.primary.temperature, 0.4);
-  assert.equal(first.document.providers.primary.enabled, true);
+  assert.equal(first.document.providers.primary.enabled, false);
   assert.equal(first.document.providers.custom.top_p, 0.8);
   assert.equal(first.document.providers.custom.cache_control, false);
-  assert.deepEqual(first.document.providers.incomplete, { model: "missing-format" });
-  assert.equal(first.document.default_provider, "primary");
+  assert.equal(first.document.providers.incomplete.model, "missing-format");
+  assert.equal(first.document.providers.incomplete.format, "openai_compatible");
+  assert.equal(first.document.default_provider, "incomplete");
   assert.deepEqual(first.document.context, { customSection: { enabled: true } });
   assert.deepEqual(first.document.session, {});
   assert.equal(first.document.unknown_root, undefined);
@@ -697,7 +706,8 @@ test("config repair enforces defaulted, optional, and system-owned node policies
       },
     },
   });
-  assert.deepEqual(unsupportedFormat.document.providers.removed, { model: "qwen" });
+  assert.equal(unsupportedFormat.document.providers.removed.model, "qwen");
+  assert.equal(unsupportedFormat.document.providers.removed.format, "openai_compatible");
 
   const repairedKnownLegacy = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,

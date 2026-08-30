@@ -1,4 +1,25 @@
 {
+  "defaults": {
+    "generic_provider": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "default-model",
+      "format": "openai_compatible",
+      "description": "Generic OpenAI-compatible fallback model",
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    }
+  },
   "providers": {
     "gpt_5_6_sol": {
       "enabled": true,

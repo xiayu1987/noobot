@@ -30,6 +30,18 @@ function validateLibrary(payload) {
 }
 
 const MODEL_LIBRARY_PROVIDERS = validateLibrary(libraryPayload);
+const GENERIC_PROVIDER_TEMPLATE = isPlainObject(libraryPayload.defaults?.generic_provider)
+  ? clone(libraryPayload.defaults.generic_provider)
+  : null;
+
+if (!GENERIC_PROVIDER_TEMPLATE) {
+  throw new TypeError("model library defaults.generic_provider is required");
+}
+for (const field of ["model", "format", "api_key", "base_url"]) {
+  if (!String(GENERIC_PROVIDER_TEMPLATE[field] || "").trim()) {
+    throw new TypeError(`model library generic provider ${field} is required`);
+  }
+}
 
 export function listModelLibraryOptions() {
   return Object.entries(MODEL_LIBRARY_PROVIDERS).map(([key, provider]) =>
@@ -46,4 +58,8 @@ export function resolveModelLibraryProvider(alias = "") {
   const key = String(alias || "").trim();
   const provider = MODEL_LIBRARY_PROVIDERS[key];
   return isPlainObject(provider) ? clone(provider) : null;
+}
+
+export function resolveDefaultModelLibraryProvider() {
+  return clone(GENERIC_PROVIDER_TEMPLATE);
 }
