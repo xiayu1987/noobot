@@ -19,6 +19,9 @@ const props = defineProps({
   // management preview is an intrinsic-height panel. Keeping this explicit
   // prevents percentage-height feedback from growing the management panel.
   fillContainer: { type: Boolean, default: false },
+  // Standalone asset previews use a bounded viewport so a catalog with many
+  // characters remains scannable inside the right panel.
+  height: { type: Number, default: 300 },
   suspendResize: { type: Boolean, default: false },
   resizeRevision: { type: Number, default: 0 },
 });
@@ -340,7 +343,12 @@ onBeforeUnmount(() => {
 defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
 </script>
 <template>
-  <div ref="host" class="imported-character-viewer" :class="{ 'is-fill-container': props.fillContainer }">
+  <div
+    ref="host"
+    class="imported-character-viewer"
+    :class="{ 'is-fill-container': props.fillContainer }"
+    :style="!props.fillContainer ? { height: `${Math.max(1, props.height)}px` } : undefined"
+  >
     <div ref="viewer" class="imported-character-viewer__canvas" />
     <p v-if="loadError" class="imported-character-viewer__error">{{ loadError }}</p>
   </div>
@@ -352,6 +360,9 @@ defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
   overflow: hidden;
   position: relative;
 }
+.imported-character-viewer:not(.is-fill-container) {
+  min-height: 0;
+}
 .imported-character-viewer.is-fill-container {
   height: 100%;
   min-height: 460px;
@@ -359,7 +370,7 @@ defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
 }
 .imported-character-viewer__canvas {
   width: 100%;
-  min-height: inherit;
+  height: 100%;
 }
 .imported-character-viewer.is-fill-container .imported-character-viewer__canvas {
   height: 100%;
