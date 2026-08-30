@@ -152,7 +152,7 @@ async function loadOfficialSample() {
             {{ asset.name }} ·
             {{ translate("character.animationCount", { count: asset.animations.length }) }}
           </p>
-          <ImportedCharacterViewer :assets="[asset]" />
+          <ImportedCharacterViewer :assets="[asset]" :height="180" />
         </article>
       </div>
     </template>
@@ -217,6 +217,9 @@ input[type="file"] {
 .character-animation-assets__previews {
   display: grid;
   gap: 10px;
+  max-height: min(480px, 60vh);
+  overflow-y: auto;
+  padding-right: 2px;
 }
 .character-animation-assets__preview-title {
   margin: 4px 0;
