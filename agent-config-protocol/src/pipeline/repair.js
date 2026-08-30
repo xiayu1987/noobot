@@ -5,6 +5,7 @@
  */
 import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
+  resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
@@ -186,39 +187,22 @@ function repairContractNode({ contract, template, target, path, changes }) {
 }
 
 function repairUnknownProvider({ target, path, changes }) {
-  if (!isPlainObject(target)) return clone(target);
-  const properties = MODEL_PROVIDER_CONFIG_CONTRACT.properties;
-  const output = {};
-  for (const [key, value] of Object.entries(target)) {
-    const childContract = properties[key];
-    if (!childContract) {
-      recordChange(
-        changes,
-        [...path, key],
-        CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
-        "unsupported_provider_node",
-      );
-      continue;
-    }
-    if (validatesContract(value, childContract)) {
-      output[key] = clone(value);
-      continue;
-    }
-    recordChange(
-      changes,
-      [...path, key],
-      CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL,
-      "invalid_provider_node_without_default",
-    );
-  }
-  return output;
+  const template = resolveDefaultModelLibraryProvider();
+  const repaired = repairContractNode({
+    contract: MODEL_PROVIDER_CONFIG_CONTRACT,
+    template,
+    target: isPlainObject(target) ? target : {},
+    path,
+    changes,
+  });
+  if (repaired === REMOVE_NODE) return clone(template);
+  return repaired;
 }
 
 function repairCollectionEntry({ collectionPath, template, target, path, changes }) {
-  // Provider aliases are user-owned model configurations and their key must
-  // survive repair. Known aliases can still use the library as the structural
-  // default; unknown aliases retain their identity while unsupported child
-  // nodes are removed because no canonical replacement facts exist for them.
+  // Provider aliases are user-owned model configurations and their key and
+  // valid values must survive repair. Unknown providers use only the generic
+  // library template to fill missing or invalid fields.
   if (collectionPath === "providers" && template === undefined) {
     const libraryTemplate = resolveModelLibraryProvider(path.at(-1));
     if (libraryTemplate) {

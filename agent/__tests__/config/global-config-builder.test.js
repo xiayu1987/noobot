@@ -164,6 +164,38 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
   assert.equal(built.rawConfig.providers.main.top_p, undefined);
 });
 
+test("createGlobalConfigBuilder: 旧的不完整 provider 不阻断运行时构建", async () => {
+  const legacyAlias = ["GLM", "5", "1"].join("_");
+  const builder = createGlobalConfigBuilder({
+    source: async () => ({
+      defaultProvider: "current",
+      providers: {
+        current: {
+          model: "gpt-5.4",
+          format: "openai_compatible",
+        },
+        [legacyAlias]: {
+          enabled: true,
+          used_for_conversation: true,
+          api_key: "${DASHSCOPE_API_KEY}",
+          base_url: "${DASHSCOPE_API_ADDRESS}",
+          model: "ZHIPU/GLM-5.1",
+        },
+      },
+    }),
+  });
+
+  const built = await builder.build({
+    configParams: {
+      DASHSCOPE_API_KEY: "configured-key",
+      DASHSCOPE_API_ADDRESS: "https://dashscope.example.com/compatible-mode/v1",
+    },
+  });
+
+  assert.equal(built.resolvedConfig.providers.current.model, "gpt-5.4");
+  assert.equal(built.resolvedConfig.providers[legacyAlias], undefined);
+});
+
 test("createGlobalConfigBuilder: derives protocol identities and removes providerId overrides", async () => {
   const builder = createGlobalConfigBuilder({
     source: async () => ({

@@ -14,15 +14,17 @@ export function normalizeConfiguredModelProviders(config = {}) {
   const providers = {};
   for (const [alias, provider] of Object.entries(config.providers)) {
     if (!isPlainObject(provider)) {
-      throw new TypeError(`configured model provider must be an object: ${alias}`);
+      // Configuration repair owns persisted records. Runtime projection must
+      // not let an obsolete record prevent the service from starting.
+      continue;
     }
     try {
       providers[alias] = normalizeRuntimeModelSpec({ alias, ...provider });
-    } catch (error) {
-      throw new TypeError(
-        `invalid configured model provider ${alias}: ${String(error?.message || error)}`,
-        { cause: error },
-      );
+    } catch {
+      // A provider that cannot satisfy the current runtime model contract is
+      // excluded from the runtime projection. The source configuration is
+      // kept unchanged and will be repaired/persisted by the config-repair
+      // pipeline when a canonical replacement exists.
     }
   }
   return { ...config, providers };

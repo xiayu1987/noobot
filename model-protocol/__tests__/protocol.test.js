@@ -12,6 +12,7 @@ import {
   MODEL_OPERATION_KIND,
   MODEL_PROTOCOL_VERSION,
   listModelLibraryOptions,
+  resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
   normalizeModelCapabilities,
   resolveModelMultimodalCapabilities,
@@ -90,6 +91,7 @@ test("model library exposes copy-safe provider templates", () => {
   first.enabled = false;
   assert.equal(second.enabled, true);
   assert.equal(resolveModelLibraryProvider("missing"), null);
+  assert.equal(resolveDefaultModelLibraryProvider().model, "default-model");
 });
 
 const invocation = {
