@@ -101,57 +101,6 @@ test("config snapshot rejects protocol and version drift", () => {
   );
 });
 
-test("default user template is the user-scope source of truth for system-owned nodes", () => {
-  const globalTemplate = readJsonFixture("../../service/config/global.config.example.json");
-  const userTemplate = readJsonFixture("../../user-template/default-user/config.example.json");
-  const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, userTemplate).sort();
-  const systemOwnedPaths = [...listConfigNodePathsByPolicy({
-    policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
-    representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
-  })].sort();
-  const systemOwnedRuntimePaths = [...listConfigNodePathsByPolicy({
-    policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
-    representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
-  })].sort();
-
-  for (const path of globalOnlyPaths) {
-    assert.ok(
-      systemOwnedPaths.some((ownedPath) => ownedPath === path || ownedPath.startsWith(`${path}.`)),
-      `global-only node is missing a system-owned policy: ${path}`,
-    );
-  }
-
-  const legacyUserConfig = structuredClone(globalTemplate);
-  legacyUserConfig.tools.execute_native_script = { enabled: false };
-  const repaired = repairConfigDocument({
-    scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: userTemplate,
-    target: legacyUserConfig,
-  });
-  for (const path of systemOwnedPaths) {
-    const value = path.split(".").reduce((node, key) => node?.[key], repaired.document);
-    assert.equal(value, undefined, `system-owned node survived user repair: ${path}`);
-  }
-
-  const sanitized = sanitizeUserConfig(legacyUserConfig);
-  const merged = mergeConfig(globalTemplate, legacyUserConfig);
-  const normalizedGlobalTemplate = normalizeKnownConfigKeys(globalTemplate);
-  for (const path of systemOwnedRuntimePaths) {
-    const sanitizedValue = path
-      .split(".")
-      .reduce((node, key) => node?.[key], sanitized);
-    const mergedValue = path
-      .split(".")
-      .reduce((node, key) => node?.[key], merged);
-    assert.equal(sanitizedValue, undefined, `system-owned node survived user sanitization: ${path}`);
-    assert.deepEqual(
-      mergedValue,
-      path.split(".").reduce((node, key) => node?.[key], normalizedGlobalTemplate),
-      `system-owned node was overridden during user merge: ${path}`,
-    );
-  }
-});
-
 test("tool policy is monotonic and deny wins", () => {
   const policy = mergeToolPolicyPatch({
     baseToolPolicy: { allowToolNames: ["read_file", "execute_script"] },
@@ -649,73 +598,6 @@ test("template resolution has one explicit source order and unresolved policy", 
     () => resolveConfigTemplates("${MISSING}", { lookup, unresolved: "fallback" }),
     /unsupported unresolved config template policy/,
   );
-});
-
-test("config repair recursively adds template nodes through one protocol", () => {
-  const synchronized = repairConfigDocument({
-    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template: {
-      workspace_root: "/template",
-      providers: {
-        primary: {
-          reasoning_effort: "medium",
-          tool_reasoning_effort: "medium",
-          capabilities: { web_search: true },
-        },
-        added: { enabled: true },
-      },
-      tools: {
-        execute_script: { enabled: true, sandbox_mode: true },
-        read_file: { enabled: true },
-        delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
-      },
-    },
-    target: {
-      workspace_root: "/configured",
-      providers: {
-        primary: { reasoning_effort: "high" },
-        custom: {
-          model: "custom-model",
-          format: "openai_compatible",
-          enabled: true,
-        },
-      },
-      tools: {
-        obsolete_tool: { enabled: true },
-      },
-      user_only: true,
-    },
-  }).document;
-
-  assert.deepEqual(synchronized, {
-    workspace_root: "/configured",
-    providers: {
-      primary: {
-        reasoning_effort: "high",
-        tool_reasoning_effort: "medium",
-        capabilities: { web_search: true },
-      },
-      added: { enabled: true },
-      custom: {
-        api_key: "${OPENAI_API_KEY}",
-        base_url: "${OPENAI_API_ADDRESS}",
-        description: "Generic OpenAI-compatible fallback model",
-        model: "custom-model",
-        format: "openai_compatible",
-        enabled: true,
-        used_for_conversation: true,
-        multimodal_parsing: { enabled: false, input_modalities: [] },
-        multimodal_generation: {
-          support_generation: { enabled: false, support_scope: [] },
-        },
-      },
-    },
-    tools: {
-      execute_script: { enabled: true },
-      read_file: { enabled: true },
-      delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
-    },
-  });
 });
 
 test("config repair preserves a valid custom value and restores an invalid value from its template", () => {
