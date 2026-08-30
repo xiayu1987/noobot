@@ -31,3 +31,72 @@ test("config repair fills only invalid fields for an unknown provider", () => {
   assert.equal(provider.api_key, "${DASHSCOPE_API_KEY}");
   assert.equal(provider.base_url, "${DASHSCOPE_API_ADDRESS}");
 });
+
+test("config repair adds the character plugin to legacy configuration", () => {
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template: {
+      plugins: {
+        character: {
+          enabled: true,
+          mode: "on",
+          characterAssets: [],
+          selectedCharacterAssetIds: [],
+        },
+      },
+    },
+    target: { plugins: {} },
+  });
+
+  assert.deepEqual(repaired.document.plugins.character, {
+    enabled: true,
+    mode: "on",
+    characterAssets: [],
+    selectedCharacterAssetIds: [],
+  });
+  assert.equal(repaired.report.changed, true);
+
+  const customized = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template: {
+      plugins: {
+        character: {
+          enabled: true,
+          mode: "on",
+          characterAssets: [],
+          selectedCharacterAssetIds: [],
+        },
+      },
+    },
+    target: {
+      plugins: {
+        character: {
+          enabled: true,
+          mode: false,
+          characterAssets: [{ assetId: "owned.asset" }],
+          selectedCharacterAssetIds: ["owned.asset"],
+        },
+      },
+    },
+  });
+  assert.equal(customized.document.plugins.character.mode, "on");
+  assert.deepEqual(customized.document.plugins.character.characterAssets, [
+    { assetId: "owned.asset" },
+  ]);
+
+  const unsupportedPlugin = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template: {
+      plugins: {
+        character: { enabled: true, mode: "on" },
+      },
+    },
+    target: {
+      plugins: {
+        character: { enabled: true, mode: "on" },
+        retired_plugin: { enabled: true, custom: "legacy" },
+      },
+    },
+  });
+  assert.equal(unsupportedPlugin.document.plugins.retired_plugin, undefined);
+});

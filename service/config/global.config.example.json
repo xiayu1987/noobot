@@ -128,6 +128,10 @@
       "mode": "off",
       "semanticModel": "gpt_5_6_sol",
       "parallelNodeExecution": true
+    },
+    "character": {
+      "enabled": true,
+      "mode": "on"
     }
   },
   "preferences": {

@@ -220,7 +220,10 @@ function repairCollectionEntry({ collectionPath, template, target, path, changes
     collectionPath === "providers"
       ? MODEL_PROVIDER_CONFIG_CONTRACT
       : CONFIG_EXTENSION_ENTRY_CONTRACTS[collectionPath];
-  if (template !== undefined && collectionPath === "plugins") return null;
+  // The plugin collection is closed by the configuration template. A plugin
+  // absent from the current template is not supported by this runtime and
+  // must not survive repair as an opaque legacy node.
+  if (collectionPath === "plugins") return template === undefined ? REMOVE_NODE : null;
   if (!contract) return isPlainObject(target) ? clone(target) : REMOVE_NODE;
   const repaired = repairContractNode({ contract, template, target, path, changes });
   if (repaired === REMOVE_NODE) return repaired;

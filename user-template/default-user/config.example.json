@@ -110,6 +110,12 @@
       "enabled": true,
       "mode": "off",
       "semanticModel": "gpt_5_6_sol"
+    },
+    "character": {
+      "enabled": true,
+      "mode": "on",
+      "characterAssets": [],
+      "selectedCharacterAssetIds": []
     }
   },
   "providers": {

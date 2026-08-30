@@ -6,6 +6,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   applyPrimaryModelReferencesToConfigFile,
   assertConfigParamsDocumentKeys,
@@ -36,8 +37,40 @@ import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
   CONFIG_REPAIR_ACTION,
+  CONFIG_PATH_REPRESENTATION,
+  listConfigNodePathsByPolicy,
   repairConfigDocument,
+  sanitizeUserConfig,
+  mergeConfig,
 } from "../src/index.js";
+
+function readJsonFixture(relativePath) {
+  return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), "utf8"));
+}
+
+function collectObjectOnlyPaths(source, reference, prefix = "") {
+  const paths = [];
+  for (const key of Object.keys(source || {})) {
+    const path = prefix ? `${prefix}.${key}` : key;
+    if (!Object.prototype.hasOwnProperty.call(reference || {}, key)) {
+      paths.push(path);
+      continue;
+    }
+    const sourceValue = source[key];
+    const referenceValue = reference[key];
+    if (
+      sourceValue &&
+      typeof sourceValue === "object" &&
+      !Array.isArray(sourceValue) &&
+      referenceValue &&
+      typeof referenceValue === "object" &&
+      !Array.isArray(referenceValue)
+    ) {
+      paths.push(...collectObjectOnlyPaths(sourceValue, referenceValue, path));
+    }
+  }
+  return paths;
+}
 test("config snapshot is versioned and validated", () => {
   const snapshot = createConfigSnapshot({ config: { x: 1 } });
   assert.equal(snapshot.protocol, "noobot.agent-config");
@@ -67,6 +100,58 @@ test("config snapshot rejects protocol and version drift", () => {
     /unsupported agent config protocol version/,
   );
 });
+
+test("default user template is the user-scope source of truth for system-owned nodes", () => {
+  const globalTemplate = readJsonFixture("../../service/config/global.config.example.json");
+  const userTemplate = readJsonFixture("../../user-template/default-user/config.example.json");
+  const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, userTemplate).sort();
+  const systemOwnedPaths = [...listConfigNodePathsByPolicy({
+    policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+    representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
+  })].sort();
+  const systemOwnedRuntimePaths = [...listConfigNodePathsByPolicy({
+    policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+    representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
+  })].sort();
+
+  for (const path of globalOnlyPaths) {
+    assert.ok(
+      systemOwnedPaths.some((ownedPath) => ownedPath === path || ownedPath.startsWith(`${path}.`)),
+      `global-only node is missing a system-owned policy: ${path}`,
+    );
+  }
+
+  const legacyUserConfig = structuredClone(globalTemplate);
+  legacyUserConfig.tools.execute_native_script = { enabled: false };
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.USER,
+    template: userTemplate,
+    target: legacyUserConfig,
+  });
+  for (const path of systemOwnedPaths) {
+    const value = path.split(".").reduce((node, key) => node?.[key], repaired.document);
+    assert.equal(value, undefined, `system-owned node survived user repair: ${path}`);
+  }
+
+  const sanitized = sanitizeUserConfig(legacyUserConfig);
+  const merged = mergeConfig(globalTemplate, legacyUserConfig);
+  const normalizedGlobalTemplate = normalizeKnownConfigKeys(globalTemplate);
+  for (const path of systemOwnedRuntimePaths) {
+    const sanitizedValue = path
+      .split(".")
+      .reduce((node, key) => node?.[key], sanitized);
+    const mergedValue = path
+      .split(".")
+      .reduce((node, key) => node?.[key], merged);
+    assert.equal(sanitizedValue, undefined, `system-owned node survived user sanitization: ${path}`);
+    assert.deepEqual(
+      mergedValue,
+      path.split(".").reduce((node, key) => node?.[key], normalizedGlobalTemplate),
+      `system-owned node was overridden during user merge: ${path}`,
+    );
+  }
+});
+
 test("tool policy is monotonic and deny wins", () => {
   const policy = mergeToolPolicyPatch({
     baseToolPolicy: { allowToolNames: ["read_file", "execute_script"] },
