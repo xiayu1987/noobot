@@ -97,7 +97,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
 
   const connectorName = `e2e-mysql-${randomUUID().slice(0, 8)}`;
   const overview = noobot.page.locator(".connector-overview-panel");
-  await overview.locator(".chat-message-nav-icon-button").click();
+  await overview.getByTestId("right-connector-panel-toggle").click();
   await overview.locator(".manager-actions .el-button--primary").click();
 
   const drawer = noobot.page.locator(".connector-add-drawer");

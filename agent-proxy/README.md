@@ -2,74 +2,64 @@
 
 [中文](./README.zh-CN.md) | English
 
-Noobot agent proxy gateway — a lightweight WebSocket fanout/replay and HTTP proxy layer sitting between the frontend and the Noobot backend service.
-
-## Purpose
-
-- **WebSocket fanout** — one upstream WebSocket connection to the backend serves multiple frontend clients for the same session.
-- **Message replay** — events are buffered per channel; reconnecting clients receive missed events automatically.
-- **HTTP proxy** — forwards HTTP requests to the backend with transparent routing.
-- **Resilience** — handles upstream disconnects, channel lifecycle, and automatic cleanup.
+Noobot Agent Proxy is the HTTP and WebSocket gateway between clients and the Noobot Service. It owns connection fanout, channel access control, reconnect authority synchronization, transport delivery, rate limiting, and optional frontend hosting. It does not own Agent business state.
 
 ## Architecture
 
+```text
+Client  -- HTTP/WebSocket -->  Agent Proxy :10062  -- HTTP/WebSocket -->  Service :10061
 ```
-Frontend  ──WS/HTTP──►  Agent Proxy (10062)  ──WS/HTTP──►  Noobot Service (10061)
-```
 
-### Key Concepts
+One channel is identified by `userId + sessionId + parentSessionId + parentDialogProcessId`. A channel can have multiple downstream subscribers and one active upstream connection.
 
-| Concept | Description |
-|---|---|
-| **Channel** | A logical session identified by `userId::sessionId::parentSessionId::dialogProcessId`. Each channel has one upstream WebSocket to the backend and zero or more downstream subscriber sockets. |
-| **Event Log** | Ordered event buffer per channel (configurable max size). Used for replay on reconnect. |
-| **Subscriber** | A frontend WebSocket attached to a channel. Receives broadcast events and can send messages upstream. |
-| **Upstream Socket** | Single WebSocket from the proxy to the Noobot backend per active channel. |
+## Transport behavior
 
-### Message Flow
+- Agent commands use `@noobot/agent-transport-protocol`; send, resend, continue, stop, finalize, interaction response, and snapshot/query commands are routed by command type.
+- Backend protocol events are validated, sequenced, and broadcast without changing their business identity.
+- Turn lifecycle delivery uses receipts and bounded redelivery.
+- A reconnect request carries `currentSessionId`, `requestId`, and `knownLifecycleSequenceMap`.
+- Reconnect returns one authoritative `replayBatch` per session. A batch can contain a Turn snapshot, the contiguous lifecycle tail after that snapshot, and complete unresolved `pendingInteractions` events.
+- Message cursors and payload fragments are not reconnect authority; reconnect accepts only the lifecycle sequence map defined above.
 
-1. Client sends `start_or_join` action with `userId` + `sessionId`.
-2. Proxy resolves or creates a channel, attaches the client as a subscriber.
-3. If no upstream exists, proxy opens one to the backend and forwards the start payload.
-4. Backend events are captured, sequenced, logged, and broadcast to all subscribers.
-5. On reconnect, client sends `reconnect` with `lastReceivedSeqMap`; proxy replays missing events.
+The reconnect wire shapes are owned by `@noobot/event-protocol`, `@noobot/session-protocol`, and `@noobot/agent-transport-protocol`; this package only coordinates their transport.
 
 ## Configuration
 
-All settings are via environment variables:
+Configuration is read from `agent-proxy.config.json`, with environment variables taking precedence. The complete supported key list, defaults, normalization, and environment-variable mapping are defined only in `src/shared/config.js`.
 
-| Variable | Default | Description |
-|---|---|---|
-| `AGENT_PROXY_PORT` | `10062` | Proxy listen port |
-| `AGENT_PROXY_HOST` | `0.0.0.0` | Proxy listen host |
-| `AGENT_PROXY_UPSTREAM_WS_URL` | `ws://127.0.0.1:10061/chat/ws` | Backend WebSocket URL |
-| `AGENT_PROXY_UPSTREAM_HTTP_BASE` | `http://127.0.0.1:10061` | Backend HTTP base URL |
-| `AGENT_PROXY_CHANNEL_RETENTION_MS` | `600000` (10 min) | Terminal channel retention |
-| `AGENT_PROXY_API_KEY_RETENTION_MS` | `86400000` (24 h) | API key identity retention |
-| `AGENT_PROXY_MAX_CHANNEL_EVENTS` | `2000` | Max events buffered per channel |
-| `AGENT_PROXY_CLEANUP_INTERVAL_MS` | `15000` | Cleanup timer interval |
-| `AGENT_PROXY_MAX_CONNECTIONS` | `1000` | Max concurrent WebSocket connections |
-| `AGENT_PROXY_MAX_BODY_SIZE` | `10485760` (10 MB) | Max HTTP request body size |
-| `AGENT_PROXY_REQUEST_ID_TTL_MS` | `660000` (11 min) | Interaction request ID TTL |
-| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS` | `30000` | HTTP upstream timeout |
-| `AGENT_PROXY_REPLAY_ON_RECONNECT` | `false` | Enable replay on reconnect |
-| `AGENT_PROXY_MAX_REPLAY_EVENTS` | `5000` | Max events per replay |
+Core settings:
 
-## Quick Start
+| Environment variable                               | Default                        | Purpose                                                   |
+| -------------------------------------------------- | ------------------------------ | --------------------------------------------------------- |
+| `AGENT_PROXY_PORT`                                 | `10062`                        | Listen port                                               |
+| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | Listen host                                               |
+| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket endpoint                                |
+| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP base URL                                     |
+| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | Upstream HTTP timeout                                     |
+| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | shared time threshold          | Reconnect snapshot timeout                                |
+| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | shared time threshold          | Lifecycle receipt timeout                                 |
+| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | shared turn threshold          | Lifecycle delivery attempt limit                          |
+| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | shared length threshold        | Maximum incoming WebSocket payload                        |
+| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | shared length threshold        | Maximum buffered WebSocket output                         |
+| `AGENT_PROXY_TRUSTED_ORIGINS`                      | empty                          | Comma-separated allowed origins; empty allows any origin  |
+| `AGENT_PROXY_TRUSTED_IPS`                          | empty                          | Comma-separated allowed IP patterns; empty allows any IP  |
+| `AGENT_PROXY_CONNECT_TOKEN`                        | empty                          | Token required by the connect interceptor when configured |
+| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | Enable HTTP rate limiting                                 |
+| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | Enable WebSocket upgrade rate limiting                    |
+| `AGENT_PROXY_FRONTEND_ROOT`                        | empty                          | Optional built frontend directory                         |
+
+Do not duplicate the full configuration schema in deployment documentation. Use `src/shared/config.js` when adding or changing a setting.
+
+## Run and test
 
 ```bash
 cd agent-proxy
 npm install
 npm start
+npm test
 ```
 
-Or with custom upstream:
-
-```bash
-AGENT_PROXY_UPSTREAM_WS_URL=ws://192.168.1.100:10061/chat/ws npm start
-```
-
-## PM2
+PM2 commands:
 
 ```bash
 npm run pm2:start
@@ -82,12 +72,16 @@ npm run pm2:list
 
 ## Endpoints
 
-| Path | Protocol | Description |
-|---|---|---|
-| `/health` | HTTP | Health check (returns channel count, active connections) |
-| `/chat/ws`, `/api/chat/ws`, `/agent-proxy/ws`, `/api/agent-proxy/ws` | WebSocket | Client WebSocket connections |
-| `/internal/connect`, `/api/internal/connect` | HTTP | Connect interceptor |
-| *any other* | HTTP | Proxied to backend |
+| Path                                                                 | Protocol             | Purpose                                             |
+| -------------------------------------------------------------------- | -------------------- | --------------------------------------------------- |
+| `/health`                                                            | HTTP                 | Health and active-connection summary                |
+| `/chat/ws`, `/api/chat/ws`, `/agent-proxy/ws`, `/api/agent-proxy/ws` | WebSocket            | Agent transport                                     |
+| `/logs/ws`, `/api/logs/ws`                                           | WebSocket proxy      | Runtime log stream                                  |
+| `/internal/connect`, `/api/internal/connect`                         | HTTP                 | Authenticated connect interceptor                   |
+| `/ide`, `/ide/*`                                                     | HTTP/WebSocket proxy | IDE route                                           |
+| Other HTTP paths                                                     | HTTP proxy           | Forwarded to Service; `/api` is stripped by default |
+
+When `AGENT_PROXY_FRONTEND_ROOT` points to a built frontend, non-API GET/HEAD routes are served as an SPA.
 
 ## License
 

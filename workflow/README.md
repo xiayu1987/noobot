@@ -7,7 +7,7 @@ Noobot workflow engine library (**ESM**).
 ## Install / Use
 
 ```js
-import workflow from 'workflow';
+import workflow from "workflow";
 // or
 import {
   compileWorkflowSemantic,
@@ -18,7 +18,7 @@ import {
   getWorkflowInstanceSnapshot,
   advanceWorkflowInstanceById,
   releaseWorkflowInstance,
-} from 'workflow';
+} from "workflow";
 ```
 
 ## Stable Facade API
@@ -35,7 +35,7 @@ import {
 ## Extension API
 
 ```js
-import workflowExtension from 'workflow/extension';
+import workflowExtension from "workflow/extension";
 // or
-import { registerModelBoxFactory } from 'workflow/extension';
+import { registerModelBoxFactory } from "workflow/extension";
 ```

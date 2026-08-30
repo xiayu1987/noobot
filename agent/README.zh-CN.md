@@ -1,38 +1,40 @@
 # noobot-agent
 
-English: [README.md](./README.md)
+中文 | [English](./README.md)
 
-从 `noobot/service/system-core` 抽离出的独立 Agent Runtime 项目（ESM）。
+Noobot 独立的 ESM Agent 运行时。Service 宿主通过声明的包边界注入配置、存储、事件、插件和模型执行能力。
 
-## 安装
+## 安装与校验
 
 ```bash
 cd agent
 npm install
-```
-
-## 快速校验
-
-```bash
 npm run check
 npm run check:tools
 npm run check:api
+npm test
 ```
 
 ## 对外入口
 
-- 主入口：`noobot-agent`
-- 子路径：
-  - `noobot-agent/agent`
-  - `noobot-agent/tools`
-  - `noobot-agent/model`
-  - `noobot-agent/event`
-  - `noobot-agent/tracking`
-  - `noobot-agent/store`
-  - `noobot-agent/session`
-  - `noobot-agent/attach`
-  - `noobot-agent/context`
-  - `noobot-agent/config`
+唯一完整清单以 `package.json#exports` 为准，主要公开子路径包括：
+
+- `noobot-agent/agent`
+- `noobot-agent/bot-manage`
+- `noobot-agent/tools`
+- `noobot-agent/model`
+- `noobot-agent/event`
+- `noobot-agent/tracking`
+- `noobot-agent/store`
+- `noobot-agent/session`
+- `noobot-agent/attach`
+- `noobot-agent/semantic-transfer`
+- `noobot-agent/context`
+- `noobot-agent/config`
+- `noobot-agent/plugin`
+- `noobot-agent/application`
+
+禁止深层导入内部文件。
 
 ## 最小示例
 
@@ -40,44 +42,21 @@ npm run check:api
 import { runAgentTurn } from "noobot-agent/agent";
 ```
 
-## Adapter 扩展点
+## 宿主 Adapter
 
-- Logger：`setLoggerAdapter` / `getLoggerAdapter`
-- Event：`setEventAdapter` / `getEventAdapter`
-- Store(FS)：`setFsAdapter` / `getFsAdapter` / `resetFsAdapter`
-- Tools：`setToolBuilderAdapter` / `getToolBuilderAdapter` / `resetToolBuilderAdapter`
-- Model：`setModelAdapter` / `getModelAdapter` / `resetModelAdapter`
+- 日志：`setLoggerAdapter`、`getLoggerAdapter`
+- 事件：`setEventAdapter`、`getEventAdapter`
+- 文件存储：`setFsAdapter`、`getFsAdapter`、`resetFsAdapter`
+- 工具构建：`setToolBuilderAdapter`、`getToolBuilderAdapter`、`resetToolBuilderAdapter`
 
-## 已接入环境变量
+Provider 配置和模型请求执行不是 Agent Adapter。`@noobot/model-protocol` 负责模型契约，`@noobot/model-runtime` 负责供应商请求执行。
 
-- `AGENT_GLOBAL_CONFIG_PATH`（兼容 `NOOBOT_GLOBAL_CONFIG_PATH`）
+## 环境变量
+
+- `AGENT_GLOBAL_CONFIG_PATH` 或 `NOOBOT_GLOBAL_CONFIG_PATH`
 - `AGENT_SYSTEM_PROMPT_PATH`
 - `AGENT_WORKSPACE_ROOT`
 
-## 与 noobot 原版的迁移差异
+## 插件策略
 
-1. **项目形态**
-   - 从 `noobot/service/system-core` 独立为 `noobot/agent`。
-2. **路径默认值去硬编码**
-   - 全局配置、system prompt、workspace root 支持环境变量覆盖。
-3. **运行时可插拔**
-   - 新增 logger/event/store/tool/model adapter 层。
-4. **公开 API 收口**
-   - 通过 `package.json#exports` 暴露受控子路径，建议避免 deep import。
-5. **依赖分层**
-   - 核心依赖与可选依赖（optionalDependencies）已区分，连接器/文档处理类能力可按需安装。
-
-## 说明
-
-- 默认行为尽量保持与原 `system-core` 一致。
-- 若你准备发布 npm 包，建议下一步补充：版本策略、变更日志、最小示例工程。
-
-## 插件策略 API
-
-Agent 在插件注册时会注入统一策略 API（`api.policy`），用于插件侧声明运行时工具策略：
-
-- `patch(patch: object)`
-
-约定：Agent 负责规范与合并，插件只声明策略（例如追加 `denyToolNames`）。
-
-详细契约文档：`../docs/plugin-policy-contract.md`
+Agent 插件宿主只暴露受限的 `policy.patch(patch)` 能力。Agent 负责规范化与合并，插件只声明策略意图。参见[插件策略契约](../docs/plugin-policy-contract.md)和[插件协议](../plugin-protocol/README.md)。

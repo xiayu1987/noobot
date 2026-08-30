@@ -13,7 +13,7 @@
 
 [Windows 安装程序](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot.Setup.<版本>.exe`）· [macOS 客户端](https://github.com/xiayu1987/noobot/releases/latest)（选择 `Noobot-<版本>-mac.zip`）· [配置文档](./CONFIGURATION.zh-CN.md) · [参与讨论](https://github.com/xiayu1987/noobot/discussions)
 
-Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI Agent 应用。它在一个自托管部署中提供隔离用户工作区、持久会话、可扩展工具、语义工作流，以及 OpenAI 兼容接口和 DashScope 模型接入。
+Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI Agent 应用。它在一个自托管部署中提供隔离用户工作区、持久会话、可扩展工具、语义工作流，以及跨 OpenAI 兼容供应商的模型系列路由。
 
 共创者：Hyler · Epicur · gonglei · Z · Y · C
 
@@ -23,31 +23,24 @@ Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI A
 
 ![Noobot 使用工具分析虚构股票组合](./docs/assets/noobot-tool-workflow-v2.gif)
 
-### LLM 制作角色动画
+### 用一句话制作 3D 角色动画
 
-用一句自然语言描述动作，Noobot 就会把动作意图转换为经过校验的动画
-协议，提交为 Session 产物，并交给 Three.js 执行。下面的可复现录制使用仓库
-真实 Three.js 运行时，连续展示了从 GLB 元数据读取、关键帧生成、播放到执行
-完成的全过程：
+导入一个带基础动作的 3D 角色，告诉 Noobot 你想让它做什么，就能看到角色按你的
+描述连续表演。你可以制作单人或多人动画，让角色挥手、行走、跳跃和互动，也可以
+在后续对话中继续调整动作、节奏与位置，无需编写动画代码。
 
-![Noobot LLM 制作角色动画协议演示](./docs/assets/noobot-character-animation.gif)
+![Noobot AI 角色动画功能演示](./docs/assets/noobot-character-animation.gif)
 
-下面这份 GIF 直接录制自正在运行的 Noobot 部署，包含真实的浏览器连接、角色插件
-启用、GLB 导入、模型请求、`character_animation_generate` 工具调用、Session 产物
-提交，以及 Three.js 播放直到完成的全过程。录制的连续 10 秒动画依次包含待机、
-挥手、跳跃、行走和待机片段：
+下面是 Noobot 真实系统录制：从导入并选择角色，到用自然语言生成一段连续动画，
+再到角色完成待机、挥手、跳跃、行走和收尾动作。整个创作和播放过程都在会话中完成：
 
-![Noobot 真实角色动画运行录制](./docs/assets/noobot-character-animation-runtime.gif)
+![Noobot 真实生成并播放角色动画](./docs/assets/noobot-character-animation-runtime.gif)
 
-角色动画插件只让模型表达动作意图，不让模型直接生成渲染代码。插件读取导入
-GLB 中真实存在的动画片段和节点，校验模型返回的协议后由浏览器执行。后续对话
-使用相同的 `animationId` 会继续追加到同一动画产物；不传则创建新的 Session 产物。
-产物事件是唯一事实源，刷新页面后仍可恢复动画。
+生成的动画会保存为当前会话的作品。刷新页面后仍能查看，也可以在任意后续对话中
+接着修改，不必向上查找最初的消息。
 
-制作动画：在“角色功能”导入 GLB，在“更多操作”中勾选一个或多个角色，然后用
-自然语言描述动作。模型调用 `character_animation_generate` 返回
-`noobot.animation.protocol` 数据；插件会在渲染前校验角色 ID、原生动画片段、
-时长、位置和关键帧，最后由 Three.js 实时播放。
+开始制作只需三步：打开“角色功能”并导入角色，在“更多操作”中勾选一个或多个
+角色，然后用自然语言描述你想看到的动作。
 
 <details>
 <summary>查看完成后的分析结果</summary>
@@ -60,9 +53,10 @@ GLB 中真实存在的动画片段和节点，校验模型返回的协议后由�
 
 - **Agent 工作空间：** 多用户工作区和会话隔离，支持持久附件与执行历史。
 - **工具与技能：** 文件操作、原生/沙箱脚本、浏览器自动化、LibreOffice、FFmpeg、多模态解析与生成、服务和可复用技能。
-- **模型互操作：** OpenAI 兼容和 DashScope 接口，按运营商/模型系列路由，支持工具调用、流式响应与多模态能力配置。
+- **模型互操作：** OpenAI 兼容供应商接口，按运营商/模型系列路由，支持工具调用、流式响应与多模态能力配置。
 - **多智能体编排：** 任务委派、语义工作流、Workflow 插件，以及 Harness 规划/指导/审查。
 - **MCP 与连接器：** 支持 MCP Server，以及数据库、终端、邮件和自定义服务连接器。
+- **AI 角色动画：** 导入 3D 角色后用自然语言制作、预览并持续修改单人或多人动画。
 - **Web 与桌面端：** Vue 3 Web 客户端，以及 Windows 和 macOS Electron 客户端。
 - **自托管运维：** PM2 + Caddy 一键部署，提供运行审计、重放、数据清洗和中英文配置。
 
@@ -123,7 +117,7 @@ chmod +x stop-services.sh
 
 ## Workspace 依赖管理
 
-仓库根目录（`noobot/package.json`）已启用 npm workspaces。
+仓库根目录的 `package.json` 已启用 npm workspaces。
 
 ```bash
 cd noobot

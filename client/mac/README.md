@@ -45,7 +45,7 @@ The package does **not** directly copy the repository root `node_modules` anymor
 In packaged mode the client starts the backend with Electron's embedded Node runtime:
 
 ```text
-<Noobot.exe> <resources>/backend/service/app.js
+<Noobot.app>/Contents/MacOS/Noobot <resources>/backend/service/app.js
 ```
 
 with `ELECTRON_RUN_AS_NODE=1`.

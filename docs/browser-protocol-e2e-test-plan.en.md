@@ -17,6 +17,7 @@ This Playwright plan validates real browser behavior for:
 - Attachments retained, added, removed, and restored from snapshots.
 - Harness connection, Hooks, Context Snapshots, and auxiliary model calls.
 - Workflow roots, child executions, attachment transfer, and combined Harness execution.
+- Agent configuration, interaction timeout, connectors, and character animation artifacts.
 - Multiple pages, offline reconnect, concurrent stop, and invalid protocol rejection.
 
 Each operation must close the complete data chain:
@@ -47,7 +48,7 @@ Rules:
 
 - Agent Transport commands and validation: `agent-transport-protocol/src/commands.js`
 - Agent Transport constants: `agent-transport-protocol/src/constants.js`
-- Turn Lifecycle and receipts: `event-protocol/src/turn-lifecycle-protocol.mjs`
+- Turn Lifecycle and receipts: `session-protocol/src/turn-lifecycle.js`
 - Browser WebSocket dispatch: `client/noobot-chat/src/infrastructure/websocket/chatWebSocketClient.js`
 - Reconnect projection: `client/noobot-chat/src/modules/chat/runtime/session/reconnectCoordinator.js`
 - Resend transaction: `client/noobot-chat/src/modules/chat/runtime/engine/resendTransaction.js`
@@ -62,7 +63,7 @@ Protocol baseline:
 | Protocol               | Current version/event             |
 | ---------------------- | --------------------------------- |
 | Agent Transport        | `protocolVersion: 2`              |
-| Turn Lifecycle         | `protocolVersion: 4`              |
+| Turn Lifecycle         | `protocolVersion: 1`              |
 | Lifecycle transport    | `transportProtocolVersion: 3`     |
 | Lifecycle wire event   | `turn_lifecycle`                  |
 | Lifecycle receipt      | `action: turn.lifecycle.received` |
@@ -274,6 +275,14 @@ Execution events must contain exactly the declared tools with paired IDs/argumen
 file cards agree with Turn journals before and after refresh, live thinking changes over time, all
 seven pairs remain expandable, and interaction/tool facts reach the final response.
 
+### PBE-037-043: Interaction, Attachments, Agent Config, And Tool Boundaries
+
+- PBE-037 verifies that a timed-out `user_interaction` closes the real modal and is not replayed.
+- PBE-038 preserves canonical parsed-attachment identity, preview, download, and refresh behavior.
+- PBE-039-041 verify the canonical Agent Config command, connect response, and refresh persistence.
+- PBE-042 verifies immediate same-page resend after stop.
+- PBE-043 closes native, multimodal, external-tool, and result-observation paths for a regular user.
+
 ### PBE-042: Immediate Same-Page Resend After Stop
 
 After `stop_completed`, edit and resend without refresh, reconnect, or Session reload. The frontend
@@ -297,6 +306,20 @@ message and assistant presentation before Workflow runtime, then render the same
 Both pages always expose the DSL toggle with DSL collapsed by default. B stops the Turn and both
 pages converge on the same stop state. Lifecycle must not manufacture messages, status must not
 trigger a REST refresh, and Workflow runtime must not create a separate host message.
+
+### PBE-047: Connector Selection, Query, And Session Authority
+
+Create and connect a MySQL connector through the browser, select it for the Session, and send a
+query. The Session selection write must commit before the model command; connector tool execution,
+model context, persistence, and provider observation must all reference that authoritative
+selection.
+
+### PBE-048: Character Import, Animation, And Session Artifact
+
+Enable the Character plugin, import and select an animated GLB, and request an animation through a
+real model call. The tool result and authoritative plugin artifact must agree; desktop and mobile
+render one Three.js card in the Session artifact panel, and refresh restores it without placing a
+duplicate card in the Character panel.
 
 ### Single Model Invocation Observation Boundary
 
@@ -328,11 +351,11 @@ npm run test:e2e:protocol:core
 npm run test:e2e:protocol:full
 ```
 
-| Tier      | Scenarios                                                                  |
-| --------- | -------------------------------------------------------------------------- |
-| Smoke     | PBE-002, PBE-006                                                           |
-| Core      | PBE-007-014, PBE-016, PBE-017, PBE-021, PBE-022, PBE-027, PBE-029, PBE-030 |
-| Full-only | PBE-015, PBE-023-026, PBE-028, PBE-031-036, PBE-044-046                    |
+| Tier      | Scenarios                                                                                        |
+| --------- | ------------------------------------------------------------------------------------------------ |
+| Smoke     | PBE-002, PBE-006                                                                                 |
+| Core      | PBE-007-014, PBE-016, PBE-017, PBE-021, PBE-022, PBE-027, PBE-029, PBE-030, PBE-037, PBE-039-042 |
+| Full-only | PBE-015, PBE-023-026, PBE-028, PBE-031-036, PBE-038, PBE-043-048                                 |
 
 ## 8. CI Failure Artifacts
 

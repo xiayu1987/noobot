@@ -13,7 +13,7 @@
 
 [Windows installer](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot.Setup.<version>.exe`) · [macOS package](https://github.com/xiayu1987/noobot/releases/latest) (choose `Noobot-<version>-mac.zip`) · [Configuration](./CONFIGURATION.md) · [Discussions](https://github.com/xiayu1987/noobot/discussions)
 
-Noobot is an open-source Web and desktop AI agent application built with Node.js, Vue 3, and Electron. It provides isolated user workspaces, durable sessions, extensible tools, semantic workflows, and OpenAI-compatible or DashScope model access from one self-hosted deployment.
+Noobot is an open-source Web and desktop AI agent application built with Node.js, Vue 3, and Electron. It provides isolated user workspaces, durable sessions, extensible tools, semantic workflows, and model-family routing across OpenAI-compatible providers from one self-hosted deployment.
 
 Co-creators: Hyler · Epicur · gonglei · Z · Y · C
 
@@ -23,36 +23,28 @@ An English demo of a fictional portfolio analysis: Noobot verifies source data, 
 
 ![Noobot tool workflow analyzing a fictional stock portfolio](./docs/assets/noobot-tool-workflow-v2.gif)
 
-### LLM-authored character animation
+### Create 3D character animation with one prompt
 
-Describe a movement in plain language and watch Noobot turn it into a validated
-animation protocol, commit it as a Session artifact, and execute it in Three.js.
-This reproducible capture uses the repository's real Three.js runtime and shows
-the complete path from GLB metadata to generated keyframes, playback, and a
-completed animation state:
+Import a 3D character with basic motions and tell Noobot what you want it to do.
+You can create solo or multi-character scenes, make characters wave, walk, jump,
+and interact, then refine their movement, timing, and position in later messages.
+No animation code is required.
 
-![Noobot LLM-authored character animation protocol](./docs/assets/noobot-character-animation.gif)
+![Noobot AI character animation demo](./docs/assets/noobot-character-animation.gif)
 
-The following GIF is captured from a running Noobot deployment. It includes the
-actual browser connection, Character plugin activation, GLB import, model
-request, `character_animation_generate` tool call, Session artifact commit, and
-Three.js playback through completion. The recorded timeline combines idle,
-wave, jump, walk, and idle clips in one continuous 10-second animation:
+The recording below comes from a running Noobot system. It follows the complete
+creative experience: import and select a character, describe a scene in plain
+language, and watch it perform a continuous sequence of idle, wave, jump, walk,
+and finishing motions inside the conversation.
 
-![Noobot real character animation runtime](./docs/assets/noobot-character-animation-runtime.gif)
+![Noobot generating and playing a character animation](./docs/assets/noobot-character-animation-runtime.gif)
 
-The character animation plugin keeps the model focused on intent rather than
-rendering code. It reads the clips and nodes that actually exist in an imported
-GLB, validates the returned protocol, and lets the browser renderer perform the
-animation. Use the same `animationId` to extend one animation across turns, or
-omit it to create a new Session artifact. The artifact event is the source of
-truth, so the animation can be restored after a refresh.
+Each animation is saved as a work created in the current session. It remains
+available after a refresh and can be refined from any later message without
+scrolling back to where it was first created.
 
-To create an animation, import a GLB in the Character feature, select one or more
-characters from **More actions**, and ask the model for a movement. The
-`character_animation_generate` tool returns `noobot.animation.protocol` data;
-the plugin validates character IDs, native clip names, timing, positions, and
-keyframes before Three.js renders it.
+To get started, open **Character**, import a model, select one or more characters
+from **More actions**, and describe the movement you want to see.
 
 <details>
 <summary>View the completed analysis</summary>
@@ -65,9 +57,10 @@ keyframes before Three.js renders it.
 
 - **Agent workspace:** multi-user workspace and session isolation with persistent attachments and execution history.
 - **Tools and skills:** file operations, native/script execution, browser automation, LibreOffice, FFmpeg, multimodal parsing/generation, services, and reusable skills.
-- **Model interoperability:** OpenAI-compatible and DashScope interfaces, provider/model-family routing, tool calling, streaming, and multimodal capability configuration.
+- **Model interoperability:** OpenAI-compatible provider interfaces, provider/model-family routing, tool calling, streaming, and multimodal capability configuration.
 - **Multi-agent orchestration:** task delegation, semantic workflows, workflow plugins, and harness-based planning/guidance/review.
 - **MCP and connectors:** MCP servers plus database, terminal, email, and custom service connectors.
+- **AI character animation:** import 3D characters and use natural language to create, preview, and refine solo or multi-character animation.
 - **Web and desktop:** Vue 3 Web client and packaged Electron clients for Windows and macOS.
 - **Self-hosted operations:** one-command PM2 + Caddy deployment, runtime audit events, replay, sanitization, and bilingual UI/configuration.
 
@@ -128,7 +121,7 @@ chmod +x stop-services.sh
 
 ## Workspace Dependency Management
 
-This repo uses npm workspaces at root (`noobot/package.json`).
+This repository uses npm workspaces from the root `package.json`.
 
 ```bash
 cd noobot

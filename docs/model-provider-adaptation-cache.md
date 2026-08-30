@@ -1,345 +1,104 @@
-# 模型厂商缓存适配与 Prompt Cache 策略
+# 模型供应商适配与 Prompt Cache
 
-本文记录 Noobot 在模型工厂层对不同模型厂商和模型系列的缓存适配规则。后续新增模型、切换 provider、排查缓存命中率时，以本文作为工程约定。
+本文说明 Noobot 当前模型运行时的供应商识别、默认参数和缓存策略。模型字段契约以 `@noobot/model-protocol` 为唯一事实源；请求适配以 `@noobot/model-runtime` 为唯一实现。
 
-相关代码：
+## 代码边界
 
-- `agent/src/models/factory/chat-model.js`
-- `agent/src/models/spec/defaults.js`
-- `agent/src/models/tool/binding-adapter.js`
-- `model-proxy/src/cache-diagnostics.js`
+- `model-protocol/src/model/provider-spec.js`：provider 配置字段、format、operator 和 adapter 契约。
+- `model-runtime/src/normalization/spec-normalizer.js`：运行时默认参数与模型系列分类。
+- `model-runtime/src/policies/cache-policy-engine.js`：供应商缓存参数与采样参数编译。
+- `model-runtime/src/adapters/openai-compatible-adapter.js`：OpenAI-compatible 客户端和 Responses API 选择。
+- `agent/src/models/tool/binding-adapter.js`：工具名称、排序和 strict schema 策略。
+- `model-proxy/src/cache-diagnostics.js`：代理侧缓存诊断。
 
-## 1. 目标
+Agent、插件和代理不得复制上述规则或自行识别供应商。
 
-缓存适配主要解决三类问题：
+## 统一传输格式与供应商识别
 
-1. 不同厂商公布的缓存机制不同，不能把 OpenAI 的字段直接套到 Claude、Gemini、DeepSeek 或 Qwen 上。
-2. Prompt Cache 对请求稳定性敏感，需要稳定 system/developer prompt、tools 顺序、模型参数和 cache key。
-3. Noobot 现有消息链路包含多轮工具调用、子会话和插件注入，transport 或 provider thread 复用必须谨慎启用。
+当前唯一模型传输格式是 `openai_compatible`。`format` 只选择 adapter，供应商由解析后的 `base_url` 主机确定：
 
-## 2. 当前内置适配
+| API 主机                            | `operatorId` |
+| ----------------------------------- | ------------ |
+| `api.openai.com`                    | `openai`     |
+| `api.anthropic.com`                 | `anthropic`  |
+| `generativelanguage.googleapis.com` | `google`     |
+| `dashscope.aliyuncs.com`            | `alibaba`    |
+| `open.bigmodel.cn`                  | `zhipu`      |
+| `api.deepseek.com`                  | `deepseek`   |
+| 其他主机或尚未解析的地址占位符      | `generic`    |
 
-### 2.1 OpenAI / OpenAI-compatible GPT 系列
+模型系列只根据实际 `model` 名称分类；配置 alias 不参与模型系列识别。环境变量名也不用于推断供应商。
 
-识别规则：
+## 运行时默认参数
 
-```text
-format = "openai_compatible"
-且 model/base_url/provider/alias 指向 OpenAI GPT/o/Codex/ChatGPT 系列
-```
+配置文件可以省略采样参数。运行时按“format → operator → 模型系列 → 具体模型”应用默认值，用户显式配置始终优先。默认参数维护在 `model-runtime/src/normalization/spec-normalizer.js`，不要复制到模型库条目中。
 
-当前内置行为：
+当 OpenAI-compatible 配置显式给出 `top_p` 而未给出 `temperature` 时，运行时不会再补 `temperature`，避免同时发送两种采样控制。
 
-- 自动生成稳定 `promptCacheKey` / `prompt_cache_key`。
-- 对支持扩展缓存控制的 OpenAI GPT 系列自动设置 `promptCacheRetention` / `prompt_cache_retention` 为 `24h`。
-- 显式 `prompt_cache_key`、`promptCacheKey`、`prompt_cache_retention`、`promptCacheRetention` 优先。
-- 普通 GPT-5/GPT-6 不默认强制 `useResponsesApi: true`，避免改变现有消息构建和工具调用链路。
-- GPT-5 系列移除 `top_p`，避免请求失败。
+## 缓存策略
 
-默认 cache key 规则：
+`model-runtime/src/policies/cache-policy-engine.js` 会先从 `extra_body` 移除所有跨供应商缓存字段，再按已识别的 `operatorId` 和模型系列生成目标请求参数。
 
-```text
-gpt-4o  -> noobot-main-gpt-4o
-gpt-4.1 -> noobot-main-gpt-4-1
-gpt-5.5 -> noobot-main-gpt-5-5
-gpt-6.1 -> noobot-main-gpt-6-1
-```
+### OpenAI GPT
 
-默认 retention 规则：
+仅当 `format=openai_compatible` 且模型系列为 GPT 时：
 
-```text
-gpt-4.1 -> 24h
-gpt-5.x -> 24h
-gpt-6.x -> 24h
-```
+- 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
+- GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
+- GPT 4.1 和其他 GPT 5 系列默认使用 `prompt_cache_retention: "24h"`。
+- GPT-5 不发送 `top_p`。
+- 显式配置的缓存字段优先于运行时默认值。
 
-`gpt-4o` 会自动获得稳定 key，但当前不自动设置 `24h` retention。
+### Anthropic
 
-### 2.2 Codex-like 系列
+`operatorId=anthropic` 时使用 `cache_control`，默认 `{ "type": "ephemeral" }`。可显式关闭或配置支持的 TTL。OpenAI 和 Gemini 缓存字段不会透传。
 
-识别规则：
+### Google / Gemini
 
-```text
-model 或 alias 包含 codex
-```
+`operatorId=google|gemini` 时，仅在显式配置 `cached_content` 或 `gemini_cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
 
-当前内置行为：
+### Alibaba、Zhipu、DeepSeek 与通用网关
 
-- `resolveUseResponsesApi()` 默认允许 Codex-like 模型走 Responses API。
-- tool binding 默认启用 strict schema，除非遇到已知不兼容工具。
-- 仍使用 OpenAI 的 Prompt Cache 参数构建逻辑。
+当前不自动添加供应商专用缓存字段。Noobot 仍通过稳定的 system 前缀和按名称排序的工具 schema 提高服务端自动缓存命中率。
 
-Codex-like 模型和普通 GPT-5+ 的区别是，Codex-like 更接近官方 Codex transport 偏好，因此允许默认 Responses；普通 GPT-5/GPT-6 不默认强切 Responses。
+## Responses API
 
-### 2.3 Anthropic / Claude
+`use_responses_api` 是显式 provider 配置。只有模型名包含 `codex` 时运行时默认开启；其他模型不会因为版本、alias 或供应商名称自动切换传输方式。
 
-厂商策略：
+Noobot 不保存或复用 `previous_response_id`。Session、编辑重发、分支、子 Session 和多 Agent 上下文仍由 Noobot 自己的协议管理，不能在继续发送完整消息的同时推导 provider thread。
 
-- Anthropic 的 prompt caching 是 message content block 级别的 `cache_control`。
-- 常见做法是在 system prompt、长工具定义、长文档或稳定上下文后设置 cache breakpoint。
+## 工具绑定
 
-Noobot 当前内置行为：
+`agent/src/models/tool/binding-adapter.js` 负责：
 
-- 识别 `anthropic`、`claude`、Anthropic base URL。
-- 不发送 OpenAI 的 `prompt_cache_key` / `prompt_cache_retention`。
-- 保持 prompt 前缀和 tools 顺序稳定，给后续 Claude 专用适配留出空间。
+- 校验并去重工具名称；
+- 按工具名称稳定排序；
+- 根据模型与工具能力决定 strict schema；
+- 对不支持的 Claude tool-search 形态执行明确过滤。
 
-暂不自动实现的原因：
+业务调用方不得再次排序、降级或按 alias 推断工具能力。
 
-- `cache_control` 不是顶层请求参数，需要改消息 content block。
-- Noobot 当前 Claude 兼容路径多走 `ChatOpenAI` / OpenAI-compatible 消息形态，直接改 block 可能影响工具调用和历史消息。
+## 配置原则
 
-后续如引入真实 Anthropic adapter，可在消息构建层增加显式开关，例如：
+模型条目只声明身份、凭据地址、能力和用户确实需要覆盖的参数：
 
 ```json
 {
-  "anthropic_prompt_cache": {
-    "enabled": true,
-    "system": true,
-    "tools": true
-  }
+  "enabled": true,
+  "api_key": "${OPENAI_API_KEY}",
+  "base_url": "${OPENAI_API_ADDRESS}",
+  "model": "gpt-5.6-sol",
+  "format": "openai_compatible"
 }
 ```
 
-### 2.4 Gemini
+通常不需要配置 `temperature`、`top_p`、`max_tokens` 或缓存字段；运行时默认值负责这些参数。需要实验 Responses API 或覆盖缓存策略时，只在目标 provider 上显式配置对应字段。
 
-厂商策略：
+## 验证与排查
 
-- Gemini 有 implicit caching，也有 explicit context caching API。
-- 命中依赖稳定前缀、足够长的上下文和相同模型等条件。
-
-Noobot 当前内置行为：
-
-- 识别 `gemini`、Google Generative Language base URL。
-- 不发送 OpenAI 的 `prompt_cache_key` / `prompt_cache_retention`。
-- 继续保持 system prompt、tools 顺序和参数稳定。
-
-暂不自动实现 explicit context cache 的原因：
-
-- explicit cache 需要创建和引用 provider 侧 cached content 资源。
-- 这和 Noobot 自己的 session tree、编辑回滚、子会话、多 Agent 状态有关，不能只靠一个顶层字段安全完成。
-
-### 2.5 DeepSeek
-
-厂商策略：
-
-- DeepSeek 公布的上下文缓存以服务端自动缓存为主，通常不需要客户端传显式 cache key。
-- 命中重点是输入前缀稳定。
-
-Noobot 当前内置行为：
-
-- 识别 `deepseek` model/provider/base URL。
-- 不发送 OpenAI 的 `prompt_cache_key` / `prompt_cache_retention`。
-- 保持 tools 顺序稳定，减少请求体抖动。
-
-### 2.6 DashScope / Qwen
-
-厂商策略：
-
-- DashScope / Qwen 有自己的上下文缓存能力。
-- 在 DashScope OpenAI 兼容 Responses API 场景，可通过 `x-dashscope-session-cache: enable` 使用多轮对话缓存。
-- 非 Responses 或非专用接口下，不能简单套用 OpenAI 的 `prompt_cache_key`。
-
-Noobot 当前内置行为：
-
-- 识别 `format = "dashscope"`、`dashscope`、`aliyuncs`、`qwen`、`qianwen`。
-- 不发送 OpenAI 的 `prompt_cache_key` / `prompt_cache_retention`。
-- `enable_thinking` 未配置时默认 `false`。
-- `thinking_budget` 支持显式 `0`。
-- 显式配置 `use_responses_api: true` 时，请求头自动加入：
-
-```text
-x-dashscope-session-cache: enable
+```bash
+npm test -w @noobot/model-protocol
+npm test -w @noobot/model-runtime
 ```
 
-默认不强制 DashScope Responses API，避免改变现有 Chat Completions 消息链路。
-
-## 3. 防串厂商规则
-
-以下字段只允许发送给 OpenAI cache vendor：
-
-```text
-prompt_cache_key
-prompt_cache_retention
-promptCacheKey
-promptCacheRetention
-```
-
-如果这些字段被误放进 Claude、Gemini、DeepSeek、DashScope/Qwen 的配置或 `extra_body`，模型工厂会剥离它们。
-
-这样做的目的：
-
-- 避免 OpenAI-only 字段导致第三方 provider 报错。
-- 避免看似启用缓存，实际 provider 完全忽略，排查时产生误判。
-- 保留将来做 provider 专用适配的清晰边界。
-
-## 4. 已内置的通用命中优化
-
-1. 稳定 cache key：
-   - OpenAI GPT/o/Codex 系列自动生成 `noobot-main-<model>`。
-   - 显式配置优先。
-
-2. 稳定 cache retention：
-   - OpenAI `gpt-4.1`、`gpt-5.x`、未来 `gpt-6.x` 默认 `24h`。
-   - 显式配置优先。
-
-3. LangChain 原生字段映射：
-   - `promptCacheKey`
-   - `promptCacheRetention`
-
-4. OpenAI snake_case 透传：
-   - `prompt_cache_key`
-   - `prompt_cache_retention`
-
-5. tools 稳定排序：
-   - `adaptToolsForBinding()` 会按 tool name 排序，降低 tool schema 顺序抖动。
-
-6. DashScope Responses session cache：
-   - 仅在 `format = "dashscope"` 且显式 `use_responses_api: true` 时启用请求头。
-
-## 5. 为什么不默认强制 Responses API
-
-Noobot 主流程消息由标准 LangChain 消息组成：
-
-- `SystemMessage`
-- `HumanMessage`
-- `AIMessage`
-- `ToolMessage`
-
-LangChain 能把这些转换为 Responses API input，但强制切换 transport 会改变底层请求结构。Noobot 现有链路还包含：
-
-- assistant tool call 历史；
-- tool result；
-- 多轮工具循环；
-- retry / fallback；
-- session tree / sub-session；
-- harness 插件注入。
-
-因此当前策略是：
-
-- 厂商安全的缓存参数自动内置；
-- transport 不默认改变；
-- 需要实验时由 provider 显式配置 `use_responses_api: true`。
-
-## 6. 线程 / previous_response_id
-
-当前没有默认启用 OpenAI Responses thread 续接，也没有保存 `previous_response_id`。
-
-原因：
-
-- Noobot 已有自己的 `sessionId / parentSessionId / dialogProcessId` 会话树。
-- provider thread 复用需要处理编辑、删除、回滚、分支、子会话、多 Agent 等复杂状态。
-- 如果继续全量发送 messages，同时又传 `previous_response_id`，可能出现上下文重复或状态不一致。
-
-后续如果要实验 provider thread reuse，建议新增显式开关，例如：
-
-```json
-{
-  "responses_thread_reuse": true
-}
-```
-
-并仅在普通连续主会话中启用，不应默认影响子会话、分支会话和编辑后的会话。
-
-## 7. 新增模型系列时的适配流程
-
-新增模型系列时按以下顺序评估：
-
-1. 确认 provider format：
-   - `openai_compatible`
-   - `dashscope`
-   - 新 format
-
-2. 确认厂商公布的缓存策略：
-   - 顶层请求参数；
-   - 消息 content block 标注；
-   - 显式 cached content 资源；
-   - 服务端自动缓存；
-   - 专用 header。
-
-3. 在 `agent/src/models/spec/defaults.js` 增加 profile 规则：
-   - 默认 temperature；
-   - top_p；
-   - penalty；
-   - thinking budget。
-
-4. 在 `agent/src/models/factory/chat-model.js` 增加请求参数规则：
-   - 是否支持 `top_p`；
-   - 是否支持 `reasoning_effort`；
-   - 是否支持 Prompt Cache；
-   - 是否需要 Responses API；
-   - 是否需要 provider 专用 header。
-
-5. 在 `agent/src/models/tool/binding-adapter.js` 增加工具绑定规则：
-   - 是否默认 strict；
-   - 是否有 strict 不兼容工具；
-   - tools 顺序必须稳定。
-
-6. 增加测试：
-   - 参数是否被正确保留/删除；
-   - cache key 是否稳定；
-   - retention 是否符合预期；
-   - 显式配置是否优先；
-   - OpenAI-only 字段是否不会串到其他厂商；
-   - 不应改变 transport 的模型是否保持现状。
-
-## 8. 推荐配置原则
-
-普通 OpenAI GPT 会话模型配置保持简洁：
-
-```json
-{
-  "model": "gpt-5.5",
-  "format": "openai_compatible",
-  "reasoning_effort": "low",
-  "temperature": 0.7,
-  "max_tokens": 10000
-}
-```
-
-不需要手写：
-
-```json
-{
-  "prompt_cache_key": "...",
-  "prompt_cache_retention": "24h"
-}
-```
-
-这些由模型工厂自动补齐。
-
-如果不同用途不应共享 cache key，可以显式指定：
-
-```json
-{
-  "prompt_cache_key": "noobot-main-gpt-5-5-programming"
-}
-```
-
-常见隔离维度：
-
-- 主会话 / 插件子流程；
-- 编程 / 普通文本；
-- 高风险工具集 / 低风险工具集；
-- 多租户环境中的安全隔离。
-
-需要实验 Responses API 时，只对目标 provider 显式开启：
-
-```json
-{
-  "use_responses_api": true
-}
-```
-
-## 9. 排查缓存命中
-
-优先检查：
-
-1. `model-proxy` 日志里的 `prompt_cache_key` 是否稳定。
-2. system/developer prompt 前缀是否稳定。
-3. tools 数量、名称、schema 顺序是否稳定。
-4. 第三方 orchestrator 是否每轮改写 system prompt 或 tool schema。
-5. provider 是否支持当前传入的缓存字段。
-6. 是否切换了 model、base_url、transport 或 provider thread。
-
-如果 `cached_input_tokens` 仍接近 0，先不要直接归因于模型 bug。应先确认请求体前缀、tools 顺序、cache key、transport 和厂商缓存策略是否一致。
+缓存未命中时依次核对实际模型、`operatorId`、请求 flow、system 前缀、工具名称和 schema 顺序，以及供应商返回的 cached-token 统计。不得根据 alias、环境变量名或相似 URL 推断供应商能力。

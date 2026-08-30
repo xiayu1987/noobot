@@ -2,7 +2,7 @@
 
 Noobot runtime event center for backend startup, session runtime, and system runtime events.
 
-This package is a Node.js library. New code should use `@noobot/runtime-events`; existing session-channel APIs remain available at `@noobot/runtime-events/session-channel`.
+This package exposes the general runtime-event API at `@noobot/runtime-events` and the specialized session-log transport at `@noobot/runtime-events/session-channel`.
 
 ## Scopes
 
@@ -37,7 +37,7 @@ await events.session({
 
 ## Storage
 
-The default JSONL transport writes new runtime events under `runtime/events` for startup/system scopes and `runtime/session/{sessionId}/events` for session scope. `workspaceRoot` is storage-routing configuration only and is never serialized into an event record. The legacy session-channel entry keeps its existing storage behavior inside this package.
+The default JSONL transport writes runtime events under `runtime/events` for startup/system scopes and `runtime/session/{sessionId}/events` for session scope. `workspaceRoot` is storage-routing configuration only and is never serialized into an event record. The session-log transport owns its storage behavior inside this package.
 
 ## Rules
 

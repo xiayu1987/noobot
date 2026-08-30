@@ -114,7 +114,7 @@ Every referenced provider must explicitly declare the corresponding capability. 
 | `tools.plan_multi_task_collaboration.enabled`               | boolean      | Enable task planning tool                                                                                   |
 | `tools.switch_model.enabled`                                | boolean      | Enable model switch tool                                                                                    |
 | `tools.user_interaction.enabled`                            | boolean      | Enable user interaction tool                                                                                |
-| `tools.execute_native_script.enabled`                       | boolean      | Enable controlled Playwright, LibreOffice, FFmpeg and FFprobe execution                                     |
+| `tools.execute_native_script.enabled`                       | boolean      | Enable controlled Playwright, LibreOffice, FFmpeg and FFprobe execution (default `true`; user configurable) |
 | `tools.execute_script.enabled`                              | boolean      | Enable script execution tool                                                                                |
 | `tools.execute_script.script_timeout_ms`                    | number       | Script timeout                                                                                              |
 | `security.execution_isolation.mode`                         | enum         | `sandbox` isolates programmable workspace compute in Docker; fixed workspace file I/O stays host-controlled |
@@ -128,7 +128,6 @@ Every referenced provider must explicitly declare the corresponding capability. 
 | `security.execution_isolation.sandbox.mounts[].description` | string       | Optional mount description                                                                                  |
 | `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | Mount read-only when `true`; defaults to writable to preserve the existing mount behavior                   |
 | `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | Queue timeout for calls sharing the same container; minimum `100` ms                                        |
-| `tools.execute_native_script.enabled`                       | boolean      | Enable the host-restricted Node.js capability tool (default `true`; global admin configuration only)        |
 
 `execute_native_script` injects controlled Playwright, LibreOffice, FFmpeg/FFprobe, declared-input, and task-output capabilities. Its unique file protocol is `files.input`, `files.readText`, `files.readJson`, `files.writeText`, `files.writeJson`, `output.file`, `output.tempFile`, and `output.directory`. Reads accept `input://`, `output://`, and `temp://` task paths; writes accept only `output://`. Capability wrappers resolve task paths internally. It does not expose imports, shell commands, environment variables, executable selection, or arbitrary host paths. Browser access is limited to loopback HTTP(S). Outputs are persisted through semantic-transfer. This host-restricted mode is intended for trusted local/admin automation; it is not an operating-system security sandbox for hostile code.
 
@@ -155,9 +154,9 @@ Execution isolation is defined by the `@noobot/execution-isolation-protocol` wor
 Large-context length defaults:
 
 - Phase-summary character threshold: 220000
-- Semantic-transfer direct threshold: 30000 chars
-- Semantic-transfer tool-result inline threshold: 30000 chars
-- Semantic-transfer tool-input overflow threshold: 30000 chars
+- Semantic-transfer direct threshold: 40000 chars
+- Semantic-transfer tool-result inline threshold: 40000 chars
+- Semantic-transfer tool-input overflow threshold: 40000 chars
 
 Length thresholds are centralized in `@noobot/shared/length-thresholds` (`shared/length-thresholds.js`). Update that package export when changing character/byte/string-size limits.
 
@@ -165,9 +164,7 @@ Notes:
 
 - If `security.execution_isolation.sandbox.mounts` is missing or empty, no extra mount is added.
 - Every configured mount must provide both an absolute host `source` and an absolute container `target`.
-- Current defaults in repo:
-  - `service/config/global.config.json`: mounts this project to `/project`
-  - `service/config/global.config.example.json`: no default project mount
+- The global example does not add an extra project mount.
 
 ### 3.5 Scenarios
 
@@ -199,10 +196,10 @@ Current plugin defaults in repo:
 
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"GLM_5_1"` in the current example)
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }` (all default to `"gpt_5_6_sol"` in the current example)
 - `plugins.workflow.enabled = true`
 - `plugins.workflow.mode = "off"`
-- `plugins.workflow.semanticModel = "GLM_5_1"`
+- `plugins.workflow.semanticModel = "gpt_5_6_sol"`
 - `plugins.workflow.parallelNodeExecution = true` in the global example
 
 ### 3.6 Providers (`providers.<alias>`)
@@ -216,9 +213,9 @@ Copy-ready current model entries are maintained in [`model-protocol/model-librar
 | `providers.<alias>.api_key`                                                | string      | API key (`${VAR_NAME}` supported)                                   |
 | `providers.<alias>.base_url`                                               | string(url) | Model API base URL                                                  |
 | `providers.<alias>.model`                                                  | string      | Model name                                                          |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`                                   |
+| `providers.<alias>.format`                                                 | enum        | `openai_compatible`                                                 |
 | `providers.<alias>.reasoning_effort`                                       | string      | Optional (if supported)                                             |
-| `providers.<alias>.enable_thinking`                                        | boolean     | Optional thinking switch (commonly for dashscope-compatible models) |
+| `providers.<alias>.enable_thinking`                                        | boolean     | Optional thinking switch when declared by the model family          |
 | `providers.<alias>.temperature`                                            | number      | Sampling temperature                                                |
 | `providers.<alias>.max_tokens`                                             | number      | Max output tokens                                                   |
 | `providers.<alias>.top_p`                                                  | number      | Optional nucleus sampling parameter                                 |
@@ -256,13 +253,13 @@ Copy-ready current model entries are maintained in [`model-protocol/model-librar
 
 ## 4) User Config (`workspace/<userId>/config.json`)
 
-User config can override global values.
+User config overrides only fields permitted by `@noobot/agent-config-protocol`. System-owned fields are removed from user documents during repair.
 
 | Section                | Description                                                                                                                              |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `default_provider`     | User default provider                                                                                                                    |
-| `attachments`          | User attachment policy override                                                                                                          |
-| `tools`                | User tool enable/options override                                                                                                        |
+| `attachments`          | User attachment settings allowed by the protocol; upload limits remain system-owned                                                      |
+| `tools`                | User tool switches/options allowed by the protocol; execution and orchestration limits remain system-owned                               |
 | `scenarios`            | User scenario selection and per-scenario model overrides (only `default`, `definitions.programming.model`, and `definitions.text.model`) |
 | `plugins`              | User plugin default/enable override                                                                                                      |
 | `providers`            | User provider override                                                                                                                   |
@@ -270,7 +267,6 @@ User config can override global values.
 | `mcp_servers`          | User MCP override                                                                                                                        |
 | `preferences`          | User preferences (e.g. `language`)                                                                                                       |
 | `preferences.language` | string                                                                                                                                   | UI/interaction language, e.g. `zh-CN` / `en-US` |
-| `streaming`            | User streaming behavior                                                                                                                  |
 
 ### 4.1 External Services (`services.<name>`)
 
@@ -312,7 +308,7 @@ Web search is provided by the `web_search` tool, not by an external service.
 | System params | `workspace/config-params.json`          |
 | Environment   | process env                             |
 
-Recommended format:
+Example:
 
 ```json
 { "api_key": "${DASHSCOPE_API_KEY}" }
@@ -320,10 +316,16 @@ Recommended format:
 
 ---
 
-## 6) Migration Notes
+## 6) Automatic Repair
 
-| Item          | Recommendation                           |
-| ------------- | ---------------------------------------- |
-| Key naming    | Use snake_case (latest example format)   |
-| Legacy keys   | Not supported. Use snake_case keys only. |
-| After changes | Restart with `./start.sh`                |
+`@noobot/agent-config-protocol` is the single repair contract for global config, the default-user config, and user configs.
+
+- Server startup repairs all three scopes; desktop startup repairs bundled/runtime config before use.
+- Missing defaulted nodes are added from the matching template.
+- Valid user values are preserved. Invalid values reset to a template default when one exists; invalid optional values are removed.
+- Unsupported nodes and system-owned nodes in user documents are removed.
+- Existing provider aliases are preserved. Their child fields are validated against the provider contract, and unsupported provider fields are removed.
+- Invalid JSON is moved to an `.invalid-<timestamp>.json` backup before a repaired document is written.
+- Protocol migration and repair happen through the same pipeline; runtime consumers do not maintain alternate config shapes.
+
+Restart with `./start.sh` after manual server-side changes so startup repair and effective configuration are applied.

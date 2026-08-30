@@ -50,4 +50,4 @@ Do not create an empty directory just to satisfy this template.
 - A pure chat transition or normalization rule belongs in `modules/chat/model`.
 - A Vue hook whose name starts with `use` belongs in the owning module's `composables` directory.
 - HTTP and WebSocket clients belong in `infrastructure` even when only one module currently uses them.
-- Plugin-facing compatibility exports belong in `public`; internal implementation files do not.
+- Stable frontend plugin exports belong in `public`; internal implementation files do not.

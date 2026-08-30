@@ -13,12 +13,12 @@ This document describes:
 
 Planning, guidance, acceptance, and review follow the matrix below:
 
-| Flow | Trigger | Arbitrate | Execute | Observe |
-| --- | --- | --- | --- | --- |
-| Planning | At `before_llm_call`, run planning tick: threshold checks update pending states (`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`) | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult` | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`) |
-| Guidance | Owns analysis and summary triggers, plus failure thresholds and plan-update execution signals | `resolveNextGuidanceAction` consumes the unified scheduler order for guidance-owned actions: `guidance > plan_update > analysis > summary_overflow > summary_turns`; summary defers when phase acceptance is ready so the stable context prefix remains provider-cache friendly | One execution path per mode (inject/separate-model), including analysis, plan-update, summary/guidance chaining, and summary capture | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`) |
-| Acceptance | Multi-hook triggers from `pending.phaseAcceptance`, `pending.acceptanceSemanticValidation`, and overflow flags | `resolveAcceptanceDecision` picks `phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` etc. | Executes phase acceptance, semantic validation, final-output guard, and tool guards by hook and mode | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`acceptance`) |
-| Review | Triggered on review hooks (`before_final_output`, `on_error`, `on_abort`, etc.) | Fixed action `review_report` | Builds report and conditionally attaches it to final output | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`review`) |
+| Flow       | Trigger                                                                                                          | Arbitrate                                                                                                                                                                                                                                                                       | Execute                                                                                                                              | Observe                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Planning   | At `before_llm_call`, run planning tick: threshold checks update pending states (`planUpdate`/`phaseAcceptance`) | Fixed action `planning_bootstrap` (`planning_capture` at `after_llm_call`)                                                                                                                                                                                                      | Runs by mode: `runPlanningBySeparateModel` or `maybeInjectPlanningPrompt`; capture by `maybeCapturePlanningResult`                   | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`planning`)   |
+| Guidance   | Owns analysis and summary triggers, plus failure thresholds and plan-update execution signals                    | `resolveNextGuidanceAction` consumes the unified scheduler order for guidance-owned actions: `guidance > plan_update > analysis > summary_overflow > summary_turns`; summary defers when phase acceptance is ready so the stable context prefix remains provider-cache friendly | One execution path per mode (inject/separate-model), including analysis, plan-update, summary/guidance chaining, and summary capture | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`guidance`)   |
+| Acceptance | Multi-hook triggers from `pending.phaseAcceptance`, `pending.acceptanceSemanticValidation`, and overflow flags   | `resolveAcceptanceDecision` picks `phase_acceptance` / `forced_acceptance` / `acceptance_semantic_validation` etc.                                                                                                                                                              | Executes phase acceptance, semantic validation, final-output guard, and tool guards by hook and mode                                 | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`acceptance`) |
+| Review     | Triggered on review hooks (`before_final_output`, `on_error`, `on_abort`, etc.)                                  | Fixed action `review_report`                                                                                                                                                                                                                                                    | Builds report and conditionally attaches it to final output                                                                          | Unified `workflow_priority_decision` + `workflow_execution_result` (domain=`review`)     |
 
 Additional constraints:
 
@@ -63,7 +63,6 @@ The concrete order is:
 
 `phase_acceptance` can block lower-priority validation and can make summary defer in selected cases so the stable context prefix remains provider-cache friendly. True hard overflow uses the `overflowForceAcceptancePending` forced-acceptance override.
 
-
 ## Scheduler Architecture And Failure Isolation
 
 Ordering decisions live in `src/capabilities/handlers/shared/workflow/scheduler.js`. The complete order is described by one config item, `WORKFLOW_PARAMS.workflow.scheduler.order` (flow / subflow / action / executor / kind), and the scheduler derives executors and sorting from it with these layers:
@@ -80,9 +79,9 @@ Rules:
 
 ## Decision Log Event
 
-Event: `workflow_priority_decision`  
-Domain: `guidance`  
-Hook point: `before_llm_call`
+Event: `workflow_priority_decision`
+
+The emitting domain and hook point are recorded on each event. Planning, guidance, acceptance, and review all use this event.
 
 Log detail fields:
 
@@ -95,7 +94,7 @@ Log detail fields:
 - `deferredActions`: actions not executed this turn and deferred
 - `blockedActions`: actions blocked by explicit blockers
 - `blockedReasons`: blocker reason code list
-- `triggeredActions`: legacy field kept for compatibility (mapped from candidate actions)
+- `triggeredActions`: projection of explicitly supplied triggered actions, or `candidateActions` when no separate list is supplied
 - `pending`: snapshot
   - `summary`
   - `guidance`
@@ -120,11 +119,11 @@ Execution result fields (`workflow_execution_result`):
 - `errorCode`
 
 Notes:
+
 - `retryCount` is derived from newly appended `capability_reasoning_retry_scheduled` events in the same execution window.
 - `errorCode` is derived from the first newly appended `*_failed` / `*_error` event name (uppercased).
 
-Compatibility note:
-- During migration, writers may keep both legacy `triggeredActions` and new `candidateActions/deferredActions/blockedReasons`.
+`candidateActions`, `deferredActions`, and `blockedReasons` are the scheduler facts. `triggeredActions` is an emitted projection for consumers that need the trigger subset; it does not define another scheduler decision.
 
 ## Trigger Timing And Thresholds
 
@@ -142,9 +141,9 @@ Unified observation/lifecycle entry:
 
 - Hook point: `before_llm_call`
 - Plan update trigger:
-  - `state.counters.planUpdateTurns >= PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.planning.planUpdate`)
+  - `state.counters.planUpdateTurns` reaches `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.planning.planUpdate.triggerTurnsThreshold`
 - Phase acceptance scheduling threshold:
-  - `state.counters.phaseAcceptanceTurns >= PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD` (mode-specific via `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.acceptance.phase`)
+  - `state.counters.phaseAcceptanceTurns` reaches `WORKFLOW_PARAMS.modeThresholds.<full|programming|text>.acceptance.phase.triggerTurnsThreshold`
 
 ### Guidance (analysis, summary, and tool-failure recovery)
 
@@ -155,16 +154,14 @@ Unified observation/lifecycle entry:
   - `after_tool_call`
   - `tool_call_error`
 - Summary trigger:
-  - Turn-based: `state.counters.summaryTurns > LLM_SUMMARY_THRESHOLD` (`8`)
-  - Char-based: `unsummarized_chars > LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD` (`200000`)
+  - Turn-based: `state.counters.summaryTurns` exceeds the active mode's `guidance.summary.turnsThreshold`
+  - Char-based: unsummarized characters exceed `WORKFLOW_PARAMS.guidance.summary.messageCharsThreshold`
   - Tool-burst: `after_tool_calls` when enabled and call count reaches the summary threshold
 - Post-summary overflow policy (`SUMMARY_POLICY.OVERFLOW_POLICY`):
   - `FORCE_ACCEPTANCE_WHEN_STILL_OVERFLOW`
 - Analysis trigger:
-  - `state.counters.analysisTurns >= ANALYSIS_TRIGGER_TURNS_THRESHOLD`
-- Failure thresholds (`FAILURE_THRESHOLD`):
-  - Consecutive failures: `CONSECUTIVE = 3`
-  - Accumulated failures: `ACCUMULATED = 10`
+  - `state.counters.analysisTurns` reaches the active mode's `guidance.analysis.turnsThreshold`
+- Failure thresholds come from `WORKFLOW_PARAMS.guidance.failureThreshold`.
 - When threshold hit, set `pending.guidance` and guidance flow is eligible at next `before_llm_call`.
 - `requestedAction` naming now follows `action + mode`, for example:
   - `summary_inject` / `summary_separate_model`
@@ -186,10 +183,10 @@ Planning inject and separate-model paths now share an intermediate message plan:
 
 ### Plan Update (revision/refinement)
 
-- Scheduled when planning threshold is reached (`planUpdateTurns >= 10`).
+- Scheduled when the active mode's planning threshold is reached.
 - Independent retry budgets:
-  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REVISION = 10`
-  - `PLAN_UPDATE_POLICY.MAX_ATTEMPTS_REFINEMENT = 10`
+  - `WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts`
+  - `WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts`
 
 ### Acceptance
 
@@ -198,23 +195,24 @@ Planning inject and separate-model paths now share an intermediate message plan:
 
 ## Responsibility Matrix (Unified Semantics)
 
-| Action | Trigger owner (sets pending) | Executor | Primary hooks |
-| --- | --- | --- | --- |
-| `planning_bootstrap` | Planning | Planning | `before_llm_call` |
-| `planning_capture` | Planning | Planning | `after_llm_call` |
-| `summary` | Guidance (thresholds) | Guidance | `before_llm_call` / `after_llm_call` / `after_tool_calls` |
-| `guidance` | Guidance (failure thresholds) | Guidance | `before_llm_call` |
-| `plan_update_revision/refinement` | Planning (thresholds) | Guidance | `before_llm_call` / `after_llm_call` |
-| `phase_acceptance` | Planning (thresholds) | Acceptance | `before_llm_call` |
-| `acceptance_semantic_validation` | Acceptance | Acceptance | `before_llm_call` / `after_llm_call` |
-| `review_report` | Review | Review | `before_final_output` / `on_error` / `on_abort` |
+| Action                            | Trigger owner (sets pending)  | Executor   | Primary hooks                                             |
+| --------------------------------- | ----------------------------- | ---------- | --------------------------------------------------------- |
+| `planning_bootstrap`              | Planning                      | Planning   | `before_llm_call`                                         |
+| `planning_capture`                | Planning                      | Planning   | `after_llm_call`                                          |
+| `summary`                         | Guidance (thresholds)         | Guidance   | `before_llm_call` / `after_llm_call` / `after_tool_calls` |
+| `guidance`                        | Guidance (failure thresholds) | Guidance   | `before_llm_call`                                         |
+| `plan_update_revision/refinement` | Planning (thresholds)         | Guidance   | `before_llm_call` / `after_llm_call`                      |
+| `phase_acceptance`                | Planning (thresholds)         | Acceptance | `before_llm_call`                                         |
+| `acceptance_semantic_validation`  | Acceptance                    | Acceptance | `before_llm_call` / `after_llm_call`                      |
+| `review_report`                   | Review                        | Review     | `before_final_output` / `on_error` / `on_abort`           |
 
 Notes:
+
 - Planning also acts as workflow tick in `before_llm_call`; actual action execution stays in each domain controller.
 
 ## Unified Pending Snapshot
 
-`workflow_priority_decision.pending` should use a consistent object shape (fields can be trimmed by domain):
+`workflow_priority_decision.pending` uses a consistent object shape; domains can omit fields they do not own:
 
 ```json
 {
@@ -245,7 +243,7 @@ To keep logs explainable and deterministic:
 2. `execute(decision)` runs only the primary path for `chosenAction`.
 3. Optional follow-up work must be logged as `executedFollowup` with an explicit reason.
 
-Pseudo code:
+Equivalent control flow:
 
 ```js
 const decision = resolveDecision();
@@ -263,7 +261,7 @@ switch (decision.chosenAction) {
 
 ## Lifecycle Error Observability
 
-`runWorkflowLifecycle(...)` should guarantee `workflow_execution_result` is emitted even on execution errors:
+`runWorkflowLifecycle(...)` guarantees that `workflow_execution_result` is emitted even when execution throws:
 
 - Emit `priority_decision` before execution.
 - Wrap `execute` in `try/catch/finally`.
@@ -273,14 +271,14 @@ switch (decision.chosenAction) {
 
 Notation: `existing_context` is the current main-model context; `agent_messages` is the output of `resolveCapabilityModelMessages(...)`.
 
-| Flow | Inject-mode message order | Separate-model message order | Key functions |
-| --- | --- | --- | --- |
-| Planning bootstrap | `existing_context -> planning context summary(system) -> available tools+allowlist(system) -> planning request(user)` | `agent_messages -> planning context summary(constraint) -> available tools+allowlist(constraint) -> planning request(task)` | `maybeInjectPlanningPrompt` / `buildPlanningMessagesForSeparateModel` |
-| Summary | `existing_context -> plan checklist context(system, optional) -> summary request(user)` | `agent_messages -> plan checklist context(extra messages) -> summary request(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=summary)` |
-| Guidance (failure analysis) | `guidance failure prompt(system, prepend) -> existing_context` | `agent_messages -> guidance failure prompt(task)` | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=guidance)` |
-| Plan update | `existing_context -> plan checklist context(system, optional) -> revision/refinement request(user)` | `Revision: agent_messages -> plan checklist context(extra) -> revision request(task); Refinement: agent_messages -> refinement request(task)` | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel` |
-| Phase acceptance | `existing_context -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `agent_messages -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `maybeInjectPhaseAcceptancePrompt` / `runPhaseAcceptanceBySeparateModel` |
-| Acceptance semantic validation | `existing_context -> main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)` | `main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)` | `maybeInjectAcceptanceSemanticValidationPrompt` / `runAcceptanceBySeparateModel` |
+| Flow                           | Inject-mode message order                                                                                                                              | Separate-model message order                                                                                                                         | Key functions                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Planning bootstrap             | `existing_context -> planning context summary(system) -> available tools+allowlist(system) -> planning request(user)`                                  | `agent_messages -> planning context summary(constraint) -> available tools+allowlist(constraint) -> planning request(task)`                          | `maybeInjectPlanningPrompt` / `buildPlanningMessagesForSeparateModel`                 |
+| Summary                        | `existing_context -> plan checklist context(system, optional) -> summary request(user)`                                                                | `agent_messages -> plan checklist context(extra messages) -> summary request(task)`                                                                  | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=summary)`  |
+| Guidance (failure analysis)    | `guidance failure prompt(system, prepend) -> existing_context`                                                                                         | `agent_messages -> guidance failure prompt(task)`                                                                                                    | `maybeInjectGuidanceOrSummaryPrompt` / `runGuidanceBySeparateModel(purpose=guidance)` |
+| Plan update                    | `existing_context -> plan checklist context(system, optional) -> revision/refinement request(user)`                                                    | `Revision: agent_messages -> plan checklist context(extra) -> revision request(task); Refinement: agent_messages -> refinement request(task)`        | `maybeInjectPlanUpdatePrompt` / `runPendingPlanUpdateBySeparateModel`                 |
+| Phase acceptance               | `existing_context -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `agent_messages -> summary reports(system, N) -> main plan context(system) -> phase acceptance history(system, N) -> phase acceptance request(user)` | `maybeInjectPhaseAcceptancePrompt` / `runPhaseAcceptanceBySeparateModel`              |
+| Acceptance semantic validation | `existing_context -> main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)`                            | `main plan context(system) -> phase acceptance history(system, N) -> semantic validation request(user)`                                              | `maybeInjectAcceptanceSemanticValidationPrompt` / `runAcceptanceBySeparateModel`      |
 
 ## Source Files
 
@@ -320,7 +318,7 @@ Notation: `existing_context` is the current main-model context; `agent_messages`
 
 ## Review Hook Allowlist
 
-Review hook filtering should be explicit in controller and centralized in `WORKFLOW_PARAMS.review.hooks`:
+The review controller reads its allowlist from `WORKFLOW_PARAMS.review.hooks`:
 
 - `before_final_output`
 - `on_error`
@@ -330,10 +328,10 @@ Review hook filtering should be explicit in controller and centralized in `WORKF
 
 To keep a single stable API surface while preserving semantic internals:
 
-| Layer | Purpose | Files |
-| --- | --- | --- |
-| Facade (stable imports) | Public entry for runtime and external imports | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js` |
-| Domain index (semantic entry) | Domain-local export aggregation | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
-| Domain implementation | Controller/deps/builders/runners | `src/capabilities/handlers/<domain>/*.js` |
-| Shared facade | Backward-compatible shared exports | `src/capabilities/handlers/shared.js` |
-| Shared semantic index | Canonical shared export map | `src/capabilities/handlers/shared/index.js` |
+| Layer                         | Purpose                                       | Files                                                                      |
+| ----------------------------- | --------------------------------------------- | -------------------------------------------------------------------------- |
+| Facade (stable imports)       | Public entry for runtime and external imports | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js`       |
+| Domain index (semantic entry) | Domain-local export aggregation               | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
+| Domain implementation         | Controller/deps/builders/runners              | `src/capabilities/handlers/<domain>/*.js`                                  |
+| Shared facade                 | Stable shared exports                         | `src/capabilities/handlers/shared.js`                                      |
+| Shared semantic index         | Canonical shared export map                   | `src/capabilities/handlers/shared/index.js`                                |

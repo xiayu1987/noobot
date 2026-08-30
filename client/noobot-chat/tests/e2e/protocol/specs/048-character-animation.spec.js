@@ -27,7 +27,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   const { page } = noobot;
   await selectPlugins(page, ["character"]);
 
-  await page.getByRole("button", { name: "角色功能" }).click();
+  await page.getByTestId("right-feature-panel-toggle").click();
   const featurePanel = page.getByTestId("right-feature-panel");
   await expect(featurePanel).toBeVisible();
   await expect(featurePanel).not.toHaveClass(/is-collapsed/);
@@ -115,7 +115,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   const card = artifactPanel.locator(`[data-animation-id="${animationId}"]`);
   await expect(card).toHaveCount(1);
   await expect(card).toBeVisible();
-  await expect(card).toContainText("1 段 · 1 个角色");
+  await expect(card.locator("header span")).toHaveText(/1\s*·\s*1\s+(?:个角色|character\(s\))/);
   const canvas = card.locator("canvas");
   await expect(canvas).toHaveCount(1);
   await expect(canvas).toBeVisible();
