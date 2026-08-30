@@ -88,5 +88,11 @@
       }
     ]
   },
+  "configuration": {
+    "defaults": {
+      "enabled": true,
+      "mode": "off"
+    }
+  },
   "enabledByDefault": true
 }

@@ -72,6 +72,14 @@ async function createFixture() {
         parsing: { default_models: { audio: "openai", image: "openai" } },
         generation: { default_models: { image: "openai" } },
       },
+      plugins: {
+        character: {
+          enabled: true,
+          mode: "on",
+          characterAssets: [],
+          selectedCharacterAssetIds: [],
+        },
+      },
     }),
   );
   await writeFile(
@@ -113,6 +121,14 @@ async function createFixture() {
       multimodal: {
         parsing: { default_models: { audio: "openai", image: "openai" } },
         generation: { default_models: { image: "openai" } },
+      },
+      plugins: {
+        character: {
+          enabled: true,
+          mode: "on",
+          characterAssets: [],
+          selectedCharacterAssetIds: [],
+        },
       },
     }),
   );
@@ -175,6 +191,9 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
         },
       }),
     );
+    const legacyUserDir = path.join(fixture.userDataPath, "workspace", "admin");
+    await mkdir(legacyUserDir, { recursive: true });
+    await writeFile(path.join(legacyUserDir, "config.json"), JSON.stringify({ providers: {} }));
 
     manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
 
@@ -187,6 +206,13 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     assert.deepEqual(config.multimodal.parsing.default_models, {
       audio: "openai",
       image: "openai",
+    });
+    const userConfig = JSON.parse(await readFile(path.join(legacyUserDir, "config.json"), "utf8"));
+    assert.deepEqual(userConfig.plugins.character, {
+      enabled: true,
+      mode: "on",
+      characterAssets: [],
+      selectedCharacterAssetIds: [],
     });
   } finally {
     await fixture.restore();

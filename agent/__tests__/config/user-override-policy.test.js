@@ -47,6 +47,16 @@ test("sanitizeUserConfig: 应剔除 tools.execute_script 覆盖", () => {
   assert.deepEqual(out.tools, { safe_tool: { enabled: true } });
 });
 
+test("sanitizeUserConfig: 用户不能写入默认模板之外的 attachments 节点", () => {
+  const out = sanitizeUserConfig({
+    attachments: {
+      storage: "user-storage",
+      maxFileCount: 1,
+    },
+  });
+  assert.equal(out.attachments, undefined);
+});
+
 test("sanitizeUserConfig: 用户不能扩大全局路径策略或子 Agent 深度", () => {
   const out = sanitizeUserConfig({
     security: { path_policy: { roles: { regular_user: { host: { access: "allow" } } } } },
@@ -227,10 +237,6 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
       admin: { model: "admin-model" },
       shared: { temperature: 0.8 },
     },
-    attachments: {
-      storage: "admin-storage",
-      maxFileCount: 99,
-    },
     session: { mode: "admin-mode", contextWindow: { reserveTokens: 250 } },
     context: { mode: "admin-context", sections: { tools: false } },
     services: {
@@ -265,8 +271,11 @@ test("mergeConfig: admin 每类配置至少覆盖一项且不污染全局配置"
   assert.equal(out.defaultProvider, "admin-provider");
   assert.equal(out.providers.global.model, "global-model");
   assert.equal(out.providers.shared.temperature, 0.8);
-  assert.equal(out.attachments.storage, "admin-storage");
-  assert.equal(out.attachments.maxFileCount, 10, "受保护的附件限制仍来自全局");
+  assert.deepEqual(
+    out.attachments,
+    globalConfig.attachments,
+    "附件策略属于全局系统配置，用户不能覆盖",
+  );
   assert.equal(out.session.mode, "admin-mode");
   assert.equal(out.session.contextWindow.maxTokens, 1000);
   assert.equal(out.session.contextWindow.reserveTokens, 250);

@@ -112,5 +112,11 @@
       }
     ]
   },
+  "configuration": {
+    "defaults": {
+      "enabled": true,
+      "mode": "on"
+    }
+  },
   "enabledByDefault": true
 }
