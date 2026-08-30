@@ -98,37 +98,36 @@ Session 日志 WebSocket：
 
 > 所有工具统一支持：`tools.<tool_name>.enabled`
 
-| 键名                                                        | 类型         | 说明                                                                      |
-| ----------------------------------------------------------- | ------------ | ------------------------------------------------------------------------- |
-| `tools.read_file.enabled`                                   | boolean      | 启用文件读取工具                                                          |
-| `tools.write_file.enabled`                                  | boolean      | 启用文件写入工具                                                          |
-| `tools.list_skills.enabled`                                 | boolean      | 启用技能列表工具                                                          |
-| `tools.call_service.enabled`                                | boolean      | 启用外部服务调用工具                                                      |
-| `tools.call_mcp_task.enabled`                               | boolean      | 启用 MCP 任务工具                                                         |
-| `tools.delegate_task_async.enabled`                         | boolean      | 启用异步委派工具                                                          |
-| `tools.delegate_task_async.wait_timeout_ms`                 | number       | 异步委派等待超时                                                          |
-| `tools.delegate_task_async.poll_interval_ms`                | number       | 异步委派轮询间隔                                                          |
-| `tools.delegate_task_async.max_sub_agent_depth`             | number       | 子任务最大深度                                                            |
-| `tools.wait_async_task_result.enabled`                      | boolean      | 启用等待异步结果工具                                                      |
-| `tools.wait_async_task_result.poll_interval_ms`             | number       | 等待工具轮询间隔                                                          |
-| `tools.plan_multi_task_collaboration.enabled`               | boolean      | 启用任务规划工具                                                          |
-| `tools.switch_model.enabled`                                | boolean      | 启用模型切换工具                                                          |
-| `tools.user_interaction.enabled`                            | boolean      | 启用用户交互工具                                                          |
-| `tools.execute_native_script.enabled`                       | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力              |
-| `tools.execute_script.enabled`                              | boolean      | 启用脚本执行工具                                                          |
-| `tools.execute_script.script_timeout_ms`                    | number       | 脚本超时                                                                  |
-| `security.execution_isolation.mode`                         | enum         | `sandbox` 在 Docker 中隔离可编程工作区计算；固定文件 I/O 仍由宿主受控执行 |
-| `security.execution_isolation.sandbox.provider`             | enum         | 工作区沙箱提供者（`docker`）                                              |
-| `security.execution_isolation.sandbox.scope`                | enum         | 容器范围（`user`）                                                        |
-| `security.execution_isolation.sandbox.container_name`       | string       | 用户级工作区沙箱容器名前缀                                                |
-| `security.execution_isolation.sandbox.image`                | string       | 可编程工作区计算使用的 Docker 镜像                                        |
-| `security.execution_isolation.sandbox.mounts`               | object[]     | 显式授权的额外宿主到容器挂载                                              |
-| `security.execution_isolation.sandbox.mounts[].source`      | string(path) | 宿主绝对路径，支持 Linux、macOS、Windows 盘符和 UNC 路径                  |
-| `security.execution_isolation.sandbox.mounts[].target`      | string(path) | `/workspace` 托管目录之外的容器绝对路径                                   |
-| `security.execution_isolation.sandbox.mounts[].description` | string       | 可选的挂载说明                                                            |
-| `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | `true` 时只读挂载；默认可写，以保留原有额外挂载行为                       |
-| `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | 复用同一容器时的排队超时，最小 `100` 毫秒                                 |
-| `tools.execute_native_script.enabled`                       | boolean      | 启用受限宿主 Node.js 能力工具（默认 `true`，仅允许全局管理员配置）        |
+| 键名                                                        | 类型         | 说明                                                                                      |
+| ----------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
+| `tools.read_file.enabled`                                   | boolean      | 启用文件读取工具                                                                          |
+| `tools.write_file.enabled`                                  | boolean      | 启用文件写入工具                                                                          |
+| `tools.list_skills.enabled`                                 | boolean      | 启用技能列表工具                                                                          |
+| `tools.call_service.enabled`                                | boolean      | 启用外部服务调用工具                                                                      |
+| `tools.call_mcp_task.enabled`                               | boolean      | 启用 MCP 任务工具                                                                         |
+| `tools.delegate_task_async.enabled`                         | boolean      | 启用异步委派工具                                                                          |
+| `tools.delegate_task_async.wait_timeout_ms`                 | number       | 异步委派等待超时                                                                          |
+| `tools.delegate_task_async.poll_interval_ms`                | number       | 异步委派轮询间隔                                                                          |
+| `tools.delegate_task_async.max_sub_agent_depth`             | number       | 子任务最大深度                                                                            |
+| `tools.wait_async_task_result.enabled`                      | boolean      | 启用等待异步结果工具                                                                      |
+| `tools.wait_async_task_result.poll_interval_ms`             | number       | 等待工具轮询间隔                                                                          |
+| `tools.plan_multi_task_collaboration.enabled`               | boolean      | 启用任务规划工具                                                                          |
+| `tools.switch_model.enabled`                                | boolean      | 启用模型切换工具                                                                          |
+| `tools.user_interaction.enabled`                            | boolean      | 启用用户交互工具                                                                          |
+| `tools.execute_native_script.enabled`                       | boolean      | 启用受控 Playwright、LibreOffice、FFmpeg 和 FFprobe 执行能力（默认 `true`，支持用户配置） |
+| `tools.execute_script.enabled`                              | boolean      | 启用脚本执行工具                                                                          |
+| `tools.execute_script.script_timeout_ms`                    | number       | 脚本超时                                                                                  |
+| `security.execution_isolation.mode`                         | enum         | `sandbox` 在 Docker 中隔离可编程工作区计算；固定文件 I/O 仍由宿主受控执行                 |
+| `security.execution_isolation.sandbox.provider`             | enum         | 工作区沙箱提供者（`docker`）                                                              |
+| `security.execution_isolation.sandbox.scope`                | enum         | 容器范围（`user`）                                                                        |
+| `security.execution_isolation.sandbox.container_name`       | string       | 用户级工作区沙箱容器名前缀                                                                |
+| `security.execution_isolation.sandbox.image`                | string       | 可编程工作区计算使用的 Docker 镜像                                                        |
+| `security.execution_isolation.sandbox.mounts`               | object[]     | 显式授权的额外宿主到容器挂载                                                              |
+| `security.execution_isolation.sandbox.mounts[].source`      | string(path) | 宿主绝对路径，支持 Linux、macOS、Windows 盘符和 UNC 路径                                  |
+| `security.execution_isolation.sandbox.mounts[].target`      | string(path) | `/workspace` 托管目录之外的容器绝对路径                                                   |
+| `security.execution_isolation.sandbox.mounts[].description` | string       | 可选的挂载说明                                                                            |
+| `security.execution_isolation.sandbox.mounts[].read_only`   | boolean      | `true` 时只读挂载；默认可写，以保留原有额外挂载行为                                       |
+| `security.execution_isolation.sandbox.lock_wait_timeout_ms` | number       | 复用同一容器时的排队超时，最小 `100` 毫秒                                                 |
 
 `execute_native_script` 注入受控的 Playwright、LibreOffice、FFmpeg/FFprobe、声明输入文件和任务输出能力。文件唯一协议为 `files.input`、`files.readText`、`files.readJson`、`files.writeText`、`files.writeJson`、`output.file`、`output.tempFile` 和 `output.directory`。读取接受 `input://`、`output://`、`temp://`，写入只接受 `output://`，能力 wrapper 在内部解析任务路径；不暴露 import、Shell 命令、环境变量、可执行文件选择或任意宿主路径。浏览器只允许访问 loopback HTTP(S)，输出统一通过 semantic-transfer 持久化。该宿主受限模式用于受信任的本地/管理员自动化，不是面向恶意代码的操作系统安全沙箱。
 
@@ -155,9 +154,9 @@ Session 日志 WebSocket：
 大上下文长度阈值默认值：
 
 - 阶段小结字符阈值：220000
-- semantic-transfer 直传阈值：30000 字符
-- semantic-transfer 工具结果 inline 阈值：30000 字符
-- semantic-transfer 工具输入 overflow 阈值：30000 字符
+- semantic-transfer 直传阈值：40000 字符
+- semantic-transfer 工具结果 inline 阈值：40000 字符
+- semantic-transfer 工具输入 overflow 阈值：40000 字符
 
 长度相关阈值统一集中在 `@noobot/shared/length-thresholds`（`shared/length-thresholds.js`）。后续调整字符数、字节数、字符串预览长度时优先改这个包导出。
 
@@ -165,9 +164,7 @@ Session 日志 WebSocket：
 
 - `security.execution_isolation.sandbox.mounts` 不配置或为空时，不添加额外挂载。
 - 每条挂载必须同时提供宿主绝对路径 `source` 和容器绝对路径 `target`。
-- 当前仓库默认值：
-  - `service/config/global.config.json`：默认挂载本项目到 `/project`
-  - `service/config/global.config.example.json`：不默认挂载项目目录
+- 全局示例默认不额外挂载项目目录。
 
 ### 3.5 情景配置
 
@@ -199,10 +196,10 @@ Session 日志 WebSocket：
 
 - `plugins.harness.enabled = true`
 - `plugins.harness.mode = "off"`
-- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"GLM_5_1"`）
+- `plugins.harness.stepModels = { planning, guidance, acceptance, default }`（当前示例中均为 `"gpt_5_6_sol"`）
 - `plugins.workflow.enabled = true`
 - `plugins.workflow.mode = "off"`
-- `plugins.workflow.semanticModel = "GLM_5_1"`
+- `plugins.workflow.semanticModel = "gpt_5_6_sol"`
 - 全局示例中 `plugins.workflow.parallelNodeExecution = true`
 
 ### 3.6 模型提供方（`providers.<alias>`）
@@ -216,9 +213,9 @@ Session 日志 WebSocket：
 | `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）                        |
 | `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                                          |
 | `providers.<alias>.model`                                                  | string      | 模型名                                                |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible` / `dashscope`                     |
+| `providers.<alias>.format`                                                 | enum        | `openai_compatible`                                   |
 | `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                                |
-| `providers.<alias>.enable_thinking`                                        | boolean     | 可选思考开关（常见于 dashscope 兼容模型）             |
+| `providers.<alias>.enable_thinking`                                        | boolean     | 模型系列声明支持时使用的可选思考开关                  |
 | `providers.<alias>.temperature`                                            | number      | 采样温度                                              |
 | `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                                        |
 | `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                            |
@@ -258,13 +255,13 @@ Session 日志 WebSocket：
 
 ## 4）用户配置（`workspace/<userId>/config.json`）
 
-用户配置可覆盖全局默认值。
+用户配置只能覆盖 `@noobot/agent-config-protocol` 允许的字段；修复时会从用户文档中移除系统所有字段。
 
 | 模块                   | 说明                                                                                                            |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `default_provider`     | 用户默认模型                                                                                                    |
-| `attachments`          | 用户级附件策略覆盖                                                                                              |
-| `tools`                | 用户级工具开关/参数覆盖                                                                                         |
+| `attachments`          | 协议允许的用户附件设置；上传限制仍归系统配置所有                                                                |
+| `tools`                | 协议允许的用户工具开关/参数；执行与编排限制仍归系统配置所有                                                     |
 | `scenarios`            | 用户级情景选择与各情景模型覆盖（只允许 `default`、`definitions.programming.model` 和 `definitions.text.model`） |
 | `plugins`              | 用户级插件开关/默认模式覆盖                                                                                     |
 | `providers`            | 用户级模型配置覆盖                                                                                              |
@@ -272,7 +269,6 @@ Session 日志 WebSocket：
 | `mcp_servers`          | 用户级 MCP 配置覆盖                                                                                             |
 | `preferences`          | 用户偏好设置（如 `language`）                                                                                   |
 | `preferences.language` | string                                                                                                          | 界面/交互语言，如 `zh-CN` / `en-US` |
-| `streaming`            | 用户级流式设置                                                                                                  |
 
 ### 4.1 外部服务（`services.<name>`）
 
@@ -314,7 +310,7 @@ Session 日志 WebSocket：
 | 系统参数 | `workspace/config-params.json`          |
 | 环境变量 | 进程环境变量                            |
 
-推荐写法：
+示例：
 
 ```json
 { "api_key": "${DASHSCOPE_API_KEY}" }
@@ -322,10 +318,16 @@ Session 日志 WebSocket：
 
 ---
 
-## 6）迁移建议
+## 6）自动修复
 
-| 项目     | 建议                                 |
-| -------- | ------------------------------------ |
-| 字段命名 | 使用最新示例中的 snake_case          |
-| 历史字段 | 不再兼容，请统一使用 snake_case 字段 |
-| 生效方式 | 修改后建议执行 `./start.sh` 重启     |
+`@noobot/agent-config-protocol` 是全局配置、默认用户配置和用户配置的唯一修复契约。
+
+- 服务启动时修复三个作用域；桌面端启动时先修复打包及运行配置再使用。
+- 缺少的默认节点从对应模板补入。
+- 合法用户值保持不变；非法值在存在模板默认值时重置为默认值，非法可选值直接移除。
+- 不支持的节点以及用户文档中的系统所有节点会被移除。
+- 已有 provider 别名不会被删除；其子字段按 provider 协议校验，不支持的字段会被移除。
+- JSON 无效时，原文件先移动为 `.invalid-<timestamp>.json` 备份，再写入修复后的文档。
+- 协议迁移和修复共用同一条流水线；运行时消费者不维护另一套配置结构。
+
+手动修改服务端配置后执行 `./start.sh` 重启，使启动修复和有效配置生效。

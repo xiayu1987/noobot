@@ -24,11 +24,9 @@ hookManager.on(
   { id: "example.before_llm_call", priority: 10, timeoutMs: 1000 },
 );
 
-const result = await hookManager.emit(
-  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
-  context,
-  { signal: parentSignal },
-);
+const result = await hookManager.emit(HOOK_POINT.AGENT.BEFORE_LLM_CALL, context, {
+  signal: parentSignal,
+});
 ```
 
 The Manager has one command surface: `on`, `once`, `off`, `clear`, `list`, and

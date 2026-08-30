@@ -13,9 +13,9 @@ context. Register handlers with `createHookManager` and `HOOK_POINT.BOT` from
 A `HOOK_POINT.BOT.BEFORE_AGENT_DISPATCH` hook is an execution router. A handler that replaces the
 main Agent must:
 
-1. call `ctx.claimAgentDispatch({ owner, source, executionId, executionKind,
-   rootExecutionId, origin, stage })` as
-   soon as it accepts exclusive ownership;
+1. call `ctx.claimAgentDispatch(...)` with `owner`, `source`, `executionId`,
+   `executionKind`, `rootExecutionId`, `origin`, and `stage` as soon as it accepts
+   exclusive ownership;
 2. return a versioned `bot_dispatch_outcome` from
    `@noobot/agent-transport-protocol/bot-dispatch`;
 3. return `handled` with its final result, or `handled` with a structured

@@ -51,13 +51,13 @@ host. A plugin never receives an unrestricted HookManager or Express application
 
 ## Ownership
 
-| Concern | Authoritative project |
-| --- | --- |
-| Plugin manifest, activation, host ports, frontend points | `plugin-protocol` |
-| Hook point names and execution semantics | `hook-protocol` |
-| Discovery, strict loading, activation-result validation | `plugin-runtime` |
-| Agent context envelopes | `context-protocol` |
-| Host capability implementations and lifecycle events | Agent, Service, Frontend hosts |
+| Concern                                                  | Authoritative project          |
+| -------------------------------------------------------- | ------------------------------ |
+| Plugin manifest, activation, host ports, frontend points | `plugin-protocol`              |
+| Hook point names and execution semantics                 | `hook-protocol`                |
+| Discovery, strict loading, activation-result validation  | `plugin-runtime`               |
+| Agent context envelopes                                  | `context-protocol`             |
+| Host capability implementations and lifecycle events     | Agent, Service, Frontend hosts |
 
 There is no V1 translator, capability inference, alternate registration export, plugin
 identity alias, or fallback plugin slot. Invalid enabled plugins fail closed.

@@ -1,61 +1,34 @@
-# bot-manage Architecture (semantic regrouping)
+# Bot Manager Architecture
 
-## 1) Layered structure
+`agent/src/bot` owns Session-level orchestration around the Agent runtime. It does not own provider adaptation, transport protocol definitions, or plugin implementations.
 
-- **Facade**
-  - `index.js` (`BotManager`) – external API and dependency wiring
-- **Execution domain**
-  - `execution/runner.js` – main session pipeline orchestration
-  - `execution/initializer.js` – runtime/session init
-  - `execution/finalizer.js` – persistence + memory post-process + result shaping
-  - `execution/turn-persister.js` – append turn / append messages
-  - `execution/parent-async-task-manager.js` – parent async task container state machine
-  - `execution/memory-postprocess.js` – memory summarize/post-process flow
-- **Async domain**
-  - `async/manager.js` – generic job lifecycle
-  - `async/session-runner.js` – session-specific async wrappers (legacy API)
-  - `async/response-builder.js` – async response DTOs
-- **Config domain**
-  - `config/run-config-resolver.js` – scenario/runConfig resolve and tool policy scoping
-  - `config/validator.js` – input/config validator
-  - `config/scenario-resolver.js` – scenario parser
-  - `config/tool-policy-manager.js` – tool policy builder
-  - `config/constants.js` – grouped constants
-- **Session orchestration**
-  - `session/session-execution-engine.js` – coordinator + stable runtime surface
-- **Bot hooks (orchestration layer)**
-  - `hook/index.js` – bot lifecycle hooks for multi-agent orchestration management
-- **Infra**
-  - `workspace-infra/workspace-service.js`
+## Layers
 
-## 2) Runtime call graph
+- `index.js`: public `BotManager` facade and dependency wiring.
+- `execution/`: run initialization, authoritative Turn execution, persistence, finalization, memory post-processing, and parent async-task coordination.
+- `session/`: Session execution engine, detached sub-Sessions, plugin runtime preparation, artifact commits, attachment enrichment, and summary checkpoints.
+- `async/`: generic asynchronous job lifecycle and Session wrappers.
+- `config/`: built-in scenario resolution and input validation.
+- `hook/`: Bot-level orchestration Hook adapter.
+- `workspace-infra/`: workspace capability adapter.
+
+## Main Flow
 
 ```text
 BotManager.runSession
   -> SessionExecutionEngine.runSession
     -> execution/runner.runSession
-      -> execution/initializer.initializeRunSessionRuntime
-      -> AgentRuntimeFacade.prepareTurnExecution
-      -> AgentRuntimeFacade.runTurn
-      -> execution/finalizer.finalizeRunSession
-         -> execution/turn-persister.appendAgentMessages
-         -> execution/memory-postprocess.runMemoryPostProcessFlow
-
-Note:
-- Agent turn preparation is centralized at `AgentRuntimeFacade.prepareTurnExecution`.
+      -> initialize run and authority state
+      -> prepare Agent Turn execution
+      -> run Agent Turn
+      -> persist and finalize
+      -> run memory post-processing
 ```
 
-## 3) Async call graph
+## Boundaries
 
-```text
-BotManager.runAsyncSession / waitAsyncSession
-  -> AsyncJobManager
-     -> async/session-runner (legacy session async API)
-     -> async/manager (generic job lifecycle)
-```
-
-## 4) Stability rules
-
-- Keep existing public API and method names intact.
-- Inside `bot-manage`, avoid path-level re-export shims unless migration is in progress.
-- Refactor policy: **no behavior change, only responsibility split**.
+- Session identities, aggregate versions, Turn revisions, lifecycle and receipts come from `@noobot/session-protocol`.
+- Provider requests run only through `@noobot/model-runtime`.
+- Plugin activation uses `@noobot/plugin-runtime`; plugins receive only declared Host Ports.
+- Detached sub-Sessions use explicit persistence scope and never infer root Session paths.
+- New orchestration code belongs in its semantic layer; do not add path-level compatibility facades or duplicate protocol normalization.

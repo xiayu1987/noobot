@@ -2,8 +2,6 @@
 
 本文档记录当前代码中实际经过 `@noobot/semantic-transfer-protocol` 的信息流。它是代码现状清单，不定义第二套协议；wire contract 仍以 `semantic-transfer-protocol/src/index.js` 为唯一规范。
 
-更新日期：2026-08-17。
-
 ## 1. 层级边界
 
 | 层                           | 职责                                                             | 不负责                                    |

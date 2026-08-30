@@ -1,180 +1,87 @@
-# noobot service
+# Noobot Service
 
 中文 | [English](./README.md)
 
-`service/` 是 noobot 的后端运行时，基于 **Express 5 + WebSocket + LangChain**。
+`service/` 是 Noobot 的 Express 5 与 WebSocket 宿主。Agent 行为由独立的 `noobot-agent` workspace 负责；Service 只负责 HTTP/WS 准入、认证、配置下发、工作区访问和 Service 插件能力。
 
-## 1) 运行依赖
+## 运行依赖
 
 - Node.js 22.22.2+
 - npm 9+
-- 可选系统依赖：
-  - `libreoffice`（Office 文档转换）
-  - `ffmpeg`（音视频处理）
-  - `docker`（在 `security.execution_isolation.mode=sandbox` 时用于工作区沙箱）
-  - 沙箱模式下，工作区文件工具与脚本工具统一使用 `/workspace` 路径视角。
+- 可选：启用相关能力时使用的 LibreOffice、FFmpeg、Docker 和 OpenVSCode Server 依赖
 
-## 2) 启动方式
+## 运行与测试
 
 ```bash
 cd service
 npm install
 npm start
-```
 
-开发模式：
-
-```bash
+# 开发
 npm run dev
+
+# 测试
+npm test
+npm run test:routes
+npm run test:tools
 ```
 
-PM2（项目内置 `.pm2`）：
+项目内 PM2 命令：
 
 ```bash
 npm run pm2:start
 npm run pm2:restart
 npm run pm2:logs
+npm run pm2:stop
 ```
 
-## 3) 测试
+完整部署使用仓库根目录的 `./start.sh` 或 `./restart-services.sh`。
 
-```bash
-cd service
-npm test
-```
+## 配置
 
-仅运行 tools 层测试：
-
-```bash
-npm run test:tools
-```
-
-`test:tools` 会覆盖 `__tests__/tools/*.test.js`，包含 agent-collab 拆分后的测试，例如：
-
-- `agent-collab-passthrough.test.js`
-- `agent-collab-wait.test.js`
-- `agent-collab-container-store.test.js`
-- `agent-collab-delegate-wait-flow.test.js`
-
-## 4) 环境与配置
-
-- `.env`：当前仅示例 `PORT=10061`
 - 全局配置：`service/config/global.config.json`
-- 示例配置：`service/config/global.config.example.json`
+- 全局模板：`service/config/global.config.example.json`
 - 用户配置：`workspace/<userId>/config.json`
-- 参数配置（`${VAR_NAME}`）：
-  - 工作区级：`workspace/config-params.json`
-  - 用户级：`workspace/<userId>/config-params.json`
-  - 优先级：`process.env` > `config-params.json`
+- 系统参数：`workspace/config-params.json`
+- 用户参数：`workspace/<userId>/config-params.json`
+- 环境文件：`service/.env`
 
-## 5) 认证与权限
+字段和优先级以[配置说明](../CONFIGURATION.zh-CN.md)为准。
 
-- 免鉴权：`GET /health`、`POST /internal/connect`
-- 其他接口默认要求 `apiKey`
-- 获取 `apiKey`：`POST /internal/connect`（`userId + connectCode`）
-- 传递方式：
-  - Header `x-api-key`
-  - Header `Authorization: Bearer <apiKey>`
-  - Query `?apikey=...`
-- `/internal/admin/*` 需要超管权限（`superAdmin`）
+## 认证
 
-## 6) API 概览（当前代码）
+- `GET /health` 和 `POST /internal/connect` 不要求 API key。
+- 其他 Service 路由要求已签发的 API key；插件路由必须使用 Manifest 中声明并校验的认证策略。
+- `POST /internal/connect` 使用 `userId + connectCode` 换取连接数据和 API key。
+- 认证请求支持 `x-api-key`、`Authorization: Bearer <apiKey>` 或 `?apikey=...`。
+- `/internal/admin/*` 还要求已配置的超级管理员角色。
 
-- 公共
-  - `GET /health`
-  - `POST /internal/connect`
-- 对话
-  - `POST /chat`
-  - `WS /chat/ws`
-- 配置参数
-  - `GET /internal/config-params`
-  - `PUT /internal/config-params`
-  - `GET /internal/config-params/catalog`
-  - `GET /internal/admin/config-params`
-  - `PUT /internal/admin/config-params`
-- 会话与连接器
-  - `GET /internal/session/:userId/:sessionId`
-  - `DELETE /internal/session/:userId/:sessionId`
-  - `GET /internal/sessions/:userId`
-  - `GET /internal/connectors/:userId/:sessionId`
-  - `PUT /internal/connectors/:userId/:sessionId/selection`
-- 工作区（用户）
-  - `GET /internal/workspace/tree/:userId`
-  - `GET /internal/workspace/file/:userId?path=...`
-  - `PUT /internal/workspace/file/:userId`
-  - `GET /internal/workspace/download/:userId?path=...`
-  - `POST /internal/workspace/reset/:userId`
-  - `POST /internal/workspace/sync/:userId`
-  - `GET /internal/attachment/:userId/:attachmentId`
-- 管理（超管）
-  - `GET /internal/admin/users`
-  - `PUT /internal/admin/users`
-  - `GET /internal/admin/template/tree`
-  - `GET /internal/admin/template/file?path=...`
-  - `PUT /internal/admin/template/file`
-  - `GET /internal/admin/workspace-all/tree`
-  - `GET /internal/admin/workspace-all/file?userId=...&path=...`
-  - `PUT /internal/admin/workspace-all/file`
-  - `GET /internal/admin/workspace-all/download?userId=...&path=...`
-  - `POST /internal/admin/workspace-all/sync`
-  - `POST /internal/admin/workspace-all/reset`
+## 主要 API 分组
 
-## 7) 关键目录
+- 对话与传输：`POST /chat`、`WS /chat/ws`、`WS /logs/ws`
+- Session：`/internal/sessions/:userId`、`/internal/session/:userId/:sessionId`
+- Session 修改：`messages/delete-from`、`messages/replace-turn`、`rename`
+- 附件：`/internal/attachment/:userId/:attachmentId`，查询参数必须带完整 Session/source 身份
+- 连接器：目录、用户实例、连接/断开和 Session 选择
+- 用户工作区：`/internal/workspace/:userId`、重置和同步
+- 管理端：用户、模板、配置参数和全工作区操作
+- 插件：通过受限插件宿主绑定的 Manifest Service 路由
 
-```
+精确方法和路径以 `routes/` 下的路由模块及插件 Manifest 为准。
+
+## 目录职责
+
+```text
 service/
-├── app.js                      # 应用入口（Express 应用 + 服务启动）
-├── bootstrap/                  # 应用初始化
-│   ├── create-app-dependencies.js
-│   ├── register-global-middlewares.js
-│   ├── register-http-modules.js
-│   └── start-http-server.js
-├── config/                     # 全局配置文件
-├── routes/                     # HTTP 路由模块
-│   ├── auth-routes.js
-│   ├── config-template-routes.js
-│   ├── connectors-routes.js
-│   ├── file-crud-routes.js           # 通用文件 CRUD 路由工厂（tree/read/write/download）
-│   ├── session-routes.js
-│   └── workspace-routes.js
-├── services/                   # 业务服务
-│   ├── auth-service.js
-│   ├── chat-run-service.js
-│   ├── config-params-service.js
-│   ├── config-scope-service.js
-│   ├── request-context-service.js
-│   ├── runtime-config-service.js
-│   ├── workspace-path-service.js
-│   ├── workspace-tree-service.js
-│   ├── workspace-users-service.js
-│   └── zip-service.js
-├── system-core/                # 核心能力
-│   ├── agent/                  # Agent 引擎（核心、上下文、执行、模型、媒体）
-│   ├── attach/                 # 附件处理
-│   ├── bot-manage/             # Bot 生命周期管理
-│   ├── config/                 # 配置加载与解析
-│   ├── connectors/             # 连接器运行时（数据库、邮件、终端）
-│   ├── context/                # 上下文组装
-│   ├── error/                  # 错误处理
-│   ├── event/                  # 事件系统
-│   ├── i18n/                   # 国际化
-│   ├── init/                   # 初始化
-│   ├── mcp/                    # MCP 客户端
-│   ├── memory/                 # 短期/长期记忆
-│   ├── model/                  # 模型抽象层
-│   ├── sandbox/                # 脚本沙箱提供方
-│   ├── service-invoker/        # 外部服务调用
-│   ├── session/                # 会话管理
-│   ├── skill/                  # 技能系统
-│   ├── system-prompt/          # 系统提示词模板
-│   ├── tools/                  # Agent 工具
-│   ├── tracking/               # 日志与诊断
-│   └── utils/                  # 工具函数
-├── ws/                         # WebSocket 服务
-│   └── chat-websocket-server.js
-└── scripts/                    # 工具脚本
-    └── check-openai-tool-schema.js
+├── app.js                 进程入口与组合根
+├── bootstrap/             依赖创建、中间件、路由和服务启动
+├── config/                全局配置文件
+├── deps/                  Service 侧依赖适配
+├── routes/                HTTP 路由模块
+├── security/              HTTP 准入与安全策略
+├── services/              Service 应用服务与插件宿主
+├── ws/                    对话及日志 WebSocket 服务
+└── scripts/               Service 工具脚本
 ```
 
-- `workspace/`：运行时用户数据（会话、文件、附件、配置参数）
-- `user-template/default-user/`：新用户工作区模板
+Agent 执行、工具、Context、Session 领域逻辑、模型解析和记忆位于 `../agent/`。供应商适配与模型执行位于 `../model-runtime/`；Service 不得复制这些职责。

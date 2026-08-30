@@ -9,14 +9,15 @@ Workflow orchestration reference:
 - `docs/architecture.md` (module-level architecture)
 
 Current architecture split:
+
 - `src/data/record-builders.js`: trace/snapshot/prompt record generation
-- `src/core/`: plugin composition (`plugin.js`), hook wiring (`hooks.js`), runtime context (`context.js`), options/constants/thresholds
+- `src/core/`: plugin composition (`plugin.js`), hook wiring (`hooks.js`), runtime context (`context.js`), options, constants, and `workflow-params.js`
 - `src/core/workflow-params.js`: single parameter center for workflow orchestration (planning/guidance/acceptance)
   - canonical shape: `WORKFLOW_PARAMS.{workflow,planning,guidance,acceptance}.*`
   - capability log event names are centralized at `WORKFLOW_PARAMS.logging.events.*`
 - `src/capabilities/profile.js`: capability contract profile (planning/guidance/assistance/memory/synthesis/supervision/review)
 - `src/capabilities/hook-map.js`: capability to lifecycle hook mapping
-- `src/capabilities/handlers/index.js`: capability handler skeleton (default noop planned handlers)
+- `src/capabilities/handlers/index.js`: capability handler registry; planning, guidance, acceptance, and review have concrete handlers, while other declared capabilities use no-op handlers
 - `src/capabilities/runtime.js`: capability runtime dispatcher (runs mapped handlers on hook points)
 - `src/capabilities/handlers/shared/`: semantic subfolders by concern
   - `workflow/`, `model/`, `message/`, `plan/`, `runtime/`
@@ -27,13 +28,13 @@ Current architecture split:
 
 Handler export convention (Facade + semantic subdirectories):
 
-| Layer | Purpose | Files |
-| --- | --- | --- |
-| Facade (stable import) | External/runtime stable entry | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js` |
-| Domain semantic entry | Domain-local export aggregation | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
-| Domain implementation | Controller/deps/prompt/runner details | `src/capabilities/handlers/<domain>/*.js` |
-| Shared facade | Backward-compatible shared aggregate export | `src/capabilities/handlers/shared.js` |
-| Shared semantic entry | Canonical shared export map | `src/capabilities/handlers/shared/index.js` |
+| Layer                  | Purpose                               | Files                                                                      |
+| ---------------------- | ------------------------------------- | -------------------------------------------------------------------------- |
+| Facade (stable import) | External/runtime stable entry         | `src/capabilities/handlers/{planning,guidance,acceptance,review}.js`       |
+| Domain semantic entry  | Domain-local export aggregation       | `src/capabilities/handlers/{planning,guidance,acceptance,review}/index.js` |
+| Domain implementation  | Controller/deps/prompt/runner details | `src/capabilities/handlers/<domain>/*.js`                                  |
+| Shared facade          | Stable shared aggregate export        | `src/capabilities/handlers/shared.js`                                      |
+| Shared semantic entry  | Canonical shared export map           | `src/capabilities/handlers/shared/index.js`                                |
 
 The plugin is non-invasive: it is attached through Noobot hooks, and hook errors are captured by Noobot's hook manager instead of breaking the main agent flow.
 
@@ -60,7 +61,7 @@ When this hook is emitted with `deletedSessionIds` (or fallback `sessionId`), ha
 
 `service/routes/session-routes.js` emits this hook after `deleteSessionBranch` succeeds.
 
-## Recommended usage: enable from runConfig
+## Enable from runConfig
 
 `SessionExecutionEngine.runSession()` can automatically create/reuse `hookManager` and register this plugin.
 
@@ -73,10 +74,10 @@ await botManager.runSession({
     plugins: {
       harness: {
         enabled: true,
-        mode: "on"
-      }
-    }
-  }
+        mode: "on",
+      },
+    },
+  },
 });
 ```
 
@@ -103,7 +104,7 @@ Per-run config takes precedence over global config:
 runConfig: {
   plugins: {
     harness: {
-      mode: "off"
+      mode: "off";
     }
   }
 }
@@ -139,51 +140,51 @@ if (api?.policy?.patch && Array.isArray(options?.denyToolNames)) {
 
 ## Options
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `enabled` | `true` | Global plugin switch. Must be `true` for harness to run. |
-| `mode` | `off` | Runtime mode: `on` enables harness for the run; `off` keeps it inactive. |
-| `basePath` | current user workspace | Root workspace for harness output. If omitted, `SessionExecutionEngine` resolves it from `workspaceService.getWorkspacePath(userId)`. |
-| `trace` | `true` | Writes hook events to `events.jsonl` and related index files. |
-| `promptPolicy` | `true` | Injects a lightweight system message before LLM calls. |
-| `finalResponseGuard` | `true` | Reserved option for final response guard behavior. |
-| `writeContextSnapshot` | `true` | Writes `context-snapshot.json` after context build. |
-| `writePrompts` | `true` | Writes prompt injection records to `prompts.jsonl`. |
-| `runtimeDirName` | `runtime` | Runtime directory name below `basePath`. |
-| `harnessDirName` | `harness` | Harness directory name below runtime directory. |
-| `promptPriority` | `80` | Hook priority for prompt injection handlers. |
-| `tracePriority` | `20` | Hook priority for trace handlers. |
-| `timeoutMs` | `300000` | Hook handler timeout, including separate-model capability calls. |
-| `maxPreviewChars` | `1200` | Maximum preview size for recorded payload snippets. |
-| `promptText` | built-in policy | System prompt text injected at `before_llm_call`. |
-| `finalResponseText` | built-in guard | System prompt text injected at `before_final_output`. |
-| `capabilityProfile` | built-in planned profile | Declares Harness Engineering capability contract; implementation can be filled later. |
-| `capabilityHandlers` | built-in noop handlers | Optional capability handler overrides for each capability domain. |
-| `planningGuidanceMode` | `separate_model` | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker. |
-| `summaryOnToolBurstThreshold` / `enableToolBurstSummary` | `false` | Optional opt-in trigger: schedule a Harness summary when one model response returns tool calls greater than or equal to the summary threshold. Disabled by default because multi-tool responses are replayed as single tool-call turns by the agent runtime. |
-| `summaryDetailSaveToAttachment` / `saveSummaryDetailToAttachment` | `false` | When enabled, persists the complete Harness summary as generated attachment(s). The same complete summary remains directly visible to the main model; the attachment is a durable copy, not a replacement for injected content. |
-| `capabilityModelInvoker` | `null` | Optional async invoker used by `separate_model` mode. If the invoker returns `traces`, harness records them to `capability-traces.jsonl`. |
-| `stepModels` / `capabilityModelByPurpose` | `{}` | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
-| `capabilityToolAllowlist` | `[]` | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools. |
-| `capabilityToolAllowlistByPurpose` | `{}` | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`. |
-| `denyToolNames` | `["plan_multi_task_collaboration", "task_summary"]` | Optional plugin-level deny list. Engine appends it into `runConfig.toolPolicy.denyToolNames` via the unified policy field. |
-| `acceptance.semanticValidation` | `true` | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow. |
-| `miniRunnerMaxTurns` | `50` | Hint option for agent-side mini-runner injector (when `planningGuidanceMode=separate_model`). |
-| `miniRunnerToolAllowlist` | `[]` | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools. |
+| Option                                                            | Default                                             | Description                                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`                                                         | `true`                                              | Global plugin switch. Must be `true` for harness to run.                                                                                                                                                                                                                                                                                     |
+| `mode`                                                            | `off`                                               | Runtime mode: `on` enables harness for the run; `off` keeps it inactive.                                                                                                                                                                                                                                                                     |
+| `basePath`                                                        | current user workspace                              | Root workspace for harness output. If omitted, `SessionExecutionEngine` resolves it from `workspaceService.getWorkspacePath(userId)`.                                                                                                                                                                                                        |
+| `trace`                                                           | `true`                                              | Writes hook events to `events.jsonl` and related index files.                                                                                                                                                                                                                                                                                |
+| `promptPolicy`                                                    | `true`                                              | Injects a lightweight system message before LLM calls.                                                                                                                                                                                                                                                                                       |
+| `finalResponseGuard`                                              | `true`                                              | Reserved option for final response guard behavior.                                                                                                                                                                                                                                                                                           |
+| `writeContextSnapshot`                                            | `true`                                              | Writes `context-snapshot.json` after context build.                                                                                                                                                                                                                                                                                          |
+| `writePrompts`                                                    | `true`                                              | Writes prompt injection records to `prompts.jsonl`.                                                                                                                                                                                                                                                                                          |
+| `runtimeDirName`                                                  | `runtime`                                           | Runtime directory name below `basePath`.                                                                                                                                                                                                                                                                                                     |
+| `harnessDirName`                                                  | `harness`                                           | Harness directory name below runtime directory.                                                                                                                                                                                                                                                                                              |
+| `promptPriority`                                                  | `80`                                                | Hook priority for prompt injection handlers.                                                                                                                                                                                                                                                                                                 |
+| `tracePriority`                                                   | `20`                                                | Hook priority for trace handlers.                                                                                                                                                                                                                                                                                                            |
+| `timeoutMs`                                                       | `300000`                                            | Hook handler timeout, including separate-model capability calls.                                                                                                                                                                                                                                                                             |
+| `maxPreviewChars`                                                 | `1200`                                              | Maximum preview size for recorded payload snippets.                                                                                                                                                                                                                                                                                          |
+| `promptText`                                                      | built-in policy                                     | System prompt text injected at `before_llm_call`.                                                                                                                                                                                                                                                                                            |
+| `finalResponseText`                                               | built-in guard                                      | System prompt text injected at `before_final_output`.                                                                                                                                                                                                                                                                                        |
+| `capabilityProfile`                                               | built-in profile                                    | Declares the Harness capability contract.                                                                                                                                                                                                                                                                                                    |
+| `capabilityHandlers`                                              | built-in handlers                                   | Optional capability handler overrides for each capability domain.                                                                                                                                                                                                                                                                            |
+| `planningGuidanceMode`                                            | `separate_model`                                    | `inject` or `separate_model`. In `separate_model`, planning/guidance can call an external model invoker.                                                                                                                                                                                                                                     |
+| `summaryOnToolBurstThreshold` / `enableToolBurstSummary`          | `false`                                             | Optional opt-in trigger: schedule a Harness summary when one model response returns tool calls greater than or equal to the summary threshold. Disabled by default because multi-tool responses are replayed as single tool-call turns by the agent runtime.                                                                                 |
+| `summaryDetailSaveToAttachment` / `saveSummaryDetailToAttachment` | `false`                                             | When enabled, persists the complete Harness summary as generated attachment(s). The same complete summary remains directly visible to the main model; the attachment is a durable copy, not a replacement for injected content.                                                                                                              |
+| `capabilityModelInvoker`                                          | `null`                                              | Optional async invoker used by `separate_model` mode. If the invoker returns `traces`, harness records them to `capability-traces.jsonl`.                                                                                                                                                                                                    |
+| `stepModels` / `capabilityModelByPurpose`                         | `{}`                                                | Per harness flow model alias. Values can be strings or `{ "model": "alias" }`. Recommended big-flow keys: `planning`, `guidance`, `acceptance`, `default`. Detailed purpose keys such as `planning_json_repair`, `summary`, `planning_revision`, `acceptance_semantic_validation` are still accepted when a fine-grained override is needed. |
+| `capabilityToolAllowlist`                                         | `[]`                                                | Tool allowlist passed from harness to capability invoker (all purposes). Empty means no tools.                                                                                                                                                                                                                                               |
+| `capabilityToolAllowlistByPurpose`                                | `{}`                                                | Per-purpose allowlist override, e.g. `planning`, `guidance`, `summary`, `acceptance_semantic_validation`.                                                                                                                                                                                                                                    |
+| `denyToolNames`                                                   | `["plan_multi_task_collaboration", "task_summary"]` | Optional plugin-level deny list. Engine appends it into `runConfig.toolPolicy.denyToolNames` via the unified policy field.                                                                                                                                                                                                                   |
+| `acceptance.semanticValidation`                                   | `true`                                              | Enables semantic task-acceptance validation through `capabilityModelInvoker`. The rule-based acceptance report is still generated first; model failures are logged and do not block the main flow.                                                                                                                                           |
+| `miniRunnerMaxTurns`                                              | `5`                                                 | Turn limit for the injected mini-runner when `planningGuidanceMode=separate_model`.                                                                                                                                                                                                                                                          |
+| `miniRunnerToolAllowlist`                                         | `[]`                                                | Fallback allowlist used by the injected mini-runner when harness does not pass a per-call allowlist. Empty means no tools.                                                                                                                                                                                                                   |
 
 ## Model invocation flow
 
 Harness itself only calls a model through `capabilityModelInvoker` when a capability is in `separate_model` mode or when a feature explicitly enables semantic validation. The selected model alias is resolved from `stepModels` / `capabilityModelByPurpose` and is passed to the invoker as `payload.model`.
 
-| Purpose / step | When it calls a model | Model key | Fallback behavior |
-| --- | --- | --- | --- |
-| Planning bootstrap | At `before_llm_call`, when `planningGuidanceMode=separate_model`, the current run has not captured a checklist yet, and a `capabilityModelInvoker` is available. | `planning` | If no invoker is available, separate-model planning is skipped; plugin-runtime normalization may fall back to `inject`. |
-| Planning JSON repair | After planning output is received, only when local parsing fails and the output looks like JSON. | `planning` by default; optional detail override `planning_json_repair` | If repair fails or returns unusable content, Harness applies the built-in default checklist; it does not call another synthesis model. |
-| Summary | When guidance detects the LLM turn counter exceeded the summary threshold and schedules a summary in `separate_model` mode. | `guidance` by default; optional detail override `summary` | If the model call fails, Harness keeps running without blocking the main flow. |
-| Planning revision | When planning turn-threshold schedules a plan update, Harness asks for a revised **main plan** in `separate_model` mode. | `planning` by default; optional detail override `planning_revision` | If no invoker is available, Harness schedules an injected planning-revision prompt instead. |
-| Planning refinement | After revision succeeds, Harness asks for refinement under selected **target main step(s)**. | `planning` by default; optional detail override `planning_refinement` | If no valid target main step remains, refinement is considered converged and skipped. |
-| Guidance | When tool failure thresholds are reached and `planningGuidanceMode=separate_model`. | `guidance` | If the model call fails, Harness logs the failure and continues. |
-| Acceptance semantic validation | During forced final acceptance or active `request_task_acceptance`, only when `acceptance.semanticValidation=true`. | `acceptance` by default; optional detail override `acceptance_semantic_validation` | If validation fails to run, base rule-based acceptance remains authoritative and the main flow continues. |
+| Purpose / step                 | When it calls a model                                                                                                                                            | Model key                                                                          | Fallback behavior                                                                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Planning bootstrap             | At `before_llm_call`, when `planningGuidanceMode=separate_model`, the current run has not captured a checklist yet, and a `capabilityModelInvoker` is available. | `planning`                                                                         | If no invoker is available, separate-model planning is skipped; plugin-runtime normalization may fall back to `inject`.                |
+| Planning JSON repair           | After planning output is received, only when local parsing fails and the output looks like JSON.                                                                 | `planning` by default; optional detail override `planning_json_repair`             | If repair fails or returns unusable content, Harness applies the built-in default checklist; it does not call another synthesis model. |
+| Summary                        | When guidance detects the LLM turn counter exceeded the summary threshold and schedules a summary in `separate_model` mode.                                      | `guidance` by default; optional detail override `summary`                          | If the model call fails, Harness keeps running without blocking the main flow.                                                         |
+| Planning revision              | When planning turn-threshold schedules a plan update, Harness asks for a revised **main plan** in `separate_model` mode.                                         | `planning` by default; optional detail override `planning_revision`                | If no invoker is available, Harness schedules an injected planning-revision prompt instead.                                            |
+| Planning refinement            | After revision succeeds, Harness asks for refinement under selected **target main step(s)**.                                                                     | `planning` by default; optional detail override `planning_refinement`              | If no valid target main step remains, refinement is considered converged and skipped.                                                  |
+| Guidance                       | When tool failure thresholds are reached and `planningGuidanceMode=separate_model`.                                                                              | `guidance`                                                                         | If the model call fails, Harness logs the failure and continues.                                                                       |
+| Acceptance semantic validation | During forced final acceptance or active `request_task_acceptance`, only when `acceptance.semanticValidation=true`.                                              | `acceptance` by default; optional detail override `acceptance_semantic_validation` | If validation fails to run, base rule-based acceptance remains authoritative and the main flow continues.                              |
 
 These steps do **not** call a separate Harness model by themselves:
 
@@ -195,7 +196,7 @@ These steps do **not** call a separate Harness model by themselves:
 
 When `planningGuidanceMode=inject`, planning/guidance prompts are injected into the **main agent model** instead of calling `capabilityModelInvoker`; in that mode `stepModels` does not select a separate Harness model for those injected prompts.
 
-## Plan revision/refinement lifecycle (latest)
+## Plan revision/refinement lifecycle
 
 Harness now uses a two-stage plan update pipeline when plan update is triggered:
 
@@ -229,8 +230,8 @@ Otherwise refinement is rejected (`planning_refinement_rejected_invalid_target_m
 
 ### Retry/limits
 
-- Revision attempts are capped by `MAX_PLAN_REVISION_ATTEMPTS` (default `10`).
-- Refinement attempts are capped by `MAX_PLAN_REFINEMENT_ATTEMPTS` (default `10`).
+- Revision attempts are capped by `WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts` (default `20`).
+- Refinement attempts are capped by `WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts` (default `20`).
 - On each successful revision, changed/new main steps reset refinement eligibility.
 
 ### Acceptance payload semantics
@@ -336,8 +337,8 @@ Memory takeover accepted return shapes (any one):
 Directive fields:
 
 - `enabled?: boolean` (default true when directive exists)
-- `allowToolNames?: string[]` (canonical) / `allowTools?: string[]` (legacy alias)
-- `denyToolNames?: string[]` (canonical) / `denyTools?: string[]` (legacy alias)
+- `allowToolNames?: string[]` or `allowTools?: string[]`
+- `denyToolNames?: string[]` or `denyTools?: string[]`
 - `forceCall?: { name: string, args?: object, id?: string }`
 - `overrideCall?: { name: string, args?: object, id?: string }`
 - `mode?: "replace"` (`before_tool_calls` only; replace all calls with `forceCall`)
@@ -386,53 +387,56 @@ Conflict strategy:
 Example:
 
 ```js
-registerHarnessCore({ hookManager }, {
-  capabilityHandlers: {
-    assistance: async ({ point }) => {
-      if (point !== "before_tool_calls") return null;
-      return {
-        toolTakeover: {
-          allowToolNames: ["wait"],
-          forceCall: { name: "wait", args: { seconds: 1 } },
-          mode: "replace",
-        },
-      };
-    },
-    supervision: async ({ point }) => {
-      if (point !== "before_tool_calls") return null;
-      return {
-        systemMessageTakeover: {
-          id: "harness-mid-hook-guard",
-          content: "中途工具阶段触发：请先执行安全检查再继续。",
-          target: "agent_system",
-          mode: "prepend",
-        },
-      };
-    },
-    guidance: async ({ point }) => {
-      if (point !== "before_llm_call") return null;
-      return {
-        messageTakeover: {
-          removeInternalMessageTypes: ["tool_choice_required_retry_prompt"],
-          id: "harness-replace-retry-prompt",
-          content: "工具重试提示由 harness 接管。",
-          target: "ctx_messages",
-          mode: "prepend",
-        },
-      };
-    },
-    memory: async ({ point }) => {
-      if (point !== "before_state_commit") return null;
-      return {
-        memoryTakeover: {
-          allowCommitTypes: ["assistant_message"],
-          stripPayloadKeys: ["rawModelContent"],
-          prependContent: "[memory-guard] ",
-        },
-      };
+registerHarnessCore(
+  { hookManager },
+  {
+    capabilityHandlers: {
+      assistance: async ({ point }) => {
+        if (point !== "before_tool_calls") return null;
+        return {
+          toolTakeover: {
+            allowToolNames: ["wait"],
+            forceCall: { name: "wait", args: { seconds: 1 } },
+            mode: "replace",
+          },
+        };
+      },
+      supervision: async ({ point }) => {
+        if (point !== "before_tool_calls") return null;
+        return {
+          systemMessageTakeover: {
+            id: "harness-mid-hook-guard",
+            content: "中途工具阶段触发：请先执行安全检查再继续。",
+            target: "agent_system",
+            mode: "prepend",
+          },
+        };
+      },
+      guidance: async ({ point }) => {
+        if (point !== "before_llm_call") return null;
+        return {
+          messageTakeover: {
+            removeInternalMessageTypes: ["tool_choice_required_retry_prompt"],
+            id: "harness-replace-retry-prompt",
+            content: "工具重试提示由 harness 接管。",
+            target: "ctx_messages",
+            mode: "prepend",
+          },
+        };
+      },
+      memory: async ({ point }) => {
+        if (point !== "before_state_commit") return null;
+        return {
+          memoryTakeover: {
+            allowCommitTypes: ["assistant_message"],
+            stripPayloadKeys: ["rawModelContent"],
+            prependContent: "[memory-guard] ",
+          },
+        };
+      },
     },
   },
-});
+);
 ```
 
 ## Output directory
@@ -482,11 +486,14 @@ import { registerHarnessCore } from "./plugin/noobot-plugin-harness/src/index.js
 
 const hookManager = createHookManager();
 
-registerHarnessCore({ hookManager }, {
-  basePath: "/path/to/workspace/user",
-  promptPolicy: true,
-  trace: true
-});
+registerHarnessCore(
+  { hookManager },
+  {
+    basePath: "/path/to/workspace/user",
+    promptPolicy: true,
+    trace: true,
+  },
+);
 
 runConfig.hookManager = hookManager;
 ```

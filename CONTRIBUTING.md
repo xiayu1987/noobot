@@ -10,8 +10,11 @@ Thanks for contributing to Noobot 🎉
    - `feat/...`
    - `fix/...`
    - `docs/...`
-2. Run locally and verify:
+2. Install, verify, and run locally:
    ```bash
+   npm install
+   npm run check:quality
+   npm test
    ./start.sh
    ```
 3. Open a PR with:
@@ -37,8 +40,8 @@ Thanks for contributing to Noobot 🎉
 
 ## Before Opening PR
 
-- [ ] App starts successfully
-- [ ] Frontend build passes
+- [ ] Quality checks pass
+- [ ] Full repository tests pass
+- [ ] App starts successfully when runtime behavior changes
 - [ ] Related docs are updated
 - [ ] No sensitive information is committed
-

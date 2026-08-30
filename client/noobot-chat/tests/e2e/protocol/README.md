@@ -16,7 +16,7 @@ Directory responsibilities:
 - `helpers/`: browser actions and protocol-domain assertions; helpers do not create business facts.
 - `specs/`: deduplicated PBE browser scenarios, including Manifest V2 activation, runtime-event
   identity, Workflow stop/continue, same-page resend after stop, low-turn Harness flows, main-flow
-  summary checkpoints, tools, live thinking, and interaction closure.
+  summary checkpoints, tools, live thinking, interaction, connectors, and character animation.
 - `playwright.protocol.config.js`: the only Playwright configuration for protocol tests.
 
 Required environment:
@@ -52,14 +52,14 @@ screenshots, or reports.
 
 ### Model invocation observation
 
-All production models are created by `agent/src/models/factory/chat-model.js`. Provider attempts
-are observed only at `model-runtime/src/executor/model-request-executor.js` through this authority:
+All production provider requests are executed and observed only at
+`model-runtime/src/executor/model-request-executor.js` through this authority:
 
 ```text
 event = model_context_trace
 data.stage = llm_invoke_messages
 data.authority = model_invoke_port
-data.protocolVersion = 1
+data.protocolVersion = 2
 ```
 
 Business branches must not emit duplicate observation events. Every provider call owns one
@@ -78,7 +78,7 @@ a hard failure.
 
 ### Implementation status
 
-All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-046 are implemented. PBE-001,
+All registered scenarios in PBE-002-003, PBE-006-017, and PBE-021-048 are implemented. PBE-001,
 PBE-004, and PBE-018 are covered by strict supersets PBE-002, PBE-006, and PBE-016/017. Every spec
 must import `test` and `expect` from `fixtures/noobot.fixture.js`. Permanent `test.skip` entries and
 placeholder scenarios without business assertions are forbidden.
@@ -94,7 +94,7 @@ placeholder scenarios without business assertions are forbidden.
 
 - `fixtures/`：浏览器、认证、Session、协议捕获及证据输出生命周期。
 - `helpers/`：浏览器操作和各协议域断言，不产生业务状态。
-- `specs/`：去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、停止后同页编辑重发、Harness 低轮次工作流、主流程小结 checkpoint，以及工具/实时思考/交互闭环。
+- `specs/`：去重后的 PBE 浏览器业务场景，包括 Manifest V2 插件激活、runtime-events 身份闭环、Workflow 停止继续、停止后同页编辑重发、Harness 低轮次工作流、主流程小结 checkpoint，以及工具、交互、连接器和角色动画闭环。
 - `playwright.protocol.config.js`：协议测试唯一 Playwright 配置。
 
 运行前必须提供：
@@ -129,14 +129,14 @@ npm run test:e2e:protocol:full
 
 ## 模型调用观测协议
 
-所有生产模型实例必须由 `agent/src/models/factory/chat-model.js` 创建，并在 provider
-`ModelPort` 的真实 Provider Attempt 边界由 `model-runtime/src/executor/model-request-executor.js` 统一观测。唯一权威事件为：
+所有生产 provider 请求必须由 `model-runtime/src/executor/model-request-executor.js` 执行，
+并在真实 Provider Attempt 边界统一观测。唯一权威事件为：
 
 ```text
 event = model_context_trace
 data.stage = llm_invoke_messages
 data.authority = model_invoke_port
-data.protocolVersion = 1
+data.protocolVersion = 2
 ```
 
 主 Agent、瞬态重试、最终 streaming、tool binding、capability、memory、MCP、协作和数据处理
@@ -176,6 +176,6 @@ Playwright 配置加载时校验策略表与全部 spec 的 PBE 编号一一闭�
 
 基础配置、证据捕获、认证和 Session fixture、协议断言入口已经建立。新增用例必须从
 `fixtures/noobot.fixture.js` 导入 `test` 和 `expect`，从而保证所有用例使用同一套捕获和审计链。
-PBE-002～003、PBE-006～017、PBE-021～046 中已登记场景均已落地；PBE-001、PBE-004 和 PBE-018
+PBE-002～003、PBE-006～017、PBE-021～048 中已登记场景均已落地；PBE-001、PBE-004 和 PBE-018
 分别按严格包含关系合并到 PBE-002、PBE-006 和 PBE-016/017。所有场景从统一 fixture 运行，
 禁止用 `test.skip` 或无业务断言的占位测试伪装覆盖率。

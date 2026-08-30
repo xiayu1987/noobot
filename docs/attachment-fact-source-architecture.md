@@ -39,8 +39,9 @@ identify, merge, replace, or resurrect an attachment in the new protocol path.
 - Non-empty values win over empty values.
 - `parsedResult`, path fields, session/source fields, preview/download fields must not be removed by raw payloads.
 - New protocol code matches only the complete canonical identity tuple.
-- The former path/file-feature matching rules are legacy compatibility behavior and must be isolated in
-  one adapter with an explicit removal plan; they are not valid protocol identity.
+- Historical path/file-feature matching is not part of the runtime protocol. Legacy persisted indexes
+  must be converted offline with `scripts/migrate-attachment-record-v1.mjs`; runtime consumers must not
+  infer identity from those fields.
 
 ## Delete and unchanged semantics
 
@@ -66,9 +67,9 @@ identify, merge, replace, or resurrect an attachment in the new protocol path.
 Do not write these directly into persisted user-message attachments or model-input metadata:
 
 ```js
-message.attachments = payload.attachments
-message.attachments = serializedAttachments
-message.attachments = [{ name, mimeType, size }]
+message.attachments = payload.attachments;
+message.attachments = serializedAttachments;
+message.attachments = [{ name, mimeType, size }];
 ```
 
 Always merge/enrich first, and preserve explicit empty arrays as delete-all.

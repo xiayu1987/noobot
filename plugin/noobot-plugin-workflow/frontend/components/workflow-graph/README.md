@@ -62,10 +62,10 @@ Model Node
 - `step-click(step)`：点击步骤Box，用于打开子 agent session
 - `update:selectedDialogProcessId(dialogProcessId)`：受控选中 step dialogProcessId 回传
 
-## dialogProcessId / dialogId 收敛约定
+## dialogProcessId 约定
 
-- 组件内部与新增数据优先使用 `dialogProcessId`。
-- 读取旧 workflow artifact 或旧节点数据时，内部可兼容 `dialogId`；新增对外 prop/event 不再提供 `dialogId` 命名入口。
+- 组件内部和对外 prop/event 统一使用 `dialogProcessId`。
+- 对话流程身份解析只读取 `dialogProcessId`，不从别名或其他字段推断。
 
 ## 扩展建议
 

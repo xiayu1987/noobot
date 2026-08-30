@@ -1,180 +1,87 @@
-# noobot service
+# Noobot Service
 
 [中文](./README.zh-CN.md) | English
 
-`service/` is the backend runtime of noobot, built with **Express 5 + WebSocket + LangChain**.
+`service/` is Noobot's Express 5 and WebSocket host. Agent behavior is owned by the separate `noobot-agent` workspace; the Service owns HTTP/WS admission, authentication, configuration delivery, workspace access, and Service plugin capabilities.
 
-## 1) Requirements
+## Requirements
 
 - Node.js 22.22.2+
 - npm 9+
-- Optional system dependencies:
-  - `libreoffice` (Office document conversion)
-  - `ffmpeg` (audio/video processing)
-  - `docker` (used when `security.execution_isolation.mode=sandbox`)
-  - Sandbox mode gives workspace file and script tools one `/workspace` path view.
+- Optional: LibreOffice, FFmpeg, Docker, and OpenVSCode Server dependencies used by enabled capabilities
 
-## 2) Run
+## Run And Test
 
 ```bash
 cd service
 npm install
 npm start
-```
 
-Dev mode:
-
-```bash
+# development
 npm run dev
+
+# tests
+npm test
+npm run test:routes
+npm run test:tools
 ```
 
-PM2 (project-local `.pm2`):
+Project-local PM2 commands:
 
 ```bash
 npm run pm2:start
 npm run pm2:restart
 npm run pm2:logs
+npm run pm2:stop
 ```
 
-## 3) Tests
+For the complete deployment, use `./start.sh` or `./restart-services.sh` from the repository root.
 
-```bash
-cd service
-npm test
-```
+## Configuration
 
-Tool-layer tests only:
-
-```bash
-npm run test:tools
-```
-
-`test:tools` includes `__tests__/tools/*.test.js`, including agent-collab split tests such as:
-
-- `agent-collab-passthrough.test.js`
-- `agent-collab-wait.test.js`
-- `agent-collab-container-store.test.js`
-- `agent-collab-delegate-wait-flow.test.js`
-
-## 4) Env & Config
-
-- `.env`: example includes `PORT=10061`
 - Global config: `service/config/global.config.json`
-- Example config: `service/config/global.config.example.json`
+- Global template: `service/config/global.config.example.json`
 - User config: `workspace/<userId>/config.json`
-- Param config (`${VAR_NAME}`):
-  - workspace-level: `workspace/config-params.json`
-  - user-level: `workspace/<userId>/config-params.json`
-  - priority: `process.env` > `config-params.json`
+- System parameters: `workspace/config-params.json`
+- User parameters: `workspace/<userId>/config-params.json`
+- Environment file: `service/.env`
 
-## 5) Auth & Permission
+See [Configuration](../CONFIGURATION.md) for the authoritative fields and precedence rules.
 
-- No auth required for: `GET /health`, `POST /internal/connect`
-- All other endpoints require `apiKey`
-- Get `apiKey` via `POST /internal/connect` with `userId + connectCode`
-- Supported ways to pass `apiKey`:
-  - Header `x-api-key`
-  - Header `Authorization: Bearer <apiKey>`
-  - Query `?apikey=...`
-- `/internal/admin/*` requires `superAdmin`
+## Authentication
 
-## 6) API Overview (current code)
+- `GET /health` and `POST /internal/connect` do not require an API key.
+- Other Service routes require the issued API key unless their registered plugin route declares another validated policy.
+- `POST /internal/connect` exchanges `userId + connectCode` for connection data and an API key.
+- Authenticated requests accept `x-api-key`, `Authorization: Bearer <apiKey>`, or `?apikey=...`.
+- `/internal/admin/*` additionally requires the configured super-admin role.
 
-- Public
-  - `GET /health`
-  - `POST /internal/connect`
-- Chat
-  - `POST /chat`
-  - `WS /chat/ws`
-- Config Params
-  - `GET /internal/config-params`
-  - `PUT /internal/config-params`
-  - `GET /internal/config-params/catalog`
-  - `GET /internal/admin/config-params`
-  - `PUT /internal/admin/config-params`
-- Sessions & Connectors
-  - `GET /internal/session/:userId/:sessionId`
-  - `DELETE /internal/session/:userId/:sessionId`
-  - `GET /internal/sessions/:userId`
-  - `GET /internal/connectors/:userId/:sessionId`
-  - `PUT /internal/connectors/:userId/:sessionId/selection`
-- Workspace (user)
-  - `GET /internal/workspace/tree/:userId`
-  - `GET /internal/workspace/file/:userId?path=...`
-  - `PUT /internal/workspace/file/:userId`
-  - `GET /internal/workspace/download/:userId?path=...`
-  - `POST /internal/workspace/reset/:userId`
-  - `POST /internal/workspace/sync/:userId`
-  - `GET /internal/attachment/:userId/:attachmentId`
-- Admin
-  - `GET /internal/admin/users`
-  - `PUT /internal/admin/users`
-  - `GET /internal/admin/template/tree`
-  - `GET /internal/admin/template/file?path=...`
-  - `PUT /internal/admin/template/file`
-  - `GET /internal/admin/workspace-all/tree`
-  - `GET /internal/admin/workspace-all/file?userId=...&path=...`
-  - `PUT /internal/admin/workspace-all/file`
-  - `GET /internal/admin/workspace-all/download?userId=...&path=...`
-  - `POST /internal/admin/workspace-all/sync`
-  - `POST /internal/admin/workspace-all/reset`
+## Main API Groups
 
-## 7) Key Directories
+- Chat and transport: `POST /chat`, `WS /chat/ws`, `WS /logs/ws`
+- Sessions: `/internal/sessions/:userId`, `/internal/session/:userId/:sessionId`
+- Session mutations: `messages/delete-from`, `messages/replace-turn`, `rename`
+- Attachments: `/internal/attachment/:userId/:attachmentId` with complete Session/source identity in the query
+- Connectors: catalog, user instances, connect/disconnect, Session selection
+- User workspace: `/internal/workspace/:userId`, reset, and sync
+- Admin: users, template, config parameters, and all-workspace operations
+- Plugins: manifest-derived Service routes bound through the scoped plugin host
 
-```
+The route modules under `routes/` and plugin manifests are the source of truth for exact methods and paths.
+
+## Directory Ownership
+
+```text
 service/
-├── app.js                      # Application entry (Express app + server start)
-├── bootstrap/                  # App initialization
-│   ├── create-app-dependencies.js
-│   ├── register-global-middlewares.js
-│   ├── register-http-modules.js
-│   └── start-http-server.js
-├── config/                     # Global configuration files
-├── routes/                     # HTTP route modules
-│   ├── auth-routes.js
-│   ├── config-template-routes.js
-│   ├── connectors-routes.js
-│   ├── file-crud-routes.js           # Generic file CRUD route factory (tree/read/write/download)
-│   ├── session-routes.js
-│   └── workspace-routes.js
-├── services/                   # Business services
-│   ├── auth-service.js
-│   ├── chat-run-service.js
-│   ├── config-params-service.js
-│   ├── config-scope-service.js
-│   ├── request-context-service.js
-│   ├── runtime-config-service.js
-│   ├── workspace-path-service.js
-│   ├── workspace-tree-service.js
-│   ├── workspace-users-service.js
-│   └── zip-service.js
-├── system-core/                # Core capabilities
-│   ├── agent/                  # Agent engine (core, context, execution, model, media)
-│   ├── attach/                 # Attachment handling
-│   ├── bot-manage/             # Bot lifecycle management
-│   ├── config/                 # Config loading & resolution
-│   ├── connectors/             # Connector runtime (databases, emails, terminals)
-│   ├── context/                # Context assembly
-│   ├── error/                  # Error handling
-│   ├── event/                  # Event system
-│   ├── i18n/                   # Internationalization
-│   ├── init/                   # Initialization
-│   ├── mcp/                    # MCP client
-│   ├── memory/                 # Short/long-term memory
-│   ├── model/                  # Model abstraction
-│   ├── sandbox/                # Script sandbox providers
-│   ├── service-invoker/        # External service invocation
-│   ├── session/                # Session management
-│   ├── skill/                  # Skill system
-│   ├── system-prompt/          # System prompt templates
-│   ├── tools/                  # Agent tools
-│   ├── tracking/               # Logging & diagnostics
-│   └── utils/                  # Utilities
-├── ws/                         # WebSocket server
-│   └── chat-websocket-server.js
-└── scripts/                    # Utility scripts
-    └── check-openai-tool-schema.js
+├── app.js                 process entry and composition root
+├── bootstrap/             dependency creation, middleware, routes, server start
+├── config/                global configuration files
+├── deps/                  Service-side dependency adapters
+├── routes/                HTTP route modules
+├── security/              HTTP admission and security policy
+├── services/              Service-owned application services and plugin host
+├── ws/                    chat and log WebSocket servers
+└── scripts/               Service utilities
 ```
 
-- `workspace/`: runtime user data (sessions, files, attachments, config params)
-- `user-template/default-user/`: template for new user workspace
+Agent execution, tools, Context, Session domain logic, model resolution, and memory live in `../agent/`. Provider adaptation and model execution live in `../model-runtime/`; Service code must not duplicate those responsibilities.

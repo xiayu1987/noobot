@@ -17,4 +17,3 @@ Please report it privately to the maintainer with:
 
 We will review and handle it as soon as possible.  
 After a fix is available, details can be disclosed responsibly.
-

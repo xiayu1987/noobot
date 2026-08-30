@@ -9,6 +9,8 @@ Noobot 前端聊天界面，基于 **Vue 3 + Vite** 构建。
 - 附件上传（文档/图片/音视频）
 - 情景模式切换（全能/编程）
 - 连接器选择与管理
+- Manifest V2 前端插件扩展
+- AI 角色动画与 Session 产物
 - 工作区文件浏览
 - 移动端适配 + 长内容展示
 
@@ -31,6 +33,10 @@ npm run build
 ## 开发文档
 
 - [Chat Session / Replay 状态与流程说明](./docs/chat-session-replay.md)
+- [前端架构与依赖边界](./src/README.md)
+- [前端插件协议](./docs/frontend-plugin-contract.md)
+- [交互请求协议](./docs/interaction-contract.md)
+- [浏览器协议 E2E](./tests/e2e/protocol/README.md)
 
 ## 部署
 
@@ -41,6 +47,7 @@ npm run build
 开发时通过 Vite proxy 将 API 请求转发到后端（默认 `http://127.0.0.1:10061`）。
 
 生产环境由 Caddy 反向代理：
+
 - 前端静态资源 → `dist/`
 - `/api/*` → 后端服务
 - `/chat/ws` → WebSocket 服务

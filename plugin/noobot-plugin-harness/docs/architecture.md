@@ -8,7 +8,6 @@
   - `context.js`: runtime/hook context resolution
   - `options.js`: option schema + normalization
   - `workflow-params.js`: single source of truth for workflow params (thresholds, enums, event names)
-  - `thresholds.js`: shared thresholds and retry limits
   - `constants.js`: plugin metadata + hook constants
 - `src/capabilities/`: capability profile, hook map, runtime dispatcher, handlers
 - `src/fsm/`: state machine transitions + audit commits
@@ -38,8 +37,8 @@ Current summary-driven plan update pipeline:
 - Refinement is bound to `targetMainSteps` and does not overwrite main plan.
 - Each main step can be refined once, until a later revision changes/removes/adds that step.
 - If no valid target main step remains, refinement converges and is skipped.
-- Revision attempts are capped by `MAX_PLAN_REVISION_ATTEMPTS`.
-- Refinement attempts are capped by `MAX_PLAN_REFINEMENT_ATTEMPTS`.
+- Revision attempts are capped by `WORKFLOW_PARAMS.planning.planUpdate.revisionMaxAttempts`.
+- Refinement attempts are capped by `WORKFLOW_PARAMS.planning.planUpdate.refinementMaxAttempts`.
 
 ### Persistence model (harness bucket)
 

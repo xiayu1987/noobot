@@ -2,74 +2,64 @@
 
 中文 | [English](./README.md)
 
-Noobot Agent 代理网关 — 一个轻量级的 WebSocket 扇出/重放与 HTTP 代理层，位于前端与 Noobot 后端服务之间。
-
-## 作用
-
-- **WebSocket 扇出** — 一条到后端的 WebSocket 上行连接，服务同一会话的多个前端客户端。
-- **消息重放** — 每个频道（channel）的事件会被缓冲；客户端重连时自动补发缺失事件。
-- **HTTP 代理** — 透明转发 HTTP 请求到后端。
-- **高可用** — 处理上行断开、频道生命周期管理与自动清理。
+Noobot Agent Proxy 是客户端与 Noobot Service 之间的 HTTP/WebSocket 网关，负责连接扇出、频道访问控制、重连权威状态同步、传输投递、限流和可选的前端托管，不持有 Agent 业务状态。
 
 ## 架构
 
+```text
+客户端  -- HTTP/WebSocket -->  Agent Proxy :10062  -- HTTP/WebSocket -->  Service :10061
 ```
-前端  ──WS/HTTP──►  Agent Proxy (10062)  ──WS/HTTP──►  Noobot Service (10061)
-```
 
-### 核心概念
+频道由 `userId + sessionId + parentSessionId + parentDialogProcessId` 唯一标识。一个频道可以有多个下游订阅者和一条活跃上游连接。
 
-| 概念 | 说明 |
-|---|---|
-| **频道（Channel）** | 逻辑会话，由 `userId::sessionId::parentSessionId::dialogProcessId` 唯一标识。每个频道有一条到后端的上行 WebSocket 和零个或多个下游订阅者。 |
-| **事件日志（Event Log）** | 每个频道的有序事件缓冲区（大小可配置），用于重连时重放。 |
-| **订阅者（Subscriber）** | 连接到频道的前端 WebSocket，接收广播事件并可向上游发送消息。 |
-| **上行连接（Upstream Socket）** | 代理到 Noobot 后端的单条 WebSocket 连接（每个活跃频道一条）。 |
+## 传输行为
 
-### 消息流程
+- Agent 命令使用 `@noobot/agent-transport-protocol`；发送、重发、继续、停止、结束、交互响应和快照/查询命令按命令类型路由。
+- 后端协议事件经过校验和排序后广播，不改变业务身份。
+- Turn 生命周期事件使用回执和有限次数重投。
+- 重连请求携带 `currentSessionId`、`requestId` 和 `knownLifecycleSequenceMap`。
+- 重连按 Session 返回一个权威 `replayBatch`，其中可包含 Turn 快照、快照后的连续生命周期事件以及完整的未完成 `pendingInteractions` 事件。
+- 消息游标和载荷片段不是重连事实源；重连只接受上述生命周期序列映射。
 
-1. 客户端发送 `start_or_join` 动作，携带 `userId` + `sessionId`。
-2. 代理解析或创建频道，将客户端添加为订阅者。
-3. 若无上行连接，代理向后端建立 WebSocket 并转发启动载荷。
-4. 后端事件被捕获、排序、记录并广播给所有订阅者。
-5. 重连时，客户端发送 `reconnect` 携带 `lastReceivedSeqMap`，代理补发缺失事件。
+重连 wire shape 由 `@noobot/event-protocol`、`@noobot/session-protocol` 和 `@noobot/agent-transport-protocol` 共同定义；本包只负责传输编排。
 
 ## 配置
 
-所有配置通过环境变量设置：
+配置首先读取 `agent-proxy.config.json`，环境变量优先。完整配置键、默认值、规范化规则和环境变量映射只以 `src/shared/config.js` 为事实源。
 
-| 环境变量 | 默认值 | 说明 |
-|---|---|---|
-| `AGENT_PROXY_PORT` | `10062` | 代理监听端口 |
-| `AGENT_PROXY_HOST` | `0.0.0.0` | 代理监听地址 |
-| `AGENT_PROXY_UPSTREAM_WS_URL` | `ws://127.0.0.1:10061/chat/ws` | 后端 WebSocket 地址 |
-| `AGENT_PROXY_UPSTREAM_HTTP_BASE` | `http://127.0.0.1:10061` | 后端 HTTP 基础地址 |
-| `AGENT_PROXY_CHANNEL_RETENTION_MS` | `600000`（10 分钟） | 终态频道保留时间 |
-| `AGENT_PROXY_API_KEY_RETENTION_MS` | `86400000`（24 小时） | API Key 身份保留时间 |
-| `AGENT_PROXY_MAX_CHANNEL_EVENTS` | `2000` | 每个频道最大缓冲事件数 |
-| `AGENT_PROXY_CLEANUP_INTERVAL_MS` | `15000` | 清理定时器间隔 |
-| `AGENT_PROXY_MAX_CONNECTIONS` | `1000` | 最大并发 WebSocket 连接数 |
-| `AGENT_PROXY_MAX_BODY_SIZE` | `10485760`（10 MB） | 最大 HTTP 请求体大小 |
-| `AGENT_PROXY_REQUEST_ID_TTL_MS` | `660000`（11 分钟） | 交互请求 ID 有效期 |
-| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS` | `30000` | HTTP 上游超时时间 |
-| `AGENT_PROXY_REPLAY_ON_RECONNECT` | `false` | 是否启用重连重放 |
-| `AGENT_PROXY_MAX_REPLAY_EVENTS` | `5000` | 单次重放最大事件数 |
+核心配置：
 
-## 快速开始
+| 环境变量                                           | 默认值                         | 用途                                 |
+| -------------------------------------------------- | ------------------------------ | ------------------------------------ |
+| `AGENT_PROXY_PORT`                                 | `10062`                        | 监听端口                             |
+| `AGENT_PROXY_HOST`                                 | `0.0.0.0`                      | 监听地址                             |
+| `AGENT_PROXY_UPSTREAM_WS_URL`                      | `ws://127.0.0.1:10061/chat/ws` | Service WebSocket 地址               |
+| `AGENT_PROXY_UPSTREAM_HTTP_BASE`                   | `http://127.0.0.1:10061`       | Service HTTP 基础地址                |
+| `AGENT_PROXY_HTTP_UPSTREAM_TIMEOUT_MS`             | `60000`                        | 上游 HTTP 超时                       |
+| `AGENT_PROXY_RECONNECT_SNAPSHOT_TIMEOUT_MS`        | 共享时间阈值                   | 重连快照超时                         |
+| `AGENT_PROXY_TURN_LIFECYCLE_RECEIPT_TIMEOUT_MS`    | 共享时间阈值                   | 生命周期回执超时                     |
+| `AGENT_PROXY_TURN_LIFECYCLE_DELIVERY_MAX_ATTEMPTS` | 共享轮次阈值                   | 生命周期事件最大投递次数             |
+| `AGENT_PROXY_WS_MAX_PAYLOAD_BYTES`                 | 共享长度阈值                   | WebSocket 最大输入载荷               |
+| `AGENT_PROXY_WS_MAX_BUFFERED_BYTES`                | 共享长度阈值                   | WebSocket 最大缓冲输出               |
+| `AGENT_PROXY_TRUSTED_ORIGINS`                      | 空                             | 逗号分隔的可信 Origin；空表示不限制  |
+| `AGENT_PROXY_TRUSTED_IPS`                          | 空                             | 逗号分隔的可信 IP 模式；空表示不限制 |
+| `AGENT_PROXY_CONNECT_TOKEN`                        | 空                             | 配置后用于保护连接拦截接口           |
+| `AGENT_PROXY_HTTP_RATE_LIMIT_ENABLED`              | `true`                         | 开启 HTTP 限流                       |
+| `AGENT_PROXY_WS_RATE_LIMIT_ENABLED`                | `true`                         | 开启 WebSocket 升级限流              |
+| `AGENT_PROXY_FRONTEND_ROOT`                        | 空                             | 可选的前端构建目录                   |
+
+部署文档不要复制完整配置 schema。新增或修改配置时，以 `src/shared/config.js` 为准。
+
+## 运行与测试
 
 ```bash
 cd agent-proxy
 npm install
 npm start
+npm test
 ```
 
-或自定义上游地址：
-
-```bash
-AGENT_PROXY_UPSTREAM_WS_URL=ws://192.168.1.100:10061/chat/ws npm start
-```
-
-## PM2
+PM2 命令：
 
 ```bash
 npm run pm2:start
@@ -80,14 +70,18 @@ npm run pm2:logs
 npm run pm2:list
 ```
 
-## 接口端点
+## 接口
 
-| 路径 | 协议 | 说明 |
-|---|---|---|
-| `/health` | HTTP | 健康检查（返回频道数、活跃连接数） |
-| `/chat/ws`, `/api/chat/ws`, `/agent-proxy/ws`, `/api/agent-proxy/ws` | WebSocket | 客户端 WebSocket 连接 |
-| `/internal/connect`, `/api/internal/connect` | HTTP | 连接拦截器 |
-| *其他路径* | HTTP | 代理转发至后端 |
+| 路径                                                                 | 协议                | 用途                                 |
+| -------------------------------------------------------------------- | ------------------- | ------------------------------------ |
+| `/health`                                                            | HTTP                | 健康状态和活跃连接摘要               |
+| `/chat/ws`、`/api/chat/ws`、`/agent-proxy/ws`、`/api/agent-proxy/ws` | WebSocket           | Agent 传输                           |
+| `/logs/ws`、`/api/logs/ws`                                           | WebSocket 代理      | 运行日志流                           |
+| `/internal/connect`、`/api/internal/connect`                         | HTTP                | 受认证保护的连接拦截接口             |
+| `/ide`、`/ide/*`                                                     | HTTP/WebSocket 代理 | IDE 路由                             |
+| 其他 HTTP 路径                                                       | HTTP 代理           | 转发到 Service；默认移除 `/api` 前缀 |
+
+当 `AGENT_PROXY_FRONTEND_ROOT` 指向前端构建目录时，非 API 的 GET/HEAD 路由按 SPA 提供。
 
 ## 开源协议
 

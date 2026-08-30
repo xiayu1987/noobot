@@ -16,6 +16,7 @@
 - 无附件、带附件、附件保留、增加、删除和快照恢复
 - Harness 插件连接、Hook、Context Snapshot 和辅助模型调用
 - Workflow 根执行、子执行、附件传递以及与 Harness 的联合运行
+- Agent 配置、交互超时、连接器和角色动画 Session 产物
 - 多标签页、断网重连、并发停止和非法协议拒绝
 
 测试必须验证完整数据链，而不只是页面是否看起来正常。每个业务操作都必须同时满足：
@@ -46,7 +47,7 @@ AND 无禁止错误
 
 - Agent Transport 命令构造和校验：`agent-transport-protocol/src/commands.js`
 - Agent Transport 命令及协议版本：`agent-transport-protocol/src/constants.js`
-- Turn Lifecycle 和 receipt：`event-protocol/src/turn-lifecycle-protocol.mjs`
+- Turn Lifecycle 和 receipt：`session-protocol/src/turn-lifecycle.js`
 - 浏览器 WebSocket 分派：`client/noobot-chat/src/infrastructure/websocket/chatWebSocketClient.js`
 - reconnect 协调与投影：`client/noobot-chat/src/modules/chat/runtime/session/reconnectCoordinator.js`
 - 编辑重发事务：`client/noobot-chat/src/modules/chat/runtime/engine/resendTransaction.js`
@@ -61,7 +62,7 @@ AND 无禁止错误
 | 协议                   | 当前版本/事件                     |
 | ---------------------- | --------------------------------- |
 | Agent Transport        | `protocolVersion: 2`              |
-| Turn Lifecycle         | `protocolVersion: 4`              |
+| Turn Lifecycle         | `protocolVersion: 1`              |
 | Lifecycle transport    | `transportProtocolVersion: 3`     |
 | Lifecycle wire event   | `turn_lifecycle`                  |
 | Lifecycle receipt      | `action: turn.lifecycle.received` |
@@ -69,7 +70,7 @@ AND 无禁止错误
 
 版本变化时应同步修改协议库、生产代码和本文断言，不得在测试中接受多个版本。
 
-## 3. 建议目录结构
+## 3. 测试与证据目录
 
 ```text
 client/noobot-chat/tests/e2e/protocol/
@@ -446,6 +447,14 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 
 断言：execution-events 中工具集合严格相等，调用参数、成功结果和 `toolCallId` 一一闭合；`write_file` 的权威 `writtenFiles` 与 Turn journal、运行中/运行中刷新/完成前刷新/完成后刷新四个时点的前端生成文件卡数量和文件键集合一致；实时思考内容至少发生两次变化，分析与执行区域都有内容；实时面板最近 10 条执行日志窗口内的调用/返回均可展开，详情面板完整 7 对调用/返回均可展开且明细非空；思考内容实时展示；交互标题、字段、提交值、工具返回和最终模型回答闭合。
 
+### PBE-037～043：交互、附件、Agent 配置与工具边界
+
+- PBE-037：`user_interaction` 超时后真实弹窗关闭，刷新或 reconnect 不得重放已超时请求。
+- PBE-038：用户附件解析结果保持 canonical identity，预览、下载和刷新投影一致。
+- PBE-039～041：Agent Config 在命令、连接响应和刷新后的下一 Turn 中保持唯一协议形态。
+- PBE-042：停止后同页立即编辑重发使用最新权威 `aggregateVersion`。
+- PBE-043：普通用户原生、多模态和外部工具调用及结果观测闭环。
+
 ### PBE-044：多次工具停止继续与快照恢复闭环
 
 步骤：先执行一个单工具命令并自然完成；随后在同一 Session 发起八步顺序工具链，观察到多个真实工具结果后停止，通过 Continue 恢复；再次观察到多个新工具结果后停止，再次 Continue 并自然完成剩余步骤。
@@ -463,6 +472,18 @@ workspace/<userId>/runtime/harness/runs/<dialogProcessId>/
 步骤：在浏览器 A 完成一轮基线消息后，浏览器 B 打开同一 Session；A 启用 Workflow 与 Harness 并发起 Workflow Turn，在运行中观察 B 的实时展示，再由 B 停止该 Turn。
 
 断言：B 必须先收到该 Turn 的用户消息与 assistant 展示实体，再收到 Workflow runtime 并渲染与 A 一致的 Workflow 卡片；DSL 在两端始终提供展开/收起且默认收起；两端停止按钮和最终 `turn.stop_completed` 状态一致。禁止通过 Turn lifecycle 推导消息、收到状态后 REST 刷新 Session 或由 Workflow runtime 另建卡片宿主消息。
+
+### PBE-047：连接器选择、查询与 Session 权威顺序
+
+步骤：通过浏览器创建并连接 MySQL 连接器，勾选为当前 Session 可用连接器，然后发送数据库查询请求。
+
+断言：Session 连接器选择必须先于模型命令权威提交；连接器工具执行、模型上下文、Session 持久化和 provider 观测使用同一选择事实，并且并发发送不能越过选择写入。
+
+### PBE-048：角色导入、动画与 Session 产物
+
+步骤：启用角色插件，导入并勾选带动画的 GLB，通过真实模型请求生成角色动画，随后在桌面端、移动端和刷新后检查渲染。
+
+断言：工具结果与权威插件产物一致；Session 产物区只渲染一张 Three.js 动画卡片，角色管理面板不得重复渲染；移动端可见且刷新后从 Session 恢复。
 
 ### 模型调用唯一观测边界
 
@@ -520,7 +541,7 @@ history、incremental 组装及小结策略结果闭合；辅助模型允许没�
 
 ## 7. 执行分层
 
-建议提供三个入口：
+测试提供三个入口：
 
 ```bash
 # 连接、发送、停止、继续
@@ -533,13 +554,13 @@ npm run test:e2e:protocol:core
 npm run test:e2e:protocol:full
 ```
 
-推荐分组：
+分组：
 
-| 级别      | 用例                                            |
-| --------- | ----------------------------------------------- |
-| Smoke     | PBE-002、006                                    |
-| Core      | PBE-007～014、016、017、021、022、027、029、030 |
-| Full-only | PBE-015、023～026、028、031～036、044～046      |
+| 级别      | 用例                                                           |
+| --------- | -------------------------------------------------------------- |
+| Smoke     | PBE-002、006                                                   |
+| Core      | PBE-007～014、016、017、021、022、027、029、030、037、039～042 |
+| Full-only | PBE-015、023～026、028、031～036、038、043～048                |
 
 ## 8. CI 失败产物要求
 
