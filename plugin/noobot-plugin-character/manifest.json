@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "character",
   "name": "noobot-plugin-character",
-  "version": "4.2.6",
+  "version": "4.2.7",
   "description": "Import animated GLB characters and render LLM-generated animation protocols with Three.js.",
   "entries": {
     "agent": "src/entries/agent.js",
@@ -13,10 +13,7 @@
     "agent": {
       "hooks": {
         "registers": [
-          {
-            "id": "character-animation-context-before-llm-call",
-            "point": "agent.before_llm_call"
-          }
+          { "id": "character-animation-context-before-llm-call", "point": "agent.before_llm_call" }
         ],
         "emits": []
       },
@@ -67,10 +64,7 @@
     "permissions": ["artifact.commit", "workspace.asset.manage", "http.authenticated"],
     "authenticatedRoutes": [
       { "method": "PUT", "path": "/api/internal/character/assets/:assetId" },
-      {
-        "method": "GET",
-        "path": "/api/internal/character/assets/:assetId/:version"
-      }
+      { "method": "GET", "path": "/api/internal/character/assets/:assetId/:version" }
     ]
   },
   "configuration": {

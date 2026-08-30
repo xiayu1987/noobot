@@ -1,6 +1,6 @@
 {
   "name": "@noobot/timeline-runtime",
-  "version": "4.2.6",
+  "version": "4.2.7",
   "private": true,
   "type": "module",
   "description": "Indexed incremental timeline runtime and bounded projections",
