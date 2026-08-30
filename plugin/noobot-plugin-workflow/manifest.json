@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "workflow",
   "name": "noobot-plugin-workflow",
-  "version": "4.2.6",
+  "version": "4.2.7",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -88,11 +88,6 @@
       }
     ]
   },
-  "configuration": {
-    "defaults": {
-      "enabled": true,
-      "mode": "off"
-    }
-  },
+  "configuration": { "defaults": { "enabled": true, "mode": "off" } },
   "enabledByDefault": true
 }

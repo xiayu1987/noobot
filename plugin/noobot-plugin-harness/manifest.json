@@ -2,7 +2,7 @@
   "protocolVersion": 2,
   "id": "harness",
   "name": "noobot-plugin-harness",
-  "version": "4.2.6",
+  "version": "4.2.7",
   "entries": {
     "agent": "src/entries/agent.js",
     "service": "src/entries/service.js",
@@ -106,17 +106,9 @@
     "ports": ["hooks.register", "policy.patch", "authenticated_request", "frontend.contribute"],
     "permissions": ["session.delete.observe", "http.authenticated"],
     "authenticatedRoutes": [
-      {
-        "method": "GET",
-        "path": "/api/internal/session/:userId/:sessionId/thinking-detail"
-      }
+      { "method": "GET", "path": "/api/internal/session/:userId/:sessionId/thinking-detail" }
     ]
   },
-  "configuration": {
-    "defaults": {
-      "enabled": true,
-      "mode": "on"
-    }
-  },
+  "configuration": { "defaults": { "enabled": true, "mode": "on" } },
   "enabledByDefault": true
 }
