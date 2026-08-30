@@ -65,6 +65,16 @@ describe("useAppShellPseudoRoute initial Session activation", () => {
     expect(new URL(window.location.href).searchParams.get("session")).toBe("requested-session");
   });
 
+  it("preserves an unapplied Session deep link when opening the mobile sidebar", () => {
+    window.history.replaceState({}, "", "/?session=requested-session");
+    const { route } = createRouteHarness();
+
+    route.pushPanelVisibilityPseudoRoute({ visible: true, panel: "sidebar" });
+
+    expect(new URL(window.location.href).searchParams.get("session")).toBe("requested-session");
+    expect(new URL(window.location.href).searchParams.get("panel")).toBe("sidebar");
+  });
+
   it("applies the initial Session route exactly once from the connected entrypoint", async () => {
     const { route, selectSession } = createRouteHarness();
     const requested = { sessionId: "persisted-session", panel: "", anchor: "" };

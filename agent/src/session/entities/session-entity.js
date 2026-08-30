@@ -9,7 +9,7 @@ import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol";
+import { normalizeAuthorityEventOutbox, validateProtocolEvent } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
@@ -42,6 +42,28 @@ function firstTextField(values = []) {
 
 function objectRecord(value) {
   return value && typeof value === "object" ? value : {};
+}
+
+function normalizeSessionArtifactEvents(session = {}) {
+  const events = [];
+  const eventIds = new Set();
+  for (const envelope of Array.isArray(session?.sessionArtifactEvents)
+    ? session.sessionArtifactEvents
+    : []) {
+    const validation = validateProtocolEvent(envelope);
+    const eventId = normalizeTextField(envelope?.identity?.eventId);
+    if (
+      !validation.valid ||
+      !validation.descriptor?.sessionArtifact ||
+      !eventId ||
+      eventIds.has(eventId)
+    ) {
+      continue;
+    }
+    eventIds.add(eventId);
+    events.push(envelope);
+  }
+  return events;
 }
 
 function normalizeSessionAttachment(item = {}) {
@@ -425,6 +447,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
+    sessionArtifactEvents: normalizeSessionArtifactEvents(session),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstTextField([session?.createdAt, context.nowValue]),
     updatedAt: firstTextField([session?.updatedAt, context.nowValue]),

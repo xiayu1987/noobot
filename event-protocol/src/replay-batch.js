@@ -53,8 +53,9 @@ export function createReplayBatch({
       throw new TypeError("replay batch contains event from a different ordering stream");
     }
   }
-  const normalizedEvents = [...inputEvents]
-    .sort((left, right) => eventSequence(left) - eventSequence(right));
+  const normalizedEvents = [...inputEvents].sort(
+    (left, right) => eventSequence(left) - eventSequence(right),
+  );
   const sequence = Number(snapshotSequence || snapshot?.sequence || 0);
   return Object.freeze({
     protocol: {
@@ -118,8 +119,10 @@ export function validateReplayBatch(batch = {}) {
     const eventValidation = validateProtocolEvent(event);
     if (!eventValidation.valid) errors.push(...eventValidation.errors);
     const sequence = eventSequence(event);
-    if (eventOrderingDomain(event) !== orderingDomain) errors.push("event_ordering_domain_mismatch");
-    if (eventOrderingScopeId(event) !== orderingScopeId) errors.push("event_ordering_scope_mismatch");
+    if (eventOrderingDomain(event) !== orderingDomain)
+      errors.push("event_ordering_domain_mismatch");
+    if (eventOrderingScopeId(event) !== orderingScopeId)
+      errors.push("event_ordering_scope_mismatch");
     const id = eventId(event);
     if (!id) errors.push("missing_event_id");
     if (id && seenEventIds.has(id)) {
@@ -160,7 +163,14 @@ export function validateReplayBatch(batch = {}) {
 
 export function assertLosslessForward(original, forwarded) {
   if (original === forwarded) return true;
-  const identityKeys = ["eventType", "eventId", "sessionId", "turnScopeId", "messageId", "executionId"];
+  const identityKeys = [
+    "eventType",
+    "eventId",
+    "sessionId",
+    "turnScopeId",
+    "messageId",
+    "executionId",
+  ];
   for (const key of identityKeys) {
     const originalValue = original?.identity?.[key];
     const forwardedValue = forwarded?.identity?.[key];
@@ -170,11 +180,7 @@ export function assertLosslessForward(original, forwarded) {
   const forwardedVersion = forwarded?.protocol?.version;
   if (originalVersion !== forwardedVersion)
     throw new Error("event_forwarding_mutated_protocolVersion");
-  const orderingKeys = [
-    "revision",
-    "sequence",
-    "aggregateVersion",
-  ];
+  const orderingKeys = ["revision", "sequence", "aggregateVersion"];
   for (const key of orderingKeys) {
     const originalValue = original?.ordering?.[key];
     const forwardedValue = forwarded?.ordering?.[key];
@@ -182,9 +188,7 @@ export function assertLosslessForward(original, forwarded) {
       if (originalValue !== forwardedValue) throw new Error(`event_forwarding_mutated_${key}`);
     }
   }
-  if (
-    JSON.stringify(original?.payload) !== JSON.stringify(forwarded?.payload)
-  ) {
+  if (JSON.stringify(original?.payload) !== JSON.stringify(forwarded?.payload)) {
     throw new Error("event_forwarding_mutated_payload");
   }
   return true;

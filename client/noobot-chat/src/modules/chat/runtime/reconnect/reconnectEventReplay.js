@@ -27,6 +27,7 @@ export async function applyReconnectEventReplay({
   applyExecutionChildren,
   applyExecutionTree,
   applyWorkflowRuntimeEvent,
+  applyRuntimeStreamEvent,
   applyPendingInteraction,
   applySubSessionReplayMessages,
   onAttachmentLifecycle,
@@ -110,6 +111,14 @@ export async function applyReconnectEventReplay({
       applyWorkflowRuntimeEvent?.(protocolEnvelope, { source: "reconnect" }) || {
         applied: false,
         reason: "workflow_runtime_projection_unavailable",
+      }
+    );
+  }
+  if (protocolResult.descriptor.family === EVENT_FAMILY.PLUGIN_ARTIFACT) {
+    return (
+      applyRuntimeStreamEvent?.(protocolEnvelope, { source: "reconnect" }) || {
+        applied: false,
+        reason: "plugin_artifact_projection_unavailable",
       }
     );
   }

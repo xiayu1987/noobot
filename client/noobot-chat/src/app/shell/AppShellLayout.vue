@@ -4,8 +4,8 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { ref } from "vue";
-import { Connection, Tickets } from "@element-plus/icons-vue";
+import { computed, ref, watch } from "vue";
+import { Connection, Grid, Tickets } from "@element-plus/icons-vue";
 import ChatMainHeader from "./ChatMainHeader.vue";
 import ChatMessageNavigator from "../../modules/chat/components/navigation/ChatMessageNavigator.vue";
 import ConnectorManager from "../../modules/connectors/components/ConnectorManager.vue";
@@ -18,8 +18,11 @@ import {
   SessionSidebar,
   UserInteractionForm,
 } from "../entrypoints.js";
+import ExtensionOutlet from "../../extensions/components/ExtensionOutlet.vue";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { resolveExtensionPoint } from "../../extensions/extension-registry.js";
 
-defineProps({
+const props = defineProps({
   ...sharedSidebarProps,
   composerActionState: { type: Object, default: () => ({}) },
   activeSession: { type: Object, default: () => ({}) },
@@ -107,6 +110,58 @@ const emit = defineEmits([
 
 const composerRef = ref();
 const messageListPanelRef = ref();
+const featurePanelVisible = ref(false);
+const featurePanelContext = computed(() => ({
+  pluginModelConfig: props.pluginModelConfig || {},
+  updatePluginModelConfig: (pluginId = "", next = {}) =>
+    emit("update:pluginModelConfig", {
+      ...(props.pluginModelConfig || {}),
+      [String(pluginId || "").trim()]: next && typeof next === "object" ? next : {},
+    }),
+}));
+const hasFeaturePanel = computed(
+  () =>
+    resolveExtensionPoint(EXTENSION_POINTS.RIGHT_TOOL_PANEL, featurePanelContext.value).length > 0,
+);
+const rightToolPanelOpen = computed(
+  () =>
+    !props.isMobile &&
+    (props.chatNavigatorVisible || props.connectorVisible || featurePanelVisible.value),
+);
+const featurePanelTitle = computed(() => {
+  const contribution = resolveExtensionPoint(
+    EXTENSION_POINTS.RIGHT_TOOL_PANEL,
+    featurePanelContext.value,
+  )[0];
+  if (typeof contribution?.resolveTitle === "function") {
+    const resolved = contribution.resolveTitle({
+      ...featurePanelContext.value,
+      translate: props.translate,
+    });
+    if (String(resolved || "").trim()) return String(resolved).trim();
+  }
+  return contribution?.title || props.translate("common.extensionFeatures");
+});
+
+function toggleFeaturePanel() {
+  const nextVisible = !featurePanelVisible.value;
+  if (nextVisible) {
+    if (props.chatNavigatorVisible) emit("toggle-chat-navigator-visible");
+    if (props.connectorVisible) emit("toggle-connectors-visible");
+  }
+  featurePanelVisible.value = nextVisible;
+}
+
+function handleMobileFeaturePanelUpdate(visible) {
+  featurePanelVisible.value = visible === true;
+}
+
+watch(
+  () => [props.chatNavigatorVisible, props.connectorVisible],
+  ([navigatorVisible, connectorsVisible]) => {
+    if (navigatorVisible || connectorsVisible) featurePanelVisible.value = false;
+  },
+);
 
 defineExpose({
   composerRef,
@@ -167,7 +222,8 @@ defineExpose({
       <div
         class="chat-content-body"
         :class="{
-          'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile,
+          'right-tool-panel-docked': !isMobile,
+          'right-tool-panel-open': rightToolPanelOpen,
         }"
       >
         <ChatMessageListPanel
@@ -197,6 +253,7 @@ defineExpose({
               <button
                 type="button"
                 class="chat-message-nav-icon chat-message-nav-icon-button"
+                data-testid="right-chat-navigator-panel-toggle"
                 :aria-label="
                   chatNavigatorVisible
                     ? translate('common.hideChatNavigator')
@@ -242,6 +299,7 @@ defineExpose({
               <button
                 type="button"
                 class="chat-message-nav-icon chat-message-nav-icon-button"
+                data-testid="right-connector-panel-toggle"
                 :aria-label="translate('connectors.management')"
                 @click="emit('toggle-connectors-visible')"
               >
@@ -268,6 +326,42 @@ defineExpose({
               :show-header="true"
               compact
               @changed="emit('connector-registry-changed')"
+            />
+          </aside>
+          <aside
+            v-if="hasFeaturePanel"
+            class="connector-overview-panel extension-feature-panel noobot-panel-card"
+            data-testid="right-feature-panel"
+            :class="{ 'is-collapsed': !featurePanelVisible }"
+          >
+            <div class="connector-overview-header">
+              <button
+                type="button"
+                class="chat-message-nav-icon chat-message-nav-icon-button"
+                data-testid="right-feature-panel-toggle"
+                :aria-label="featurePanelTitle"
+                :aria-expanded="featurePanelVisible"
+                @click="toggleFeaturePanel"
+              >
+                <el-icon><Grid /></el-icon>
+              </button>
+              <span v-show="featurePanelVisible" class="connector-overview-title">{{
+                featurePanelTitle
+              }}</span>
+              <el-button
+                v-show="featurePanelVisible"
+                text
+                size="small"
+                @click="featurePanelVisible = false"
+              >
+                {{ translate("common.collapse") }}
+              </el-button>
+            </div>
+            <ExtensionOutlet
+              v-if="featurePanelVisible"
+              :point="EXTENSION_POINTS.RIGHT_TOOL_PANEL"
+              :context="featurePanelContext"
+              :extra-props="featurePanelContext"
             />
           </aside>
         </div>
@@ -298,6 +392,20 @@ defineExpose({
           <el-icon><Connection /></el-icon>
         </el-button>
       </Teleport>
+      <Teleport to="body">
+        <el-button
+          v-if="isMobile && hasFeaturePanel"
+          class="mobile-feature-trigger noobot-floating-action-btn"
+          circle
+          size="large"
+          data-testid="mobile-feature-panel-trigger"
+          :aria-label="featurePanelTitle"
+          :aria-expanded="featurePanelVisible"
+          @click="toggleFeaturePanel"
+        >
+          <el-icon><Grid /></el-icon>
+        </el-button>
+      </Teleport>
       <el-drawer
         v-if="isMobile"
         :model-value="connectorVisible"
@@ -315,11 +423,28 @@ defineExpose({
           @changed="emit('connector-registry-changed')"
         />
       </el-drawer>
+      <el-drawer
+        v-if="isMobile && hasFeaturePanel"
+        :model-value="featurePanelVisible"
+        :title="featurePanelTitle"
+        direction="rtl"
+        size="100%"
+        class="mobile-feature-drawer noobot-side-drawer"
+        data-testid="mobile-feature-panel"
+        @update:model-value="handleMobileFeaturePanelUpdate"
+      >
+        <ExtensionOutlet
+          :point="EXTENSION_POINTS.RIGHT_TOOL_PANEL"
+          :context="featurePanelContext"
+          :extra-props="featurePanelContext"
+        />
+      </el-drawer>
 
       <div
         class="chat-composer-body"
         :class="{
-          'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile,
+          'right-tool-panel-docked': !isMobile,
+          'right-tool-panel-open': rightToolPanelOpen,
         }"
       >
         <UserInteractionForm
@@ -422,6 +547,11 @@ defineExpose({
 }
 
 @media (min-width: 961px) {
+  .chat-content-body.right-tool-panel-docked,
+  .chat-composer-body.right-tool-panel-docked {
+    padding-right: 96px;
+  }
+
   .chat-content-body.right-tool-panel-open,
   .chat-composer-body.right-tool-panel-open {
     padding-right: 268px;
@@ -432,7 +562,9 @@ defineExpose({
   position: relative;
   flex: 1;
   display: flex;
+  min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
 }
 
 .chat-composer-body {
@@ -479,6 +611,8 @@ defineExpose({
 .connector-overview-panel {
   width: 236px;
   max-width: 24vw;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
@@ -491,6 +625,32 @@ defineExpose({
   width: var(--noobot-side-panel-collapsed-width);
   max-width: var(--noobot-side-panel-collapsed-width);
   padding: var(--noobot-space-xs);
+}
+
+/* A collapsed feature host is a toolbar affordance, not a shrunken panel. */
+.extension-feature-panel.is-collapsed {
+  box-sizing: border-box;
+  width: var(--noobot-side-panel-collapsed-width);
+  min-width: var(--noobot-side-panel-collapsed-width);
+  max-width: var(--noobot-side-panel-collapsed-width);
+  height: var(--noobot-side-panel-collapsed-width);
+  min-height: var(--noobot-side-panel-collapsed-width);
+  max-height: var(--noobot-side-panel-collapsed-width);
+  padding: 0;
+  overflow: hidden;
+}
+
+.extension-feature-panel.is-collapsed .connector-overview-header {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.extension-feature-panel.is-collapsed .chat-message-nav-icon-button {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--noobot-radius-md);
 }
 
 .connector-overview-header {
@@ -600,6 +760,15 @@ defineExpose({
 .mobile-connector-trigger {
   position: fixed;
   top: calc(56px + 68px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  z-index: 2001;
+  width: var(--noobot-control-height-xl);
+  height: var(--noobot-control-height-xl);
+}
+
+.mobile-feature-trigger {
+  position: fixed;
+  top: calc(56px + 120px + env(safe-area-inset-top));
   right: calc(16px + env(safe-area-inset-right));
   z-index: 2001;
   width: var(--noobot-control-height-xl);

@@ -26,6 +26,7 @@ import {
   getMessageTurnScopeKey,
 } from "../../model/messageIdentity.js";
 import { sharedMessageRenderProps } from "../../model/messageItemProps.js";
+import SessionArtifactPanel from "../artifacts/SessionArtifactPanel.vue";
 
 defineEmits(["open-thinking-details"]);
 
@@ -221,12 +222,14 @@ defineExpose({
         </template>
       </div>
     </el-scrollbar>
+    <SessionArtifactPanel :active-session="activeSession" />
   </div>
 </template>
 
 <style scoped>
 .message-container {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   position: relative;
 }

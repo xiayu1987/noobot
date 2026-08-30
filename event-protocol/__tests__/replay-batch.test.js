@@ -57,18 +57,20 @@ const event = (sequence, eventId = `event-${sequence}`, overrides = {}) => {
   });
 };
 
-const snapshot = (sequence = 2) => createTurnSnapshotEnvelope(createTurnLifecycleSnapshot({
-  commandId: "snapshot-command",
-  sessionId: "session-1",
-  sequence,
-  generatedAt: "2026-01-01T00:00:00.000Z",
-}), { eventId: `snapshot-${sequence}`, producer: { type: "agent", id: "agent-1" } });
+const snapshot = (sequence = 2) =>
+  createTurnSnapshotEnvelope(
+    createTurnLifecycleSnapshot({
+      commandId: "snapshot-command",
+      sessionId: "session-1",
+      sequence,
+      generatedAt: "2026-01-01T00:00:00.000Z",
+    }),
+    { eventId: `snapshot-${sequence}`, producer: { type: "agent", id: "agent-1" } },
+  );
 
 test("replay batch validates snapshot baseline and contiguous event tail", () => {
   assert.equal(validateProtocolEvent(snapshot(0)).valid, true);
-  assert.ok(
-    validateProtocolEvent(event(0)).errors.includes("sequence_below_family_minimum"),
-  );
+  assert.ok(validateProtocolEvent(event(0)).errors.includes("sequence_below_family_minimum"));
   const batch = createReplayBatch({
     sessionId: "session-1",
     orderingDomain: "session",
@@ -165,18 +167,22 @@ test("replay rejects events from another ordering stream", () => {
     ordering: { ...event(1).ordering, domain: "message", scopeId: "message-1" },
   };
   assert.throws(
-    () => createReplayBatch({
-      sessionId: "session-1",
+    () =>
+      createReplayBatch({
+        sessionId: "session-1",
+        orderingDomain: "session",
+        orderingScopeId: "session-1",
+        events: [foreign],
+      }),
+    /different ordering stream/,
+  );
+  assert.deepEqual(
+    replayEventTail({
       orderingDomain: "session",
       orderingScopeId: "session-1",
       events: [foreign],
+      apply() {},
     }),
-    /different ordering stream/,
+    { applied: false, reason: "event_ordering_stream_mismatch" },
   );
-  assert.deepEqual(replayEventTail({
-    orderingDomain: "session",
-    orderingScopeId: "session-1",
-    events: [foreign],
-    apply() {},
-  }), { applied: false, reason: "event_ordering_stream_mismatch" });
 });

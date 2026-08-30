@@ -579,7 +579,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
           executionId: "agent:internal-turn:abort-test",
         }),
       }),
-    (error) => error === abortError,
+    (error) => error?.cause === abortError && error?.lifecycle?.state === "stop_completed",
   );
   assert.deepEqual(
     calls.lifecyclePayloads.map((payload) => payload.eventType),
@@ -601,7 +601,7 @@ test("detached sub-session propagates main runner abort and failure contracts", 
     command: "user_stopped",
     description: "子 Agent 已停止",
   });
-  assert.equal(abortError.lifecycle.state, "stop_completed");
+  assert.equal(Object.hasOwn(abortError, "lifecycle"), false);
   assert.equal(
     events.some(
       (event) =>

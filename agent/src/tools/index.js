@@ -150,6 +150,17 @@ async function buildToolsDefault(ctx) {
     ...createRequestHelpTool(ctx),
     ...(allowUserInteraction ? createUserInteractionTool(ctx) : []),
   ];
+  const pluginTools = (
+    Array.isArray(runtime?.runConfig?.pluginTools) ? runtime.runConfig.pluginTools : []
+  ).map((contribution) => {
+    const tool = contribution.factory(ctx);
+    const declaredName = String(contribution.name || "").trim();
+    if (!tool || String(tool.name || "").trim() !== declaredName) {
+      throw new TypeError(`plugin tool does not match its declaration: ${contribution.id}`);
+    }
+    return tool;
+  });
+  baseTools.push(...pluginTools);
   const enabledTools = filterToolsByConfigEnabled(baseTools, effectiveConfig);
   for (const tool of enabledTools) {
     if (tool?.metadata?.pathContract) assertToolPathContract(tool.metadata.pathContract);

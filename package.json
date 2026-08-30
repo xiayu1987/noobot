@@ -31,6 +31,7 @@
     "workflow",
     "plugin/noobot-plugin-harness",
     "plugin/noobot-plugin-workflow",
+    "plugin/noobot-plugin-character",
     "client/noobot-chat",
     "client/startup",
     "client/shared",

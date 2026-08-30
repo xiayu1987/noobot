@@ -7,7 +7,6 @@ import { PSEUDO_PANEL } from "./useAppShellPseudoRoute.js";
 import { updateDrawerModelVisibility } from "../runtime/appShellEventHandlers.js";
 
 export function useAppShellPanelActions({
-  activeSessionId,
   userId,
   apiRole,
   isSuperAdmin,
@@ -39,7 +38,7 @@ export function useAppShellPanelActions({
     }
     closeComposerMorePanel();
     openWorkspaceRaw?.();
-    pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.WORKSPACE);
+    pushPanelPseudoRoute?.(PSEUDO_PANEL.WORKSPACE);
   }
 
   function openConnectors() {
@@ -50,7 +49,7 @@ export function useAppShellPanelActions({
     }
     closeComposerMorePanel();
     openConnectorsRaw?.();
-    pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.CONNECTORS);
+    pushPanelPseudoRoute?.(PSEUDO_PANEL.CONNECTORS);
   }
 
   async function openUserSettings() {
@@ -65,14 +64,14 @@ export function useAppShellPanelActions({
     }
     closeComposerMorePanel();
     openUserSettingsRaw?.();
-    pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.USER_SETTINGS);
+    pushPanelPseudoRoute?.(PSEUDO_PANEL.USER_SETTINGS);
   }
 
   function openConfigParams() {
     if (!ensureConnected?.()) return;
     closeComposerMorePanel();
     openConfigParamsRaw?.();
-    pushPanelPseudoRoute?.(activeSessionId?.value, PSEUDO_PANEL.CONFIG_PARAMS);
+    pushPanelPseudoRoute?.(PSEUDO_PANEL.CONFIG_PARAMS);
   }
 
   function handleToggleSidebar() {
@@ -80,7 +79,6 @@ export function useAppShellPanelActions({
     if (isMobile?.value) {
       if (mobileSidebarOpen?.value) closeComposerMorePanel();
       pushPanelVisibilityPseudoRoute?.({
-        sessionId: activeSessionId?.value,
         visible: mobileSidebarOpen?.value,
         panel: PSEUDO_PANEL.SIDEBAR,
       });
@@ -100,7 +98,6 @@ export function useAppShellPanelActions({
     }
     if (composerMorePanelVisible) composerMorePanelVisible.value = nextVisible;
     pushPanelVisibilityPseudoRoute?.({
-      sessionId: activeSessionId?.value,
       visible: nextVisible,
       panel: PSEUDO_PANEL.COMPOSER,
     });

@@ -22,6 +22,13 @@ const appShellLayoutSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/shell/AppShellLayout.vue"),
   "utf8",
 );
+const chatMessageListPanelSource = readFileSync(
+  path.resolve(
+    __dirname,
+    "../../../src/modules/chat/components/navigation/ChatMessageListPanel.vue",
+  ),
+  "utf8",
+);
 const appShellDrawersSource = readFileSync(
   path.resolve(__dirname, "../../../src/app/shell/AppShellDrawers.vue"),
   "utf8",
@@ -268,14 +275,14 @@ describe("AppShell chat message navigator", () => {
     expect(chatMessageNavigatorStateSource).toContain("mobileChatNavigatorVisible.value = false;");
   });
 
-  it("reserves equal desktop space for either expanded right tool panel", () => {
+  it("reserves equal desktop space for any expanded right tool panel", () => {
     expect(appShellLayoutSource).toContain('<main class="main-content">');
     expect(appShellLayoutSource).toContain("<ChatMainHeader");
     expect(appShellLayoutSource).toContain('class="chat-content-body"');
     expect(appShellLayoutSource).toContain('class="chat-composer-body"');
-    expect(appShellLayoutSource).toContain(
-      "'right-tool-panel-open': (chatNavigatorVisible || connectorVisible) && !isMobile",
-    );
+    expect(appShellLayoutSource).toContain("const rightToolPanelOpen = computed(");
+    expect(appShellLayoutSource).toContain("'right-tool-panel-docked': !isMobile");
+    expect(appShellLayoutSource).toContain("'right-tool-panel-open': rightToolPanelOpen");
     expect(appShellLayoutSource.indexOf("<ChatMainHeader")).toBeLessThan(
       appShellLayoutSource.indexOf('class="chat-content-body"'),
     );
@@ -287,16 +294,19 @@ describe("AppShell chat message navigator", () => {
     );
     expect(appShellLayoutSource).toContain(".chat-content-body {\n  position: relative;");
     expect(appShellLayoutSource).toContain(
-      ".chat-content-body.right-tool-panel-open,\n  .chat-composer-body.right-tool-panel-open {\n    padding-right: 268px;",
+      ".chat-content-body.right-tool-panel-docked,\n  .chat-composer-body.right-tool-panel-docked {\n    padding-right: 96px;",
+    );
+    expect(appShellLayoutSource).toContain(
+      ".chat-composer-body.right-tool-panel-open {\n    padding-right: 268px;",
     );
     expect(appShellLayoutSource).toContain(".chat-composer-body {\n  flex-shrink: 0;");
     expect(appShellLayoutSource).not.toContain(".main-content {\n    padding-right: 268px;");
     expect(appShellLayoutSource).toContain("top: 18px;");
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !chatNavigatorVisible }\"");
     expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
-    expect(appShellLayoutSource).toContain(
-      "width: var(--noobot-side-panel-collapsed-width);",
-    );
+    expect(appShellLayoutSource).toContain("width: var(--noobot-side-panel-collapsed-width);");
+    expect(chatMessageListPanelSource).not.toContain("has-right-tool-panel");
+    expect(chatMessageListPanelSource).not.toContain("rightToolPanelOpen");
   });
 
   it("keeps the navigator polished and the mobile trigger reachable", () => {
@@ -311,9 +321,21 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(":aria-label=\"translate('common.chatNavigator')\"");
   });
 
+  it("hosts right-tool extensions in a dedicated mobile trigger and drawer", () => {
+    expect(appShellLayoutSource).toContain(
+      'class="mobile-feature-trigger noobot-floating-action-btn"',
+    );
+    expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel-trigger"');
+    expect(appShellLayoutSource).toContain('data-testid="mobile-feature-panel"');
+    expect(appShellLayoutSource).toContain('class="mobile-feature-drawer noobot-side-drawer"');
+    expect(appShellLayoutSource).toContain(':title="featurePanelTitle"');
+    expect(appShellLayoutSource).toContain(':point="EXTENSION_POINTS.RIGHT_TOOL_PANEL"');
+    expect(appShellLayoutSource).toContain("top: calc(56px + 120px + env(safe-area-inset-top));");
+  });
+
   it("uses Element Plus icons, theme variables, and pseudo route for the mobile navigator", () => {
     expect(appShellLayoutSource).toContain(
-      'import { Connection, Tickets } from "@element-plus/icons-vue"',
+      'import { Connection, Grid, Tickets } from "@element-plus/icons-vue"',
     );
     expect(appShellLayoutSource).toContain("<el-icon><Tickets /></el-icon>");
     expect(appShellLayoutSource).toContain(
@@ -383,5 +405,21 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).not.toContain("@touchstart.stop.prevent");
     expect(appShellLayoutSource).not.toContain("is-dragging");
     expect(appShellSource).not.toContain("mobile-chat-navigator-trigger-pointer");
+  });
+
+  it("anchors the session artifact panel to the right without runtime offsets", () => {
+    const artifactPanelSource = readFileSync(
+      path.resolve(
+        __dirname,
+        "../../../src/modules/chat/components/artifacts/SessionArtifactPanel.vue",
+      ),
+      "utf8",
+    );
+    expect(artifactPanelSource).toContain("right: var(--noobot-space-xl);");
+    expect(artifactPanelSource).toContain("--noobot-mobile-artifact-top:");
+    expect(artifactPanelSource).toContain("top: var(--noobot-mobile-artifact-top);");
+    expect(artifactPanelSource).not.toContain("top: 124px;");
+    expect(artifactPanelSource).not.toContain("rightOffset");
+    expect(artifactPanelSource).not.toContain(':style="{ right:');
   });
 });

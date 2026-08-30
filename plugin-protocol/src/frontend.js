@@ -14,6 +14,9 @@ export const EXTENSION_POINTS = Object.freeze({
   MARKDOWN_COLLAPSE_MARKERS: "markdown.collapse.markers",
   RUNTIME_STREAM_ROUTE: "runtime.stream.route",
   SESSION_DETAIL_HYDRATOR: "session.detail.hydrator",
+  SESSION_ARTIFACT_PANEL: "session.artifact.panel",
+  RIGHT_TOOL_PANEL: "right.tool.panel",
+  COMPOSER_MORE_ACTIONS: "composer.more.actions",
 });
 
 export const EXTENSION_ARBITRATION = Object.freeze({

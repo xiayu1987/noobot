@@ -12,7 +12,9 @@ import { matchesThinkingPanel } from "./thinking-panel-matcher.js";
 export async function activate(ctx = {}) {
   const contribute = ctx?.contributeExtension;
   const points = ctx?.extensionPoints;
-  const thinkingDetailService = createThinkingDetailService(ctx?.services?.authenticatedRequest?.get);
+  const thinkingDetailService = createThinkingDetailService(
+    ctx?.services?.authenticatedRequest?.request,
+  );
   if (typeof contribute !== "function" || !points) {
     throw new Error("frontend contribution API is required");
   }
@@ -21,39 +23,39 @@ export async function activate(ctx = {}) {
     provide: () => ["NOOBOT_HARNESS_COLLAPSE"],
   });
   contribute(points.COMPOSER_OPTIONS_MODEL, {
-        id: "harness-model-extension",
-        capability: "composer.model-extension",
-        priority: 10,
-        component: HarnessModelExtension,
-        when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
-        resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
+    id: "harness-model-extension",
+    capability: "composer.model-extension",
+    priority: 10,
+    component: HarnessModelExtension,
+    when: (context = {}) => context?.selectedPluginKeySet?.has?.("harness") === true,
+    resolveProps: (context = {}) => ({ pluginContext: context.pluginContext?.("harness") }),
   });
   contribute(points.MESSAGE_CARD_PRE, {
-        id: "thinking-panel",
-        capability: "message.panel.thinking",
-        exclusiveGroup: "message.panel.thinking",
-        slot: "pre",
-        priority: 10,
-        component: ThinkingPanel,
-        when: (context = {}) => matchesThinkingPanel(context?.messageItem),
-        resolveProps: (context = {}) => ({
-          messageItem: context?.messageItem || {},
-          allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
-          runtime: context?.messageRuntime || null,
-          userId: String(context?.userId || ""),
-          thinkingDetailService,
-          renderMarkdown: context?.renderMarkdown,
-          formatTime: context?.formatTime,
-          formatFileSize: context?.formatFileSize,
-          isImageMime: context?.isImageMime,
-        }),
-        resolveListeners: (context = {}) => ({
-          "open-thinking-details": (payload = {}) => {
-            if (typeof context?.onOpenThinkingDetails === "function") {
-              context.onOpenThinkingDetails(payload);
-            }
-          },
-        }),
+    id: "thinking-panel",
+    capability: "message.panel.thinking",
+    exclusiveGroup: "message.panel.thinking",
+    slot: "pre",
+    priority: 10,
+    component: ThinkingPanel,
+    when: (context = {}) => matchesThinkingPanel(context?.messageItem),
+    resolveProps: (context = {}) => ({
+      messageItem: context?.messageItem || {},
+      allMessages: Array.isArray(context?.allMessages) ? context.allMessages : [],
+      runtime: context?.messageRuntime || null,
+      userId: String(context?.userId || ""),
+      thinkingDetailService,
+      renderMarkdown: context?.renderMarkdown,
+      formatTime: context?.formatTime,
+      formatFileSize: context?.formatFileSize,
+      isImageMime: context?.isImageMime,
+    }),
+    resolveListeners: (context = {}) => ({
+      "open-thinking-details": (payload = {}) => {
+        if (typeof context?.onOpenThinkingDetails === "function") {
+          context.onOpenThinkingDetails(payload);
+        }
+      },
+    }),
   });
   return createPluginActivationResult({ pluginId: "harness", surface: PLUGIN_SURFACE.FRONTEND });
 }

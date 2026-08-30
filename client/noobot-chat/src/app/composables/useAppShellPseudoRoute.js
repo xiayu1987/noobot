@@ -7,8 +7,6 @@ import { nextTick, watch } from "vue";
 import { PSEUDO_PANEL, usePseudoRoute } from "../../shared/composables/usePseudoRoute.js";
 import {
   buildClosePseudoPanelRoute,
-  buildPanelPseudoRoute,
-  buildPanelVisibilityPseudoRoute,
   buildSessionPseudoRoute,
   resolveActivePseudoPanel as resolveActivePseudoPanelState,
 } from "../routing/appShellRoutePayload.js";
@@ -159,12 +157,12 @@ export function useAppShellPseudoRoute({
     }
   }
 
-  function pushPanelPseudoRoute(sessionId = "", panel = "") {
-    pushPseudoRoute(buildPanelPseudoRoute(sessionId, panel));
+  function pushPanelPseudoRoute(panel = "") {
+    pushPseudoRoute({ panel });
   }
 
-  function pushPanelVisibilityPseudoRoute({ sessionId = "", visible = false, panel = "" } = {}) {
-    pushPseudoRoute(buildPanelVisibilityPseudoRoute({ sessionId, visible, panel }));
+  function pushPanelVisibilityPseudoRoute({ visible = false, panel = "" } = {}) {
+    pushPseudoRoute({ panel: visible ? panel : "" });
   }
 
   function pushClosePseudoPanelRoute() {

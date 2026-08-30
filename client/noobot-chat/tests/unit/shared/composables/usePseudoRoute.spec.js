@@ -32,7 +32,12 @@ describe("usePseudoRoute", () => {
     resetUrl("/chat?session=s1&panel=thinking-details");
     expect(parsePseudoRouteFromLocation().panel).toBe(PSEUDO_PANEL.THINKING_DETAILS);
     expect(normalizePseudoPanel("unknown")).toBe("");
-    expect(isSamePseudoRoute({ sessionId: "s1", panel: "workspace" }, { sessionId: "s1", panel: "workspace" })).toBe(true);
+    expect(
+      isSamePseudoRoute(
+        { sessionId: "s1", panel: "workspace" },
+        { sessionId: "s1", panel: "workspace" },
+      ),
+    ).toBe(true);
   });
 
   it("pushes a new pseudo route and preserves unrelated query/hash", () => {
@@ -52,6 +57,18 @@ describe("usePseudoRoute", () => {
       panel: PSEUDO_PANEL.THINKING_DETAILS,
       anchor: "",
     });
+  });
+
+  it("uses the location route until the initial deep link has been applied", () => {
+    resetUrl("/chat?session=requested-session");
+    const router = usePseudoRoute({
+      resolveCurrentSessionId: () => "local-session",
+      resolveCurrentPanel: () => "",
+    });
+
+    router.pushPseudoRoute({ panel: PSEUDO_PANEL.SIDEBAR });
+
+    expect(window.location.search).toBe("?session=requested-session&panel=sidebar");
   });
 
   it("does not push duplicate pseudo route entries", () => {

@@ -73,6 +73,7 @@ async function createFixture() {
   await writeRuntimeFile(backendSource, "node_modules/express/package.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-harness/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "plugin/noobot-plugin-workflow/manifest.json", "{}");
+  await writeRuntimeFile(backendSource, "plugin/noobot-plugin-character/manifest.json", "{}");
   await writeRuntimeFile(backendSource, "service/config/global.config.example.json", "{}");
   await writeRuntimeFile(backendSource, "user-template/default-user/config.example.json", "{}");
   await writeRuntimeFile(frontendSource, "index.html", "<html></html>");

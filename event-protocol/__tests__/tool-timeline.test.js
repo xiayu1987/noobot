@@ -109,10 +109,13 @@ test("canonical detail counts match the event records exposed to renderers", () 
     { call: { eventId: "call-2" } },
   ];
   assert.equal(countCanonicalToolTimelineEvents(toolTimeline), 3);
-  assert.equal(countCanonicalThinkingDetailEvents({
-    toolTimeline,
-    activityTimeline: [{ eventId: "activity-1" }],
-  }), 4);
+  assert.equal(
+    countCanonicalThinkingDetailEvents({
+      toolTimeline,
+      activityTimeline: [{ eventId: "activity-1" }],
+    }),
+    4,
+  );
 });
 
 test("canonical realtime application mutates one indexed timeline without changing its wire shape", () => {

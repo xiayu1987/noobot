@@ -47,7 +47,8 @@ export function normalizeAuthorityEventOutbox(source = []) {
       eventId !== clean(envelope?.identity?.eventId) ||
       eventIds.has(eventId) ||
       !validateAuthorityEnvelope(envelope)
-    ) continue;
+    )
+      continue;
     eventIds.add(eventId);
     normalized.push({
       eventId,
@@ -89,15 +90,33 @@ export function recordAuthorityEventDeliveryAttempt(
 
 export function acknowledgeAuthorityEventDelivery(
   source = [],
-  { eventId = "", consumerId = "", orderingDomain = "", orderingScopeId = "", sequence, deliveredAt = "" } = {},
+  {
+    eventId = "",
+    consumerId = "",
+    orderingDomain = "",
+    orderingScopeId = "",
+    sequence,
+    deliveredAt = "",
+  } = {},
 ) {
   const normalizedEventId = clean(eventId);
   const normalizedConsumerId = clean(consumerId);
   const normalizedDomain = clean(orderingDomain);
   const normalizedScopeId = clean(orderingScopeId);
   const normalizedSequence = Number(sequence);
-  if (!normalizedConsumerId || !normalizedDomain || !normalizedScopeId || !Number.isInteger(normalizedSequence) || normalizedSequence < 1) {
-    return { found: false, changed: false, reason: "invalid_delivery_acknowledgement", outbox: normalizeAuthorityEventOutbox(source) };
+  if (
+    !normalizedConsumerId ||
+    !normalizedDomain ||
+    !normalizedScopeId ||
+    !Number.isInteger(normalizedSequence) ||
+    normalizedSequence < 1
+  ) {
+    return {
+      found: false,
+      changed: false,
+      reason: "invalid_delivery_acknowledgement",
+      outbox: normalizeAuthorityEventOutbox(source),
+    };
   }
   let found = false;
   let changed = false;
@@ -108,7 +127,8 @@ export function acknowledgeAuthorityEventDelivery(
       item.envelope.ordering.domain !== normalizedDomain ||
       item.envelope.ordering.scopeId !== normalizedScopeId ||
       Number(item.envelope.ordering.sequence) !== normalizedSequence
-    ) return item;
+    )
+      return item;
     if (item.delivery.deliveredAt) return item;
     changed = true;
     return {
@@ -134,13 +154,25 @@ export function acknowledgeAuthorityEventDelivery(
  */
 export function compactAuthorityEventOutbox(
   source = [],
-  { consumerId = "", orderingDomain = "", orderingScopeId = "", deliveredThroughSequence, retainDeliveredAfter = "" } = {},
+  {
+    consumerId = "",
+    orderingDomain = "",
+    orderingScopeId = "",
+    deliveredThroughSequence,
+    retainDeliveredAfter = "",
+  } = {},
 ) {
   const normalizedConsumerId = clean(consumerId);
   const normalizedDomain = clean(orderingDomain);
   const normalizedScopeId = clean(orderingScopeId);
   const watermark = Number(deliveredThroughSequence);
-  if (!normalizedConsumerId || !normalizedDomain || !normalizedScopeId || !Number.isInteger(watermark) || watermark < 0) {
+  if (
+    !normalizedConsumerId ||
+    !normalizedDomain ||
+    !normalizedScopeId ||
+    !Number.isInteger(watermark) ||
+    watermark < 0
+  ) {
     return {
       compacted: false,
       reason: "invalid_delivery_watermark",
@@ -161,7 +193,11 @@ export function compactAuthorityEventOutbox(
   const retained = outbox.filter((item) => {
     if (!item.delivery.deliveredAt) return true;
     if (item.delivery.consumerId !== normalizedConsumerId) return true;
-    if (item.delivery.orderingDomain !== normalizedDomain || item.delivery.orderingScopeId !== normalizedScopeId) return true;
+    if (
+      item.delivery.orderingDomain !== normalizedDomain ||
+      item.delivery.orderingScopeId !== normalizedScopeId
+    )
+      return true;
     if (item.delivery.sequence > watermark) return true;
     if (Date.parse(item.delivery.deliveredAt) >= Date.parse(cutoff)) return true;
     return false;

@@ -26,6 +26,12 @@ const frontendPointSchema = strictString.refine(
 );
 const hostPortSchema = z.enum(Object.values(PLUGIN_HOST_PORT));
 const permissionSchema = z.enum(Object.values(PLUGIN_PERMISSION));
+const authenticatedRouteSchema = z
+  .object({
+    method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+    path: strictString,
+  })
+  .strict();
 export const pluginHookRegistrationContributionSchema = z
   .object({ id: strictString, point: hookPointSchema })
   .strict();
@@ -36,6 +42,13 @@ export const pluginRouteContributionSchema = z
     method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
     paths: z.array(strictString).min(1),
     auth: z.enum(["connected_user", "internal"]),
+  })
+  .strict();
+
+export const pluginToolContributionSchema = z
+  .object({
+    id: strictString,
+    name: strictString,
   })
   .strict();
 
@@ -66,6 +79,7 @@ const surfaceContributionSchema = z
       .strict()
       .optional(),
     executionIntent: pluginExecutionIntentSchema.optional(),
+    tools: z.array(pluginToolContributionSchema).optional(),
     routes: z.array(pluginRouteContributionSchema).optional(),
     extensions: z.array(pluginFrontendContributionSchema).optional(),
   })
@@ -96,7 +110,7 @@ export const pluginManifestSchema = z
       .object({
         ports: z.array(hostPortSchema).default([]),
         permissions: z.array(permissionSchema).default([]),
-        authenticatedRoutes: z.array(strictString).default([]),
+        authenticatedRoutes: z.array(authenticatedRouteSchema).default([]),
       })
       .strict(),
     configuration: z
@@ -141,6 +155,7 @@ export const pluginManifestSchema = z
         "hooks.emit",
         Object.values(manifest.contributes).some((item) => item?.hooks?.emits?.length),
       ],
+      ["tools.register", Boolean(manifest.contributes.agent?.tools?.length)],
       ["routes.bind", Boolean(manifest.contributes.service?.routes?.length)],
       ["frontend.contribute", Boolean(manifest.contributes.frontend?.extensions?.length)],
     ];
@@ -167,6 +182,7 @@ export const pluginManifestSchema = z
         const surfaceUsesPort = {
           [PLUGIN_HOST_PORT.HOOKS_REGISTER]: Boolean(contributes?.hooks?.registers?.length),
           [PLUGIN_HOST_PORT.HOOKS_EMIT]: Boolean(contributes?.hooks?.emits?.length),
+          [PLUGIN_HOST_PORT.TOOLS_REGISTER]: Boolean(contributes?.tools?.length),
           [PLUGIN_HOST_PORT.ROUTES_BIND]: Boolean(contributes?.routes?.length),
           [PLUGIN_HOST_PORT.FRONTEND_CONTRIBUTE]: Boolean(contributes?.extensions?.length),
         };
@@ -202,6 +218,13 @@ export const pluginManifestSchema = z
           message: "routes are service contributions",
         });
       }
+      if (contributes?.tools?.length && surface !== PLUGIN_SURFACE.AGENT) {
+        context.addIssue({
+          code: "custom",
+          path: ["contributes", surface, "tools"],
+          message: "tools are agent contributions",
+        });
+      }
       if (contributes?.extensions?.length && surface !== PLUGIN_SURFACE.FRONTEND) {
         context.addIssue({
           code: "custom",
@@ -235,6 +258,14 @@ export const pluginManifestSchema = z
         message: "route ids must be unique",
       });
     }
+    const toolIds = (manifest.contributes.agent?.tools || []).map((item) => item.id);
+    if (new Set(toolIds).size !== toolIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["contributes", "agent", "tools"],
+        message: "tool contribution ids must be unique",
+      });
+    }
     const extensionIds = (manifest.contributes.frontend?.extensions || []).map((item) => item.id);
     if (new Set(extensionIds).size !== extensionIds.length) {
       context.addIssue({
@@ -258,13 +289,22 @@ export function manifestContributesToSurface(manifest = {}, surface = "") {
   return Boolean(contributionsForSurface(manifest, surface));
 }
 
-export function requireDeclaredPluginHook(manifest = {}, surface = "", point = "", registrationId = "") {
+export function requireDeclaredPluginHook(
+  manifest = {},
+  surface = "",
+  point = "",
+  registrationId = "",
+) {
   const hooks = contributionsForSurface(manifest, surface)?.hooks?.registers || [];
   const normalizedPoint = String(point || "").trim();
   const normalizedId = String(registrationId || "").trim();
-  const declaration = hooks.find((item) => item.point === normalizedPoint && item.id === normalizedId);
+  const declaration = hooks.find(
+    (item) => item.point === normalizedPoint && item.id === normalizedId,
+  );
   if (!declaration) {
-    throw new TypeError(`plugin ${manifest?.id || "<unknown>"} did not declare hook ${normalizedPoint}#${normalizedId}`);
+    throw new TypeError(
+      `plugin ${manifest?.id || "<unknown>"} did not declare hook ${normalizedPoint}#${normalizedId}`,
+    );
   }
   return declaration;
 }
@@ -291,6 +331,14 @@ export function requireDeclaredPluginRoute(manifest = {}, routeId = "") {
   return route;
 }
 
+export function requireDeclaredPluginTool(manifest = {}, toolId = "") {
+  const normalized = String(toolId || "").trim();
+  const tool = (manifest?.contributes?.agent?.tools || []).find((item) => item.id === normalized);
+  if (!tool)
+    throw new TypeError(`plugin ${manifest?.id || "<unknown>"} did not declare tool ${normalized}`);
+  return tool;
+}
+
 export function requireDeclaredFrontendContribution(
   manifest = {},
   contributionId = "",
@@ -315,23 +363,24 @@ function contributionReceiptKey(item = {}) {
       return `hook:${String(item.registrationId || "").trim()}:${String(item.point || "").trim()}`;
     case "route":
       return `route:${String(item.routeId || "").trim()}`;
+    case "tool":
+      return `tool:${String(item.toolId || "").trim()}`;
     case "extension":
       return `extension:${String(item.contributionId || "").trim()}:${String(item.point || "").trim()}`;
     default:
-      throw new TypeError(`unsupported plugin contribution receipt type: ${String(item?.type || "<empty>")}`);
+      throw new TypeError(
+        `unsupported plugin contribution receipt type: ${String(item?.type || "<empty>")}`,
+      );
   }
 }
 
 function declaredContributionKeys(manifest = {}, surface = "") {
   const contributions = contributionsForSurface(manifest, surface);
   return [
-    ...(contributions?.hooks?.registers || []).map(
-      (item) => `hook:${item.id}:${item.point}`,
-    ),
+    ...(contributions?.hooks?.registers || []).map((item) => `hook:${item.id}:${item.point}`),
     ...(contributions?.routes || []).map((item) => `route:${item.id}`),
-    ...(contributions?.extensions || []).map(
-      (item) => `extension:${item.id}:${item.point}`,
-    ),
+    ...(contributions?.tools || []).map((item) => `tool:${item.id}`),
+    ...(contributions?.extensions || []).map((item) => `extension:${item.id}:${item.point}`),
   ];
 }
 
@@ -340,11 +389,7 @@ function declaredContributionKeys(manifest = {}, surface = "") {
  * The Manifest is the sole declaration source: counts, hook points, or host
  * state must never be used to infer which contribution was registered.
  */
-export function validatePluginContributionReceipt(
-  manifest = {},
-  surface = "",
-  receipt = [],
-) {
+export function validatePluginContributionReceipt(manifest = {}, surface = "", receipt = []) {
   const normalizedSurface = String(surface || "").trim();
   const expected = declaredContributionKeys(manifest, normalizedSurface);
   const actual = (Array.isArray(receipt) ? receipt : []).map(contributionReceiptKey);

@@ -7,13 +7,19 @@ import { randomUUID } from "node:crypto";
 import { emitEvent } from "../../events/index.js";
 import { getRuntimeFromAgentContext } from "../../context/agent-context-accessor.js";
 import { CALLER_ROLE } from "../config/constants.js";
-import { TURN_EVENT, TURN_PHASE, createTurnAcceptanceReceipt } from "@noobot/session-protocol";
+import {
+  TURN_EVENT,
+  TURN_PHASE,
+  createTurnAcceptanceReceipt,
+  isExecutionAbortError,
+} from "@noobot/session-protocol";
 import { normalizeTrimmedStringList } from "./session-execution-engine-utils.js";
 import { readSelectedModelValue } from "../execution/runner/debug-utils.js";
 import {
   createDetachedTerminalReceipt,
   createScopedSubSessionEventListener,
 } from "./detached-subsession-events.js";
+import { createExecutionFailure } from "../../shared/errors/index.js";
 
 export { createDetachedTerminalReceipt, createScopedSubSessionEventListener };
 
@@ -198,8 +204,7 @@ async function runDetachedSubSession(dependencies, request) {
       lifecycle,
     );
   } catch (error) {
-    await commitDetachedError(error, dependencies, request, runtime, identity, lifecycle);
-    throw error;
+    throw await commitDetachedError(error, dependencies, request, runtime, identity, lifecycle);
   }
   const terminalLifecycle = await commitDetachedCompletion(dependencies, lifecycle);
   return projectDetachedResult(result, identity, prepared, terminalLifecycle);
@@ -591,18 +596,18 @@ function assertDetachedDialogIdentity(result, request, identity) {
 }
 
 async function commitDetachedError(error, dependencies, request, runtime, identity, lifecycle) {
-  const stopped = identity.abortSignal?.aborted || error?.name === "AbortError";
+  const stopped = isExecutionAbortError({ error, abortSignal: identity.abortSignal });
   const terminalLifecycle = stopped
     ? await commitDetachedStop(dependencies, lifecycle)
     : await commitDetachedFailure(error, lifecycle);
-  if (error && typeof error === "object") {
-    error.lifecycle = createDetachedTerminalReceipt({
-      lifecycle: terminalLifecycle?.turn || error.lifecycle,
-      executionId: identity.executionId,
-      failed: !stopped,
-    });
-  }
-  emitDetachedTerminalEvent(request, identity, terminalLifecycle, error, stopped);
+  const receipt = createDetachedTerminalReceipt({
+    lifecycle: terminalLifecycle?.turn || error?.lifecycle,
+    executionId: identity.executionId,
+    failed: !stopped,
+  });
+  const executionFailure = createExecutionFailure(error, receipt);
+  emitDetachedTerminalEvent(request, identity, terminalLifecycle, executionFailure, stopped);
+  return executionFailure;
 }
 
 async function commitDetachedStop(dependencies, lifecycle) {

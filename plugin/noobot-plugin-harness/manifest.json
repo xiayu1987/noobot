@@ -105,7 +105,12 @@
   "requires": {
     "ports": ["hooks.register", "policy.patch", "authenticated_request", "frontend.contribute"],
     "permissions": ["session.delete.observe", "http.authenticated"],
-    "authenticatedRoutes": ["/api/internal/session/:userId/:sessionId/thinking-detail"]
+    "authenticatedRoutes": [
+      {
+        "method": "GET",
+        "path": "/api/internal/session/:userId/:sessionId/thinking-detail"
+      }
+    ]
   },
   "enabledByDefault": true
 }

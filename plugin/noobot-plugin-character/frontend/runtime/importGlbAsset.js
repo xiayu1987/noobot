@@ -1,0 +1,40 @@
+/*
+ * Copyright (c) 2026 xiayu
+ * Contact: 126240622+xiayu1987@users.noreply.github.com
+ * SPDX-License-Identifier: MIT
+ */
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { saveImportedAsset } from "./importedAssetStore.js";
+
+export async function importGlbAsset({ blob, name, assetId }) {
+  if (!(blob instanceof Blob)) throw new TypeError("GLB import requires a Blob");
+  const resolvedAssetId = String(assetId || "").trim();
+  if (!resolvedAssetId) throw new TypeError("GLB import requires an asset ID");
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const gltf = await new GLTFLoader().loadAsync(objectUrl);
+    const nodes = [];
+    gltf.scene.traverse((node) => {
+      const nodeName = String(node?.name || "").trim();
+      if (nodeName) nodes.push(nodeName);
+    });
+    return saveImportedAsset(
+      {
+        assetId: resolvedAssetId,
+        name: String(name || "character.glb").trim() || "character.glb",
+        format: "glb",
+        size: blob.size,
+        animations: (gltf.animations || []).map((clip) => ({
+          name: String(clip.name || "").trim(),
+          duration: Number(clip.duration.toFixed(4)),
+          tracks: clip.tracks.length,
+        })),
+        nodes: [...new Set(nodes)].slice(0, 500),
+        importedAt: new Date().toISOString(),
+      },
+      blob,
+    );
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}

@@ -20,10 +20,17 @@ describe("scoped authenticated HTTP service", () => {
   it("allows a declared same-origin GET route and preserves query parameters", async () => {
     fetcher.mockResolvedValue({ ok: true });
     const service = createScopedAuthenticatedHttpService({
-      routePatterns: ["/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId"],
+      routePatterns: [
+        {
+          method: "GET",
+          path: "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId",
+        },
+      ],
     });
 
-    await service.get("/api/internal/workflow/session/admin/session-1/node-1?detail=1");
+    await service.request("/api/internal/workflow/session/admin/session-1/node-1?detail=1", {
+      method: "GET",
+    });
 
     expect(fetcher).toHaveBeenCalledWith(
       "/api/internal/workflow/session/admin/session-1/node-1?detail=1",
@@ -38,17 +45,26 @@ describe("scoped authenticated HTTP service", () => {
     ["segment suffix", "/api/internal/workflow/session/admin/s/n/extra"],
   ])("rejects %s", (_label, url) => {
     const service = createScopedAuthenticatedHttpService({
-      routePatterns: ["/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId"],
+      routePatterns: [
+        {
+          method: "GET",
+          path: "/api/internal/workflow/session/:userId/:sessionId/:nodeDialogProcessId",
+        },
+      ],
     });
 
-    expect(() => service.get(url)).toThrow("authenticated HTTP route is not allowed");
+    expect(() => service.request(url, { method: "GET" })).toThrow(
+      "authenticated HTTP route is not allowed",
+    );
     expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("ignores manifest patterns outside the internal API namespace", () => {
-    const service = createScopedAuthenticatedHttpService({ routePatterns: ["/:path"] });
+    const service = createScopedAuthenticatedHttpService({
+      routePatterns: [{ method: "GET", path: "/:path" }],
+    });
 
-    expect(() => service.get("/api/internal/anything")).toThrow(
+    expect(() => service.request("/api/internal/anything", { method: "GET" })).toThrow(
       "authenticated HTTP route is not allowed",
     );
   });
@@ -56,11 +72,39 @@ describe("scoped authenticated HTTP service", () => {
   it("fails closed when the host fetcher is unavailable", () => {
     authenticatedHttpService.configure({ fetcher: null });
     const service = createScopedAuthenticatedHttpService({
-      routePatterns: ["/api/internal/session/:userId/:sessionId/thinking-detail"],
+      routePatterns: [
+        {
+          method: "GET",
+          path: "/api/internal/session/:userId/:sessionId/thinking-detail",
+        },
+      ],
     });
 
-    expect(() => service.get("/api/internal/session/admin/s/thinking-detail")).toThrow(
-      "authenticated HTTP service is unavailable",
-    );
+    expect(() =>
+      service.request("/api/internal/session/admin/s/thinking-detail", { method: "GET" }),
+    ).toThrow("authenticated HTTP service is unavailable");
+  });
+
+  it("authorizes each declared method independently", async () => {
+    fetcher.mockResolvedValue({ ok: true });
+    const service = createScopedAuthenticatedHttpService({
+      routePatterns: [{ method: "PUT", path: "/api/internal/character/assets/:assetId" }],
+    });
+    const body = new Blob(["glb"]);
+
+    await service.request("/api/internal/character/assets/user.glb.1", {
+      method: "PUT",
+      body,
+      headers: { "content-type": "model/gltf-binary" },
+    });
+
+    expect(fetcher).toHaveBeenCalledWith("/api/internal/character/assets/user.glb.1", {
+      method: "PUT",
+      body,
+      headers: { "content-type": "model/gltf-binary" },
+    });
+    expect(() =>
+      service.request("/api/internal/character/assets/user.glb.1", { method: "GET" }),
+    ).toThrow("authenticated HTTP route is not allowed");
   });
 });

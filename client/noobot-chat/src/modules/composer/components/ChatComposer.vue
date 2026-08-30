@@ -17,6 +17,8 @@ import { useComposerOptions } from "../composables/useComposerOptions.js";
 import { sharedComposerOptionProps } from "../model/composerOptionProps.js";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 import { logResendDebug } from "../../debug/loggers/resendDebugLogger.js";
+import ExtensionOutlet from "../../../extensions/components/ExtensionOutlet.vue";
+import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 
 const props = defineProps({
   modelValue: { type: String, default: "" },
@@ -270,6 +272,16 @@ function onStreamOutputChange(value) {
 function onConnectorSelectionChange(selectedConnectorIds = []) {
   emit("connector-selected", Array.isArray(selectedConnectorIds) ? selectedConnectorIds : []);
 }
+function updatePluginModelConfig(pluginId = "", next = {}) {
+  emit("update:pluginModelConfig", {
+    ...(props.pluginModelConfig || {}),
+    [String(pluginId || "").trim()]: next && typeof next === "object" ? next : {},
+  });
+}
+const moreActionsExtensionContext = computed(() => ({
+  pluginModelConfig: props.pluginModelConfig || {},
+  updatePluginModelConfig,
+}));
 
 function toggleMorePanel() {
   effectiveMorePanelVisible.value = !effectiveMorePanelVisible.value;
@@ -314,6 +326,12 @@ defineExpose({
                 embedded
                 :connector-panel-state="connectorPanelState"
                 @selection-change="onConnectorSelectionChange"
+              />
+
+              <ExtensionOutlet
+                :point="EXTENSION_POINTS.COMPOSER_MORE_ACTIONS"
+                :context="moreActionsExtensionContext"
+                :extra-props="moreActionsExtensionContext"
               />
 
               <ComposerMoreOptions
@@ -419,11 +437,7 @@ defineExpose({
 }
 
 .composer-wrapper.is-file-dragging .composer {
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 58%,
-    var(--noobot-panel-border)
-  );
+  border-color: color-mix(in srgb, var(--noobot-accent) 58%, var(--noobot-panel-border));
   box-shadow: var(--noobot-focus-ring);
 }
 
@@ -496,13 +510,8 @@ defineExpose({
   min-height: 28px;
   padding: 0 10px;
   border-radius: var(--noobot-radius-pill);
-  border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
-  background: color-mix(
-    in srgb,
-    var(--noobot-surface-sidebar) 78%,
-    transparent
-  );
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 70%, transparent);
+  background: color-mix(in srgb, var(--noobot-surface-sidebar) 78%, transparent);
   color: var(--noobot-text-main);
   box-shadow: none;
   display: inline-flex;
@@ -511,11 +520,7 @@ defineExpose({
 }
 
 .more-collapse-btn:hover {
-  background: color-mix(
-    in srgb,
-    var(--noobot-accent) 10%,
-    var(--noobot-surface-sidebar)
-  );
+  background: color-mix(in srgb, var(--noobot-accent) 10%, var(--noobot-surface-sidebar));
   color: var(--noobot-text-strong);
 }
 

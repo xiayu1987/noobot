@@ -23,6 +23,32 @@ Noobot 是基于 Node.js、Vue 3 和 Electron 构建的开源 Web 与桌面 AI A
 
 ![Noobot 使用工具分析虚构股票组合](./docs/assets/noobot-tool-workflow-v2.gif)
 
+### LLM 制作角色动画
+
+用一句自然语言描述动作，Noobot 就会把动作意图转换为经过校验的动画
+协议，提交为 Session 产物，并交给 Three.js 执行。下面的可复现录制使用仓库
+真实 Three.js 运行时，连续展示了从 GLB 元数据读取、关键帧生成、播放到执行
+完成的全过程：
+
+![Noobot LLM 制作角色动画协议演示](./docs/assets/noobot-character-animation.gif)
+
+下面这份 GIF 直接录制自正在运行的 Noobot 部署，包含真实的浏览器连接、角色插件
+启用、GLB 导入、模型请求、`character_animation_generate` 工具调用、Session 产物
+提交，以及 Three.js 播放直到完成的全过程。录制的连续 10 秒动画依次包含待机、
+挥手、跳跃、行走和待机片段：
+
+![Noobot 真实角色动画运行录制](./docs/assets/noobot-character-animation-runtime.gif)
+
+角色动画插件只让模型表达动作意图，不让模型直接生成渲染代码。插件读取导入
+GLB 中真实存在的动画片段和节点，校验模型返回的协议后由浏览器执行。后续对话
+使用相同的 `animationId` 会继续追加到同一动画产物；不传则创建新的 Session 产物。
+产物事件是唯一事实源，刷新页面后仍可恢复动画。
+
+制作动画：在“角色功能”导入 GLB，在“更多操作”中勾选一个或多个角色，然后用
+自然语言描述动作。模型调用 `character_animation_generate` 返回
+`noobot.animation.protocol` 数据；插件会在渲染前校验角色 ID、原生动画片段、
+时长、位置和关键帧，最后由 Three.js 实时播放。
+
 <details>
 <summary>查看完成后的分析结果</summary>
 

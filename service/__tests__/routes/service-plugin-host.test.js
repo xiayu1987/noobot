@@ -7,15 +7,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createServicePluginHost } from "../../services/service-plugin-host.js";
 
-function serviceEntry({ activate, routes = [], hooks = [], ports = ["hooks.register", "routes.bind"] } = {}) {
+function serviceEntry({
+  activate,
+  routes = [],
+  hooks = [],
+  ports = ["hooks.register", "routes.bind"],
+} = {}) {
+  const permissions = [];
+  if (ports.includes("service.sessions.read")) permissions.push("session.read");
+  if (ports.includes("service.workspace.assets")) permissions.push("workspace.asset.manage");
   const manifest = {
     protocolVersion: 2,
     id: "demo",
     name: "demo",
     version: "1.0.0",
     entries: { service: "service.mjs" },
-    contributes: { service: { hooks: { registers: hooks.map((point) => ({ id: `test.${point}`, point })), emits: [] }, routes } },
-    requires: { ports, permissions: ports.includes("service.sessions.read") ? ["session.read"] : [], authenticatedRoutes: [] },
+    contributes: {
+      service: {
+        hooks: { registers: hooks.map((point) => ({ id: `test.${point}`, point })), emits: [] },
+        routes,
+      },
+    },
+    requires: { ports, permissions, authenticatedRoutes: [] },
     enabledByDefault: true,
   };
   return { pluginId: "demo", manifest, surface: "service", activate };
@@ -33,9 +46,15 @@ test("service plugin host binds declared routes without exposing Express", async
     },
   });
   const registrations = [];
-  const app = { use(handler) { registrations.push({ handler }); } };
+  const app = {
+    use(handler) {
+      registrations.push({ handler });
+    },
+  };
   const ports = Object.freeze({ sessions: Object.freeze({ readSnapshot() {} }) });
-  const host = createServicePluginHost({ loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }) });
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
+  });
 
   const result = await host.registerServiceRoutes(app, { ports, translateText: () => "" });
 
@@ -46,6 +65,26 @@ test("service plugin host binds declared routes without exposing Express", async
   assert.equal(registrations.length, 1);
 });
 
+test("service plugin host scopes the workspace asset port to plugin identity", async () => {
+  let receivedPort;
+  const entry = serviceEntry({
+    ports: ["hooks.register", "service.workspace.assets"],
+    activate(host) {
+      receivedPort = host.ports.workspaceAssets;
+      return { protocolVersion: 2, pluginId: "demo", surface: "service" };
+    },
+  });
+  const scoped = Object.freeze({ read() {}, write() {} });
+  const forPlugin = (pluginId) => (pluginId === "demo" ? scoped : null);
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
+  });
+
+  await host.registerServiceRoutes({ use() {} }, { ports: { workspaceAssets: { forPlugin } } });
+
+  assert.equal(receivedPort, scoped);
+});
+
 test("service plugin host rejects an undeclared route", async () => {
   const entry = serviceEntry({
     activate(host) {
@@ -53,8 +92,13 @@ test("service plugin host rejects an undeclared route", async () => {
       return { protocolVersion: 2, pluginId: "demo", surface: "service" };
     },
   });
-  const host = createServicePluginHost({ loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }) });
-  await assert.rejects(() => host.registerServiceRoutes({ use() {} }, { ports: {} }), /did not declare route/);
+  const host = createServicePluginHost({
+    loadPluginRuntime: async () => ({ registry: new Map([["demo", entry]]), errors: [] }),
+  });
+  await assert.rejects(
+    () => host.registerServiceRoutes({ use() {} }, { ports: {} }),
+    /did not declare route/,
+  );
 });
 
 test("service plugin host loads the service surface from the configured plugin root", async () => {
@@ -83,8 +127,16 @@ function successfulActivation(dispose) {
 test("failed refresh preserves the committed generation and disposes it only when the host closes", async () => {
   let activeDisposals = 0;
   const host = createServicePluginHost({
-    loadPluginRuntime: async () => runtimeWithActivation(successfulActivation(() => { activeDisposals += 1; })),
-    refreshPluginRuntime: async () => runtimeWithActivation(() => { throw new Error("candidate failed"); }),
+    loadPluginRuntime: async () =>
+      runtimeWithActivation(
+        successfulActivation(() => {
+          activeDisposals += 1;
+        }),
+      ),
+    refreshPluginRuntime: async () =>
+      runtimeWithActivation(() => {
+        throw new Error("candidate failed");
+      }),
   });
   const app = { use() {} };
 
@@ -100,8 +152,18 @@ test("successful refresh releases the previous scope exactly once", async () => 
   let previousDisposals = 0;
   let currentDisposals = 0;
   const host = createServicePluginHost({
-    loadPluginRuntime: async () => runtimeWithActivation(successfulActivation(() => { previousDisposals += 1; })),
-    refreshPluginRuntime: async () => runtimeWithActivation(successfulActivation(() => { currentDisposals += 1; })),
+    loadPluginRuntime: async () =>
+      runtimeWithActivation(
+        successfulActivation(() => {
+          previousDisposals += 1;
+        }),
+      ),
+    refreshPluginRuntime: async () =>
+      runtimeWithActivation(
+        successfulActivation(() => {
+          currentDisposals += 1;
+        }),
+      ),
   });
 
   await host.registerServiceRoutes({ use() {} }, { ports: {} });
@@ -119,12 +181,25 @@ test("concurrent refreshes commit in request order without an older generation o
   const disposalCounts = [0, 0, 0];
   let refreshCalls = 0;
   const host = createServicePluginHost({
-    loadPluginRuntime: async () => runtimeWithActivation(successfulActivation(() => { disposalCounts[0] += 1; })),
+    loadPluginRuntime: async () =>
+      runtimeWithActivation(
+        successfulActivation(() => {
+          disposalCounts[0] += 1;
+        }),
+      ),
     refreshPluginRuntime: () => {
       const generation = ++refreshCalls;
-      return new Promise((resolve) => refreshResolvers.push(() => resolve(
-        runtimeWithActivation(successfulActivation(() => { disposalCounts[generation] += 1; })),
-      )));
+      return new Promise((resolve) =>
+        refreshResolvers.push(() =>
+          resolve(
+            runtimeWithActivation(
+              successfulActivation(() => {
+                disposalCounts[generation] += 1;
+              }),
+            ),
+          ),
+        ),
+      );
     },
   });
 
@@ -150,12 +225,15 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   let releaseActivation;
   let candidateDisposals = 0;
   const activationStarted = new Promise((resolve) => {
-    releaseActivation = () => resolve({
-      protocolVersion: 2,
-      pluginId: "demo",
-      surface: "service",
-      dispose() { candidateDisposals += 1; },
-    });
+    releaseActivation = () =>
+      resolve({
+        protocolVersion: 2,
+        pluginId: "demo",
+        surface: "service",
+        dispose() {
+          candidateDisposals += 1;
+        },
+      });
   });
   const host = createServicePluginHost({
     loadPluginRuntime: async () => runtimeWithActivation(() => activationStarted),
@@ -168,8 +246,5 @@ test("dispose invalidates an activation in progress and cleans its candidate sco
   await assert.rejects(() => registration, /lost lifecycle ownership/);
   await disposal;
   assert.equal(candidateDisposals, 1);
-  await assert.rejects(
-    () => host.registerServiceRoutes({ use() {} }, { ports: {} }),
-    /disposed/,
-  );
+  await assert.rejects(() => host.registerServiceRoutes({ use() {} }, { ports: {} }), /disposed/);
 });

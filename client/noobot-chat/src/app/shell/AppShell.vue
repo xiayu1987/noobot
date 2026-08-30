@@ -360,7 +360,6 @@ const {
 });
 
 appShellPanelActions = useAppShellPanelActions({
-  activeSessionId,
   userId,
   apiRole,
   isSuperAdmin,
