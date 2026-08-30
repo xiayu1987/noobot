@@ -15,6 +15,10 @@ const props = defineProps({
   assets: { type: Array, default: () => [] },
   protocols: { type: Array, default: () => [] },
   revision: { type: Number, default: 0 },
+  // Session artifact cards provide a bounded flex container while the asset
+  // management preview is an intrinsic-height panel. Keeping this explicit
+  // prevents percentage-height feedback from growing the management panel.
+  fillContainer: { type: Boolean, default: false },
   suspendResize: { type: Boolean, default: false },
   resizeRevision: { type: Number, default: 0 },
 });
@@ -336,7 +340,7 @@ onBeforeUnmount(() => {
 defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
 </script>
 <template>
-  <div ref="host" class="imported-character-viewer">
+  <div ref="host" class="imported-character-viewer" :class="{ 'is-fill-container': props.fillContainer }">
     <div ref="viewer" class="imported-character-viewer__canvas" />
     <p v-if="loadError" class="imported-character-viewer__error">{{ loadError }}</p>
   </div>
@@ -345,15 +349,20 @@ defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
 .imported-character-viewer {
   width: 100%;
   min-height: 300px;
-  height: 100%;
   overflow: hidden;
   position: relative;
+}
+.imported-character-viewer.is-fill-container {
+  height: 100%;
+  min-height: 460px;
   flex: 1 1 auto;
 }
 .imported-character-viewer__canvas {
   width: 100%;
-  height: 100%;
   min-height: inherit;
+}
+.imported-character-viewer.is-fill-container .imported-character-viewer__canvas {
+  height: 100%;
 }
 :deep(.imported-character-viewer__webgl) {
   display: block;

@@ -87,6 +87,7 @@ function replay() {
       :assets="assets"
       :protocols="card.protocols"
       :revision="card.revision"
+      fill-container
       :suspend-resize="props.suspendResize"
       :resize-revision="props.resizeRevision"
     />
