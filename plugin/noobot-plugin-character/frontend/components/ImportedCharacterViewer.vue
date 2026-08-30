@@ -15,10 +15,12 @@ const props = defineProps({
   assets: { type: Array, default: () => [] },
   protocols: { type: Array, default: () => [] },
   revision: { type: Number, default: 0 },
-  height: { type: Number, default: 300 },
+  suspendResize: { type: Boolean, default: false },
+  resizeRevision: { type: Number, default: 0 },
 });
 const host = ref();
 const loadError = ref("");
+const isRecording = ref(false);
 const { translate } = useCharacterLocale();
 const viewer = ref();
 let renderer;
@@ -31,6 +33,68 @@ let mountRevision = 0;
 let players = new Map();
 let queuedProtocolCount = 0;
 let nextPlaybackAt = 0;
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function exportImage() {
+  if (!renderer?.domElement) throw new Error(translate("character.loadError"));
+  renderer.render(scene, camera);
+  renderer.domElement.toBlob((blob) => {
+    if (blob) downloadBlob(blob, "noobot-character-animation.png");
+  }, "image/png");
+}
+
+function resolveRecordingMimeType() {
+  if (typeof MediaRecorder === "undefined") return "";
+  return (
+    ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((type) =>
+      MediaRecorder.isTypeSupported?.(type),
+    ) || ""
+  );
+}
+
+async function exportVideo() {
+  if (!renderer?.domElement?.captureStream)
+    throw new Error(translate("character.exportUnavailable"));
+  const mimeType = resolveRecordingMimeType();
+  if (!mimeType) throw new Error(translate("character.exportUnavailable"));
+  if (isRecording.value) return;
+  restartPlayback();
+  const stream = renderer.domElement.captureStream(30);
+  const recorder = new MediaRecorder(stream, { mimeType });
+  const chunks = [];
+  const durationMs = Math.max(
+    1000,
+    Math.min(
+      60000,
+      props.protocols.reduce((total, protocol) => total + protocol.duration, 0) * 1000 + 500,
+    ),
+  );
+  isRecording.value = true;
+  const result = new Promise((resolve, reject) => {
+    recorder.ondataavailable = (event) => event.data?.size && chunks.push(event.data);
+    recorder.onerror = () => reject(recorder.error || new Error("MediaRecorder error"));
+    recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+  });
+  recorder.start();
+  setTimeout(() => recorder.state !== "inactive" && recorder.stop(), durationMs);
+  try {
+    const blob = await result;
+    downloadBlob(blob, "noobot-character-animation.webm");
+  } finally {
+    stream.getTracks().forEach((track) => track.stop());
+    isRecording.value = false;
+  }
+}
 
 function disposeModel(root) {
   root?.traverse((object) => {
@@ -67,7 +131,7 @@ function dispose() {
 function resizeRenderer() {
   if (!renderer || !camera || !viewer.value) return;
   const width = Math.max(1, viewer.value.clientWidth || 320);
-  const height = Math.max(1, props.height);
+  const height = Math.max(1, viewer.value.clientHeight || 300);
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   renderer.setSize(width, height, false);
@@ -123,6 +187,16 @@ function queueProtocols() {
     nextPlaybackAt = startsAt + protocol.duration;
   }
   queuedProtocolCount = props.protocols.length;
+}
+
+function restartPlayback() {
+  for (const player of players.values()) {
+    player.mixer.stopAllAction();
+    player.mixer.setTime(0);
+  }
+  queuedProtocolCount = 0;
+  nextPlaybackAt = 0;
+  queueProtocols();
 }
 
 async function loadPlayer(asset, revision) {
@@ -187,6 +261,7 @@ async function mount() {
     renderer = new THREE.WebGLRenderer({
       antialias: false,
       alpha: false,
+      preserveDrawingBuffer: true,
       powerPreference: "low-power",
       failIfMajorPerformanceCaveat: false,
     });
@@ -205,7 +280,9 @@ async function mount() {
   renderer.domElement.setAttribute("aria-label", translate("character.canvasLabel"));
   viewer.value.append(renderer.domElement);
   resizeRenderer();
-  resizeObserver = new ResizeObserver(resizeRenderer);
+  resizeObserver = new ResizeObserver(() => {
+    if (!props.suspendResize) resizeRenderer();
+  });
   resizeObserver.observe(viewer.value);
   requestAnimationFrame(resizeRenderer);
   controls = new OrbitControls(camera, renderer.domElement);
@@ -229,16 +306,37 @@ async function mount() {
 }
 
 watch(() => props.assets.map((asset) => asset.assetId).join("|"), mount);
-watch(() => props.height, resizeRenderer);
+watch(
+  () => props.suspendResize,
+  (suspended) => {
+    if (suspended && viewer.value) {
+      const rect = viewer.value.getBoundingClientRect();
+      viewer.value.style.width = `${rect.width}px`;
+      viewer.value.style.height = `${rect.height}px`;
+    } else if (!suspended && viewer.value) {
+      viewer.value.style.removeProperty("width");
+      viewer.value.style.removeProperty("height");
+      requestAnimationFrame(resizeRenderer);
+    }
+  },
+);
+watch(
+  () => props.resizeRevision,
+  () => {
+    if (!props.suspendResize) requestAnimationFrame(resizeRenderer);
+  },
+);
 onMounted(() => mount());
 watch(() => props.revision, queueProtocols);
 onBeforeUnmount(() => {
   mountRevision += 1;
   dispose();
 });
+
+defineExpose({ exportImage, exportVideo, restartPlayback, isRecording });
 </script>
 <template>
-  <div ref="host" class="imported-character-viewer" :style="{ minHeight: `${props.height}px` }">
+  <div ref="host" class="imported-character-viewer">
     <div ref="viewer" class="imported-character-viewer__canvas" />
     <p v-if="loadError" class="imported-character-viewer__error">{{ loadError }}</p>
   </div>
@@ -247,8 +345,10 @@ onBeforeUnmount(() => {
 .imported-character-viewer {
   width: 100%;
   min-height: 300px;
+  height: 100%;
   overflow: hidden;
   position: relative;
+  flex: 1 1 auto;
 }
 .imported-character-viewer__canvas {
   width: 100%;
