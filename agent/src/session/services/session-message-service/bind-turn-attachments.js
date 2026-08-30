@@ -17,17 +17,15 @@ import { resolveAggregateVersion } from "./anchor-utils.js";
 
 const text = (value) => String(value || "").trim();
 
-export async function bindTurnAttachments({
+function prepareAttachmentBinding({
   userId,
   sessionId,
-  parentSessionId = "",
-  turnScopeId = "",
-  messageUid = "",
-  attachments = [],
-  expectedAggregateVersion = null,
-  commandId = "",
-  persistenceContext = null,
-} = {}) {
+  turnScopeId,
+  messageUid,
+  commandId,
+  attachments,
+  expectedAggregateVersion,
+}) {
   const identity = {
     userId: text(userId),
     sessionId: text(sessionId),
@@ -48,12 +46,39 @@ export async function bindTurnAttachments({
       errorCode: "INVALID_CANONICAL_ATTACHMENT",
     });
   }
-  const normalizedExpectedVersion = normalizeExpectedAggregateVersion(expectedAggregateVersion);
-  const requestHash = createTurnAttachmentBindFingerprint({
-    turnScopeId: identity.turnScopeId,
-    messageUid: identity.messageUid,
-    attachments: canonicalAttachments,
-  });
+  return {
+    identity,
+    canonicalAttachments,
+    normalizedExpectedVersion: normalizeExpectedAggregateVersion(expectedAggregateVersion),
+    requestHash: createTurnAttachmentBindFingerprint({
+      turnScopeId: identity.turnScopeId,
+      messageUid: identity.messageUid,
+      attachments: canonicalAttachments,
+    }),
+  };
+}
+
+export async function bindTurnAttachments({
+  userId,
+  sessionId,
+  parentSessionId = "",
+  turnScopeId = "",
+  messageUid = "",
+  attachments = [],
+  expectedAggregateVersion = null,
+  commandId = "",
+  persistenceContext = null,
+} = {}) {
+  const { identity, canonicalAttachments, normalizedExpectedVersion, requestHash } =
+    prepareAttachmentBinding({
+      userId,
+      sessionId,
+      turnScopeId,
+      messageUid,
+      commandId,
+      attachments,
+      expectedAggregateVersion,
+    });
   return this._withSessionMutation(
     identity.userId,
     identity.sessionId,

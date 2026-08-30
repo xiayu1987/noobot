@@ -386,8 +386,9 @@ export async function putWorkspaceFileApi(
   });
 }
 
-export async function getWorkspaceFileMutationDiffApi(
+async function getWorkspaceFileMutationApi(
   { userId = "", sessionId = "", sessionScope = null, mutationId = "", allWorkspace = false },
+  artifact,
   { fetcher } = {},
 ) {
   const runFetch = resolveFetcher(fetcher);
@@ -401,25 +402,17 @@ export async function getWorkspaceFileMutationDiffApi(
     relativeDir: sessionScope?.relativeDir,
     allowedRoot: sessionScope?.allowedRoot,
   });
-  return runFetch(`${prefix}/file-mutations/${encodeURIComponent(mutationId)}/diff${query ? `?${query}` : ""}`);
+  return runFetch(
+    `${prefix}/file-mutations/${encodeURIComponent(mutationId)}/${artifact}${query ? `?${query}` : ""}`,
+  );
 }
 
-export async function getWorkspaceFileMutationFileApi(
-  { userId = "", sessionId = "", sessionScope = null, mutationId = "", allWorkspace = false },
-  { fetcher } = {},
-) {
-  const runFetch = resolveFetcher(fetcher);
-  const prefix = allWorkspace
-    ? "/api/internal/admin/workspace-all"
-    : `/api/internal/workspace/${encodeURIComponent(userId)}`;
-  const query = buildQueryString({
-    sessionId,
-    parentSessionId: sessionScope?.parentSessionId,
-    scopeId: sessionScope?.scopeId,
-    relativeDir: sessionScope?.relativeDir,
-    allowedRoot: sessionScope?.allowedRoot,
-  });
-  return runFetch(`${prefix}/file-mutations/${encodeURIComponent(mutationId)}/file${query ? `?${query}` : ""}`);
+export async function getWorkspaceFileMutationDiffApi(request, options = {}) {
+  return getWorkspaceFileMutationApi(request, "diff", options);
+}
+
+export async function getWorkspaceFileMutationFileApi(request, options = {}) {
+  return getWorkspaceFileMutationApi(request, "file", options);
 }
 
 export async function getRegularUsersApi({ fetcher } = {}) {

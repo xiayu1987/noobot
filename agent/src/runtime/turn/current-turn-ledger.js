@@ -13,13 +13,18 @@ function applyPatch(item = {}, patch = {}) {
   return nextItem;
 }
 
-export function createCurrentTurnMessagesStore(messages = []) {
-  const items = (Array.isArray(messages) ? messages : []).map((item) => ({ ...(item || {}) }));
+function cloneItems(values = []) {
+  return (Array.isArray(values) ? values : []).map((item) => ({ ...(item || {}) }));
+}
+
+function createCurrentTurnStore(values = []) {
+  const items = cloneItems(values);
   return {
-    push(message = {}) {
-      const normalizedMessage = message && typeof message === "object" ? { ...message } : {};
-      items.push(normalizedMessage);
-      return normalizedMessage;
+    items,
+    push(value = {}) {
+      const normalizedValue = value && typeof value === "object" ? { ...value } : {};
+      items.push(normalizedValue);
+      return normalizedValue;
     },
     updateLast(patch = {}, matcher = null) {
       for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -29,6 +34,18 @@ export function createCurrentTurnMessagesStore(messages = []) {
       }
       return null;
     },
+    toArray() {
+      return cloneItems(items);
+    },
+  };
+}
+
+export function createCurrentTurnMessagesStore(messages = []) {
+  const store = createCurrentTurnStore(messages);
+  const { items } = store;
+  return {
+    push: store.push,
+    updateLast: store.updateLast,
     removeLast(matcher = null) {
       for (let index = items.length - 1; index >= 0; index -= 1) {
         if (typeof matcher === "function" && !matcher(items[index] || {})) continue;
@@ -47,40 +64,24 @@ export function createCurrentTurnMessagesStore(messages = []) {
       return updatedCount;
     },
     replaceAll(messagesToKeep = []) {
-      const nextItems = (Array.isArray(messagesToKeep) ? messagesToKeep : []).map((item) => ({
-        ...(item || {}),
-      }));
+      const nextItems = cloneItems(messagesToKeep);
       items.splice(0, items.length, ...nextItems);
       return items.length;
     },
-    toArray() {
-      return items.map((item) => ({ ...item }));
-    },
+    toArray: store.toArray,
   };
 }
 
 export function createCurrentTurnTasksStore(tasks = []) {
-  const items = (Array.isArray(tasks) ? tasks : []).map((item) => ({ ...(item || {}) }));
+  const store = createCurrentTurnStore(tasks);
+  const { items } = store;
   return {
-    push(task = {}) {
-      const normalizedTask = task && typeof task === "object" ? { ...task } : {};
-      items.push(normalizedTask);
-      return normalizedTask;
-    },
-    updateLast(patch = {}, matcher = null) {
-      for (let index = items.length - 1; index >= 0; index -= 1) {
-        if (typeof matcher === "function" && !matcher(items[index] || {})) continue;
-        items[index] = applyPatch(items[index], patch);
-        return items[index];
-      }
-      return null;
-    },
+    push: store.push,
+    updateLast: store.updateLast,
     last() {
       return items.length ? { ...(items[items.length - 1] || {}) } : null;
     },
-    toArray() {
-      return items.map((item) => ({ ...item }));
-    },
+    toArray: store.toArray,
   };
 }
 

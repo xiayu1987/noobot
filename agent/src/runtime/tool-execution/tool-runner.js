@@ -607,12 +607,30 @@ export async function executeToolCall(options = {}) {
   return finalizeToolExecution(state);
 }
 
+function recordOrEmpty(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function createTurnToolExecutionContext(options = {}) {
+  const call = recordOrEmpty(options.call);
+  return {
+    call,
+    runtime: recordOrEmpty(options.runtime),
+    eventListener: options.eventListener || null,
+    turn: Number(options.turn || 1),
+    toolCallId: resolveToolCallId(call),
+    abortSignal: options.abortSignal || null,
+  };
+}
+
+function transferEnvelopeEventFields(result = {}) {
+  const transferEnvelopes = Array.isArray(result.transferEnvelopes) ? result.transferEnvelopes : [];
+  return transferEnvelopes.length ? { transferEnvelopes } : {};
+}
+
 export async function executeToolCallInTurn(options = {}) {
-  const call = options?.call && typeof options.call === "object" ? options.call : {};
-  const runtime = options?.runtime && typeof options.runtime === "object" ? options.runtime : {};
-  const eventListener = options?.eventListener || null;
-  const turn = Number(options?.turn || 1);
-  const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
+  const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
+    createTurnToolExecutionContext(options);
   const initialRiskAssessment = createToolRiskAssessment(call);
   const initialRiskLevel = getToolRiskLevel(initialRiskAssessment);
   await emitMessageEvent(eventListener, runtime, "tool_call_start", {
@@ -623,7 +641,7 @@ export async function executeToolCallInTurn(options = {}) {
     riskLevel: initialRiskLevel,
     securityAssessment: initialRiskAssessment.current,
   });
-  assertNotAborted(options?.abortSignal || null, runtime);
+  assertNotAborted(abortSignal, runtime);
   const result = await executeToolCall(options);
   await emitMessageEvent(eventListener, runtime, "tool_call_end", {
     turn,
@@ -633,9 +651,7 @@ export async function executeToolCallInTurn(options = {}) {
     toolCallId,
     riskLevel: result?.riskLevel,
     securityAssessment: result?.securityAssessment,
-    ...(Array.isArray(result?.transferEnvelopes) && result.transferEnvelopes.length
-      ? { transferEnvelopes: result.transferEnvelopes }
-      : {}),
+    ...transferEnvelopeEventFields(result),
   });
   return result;
 }
@@ -668,11 +684,8 @@ function rejectedToolCallResult({ call = {}, error = null, abortSignal = null } 
 }
 
 export async function settleToolCallInTurn(options = {}) {
-  const call = options?.call && typeof options.call === "object" ? options.call : {};
-  const runtime = options?.runtime && typeof options.runtime === "object" ? options.runtime : {};
-  const eventListener = options?.eventListener || null;
-  const turn = Number(options?.turn || 1);
-  const toolCallId = call?.id || call?.tool_call_id || call?.toolCallId || "";
+  const { call, runtime, eventListener, turn, toolCallId, abortSignal } =
+    createTurnToolExecutionContext(options);
   try {
     return {
       status: "fulfilled",
@@ -683,7 +696,7 @@ export async function settleToolCallInTurn(options = {}) {
     const result = rejectedToolCallResult({
       call,
       error,
-      abortSignal: options?.abortSignal || null,
+      abortSignal,
     });
     await emitMessageEvent(eventListener, runtime, "tool_call_end", {
       turn,
