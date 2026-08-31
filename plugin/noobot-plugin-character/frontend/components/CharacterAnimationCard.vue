@@ -18,9 +18,7 @@ const viewer = ref();
 const exportError = ref("");
 const exporting = ref(false);
 const assetIds = computed(() => [
-  ...new Set(
-    props.card.protocol.characters.map((character) => character.assetId),
-  ),
+  ...new Set(props.card.protocol.characters.map((character) => character.assetId)),
 ]);
 const assets = computed(() =>
   assetIds.value

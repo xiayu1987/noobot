@@ -38,7 +38,11 @@ export async function importGlbAsset({ blob, name, assetId }) {
         })),
         nodes: [...new Set(nodes)].slice(0, 500),
         bounds: { min, max, height },
-        normalization: { targetHeight, scale: targetHeight / height, floorOffset: -min[1] * targetHeight / height },
+        normalization: {
+          targetHeight,
+          scale: targetHeight / height,
+          floorOffset: (-min[1] * targetHeight) / height,
+        },
         importedAt: new Date().toISOString(),
       },
       blob,

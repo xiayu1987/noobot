@@ -6,6 +6,13 @@
 export {
   AnimationProtocolInputSchema,
   AnimationProtocolSchema,
+  AnimationProtocolUpdateInputSchema,
+  AnimationIdSchema,
+  AnimationScriptSchema,
+  AnimationSceneSchema,
+  AnimationEventSchema,
+  AnimationCharacterDeclarationSchema,
+  compileAnimationScript,
   parseAnimationProtocol,
   safeParseAnimationProtocol,
 } from "./animation-protocol.js";

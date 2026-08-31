@@ -43,6 +43,30 @@
             "/api/internal/character/assets/:assetId/:version"
           ],
           "auth": "connected_user"
+        },
+        {
+          "id": "character.asset.commit",
+          "method": "PUT",
+          "paths": [
+            "/internal/character/assets/:assetId/descriptor",
+            "/api/internal/character/assets/:assetId/descriptor"
+          ],
+          "auth": "connected_user"
+        },
+        {
+          "id": "character.asset.list",
+          "method": "GET",
+          "paths": ["/internal/character/assets", "/api/internal/character/assets"],
+          "auth": "connected_user"
+        },
+        {
+          "id": "character.asset.delete",
+          "method": "DELETE",
+          "paths": [
+            "/internal/character/assets/:assetId",
+            "/api/internal/character/assets/:assetId"
+          ],
+          "auth": "connected_user"
         }
       ]
     },
@@ -62,23 +86,29 @@
       "tools.register",
       "artifacts.commit",
       "artifacts.get",
-      "artifacts.replace",
       "routes.bind",
       "service.workspace.assets",
       "authenticated_request",
       "frontend.contribute"
     ],
-    "permissions": ["artifact.commit", "session.read", "workspace.asset.manage", "http.authenticated"],
+    "permissions": [
+      "artifact.commit",
+      "artifact.read",
+      "workspace.asset.manage",
+      "http.authenticated"
+    ],
     "authenticatedRoutes": [
       { "method": "PUT", "path": "/api/internal/character/assets/:assetId" },
-      { "method": "GET", "path": "/api/internal/character/assets/:assetId/:version" }
+      { "method": "PUT", "path": "/api/internal/character/assets/:assetId/descriptor" },
+      { "method": "GET", "path": "/api/internal/character/assets" },
+      { "method": "GET", "path": "/api/internal/character/assets/:assetId/:version" },
+      { "method": "DELETE", "path": "/api/internal/character/assets/:assetId" }
     ]
   },
   "configuration": {
     "defaults": {
       "enabled": true,
       "mode": "on",
-      "characterAssets": [],
       "selectedCharacterAssetIds": []
     }
   },

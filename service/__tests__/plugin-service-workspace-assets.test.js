@@ -56,3 +56,35 @@ test("workspace asset port rejects invalid identity before filesystem access", a
     /invalid workspace asset ID/,
   );
 });
+
+test("workspace asset metadata catalog is user-scoped and deletion removes binary content", async (t) => {
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-plugin-catalog-"));
+  t.after(() => fs.rm(workspace, { recursive: true, force: true }));
+  const port = createPluginServicePorts({
+    bot: { getWorkspacePath: () => workspace },
+  }).workspaceAssets.forPlugin("character");
+  const content = Buffer.from("catalog-glb");
+  const written = await port.write({
+    userId: "admin",
+    assetId: "asset.one",
+    source: Readable.from(content),
+    declaredBytes: content.length,
+  });
+  await port.writeMetadata({
+    userId: "admin",
+    assetId: "asset.one",
+    metadata: { assetId: "asset.one", version: written.version },
+  });
+  assert.deepEqual(await port.listMetadata({ userId: "admin" }), {
+    "asset.one": { assetId: "asset.one", version: written.version },
+  });
+  assert.deepEqual(await port.delete({ userId: "admin", assetId: "asset.one" }), {
+    assetId: "asset.one",
+    deleted: true,
+  });
+  assert.deepEqual(await port.listMetadata({ userId: "admin" }), {});
+  assert.equal(
+    await port.read({ userId: "admin", assetId: "asset.one", version: written.version }),
+    null,
+  );
+});

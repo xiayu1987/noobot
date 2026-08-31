@@ -41,12 +41,14 @@ test("plugin artifact port owns persistence and publication behind one generic c
     artifact: {
       artifactType: "example.document",
       artifactId: "document-1",
+      operation: "created",
       data: { title: "document" },
     },
     toolContext: { agentContext },
   });
 
-  assert.equal(result, envelope);
+  assert.equal(result.committed, true);
+  assert.equal(result.eventId, envelope.identity.eventId);
   assert.deepEqual(
     {
       family: commits[0].family,
@@ -57,7 +59,7 @@ test("plugin artifact port owns persistence and publication behind one generic c
     },
     {
       family: "plugin.artifact",
-      scopeId: "session-1:example:document-1",
+      scopeId: "session-1:example:example.document:document-1",
       pluginId: "example",
       artifactType: "example.document",
       artifactId: "document-1",

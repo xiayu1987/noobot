@@ -109,6 +109,8 @@ watch(
 
 <style scoped>
 .chat-message-navigator {
+  box-sizing: border-box;
+  width: 100%;
   max-height: min(70vh, 560px);
   overflow: auto;
   padding: 10px 12px;
@@ -150,7 +152,10 @@ watch(
 
 :deep(.el-anchor__link) {
   position: relative;
-  max-width: 208px;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   margin: 3px 0;
   padding: 8px 14px 8px 16px;
   border-radius: var(--noobot-radius-xs);

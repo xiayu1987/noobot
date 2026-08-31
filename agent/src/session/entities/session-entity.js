@@ -9,7 +9,11 @@ import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import { normalizeAuthorityEventOutbox, validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  normalizeAuthorityEventOutbox,
+  projectPluginArtifacts,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";
@@ -44,7 +48,7 @@ function objectRecord(value) {
   return value && typeof value === "object" ? value : {};
 }
 
-function normalizeSessionArtifactEvents(session = {}) {
+function normalizeSessionArtifactEvents(session = {}, sessionId = "") {
   const events = [];
   const eventIds = new Set();
   for (const envelope of Array.isArray(session?.sessionArtifactEvents)
@@ -55,6 +59,7 @@ function normalizeSessionArtifactEvents(session = {}) {
     if (
       !validation.valid ||
       !validation.descriptor?.sessionArtifact ||
+      (sessionId && normalizeTextField(envelope?.identity?.sessionId) !== sessionId) ||
       !eventId ||
       eventIds.has(eventId)
     ) {
@@ -64,28 +69,6 @@ function normalizeSessionArtifactEvents(session = {}) {
     events.push(envelope);
   }
   return events;
-}
-
-function normalizeSessionArtifacts(session = {}) {
-  const source = session?.sessionArtifacts;
-  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
-  const result = {};
-  for (const [key, value] of Object.entries(source)) {
-    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
-    const pluginId = normalizeTextField(value.pluginId);
-    const artifactType = normalizeTextField(value.artifactType);
-    const artifactId = normalizeTextField(value.artifactId);
-    const revision = Number(value.revision);
-    if (!pluginId || !artifactType || !artifactId || !Number.isInteger(revision) || revision < 1) continue;
-    result[`${pluginId}:${artifactType}:${artifactId}`] = {
-      ...value,
-      pluginId,
-      artifactType,
-      artifactId,
-      revision,
-    };
-  }
-  return result;
 }
 
 function normalizeSessionAttachment(item = {}) {
@@ -455,8 +438,13 @@ function resolveSessionNormalizationContext(session, { now, sessionId, parentSes
 }
 
 function createNormalizedSessionEntity(session, context, messages) {
+  const normalizedBase = { ...objectRecord(session) };
+  // The event list is the only persisted artifact fact.  A materialized map
+  // would create a second source of truth and can drift after old sessions are
+  // loaded.
+  delete normalizedBase.sessionArtifacts;
   return {
-    ...objectRecord(session),
+    ...normalizedBase,
     sessionId: context.sessionId,
     parentSessionId: context.parentSessionId,
     aggregateVersion: Math.max(0, Number(session?.aggregateVersion) || 0),
@@ -469,8 +457,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     turnTimings: normalizeTurnTimingsEntity(session?.turnTimings || []),
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
-    sessionArtifactEvents: normalizeSessionArtifactEvents(session),
-    sessionArtifacts: normalizeSessionArtifacts(session),
+    sessionArtifactEvents: normalizeSessionArtifactEvents(session, context.sessionId),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstTextField([session?.createdAt, context.nowValue]),
     updatedAt: firstTextField([session?.updatedAt, context.nowValue]),

@@ -264,7 +264,7 @@ describe("AppShell chat message navigator", () => {
   });
 
   it("uses Element Plus anchor on desktop and drawer on mobile", () => {
-    expect(appShellLayoutSource).toContain('<el-affix :offset="80">');
+    expect(appShellLayoutSource).toContain('class="chat-message-nav-scroll"');
     expect(appShellLayoutSource).toContain("<ChatMessageNavigator");
     expect(appShellSource).toContain(':mobile-chat-navigator-visible="mobileChatNavigatorVisible"');
     expect(appShellSource).toContain(
@@ -305,6 +305,16 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(":class=\"{ 'is-collapsed': !chatNavigatorVisible }\"");
     expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
     expect(appShellLayoutSource).toContain("width: var(--noobot-side-panel-collapsed-width);");
+    expect(appShellLayoutSource).toContain(".chat-message-nav-scroll {");
+    expect(appShellLayoutSource).toContain(".chat-message-nav-scroll :deep(.chat-message-navigator)");
+    expect(appShellLayoutSource).toContain("max-height: none;");
+    expect(appShellLayoutSource).toContain("overflow: visible;");
+    expect(appShellLayoutSource).toContain("function toggleChatNavigator()");
+    expect(appShellLayoutSource).toContain("if (nextVisible) featurePanelVisible.value = false;");
+    expect(appShellLayoutSource).toContain("overflow: hidden;");
+    expect(appShellLayoutSource).toContain(".right-tool-panels > * {\n  flex: 0 0 auto;");
+    expect(appShellLayoutSource).toContain(".right-tool-panels > *.is-collapsed {");
+    expect(appShellLayoutSource).toContain("overflow-y: auto;");
     expect(chatMessageListPanelSource).not.toContain("has-right-tool-panel");
     expect(chatMessageListPanelSource).not.toContain("rightToolPanelOpen");
   });

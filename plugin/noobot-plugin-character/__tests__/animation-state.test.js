@@ -5,6 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import {
   animationRuntimeState,
   applyAnimationRuntimeEvent,
@@ -14,23 +15,37 @@ import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/c
 
 const protocol = (animationId, assetId = "robot-a") => ({
   format: "noobot.animation.protocol",
-  version: 1,
+  version: 2,
   animationId,
   duration: 1,
   loop: false,
   scene: {
     coordinateSystem: "normalized_world",
-    targetHeight: 1,
+    unitHeight: 1,
     groundY: 0,
-    framing: "all_characters",
-    layout: { mode: "explicit", positions: [{ assetId, position: [0, 0, 0] }] },
+    collisionSpace: {
+      units: "normalized_world",
+      origin: [0, 0, 0],
+      detection: "continuous",
+      colliders: [],
+    },
+    cameraTrack: {
+      type: "keyframes",
+      keyframes: [
+        { time: 0, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
+        { time: 1, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
+      ],
+    },
   },
   characters: [
     {
+      characterId: "character-1",
       assetId,
+      rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
       segments: [{ type: "native_clip", start: 0, duration: 1, clip: "Wave" }],
     },
   ],
+  events: [],
 });
 const asset = (assetId = "robot-a") => ({
   assetId,
@@ -53,15 +68,25 @@ const asset = (assetId = "robot-a") => ({
 test("same animation ID replaces one card and different IDs create cards", () => {
   resetAnimationRuntimeState("session-a");
   let event = 0;
-  const envelope = (animationId, assetId) => ({
-    identity: { sessionId: "session-a", eventId: `event-${++event}` },
-    payload: {
+  const revisions = new Map();
+  const envelope = (animationId, assetId) => {
+    const baseRevision = revisions.get(animationId) || 0;
+    const revision = baseRevision + 1;
+    revisions.set(animationId, revision);
+    event += 1;
+    return createPluginArtifactEnvelope({
       pluginId: CHARACTER_PLUGIN_ID,
       artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
-      revision: event,
+      artifactId: animationId,
+      sessionId: "session-a",
+      turnScopeId: "turn-1",
+      sequence: event,
+      operation: baseRevision ? "replaced" : "created",
+      revision,
+      baseRevision: baseRevision || null,
       data: { protocol: protocol(animationId, assetId), assets: [asset(assetId)] },
-    },
-  });
+    });
+  };
   assert.equal(applyAnimationRuntimeEvent(envelope("animation-a")).created, true);
   assert.equal(applyAnimationRuntimeEvent(envelope("animation-a")).created, false);
   applyAnimationRuntimeEvent(envelope("animation-b", "robot-b"));

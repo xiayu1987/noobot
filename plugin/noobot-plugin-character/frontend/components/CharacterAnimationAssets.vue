@@ -4,8 +4,14 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { importGlbAsset } from "../runtime/importGlbAsset.js";
+import {
+  characterAssetCatalog,
+  recordCharacterAsset,
+  refreshCharacterAssetCatalog,
+  removeCharacterAsset,
+} from "../runtime/characterAssetCatalog.js";
 import ImportedCharacterViewer from "./ImportedCharacterViewer.vue";
 import robotSampleUrl from "../../assets/samples/robot-expressive/RobotExpressive.glb?url";
 import soldierSampleUrl from "../../assets/samples/Soldier.glb?url";
@@ -34,11 +40,7 @@ const samples = Object.freeze([
   { id: "sample.three.horse", name: "Horse.glb", url: horseSampleUrl },
   { id: "sample.three.parrot", name: "Parrot.glb", url: parrotSampleUrl },
 ]);
-const importedAssets = computed(() =>
-  Array.isArray(props.pluginModelConfig?.characterAssets)
-    ? props.pluginModelConfig.characterAssets
-    : [],
-);
+const importedAssets = computed(() => characterAssetCatalog.assets);
 const selectedIds = computed(
   () =>
     new Set(
@@ -53,7 +55,8 @@ const previewAssets = computed(() => {
   return selected.length ? selected : fallback ? [fallback] : [];
 });
 function writeConfig(next) {
-  props.updatePluginModelConfig?.({ ...(props.pluginModelConfig || {}), ...next });
+  const { characterAssets: _removedCatalog, ...current } = props.pluginModelConfig || {};
+  props.updatePluginModelConfig?.({ ...current, ...next });
 }
 function toggle(asset) {
   const current = new Set(selectedIds.value);
@@ -62,14 +65,22 @@ function toggle(asset) {
   writeConfig({ selectedCharacterAssetIds: [...current] });
 }
 function select(asset) {
-  const catalog = new Map(importedAssets.value.map((item) => [item.assetId, item]));
-  catalog.set(asset.assetId, asset);
   const selected = new Set(selectedIds.value);
   selected.add(asset.assetId);
-  writeConfig({
-    characterAssets: [...catalog.values()],
-    selectedCharacterAssetIds: [...selected],
-  });
+  writeConfig({ selectedCharacterAssetIds: [...selected] });
+}
+async function remove(asset) {
+  const assetId = String(asset?.assetId || "").trim();
+  if (!assetId) return;
+  error.value = "";
+  try {
+    await removeCharacterAsset(asset);
+    writeConfig({
+      selectedCharacterAssetIds: [...selectedIds.value].filter((item) => item !== assetId),
+    });
+  } catch (cause) {
+    error.value = String(cause?.message || cause || "character asset deletion failed");
+  }
 }
 async function importFile(event) {
   const file = event.target.files?.[0];
@@ -83,6 +94,7 @@ async function importFile(event) {
       name: file.name,
       assetId: `user.glb.${globalThis.crypto.randomUUID()}`,
     });
+    recordCharacterAsset(metadata);
     select(metadata);
   } catch (cause) {
     error.value = String(cause?.message || cause || "GLB import failed");
@@ -101,6 +113,7 @@ async function loadOfficialSample(sample = samples[0]) {
       name: sample.name,
       assetId: sample.id,
     });
+    recordCharacterAsset(metadata);
     select(metadata);
   } catch (cause) {
     error.value = String(cause?.message || cause || "sample load failed");
@@ -108,6 +121,23 @@ async function loadOfficialSample(sample = samples[0]) {
     importing.value = false;
   }
 }
+
+onMounted(async () => {
+  error.value = "";
+  try {
+    const assets = await refreshCharacterAssetCatalog();
+    const available = new Set(assets.map((asset) => asset.assetId));
+    const selectedCharacterAssetIds = [...selectedIds.value].filter((id) => available.has(id));
+    if (
+      selectedCharacterAssetIds.length !== selectedIds.value.size ||
+      Object.hasOwn(props.pluginModelConfig || {}, "characterAssets")
+    ) {
+      writeConfig({ selectedCharacterAssetIds });
+    }
+  } catch (cause) {
+    error.value = String(cause?.message || cause || "character asset catalog load failed");
+  }
+});
 </script>
 <template>
   <section class="character-animation-assets" :class="{ 'is-right-panel': mode === 'manage' }">
@@ -141,33 +171,71 @@ async function loadOfficialSample(sample = samples[0]) {
             {{ sample.name }}
           </button>
         </div>
+        <div v-if="importedAssets.length" class="character-animation-assets__inventory">
+          <div
+            v-for="asset in importedAssets"
+            :key="`inventory-${asset.assetId}`"
+            class="character-animation-assets__inventory-item"
+          >
+            <span>{{ asset.name }}</span>
+            <button
+              type="button"
+              class="character-animation-assets__remove"
+              :title="translate('character.removeAsset')"
+              @click="remove(asset)"
+            >
+              {{ translate("character.removeAsset") }}
+            </button>
+          </div>
+        </div>
       </template>
       <p v-if="error" class="character-animation-assets__error">{{ error }}</p>
-      <label
-        v-if="mode === 'select'"
-        v-for="asset in importedAssets"
-        :key="asset.assetId"
-        class="character-animation-assets__item"
-        :data-asset-id="asset.assetId"
-        ><input
-          type="checkbox"
-          data-testid="character-select-asset"
-          :checked="selectedIds.has(asset.assetId)"
-          @change="toggle(asset)"
-        /><span
-          >{{ asset.name }} ·
-          {{ translate("character.animationCount", { count: asset.animations.length }) }}</span
-        ></label
-      >
+      <template v-if="mode === 'select'">
+        <div
+          v-for="asset in importedAssets"
+          :key="asset.assetId"
+          class="character-animation-assets__item"
+          :data-asset-id="asset.assetId"
+        >
+          <input
+            type="checkbox"
+            data-testid="character-select-asset"
+            :checked="selectedIds.has(asset.assetId)"
+            @change="toggle(asset)"
+          />
+          <span
+            >{{ asset.name }} ·
+            {{ translate("character.animationCount", { count: asset.animations.length }) }}</span
+          >
+          <button
+            type="button"
+            class="character-animation-assets__remove"
+            :title="translate('character.removeAsset')"
+            @click="remove(asset)"
+          >
+            {{ translate("character.removeAsset") }}
+          </button>
+        </div>
+      </template>
       <p v-if="!importedAssets.length" class="character-animation-assets__empty">
         {{ translate(mode === "manage" ? "character.noImportedAssets" : "character.selectHint") }}
       </p>
       <div v-if="mode === 'manage'" class="character-animation-assets__previews">
         <article v-for="asset in previewAssets" :key="asset.assetId">
-          <p class="character-animation-assets__preview-title">
-            {{ asset.name }} ·
-            {{ translate("character.animationCount", { count: asset.animations.length }) }}
-          </p>
+          <div class="character-animation-assets__preview-header">
+            <p class="character-animation-assets__preview-title">
+              {{ asset.name }} ·
+              {{ translate("character.animationCount", { count: asset.animations.length }) }}
+            </p>
+            <button
+              type="button"
+              class="character-animation-assets__remove"
+              :title="translate('character.removeAsset')"
+              @click="remove(asset)"
+            >
+              {{ translate("character.removeAsset") }}
+            </button>
+          </div>
           <ImportedCharacterViewer :assets="[asset]" :height="180" />
         </article>
       </div>
@@ -218,9 +286,45 @@ input[type="file"] {
 }
 .character-animation-assets__item {
   display: flex;
+  align-items: center;
   gap: 7px;
+  min-width: 0;
   padding: 6px 0;
   font-size: 12px;
+}
+.character-animation-assets__item > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.character-animation-assets__remove {
+  flex: 0 0 auto;
+  color: #fca5a5;
+  font-size: 11px;
+}
+.character-animation-assets__inventory {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 12px;
+}
+.character-animation-assets__inventory-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0;
+  border-top: 1px solid color-mix(in srgb, #385170 55%, transparent);
+  color: #dbeafe;
+  font-size: 12px;
+}
+.character-animation-assets__inventory-item > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .character-animation-assets__error {
   color: #fca5a5;
@@ -233,13 +337,23 @@ input[type="file"] {
 .character-animation-assets__previews {
   display: grid;
   gap: 10px;
-  max-height: min(480px, 60vh);
-  overflow-y: auto;
   padding-right: 2px;
+}
+
+.is-right-panel .character-animation-assets__previews {
+  max-height: none;
+  overflow: visible;
 }
 .character-animation-assets__preview-title {
   margin: 4px 0;
   color: #93a4bb;
   font-size: 12px;
+}
+.character-animation-assets__preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 </style>

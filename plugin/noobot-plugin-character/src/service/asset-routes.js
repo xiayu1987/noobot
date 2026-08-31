@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { AnimationAssetSchema } from "../animation-protocol.js";
 
 const GLB_MIME_TYPE = "model/gltf-binary";
 
@@ -41,11 +42,35 @@ function requireGlbContentType(req = {}) {
   }
 }
 
+function canonicalResource(assetId, version, size) {
+  return Object.freeze({
+    version,
+    mimeType: GLB_MIME_TYPE,
+    size,
+    url: `/api/internal/character/assets/${encodeURIComponent(assetId)}/${version}`,
+  });
+}
+
+function parseDescriptor(req = {}) {
+  const descriptor = AnimationAssetSchema.parse(req.body);
+  const assetId = String(req.params?.assetId || "").trim();
+  const expectedUrl = `/api/internal/character/assets/${encodeURIComponent(assetId)}/${descriptor.resource.version}`;
+  if (descriptor.assetId !== assetId || descriptor.resource.url !== expectedUrl) {
+    const error = new Error("character asset descriptor does not match its resource identity");
+    error.statusCode = 400;
+    throw error;
+  }
+  return descriptor;
+}
+
 export function createCharacterAssetRouteHandlers({ workspaceAssets } = {}) {
   if (
     !workspaceAssets ||
     typeof workspaceAssets.write !== "function" ||
-    typeof workspaceAssets.read !== "function"
+    typeof workspaceAssets.read !== "function" ||
+    typeof workspaceAssets.listMetadata !== "function" ||
+    typeof workspaceAssets.writeMetadata !== "function" ||
+    typeof workspaceAssets.delete !== "function"
   ) {
     throw new Error("character service workspace asset port is required");
   }
@@ -60,12 +85,42 @@ export function createCharacterAssetRouteHandlers({ workspaceAssets } = {}) {
         validate: validateGlb,
       });
       const resource = Object.freeze({
-        version: asset.version,
-        mimeType: GLB_MIME_TYPE,
-        size: asset.size,
-        url: `/api/internal/character/assets/${encodeURIComponent(asset.assetId)}/${asset.version}`,
+        ...canonicalResource(asset.assetId, asset.version, asset.size),
       });
       res.status(201).json({ ok: true, asset: { ...asset, format: "glb", resource } });
+    },
+    "character.asset.commit": async (req, res) => {
+      const descriptor = parseDescriptor(req);
+      const resource = await workspaceAssets.read({
+        userId: requestUserId(req),
+        assetId: descriptor.assetId,
+        version: descriptor.resource.version,
+      });
+      resource?.stream?.destroy?.();
+      if (!resource || resource.size !== descriptor.resource.size) {
+        const error = new Error("character asset resource not found");
+        error.statusCode = 404;
+        throw error;
+      }
+      const asset = await workspaceAssets.writeMetadata({
+        userId: requestUserId(req),
+        assetId: descriptor.assetId,
+        metadata: descriptor,
+      });
+      res.status(201).json({ ok: true, asset });
+    },
+    "character.asset.list": async (req, res) => {
+      const catalog = await workspaceAssets.listMetadata({ userId: requestUserId(req) });
+      const assets = Object.values(catalog).map((asset) => AnimationAssetSchema.parse(asset));
+      assets.sort((left, right) => left.importedAt.localeCompare(right.importedAt));
+      res.status(200).json({ ok: true, assets });
+    },
+    "character.asset.delete": async (req, res) => {
+      const result = await workspaceAssets.delete({
+        userId: requestUserId(req),
+        assetId: req.params.assetId,
+      });
+      res.status(200).json({ ok: true, ...result });
     },
     "character.asset.read": async (req, res) => {
       const asset = await workspaceAssets.read({

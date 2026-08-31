@@ -2,19 +2,21 @@
 
 This plugin imports animated GLB files in the browser, records their exact clip
 and node metadata, and renders LLM-authored animation protocols with Three.js.
-It contributes one agent tool: `character_animation_generate`.
+It contributes agent tools for creating, reading, replacing, and compiling
+declarative animation scripts.
 
-The protocol is `noobot.animation.protocol` version 1. An animation has an
+The protocol is `noobot.animation.protocol` version 2. An animation has an
 `animationId` and one synchronized, gap-free timeline per participating
-character. Each character declares its imported `assetId`, initial world
-position, recognized native clips, and optional position/quaternion/scale
-keyframes. Passing an existing ID appends to its animation card; omitting the
-ID creates one and returns it. JavaScript and unknown assets, clips, or nodes
-are never accepted. Authoritative `plugin.artifact` events drive playback.
+character. Each character declares its imported `assetId` and root transform;
+the scene declares normalized collision space and a camera track. Existing IDs
+are replaced only with an explicit base revision. Scripts are structured
+`sequence`/`parallel`/`event` trees; JavaScript is never executed.
+Authoritative `plugin.artifact` events drive playback.
 
 The right feature panel imports and previews GLB files. The Composer More
 Actions extension selects assets for the current model request. Only selected
-metadata is sent to the model; GLB bytes remain in browser IndexedDB.
+metadata is sent to the model. GLB bytes are stored by the authenticated
+workspace asset service and cached in browser IndexedDB for playback.
 
 ## Creating animations with an LLM
 
@@ -22,14 +24,14 @@ metadata is sent to the model; GLB bytes remain in browser IndexedDB.
 2. Let the plugin inspect the asset's native clips and node names.
 3. Select one or more character assets in Composer **More actions**.
 4. Describe the intended movement in natural language.
-5. The model calls `character_animation_generate`.
+5. The model calls `character_animation_generate` or `character_animation_script`.
 6. The plugin validates and commits the `noobot.animation.protocol` payload.
 7. The Session artifact panel renders the protocol and preserves it across refreshes.
 
-Use an existing `animationId` to extend the same animation card across turns.
-Omit it to create a new animation artifact. The model supplies intent and
-keyframes; the plugin remains responsible for asset identity, clip/node validity,
-timing, and browser-side playback.
+Call `character_animation_get` before modifying an existing `animationId`, then
+call `character_animation_update` or `character_animation_script` with its
+`baseRevision`. Creation and replacement are distinct operations; no append
+behavior exists.
 
 The repository demo GIF is generated from the real Three.js runtime with:
 
