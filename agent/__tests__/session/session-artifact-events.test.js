@@ -20,6 +20,13 @@ const protocol = {
   animationId: "session-animation",
   duration: 1,
   loop: false,
+  scene: {
+    coordinateSystem: "normalized_world",
+    targetHeight: 1,
+    groundY: 0,
+    framing: "all_characters",
+    layout: { mode: "explicit", positions: [{ assetId: "robot-a", position: [0, 0, 0] }] },
+  },
   characters: [
     {
       assetId: "asset-1",
@@ -71,6 +78,9 @@ test("plugin artifact commits persist an independent Session artifact fact", asy
       pluginId: "character",
       artifactType: "character.animation",
       artifactId: "session-animation",
+      operation: "created",
+      revision: 1,
+      baseRevision: null,
       data: {
         protocol,
         assets: [
@@ -147,4 +157,40 @@ test("Session normalization never derives artifact history from the delivery out
   });
 
   assert.deepEqual(normalized.sessionArtifactEvents, []);
+});
+
+test("plugin artifact replacement increments revision and rejects a stale base revision", async () => {
+  let session = {
+    sessionId: "session-1", parentSessionId: "", aggregateVersion: 0,
+    messages: [], authorityEventOutbox: [], sessionArtifactEvents: [],
+  };
+  const repo = {
+    async resolveParentSessionId() { return ""; },
+    async findById() { return structuredClone(session); },
+    async save(_userId, next) { session = structuredClone(next); session.aggregateVersion += 1; return session; },
+  };
+  const service = new SessionMessageService({ sessionRepo: repo, now: () => "2026-08-29T00:00:00.000Z" });
+  const common = {
+    userId: "admin", sessionId: "session-1", family: EVENT_FAMILY.PLUGIN_ARTIFACT,
+    schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
+    identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: "turn-1" },
+    ordering: { domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN, scopeId: "session-1:character:session-animation" },
+    producer: { type: "plugin", id: "character" },
+  };
+  await service.commitAuthorityEvent({ ...common, payload: {
+    pluginId: "character", artifactType: "character.animation", artifactId: "session-animation",
+    operation: "created", revision: 1, baseRevision: null, data: { protocol, assets: [] },
+  } });
+  const replaced = await service.replacePluginArtifact({ ...common, baseRevision: 1, payload: {
+    ...common.payload, pluginId: "character", artifactType: "character.animation", artifactId: "session-animation",
+    data: { protocol, assets: [] },
+  } });
+  assert.equal(replaced.committed, true);
+  assert.equal(replaced.envelope.payload.revision, 2);
+  const stale = await service.replacePluginArtifact({ ...common, baseRevision: 1, payload: {
+    ...common.payload, pluginId: "character", artifactType: "character.animation", artifactId: "session-animation",
+    data: { protocol, assets: [] },
+  } });
+  assert.equal(stale.committed, false);
+  assert.equal(stale.code, "ANIMATION_REVISION_CONFLICT");
 });

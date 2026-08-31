@@ -26,6 +26,8 @@ const animationAsset = z.object({
     tracks: z.number().int().nonnegative(),
   }).strict()),
   nodes: z.array(z.string().trim().min(1).max(160)).max(500),
+  bounds: z.object({ min: vec3, max: vec3, height: number.positive() }).strict(),
+  normalization: z.object({ targetHeight: number.positive(), scale: number.positive(), floorOffset: number }).strict(),
   importedAt: z.iso.datetime(),
   resource: assetResource,
 }).strict().refine((value) => value.size === value.resource.size, {
@@ -59,17 +61,37 @@ const segment = z.discriminatedUnion("type", [
 ]);
 const characterTimeline = z.object({
   assetId,
-  initialPosition: vec3,
   segments: z.array(segment).min(1).max(100),
+}).strict();
+const layoutPosition = z.object({ assetId, position: vec3 }).strict();
+const scene = z.object({
+  coordinateSystem: z.literal("normalized_world"),
+  targetHeight: number.positive(),
+  groundY: number,
+  framing: z.literal("all_characters"),
+  layout: z.object({
+    mode: z.literal("explicit"),
+    positions: z.array(layoutPosition).min(1).max(32),
+  }).strict(),
 }).strict();
 
 function validateTimeline(value, context) {
   const assetIds = new Set();
+  const layoutIds = new Set();
+  for (const [index, item] of value.scene.layout.positions.entries()) {
+    if (layoutIds.has(item.assetId)) {
+      context.addIssue({ code: "custom", path: ["scene", "layout", "positions", index, "assetId"], message: "layout asset IDs must be unique" });
+    }
+    layoutIds.add(item.assetId);
+  }
   for (const [characterIndex, character] of value.characters.entries()) {
     if (assetIds.has(character.assetId)) {
       context.addIssue({ code: "custom", path: ["characters", characterIndex, "assetId"], message: "each character asset may appear only once" });
     }
     assetIds.add(character.assetId);
+    if (!layoutIds.has(character.assetId)) {
+      context.addIssue({ code: "custom", path: ["scene", "layout", "positions"], message: "each character requires one layout position" });
+    }
     let expectedStart = 0;
     for (const [segmentIndex, segmentValue] of character.segments.entries()) {
       const segmentPath = ["characters", characterIndex, "segments", segmentIndex];
@@ -104,6 +126,9 @@ function validateTimeline(value, context) {
       context.addIssue({ code: "custom", path: ["characters", characterIndex, "segments"], message: "each character timeline must equal the animation duration" });
     }
   }
+  for (const assetId of layoutIds) {
+    if (!assetIds.has(assetId)) context.addIssue({ code: "custom", path: ["scene", "layout", "positions"], message: "layout cannot contain an unknown character" });
+  }
 }
 
 const fields = {
@@ -111,6 +136,7 @@ const fields = {
   version: z.literal(1),
   duration: number.positive().max(3600),
   loop: z.boolean().default(false),
+  scene,
   characters: z.array(characterTimeline).min(1).max(32),
 };
 

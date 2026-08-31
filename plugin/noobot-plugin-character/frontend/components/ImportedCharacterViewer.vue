@@ -13,7 +13,7 @@ import { useCharacterLocale } from "../i18n/index.js";
 
 const props = defineProps({
   assets: { type: Array, default: () => [] },
-  protocols: { type: Array, default: () => [] },
+  protocol: { type: Object, default: null },
   revision: { type: Number, default: 0 },
   // Session artifact cards provide a bounded flex container while the asset
   // management preview is an intrinsic-height panel. Keeping this explicit
@@ -83,7 +83,7 @@ async function exportVideo() {
     1000,
     Math.min(
       60000,
-      props.protocols.reduce((total, protocol) => total + protocol.duration, 0) * 1000 + 500,
+      (props.protocol?.duration || 0) * 1000 + 500,
     ),
   );
   isRecording.value = true;
@@ -161,7 +161,8 @@ function createKeyframeClip(segment, animationId, characterIndex, segmentIndex) 
 }
 
 function playCharacter(player, protocol, character, characterIndex, startsAt) {
-  player.anchor.position.fromArray(character.initialPosition);
+  const layout = protocol.scene.layout.positions.find((item) => item.assetId === character.assetId);
+  player.anchor.position.fromArray(layout.position);
   character.segments.forEach((segment, segmentIndex) => {
     const clip =
       segment.type === "native_clip"
@@ -179,10 +180,10 @@ function playCharacter(player, protocol, character, characterIndex, startsAt) {
   });
 }
 
-function queueProtocols() {
-  if (!players.size || queuedProtocolCount >= props.protocols.length) return;
-  for (let index = queuedProtocolCount; index < props.protocols.length; index += 1) {
-    const protocol = props.protocols[index];
+function queueProtocol() {
+  if (!players.size || !props.protocol || queuedProtocolCount) return;
+  {
+    const protocol = props.protocol;
     const startsAt = Math.max(
       nextPlaybackAt,
       ...[...players.values()].map((item) => item.mixer.time),
@@ -193,7 +194,7 @@ function queueProtocols() {
     });
     nextPlaybackAt = startsAt + protocol.duration;
   }
-  queuedProtocolCount = props.protocols.length;
+  queuedProtocolCount = 1;
 }
 
 function restartPlayback() {
@@ -203,7 +204,7 @@ function restartPlayback() {
   }
   queuedProtocolCount = 0;
   nextPlaybackAt = 0;
-  queueProtocols();
+  queueProtocol();
 }
 
 async function loadPlayer(asset, revision) {
@@ -218,6 +219,7 @@ async function loadPlayer(asset, revision) {
       return null;
     }
     return {
+      asset,
       assetId: asset.assetId,
       anchor: new THREE.Group(),
       model: gltf.scene,
@@ -253,7 +255,11 @@ async function mount() {
   players = new Map(loaded.map((player) => [player.assetId, player]));
   for (const [index, player] of loaded.entries()) {
     player.anchor.add(player.model);
-    if (!props.protocols.length) player.anchor.position.x = index - (loaded.length - 1) / 2;
+    const bounds = new THREE.Box3().setFromObject(player.model);
+    const normalization = player.asset.normalization;
+    player.model.scale.setScalar(normalization.scale);
+    player.model.position.y = normalization.floorOffset + (props.protocol?.scene?.groundY || 0);
+    if (!props.protocol) player.anchor.position.x = index - (loaded.length - 1) / 2;
     scene.add(player.anchor);
   }
   scene.add(new THREE.HemisphereLight("#fff", "#445", 2));
@@ -303,13 +309,13 @@ async function mount() {
     renderer.render(scene, camera);
   };
   animate();
-  if (!props.protocols.length) {
+  if (!props.protocol) {
     loaded.forEach((player) => {
       const idle = player.animations[0];
       if (idle) player.mixer.clipAction(idle).play();
     });
   }
-  queueProtocols();
+  queueProtocol();
 }
 
 watch(() => props.assets.map((asset) => asset.assetId).join("|"), mount);
@@ -334,7 +340,7 @@ watch(
   },
 );
 onMounted(() => mount());
-watch(() => props.revision, queueProtocols);
+watch(() => props.revision, () => { restartPlayback(); });
 onBeforeUnmount(() => {
   mountRevision += 1;
   dispose();

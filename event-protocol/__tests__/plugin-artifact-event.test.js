@@ -24,6 +24,13 @@ const protocol = {
   animationId: "wave-once",
   duration: 1,
   loop: false,
+  scene: {
+    coordinateSystem: "normalized_world",
+    targetHeight: 1,
+    groundY: 0,
+    framing: "all_characters",
+    layout: { mode: "explicit", positions: [{ assetId: "robot-a", position: [0, 0, 0] }] },
+  },
   characters: [
     {
       assetId: "sample.three.robot-expressive",

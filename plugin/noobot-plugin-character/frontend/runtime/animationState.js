@@ -40,7 +40,7 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
   if (!card) {
     card = reactive({
       animationId: protocol.animationId,
-      protocols: [],
+      protocol: null,
       eventIds: [],
       assets: [],
       revision: 0,
@@ -55,8 +55,13 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
   const assetMap = new Map(card.assets.map((asset) => [asset.assetId, asset]));
   for (const asset of assetResult.data) assetMap.set(asset.assetId, asset);
   card.assets = [...assetMap.values()];
-  card.protocols.push(protocol);
-  card.revision += 1;
+  const eventRevision = Number(envelope?.payload?.revision);
+  if (!Number.isInteger(eventRevision) || eventRevision < 1) {
+    return { applied: false, reason: "missing_revision", animationId: protocol.animationId };
+  }
+  if (eventRevision <= card.revision) return { applied: false, reason: "stale_revision", animationId: protocol.animationId };
+  card.protocol = protocol;
+  card.revision = eventRevision;
   animationRuntimeState.revision += 1;
   return {
     applied: true,
