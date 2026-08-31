@@ -48,3 +48,10 @@ node scripts/capture-character-animation-runtime.mjs
 
 `assets/samples/robot-expressive/RobotExpressive.glb` is the Three.js r180
 official example model. Its accompanying README records the CC0 1.0 license.
+
+The built-in sample catalog also includes `Soldier.glb`, `Flamingo.glb`,
+`Horse.glb`, and `Parrot.glb` from the Three.js examples repository (r180).
+These files are redistributed for demonstration and interoperability testing;
+their upstream attribution and license notices are recorded in
+`assets/samples/THREEJS-SAMPLES-LICENSES.md`. Review each notice before using
+the samples in a separately distributed product.
