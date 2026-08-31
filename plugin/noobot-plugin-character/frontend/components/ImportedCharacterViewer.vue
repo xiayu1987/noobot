@@ -40,6 +40,7 @@ let mountRevision = 0;
 let players = new Map();
 let queuedProtocolCount = 0;
 let nextPlaybackAt = 0;
+let activeProtocol = null;
 
 function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
@@ -79,13 +80,7 @@ async function exportVideo() {
   const stream = renderer.domElement.captureStream(30);
   const recorder = new MediaRecorder(stream, { mimeType });
   const chunks = [];
-  const durationMs = Math.max(
-    1000,
-    Math.min(
-      60000,
-      (props.protocol?.duration || 0) * 1000 + 500,
-    ),
-  );
+  const durationMs = Math.max(1000, Math.min(60000, (props.protocol?.duration || 0) * 1000 + 500));
   isRecording.value = true;
   const result = new Promise((resolve, reject) => {
     recorder.ondataavailable = (event) => event.data?.size && chunks.push(event.data);
@@ -131,6 +126,7 @@ function dispose() {
   scene = undefined;
   camera = undefined;
   players = new Map();
+  activeProtocol = null;
   queuedProtocolCount = 0;
   nextPlaybackAt = 0;
 }
@@ -160,37 +156,170 @@ function createKeyframeClip(segment, animationId, characterIndex, segmentIndex) 
   );
 }
 
-function playCharacter(player, protocol, character, characterIndex, startsAt) {
-  const layout = protocol.scene.layout.positions.find((item) => item.assetId === character.assetId);
-  player.anchor.position.fromArray(layout.position);
-  character.segments.forEach((segment, segmentIndex) => {
+function playCharacter(player, protocol, character, characterIndex) {
+  player.segmentActions = character.segments.map((segment, segmentIndex) => {
     const clip =
       segment.type === "native_clip"
         ? THREE.AnimationClip.findByName(player.animations, segment.clip)?.clone()
         : createKeyframeClip(segment, protocol.animationId, characterIndex, segmentIndex);
-    if (!clip) return;
+    if (!clip) return null;
     const action = player.mixer.clipAction(clip);
     action.clampWhenFinished = !protocol.loop && segmentIndex === character.segments.length - 1;
     action
       .setLoop(protocol.loop ? THREE.LoopRepeat : THREE.LoopOnce, protocol.loop ? Infinity : 1)
       .reset()
-      .setDuration(segment.duration)
-      .startAt(startsAt + segment.start)
-      .play();
+      .setDuration(segment.duration);
+    action.enabled = false;
+    action.weight = 0;
+    // The protocol timeline, not the source clip duration, owns playback.
+    // Keep the action paused so a short GLB clip cannot finish early and
+    // disable itself before the declared segment ends.
+    action.paused = true;
+    return action;
   });
+  player.activeSegmentIndex = -1;
+}
+
+function updateCharacterActions(protocol, time) {
+  for (const player of players.values()) {
+    const character = protocol?.characters?.find((item) => item.assetId === player.assetId);
+    if (!character || !player.segmentActions?.length) continue;
+    let segmentIndex = character.segments.findIndex(
+      (segment) => time >= segment.start && time < segment.start + segment.duration,
+    );
+    if (segmentIndex < 0 && time >= protocol.duration) segmentIndex = character.segments.length - 1;
+    if (segmentIndex < 0) continue;
+    const segment = character.segments[segmentIndex];
+    const action = player.segmentActions[segmentIndex];
+    if (!action) continue;
+    if (segmentIndex !== player.activeSegmentIndex) {
+      player.segmentActions.forEach((item, index) => {
+        if (item && index !== segmentIndex) {
+          item.enabled = false;
+          item.weight = 0;
+          item.paused = true;
+        }
+      });
+      action.enabled = true;
+      action.weight = 1;
+      action.paused = true;
+      action.reset().play();
+      player.activeSegmentIndex = segmentIndex;
+    }
+    action.enabled = true;
+    action.weight = 1;
+    action.paused = true;
+    const localTime = Math.min(segment.duration, Math.max(0, time - segment.start));
+    const clipDuration = Math.max(0, action.getClip().duration);
+    action.time =
+      segment.duration > 0
+        ? Math.min(clipDuration, (localTime / segment.duration) * clipDuration)
+        : 0;
+    if (
+      !protocol.loop &&
+      time >= protocol.duration &&
+      segmentIndex === character.segments.length - 1
+    ) {
+      action.enabled = true;
+      action.paused = true;
+      action.time = clipDuration;
+    }
+
+    // AnimationMixer applies action state during update(). At a segment
+    // boundary the previous action may already have completed and disabled
+    // itself, so waiting for the next frame briefly exposes the model's bind
+    // pose. Re-evaluate at the current action time immediately after the
+    // timeline selects the active segment; this keeps every rendered frame
+    // covered by exactly one action.
+    player.mixer.update(0);
+  }
+}
+
+function applyRootTransforms(protocol) {
+  for (const player of players.values()) {
+    const character = protocol?.characters?.find((item) => item.assetId === player.assetId);
+    const root = character?.rootTransform;
+    if (!root) continue;
+    player.anchor.position.fromArray(root.position);
+    player.anchor.quaternion.fromArray(root.rotation);
+    player.anchor.scale.fromArray(root.scale);
+  }
+}
+
+function updateRootMotion(protocol, time) {
+  for (const player of players.values()) {
+    const character = protocol?.characters?.find((item) => item.assetId === player.assetId);
+    const segment = character?.segments?.find(
+      (item) => item.rootMotion && time >= item.start && time <= item.start + item.duration,
+    );
+    if (!segment) {
+      const root = character?.rootTransform;
+      if (root) {
+        player.anchor.position.fromArray(root.position);
+        player.anchor.quaternion.fromArray(root.rotation);
+        player.anchor.scale.fromArray(root.scale);
+      }
+      continue;
+    }
+    const frames = segment.rootMotion.keyframes;
+    const localTime = Math.min(segment.duration, Math.max(0, time - segment.start));
+    let left = frames[0];
+    let right = frames[frames.length - 1];
+    for (let index = 1; index < frames.length; index += 1) {
+      if (localTime <= frames[index].time) {
+        right = frames[index];
+        left = frames[index - 1];
+        break;
+      }
+    }
+    const span = Math.max(0.000001, right.time - left.time);
+    const amount = Math.min(1, Math.max(0, (localTime - left.time) / span));
+    player.anchor.position
+      .fromArray(left.position)
+      .lerp(new THREE.Vector3().fromArray(right.position), amount);
+    player.anchor.quaternion
+      .fromArray(left.rotation)
+      .slerp(new THREE.Quaternion().fromArray(right.rotation), amount);
+    player.anchor.scale
+      .fromArray(left.scale)
+      .lerp(new THREE.Vector3().fromArray(right.scale), amount);
+  }
+}
+
+function updateCamera(protocol, time) {
+  const frames = protocol?.scene?.cameraTrack?.keyframes || [];
+  if (!camera || frames.length < 2) return;
+  let left = frames[0];
+  let right = frames[frames.length - 1];
+  for (let index = 1; index < frames.length; index += 1) {
+    if (time <= frames[index].time) {
+      right = frames[index];
+      left = frames[index - 1];
+      break;
+    }
+  }
+  const span = Math.max(0.000001, right.time - left.time);
+  const amount = Math.min(1, Math.max(0, (time - left.time) / span));
+  camera.position
+    .fromArray(left.position)
+    .lerp(new THREE.Vector3().fromArray(right.position), amount);
+  controls?.target.fromArray(left.target).lerp(new THREE.Vector3().fromArray(right.target), amount);
+  camera.fov = left.fov + (right.fov - left.fov) * amount;
+  camera.updateProjectionMatrix();
 }
 
 function queueProtocol() {
   if (!players.size || !props.protocol || queuedProtocolCount) return;
   {
     const protocol = props.protocol;
+    activeProtocol = protocol;
     const startsAt = Math.max(
       nextPlaybackAt,
       ...[...players.values()].map((item) => item.mixer.time),
     );
     protocol.characters.forEach((character, characterIndex) => {
       const player = players.get(character.assetId);
-      if (player) playCharacter(player, protocol, character, characterIndex, startsAt);
+      if (player) playCharacter(player, protocol, character, characterIndex);
     });
     nextPlaybackAt = startsAt + protocol.duration;
   }
@@ -218,15 +347,19 @@ async function loadPlayer(asset, revision) {
       URL.revokeObjectURL(objectUrl);
       return null;
     }
-    return {
+    const mixer = new THREE.AnimationMixer(gltf.scene);
+    const player = {
       asset,
       assetId: asset.assetId,
       anchor: new THREE.Group(),
       model: gltf.scene,
-      mixer: new THREE.AnimationMixer(gltf.scene),
+      mixer,
       animations: gltf.animations || [],
       objectUrl,
+      segmentActions: [],
+      activeSegmentIndex: -1,
     };
+    return player;
   } catch (error) {
     URL.revokeObjectURL(objectUrl);
     throw error;
@@ -255,10 +388,10 @@ async function mount() {
   players = new Map(loaded.map((player) => [player.assetId, player]));
   for (const [index, player] of loaded.entries()) {
     player.anchor.add(player.model);
-    const bounds = new THREE.Box3().setFromObject(player.model);
     const normalization = player.asset.normalization;
     player.model.scale.setScalar(normalization.scale);
     player.model.position.y = normalization.floorOffset + (props.protocol?.scene?.groundY || 0);
+    if (props.protocol) applyRootTransforms(props.protocol);
     if (!props.protocol) player.anchor.position.x = index - (loaded.length - 1) / 2;
     scene.add(player.anchor);
   }
@@ -305,6 +438,15 @@ async function mount() {
     frame = requestAnimationFrame(animate);
     const delta = clock.getDelta();
     for (const player of players.values()) player.mixer.update(delta);
+    if (activeProtocol) {
+      const time = Math.max(...[...players.values()].map((item) => item.mixer.time), 0);
+      updateCharacterActions(activeProtocol, time);
+      updateRootMotion(activeProtocol, time);
+      const cameraTime = activeProtocol.loop
+        ? time % Math.max(activeProtocol.duration, 0.000001)
+        : Math.min(time, activeProtocol.duration);
+      updateCamera(activeProtocol, cameraTime);
+    }
     controls.update();
     renderer.render(scene, camera);
   };
@@ -340,7 +482,13 @@ watch(
   },
 );
 onMounted(() => mount());
-watch(() => props.revision, () => { restartPlayback(); });
+watch(
+  () => props.revision,
+  () => {
+    applyRootTransforms(props.protocol);
+    restartPlayback();
+  },
+);
 onBeforeUnmount(() => {
   mountRevision += 1;
   dispose();

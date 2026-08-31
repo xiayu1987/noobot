@@ -39,6 +39,37 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
       requireAssetToken(assetId, assetIdPattern, "ID"),
       requireAssetToken(version, assetVersionPattern, "version"),
     );
+  const resolveCatalogPath = (userId) => path.resolve(resolveRoot(userId), "catalog.json");
+  let catalogMutation = Promise.resolve();
+  const readCatalog = async (userId) => {
+    try {
+      const value = JSON.parse(await fs.readFile(resolveCatalogPath(userId), "utf8"));
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new TypeError("workspace asset catalog must be an object");
+      }
+      return value;
+    } catch (error) {
+      if (error?.code === "ENOENT") return {};
+      throw error;
+    }
+  };
+  const writeCatalog = async (userId, catalog) => {
+    const root = resolveRoot(userId);
+    await fs.mkdir(root, { recursive: true });
+    const temporaryPath = path.resolve(root, `.catalog-${randomUUID()}`);
+    try {
+      await fs.writeFile(temporaryPath, JSON.stringify(catalog), { flag: "wx" });
+      await fs.rename(temporaryPath, resolveCatalogPath(userId));
+    } catch (error) {
+      await fs.rm(temporaryPath, { force: true });
+      throw error;
+    }
+  };
+  const mutateCatalog = (mutation) => {
+    const operation = catalogMutation.then(mutation, mutation);
+    catalogMutation = operation.catch(() => undefined);
+    return operation;
+  };
   return Object.freeze({
     maxFileBytes: LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes,
     async write({ userId, assetId, source, declaredBytes = 0, validate = null } = {}) {
@@ -114,6 +145,35 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
       return Object.freeze({
         size: stats.size,
         stream: createReadStream(filePath),
+      });
+    },
+    async listMetadata({ userId } = {}) {
+      return Object.freeze({ ...(await readCatalog(userId)) });
+    },
+    async writeMetadata({ userId, assetId, metadata } = {}) {
+      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+      if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+        throw new TypeError("workspace asset metadata object is required");
+      }
+      return mutateCatalog(async () => {
+        const catalog = await readCatalog(userId);
+        catalog[normalizedAssetId] = metadata;
+        await writeCatalog(userId, catalog);
+        return metadata;
+      });
+    },
+    async delete({ userId, assetId } = {}) {
+      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+      return mutateCatalog(async () => {
+        const catalog = await readCatalog(userId);
+        const existed = Object.prototype.hasOwnProperty.call(catalog, normalizedAssetId);
+        delete catalog[normalizedAssetId];
+        await writeCatalog(userId, catalog);
+        await fs.rm(path.resolve(resolveRoot(userId), normalizedAssetId), {
+          recursive: true,
+          force: true,
+        });
+        return Object.freeze({ assetId: normalizedAssetId, deleted: existed });
       });
     },
   });

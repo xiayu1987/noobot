@@ -31,10 +31,18 @@ function hydrateCharacterSessionArtifacts({ mainSessionDoc = {}, sessionItem = {
   const sessionId = String(mainSessionDoc?.sessionId || sessionItem?.sessionId || "").trim();
   resetAnimationRuntimeState(sessionId);
   const events = Array.isArray(mainSessionDoc?.sessionArtifactEvents)
-    ? mainSessionDoc.sessionArtifactEvents
+    ? [...mainSessionDoc.sessionArtifactEvents].sort(
+        (left, right) =>
+          Number(left?.ordering?.sequence || 0) - Number(right?.ordering?.sequence || 0),
+      )
     : [];
   return events.reduce(
-    (count, envelope) => count + Number(applyAnimationRuntimeEvent(envelope).applied === true),
+    (count, envelope) =>
+      count +
+      Number(
+        String(envelope?.identity?.sessionId || "").trim() === sessionId &&
+          applyAnimationRuntimeEvent(envelope).applied === true,
+      ),
     0,
   );
 }

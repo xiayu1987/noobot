@@ -8,6 +8,7 @@ import { bindTurnAttachments } from "./session-message-service/bind-turn-attachm
 import { appendTurn, appendTurns } from "./session-message-service/append-turn.js";
 import { commitMessageEvent } from "./session-message-service/message-event.js";
 import { commitAuthorityEvent } from "./session-message-service/authority-event.js";
+import { pluginArtifactKey, projectPluginArtifacts } from "@noobot/event-protocol";
 import { deleteFromMessage, replaceTurn } from "./session-message-service/turn-mutations.js";
 import {
   acknowledgeAuthorityEvent,
@@ -130,10 +131,13 @@ export class SessionMessageService {
   }
   async getPluginArtifact(payload = {}) {
     const session = await this.sessionRepo.findById(
-      payload.userId, payload.sessionId, payload.parentSessionId || "", payload.persistenceContext || null,
+      payload.userId,
+      payload.sessionId,
+      payload.parentSessionId || "",
+      payload.persistenceContext || null,
     );
-    const key = `${payload.pluginId}:${payload.artifactType}:${payload.artifactId}`;
-    const current = session?.sessionArtifacts?.[key];
+    const key = pluginArtifactKey(payload);
+    const current = projectPluginArtifacts(session?.sessionArtifactEvents || [])[key];
     if (!current) return { found: false, artifact: null, revision: 0 };
     return {
       found: true,
@@ -142,17 +146,6 @@ export class SessionMessageService {
       artifact: current.data,
       eventId: current.eventId,
     };
-  }
-  async replacePluginArtifact(payload = {}) {
-    const baseRevision = payload.baseRevision == null ? null : Number(payload.baseRevision);
-    return this.commitAuthorityEvent({
-      ...payload,
-      payload: {
-        ...payload.payload,
-        operation: "replaced",
-        baseRevision,
-      },
-    });
   }
   async deleteFromMessage(payload = {}) {
     return deleteFromMessage.call(this, payload);

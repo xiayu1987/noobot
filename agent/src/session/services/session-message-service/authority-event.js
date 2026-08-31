@@ -4,8 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { createEventEnvelope, validateProtocolEvent } from "@noobot/event-protocol";
+import {
+  createEventEnvelope,
+  getEventFamily,
+  pluginArtifactKey,
+  projectPluginArtifacts,
+  validateProtocolEvent,
+} from "@noobot/event-protocol";
 import { normalizeAuthorityEventOutbox } from "@noobot/event-protocol/outbox";
+import {
+  PLUGIN_ARTIFACT_ERROR_CODE,
+  PLUGIN_ARTIFACT_FAMILY,
+} from "@noobot/event-protocol/plugin-artifact-event";
 
 const text = (value) => String(value || "").trim();
 
@@ -65,25 +75,50 @@ export async function commitAuthorityEvent({
         persistenceContext,
       );
       if (!session) return { committed: false, reason: "session_not_found" };
-      let eventPayload = { ...payload };
-      const artifactKey = `${text(payload?.pluginId)}:${text(payload?.artifactType)}:${text(payload?.artifactId)}`;
-      const currentArtifact = session.sessionArtifacts?.[artifactKey] || null;
+      const eventPayload = { ...payload };
+      const descriptor = getEventFamily(family);
+      const isArtifact = descriptor?.sessionArtifact === true && family === PLUGIN_ARTIFACT_FAMILY;
+      const artifactKey = isArtifact ? pluginArtifactKey(payload) : "";
+      const currentArtifact = isArtifact
+        ? projectPluginArtifacts(session.sessionArtifactEvents || [])[artifactKey] || null
+        : null;
       const currentRevision = currentArtifact ? Number(currentArtifact.revision) : 0;
       const expectedRevision = payload?.baseRevision == null ? null : Number(payload.baseRevision);
-      if (payload?.operation === "replaced" && (currentArtifact ? expectedRevision !== currentRevision : expectedRevision !== 0)) {
-          return {
-            committed: false,
-            reason: "revision_conflict",
-            code: "ANIMATION_REVISION_CONFLICT",
-            currentRevision,
-          };
+      if (isArtifact && payload?.operation === "replaced" && !currentArtifact) {
+        return {
+          committed: false,
+          reason: "artifact_not_found",
+          code: PLUGIN_ARTIFACT_ERROR_CODE.NOT_FOUND,
+          currentRevision: 0,
+        };
       }
-      if (payload?.operation === "created" && currentArtifact) {
-        return { committed: false, reason: "artifact_exists", code: "ARTIFACT_ALREADY_EXISTS", currentRevision };
+      if (isArtifact && payload?.operation === "replaced" && expectedRevision !== currentRevision) {
+        return {
+          committed: false,
+          reason: "revision_conflict",
+          code: PLUGIN_ARTIFACT_ERROR_CODE.REVISION_CONFLICT,
+          currentRevision,
+        };
       }
-      eventPayload.revision = payload?.operation === "replaced" ? currentRevision + 1 : 1;
+      if (isArtifact && payload?.operation === "created" && currentArtifact) {
+        return {
+          committed: false,
+          reason: "artifact_exists",
+          code: PLUGIN_ARTIFACT_ERROR_CODE.ALREADY_EXISTS,
+          currentRevision,
+        };
+      }
+      if (isArtifact) {
+        eventPayload.revision = payload?.operation === "replaced" ? currentRevision + 1 : 1;
+      }
       const actualVersion = Math.max(0, Number(session.aggregateVersion) || 0);
       const occurredAt = this.now();
+      const sequence = nextSequence(
+        session.authorityEventOutbox,
+        session.sessionArtifactEvents,
+        orderingDomain,
+        orderingScopeId,
+      );
       const envelope = createEventEnvelope({
         family,
         schemaVersion,
@@ -97,12 +132,8 @@ export async function commitAuthorityEvent({
           ...ordering,
           domain: orderingDomain,
           scopeId: orderingScopeId,
-          sequence: nextSequence(
-            session.authorityEventOutbox,
-            session.sessionArtifactEvents,
-            orderingDomain,
-            orderingScopeId,
-          ),
+          sequence,
+          ...(isArtifact ? { revision: eventPayload.revision } : {}),
           aggregateVersion: actualVersion + 1,
         },
         producer,
@@ -124,18 +155,6 @@ export async function commitAuthorityEvent({
       ];
       if (validation.descriptor?.sessionArtifact === true) {
         session.sessionArtifactEvents = [...(session.sessionArtifactEvents || []), envelope];
-        session.sessionArtifacts = {
-          ...(session.sessionArtifacts || {}),
-          [artifactKey]: {
-            pluginId: envelope.payload.pluginId,
-            artifactType: envelope.payload.artifactType,
-            artifactId: envelope.payload.artifactId,
-            revision: envelope.payload.revision,
-            operation: envelope.payload.operation,
-            data: envelope.payload.data,
-            eventId: envelope.identity.eventId,
-          },
-        };
       }
       session.updatedAt = occurredAt;
       const saved = await this.sessionRepo.save(owner.userId, session, resolvedParentSessionId, {

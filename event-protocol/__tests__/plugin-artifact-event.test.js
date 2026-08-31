@@ -81,7 +81,10 @@ test("plugin artifact ordering is scoped by plugin and artifact ID", () => {
   assert.equal(envelope.identity.eventType, PLUGIN_ARTIFACT_EVENT);
   assert.equal(envelope.protocol.schemaVersion, PLUGIN_ARTIFACT_SCHEMA_VERSION);
   assert.equal(envelope.ordering.domain, PLUGIN_ARTIFACT_SEQUENCE_DOMAIN);
-  assert.equal(envelope.ordering.scopeId, `session-1:character:${protocol.animationId}`);
+  assert.equal(
+    envelope.ordering.scopeId,
+    `session-1:character:character.animation:${protocol.animationId}`,
+  );
   assert.equal(envelope.payload.data.protocol, protocol);
 });
 

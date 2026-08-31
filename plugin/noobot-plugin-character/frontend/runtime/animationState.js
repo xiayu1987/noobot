@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { reactive } from "vue";
+import { reducePluginArtifact } from "@noobot/event-protocol";
 import {
   safeParseAnimationAssets,
   safeParseAnimationProtocol,
@@ -27,16 +28,40 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
   ) {
     return { applied: false, reason: "unsupported_character_artifact" };
   }
-  if (animationRuntimeState.sessionId !== sessionId) resetAnimationRuntimeState(sessionId);
+  if (animationRuntimeState.sessionId && animationRuntimeState.sessionId !== sessionId) {
+    return { applied: false, reason: "session_mismatch" };
+  }
+  if (!animationRuntimeState.sessionId) animationRuntimeState.sessionId = sessionId;
   const assetResult = safeParseAnimationAssets(envelope?.payload?.data?.assets);
   if (!assetResult.success) return { applied: false, reason: "invalid_animation_assets" };
   const result = safeParseAnimationProtocol(envelope?.payload?.data?.protocol);
   if (!result.success) return { applied: false, reason: "invalid_animation_protocol" };
   const protocol = result.data;
+  if (String(envelope?.payload?.artifactId || "").trim() !== protocol.animationId) {
+    return { applied: false, reason: "artifact_id_mismatch", animationId: protocol.animationId };
+  }
   let card = animationRuntimeState.cards.find(
     (candidate) => candidate.animationId === protocol.animationId,
   );
-  const created = !card;
+  const eventId = String(envelope?.identity?.eventId || "").trim();
+  if (!eventId)
+    return { applied: false, reason: "missing_event_id", animationId: protocol.animationId };
+  if (card?.eventIds.includes(eventId)) {
+    return { applied: false, reason: "duplicate_event", animationId: protocol.animationId };
+  }
+  const currentArtifact = card
+    ? {
+        revision: card.revision,
+        pluginId: CHARACTER_PLUGIN_ID,
+        artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
+        artifactId: protocol.animationId,
+        data: { protocol: card.protocol, assets: card.assets },
+      }
+    : null;
+  const reduced = reducePluginArtifact(currentArtifact, envelope);
+  if (!reduced.applied)
+    return { applied: false, reason: reduced.reason, animationId: protocol.animationId };
+  const eventRevision = reduced.artifact.revision;
   if (!card) {
     card = reactive({
       animationId: protocol.animationId,
@@ -45,23 +70,13 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
       assets: [],
       revision: 0,
     });
-    animationRuntimeState.cards.push(card);
   }
-  const eventId = String(envelope?.identity?.eventId || "").trim();
-  if (card.eventIds.includes(eventId)) {
-    return { applied: false, reason: "duplicate_event", animationId: protocol.animationId };
-  }
+  const created = !animationRuntimeState.cards.includes(card);
   card.eventIds.push(eventId);
-  const assetMap = new Map(card.assets.map((asset) => [asset.assetId, asset]));
-  for (const asset of assetResult.data) assetMap.set(asset.assetId, asset);
-  card.assets = [...assetMap.values()];
-  const eventRevision = Number(envelope?.payload?.revision);
-  if (!Number.isInteger(eventRevision) || eventRevision < 1) {
-    return { applied: false, reason: "missing_revision", animationId: protocol.animationId };
-  }
-  if (eventRevision <= card.revision) return { applied: false, reason: "stale_revision", animationId: protocol.animationId };
+  card.assets = assetResult.data;
   card.protocol = protocol;
   card.revision = eventRevision;
+  if (!animationRuntimeState.cards.includes(card)) animationRuntimeState.cards.push(card);
   animationRuntimeState.revision += 1;
   return {
     applied: true,

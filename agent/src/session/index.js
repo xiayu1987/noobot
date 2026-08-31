@@ -362,10 +362,6 @@ export function createSessionFacade(runtime = {}) {
     async getPluginArtifact(payload = {}) {
       return sessionMessageService.getPluginArtifact(bindPersistenceScope(payload));
     },
-    async replacePluginArtifact(payload = {}) {
-      return sessionMessageService.replacePluginArtifact(bindPersistenceScope(payload));
-    },
-
     async commitTurn(payload = {}) {
       return sessionMessageService.commitTurn(payload);
     },

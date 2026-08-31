@@ -152,6 +152,12 @@ function toggleFeaturePanel() {
   featurePanelVisible.value = nextVisible;
 }
 
+function toggleChatNavigator() {
+  const nextVisible = !props.chatNavigatorVisible;
+  if (nextVisible) featurePanelVisible.value = false;
+  emit("toggle-chat-navigator-visible");
+}
+
 function handleMobileFeaturePanelUpdate(visible) {
   featurePanelVisible.value = visible === true;
 }
@@ -259,7 +265,7 @@ defineExpose({
                     ? translate('common.hideChatNavigator')
                     : translate('common.showChatNavigator')
                 "
-                @click="emit('toggle-chat-navigator-visible')"
+                @click="toggleChatNavigator"
               >
                 <el-icon><Tickets /></el-icon>
               </button>
@@ -276,12 +282,12 @@ defineExpose({
                 size="small"
                 class="chat-message-nav-toggle"
                 v-show="chatNavigatorVisible"
-                @click="emit('toggle-chat-navigator-visible')"
+                @click="toggleChatNavigator"
               >
                 {{ translate("common.hideChatNavigator") }}
               </el-button>
             </div>
-            <el-affix :offset="80">
+            <div class="chat-message-nav-scroll">
               <ChatMessageNavigator
                 v-show="chatNavigatorVisible"
                 :items="chatMessageNavItems"
@@ -289,7 +295,7 @@ defineExpose({
                 :is-mobile="isMobile"
                 @select="emit('select-chat-message-nav-item', $event)"
               />
-            </el-affix>
+            </div>
           </aside>
           <aside
             class="connector-overview-panel noobot-panel-card"
@@ -574,8 +580,12 @@ defineExpose({
 }
 
 .chat-message-nav-panel {
+  box-sizing: border-box;
   width: 236px;
   max-width: 24vw;
+  max-height: calc(100vh - 36px);
+  min-height: 0;
+  overflow: hidden;
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
@@ -594,12 +604,18 @@ defineExpose({
   align-items: flex-end;
   gap: var(--noobot-space-sm);
   max-height: calc(100% - 36px);
+  overflow-y: auto;
+  overflow-x: hidden;
   pointer-events: none;
 }
 
 .right-tool-panels > * {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   pointer-events: auto;
+}
+
+.right-tool-panels > *.is-collapsed {
+  min-height: var(--noobot-side-panel-collapsed-width);
 }
 
 .chat-message-nav-panel.is-collapsed {
@@ -608,11 +624,21 @@ defineExpose({
   padding: var(--noobot-space-xs);
 }
 
+.chat-message-nav-scroll {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 0;
+}
+
+.chat-message-nav-scroll :deep(.chat-message-navigator) {
+  max-height: none;
+  overflow: visible;
+}
+
 .connector-overview-panel {
   width: 236px;
   max-width: 24vw;
-  max-height: calc(100vh - 36px);
-  overflow-y: auto;
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
