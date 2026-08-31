@@ -66,6 +66,28 @@ function normalizeSessionArtifactEvents(session = {}) {
   return events;
 }
 
+function normalizeSessionArtifacts(session = {}) {
+  const source = session?.sessionArtifacts;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return {};
+  const result = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const pluginId = normalizeTextField(value.pluginId);
+    const artifactType = normalizeTextField(value.artifactType);
+    const artifactId = normalizeTextField(value.artifactId);
+    const revision = Number(value.revision);
+    if (!pluginId || !artifactType || !artifactId || !Number.isInteger(revision) || revision < 1) continue;
+    result[`${pluginId}:${artifactType}:${artifactId}`] = {
+      ...value,
+      pluginId,
+      artifactType,
+      artifactId,
+      revision,
+    };
+  }
+  return result;
+}
+
 function normalizeSessionAttachment(item = {}) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
   const identity = projectAttachmentIdentity(item);
@@ -448,6 +470,7 @@ function createNormalizedSessionEntity(session, context, messages) {
     turnLifecycle: normalizeTurnLifecycleEntity(session?.turnLifecycle || {}),
     authorityEventOutbox: normalizeAuthorityEventOutbox(session?.authorityEventOutbox || []),
     sessionArtifactEvents: normalizeSessionArtifactEvents(session),
+    sessionArtifacts: normalizeSessionArtifacts(session),
     selectedConnectorIds: normalizeSelectedConnectorIds(session?.selectedConnectorIds),
     createdAt: firstTextField([session?.createdAt, context.nowValue]),
     updatedAt: firstTextField([session?.updatedAt, context.nowValue]),

@@ -19,9 +19,7 @@ const exportError = ref("");
 const exporting = ref(false);
 const assetIds = computed(() => [
   ...new Set(
-    props.card.protocols.flatMap((protocol) =>
-      protocol.characters.map((character) => character.assetId),
-    ),
+    props.card.protocol.characters.map((character) => character.assetId),
   ),
 ]);
 const assets = computed(() =>
@@ -53,7 +51,7 @@ function replay() {
       <div class="character-animation-card__title">
         <strong>{{ card.animationId }}</strong>
         <span>
-          {{ card.protocols.length }} ·
+          rev {{ card.revision }} ·
           {{ translate("character.characterCount", { count: assetIds.length }) }}
         </span>
       </div>
@@ -85,7 +83,7 @@ function replay() {
       v-if="assets.length === assetIds.length"
       ref="viewer"
       :assets="assets"
-      :protocols="card.protocols"
+      :protocol="card.protocol"
       :revision="card.revision"
       fill-container
       :suspend-resize="props.suspendResize"

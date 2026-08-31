@@ -128,6 +128,32 @@ export class SessionMessageService {
   async commitAuthorityEvent(payload = {}) {
     return commitAuthorityEvent.call(this, payload);
   }
+  async getPluginArtifact(payload = {}) {
+    const session = await this.sessionRepo.findById(
+      payload.userId, payload.sessionId, payload.parentSessionId || "", payload.persistenceContext || null,
+    );
+    const key = `${payload.pluginId}:${payload.artifactType}:${payload.artifactId}`;
+    const current = session?.sessionArtifacts?.[key];
+    if (!current) return { found: false, artifact: null, revision: 0 };
+    return {
+      found: true,
+      revision: current.revision,
+      operation: current.operation,
+      artifact: current.data,
+      eventId: current.eventId,
+    };
+  }
+  async replacePluginArtifact(payload = {}) {
+    const baseRevision = payload.baseRevision == null ? null : Number(payload.baseRevision);
+    return this.commitAuthorityEvent({
+      ...payload,
+      payload: {
+        ...payload.payload,
+        operation: "replaced",
+        baseRevision,
+      },
+    });
+  }
   async deleteFromMessage(payload = {}) {
     return deleteFromMessage.call(this, payload);
   }

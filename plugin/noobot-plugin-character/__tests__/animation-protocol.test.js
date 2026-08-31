@@ -8,7 +8,12 @@ import assert from "node:assert/strict";
 import { createModelContext } from "@noobot/context-protocol";
 import { parseAnimationProtocol, safeParseAnimationProtocol } from "../src/animation-protocol.js";
 import { createAnimationTools } from "../src/animation-tools.js";
-import { CHARACTER_ANIMATION_ARTIFACT_TYPE } from "../src/contract.js";
+import {
+  CHARACTER_ANIMATION_ARTIFACT_TYPE,
+  CHARACTER_ANIMATION_SCRIPT_TOOL_ID,
+  CHARACTER_ANIMATION_TOOL_ID,
+  CHARACTER_ANIMATION_UPDATE_TOOL_ID,
+} from "../src/contract.js";
 import { activate, injectAnimationContext } from "../src/entries/agent.js";
 
 const assets = ["robot-a", "robot-b"].map((name) => ({
@@ -18,6 +23,8 @@ const assets = ["robot-a", "robot-b"].map((name) => ({
   size: 12,
   animations: [{ name: "Walking", duration: 1.2, tracks: 42 }],
   nodes: ["Head"],
+  bounds: { min: [0, 0, 0], max: [1, 1, 1], height: 1 },
+  normalization: { targetHeight: 1, scale: 1, floorOffset: 0 },
   importedAt: "2026-08-29T00:00:00.000Z",
   resource: {
     version: "a".repeat(64),
@@ -32,9 +39,18 @@ const protocol = {
   animationId: "walk-and-nod",
   duration: 2,
   loop: false,
+  scene: {
+    coordinateSystem: "normalized_world",
+    targetHeight: 1,
+    groundY: 0,
+    framing: "all_characters",
+    layout: {
+      mode: "explicit",
+      positions: assets.map((asset, index) => ({ assetId: asset.assetId, position: [index * 2, 0, 0] })),
+    },
+  },
   characters: assets.map((asset, index) => ({
     assetId: asset.assetId,
-    initialPosition: [index * 2, 0, 0],
     segments: [
       { type: "native_clip", start: 0, duration: 1, clip: "Walking" },
       {
@@ -95,7 +111,7 @@ test("character context is absent without a selection and injected once with exa
   };
   assert.equal(injectAnimationContext(context, config), true);
   assert.equal(injectAnimationContext(context, config), false);
-  assert.match(String(modelContext.messageBlocks.system[0].content), /initialPosition/);
+  assert.match(String(modelContext.messageBlocks.system[0].content), /layout:\{mode:explicit,positions:/);
   assert.match(String(modelContext.messageBlocks.system[0].content), /Walking/);
 });
 
@@ -144,7 +160,7 @@ test("the tool creates and returns an animation ID when the model omits it", asy
 });
 
 test("the registered tool commits through the declared artifact port", async () => {
-  let registeredFactory = null;
+  const registeredFactories = new Map();
   const commits = [];
   const agentContext = { protocolVersion: 1 };
   const activation = activate(
@@ -155,10 +171,12 @@ test("the registered tool commits through the declared artifact port", async () 
           commits.push({ artifact, toolContext });
           return { identity: { eventId: "event-1" } };
         },
+        get: async () => ({ found: false, artifact: null, revision: 0 }),
+        replace: async () => ({ committed: true, envelope: { identity: { eventId: "event-2" } } }),
       },
       tools: {
-        register: (_id, factory) => {
-          registeredFactory = factory;
+        register: (id, factory) => {
+          registeredFactories.set(id, factory);
           return { dispose() {} };
         },
       },
@@ -168,11 +186,18 @@ test("the registered tool commits through the declared artifact port", async () 
       selectedCharacterAssetIds: assets.map((asset) => asset.assetId),
     },
   );
-  const tool = registeredFactory({ agentContext });
+  const tool = registeredFactories.get(CHARACTER_ANIMATION_TOOL_ID)({ agentContext });
   const result = JSON.parse(
     await tool.invoke({
       protocol: {
         ...protocol,
+        scene: {
+          ...protocol.scene,
+          layout: {
+            ...protocol.scene.layout,
+            positions: [protocol.scene.layout.positions[0]],
+          },
+        },
         characters: [protocol.characters[0]],
       },
     }),
@@ -181,4 +206,33 @@ test("the registered tool commits through the declared artifact port", async () 
   assert.equal(result.ok, true);
   assert.equal(commits[0].artifact.artifactType, CHARACTER_ANIMATION_ARTIFACT_TYPE);
   assert.equal(commits[0].toolContext.agentContext, agentContext);
+});
+
+test("update replaces an animation with an atomic base revision", async () => {
+  const replacements = [];
+  const updateTool = createAnimationTools({
+    pluginConfig: { characterAssets: assets, selectedCharacterAssetIds: assets.map((asset) => asset.assetId) },
+    replaceArtifact: async (artifact) => {
+      replacements.push(artifact);
+      return { committed: true, envelope: { identity: { eventId: "replace-1" } } };
+    },
+  }).find((tool) => tool.name === CHARACTER_ANIMATION_UPDATE_TOOL_ID);
+  const result = JSON.parse(await updateTool.invoke({ animationId: protocol.animationId, baseRevision: 3, protocol }));
+  assert.equal(result.ok, true);
+  assert.equal(replacements[0].baseRevision, 3);
+  assert.equal(replacements[0].data.protocol.animationId, protocol.animationId);
+});
+
+test("script tool rejects host capabilities and accepts a protocol expression", async () => {
+  const commits = [];
+  const tools = createAnimationTools({
+    pluginConfig: { characterAssets: assets, selectedCharacterAssetIds: assets.map((asset) => asset.assetId) },
+    commitArtifact: async (artifact) => { commits.push(artifact); return { identity: { eventId: "script-1" } }; },
+  });
+  const scriptTool = tools.find((tool) => tool.name === CHARACTER_ANIMATION_SCRIPT_TOOL_ID);
+  const rejected = await scriptTool.invoke({ script: "process.exit()" }).catch((error) => error.message);
+  assert.match(String(rejected), /forbidden capability|schema/);
+  const result = JSON.parse(await scriptTool.invoke({ script: JSON.stringify({ ...protocol, animationId: undefined }) }));
+  assert.equal(result.ok, true);
+  assert.equal(commits.length, 1);
 });

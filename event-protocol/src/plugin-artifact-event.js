@@ -9,6 +9,7 @@ export const PLUGIN_ARTIFACT_EVENT = "plugin.artifact.committed";
 export const PLUGIN_ARTIFACT_FAMILY = "plugin.artifact";
 export const PLUGIN_ARTIFACT_SEQUENCE_DOMAIN = "plugin-artifact";
 export const PLUGIN_ARTIFACT_SCHEMA_VERSION = 1;
+export const PLUGIN_ARTIFACT_OPERATIONS = Object.freeze(["created", "replaced", "deleted"]);
 
 const text = (value) => String(value ?? "").trim();
 const tokenPattern = /^[A-Za-z][A-Za-z0-9_.-]{0,159}$/;
@@ -21,6 +22,9 @@ export function createPluginArtifactEnvelope({
   turnScopeId = "",
   data = {},
   sequence = 1,
+  operation = "created",
+  revision = sequence,
+  baseRevision = null,
   occurredAt = new Date().toISOString(),
 } = {}) {
   const envelope = createEventEnvelope({
@@ -45,6 +49,9 @@ export function createPluginArtifactEnvelope({
       artifactType: text(artifactType),
       artifactId: text(artifactId),
       data,
+      operation: text(operation),
+      revision,
+      baseRevision,
     },
   });
   const validation = validatePluginArtifactEnvelope(envelope);
@@ -60,6 +67,7 @@ export function validatePluginArtifactEnvelope(envelope = {}) {
   const artifactType = text(envelope?.payload?.artifactType);
   const artifactId = text(envelope?.payload?.artifactId);
   const sessionId = text(envelope?.identity?.sessionId);
+  const operation = text(envelope?.payload?.operation);
   if (envelope?.protocol?.schemaVersion !== PLUGIN_ARTIFACT_SCHEMA_VERSION) {
     errors.push("plugin_artifact_schema_version_mismatch");
   }
@@ -73,6 +81,12 @@ export function validatePluginArtifactEnvelope(envelope = {}) {
   if (!tokenPattern.test(artifactType)) errors.push("invalid_artifact_type");
   if (!tokenPattern.test(artifactId)) errors.push("invalid_artifact_id");
   if (!text(envelope?.identity?.turnScopeId)) errors.push("missing_turn_scope_id");
+  if (!PLUGIN_ARTIFACT_OPERATIONS.includes(operation)) errors.push("invalid_operation");
+  if (!Number.isInteger(envelope?.payload?.revision) || envelope.payload.revision < 1) errors.push("invalid_revision");
+  if (envelope?.payload?.baseRevision !== null
+    && (!Number.isInteger(envelope?.payload?.baseRevision) || envelope.payload.baseRevision < 0)) {
+    errors.push("invalid_base_revision");
+  }
   if (envelope?.producer?.type !== "plugin" || text(envelope?.producer?.id) !== pluginId) {
     errors.push("plugin_producer_mismatch");
   }

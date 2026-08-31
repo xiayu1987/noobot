@@ -51,7 +51,12 @@ export async function commitPluginArtifact({
       scopeId: `${identity.sessionId}:${pluginId}:${id}`,
     },
     producer: { type: "plugin", id: pluginId },
-    payload: { pluginId, artifactType: type, artifactId: id, data: artifact.data },
+    payload: {
+      pluginId, artifactType: type, artifactId: id, data: artifact.data,
+      operation: text(artifact.operation) || "created",
+      baseRevision: artifact.baseRevision == null ? null : Number(artifact.baseRevision),
+      revision: artifact.revision == null ? 1 : Number(artifact.revision),
+    },
     persistenceContext: runtime.persistenceContext || null,
   });
   if (!committed?.committed || !committed.envelope) {
@@ -63,4 +68,39 @@ export async function commitPluginArtifact({
     ts: new Date().toISOString(),
   });
   return committed.envelope;
+}
+
+export async function getPluginArtifact({ pluginId = "", artifact = {}, toolContext = {} } = {}) {
+  const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
+  const system = runtime?.systemRuntime || {};
+  if (typeof runtime?.sessionManager?.getPluginArtifact !== "function")
+    throw new Error("plugin artifact query port is unavailable");
+  return runtime.sessionManager.getPluginArtifact({
+    userId: text(runtime?.userId || system.userId), sessionId: text(system.sessionId),
+    parentSessionId: text(system.parentSessionId), persistenceContext: runtime.persistenceContext || null,
+    pluginId, artifactType: text(artifact?.artifactType), artifactId: text(artifact?.artifactId),
+  });
+}
+
+export async function replacePluginArtifact({ pluginId = "", artifact = {}, toolContext = {} } = {}) {
+  const runtime = getRuntimeFromAgentContext(toolContext?.agentContext);
+  const system = runtime?.systemRuntime || {};
+  if (typeof runtime?.sessionManager?.replacePluginArtifact !== "function")
+    throw new Error("plugin artifact replace port is unavailable");
+  return runtime.sessionManager.replacePluginArtifact({
+    userId: text(runtime?.userId || system.userId), sessionId: text(system.sessionId),
+    parentSessionId: text(system.parentSessionId), turnScopeId: text(system.turnScopeId || system.config?.turnScopeId),
+    family: PLUGIN_ARTIFACT_FAMILY, schemaVersion: PLUGIN_ARTIFACT_SCHEMA_VERSION,
+    identity: { eventType: PLUGIN_ARTIFACT_EVENT, turnScopeId: text(system.turnScopeId || system.config?.turnScopeId) },
+    causality: { correlationId: text(system.turnScopeId || system.config?.turnScopeId) },
+    ordering: { domain: PLUGIN_ARTIFACT_SEQUENCE_DOMAIN, scopeId: `${system.sessionId}:${pluginId}:${text(artifact.artifactId)}` },
+    producer: { type: "plugin", id: pluginId },
+    payload: {
+      pluginId, artifactType: text(artifact.artifactType), artifactId: text(artifact.artifactId),
+      data: artifact.data, operation: "replaced",
+      revision: Number(artifact.baseRevision || 0) + 1,
+    },
+    baseRevision: artifact.baseRevision == null ? null : Number(artifact.baseRevision),
+    persistenceContext: runtime.persistenceContext || null,
+  });
 }

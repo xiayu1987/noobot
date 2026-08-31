@@ -31,7 +31,7 @@ import { createAgentCapabilityModelInvoker } from "../../runtime/capability-runn
 import { normalizeTrimmedStringList, selectHookManager } from "./session-execution-engine-utils.js";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { commitPluginArtifact } from "./plugin-artifact-committer.js";
+import { commitPluginArtifact, getPluginArtifact, replacePluginArtifact } from "./plugin-artifact-committer.js";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
 export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
@@ -304,6 +304,14 @@ export class RunConfigPluginPreparer {
               path: ["artifacts", "commit"],
               value: (artifact, toolContext) =>
                 commitPluginArtifact({ pluginId: entry.pluginId, artifact, toolContext }),
+            },
+            [PLUGIN_HOST_PORT.ARTIFACTS_GET]: {
+              path: ["artifacts", "get"],
+              value: (artifact, toolContext) => getPluginArtifact({ pluginId: entry.pluginId, artifact, toolContext }),
+            },
+            [PLUGIN_HOST_PORT.ARTIFACTS_REPLACE]: {
+              path: ["artifacts", "replace"],
+              value: (artifact, toolContext) => replacePluginArtifact({ pluginId: entry.pluginId, artifact, toolContext }),
             },
             [PLUGIN_HOST_PORT.TOOLS_REGISTER]: {
               path: ["tools", "register"],

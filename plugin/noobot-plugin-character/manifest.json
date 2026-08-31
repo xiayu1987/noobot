@@ -17,7 +17,12 @@
         ],
         "emits": []
       },
-      "tools": [{ "id": "character_animation_generate", "name": "character_animation_generate" }]
+      "tools": [
+        { "id": "character_animation_generate", "name": "character_animation_generate" },
+        { "id": "character_animation_get", "name": "character_animation_get" },
+        { "id": "character_animation_update", "name": "character_animation_update" },
+        { "id": "character_animation_script", "name": "character_animation_script" }
+      ]
     },
     "service": {
       "routes": [
@@ -56,12 +61,14 @@
       "hooks.register",
       "tools.register",
       "artifacts.commit",
+      "artifacts.get",
+      "artifacts.replace",
       "routes.bind",
       "service.workspace.assets",
       "authenticated_request",
       "frontend.contribute"
     ],
-    "permissions": ["artifact.commit", "workspace.asset.manage", "http.authenticated"],
+    "permissions": ["artifact.commit", "session.read", "workspace.asset.manage", "http.authenticated"],
     "authenticatedRoutes": [
       { "method": "PUT", "path": "/api/internal/character/assets/:assetId" },
       { "method": "GET", "path": "/api/internal/character/assets/:assetId/:version" }

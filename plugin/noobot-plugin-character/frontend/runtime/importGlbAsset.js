@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as THREE from "three";
 import { saveImportedAsset } from "./importedAssetStore.js";
 
 export async function importGlbAsset({ blob, name, assetId }) {
@@ -18,6 +19,12 @@ export async function importGlbAsset({ blob, name, assetId }) {
       const nodeName = String(node?.name || "").trim();
       if (nodeName) nodes.push(nodeName);
     });
+    const bounds = new THREE.Box3().setFromObject(gltf.scene);
+    const min = bounds.min.toArray();
+    const max = bounds.max.toArray();
+    const height = max[1] - min[1];
+    if (!(height > 0)) throw new Error("GLB model must have a positive height");
+    const targetHeight = 1;
     return saveImportedAsset(
       {
         assetId: resolvedAssetId,
@@ -30,6 +37,8 @@ export async function importGlbAsset({ blob, name, assetId }) {
           tracks: clip.tracks.length,
         })),
         nodes: [...new Set(nodes)].slice(0, 500),
+        bounds: { min, max, height },
+        normalization: { targetHeight, scale: targetHeight / height, floorOffset: -min[1] * targetHeight / height },
         importedAt: new Date().toISOString(),
       },
       blob,
