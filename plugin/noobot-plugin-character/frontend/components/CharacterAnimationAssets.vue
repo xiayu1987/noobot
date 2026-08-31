@@ -7,7 +7,11 @@
 import { computed, ref } from "vue";
 import { importGlbAsset } from "../runtime/importGlbAsset.js";
 import ImportedCharacterViewer from "./ImportedCharacterViewer.vue";
-import sampleUrl from "../../assets/samples/robot-expressive/RobotExpressive.glb?url";
+import robotSampleUrl from "../../assets/samples/robot-expressive/RobotExpressive.glb?url";
+import soldierSampleUrl from "../../assets/samples/Soldier.glb?url";
+import flamingoSampleUrl from "../../assets/samples/Flamingo.glb?url";
+import horseSampleUrl from "../../assets/samples/Horse.glb?url";
+import parrotSampleUrl from "../../assets/samples/Parrot.glb?url";
 import { useCharacterLocale } from "../i18n/index.js";
 
 const props = defineProps({
@@ -23,6 +27,13 @@ const error = ref("");
 const { translate } = useCharacterLocale();
 const importing = ref(false);
 const collapsed = ref(false);
+const samples = Object.freeze([
+  { id: "sample.three.robot-expressive", name: "RobotExpressive.glb", url: robotSampleUrl },
+  { id: "sample.three.soldier", name: "Soldier.glb", url: soldierSampleUrl },
+  { id: "sample.three.flamingo", name: "Flamingo.glb", url: flamingoSampleUrl },
+  { id: "sample.three.horse", name: "Horse.glb", url: horseSampleUrl },
+  { id: "sample.three.parrot", name: "Parrot.glb", url: parrotSampleUrl },
+]);
 const importedAssets = computed(() =>
   Array.isArray(props.pluginModelConfig?.characterAssets)
     ? props.pluginModelConfig.characterAssets
@@ -79,16 +90,16 @@ async function importFile(event) {
     importing.value = false;
   }
 }
-async function loadOfficialSample() {
+async function loadOfficialSample(sample = samples[0]) {
   error.value = "";
   importing.value = true;
   try {
-    const response = await fetch(sampleUrl);
+    const response = await fetch(sample.url);
     if (!response.ok) throw new Error(`sample load failed: ${response.status}`);
     const metadata = await importGlbAsset({
       blob: await response.blob(),
-      name: "RobotExpressive.glb",
-      assetId: "sample.three.robot-expressive",
+      name: sample.name,
+      assetId: sample.id,
     });
     select(metadata);
   } catch (cause) {
@@ -116,15 +127,20 @@ async function loadOfficialSample() {
             :disabled="importing"
             @change="importFile"
         /></label>
-        <button
-          type="button"
-          class="character-animation-assets__sample"
-          data-testid="character-load-sample"
-          :disabled="importing"
-          @click="loadOfficialSample"
-        >
-          {{ translate(importing ? "character.loadingSample" : "character.loadSample") }}
-        </button>
+        <div class="character-animation-assets__samples">
+          <button
+            v-for="(sample, index) in samples"
+            :key="sample.id"
+            type="button"
+            class="character-animation-assets__sample"
+            :data-testid="index === 0 ? 'character-load-sample' : undefined"
+            :disabled="importing"
+            @click="loadOfficialSample(sample)"
+          >
+            {{ translate(importing ? "character.loadingSample" : "character.loadSample") }} ·
+            {{ sample.name }}
+          </button>
+        </div>
       </template>
       <p v-if="error" class="character-animation-assets__error">{{ error }}</p>
       <label
