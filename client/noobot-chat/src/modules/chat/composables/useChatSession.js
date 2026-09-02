@@ -69,6 +69,10 @@ import {
 } from "../../debug/loggers/thinkingReplayDebugLogger.js";
 import { setToolLogWindowDebugLogSink } from "../../debug/loggers/toolLogWindowDebugLogger.js";
 import { setTerminalResolutionDebugLogSink } from "../../debug/loggers/terminalResolutionDebugLogger.js";
+import { setTransportDiagnosticsLogSink } from "../../debug/loggers/transportDiagnosticsLogger.js";
+import { setPluginRuntimeDiagnosticsLogSink } from "../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
+import { setTurnRuntimeDiagnosticsLogSink } from "../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
+import { setMessageMutationDiagnosticsLogSink } from "../../debug/loggers/messageMutationDiagnosticsLogger.js";
 import {
   resolveSessionTurnRuntime,
   resolveLatestContinuableStoppedTurn,
@@ -335,6 +339,9 @@ export function useChatSession({
     refreshAuthentication,
     sessionLogSink: sessionLogWebSocketClient,
   });
+  // Plugin HTTP capabilities must use the same authenticated fetcher as the
+  // host. Configure this before plugin activation so catalog hydration never
+  // issues an unauthenticated request.
   watch(apiKey, (nextApiKey, previousApiKey) => {
     if (nextApiKey && nextApiKey !== previousApiKey) sessionLogWebSocketClient.resume();
   });
@@ -347,6 +354,10 @@ export function useChatSession({
   setThinkingReplayDebugLogSink(sessionLogWebSocketClient);
   setToolLogWindowDebugLogSink(sessionLogWebSocketClient);
   setTerminalResolutionDebugLogSink(sessionLogWebSocketClient);
+  setTransportDiagnosticsLogSink(sessionLogWebSocketClient);
+  setPluginRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
+  setTurnRuntimeDiagnosticsLogSink(sessionLogWebSocketClient);
+  setMessageMutationDiagnosticsLogSink(sessionLogWebSocketClient);
 
   let lastComposerRenderSignature = "";
   watch(

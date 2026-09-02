@@ -12,10 +12,12 @@ import { createModelContext } from "@noobot/context-protocol";
 import {
   compileAnimationScript,
   hasSpatiallyReachableEvents,
+  analyzeAnimationSpatial,
   parseAnimationProtocol,
   safeParseAnimationProtocol,
 } from "../src/animation-protocol.js";
 import { createAnimationTools } from "../src/animation-tools.js";
+import { compileCharacterRootMotion } from "../src/root-motion.js";
 import {
   CHARACTER_ANIMATION_ARTIFACT_TYPE,
   CHARACTER_ANIMATION_TOOL_ID,
@@ -23,72 +25,7 @@ import {
 } from "../src/contract.js";
 import { activate, injectAnimationContext } from "../src/entries/agent.js";
 
-const assets = ["robot-a", "robot-b"].map((name) => ({
-  assetId: `user.glb.${name}`,
-  name: `${name}.glb`,
-  format: "glb",
-  size: 12,
-  animations: [{ name: "Walking", duration: 1.2, tracks: 42 }],
-  nodes: ["Head"],
-  bounds: { min: [0, 0, 0], max: [1, 1, 1], height: 1 },
-  normalization: { targetHeight: 1, scale: 1, floorOffset: 0 },
-  importedAt: "2026-08-29T00:00:00.000Z",
-  resource: {
-    version: "a".repeat(64),
-    mimeType: "model/gltf-binary",
-    size: 12,
-    url: `/api/internal/character/assets/user.glb.${name}/${"a".repeat(64)}`,
-  },
-}));
-const protocol = {
-  format: "noobot.animation.protocol",
-  version: 2,
-  animationId: "walk-and-nod",
-  duration: 2,
-  loop: false,
-  scene: {
-    coordinateSystem: "normalized_world",
-    unitHeight: 1,
-    groundY: 0,
-    collisionSpace: {
-      units: "normalized_world",
-      origin: [0, 0, 0],
-      detection: "continuous",
-      colliders: [],
-    },
-    cameraTrack: {
-      type: "keyframes",
-      keyframes: [
-        { time: 0, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
-        { time: 2, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
-      ],
-    },
-  },
-  characters: assets.map((asset, index) => ({
-    characterId: `character-${index + 1}`,
-    assetId: asset.assetId,
-    rootTransform: { position: [index * 2, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
-    segments: [
-      { type: "native_clip", start: 0, duration: 1, clip: "Walking" },
-      {
-        type: "keyframes",
-        start: 1,
-        duration: 1,
-        tracks: [
-          {
-            node: "Head",
-            property: "rotation",
-            keyframes: [
-              { time: 0, rotation: [0, 0, 0, 1] },
-              { time: 1, rotation: [0, 0.2, 0, 0.98] },
-            ],
-          },
-        ],
-      },
-    ],
-  })),
-  events: [],
-};
+import { assets, generationProtocol, protocol } from "./fixtures/animation-fixtures.js";
 
 function createTool(selectedAssets = assets) {
   const commits = [];
@@ -115,6 +52,7 @@ test("animation protocol accepts synchronized character timelines and root trans
 test("native clips can carry synchronized absolute root motion", () => {
   const moving = structuredClone(protocol);
   moving.characters[0].segments[0].rootMotion = {
+    space: "normalized_world",
     keyframes: [
       { time: 0, position: [-1, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
       { time: 1, position: [-0.2, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
@@ -123,6 +61,59 @@ test("native clips can carry synchronized absolute root motion", () => {
   assert.equal(safeParseAnimationProtocol(moving).success, true);
   moving.characters[0].segments[0].rootMotion.keyframes[1].time = 0.9;
   assert.equal(safeParseAnimationProtocol(moving).success, false);
+});
+
+test("face_motion derives canonical -Z orientation from travel direction", () => {
+  const character = {
+    characterId: "walker",
+    assetId: "asset.walker",
+    orientationMode: "face_motion",
+    rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+    segments: [
+      {
+        type: "native_clip",
+        start: 0,
+        duration: 1,
+        clip: "Walk",
+        rootMotion: {
+          space: "character_local",
+          keyframes: [
+            { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+            { time: 1, position: [1, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+          ],
+        },
+      },
+    ],
+  };
+  const end = compileCharacterRootMotion(character).segments[0].rootMotion.keyframes[1];
+  assert.ok(Math.abs(end.rotation[1] + 0.7071067811865476) < 1e-6);
+  assert.ok(Math.abs(end.rotation[3] - 0.7071067811865476) < 1e-6);
+});
+
+test("authored orientation preserves backing facing", () => {
+  const character = {
+    characterId: "backing",
+    assetId: "asset.backing",
+    orientationMode: "authored",
+    rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+    segments: [
+      {
+        type: "native_clip",
+        start: 0,
+        duration: 1,
+        clip: "Back",
+        rootMotion: {
+          space: "character_local",
+          keyframes: [
+            { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+            { time: 1, position: [0, 0, 1], rotation: [0, 1, 0, 0], scale: [1, 1, 1] },
+          ],
+        },
+      },
+    ],
+  };
+  const end = compileCharacterRootMotion(character).segments[0].rootMotion.keyframes[1];
+  assert.deepEqual(end.rotation, [0, 1, 0, 0]);
 });
 
 test("attack and contact events must be spatially reachable", () => {
@@ -159,45 +150,230 @@ test("attack and contact events must be spatially reachable", () => {
   assert.equal(safeParseAnimationProtocol(fighting).success, true);
   assert.equal(hasSpatiallyReachableEvents(parseAnimationProtocol(fighting)), false);
   fighting.characters[1].rootTransform.position = [0.4, 0, 0];
+  for (const frame of fighting.characters[1].segments[0].rootMotion.keyframes)
+    frame.position = [0.4, 0, 0];
+  for (const frame of fighting.characters[1].segments[1].rootMotion.keyframes)
+    frame.position = [0.4, 0, 0];
   assert.equal(hasSpatiallyReachableEvents(parseAnimationProtocol(fighting)), true);
 });
 
-test("declarative script compiles sequence, parallel and event into one protocol", () => {
-  const declaration = protocol.characters[0];
-  const compiled = compileAnimationScript({
-    format: "noobot.animation.script",
-    version: 1,
-    loop: false,
-    scene: protocol.scene,
-    characters: [
-      {
-        characterId: declaration.characterId,
-        assetId: declaration.assetId,
-        rootTransform: declaration.rootTransform,
+test("node-bound attack events allow conservative animated limb reach", () => {
+  const fighting = structuredClone(protocol);
+  fighting.characters[0].rootTransform.position = [0, 0, 0];
+  fighting.characters[1].rootTransform.position = [1.6, 0, 0];
+  for (const frame of fighting.characters[0].segments.flatMap(
+    (segment) => segment.rootMotion.keyframes,
+  ))
+    frame.position = [0, 0, 0];
+  for (const frame of fighting.characters[1].segments.flatMap(
+    (segment) => segment.rootMotion.keyframes,
+  ))
+    frame.position = [1.6, 0, 0];
+  fighting.scene.collisionSpace.colliders = [
+    {
+      colliderId: "robot-fist",
+      characterId: "character-1",
+      node: "Head",
+      role: "hitbox",
+      shape: { type: "sphere", center: [0, 0, 0], radius: 0.14 },
+    },
+    {
+      colliderId: "soldier-torso",
+      characterId: "character-2",
+      node: "Head",
+      role: "hurtbox",
+      shape: { type: "box", center: [0, 0, 0], size: [0.5, 1, 0.5] },
+    },
+  ];
+  fighting.events = [
+    {
+      eventId: "strike",
+      type: "attack",
+      time: 0.5,
+      attackerId: "character-1",
+      targetId: "character-2",
+      hitboxId: "robot-fist",
+      hurtboxId: "soldier-torso",
+    },
+  ];
+  assert.equal(hasSpatiallyReachableEvents(parseAnimationProtocol(fighting)), true);
+  fighting.characters[1].rootTransform.position = [10, 0, 0];
+  for (const frame of fighting.characters[1].segments.flatMap(
+    (segment) => segment.rootMotion.keyframes,
+  ))
+    frame.position = [10, 0, 0];
+  assert.equal(hasSpatiallyReachableEvents(parseAnimationProtocol(fighting)), false);
+});
+
+test("spatial diagnostics apply root rotation/scale and expose displacement", () => {
+  const value = structuredClone(protocol);
+  value.characters[0].rootTransform = {
+    position: [1, 0, 0],
+    rotation: [0, 0, Math.sqrt(0.5), Math.sqrt(0.5)],
+    scale: [2, 2, 2],
+  };
+  value.characters[1].rootTransform.position = [1, 2, 0];
+  value.characters[0].segments.forEach((segment) => {
+    segment.rootMotion?.keyframes.forEach((frame) => {
+      frame.position = [1, 0, 0];
+      frame.rotation = [0, 0, Math.sqrt(0.5), Math.sqrt(0.5)];
+      frame.scale = [2, 2, 2];
+    });
+  });
+  value.characters[1].segments.forEach((segment) => {
+    segment.rootMotion?.keyframes.forEach((frame) => {
+      frame.position = [1, 2, 0];
+    });
+  });
+  value.scene.collisionSpace.colliders = [
+    {
+      colliderId: "a",
+      characterId: "character-1",
+      node: null,
+      role: "solid",
+      shape: { type: "sphere", center: [1, 0, 0], radius: 0.1 },
+    },
+    {
+      colliderId: "b",
+      characterId: "character-2",
+      node: null,
+      role: "solid",
+      shape: { type: "sphere", center: [0, 0, 0], radius: 0.1 },
+    },
+  ];
+  const diagnostics = analyzeAnimationSpatial(value);
+  assert.equal(diagnostics.units, "normalized_world");
+  assert.equal(diagnostics.characters["character-1"].displacement, 0);
+  // [1, 0, 0] rotated in the XY plane by 90 degrees and scaled by 2 => [0, 2, 0].
+  assert.ok(diagnostics.characters["character-1"].minClearance < 0);
+});
+
+test("collision protocol accepts capsule colliders", () => {
+  const value = structuredClone(protocol);
+  value.characters = [value.characters[0]];
+  value.scene.collisionSpace.colliders = [
+    {
+      colliderId: "capsule-solid",
+      characterId: "character-1",
+      node: null,
+      role: "solid",
+      shape: { type: "capsule", center: [0, 0.5, 0], radius: 0.2, halfHeight: 0.3 },
+    },
+  ];
+  assert.equal(safeParseAnimationProtocol(value).success, true);
+});
+
+test("spatial diagnostics keep root colliders in canonical units", () => {
+  const value = structuredClone(protocol);
+  value.characters = [value.characters[0]];
+  value.characters[0].segments = [
+    {
+      type: "native_clip",
+      start: 0,
+      duration: 1,
+      clip: "Walking",
+      rootMotion: {
+        space: "normalized_world",
+        keyframes: [
+          { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+          { time: 1, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+        ],
       },
-    ],
-    root: {
-      type: "sequence",
-      steps: [
-        {
-          type: "parallel",
-          steps: [
-            { type: "clip", characterId: declaration.characterId, clip: "Walking", duration: 1 },
-            { type: "event", event: { eventId: "step-start", type: "marker", name: "start" } },
+    },
+  ];
+  value.scene.collisionSpace.colliders = [
+    {
+      colliderId: "root",
+      characterId: "character-1",
+      node: null,
+      role: "solid",
+      shape: { type: "sphere", center: [0, 0, 0], radius: 0.1 },
+    },
+  ];
+  const diagnostics = analyzeAnimationSpatial(value);
+  assert.equal(diagnostics.characters["character-1"].minClearance, null);
+  assert.equal(diagnostics.characters["character-1"].distance, 0);
+});
+
+test("node resolver supplies animated world-space collider transforms", () => {
+  const value = structuredClone(protocol);
+  value.characters = [value.characters[0]];
+  value.characters[0].segments = [
+    {
+      type: "native_clip",
+      start: 0,
+      duration: 1,
+      clip: "Walking",
+      rootMotion: {
+        space: "normalized_world",
+        keyframes: [
+          { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+          { time: 1, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+        ],
+      },
+    },
+  ];
+  value.scene.collisionSpace.colliders = [
+    {
+      colliderId: "node-a",
+      characterId: "character-1",
+      node: "Hand",
+      role: "solid",
+      shape: { type: "sphere", center: [0, 0, 0], radius: 0.1 },
+    },
+  ];
+  const diagnostics = analyzeAnimationSpatial(value, {
+    resolveColliderNode: () => ({
+      position: [2, 0, 0],
+      rotation: [0, 0, 0, 1],
+      scale: [1, 1, 1],
+    }),
+  });
+  assert.equal(diagnostics.characters["character-1"].distance, 0);
+  assert.equal(diagnostics.characters["character-1"].minClearance, null);
+});
+
+test("swept diagnostics catch a collision between sampled frames", () => {
+  const value = structuredClone(protocol);
+  value.duration = 1;
+  value.characters = value.characters.map((character, index) => ({
+    ...character,
+    segments: [
+      {
+        type: "native_clip",
+        start: 0,
+        duration: 1,
+        clip: "Walking",
+        rootMotion: {
+          space: "normalized_world",
+          keyframes: [
+            {
+              time: 0,
+              position: index ? [1, 0, 0] : [-1, 0, 0],
+              rotation: [0, 0, 0, 1],
+              scale: [1, 1, 1],
+            },
+            {
+              time: 1,
+              position: index ? [-1, 0, 0] : [1, 0, 0],
+              rotation: [0, 0, 0, 1],
+              scale: [1, 1, 1],
+            },
           ],
         },
-        {
-          type: "keyframes",
-          characterId: declaration.characterId,
-          duration: 1,
-          tracks: protocol.characters[0].segments[1].tracks,
-        },
-      ],
-    },
-  });
-  assert.equal(compiled.duration, 2);
-  assert.equal(compiled.characters[0].segments[1].start, 1);
-  assert.equal(compiled.events[0].time, 0);
+      },
+    ],
+  }));
+  value.scene.collisionSpace.colliders = value.characters.map((character, index) => ({
+    colliderId: `solid-${index}`,
+    characterId: character.characterId,
+    node: null,
+    role: "solid",
+    shape: { type: "sphere", center: [0, 0, 0], radius: 0.1 },
+  }));
+  const diagnostics = analyzeAnimationSpatial(value);
+  assert.ok(diagnostics.penetrationIntervals.length > 0);
+  assert.ok(diagnostics.characters["character-1"].minClearance < 0);
 });
 
 test("character context is absent without a selection and injected once with exact metadata", async (t) => {
@@ -222,16 +398,17 @@ test("character context is absent without a selection and injected once with exa
   assert.equal(await injectAnimationContext(context, config), false);
   assert.match(String(modelContext.messageBlocks.system[0].content), /get before update/);
   assert.match(String(modelContext.messageBlocks.system[0].content), /Walking/);
+  assert.match(String(modelContext.messageBlocks.system[0].content), /type:"channel"/);
 });
 
 test("the animation tool validates every selected character reference", async () => {
   const unselected = createTool([assets[0]]).tool;
-  const missing = JSON.parse(await unselected.invoke({ protocol }));
+  const missing = JSON.parse(await unselected.invoke({ protocol: generationProtocol }));
   assert.deepEqual(
     { code: missing.code, assetId: missing.assetId },
     { code: "ANIMATION_ASSET_NOT_SELECTED", assetId: assets[1].assetId },
   );
-  const unknownClip = structuredClone(protocol);
+  const unknownClip = structuredClone(generationProtocol);
   unknownClip.characters[1].segments[0].clip = "Flying";
   const result = JSON.parse(await createTool().tool.invoke({ protocol: unknownClip }));
   assert.deepEqual(
@@ -242,7 +419,7 @@ test("the animation tool validates every selected character reference", async ()
 
 test("the tool preserves a supplied animation ID and returns authoritative identity", async () => {
   const { tool, commits } = createTool();
-  const result = JSON.parse(await tool.invoke({ protocol }));
+  const result = JSON.parse(await tool.invoke({ protocol: generationProtocol }));
   assert.equal(result.ok, true);
   assert.equal(result.animationId, protocol.animationId);
   assert.deepEqual(
@@ -260,7 +437,7 @@ test("the tool preserves a supplied animation ID and returns authoritative ident
 });
 
 test("the tool creates and returns an animation ID when the model omits it", async () => {
-  const { animationId: _animationId, ...withoutId } = protocol;
+  const { animationId: _animationId, ...withoutId } = generationProtocol;
   const { tool, commits } = createTool();
   const result = JSON.parse(await tool.invoke({ protocol: withoutId }));
   assert.equal(result.ok, true);
@@ -306,9 +483,9 @@ test("the registered tool commits through the declared artifact port", async (t)
   const result = JSON.parse(
     await tool.invoke({
       protocol: {
-        ...protocol,
-        scene: protocol.scene,
-        characters: [protocol.characters[0]],
+        ...generationProtocol,
+        scene: generationProtocol.scene,
+        characters: [generationProtocol.characters[0]],
       },
     }),
   );

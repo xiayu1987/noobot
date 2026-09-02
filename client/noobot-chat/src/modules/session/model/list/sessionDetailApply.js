@@ -27,6 +27,7 @@ import {
   logWorkflowDiagnostics,
   summarizeWorkflowMessages,
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { logTurnRuntimeDiagnostics } from "../../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
 import { applyLatestSessionAggregateVersion } from "../../../chat/runtime/engine/sessionAggregateVersionManager.js";
 import {
   confirmTurnRuntimeDeletion,
@@ -171,7 +172,7 @@ export function createSessionDetailApplicator({
       sessionDocs,
       makeViewMessage,
     });
-    logWorkflowDiagnostics("frontend.sessionDetailProjection.terminalPresentation", () => ({
+    logTurnRuntimeDiagnostics("frontend.sessionDetailProjection.terminalPresentation", () => ({
       sessionId: detailSessionId,
       applyMode,
       projectedTerminalPresentations: detailProjection.messages

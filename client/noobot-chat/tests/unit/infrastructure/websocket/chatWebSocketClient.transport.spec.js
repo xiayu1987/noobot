@@ -19,6 +19,7 @@ import {
   AGENT_TRANSPORT_EVENT,
   createAgentCommandReceipt,
 } from "@noobot/agent-transport-protocol";
+import { createPluginArtifactEnvelope } from "@noobot/event-protocol/plugin-artifact-event";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import {
@@ -77,9 +78,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     });
     const onEvent = vi.fn();
     const payload = streamCommand({
-        sessionId: "session-transport-log",
-        turnScopeId: "turn-transport-log",
-      });
+      sessionId: "session-transport-log",
+      turnScopeId: "turn-transport-log",
+    });
     const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     const authoritativeEvent = canonicalMessageEvent({
@@ -136,6 +137,39 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     );
   });
 
+  it("preserves stream-scoped runtime events received before the stream handler binds", async () => {
+    MockWebSocket.initialReadyState = MockWebSocket.CONNECTING;
+    const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
+    const onEvent = vi.fn();
+    const payload = streamCommand({
+      sessionId: "session-bind-race",
+      turnScopeId: "turn-bind-race",
+    });
+    const streamPromise = client.stream(payload, onEvent);
+    const socket = MockWebSocket.instances[0];
+    const artifact = createPluginArtifactEnvelope({
+      pluginId: "character",
+      artifactType: "character.animation",
+      artifactId: "animation.bind-race",
+      sessionId: "session-bind-race",
+      turnScopeId: "turn-bind-race",
+      data: { protocol: { animationId: "animation.bind-race" } },
+    });
+
+    socket.emit("plugin.artifact.committed", artifact);
+    expect(onEvent).not.toHaveBeenCalled();
+
+    socket.readyState = MockWebSocket.OPEN;
+    socket.onopen?.();
+    expect(onEvent).toHaveBeenCalledWith({
+      event: "plugin.artifact.committed",
+      data: artifact,
+    });
+
+    emitCommandReceipt(socket, payload);
+    await streamPromise;
+  });
+
   it("uses channelSessionId only as transport routing identity", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
@@ -170,9 +204,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const payload = streamCommand({
-        sessionId: "session-receipt-1",
-        turnScopeId: "turn-receipt-1",
-      });
+      sessionId: "session-receipt-1",
+      turnScopeId: "turn-receipt-1",
+    });
     const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     socket.sent = [];
@@ -263,9 +297,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const onEvent = vi.fn();
     const payload = streamCommand({
-        sessionId: "session-receipt-failure",
-        turnScopeId: "turn-receipt-failure",
-      });
+      sessionId: "session-receipt-failure",
+      turnScopeId: "turn-receipt-failure",
+    });
     const streamPromise = client.stream(payload, onEvent);
     const socket = MockWebSocket.instances[0];
     socket.send = () => {
@@ -340,9 +374,9 @@ describe("chatWebSocketClient transport lifecycle and failures", () => {
   it("extracts a readable message from structured stream errors", async () => {
     const client = createChatWebSocketClient({ resolveWebSocketUrl: () => "ws://test" });
     const payload = streamCommand({
-        sessionId: "s-error-object",
-        turnScopeId: "turn-error-object",
-      });
+      sessionId: "s-error-object",
+      turnScopeId: "turn-error-object",
+    });
     const streamPromise = client.stream(payload, vi.fn());
     const socket = MockWebSocket.instances[0];
 

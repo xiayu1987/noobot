@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { devices } from "@playwright/test";
+import path from "node:path";
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
@@ -12,8 +13,13 @@ import {
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
 import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
-import { waitForSessionExecutionEventTree } from "../helpers/persistence-audit.js";
+import {
+  readJsonLines,
+  sessionRoot,
+  waitForSessionExecutionEventTree,
+} from "../helpers/persistence-audit.js";
 import { waitForCommand } from "../helpers/scenario-assertions.js";
+import { findProtocolObjects } from "../helpers/websocket-capture.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 const animationId = "e2e.character.wave";
@@ -97,13 +103,70 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   );
   expect(authority.data.envelope.payload.data.protocol.characters).toEqual([
     {
+      characterId: "robot",
       assetId: "sample.three.robot-expressive",
-      initialPosition: [0, 0, 0],
-      segments: [{ type: "native_clip", start: 0, duration: 2, clip: "Wave" }],
+      rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+      orientationMode: "auto",
+      segments: [
+        {
+          type: "native_clip",
+          start: 0,
+          duration: 2,
+          clip: "Wave",
+          rootMotion: {
+            space: "normalized_world",
+            keyframes: [
+              { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+              { time: 2, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+            ],
+          },
+        },
+      ],
     },
   ]);
 
   const artifactPanel = page.getByTestId("session-artifact-panel");
+  await expect
+    .poll(
+      () =>
+        findProtocolObjects(protocolCapture.websocketReceived).some(
+          (packet) =>
+            packet?.event === "plugin.artifact.committed" &&
+            packet?.data?.payload?.data?.protocol?.animationId === animationId,
+        ),
+      { timeout: 15000 },
+    )
+    .toBe(true);
+  const transportLogPath = path.join(
+    sessionRoot(noobot.userId, noobot.sessionId),
+    "logs/transport.jsonl",
+  );
+  await expect
+    .poll(
+      async () => {
+        const records = await readJsonLines(transportLogPath);
+        return records.some(
+          (record) =>
+            record?.event === "frontend.runtimeStream.routeCompleted" &&
+            record?.data?.eventType === "plugin.artifact.committed" &&
+            record?.data?.routed === true,
+        );
+      },
+      { timeout: 15000 },
+    )
+    .toBe(true);
+  const artifactRoutes = (await readJsonLines(transportLogPath)).filter(
+    (record) =>
+      record?.event === "frontend.runtimeStream.routeCompleted" &&
+      record?.data?.eventType === "plugin.artifact.committed",
+  );
+  expect(artifactRoutes).toHaveLength(1);
+  const liveRoute = artifactRoutes[0];
+  expect(liveRoute.data).toMatchObject({
+    eventType: "plugin.artifact.committed",
+    eventFamily: "plugin.artifact",
+    routed: true,
+  });
   await expect(artifactPanel).toBeVisible();
   await expect(artifactPanel).not.toHaveClass(/is-collapsed/);
   const artifactPanelBox = await artifactPanel.boundingBox();
@@ -128,7 +191,52 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
       height: expect.any(Number),
     });
   expect(await canvas.evaluate((node) => node.width * node.height)).toBeGreaterThan(0);
-  await expect(card.getByRole("button", { name: /重新播放|Replay/ })).toBeVisible();
+  const viewerCanvas = card.locator("canvas");
+  const replay = card.getByRole("button", { name: /重新播放|Replay/ });
+  await expect(replay).toBeVisible();
+  await replay.click();
+  await expect
+    .poll(
+      async () =>
+        viewerCanvas.evaluate((node) => ({
+          time: Number(node.dataset.playbackTime || 0),
+          ended: node.dataset.playbackEnded === "true",
+        })),
+      { timeout: 1000 },
+    )
+    .toMatchObject({ time: expect.any(Number), ended: false });
+  const playbackStart = await viewerCanvas.evaluate((node) => ({
+    time: Number(node.dataset.playbackTime || 0),
+    positions: JSON.parse(node.dataset.characterPositions || "{}"),
+  }));
+  expect(playbackStart.time).toBeLessThan(0.2);
+  expect(playbackStart.positions["sample.three.robot-expressive"]).toHaveLength(3);
+  await expect
+    .poll(async () => viewerCanvas.evaluate((node) => node.dataset.playbackEnded === "true"), {
+      timeout: 5000,
+    })
+    .toBe(true);
+  const playbackEnd = await viewerCanvas.evaluate((node) => ({
+    time: Number(node.dataset.playbackTime || 0),
+    positions: JSON.parse(node.dataset.characterPositions || "{}"),
+  }));
+  expect(playbackEnd.time).toBeGreaterThanOrEqual(2);
+  const endPosition = playbackEnd.positions["sample.three.robot-expressive"];
+  expect(endPosition.every(Number.isFinite)).toBe(true);
+  const settledPositions = [];
+  for (let sample = 0; sample < 4; sample += 1) {
+    await page.waitForTimeout(100);
+    settledPositions.push(
+      await viewerCanvas.evaluate(
+        (node) =>
+          JSON.parse(node.dataset.characterPositions || "{}")["sample.three.robot-expressive"],
+      ),
+    );
+  }
+  for (const position of settledPositions.slice(1))
+    expect(
+      Math.hypot(...position.map((value, index) => value - settledPositions[0][index])),
+    ).toBeLessThan(0.0000001);
   await expect(card.getByRole("button", { name: /导出图片|Export image/ })).toBeVisible();
   await expect(card.getByRole("button", { name: /导出视频|Export video/ })).toBeVisible();
   const resizeLeft = artifactPanel.getByTestId("session-artifact-panel-resize-left");
@@ -330,5 +438,9 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   const collapsedBox = await chatNavigatorPanel.boundingBox();
   expect(collapsedBox?.width).toBeLessThanOrEqual(60);
   expect(collapsedBox?.height).toBeLessThanOrEqual(60);
+  const unauthorizedResponses = protocolCapture.httpResponses.filter(
+    (response) => response.status === 401,
+  );
+  expect(unauthorizedResponses, JSON.stringify(unauthorizedResponses, null, 2)).toEqual([]);
   assertNoForbiddenErrors(protocolCapture.console);
 });

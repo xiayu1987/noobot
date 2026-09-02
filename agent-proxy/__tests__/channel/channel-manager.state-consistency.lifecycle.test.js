@@ -31,6 +31,10 @@ import {
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
 import { EVENT_FAMILY, createEventEnvelope } from "@noobot/event-protocol";
+import {
+  createPluginArtifactEnvelope,
+  PLUGIN_ARTIFACT_EVENT,
+} from "@noobot/event-protocol/plugin-artifact-event";
 import { MESSAGE_EVENT_TYPE, MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 
@@ -606,6 +610,40 @@ test("successful upstream messages bypass session logs and retain data-plane met
     broadcasts: 1,
     deliveries: 1,
     lifecycleReceipts: 0,
+  });
+});
+
+test("upstream plugin artifact is forwarded to the connected browser socket", () => {
+  FakeUpstreamWebSocket.instances = [];
+  const manager = new ChannelManager(FakeUpstreamWebSocket);
+  const sessionId = "session-artifact-live";
+  const channel = manager.ensureChannel(createChannelKey({ userId: "user-1", sessionId }), {
+    userId: "user-1",
+    sessionId,
+  });
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+  manager.attachSubscriber(channel, client);
+  client.sentEvents = [];
+  manager.connectUpstreamChannel(channel, "api-key-1", "zh-CN");
+  const upstream = FakeUpstreamWebSocket.instances.at(-1);
+  upstream.emit("open");
+  const artifact = createPluginArtifactEnvelope({
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: "animation-live",
+    sessionId,
+    turnScopeId: "turn-live",
+    data: { protocol: {}, assets: [] },
+  });
+
+  upstream.emit("message", JSON.stringify({ event: PLUGIN_ARTIFACT_EVENT, data: artifact }));
+
+  assert.deepEqual(client.sentEvents.at(-1), {
+    event: PLUGIN_ARTIFACT_EVENT,
+    data: artifact,
+    channelSessionId: sessionId,
   });
 });
 

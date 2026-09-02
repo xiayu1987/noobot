@@ -8,7 +8,10 @@ import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { CCDIKSolver } from "three/addons/animation/CCDIKSolver.js";
 import { loadImportedAsset } from "../runtime/importedAssetStore.js";
+import { makeNativeClipInPlace } from "../runtime/nativeClipNormalization.js";
+import { createCharacterPhysicsRuntime } from "../runtime/characterPhysicsRuntime.js";
 import { useCharacterLocale } from "../i18n/index.js";
 
 const props = defineProps({
@@ -24,6 +27,9 @@ const props = defineProps({
   height: { type: Number, default: 300 },
   suspendResize: { type: Boolean, default: false },
   resizeRevision: { type: Number, default: 0 },
+  // Collision helpers are a debugging aid and stay hidden during normal
+  // playback so their wireframe does not look like a mesh overlay.
+  showColliders: { type: Boolean, default: false },
 });
 const host = ref();
 const loadError = ref("");
@@ -41,6 +47,22 @@ let players = new Map();
 let queuedProtocolCount = 0;
 let nextPlaybackAt = 0;
 let activeProtocol = null;
+// The protocol timeline is the single clock for actions, root motion, physics,
+// and camera playback. AnimationMixer.time is an implementation detail of a
+// single character and cannot define a multi-character timeline.
+let protocolElapsed = 0;
+// Non-loop playback has an explicit terminal state. Once the terminal frame
+// has been evaluated and physics has settled, no runtime channel may write to
+// the character again; repeated constraint projection is the source of end
+// frame jitter.
+let playbackEnded = false;
+let contactTargets = [];
+let colliderHelpers = [];
+const physics = createCharacterPhysicsRuntime({
+  getPlayers: () => players,
+  getScene: () => scene,
+  getRevision: () => mountRevision,
+});
 
 function downloadBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
@@ -119,6 +141,13 @@ function dispose() {
     disposeModel(player.model);
     URL.revokeObjectURL(player.objectUrl);
   }
+  colliderHelpers.forEach(({ helper }) => {
+    helper.geometry?.dispose?.();
+    helper.material?.dispose?.();
+    scene?.remove(helper);
+  });
+  colliderHelpers = [];
+  physics.release();
   renderer?.dispose();
   viewer.value?.replaceChildren();
   controls = undefined;
@@ -126,7 +155,10 @@ function dispose() {
   scene = undefined;
   camera = undefined;
   players = new Map();
+  contactTargets = [];
   activeProtocol = null;
+  protocolElapsed = 0;
+  playbackEnded = false;
   queuedProtocolCount = 0;
   nextPlaybackAt = 0;
 }
@@ -158,11 +190,12 @@ function createKeyframeClip(segment, animationId, characterIndex, segmentIndex) 
 
 function playCharacter(player, protocol, character, characterIndex) {
   player.segmentActions = character.segments.map((segment, segmentIndex) => {
-    const clip =
+    let clip =
       segment.type === "native_clip"
         ? THREE.AnimationClip.findByName(player.animations, segment.clip)?.clone()
         : createKeyframeClip(segment, protocol.animationId, characterIndex, segmentIndex);
     if (!clip) return null;
+    if (segment.type === "native_clip") clip = makeNativeClipInPlace(clip, player.model);
     const action = player.mixer.clipAction(clip);
     action.clampWhenFinished = !protocol.loop && segmentIndex === character.segments.length - 1;
     action
@@ -240,29 +273,49 @@ function applyRootTransforms(protocol) {
     const character = protocol?.characters?.find((item) => item.assetId === player.assetId);
     const root = character?.rootTransform;
     if (!root) continue;
-    player.anchor.position.fromArray(root.position);
-    player.anchor.quaternion.fromArray(root.rotation);
-    player.anchor.scale.fromArray(root.scale);
+    player.physicsCorrection?.set(0, 0, 0);
+    applyAuthoredRootTransform(player, root.position, root.rotation, root.scale);
+    player.physicsPosition?.copy(player.authoredPosition);
   }
 }
 
+function applyAuthoredRootTransform(player, position, rotation, scale) {
+  player.authoredPosition ||= new THREE.Vector3();
+  player.authoredPosition.fromArray(position);
+  player.authoredRotation ||= new THREE.Quaternion();
+  player.authoredRotation.fromArray(rotation);
+  player.authoredScale ||= new THREE.Vector3();
+  player.authoredScale.fromArray(scale);
+  player.physicsCorrection ||= new THREE.Vector3();
+  player.anchor.position.copy(player.authoredPosition).add(player.physicsCorrection);
+  player.anchor.quaternion.copy(player.authoredRotation);
+  player.anchor.scale.copy(player.authoredScale);
+}
+
 function updateRootMotion(protocol, time) {
+  const duration = Math.max(0, Number(protocol?.duration || 0));
+  // Root motion is evaluated on the protocol timeline. A mixer keeps its
+  // clock advancing after a non-looping clip has finished; clamp that clock
+  // to the declared terminal frame instead of falling back to the authored
+  // start transform (which causes a visible snap/flash).
+  const timelineTime = protocol?.loop
+    ? time % Math.max(duration, 0.000001)
+    : Math.min(Math.max(0, time), duration);
   for (const player of players.values()) {
     const character = protocol?.characters?.find((item) => item.assetId === player.assetId);
     const segment = character?.segments?.find(
-      (item) => item.rootMotion && time >= item.start && time <= item.start + item.duration,
+      (item) =>
+        item.rootMotion && timelineTime >= item.start && timelineTime <= item.start + item.duration,
     );
     if (!segment) {
       const root = character?.rootTransform;
       if (root) {
-        player.anchor.position.fromArray(root.position);
-        player.anchor.quaternion.fromArray(root.rotation);
-        player.anchor.scale.fromArray(root.scale);
+        applyAuthoredRootTransform(player, root.position, root.rotation, root.scale);
       }
       continue;
     }
     const frames = segment.rootMotion.keyframes;
-    const localTime = Math.min(segment.duration, Math.max(0, time - segment.start));
+    const localTime = Math.min(segment.duration, Math.max(0, timelineTime - segment.start));
     let left = frames[0];
     let right = frames[frames.length - 1];
     for (let index = 1; index < frames.length; index += 1) {
@@ -274,37 +327,175 @@ function updateRootMotion(protocol, time) {
     }
     const span = Math.max(0.000001, right.time - left.time);
     const amount = Math.min(1, Math.max(0, (localTime - left.time) / span));
-    player.anchor.position
-      .fromArray(left.position)
-      .lerp(new THREE.Vector3().fromArray(right.position), amount);
-    player.anchor.quaternion
-      .fromArray(left.rotation)
-      .slerp(new THREE.Quaternion().fromArray(right.rotation), amount);
-    player.anchor.scale
-      .fromArray(left.scale)
-      .lerp(new THREE.Vector3().fromArray(right.scale), amount);
+    applyAuthoredRootTransform(
+      player,
+      left.position.map((value, index) => value + (right.position[index] - value) * amount),
+      new THREE.Quaternion()
+        .fromArray(left.rotation)
+        .slerp(new THREE.Quaternion().fromArray(right.rotation), amount)
+        .toArray(),
+      left.scale.map((value, index) => value + (right.scale[index] - value) * amount),
+    );
+  }
+}
+
+function updatePlaybackTelemetry(time) {
+  if (!viewer.value || !activeProtocol) return;
+  const target = renderer?.domElement || viewer.value;
+  target.dataset.playbackTime = String(time);
+  const positions = {};
+  for (const player of players.values()) {
+    positions[player.assetId] = player.anchor.position
+      .toArray()
+      .map((value) => Number(value.toFixed(9)));
+  }
+  target.dataset.characterPositions = JSON.stringify(positions);
+  target.dataset.playbackEnded = String(playbackEnded);
+}
+
+function findNode(root, name) {
+  return physics.findNode(root, name);
+}
+
+function setupColliderHelpers(protocol) {
+  colliderHelpers = [];
+  for (const collider of protocol?.scene?.collisionSpace?.colliders || []) {
+    const geometry =
+      collider.shape.type === "sphere"
+        ? new THREE.SphereGeometry(collider.shape.radius, 12, 8)
+        : collider.shape.type === "capsule"
+          ? new THREE.CapsuleGeometry(collider.shape.radius, collider.shape.halfHeight * 2, 8, 12)
+          : new THREE.BoxGeometry(...collider.shape.size);
+    const color =
+      collider.role === "solid" ? 0xf97316 : collider.role === "hitbox" ? 0xef4444 : 0x22c55e;
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.42,
+    });
+    const helper = new THREE.Mesh(geometry, material);
+    helper.visible = props.showColliders;
+    helper.userData.colliderId = collider.colliderId;
+    scene.add(helper);
+    colliderHelpers.push({ collider, helper });
+  }
+}
+
+function updateColliderHelperVisibility() {
+  for (const { helper } of colliderHelpers) helper.visible = props.showColliders;
+}
+
+function updateColliderHelpers(protocol) {
+  for (const item of colliderHelpers) {
+    const character = protocol.characters.find(
+      (value) => value.characterId === item.collider.characterId,
+    );
+    const player = players.get(character?.assetId);
+    if (!player) continue;
+    const transform = physics.colliderWorldTransform(player, item.collider);
+    item.helper.position.copy(transform.position);
+    item.helper.quaternion.copy(transform.rotation);
+    item.helper.scale.copy(transform.scale);
+  }
+}
+
+function setupContactConstraints(protocol) {
+  contactTargets = [];
+  for (const constraint of protocol?.scene?.contactConstraints || []) {
+    const player = players.get(
+      protocol.characters.find((item) => item.characterId === constraint.characterId)?.assetId,
+    );
+    if (!player) continue;
+    const skinnedMesh = player.model.getObjectByProperty("isSkinnedMesh", true);
+    const skeleton = skinnedMesh?.skeleton;
+    if (!skeleton) continue;
+    const effector = skeleton.bones.findIndex((bone) => bone.name === constraint.node);
+    const links = constraint.chain
+      .map((name) => skeleton.bones.findIndex((bone) => bone.name === name))
+      .filter((index) => index >= 0)
+      .map((index) => ({ index }));
+    if (effector < 0 || !links.length) continue;
+    const target = new THREE.Object3D();
+    scene.add(target);
+    skeleton.bones.push(target);
+    const solver = new CCDIKSolver(skinnedMesh, [
+      { target: skeleton.bones.length - 1, effector, links },
+    ]);
+    target.matrixWorld.copy(player.anchor.matrixWorld);
+    contactTargets.push({ constraint, player, target, solver });
+  }
+}
+
+function updateContactConstraints(protocol, time) {
+  for (const item of contactTargets) {
+    const { constraint, target } = item;
+    if (time < constraint.start || time > constraint.end) continue;
+    if (constraint.targetCharacterId && constraint.targetNode) {
+      const targetCharacter = protocol.characters.find(
+        (character) => character.characterId === constraint.targetCharacterId,
+      );
+      const targetPlayer = players.get(targetCharacter?.assetId);
+      const node = findNode(targetPlayer?.model, constraint.targetNode);
+      if (node && targetPlayer) {
+        targetPlayer.anchor.updateMatrixWorld(true);
+        node.getWorldPosition(target.position);
+      }
+    } else if (constraint.targetPosition) {
+      target.position.fromArray(constraint.targetPosition);
+    }
+    target.updateMatrixWorld(true);
+    item.solver.update();
   }
 }
 
 function updateCamera(protocol, time) {
   const frames = protocol?.scene?.cameraTrack?.keyframes || [];
   if (!camera || frames.length < 2) return;
-  let left = frames[0];
-  let right = frames[frames.length - 1];
+  let leftIndex = 0;
+  let rightIndex = frames.length - 1;
   for (let index = 1; index < frames.length; index += 1) {
-    if (time <= frames[index].time) {
-      right = frames[index];
-      left = frames[index - 1];
-      break;
+    if (frames[index].time <= time + 0.000001) {
+      leftIndex = index;
+      continue;
     }
+    rightIndex = index;
+    break;
   }
+  if (leftIndex === frames.length - 1) rightIndex = leftIndex;
+  const left = frames[leftIndex];
+  const right = frames[rightIndex];
   const span = Math.max(0.000001, right.time - left.time);
-  const amount = Math.min(1, Math.max(0, (time - left.time) / span));
-  camera.position
-    .fromArray(left.position)
-    .lerp(new THREE.Vector3().fromArray(right.position), amount);
-  controls?.target.fromArray(left.target).lerp(new THREE.Vector3().fromArray(right.target), amount);
-  camera.fov = left.fov + (right.fov - left.fov) * amount;
+  const linearAmount = Math.min(1, Math.max(0, (time - left.time) / span));
+  const easedAmount =
+    left.easing === "ease_in_out"
+      ? linearAmount * linearAmount * (3 - 2 * linearAmount)
+      : linearAmount;
+  const amount = right.transition === "cut" ? 0 : easedAmount;
+  const track = protocol.scene.cameraTrack;
+  const interpolateVector = (property, interpolation) => {
+    const leftValue = new THREE.Vector3().fromArray(left[property]);
+    const rightValue = new THREE.Vector3().fromArray(right[property]);
+    if (interpolation === "linear" || leftIndex === rightIndex) {
+      return leftValue.lerp(rightValue, amount);
+    }
+    const previous = leftIndex > 0 && left.transition !== "cut" ? frames[leftIndex - 1] : left;
+    const next =
+      rightIndex < frames.length - 1 && frames[rightIndex + 1].transition !== "cut"
+        ? frames[rightIndex + 1]
+        : right;
+    const curve = new THREE.CatmullRomCurve3(
+      [previous, left, right, next].map((frame) => new THREE.Vector3().fromArray(frame[property])),
+      false,
+      interpolation === "catmull_rom_centripetal" ? "centripetal" : "catmullrom",
+    );
+    return curve.getPoint((1 + amount) / 3);
+  };
+  camera.position.copy(interpolateVector("position", track.positionInterpolation));
+  controls?.target.copy(interpolateVector("target", track.targetInterpolation));
+  const fovAmount =
+    track.fovInterpolation === "cubic" ? amount * amount * (3 - 2 * amount) : amount;
+  camera.fov = left.fov + (right.fov - left.fov) * fovAmount;
   camera.updateProjectionMatrix();
 }
 
@@ -313,6 +504,8 @@ function queueProtocol() {
   {
     const protocol = props.protocol;
     activeProtocol = protocol;
+    protocolElapsed = 0;
+    playbackEnded = false;
     const startsAt = Math.max(
       nextPlaybackAt,
       ...[...players.values()].map((item) => item.mixer.time),
@@ -331,6 +524,10 @@ function restartPlayback() {
     player.mixer.stopAllAction();
     player.mixer.setTime(0);
   }
+  if (activeProtocol) updateRootMotion(activeProtocol, 0);
+  physics.reset();
+  protocolElapsed = 0;
+  playbackEnded = false;
   queuedProtocolCount = 0;
   nextPlaybackAt = 0;
   queueProtocol();
@@ -358,12 +555,98 @@ async function loadPlayer(asset, revision) {
       objectUrl,
       segmentActions: [],
       activeSegmentIndex: -1,
+      authoredPosition: new THREE.Vector3(),
+      authoredRotation: new THREE.Quaternion(),
+      authoredScale: new THREE.Vector3(1, 1, 1),
+      physicsPosition: new THREE.Vector3(),
+      physicsCorrection: new THREE.Vector3(),
+      grounded: false,
+      verticalVelocity: 0,
+      rapierColliders: [],
+      rapierControllers: [],
     };
     return player;
   } catch (error) {
     URL.revokeObjectURL(objectUrl);
     throw error;
   }
+}
+
+function configurePlayers(loaded) {
+  players = new Map(loaded.map((player) => [player.assetId, player]));
+  for (const [index, player] of loaded.entries()) {
+    player.anchor.add(player.model);
+    const normalization = player.asset.normalization;
+    player.model.scale.setScalar(normalization.scale);
+    if (Array.isArray(player.asset.canonicalRotation)) {
+      player.model.quaternion.fromArray(player.asset.canonicalRotation);
+    }
+    player.model.position.set(
+      normalization.anchorOffset?.[0] || 0,
+      normalization.floorOffset + (props.protocol?.scene?.groundY || 0),
+      normalization.anchorOffset?.[2] || 0,
+    );
+    if (props.protocol) applyRootTransforms(props.protocol);
+    if (!props.protocol) player.anchor.position.x = index - (loaded.length - 1) / 2;
+    scene.add(player.anchor);
+  }
+  if (props.protocol) {
+    setupContactConstraints(props.protocol);
+    setupColliderHelpers(props.protocol);
+  }
+}
+
+function setupCamera(loaded) {
+  const box = new THREE.Box3();
+  loaded.forEach((player) => box.expandByObject(player.anchor));
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
+  // Assets and protocol tracks use canonical -Z as the character forward
+  // direction; the standalone import preview must use the same front side.
+  camera.position.set(center.x, center.y, center.z - Math.max(size.x, size.y, size.z, 1) * 2.2);
+  camera.lookAt(center);
+  return center;
+}
+
+function startAnimationLoop() {
+  const clock = new THREE.Clock();
+  const animate = () => {
+    frame = requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    for (const player of players.values()) {
+      // A completed non-loop protocol is immutable. Do not advance mixers
+      // after the terminal frame; this keeps the frozen pose authoritative.
+      if (!activeProtocol || !playbackEnded) player.mixer.update(delta);
+    }
+    if (activeProtocol) {
+      const duration = Math.max(0, Number(activeProtocol.duration || 0));
+      if (!playbackEnded) {
+        protocolElapsed = activeProtocol.loop
+          ? protocolElapsed + delta
+          : Math.min(duration, protocolElapsed + delta);
+        const time = activeProtocol.loop
+          ? protocolElapsed % Math.max(duration, 0.000001)
+          : protocolElapsed;
+        updateCharacterActions(activeProtocol, time);
+        updateRootMotion(activeProtocol, time);
+        updateContactConstraints(activeProtocol, time);
+        physics.step(activeProtocol, delta);
+        updateColliderHelpers(activeProtocol);
+        const cameraTime = activeProtocol.loop
+          ? time % Math.max(activeProtocol.duration, 0.000001)
+          : Math.min(time, activeProtocol.duration);
+        updateCamera(activeProtocol, cameraTime);
+        // Mark completion only after all channels have evaluated the terminal
+        // frame and physics has performed its final projection.
+        if (!activeProtocol.loop && protocolElapsed >= duration) playbackEnded = true;
+        updatePlaybackTelemetry(time);
+      }
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  };
+  animate();
 }
 
 async function mount() {
@@ -385,24 +668,10 @@ async function mount() {
   if (revision !== mountRevision || loaded.length !== props.assets.length) return;
   scene = new THREE.Scene();
   scene.background = new THREE.Color("#0a1120");
-  players = new Map(loaded.map((player) => [player.assetId, player]));
-  for (const [index, player] of loaded.entries()) {
-    player.anchor.add(player.model);
-    const normalization = player.asset.normalization;
-    player.model.scale.setScalar(normalization.scale);
-    player.model.position.y = normalization.floorOffset + (props.protocol?.scene?.groundY || 0);
-    if (props.protocol) applyRootTransforms(props.protocol);
-    if (!props.protocol) player.anchor.position.x = index - (loaded.length - 1) / 2;
-    scene.add(player.anchor);
-  }
+  configurePlayers(loaded);
+  await physics.setup(props.protocol, revision);
   scene.add(new THREE.HemisphereLight("#fff", "#445", 2));
-  const box = new THREE.Box3();
-  loaded.forEach((player) => box.expandByObject(player.anchor));
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  camera = new THREE.PerspectiveCamera(40, 1, 0.01, 1000);
-  camera.position.set(center.x, center.y, center.z + Math.max(size.x, size.y, size.z, 1) * 2.2);
-  camera.lookAt(center);
+  const center = setupCamera(loaded);
   try {
     renderer = new THREE.WebGLRenderer({
       antialias: false,
@@ -433,24 +702,7 @@ async function mount() {
   requestAnimationFrame(resizeRenderer);
   controls = new OrbitControls(camera, renderer.domElement);
   controls.target.copy(center);
-  const clock = new THREE.Clock();
-  const animate = () => {
-    frame = requestAnimationFrame(animate);
-    const delta = clock.getDelta();
-    for (const player of players.values()) player.mixer.update(delta);
-    if (activeProtocol) {
-      const time = Math.max(...[...players.values()].map((item) => item.mixer.time), 0);
-      updateCharacterActions(activeProtocol, time);
-      updateRootMotion(activeProtocol, time);
-      const cameraTime = activeProtocol.loop
-        ? time % Math.max(activeProtocol.duration, 0.000001)
-        : Math.min(time, activeProtocol.duration);
-      updateCamera(activeProtocol, cameraTime);
-    }
-    controls.update();
-    renderer.render(scene, camera);
-  };
-  animate();
+  startAnimationLoop();
   if (!props.protocol) {
     loaded.forEach((player) => {
       const idle = player.animations[0];
@@ -481,12 +733,16 @@ watch(
     if (!props.suspendResize) requestAnimationFrame(resizeRenderer);
   },
 );
+
+watch(() => props.showColliders, updateColliderHelperVisibility);
 onMounted(() => mount());
 watch(
   () => props.revision,
   () => {
     applyRootTransforms(props.protocol);
+    physics.release();
     restartPlayback();
+    if (scene && props.protocol) physics.setup(props.protocol, mountRevision);
   },
 );
 onBeforeUnmount(() => {

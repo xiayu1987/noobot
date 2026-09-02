@@ -4,7 +4,7 @@
   SPDX-License-Identifier: MIT
 -->
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { importGlbAsset } from "../runtime/importGlbAsset.js";
 import {
   characterAssetCatalog,
@@ -28,14 +28,28 @@ const props = defineProps({
     default: "select",
     validator: (value) => ["manage", "select"].includes(value),
   },
+  connected: { type: Boolean, default: false },
 });
 const error = ref("");
 const { translate } = useCharacterLocale();
 const importing = ref(false);
 const collapsed = ref(false);
 const samples = Object.freeze([
-  { id: "sample.three.robot-expressive", name: "RobotExpressive.glb", url: robotSampleUrl },
-  { id: "sample.three.soldier", name: "Soldier.glb", url: soldierSampleUrl },
+  {
+    id: "sample.three.robot-expressive",
+    name: "RobotExpressive.glb",
+    url: robotSampleUrl,
+    // RobotExpressive.glb is authored facing +Z; convert it once to the
+    // protocol's canonical -Z forward axis at import time.
+    canonicalRotation: [0, 1, 0, 0],
+  },
+  {
+    id: "sample.three.soldier",
+    name: "Soldier.glb",
+    url: soldierSampleUrl,
+    // Soldier.glb is authored facing -Z, already matching the protocol axis.
+    canonicalRotation: [0, 0, 0, 1],
+  },
   { id: "sample.three.flamingo", name: "Flamingo.glb", url: flamingoSampleUrl },
   { id: "sample.three.horse", name: "Horse.glb", url: horseSampleUrl },
   { id: "sample.three.parrot", name: "Parrot.glb", url: parrotSampleUrl },
@@ -112,6 +126,7 @@ async function loadOfficialSample(sample = samples[0]) {
       blob: await response.blob(),
       name: sample.name,
       assetId: sample.id,
+      canonicalRotation: sample.canonicalRotation,
     });
     recordCharacterAsset(metadata);
     select(metadata);
@@ -122,7 +137,7 @@ async function loadOfficialSample(sample = samples[0]) {
   }
 }
 
-onMounted(async () => {
+async function hydrateCatalog() {
   error.value = "";
   try {
     const assets = await refreshCharacterAssetCatalog();
@@ -137,7 +152,15 @@ onMounted(async () => {
   } catch (cause) {
     error.value = String(cause?.message || cause || "character asset catalog load failed");
   }
-});
+}
+
+watch(
+  () => props.connected,
+  (connected) => {
+    if (connected === true) void hydrateCatalog();
+  },
+  { immediate: true },
+);
 </script>
 <template>
   <section class="character-animation-assets" :class="{ 'is-right-panel': mode === 'manage' }">

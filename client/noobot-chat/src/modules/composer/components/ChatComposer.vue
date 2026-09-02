@@ -279,6 +279,7 @@ function updatePluginModelConfig(pluginId = "", next = {}) {
   });
 }
 const moreActionsExtensionContext = computed(() => ({
+  connected: props.connected === true,
   pluginModelConfig: props.pluginModelConfig || {},
   updatePluginModelConfig,
 }));

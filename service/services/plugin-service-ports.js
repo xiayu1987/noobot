@@ -26,6 +26,75 @@ function requireAssetToken(value, pattern, label) {
   return normalized;
 }
 
+function createWorkspaceAssetWriter({ resolveRoot }) {
+  return async function write({
+    userId,
+    assetId,
+    source,
+    declaredBytes = 0,
+    validate = null,
+  } = {}) {
+    const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
+    if (!source || typeof source.pipe !== "function") {
+      throw new TypeError("workspace asset source stream is required");
+    }
+    const expectedBytes = Number(declaredBytes);
+    const maximum = LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes;
+    if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > maximum) {
+      const error = new Error("workspace asset content length is invalid");
+      error.statusCode = expectedBytes > maximum ? 413 : 400;
+      throw error;
+    }
+    const assetDir = path.resolve(resolveRoot(userId), normalizedAssetId);
+    await fs.mkdir(assetDir, { recursive: true });
+    const temporaryPath = path.resolve(assetDir, `.upload-${randomUUID()}`);
+    const hash = createHash("sha256");
+    const prefixChunks = [];
+    let prefixBytes = 0;
+    let actualBytes = 0;
+    const meter = new Transform({
+      transform(chunk, _encoding, callback) {
+        actualBytes += chunk.length;
+        if (actualBytes > maximum) {
+          const error = new Error("workspace asset exceeds the configured size limit");
+          error.statusCode = 413;
+          callback(error);
+          return;
+        }
+        if (prefixBytes < 16) {
+          const prefix = chunk.subarray(0, Math.min(chunk.length, 16 - prefixBytes));
+          prefixChunks.push(prefix);
+          prefixBytes += prefix.length;
+        }
+        hash.update(chunk);
+        callback(null, chunk);
+      },
+    });
+    try {
+      await pipeline(source, meter, createWriteStream(temporaryPath, { flags: "wx" }));
+      if (actualBytes !== expectedBytes) {
+        const error = new Error("workspace asset content length mismatch");
+        error.statusCode = 400;
+        throw error;
+      }
+      const prefix = Buffer.concat(prefixChunks);
+      if (typeof validate === "function") validate({ prefix, size: actualBytes });
+      const version = hash.digest("hex");
+      const filePath = path.resolve(assetDir, version);
+      try {
+        await fs.rename(temporaryPath, filePath);
+      } catch (error) {
+        if (error?.code !== "EEXIST") throw error;
+        await fs.rm(temporaryPath, { force: true });
+      }
+      return Object.freeze({ assetId: normalizedAssetId, version, size: actualBytes });
+    } catch (error) {
+      await fs.rm(temporaryPath, { force: true });
+      throw error;
+    }
+  };
+}
+
 function createWorkspaceAssetPort({ bot, pluginId }) {
   const normalizedPluginId = requireAssetToken(pluginId, assetIdPattern, "plugin ID");
   const resolveRoot = (userId) => {
@@ -72,66 +141,7 @@ function createWorkspaceAssetPort({ bot, pluginId }) {
   };
   return Object.freeze({
     maxFileBytes: LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes,
-    async write({ userId, assetId, source, declaredBytes = 0, validate = null } = {}) {
-      const normalizedAssetId = requireAssetToken(assetId, assetIdPattern, "ID");
-      if (!source || typeof source.pipe !== "function") {
-        throw new TypeError("workspace asset source stream is required");
-      }
-      const expectedBytes = Number(declaredBytes);
-      const maximum = LENGTH_THRESHOLDS.serviceHttp.workspaceAssetFileBytes;
-      if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 1 || expectedBytes > maximum) {
-        const error = new Error("workspace asset content length is invalid");
-        error.statusCode = expectedBytes > maximum ? 413 : 400;
-        throw error;
-      }
-      const assetDir = path.resolve(resolveRoot(userId), normalizedAssetId);
-      await fs.mkdir(assetDir, { recursive: true });
-      const temporaryPath = path.resolve(assetDir, `.upload-${randomUUID()}`);
-      const hash = createHash("sha256");
-      const prefixChunks = [];
-      let prefixBytes = 0;
-      let actualBytes = 0;
-      const meter = new Transform({
-        transform(chunk, _encoding, callback) {
-          actualBytes += chunk.length;
-          if (actualBytes > maximum) {
-            const error = new Error("workspace asset exceeds the configured size limit");
-            error.statusCode = 413;
-            callback(error);
-            return;
-          }
-          if (prefixBytes < 16) {
-            const prefix = chunk.subarray(0, Math.min(chunk.length, 16 - prefixBytes));
-            prefixChunks.push(prefix);
-            prefixBytes += prefix.length;
-          }
-          hash.update(chunk);
-          callback(null, chunk);
-        },
-      });
-      try {
-        await pipeline(source, meter, createWriteStream(temporaryPath, { flags: "wx" }));
-        if (actualBytes !== expectedBytes) {
-          const error = new Error("workspace asset content length mismatch");
-          error.statusCode = 400;
-          throw error;
-        }
-        const prefix = Buffer.concat(prefixChunks);
-        if (typeof validate === "function") validate({ prefix, size: actualBytes });
-        const version = hash.digest("hex");
-        const filePath = path.resolve(assetDir, version);
-        try {
-          await fs.rename(temporaryPath, filePath);
-        } catch (error) {
-          if (error?.code !== "EEXIST") throw error;
-          await fs.rm(temporaryPath, { force: true });
-        }
-        return Object.freeze({ assetId: normalizedAssetId, version, size: actualBytes });
-      } catch (error) {
-        await fs.rm(temporaryPath, { force: true });
-        throw error;
-      }
-    },
+    write: createWorkspaceAssetWriter({ resolveRoot }),
     async read({ userId, assetId, version } = {}) {
       const filePath = resolveVersionPath(userId, assetId, version);
       let stats;

@@ -33,6 +33,10 @@ const CHARACTER_MESSAGES = Object.freeze({
       exportingVideo: "正在导出视频…",
       exportUnavailable: "当前浏览器不支持导出视频",
       exportFailed: "导出失败：{error}",
+      pathDistance: "路径距离",
+      netDisplacement: "净位移",
+      minClearance: "最小间隙",
+      penetrations: "穿透区间",
     }),
   }),
   "en-US": Object.freeze({
@@ -60,6 +64,10 @@ const CHARACTER_MESSAGES = Object.freeze({
       exportingVideo: "Exporting video…",
       exportUnavailable: "Video export is not supported by this browser",
       exportFailed: "Export failed: {error}",
+      pathDistance: "Path distance",
+      netDisplacement: "Net displacement",
+      minClearance: "Min clearance",
+      penetrations: "Penetration intervals",
     }),
   }),
 });

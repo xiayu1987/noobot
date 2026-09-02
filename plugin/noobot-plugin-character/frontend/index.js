@@ -17,19 +17,31 @@ import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/c
 import { configureImportedAssetStore } from "./runtime/importedAssetStore.js";
 import { useCharacterLocale } from "./i18n/index.js";
 
-export function routeCharacterRuntimeEvent({ envelope, descriptor } = {}) {
+export function routeCharacterRuntimeEvent({ envelope, descriptor, context } = {}) {
   if (
     descriptor?.family === EVENT_FAMILY.PLUGIN_ARTIFACT &&
     envelope?.payload?.pluginId === CHARACTER_PLUGIN_ID &&
     envelope?.payload?.artifactType === CHARACTER_ANIMATION_ARTIFACT_TYPE
-  )
+  ) {
+    const eventSessionId = String(envelope?.identity?.sessionId || "").trim();
+    const activeSessionId = String(context?.sessionId || "").trim();
+    // The live stream carries the authoritative session identity. Establish
+    // the plugin projection boundary before applying its first event so a
+    // session switch cannot reject that event while detail hydration is still
+    // pending. A different active session remains ineligible.
+    if (activeSessionId && eventSessionId && activeSessionId !== eventSessionId) return false;
+    if (eventSessionId && animationRuntimeState.sessionId !== eventSessionId) {
+      resetAnimationRuntimeState(eventSessionId);
+    }
     return applyAnimationRuntimeEvent(envelope).applied === true;
+  }
   return false;
 }
 
 function hydrateCharacterSessionArtifacts({ mainSessionDoc = {}, sessionItem = {} } = {}) {
   const sessionId = String(mainSessionDoc?.sessionId || sessionItem?.sessionId || "").trim();
-  resetAnimationRuntimeState(sessionId);
+  if (!sessionId) return 0;
+  if (animationRuntimeState.sessionId !== sessionId) resetAnimationRuntimeState(sessionId);
   const events = Array.isArray(mainSessionDoc?.sessionArtifactEvents)
     ? [...mainSessionDoc.sessionArtifactEvents].sort(
         (left, right) =>
@@ -60,6 +72,7 @@ export async function activate(ctx = {}) {
   const resolveAssetProps = (context = {}, mode) => ({
     pluginModelConfig: context?.pluginModelConfig?.[pluginId] || {},
     updatePluginModelConfig: (next = {}) => context?.updatePluginModelConfig?.(pluginId, next),
+    connected: context?.connected === true,
     mode,
   });
   contribute(points.RUNTIME_STREAM_ROUTE, {
@@ -78,12 +91,11 @@ export async function activate(ctx = {}) {
   contribute(points.SESSION_ARTIFACT_PANEL, {
     id: "character-session-artifacts",
     resolveTitle: () => translate("character.animationArtifact"),
-    when: ({ sessionId } = {}) =>
-      Boolean(
-        sessionId &&
-        animationRuntimeState.sessionId === sessionId &&
-        animationRuntimeState.cards.length,
-      ),
+    when: ({ sessionId } = {}) => {
+      const projectedSessionId = animationRuntimeState.sessionId;
+      const artifactCount = animationRuntimeState.cards.length;
+      return Boolean(sessionId && projectedSessionId === sessionId && artifactCount > 0);
+    },
     component: CharacterSessionArtifacts,
     resolveProps: ({ sessionId } = {}) => ({ sessionId }),
   });

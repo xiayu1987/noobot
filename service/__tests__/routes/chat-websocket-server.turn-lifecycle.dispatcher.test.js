@@ -13,7 +13,9 @@ import {
 } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
+  createPluginArtifactEnvelope,
   listPendingAuthorityEvents,
+  PLUGIN_ARTIFACT_EVENT,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
 import {
@@ -29,6 +31,7 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
 import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
+import { createOutboundEventSender } from "../../ws/chat-websocket/outbound-event-sender.js";
 import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
 import {
   attachRunTransport,
@@ -52,6 +55,75 @@ import {
   installLifecycleSnapshotReader,
   requestTurnSnapshot,
 } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+
+test("plugin artifact outbox commit is sent through the active WebSocket before acknowledgement", async () => {
+  const envelope = createPluginArtifactEnvelope({
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: "animation.live",
+    sessionId: "s-artifact-live",
+    turnScopeId: "turn-artifact-live",
+    data: { protocol: { animationId: "animation.live" }, assets: [] },
+  });
+  let pending = [{ eventId: envelope.identity.eventId, envelope }];
+  let acknowledged = 0;
+  const bot = {
+    async getPendingAuthorityEvents() {
+      return { found: true, events: pending };
+    },
+    async recordAuthorityEventAttempt() {
+      return { recorded: true };
+    },
+    async acknowledgeAuthorityEvent({ eventId }) {
+      acknowledged += 1;
+      pending = pending.filter((item) => item.eventId !== eventId);
+      return { acknowledged: true };
+    },
+  };
+  const packets = [];
+  const logs = [];
+  const webSocket = {
+    readyState: WebSocket.OPEN,
+    send(packet, callback) {
+      packets.push(JSON.parse(packet));
+      callback();
+    },
+  };
+  const sendEvent = createOutboundEventSender({
+    webSocket,
+    state: {},
+    logConnection: (event, data) => logs.push({ event, data }),
+    sessionLogConfig: {},
+  });
+  const runHandle = registerActiveRun({
+    userId: "u1",
+    sessionId: "s-artifact-live",
+    turnScopeId: "turn-artifact-live",
+  });
+  attachRunTransport(runHandle, sendEvent);
+  const dispatch = createAuthorityEventDispatcher({
+    resolveBot: () => bot,
+    sendEvent: (...args) => publishRunEvent(runHandle, ...args),
+  });
+
+  try {
+    const result = await dispatch({ userId: "u1", sessionId: "s-artifact-live" });
+
+    assert.deepEqual(result, { dispatched: true, delivered: 1 });
+    assert.deepEqual(packets, [{ event: PLUGIN_ARTIFACT_EVENT, data: envelope }]);
+    assert.equal(acknowledged, 1);
+    assert.equal(
+      logs.some(
+        (item) =>
+          item.event === "service.authorityOutbox.eventSent" &&
+          item.data.eventId === envelope.identity.eventId,
+      ),
+      true,
+    );
+  } finally {
+    unregisterActiveRun(runHandle);
+  }
+});
 
 test("authority dispatcher keeps a failed send pending and reconnect retries the same envelope once", async () => {
   let eventOutbox = [];
@@ -523,4 +595,3 @@ test("authority dispatcher leaves an event pending when acknowledgement persiste
   await dispatch({ userId: "u1", sessionId: "s-ack-retry" });
   assert.equal(sentEventIds.length, 2);
 });
-

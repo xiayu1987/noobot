@@ -25,7 +25,7 @@ import {
   turnRuntimeDisplayState,
 } from "../run-state-machine/turnRuntimeRegistry.js";
 import { clearTurnUiState } from "./turnUiStore.js";
-import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { logMessageMutationDiagnostics } from "../../../debug/loggers/messageMutationDiagnosticsLogger.js";
 
 const delay = (ms) =>
   new Promise((resolve) => {
@@ -276,7 +276,7 @@ export function createMonotonicMessageActions({
         source: "delete_superseded_resend",
       });
     }
-    logWorkflowDiagnostics("frontend.messageDelete.started", () => ({
+    logMessageMutationDiagnostics("frontend.messageDelete.started", () => ({
       sessionId: initialSessionId,
       dialogProcessId: getMessageDialogProcessId(userTargetMessage),
       turnScopeId: initialTurnScopeId,
@@ -297,7 +297,7 @@ export function createMonotonicMessageActions({
         );
         const locallyDeletedTurnScopeIds = collectMessageCascadeTurnScopeIds(userTargetMessage);
         messageOperationStore?.updateOperation?.(deleteOperation?.opId, { status: "deleting" });
-        logWorkflowDiagnostics("frontend.messageDelete.requestPrepared", () => ({
+        logMessageMutationDiagnostics("frontend.messageDelete.requestPrepared", () => ({
           sessionId,
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -331,7 +331,7 @@ export function createMonotonicMessageActions({
         });
         const result = mutationResult?.result;
         const payload = mutationResult?.payload;
-        logWorkflowDiagnostics("frontend.messageDelete.responseReceived", () => ({
+        logMessageMutationDiagnostics("frontend.messageDelete.responseReceived", () => ({
           sessionId,
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -356,7 +356,7 @@ export function createMonotonicMessageActions({
           sessionId,
         });
         cascadeDeleteMessagesFrom(userTargetMessage);
-        logWorkflowDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
+        logMessageMutationDiagnostics("frontend.messageDelete.localCascadeApplied", () => ({
           sessionId,
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),
@@ -368,7 +368,7 @@ export function createMonotonicMessageActions({
           deletedTurnScopeIds: confirmedDeletedTurnScopeIds,
         });
         cascadeDeleteMessagesFrom(userTargetMessage);
-        logWorkflowDiagnostics("frontend.messageDelete.completed", () => ({
+        logMessageMutationDiagnostics("frontend.messageDelete.completed", () => ({
           sessionId,
           dialogProcessId: getMessageDialogProcessId(userTargetMessage),
           turnScopeId: getMessageTurnScopeId(userTargetMessage),

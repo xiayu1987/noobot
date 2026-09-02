@@ -5,7 +5,7 @@
  */
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import { selectPlugins, sendMessage } from "../helpers/browser-actions.js";
-import { waitForCommand, waitForTurnTerminal } from "../helpers/scenario-assertions.js";
+import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { toolEventsForTurn, waitForToolSet } from "../helpers/thinking-tool-assertions.js";
@@ -53,8 +53,24 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
   // assertion unchanged.
   await expect(interaction).toBeHidden({ timeout: 60000 });
 
-  await waitForTurnTerminal(protocolCapture, noobot.sessionId, command.identity.turnScopeId, {
-    timeoutMs: 120000,
+  const failedInteraction = await waitForCaptured(
+    () =>
+      findProtocolObjects(protocolCapture.websocketReceived).find(
+        (event) =>
+          event.event === "interaction_request" &&
+          event.data?.identity?.sessionId === noobot.sessionId &&
+          event.data?.identity?.turnScopeId === command.identity.turnScopeId &&
+          event.data?.payload?.lifecycle === "failed",
+      ),
+    { timeoutMs: 60000 },
+  );
+  expect(failedInteraction.data?.payload).toMatchObject({
+    lifecycle: "failed",
+    resolvedBy: "system",
+    interactionData: {
+      reason: "timeout",
+      error: { code: "user_interaction_timeout" },
+    },
   });
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   await expect(interaction).toBeHidden();

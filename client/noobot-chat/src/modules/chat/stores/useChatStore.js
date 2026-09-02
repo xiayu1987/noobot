@@ -10,7 +10,7 @@ import { createTurnRuntimeStoreActions } from "./chatStoreTurnRuntime.js";
 import { createChatExecutionSelectors } from "./chatStoreExecutionSelectors.js";
 import { createSubSessionMessageRegistry, createSubSessionStore } from "./chatStoreSubSessions.js";
 import { createWorkflowStore } from "./chatStoreWorkflows.js";
-import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
+import { logTurnRuntimeDiagnostics } from "../../debug/loggers/turnRuntimeDiagnosticsLogger.js";
 import { projectTurnRuntimeToMessages } from "../runtime/engine/turnProjectionStore.js";
 import { isFinalTurnState } from "../runtime/run-state-machine/turnReducer.js";
 
@@ -59,7 +59,7 @@ export const useChatStore = defineStore("chat", () => {
   const turnActions = createTurnRuntimeStoreActions(turnRuntimeRegistry, {
     onTurnEvaluated: ({ reducer, input, result, applied }) => {
       const turn = result?.turn;
-      logWorkflowDiagnostics("frontend.turnRuntime.commitEvaluated", () => ({
+      logTurnRuntimeDiagnostics("frontend.turnRuntime.commitEvaluated", () => ({
         sessionId: String(
           turn?.parentSessionId ||
             input?.parentSessionId ||
@@ -87,7 +87,7 @@ export const useChatStore = defineStore("chat", () => {
       const existingSubSession = Boolean(
         sessionId && subSessions?.selectSubSessionMessages(sessionId),
       );
-      logWorkflowDiagnostics("frontend.turnRuntime.commitProjectionEvaluated", () => ({
+      logTurnRuntimeDiagnostics("frontend.turnRuntime.commitProjectionEvaluated", () => ({
         sessionId: parentSessionId || sessionId,
         nodeSessionId: sessionId,
         parentSessionId,
@@ -117,7 +117,7 @@ export const useChatStore = defineStore("chat", () => {
         container = subSessions.ensureSubSessionMessageContainer(turn);
         subSessionProjection = subSessions.applyTurnRuntimeMessageProjection(turn);
       }
-      logWorkflowDiagnostics("frontend.turnRuntime.messageProjectionCommitted", () => ({
+      logTurnRuntimeDiagnostics("frontend.turnRuntime.messageProjectionCommitted", () => ({
         sessionId: parentSessionId || sessionId,
         nodeSessionId: sessionId,
         parentSessionId,

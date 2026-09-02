@@ -13,6 +13,7 @@ import { useLocale } from "../../../../shared/i18n/useLocale.js";
 
 const props = defineProps({
   activeSession: { type: Object, default: () => ({}) },
+  connected: { type: Boolean, default: false },
 });
 const { translate } = useLocale();
 const expanded = ref(true);
@@ -22,6 +23,7 @@ const isResizing = ref(false);
 const resizeRevision = ref(0);
 let resizeSession = null;
 const context = computed(() => ({
+  connected: props.connected === true,
   sessionId: String(props.activeSession?.sessionId || "").trim(),
   session: props.activeSession || {},
   sessionDocs: Array.isArray(props.activeSession?.sessionDocs)

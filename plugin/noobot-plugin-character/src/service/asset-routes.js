@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { AnimationAssetSchema } from "../animation-protocol.js";
+import { migrateLegacyAssetDescriptor } from "../asset-metadata-migration.js";
 
 const GLB_MIME_TYPE = "model/gltf-binary";
 
@@ -110,8 +111,20 @@ export function createCharacterAssetRouteHandlers({ workspaceAssets } = {}) {
       res.status(201).json({ ok: true, asset });
     },
     "character.asset.list": async (req, res) => {
-      const catalog = await workspaceAssets.listMetadata({ userId: requestUserId(req) });
-      const assets = Object.values(catalog).map((asset) => AnimationAssetSchema.parse(asset));
+      const userId = requestUserId(req);
+      const catalog = await workspaceAssets.listMetadata({ userId });
+      const assets = await Promise.all(
+        Object.entries(catalog).map(async ([assetId, value]) => {
+          const migrated = migrateLegacyAssetDescriptor(value);
+          const asset = AnimationAssetSchema.parse(migrated || value);
+          if (migrated) {
+            if (asset.assetId !== assetId)
+              throw new TypeError("character asset catalog identity mismatch");
+            await workspaceAssets.writeMetadata({ userId, assetId, metadata: asset });
+          }
+          return asset;
+        }),
+      );
       assets.sort((left, right) => left.importedAt.localeCompare(right.importedAt));
       res.status(200).json({ ok: true, assets });
     },

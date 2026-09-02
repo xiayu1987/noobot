@@ -7,7 +7,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as THREE from "three";
 import { saveImportedAsset } from "./importedAssetStore.js";
 
-export async function importGlbAsset({ blob, name, assetId }) {
+export async function importGlbAsset({ blob, name, assetId, canonicalRotation = [0, 0, 0, 1] }) {
   if (!(blob instanceof Blob)) throw new TypeError("GLB import requires a Blob");
   const resolvedAssetId = String(assetId || "").trim();
   if (!resolvedAssetId) throw new TypeError("GLB import requires an asset ID");
@@ -38,10 +38,22 @@ export async function importGlbAsset({ blob, name, assetId }) {
         })),
         nodes: [...new Set(nodes)].slice(0, 500),
         bounds: { min, max, height },
+        sourceUnit: "meter",
+        metersPerUnit: 1,
+        heightMeters: height,
+        canonicalUnit: "normalized_world",
+        anchor: "foot_center",
+        axes: { handedness: "right", up: "Y", forward: "-Z" },
+        canonicalRotation,
         normalization: {
           targetHeight,
           scale: targetHeight / height,
           floorOffset: (-min[1] * targetHeight) / height,
+          anchorOffset: [
+            (-(min[0] + max[0]) * 0.5 * targetHeight) / height,
+            0,
+            (-(min[2] + max[2]) * 0.5 * targetHeight) / height,
+          ],
         },
         importedAt: new Date().toISOString(),
       },

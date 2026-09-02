@@ -37,7 +37,11 @@ function descriptor() {
     animations: [{ name: "Idle", duration: 1, tracks: 1 }],
     nodes: ["Root"],
     bounds: { min: [0, 0, 0], max: [1, 1, 1], height: 1 },
-    normalization: { targetHeight: 1, scale: 1, floorOffset: 0 },
+    sourceUnit: "meter",
+    canonicalUnit: "normalized_world",
+    anchor: "foot_center",
+    axes: { handedness: "right", up: "Y", forward: "-Z" },
+    normalization: { targetHeight: 1, scale: 1, floorOffset: 0, anchorOffset: [0, 0, 0] },
     importedAt: "2026-08-31T00:00:00.000Z",
     resource: {
       version: "a".repeat(64),
@@ -165,4 +169,37 @@ test("character asset descriptor rejects mismatched identity", async () => {
     () => handlers["character.asset.commit"](req, response()),
     /does not match its resource identity/,
   );
+});
+
+test("character asset list migrates the explicit legacy metadata shape once", async () => {
+  const legacy = descriptor();
+  delete legacy.sourceUnit;
+  delete legacy.canonicalUnit;
+  delete legacy.anchor;
+  delete legacy.axes;
+  legacy.normalization = { targetHeight: 1, scale: 1, floorOffset: 0 };
+  const writes = [];
+  const handlers = createCharacterAssetRouteHandlers({
+    workspaceAssets: workspaceAssets({
+      async listMetadata() {
+        return { [legacy.assetId]: legacy };
+      },
+      async writeMetadata(input) {
+        writes.push(input);
+        return input.metadata;
+      },
+    }),
+  });
+  const result = response();
+  await handlers["character.asset.list"](request(glbBuffer()), result);
+  assert.equal(result.statusCode, 200);
+  assert.deepEqual(result.value.assets[0].axes, {
+    handedness: "right",
+    up: "Y",
+    forward: "-Z",
+  });
+  assert.equal(result.value.assets[0].sourceUnit, "meter");
+  assert.deepEqual(result.value.assets[0].normalization.anchorOffset, [0, 0, 0]);
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].metadata, result.value.assets[0]);
 });

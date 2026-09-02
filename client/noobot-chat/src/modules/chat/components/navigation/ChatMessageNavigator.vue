@@ -164,8 +164,7 @@ watch(
   white-space: nowrap;
   color: var(--noobot-text-secondary);
   background: var(--noobot-surface-soft);
-  border: 1px solid
-    color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
+  border: 1px solid color-mix(in srgb, var(--noobot-panel-border) 56%, transparent);
   font-size: var(--noobot-font-size-sm);
   line-height: 1.35;
   transition:
@@ -239,11 +238,7 @@ watch(
 :deep(.el-anchor__link:hover) {
   color: var(--noobot-text-main);
   background: var(--noobot-surface-soft-hover);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 24%,
-    var(--noobot-panel-border)
-  );
+  border-color: color-mix(in srgb, var(--noobot-accent) 24%, var(--noobot-panel-border));
   transform: translateX(2px);
 }
 
@@ -251,11 +246,7 @@ watch(
 :deep(.el-anchor__link.is-current) {
   color: var(--noobot-text-strong);
   background: var(--noobot-surface-primary-soft);
-  border-color: color-mix(
-    in srgb,
-    var(--noobot-accent) 42%,
-    var(--noobot-panel-border)
-  );
+  border-color: color-mix(in srgb, var(--noobot-accent) 42%, var(--noobot-panel-border));
   font-weight: 700;
 }
 
@@ -268,11 +259,7 @@ watch(
   .chat-message-navigator {
     max-height: calc(100dvh - 120px);
     padding: 8px 10px;
-    border-color: color-mix(
-      in srgb,
-      var(--noobot-panel-border) 58%,
-      transparent
-    );
+    border-color: color-mix(in srgb, var(--noobot-panel-border) 58%, transparent);
     background: color-mix(in srgb, var(--noobot-panel-bg) 96%, transparent);
   }
 
