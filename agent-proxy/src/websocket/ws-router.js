@@ -3,7 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { config } from "../shared/config.js";
 import {
   AGENT_PROXY_ERROR,
   CHANNEL_RETENTION_PHASE,
@@ -255,16 +254,13 @@ export class WsRouter {
         return;
       }
       this.channelManager.attachSubscriber(targetChannel, socket);
-      if (config.replayOnReconnect) {
-        const sequenceByChannel = socket.__agentProxyLastSequenceByChannel || {};
-        this.channelManager.replayChannelEvents(
-          targetChannel,
-          socket,
-          Number(sequenceByChannel[targetChannel.key] || 0),
-        );
-      } else {
-        this.channelManager.syncSocketToChannelTail(targetChannel, socket);
-      }
+      const sequenceByChannel = socket.__agentProxyLastSequenceByChannel || {};
+      this.channelManager.replayChannelEvents(
+        targetChannel,
+        socket,
+        Number(sequenceByChannel[targetChannel.key] || 0),
+      );
+      this.channelManager.syncSocketToChannelTail(targetChannel, socket);
     },
 
     [WS_ACTION.RECONNECT](socket, payload) {

@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AnimationAssetSchema } from "./animation-protocol.js";
+import { migrateLegacyAssetDescriptor } from "./asset-metadata-migration.js";
 
 export async function readCharacterAssetCatalog(basePath) {
   const workspacePath = String(basePath || "").trim();
@@ -22,7 +23,7 @@ export async function readCharacterAssetCatalog(basePath) {
     throw new TypeError("character asset catalog must be an object");
   }
   return Object.entries(catalog).map(([assetId, value]) => {
-    const asset = AnimationAssetSchema.parse(value);
+    const asset = AnimationAssetSchema.parse(migrateLegacyAssetDescriptor(value) || value);
     if (asset.assetId !== assetId) {
       throw new TypeError("character asset catalog identity mismatch");
     }

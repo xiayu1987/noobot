@@ -33,6 +33,7 @@ defineEmits(["open-thinking-details"]);
 const props = defineProps({
   loadingSessionDetail: { type: Boolean, default: false },
   activeSession: { type: Object, default: () => ({}) },
+  connected: { type: Boolean, default: false },
   shouldRenderMessageInChat: { type: Function, required: true },
   ...sharedMessageRenderProps,
   emptyLogoSrc: { type: String, default: "" },
@@ -222,7 +223,7 @@ defineExpose({
         </template>
       </div>
     </el-scrollbar>
-    <SessionArtifactPanel :active-session="activeSession" />
+    <SessionArtifactPanel :active-session="activeSession" :connected="connected" />
   </div>
 </template>
 

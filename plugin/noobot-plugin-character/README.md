@@ -5,13 +5,46 @@ and node metadata, and renders LLM-authored animation protocols with Three.js.
 It contributes agent tools for creating, reading, replacing, and compiling
 declarative animation scripts.
 
-The protocol is `noobot.animation.protocol` version 2. An animation has an
+The protocol is `noobot.animation.protocol` version 4. An animation has an
 `animationId` and one synchronized, gap-free timeline per participating
 character. Each character declares its imported `assetId` and root transform;
-the scene declares normalized collision space and a camera track. Existing IDs
+the scene declares normalized collision space, contact constraints and a camera track. Existing IDs
 are replaced only with an explicit base revision. Scripts are structured
 `sequence`/`parallel`/`event` trees; JavaScript is never executed.
-Authoritative `plugin.artifact` events drive playback.
+Authoritative `plugin.artifact` events drive playback. GLB assets use meter source units, a right-handed Y-up/-Z-forward axis convention and a `foot_center` anchor. Input root motion is `character_local`; compilation produces absolute `normalized_world` tracks. Characters expose `orientationMode`: `face_motion` aligns locomotion to travel direction, while `authored` preserves backing and side-step facing. The runtime applies `rootTransform × rootMotion × assetCanonicalTransform` and reports trajectory distance, speed, clearance and penetration intervals.
+
+Scripts also support semantic movement, orientation and posture presets. Move
+nodes use `{ type: "move", characterId, mode, clip, target, duration?, obstacleId?, clearance? }`;
+orientation nodes use `{ type: "orient", characterId, mode: "face", clip, target, duration? }` or `{ type: "orient", characterId, mode: "turn", clip, angle, duration? }`;
+and posture nodes use `{ type: "posture", characterId, mode: "idle"|"stop"|"crouch"|"kneel"|"sit"|"lie"|"stand_up", clip, duration }`.
+For precise model-authored animation programming, use a `channel` node:
+`{ type: "channel", characterId, channelId, duration, tracks, rootMotion? }`.
+Each track targets one imported node/property (`position`, `rotation` or
+`scale`) and must provide complete keyframes from zero to its duration. The
+channel label is retained on the authoritative v4 track; the renderer executes
+that same v4 timeline, with no second runtime protocol.
+Move modes include `walk`, `run`, `crawl`, `jump`, `hop`, `drop`, `detour`,
+`step_over`, `jump_over`, `vault`, and `climb_over`. `target` is a world-space
+destination; the start is the character root or the preceding node endpoint.
+Obstacle modes reference a solid box collider declared in
+`scene.collisionSpace`. The compiler expands these nodes into the same
+authoritative v4 timeline and rejects unsupported geometry or invalid
+ground/obstacle constraints.
+
+Continuous solid collision playback uses `@dimforge/rapier3d-compat` (Rapier 3D
+WASM, Apache-2.0). Each character is represented by a kinematic body with
+capsule, sphere, or box colliders; the runtime adds a fixed ground collider,
+uses a character controller for swept movement and grounding, enables CCD, and
+projects the corrected position back to the Three.js anchor. `events_only`
+protocols keep authored positions without the solid projection step.
+
+New animations select a built-in, versioned camera preset through
+`scene.camera`; the plugin compiler expands that request into the only runtime
+representation, a complete `cameraTrack`. Artifacts never retain preset
+references, so later catalog changes cannot alter existing animations. Use
+`character_camera_preset_list` to read stable preset IDs and
+`character_animation_camera_apply` to replace an existing animation's camera
+at an explicit revision.
 
 The right feature panel imports and previews GLB files. The Composer More
 Actions extension selects assets for the current model request. Only selected

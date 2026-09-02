@@ -14,6 +14,7 @@
     "test": "node --test __tests__/**/*.test.js"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.20.0",
     "@noobot/context-protocol": "file:../../context-protocol",
     "@noobot/event-protocol": "file:../../event-protocol",
     "@noobot/hook-protocol": "file:../../hook-protocol",

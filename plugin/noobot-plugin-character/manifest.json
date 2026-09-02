@@ -21,7 +21,9 @@
         { "id": "character_animation_generate", "name": "character_animation_generate" },
         { "id": "character_animation_get", "name": "character_animation_get" },
         { "id": "character_animation_update", "name": "character_animation_update" },
-        { "id": "character_animation_script", "name": "character_animation_script" }
+        { "id": "character_animation_script", "name": "character_animation_script" },
+        { "id": "character_camera_preset_list", "name": "character_camera_preset_list" },
+        { "id": "character_animation_camera_apply", "name": "character_animation_camera_apply" }
       ]
     },
     "service": {

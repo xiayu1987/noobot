@@ -1,0 +1,172 @@
+[
+  {
+    "presetId": "camera.static.wide",
+    "version": 1,
+    "label": "固定全景",
+    "description": "固定机位完整容纳所有主体。",
+    "samples": 2,
+    "operators": [{ "type": "frame_subjects", "fov": 50, "margin": 0.35 }]
+  },
+  {
+    "presetId": "camera.static.medium",
+    "version": 1,
+    "label": "固定中景",
+    "description": "固定机位突出所选主体。",
+    "samples": 2,
+    "operators": [{ "type": "frame_subjects", "fov": 38, "margin": 0.12 }]
+  },
+  {
+    "presetId": "camera.pan.left",
+    "version": 1,
+    "label": "向左摇镜",
+    "description": "机位固定，视线向左移动。",
+    "samples": 3,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "target": [-0.8, 0, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.pan.right",
+    "version": 1,
+    "label": "向右摇镜",
+    "description": "机位固定，视线向右移动。",
+    "samples": 3,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "target": [0.8, 0, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.tilt.up",
+    "version": 1,
+    "label": "向上摇镜",
+    "description": "机位固定，视线向上移动。",
+    "samples": 3,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "target": [0, 0.8, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.tilt.down",
+    "version": 1,
+    "label": "向下摇镜",
+    "description": "机位固定，视线向下移动。",
+    "samples": 3,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "target": [0, -0.8, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.dolly.in",
+    "version": 1,
+    "label": "推镜",
+    "description": "相机沿视线方向接近主体。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.3 },
+      { "type": "dolly", "endDistanceRatio": 0.58 }
+    ]
+  },
+  {
+    "presetId": "camera.dolly.out",
+    "version": 1,
+    "label": "拉镜",
+    "description": "相机沿视线方向远离主体。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.12 },
+      { "type": "dolly", "endDistanceRatio": 1.65 }
+    ]
+  },
+  {
+    "presetId": "camera.truck.left",
+    "version": 1,
+    "label": "左移镜头",
+    "description": "相机与视线目标同步向左横移。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "position": [-1.2, 0, 0], "target": [-1.2, 0, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.truck.right",
+    "version": 1,
+    "label": "右移镜头",
+    "description": "相机与视线目标同步向右横移。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "position": [1.2, 0, 0], "target": [1.2, 0, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.pedestal.up",
+    "version": 1,
+    "label": "升镜",
+    "description": "相机与视线目标同步升高。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "position": [0, 1.2, 0], "target": [0, 1.2, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.pedestal.down",
+    "version": 1,
+    "label": "降镜",
+    "description": "相机与视线目标同步降低。",
+    "samples": 4,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "translate", "position": [0, -0.8, 0], "target": [0, -0.8, 0] }
+    ]
+  },
+  {
+    "presetId": "camera.orbit.clockwise",
+    "version": 1,
+    "label": "顺时针环绕",
+    "description": "围绕主体顺时针走圆弧。",
+    "samples": 9,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.3 },
+      { "type": "orbit", "degrees": 120 }
+    ]
+  },
+  {
+    "presetId": "camera.orbit.counterclockwise",
+    "version": 1,
+    "label": "逆时针环绕",
+    "description": "围绕主体逆时针走圆弧。",
+    "samples": 9,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.3 },
+      { "type": "orbit", "degrees": -120 }
+    ]
+  },
+  {
+    "presetId": "camera.follow.behind",
+    "version": 1,
+    "label": "后方跟拍",
+    "description": "根据所选主体根运动从后方跟随。",
+    "samples": 9,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "follow", "side": "behind" }
+    ]
+  },
+  {
+    "presetId": "camera.follow.side",
+    "version": 1,
+    "label": "侧面跟拍",
+    "description": "根据所选主体根运动从侧面跟随。",
+    "samples": 9,
+    "operators": [
+      { "type": "frame_subjects", "fov": 42, "margin": 0.25 },
+      { "type": "follow", "side": "right" }
+    ]
+  }
+]

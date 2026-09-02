@@ -112,6 +112,7 @@ const composerRef = ref();
 const messageListPanelRef = ref();
 const featurePanelVisible = ref(false);
 const featurePanelContext = computed(() => ({
+  connected: props.connected === true,
   pluginModelConfig: props.pluginModelConfig || {},
   updatePluginModelConfig: (pluginId = "", next = {}) =>
     emit("update:pluginModelConfig", {
@@ -236,6 +237,7 @@ defineExpose({
           ref="messageListPanelRef"
           :loading-session-detail="loadingSessionDetail"
           :active-session="activeSession || {}"
+          :connected="connected"
           :should-render-message-in-chat="shouldRenderMessageInChat"
           :user-id="userId"
           :render-markdown="renderMarkdown"

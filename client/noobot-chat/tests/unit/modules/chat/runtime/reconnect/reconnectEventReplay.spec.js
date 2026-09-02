@@ -140,22 +140,66 @@ describe("applyReconnectEventReplay", () => {
       data: {
         protocol: {
           format: "noobot.animation.protocol",
-          version: 1,
+          version: 4,
           animationId: "animation-1",
           duration: 1,
           loop: false,
           scene: {
             coordinateSystem: "normalized_world",
-            targetHeight: 1,
+            unitHeight: 1,
             groundY: 0,
-            framing: "all_characters",
-            layout: { mode: "explicit", positions: [{ assetId: "robot-a", position: [0, 0, 0] }] },
+            collisionSpace: {
+              units: "normalized_world",
+              origin: [0, 0, 0],
+              detection: "continuous",
+              colliders: [],
+            },
+            contactConstraints: [],
+            cameraTrack: {
+              type: "keyframes",
+              positionInterpolation: "linear",
+              targetInterpolation: "linear",
+              fovInterpolation: "linear",
+              keyframes: [
+                {
+                  time: 0,
+                  position: [0, 1, 5],
+                  target: [0, 0.5, 0],
+                  fov: 40,
+                  transition: "blend",
+                  easing: "linear",
+                },
+                {
+                  time: 1,
+                  position: [0, 1, 5],
+                  target: [0, 0.5, 0],
+                  fov: 40,
+                  transition: "blend",
+                  easing: "linear",
+                },
+              ],
+            },
           },
           characters: [
             {
+              characterId: "character-1",
               assetId: "asset-1",
-              initialPosition: [0, 0, 0],
-              segments: [{ type: "native_clip", start: 0, duration: 1, clip: "Idle" }],
+              rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+              segments: [
+                {
+                  type: "native_clip",
+                  start: 0,
+                  duration: 1,
+                  clip: "Idle",
+                  rootMotion: {
+                    space: "normalized_world",
+                    keyframes: [
+                      { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+                      { time: 1, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+                    ],
+                  },
+                },
+              ],
             },
           ],
         },
@@ -167,6 +211,12 @@ describe("applyReconnectEventReplay", () => {
             size: 12,
             animations: [{ name: "Idle", duration: 1, tracks: 1 }],
             nodes: ["Head"],
+            bounds: { min: [0, 0, 0], max: [1, 1, 1], height: 1 },
+            sourceUnit: "meter",
+            canonicalUnit: "normalized_world",
+            anchor: "foot_center",
+            axes: { handedness: "right", up: "Y", forward: "-Z" },
+            normalization: { targetHeight: 1, scale: 1, floorOffset: 0, anchorOffset: [0, 0, 0] },
             importedAt: "2026-08-29T00:00:00.000Z",
             resource: {
               version: "a".repeat(64),

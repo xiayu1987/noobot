@@ -7,9 +7,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { createChannelKey, ensureConnectionId, resolveMessageEventTrace } from "../../src/shared/utils.js";
+import {
+  createChannelKey,
+  ensureConnectionId,
+  resolveMessageEventTrace,
+} from "../../src/shared/utils.js";
 import { createMockSocket } from "./channel-manager.state-consistency.test-helpers.js";
 import { createEventEnvelope, EVENT_FAMILY } from "@noobot/event-protocol";
+import {
+  createPluginArtifactEnvelope,
+  PLUGIN_ARTIFACT_EVENT,
+} from "@noobot/event-protocol/plugin-artifact-event";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_TYPE,
@@ -109,6 +117,39 @@ test("event replay should include channel sessionId without mutating cached enve
   assert.equal(envelope?.data?.identity?.sessionId, "session-1");
 });
 
+test("normal JOIN replay includes committed events during a socket gap", () => {
+  const manager = new ChannelManager({ OPEN: 1 });
+  const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
+  const channel = manager.ensureChannel(channelKey, {
+    userId: "user-1",
+    sessionId: "session-1",
+  });
+  channel.status = "running";
+  channel.ownerApiKey = "api-key-1";
+  channel.ownerUserId = "user-1";
+  const artifact = createPluginArtifactEnvelope({
+    pluginId: "character",
+    artifactType: "character.animation",
+    artifactId: "animation-1",
+    sessionId: "session-1",
+    turnScopeId: "turn-1",
+    data: { protocol: {}, assets: [] },
+  });
+  const eventEnvelope = manager.pushChannelEvent(channel, PLUGIN_ARTIFACT_EVENT, artifact);
+  const client = createMockSocket({ apiKey: "api-key-1", userId: "user-1" });
+
+  manager.replayChannelEvents(channel, client, 0);
+
+  assert.deepEqual(client.sentEvents, [
+    {
+      event: PLUGIN_ARTIFACT_EVENT,
+      data: artifact,
+      channelSessionId: "session-1",
+    },
+  ]);
+  assert.equal(client.__agentProxyLastSequenceByChannel[channelKey], eventEnvelope.sequence);
+});
+
 test("broadcast event order should be identical across same-channel clients", () => {
   const manager = new ChannelManager({ OPEN: 1 });
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
@@ -170,16 +211,28 @@ test("message event tracing only accepts the shared authoritative envelope", () 
     turnScopeId: "turn-1",
     dialogProcessId: "",
   });
-  assert.equal(resolveMessageEventTrace("subagent_message_event", authoritative, 11).protocolKind, "non_message_event");
-  assert.equal(resolveMessageEventTrace("thinking", authoritative, 9).protocolKind, "non_message_event");
-  assert.equal(resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, { eventId: "loose" }, 9).protocolKind, "non_message_event");
+  assert.equal(
+    resolveMessageEventTrace("subagent_message_event", authoritative, 11).protocolKind,
+    "non_message_event",
+  );
+  assert.equal(
+    resolveMessageEventTrace("thinking", authoritative, 9).protocolKind,
+    "non_message_event",
+  );
+  assert.equal(
+    resolveMessageEventTrace(MESSAGE_EVENT_WIRE_EVENT, { eventId: "loose" }, 9).protocolKind,
+    "non_message_event",
+  );
 });
 
 test("broadcast only records unsuccessful delivery results", () => {
   const records = [];
-  const manager = new ChannelManager({ OPEN: 1 }, {
-    sessionLogClient: { log: (_apiKey, event) => records.push(event) },
-  });
+  const manager = new ChannelManager(
+    { OPEN: 1 },
+    {
+      sessionLogClient: { log: (_apiKey, event) => records.push(event) },
+    },
+  );
   const channelKey = createChannelKey({ userId: "user-1", sessionId: "session-1" });
   const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId: "session-1" });
   channel.ownerApiKey = "api-key-1";
@@ -201,7 +254,10 @@ test("broadcast only records unsuccessful delivery results", () => {
       item.event === "agentProxy.channel.broadcast.delivery" &&
       item.data.transportEvent === MESSAGE_EVENT_WIRE_EVENT,
   );
-  assert.deepEqual(deliveries.map((item) => item.data.result), ["skipped"]);
+  assert.deepEqual(
+    deliveries.map((item) => item.data.result),
+    ["skipped"],
+  );
   assert.equal(deliveries[0]?.data?.dropReason, "socket_not_open");
   assert.ok(deliveries.every((item) => item.data.connectionId));
   assert.equal(openSocket.__agentProxyLastSequenceByChannel[channelKey], 1);

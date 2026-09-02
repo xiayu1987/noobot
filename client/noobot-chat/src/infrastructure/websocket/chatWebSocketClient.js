@@ -7,7 +7,7 @@ import { StreamEventEnum } from "../../modules/chat/model/chatConstants.js";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { createWebSocketTransportSupervisor } from "./webSocketTransportSupervisor.js";
 import { closeWebSocket } from "./closeWebSocket.js";
-import { logWorkflowDiagnostics } from "../../modules/debug/loggers/workflowDiagnosticsLogger.js";
+import { logTransportDiagnostics } from "../../modules/debug/loggers/transportDiagnosticsLogger.js";
 import {
   createTurnLifecycleReceipt,
   TURN_EVENT,
@@ -61,10 +61,10 @@ export function createChatWebSocketClient({
   let reconnectTimeout = null;
   let liveEventSubscriber = null;
   // A server can answer the turn immediately after the command is sent. Keep
-  // authoritative message events received during the short handler-bind
-  // window until the stream owns the socket; dropping them makes live
-  // artifacts appear only after a later replay.
-  const pendingMessageEvents = [];
+  // every protocol event for that stream during the short handler-bind
+  // window; dropping a runtime event makes live artifacts appear only after a
+  // later replay.
+  const pendingStreamEvents = [];
   const RECONNECT_TIMEOUT_MS = TIME_THRESHOLDS.client.wsReconnectTimeoutMs;
   function logAgentTransportCommand(event, command, extra = {}) {
     try {
@@ -144,7 +144,7 @@ export function createChatWebSocketClient({
     if (event !== TURN_LIFECYCLE_WIRE_EVENT) return;
     const validation = validateTurnLifecycleEnvelope(data);
     if (!validation.valid) {
-      logWorkflowDiagnostics("frontend.websocket.lifecycleReceiptRejected", () => ({
+      logTransportDiagnostics("frontend.websocket.lifecycleReceiptRejected", () => ({
         sessionId: normalizeTrimmedString(data?.sessionId),
         dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
         turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -156,7 +156,7 @@ export function createChatWebSocketClient({
     try {
       ws.send(JSON.stringify(createTurnLifecycleReceipt(data)));
     } catch (error) {
-      logWorkflowDiagnostics("frontend.websocket.lifecycleReceiptSendFailed", () => ({
+      logTransportDiagnostics("frontend.websocket.lifecycleReceiptSendFailed", () => ({
         sessionId: normalizeTrimmedString(data?.sessionId),
         dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
         turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -232,7 +232,7 @@ export function createChatWebSocketClient({
           const hasLiveSubscriber = typeof liveEventSubscriber === "function";
           const observedData = receivedTransportEvent.data;
           logTransportEventReceived(event, observedData, { hasLiveSubscriber });
-          logWorkflowDiagnostics("frontend.websocket.transportEventReceived", () => ({
+          logTransportDiagnostics("frontend.websocket.transportEventReceived", () => ({
             sessionId: normalizeTrimmedString(observedData?.identity?.sessionId),
             dialogProcessId: normalizeTrimmedString(observedData?.payload?.dialogProcessId),
             turnScopeId: normalizeTrimmedString(observedData?.identity?.turnScopeId),
@@ -265,8 +265,12 @@ export function createChatWebSocketClient({
                     ? "transport_live_subscriber"
                     : "unowned";
           const dispatchEligible = owner !== "unowned";
-          if (owner === "unowned" && event === "message_event") {
-            pendingMessageEvents.push(transportEvent);
+          if (
+            owner === "unowned" &&
+            activeStreamContext?.payload &&
+            isEventForStreamScope(data, activeStreamContext.payload, channelSessionId)
+          ) {
+            pendingStreamEvents.push(transportEvent);
             return;
           }
           if (event === TURN_LIFECYCLE_WIRE_EVENT) {
@@ -289,7 +293,7 @@ export function createChatWebSocketClient({
                 },
               );
             }
-            logWorkflowDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
+            logTransportDiagnostics("frontend.websocket.lifecycleDispatchEvaluated", () => ({
               sessionId: normalizeTrimmedString(lifecycleData?.sessionId),
               parentSessionId: normalizeTrimmedString(lifecycleData?.parentSessionId),
               dialogProcessId: normalizeTrimmedString(lifecycleData?.dialogProcessId),
@@ -316,7 +320,7 @@ export function createChatWebSocketClient({
           } else if (owner === "transport_live_subscriber") {
             liveEventSubscriber(transportEvent);
           }
-          logWorkflowDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
+          logTransportDiagnostics("frontend.websocket.protocolEventDispatched", () => ({
             sessionId: normalizeTrimmedString(data?.sessionId),
             dialogProcessId: normalizeTrimmedString(data?.dialogProcessId),
             turnScopeId: normalizeTrimmedString(data?.turnScopeId),
@@ -328,7 +332,7 @@ export function createChatWebSocketClient({
             dispatched: dispatchEligible,
           }));
         } catch (error) {
-          logWorkflowDiagnostics("frontend.websocket.transportEventRejected", () => ({
+          logTransportDiagnostics("frontend.websocket.transportEventRejected", () => ({
             sessionId: normalizeTrimmedString(parsedData?.sessionId),
             parentSessionId: normalizeTrimmedString(parsedData?.parentSessionId),
             dialogProcessId: normalizeTrimmedString(parsedData?.dialogProcessId),
@@ -585,11 +589,11 @@ export function createChatWebSocketClient({
             rebindSocket: bindStreamSocketHandlers,
             handleProtocolEvent,
           };
-          const pending = pendingMessageEvents.splice(0, pendingMessageEvents.length);
+          const pending = pendingStreamEvents.splice(0, pendingStreamEvents.length);
           for (const packet of pending) {
             if (isEventForStreamScope(packet.data, payload, packet.channelSessionId)) {
               handleProtocolEvent(packet);
-            } else pendingMessageEvents.push(packet);
+            } else pendingStreamEvents.push(packet);
           }
         }
       }
@@ -694,7 +698,7 @@ export function createChatWebSocketClient({
 
           if (event === StreamEventEnum.RECONNECT_DATA) {
             if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
-              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
+              logTransportDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
                 sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
                 protocolEvent: event,
                 reason: "request_id_mismatch",
@@ -707,7 +711,7 @@ export function createChatWebSocketClient({
 
           if (event === StreamEventEnum.RECONNECT_COMPLETE) {
             if (normalizeTrimmedString(data?.requestId) && data.requestId !== requestId) {
-              logWorkflowDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
+              logTransportDiagnostics("frontend.websocket.reconnectControlRejected", () => ({
                 sessionId: normalizeTrimmedString(data?.sessionId || currentSessionId),
                 protocolEvent: event,
                 reason: "request_id_mismatch",

@@ -19,7 +19,7 @@ import {
   routeMessageProjectionEvent,
 } from "./messageProjectionRouter.js";
 import { routeTerminalStreamEvent } from "./terminalStreamRouter.js";
-import { logWorkflowDiagnostics } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
+import { logPluginRuntimeDiagnostics } from "../../../debug/loggers/pluginRuntimeDiagnosticsLogger.js";
 
 function routePostProjectionEvent(event, data, context) {
   const {
@@ -92,6 +92,67 @@ function routePostProjectionEvent(event, data, context) {
     routeTerminalStreamEvent(event, data, terminalRouteContext);
   }
   return true;
+}
+
+function logRuntimeRouteCompleted({
+  routed,
+  data,
+  authoritativeEvent,
+  authoritativeIdentity,
+  authoritativePayload,
+  logSessionEvent,
+  sessionId,
+  turnScopeId,
+}) {
+  logSessionEvent?.({
+    category: "transport",
+    level: routed ? "info" : "warn",
+    event: "frontend.runtimeStream.routeCompleted",
+    sessionId: authoritativeIdentity.sessionId || data?.sessionId || sessionId,
+    dialogProcessId: authoritativePayload.dialogProcessId || data?.dialogProcessId || "",
+    turnScopeId: authoritativeIdentity.turnScopeId || data?.turnScopeId || turnScopeId,
+    data: {
+      eventType: String(authoritativeEvent?.identity?.eventType || ""),
+      eventFamily: String(authoritativeEvent?.protocol?.family || ""),
+      routed,
+    },
+  });
+}
+
+function routeAuthoritativeRuntimeEvent({
+  event,
+  data,
+  protocolEnvelope,
+  authoritativeEvent,
+  authoritativeIdentity,
+  authoritativePayload,
+  applyWorkflowRuntimeEvent,
+  logSessionEvent,
+  sessionId,
+  turnScopeId,
+  reduceSubSessionMessageEvent,
+}) {
+  if (protocolEnvelope?.identity?.eventType !== event) return false;
+  const routed = routeRuntimeStreamEvent(protocolEnvelope, {
+    source: "live",
+    logRuntimeProjectionDiagnostics: logPluginRuntimeDiagnostics,
+    applyWorkflowRuntimeEvent,
+    logSessionEvent,
+    sessionId,
+    turnScopeId,
+    reduceSubSessionMessageEvent,
+  });
+  logRuntimeRouteCompleted({
+    routed,
+    data,
+    authoritativeEvent,
+    authoritativeIdentity,
+    authoritativePayload,
+    logSessionEvent,
+    sessionId,
+    turnScopeId,
+  });
+  return routed;
 }
 
 export function createSendStreamEventHandler(context) {
@@ -211,10 +272,13 @@ export function createSendStreamEventHandler(context) {
     )
       return;
     if (
-      data?.identity?.eventType === event &&
-      routeRuntimeStreamEvent(data, {
-        source: "live",
-        logRuntimeProjectionDiagnostics: logWorkflowDiagnostics,
+      routeAuthoritativeRuntimeEvent({
+        event,
+        data,
+        protocolEnvelope,
+        authoritativeEvent,
+        authoritativeIdentity,
+        authoritativePayload,
         applyWorkflowRuntimeEvent,
         logSessionEvent,
         sessionId,

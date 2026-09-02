@@ -15,7 +15,7 @@ import { CHARACTER_ANIMATION_ARTIFACT_TYPE, CHARACTER_PLUGIN_ID } from "../src/c
 
 const protocol = (animationId, assetId = "robot-a") => ({
   format: "noobot.animation.protocol",
-  version: 2,
+  version: 4,
   animationId,
   duration: 1,
   loop: false,
@@ -29,11 +29,29 @@ const protocol = (animationId, assetId = "robot-a") => ({
       detection: "continuous",
       colliders: [],
     },
+    contactConstraints: [],
     cameraTrack: {
       type: "keyframes",
+      positionInterpolation: "linear",
+      targetInterpolation: "linear",
+      fovInterpolation: "linear",
       keyframes: [
-        { time: 0, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
-        { time: 1, position: [0, 1, 5], target: [0, 0.5, 0], fov: 40 },
+        {
+          time: 0,
+          position: [0, 1, 5],
+          target: [0, 0.5, 0],
+          fov: 40,
+          transition: "blend",
+          easing: "linear",
+        },
+        {
+          time: 1,
+          position: [0, 1, 5],
+          target: [0, 0.5, 0],
+          fov: 40,
+          transition: "blend",
+          easing: "linear",
+        },
       ],
     },
   },
@@ -42,7 +60,21 @@ const protocol = (animationId, assetId = "robot-a") => ({
       characterId: "character-1",
       assetId,
       rootTransform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
-      segments: [{ type: "native_clip", start: 0, duration: 1, clip: "Wave" }],
+      segments: [
+        {
+          type: "native_clip",
+          start: 0,
+          duration: 1,
+          clip: "Wave",
+          rootMotion: {
+            space: "normalized_world",
+            keyframes: [
+              { time: 0, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+              { time: 1, position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
+            ],
+          },
+        },
+      ],
     },
   ],
   events: [],
@@ -55,7 +87,11 @@ const asset = (assetId = "robot-a") => ({
   animations: [{ name: "Wave", duration: 1, tracks: 1 }],
   nodes: ["Head"],
   bounds: { min: [0, 0, 0], max: [1, 1, 1], height: 1 },
-  normalization: { targetHeight: 1, scale: 1, floorOffset: 0 },
+  sourceUnit: "meter",
+  canonicalUnit: "normalized_world",
+  anchor: "foot_center",
+  axes: { handedness: "right", up: "Y", forward: "-Z" },
+  normalization: { targetHeight: 1, scale: 1, floorOffset: 0, anchorOffset: [0, 0, 0] },
   importedAt: "2026-08-29T00:00:00.000Z",
   resource: {
     version: "a".repeat(64),
@@ -108,4 +144,25 @@ test("the character projector rejects another plugin's artifact", () => {
   });
   assert.deepEqual(result, { applied: false, reason: "unsupported_character_artifact" });
   assert.equal(animationRuntimeState.cards.length, 0);
+});
+
+test("a live event applies after establishing its session boundary", () => {
+  resetAnimationRuntimeState("previous-session");
+  const envelope = createPluginArtifactEnvelope({
+    pluginId: CHARACTER_PLUGIN_ID,
+    artifactType: CHARACTER_ANIMATION_ARTIFACT_TYPE,
+    artifactId: "animation-live",
+    sessionId: "live-session",
+    turnScopeId: "turn-live",
+    sequence: 1,
+    operation: "created",
+    revision: 1,
+    data: { protocol: protocol("animation-live"), assets: [asset()] },
+  });
+  resetAnimationRuntimeState(envelope.identity.sessionId);
+  const result = applyAnimationRuntimeEvent(envelope);
+  assert.equal(result.applied, true);
+  assert.equal(animationRuntimeState.sessionId, "live-session");
+  assert.equal(animationRuntimeState.cards.length, 1);
+  resetAnimationRuntimeState();
 });

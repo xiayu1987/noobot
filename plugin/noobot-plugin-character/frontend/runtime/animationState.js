@@ -19,8 +19,7 @@ export function resetAnimationRuntimeState(sessionId = "") {
   animationRuntimeState.revision = 0;
 }
 
-export function applyAnimationRuntimeEvent(envelope = {}) {
-  const sessionId = String(envelope?.identity?.sessionId || "").trim();
+function rejectEnvelope(envelope, sessionId) {
   if (!sessionId) return { applied: false, reason: "missing_session_id" };
   if (
     envelope?.payload?.pluginId !== CHARACTER_PLUGIN_ID ||
@@ -31,15 +30,25 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
   if (animationRuntimeState.sessionId && animationRuntimeState.sessionId !== sessionId) {
     return { applied: false, reason: "session_mismatch" };
   }
-  if (!animationRuntimeState.sessionId) animationRuntimeState.sessionId = sessionId;
+  return null;
+}
+
+function parseEnvelopeArtifact(envelope) {
   const assetResult = safeParseAnimationAssets(envelope?.payload?.data?.assets);
-  if (!assetResult.success) return { applied: false, reason: "invalid_animation_assets" };
+  if (!assetResult.success)
+    return { error: { applied: false, reason: "invalid_animation_assets" } };
   const result = safeParseAnimationProtocol(envelope?.payload?.data?.protocol);
-  if (!result.success) return { applied: false, reason: "invalid_animation_protocol" };
+  if (!result.success) return { error: { applied: false, reason: "invalid_animation_protocol" } };
   const protocol = result.data;
   if (String(envelope?.payload?.artifactId || "").trim() !== protocol.animationId) {
-    return { applied: false, reason: "artifact_id_mismatch", animationId: protocol.animationId };
+    return {
+      error: { applied: false, reason: "artifact_id_mismatch", animationId: protocol.animationId },
+    };
   }
+  return { protocol, assets: assetResult.data };
+}
+
+function applyAnimationCard(envelope, protocol, assets) {
   let card = animationRuntimeState.cards.find(
     (candidate) => candidate.animationId === protocol.animationId,
   );
@@ -73,7 +82,7 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
   }
   const created = !animationRuntimeState.cards.includes(card);
   card.eventIds.push(eventId);
-  card.assets = assetResult.data;
+  card.assets = assets;
   card.protocol = protocol;
   card.revision = eventRevision;
   if (!animationRuntimeState.cards.includes(card)) animationRuntimeState.cards.push(card);
@@ -85,4 +94,15 @@ export function applyAnimationRuntimeEvent(envelope = {}) {
     cardRevision: card.revision,
     revision: animationRuntimeState.revision,
   };
+}
+
+export function applyAnimationRuntimeEvent(envelope = {}) {
+  const sessionId = String(envelope?.identity?.sessionId || "").trim();
+  const rejection = rejectEnvelope(envelope, sessionId);
+  if (rejection) return rejection;
+  if (!animationRuntimeState.sessionId) animationRuntimeState.sessionId = sessionId;
+  const parsed = parseEnvelopeArtifact(envelope);
+  if (parsed.error) return parsed.error;
+  const result = applyAnimationCard(envelope, parsed.protocol, parsed.assets);
+  return result;
 }

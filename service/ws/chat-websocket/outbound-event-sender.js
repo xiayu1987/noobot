@@ -43,12 +43,8 @@ function getAuthoritativeMessageEvent(data) {
 }
 
 function resolveEventType(protocolEnvelope, authoritativeEvent, data) {
-  return text(
-    protocolEnvelope?.payload?.eventType ||
-      authoritativeEvent?.eventType ||
-      data?.eventType ||
-      data?.messageEvent?.eventType,
-  );
+  if (protocolEnvelope) return text(protocolEnvelope.identity?.eventType);
+  return text(authoritativeEvent?.eventType || data?.eventType || data?.messageEvent?.eventType);
 }
 
 function createTransportDiagnostic({
@@ -63,7 +59,7 @@ function createTransportDiagnostic({
     eventId: text(
       protocolEnvelope?.identity?.eventId || authoritativeEvent?.eventId || data?.eventId,
     ),
-    eventType,
+    eventType: eventType || text(protocolEnvelope?.identity?.eventType),
     messageId: text(authoritativeEvent?.messageId || data?.messageId),
     presentationMessageId: text(
       authoritativeEvent?.presentationMessageId || data?.presentationMessageId,
@@ -76,6 +72,7 @@ function createTransportDiagnostic({
 
 function classifyOutboundEvent(eventName, eventType) {
   return {
+    authorityEnvelope: false,
     toolFrame: eventType === "tool_call_start" || eventType === "tool_call_end",
     terminalLifecycle:
       eventName === TURN_LIFECYCLE_WIRE_EVENT &&
@@ -93,6 +90,7 @@ function logRejectedTransport({
   transportDiagnostic,
   toolFrame,
   terminalLifecycle,
+  authorityEnvelope,
 }) {
   if (authoritativeEvent) {
     logConnection("service.websocket.messageEvent.sendRejected", transportDiagnostic);
@@ -105,6 +103,12 @@ function logRejectedTransport({
       sessionId: data?.sessionId,
       dialogProcessId: data?.dialogProcessId,
       turnScopeId: data?.turnScopeId,
+    });
+  }
+  if (authorityEnvelope) {
+    logConnection("service.authorityOutbox.eventSendRejected", {
+      ...transportDiagnostic,
+      eventName,
     });
   }
   if (terminalLifecycle) {
@@ -149,6 +153,7 @@ function logSuccessfulTransport({
   transportDiagnostic,
   toolFrame,
   terminalLifecycle,
+  authorityEnvelope,
 }) {
   if (authoritativeEvent) {
     logConnection("service.websocket.messageEvent.sendCompleted", {
@@ -165,6 +170,14 @@ function logSuccessfulTransport({
       sessionId: enrichedData.sessionId,
       dialogProcessId: enrichedData.dialogProcessId,
       turnScopeId: enrichedData.turnScopeId,
+    });
+  }
+  if (authorityEnvelope) {
+    logConnection("service.authorityOutbox.eventSent", {
+      ...transportDiagnostic,
+      eventName,
+      transportSequence: sequence,
+      readyState,
     });
   }
   if (terminalLifecycle) {
@@ -235,7 +248,10 @@ export function createOutboundEventSender({ webSocket, state, logConnection, ses
     if (authoritativeEvent) {
       logConnection("service.websocket.messageEvent.sendStarted", transportDiagnostic);
     }
-    const classification = classifyOutboundEvent(eventName, eventType);
+    const classification = {
+      ...classifyOutboundEvent(eventName, eventType),
+      authorityEnvelope: Boolean(protocolEnvelope),
+    };
     if (webSocket.readyState !== 1) {
       logRejectedTransport({
         logConnection,
