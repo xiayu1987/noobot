@@ -77,6 +77,12 @@ export function createConfigValueSource({ baseValues = {}, overrideValues = null
       const configuredModel = valueAt(base, ["providers", alias, "model"]);
       const fromModel = resolveModelLibraryProviderByModel(configuredModel);
       if (isPlainObject(fromModel)) return fromModel;
+      // A provider alias that is intentionally defined only by the explicit
+      // global example still needs its declared capabilities and connection
+      // fields.  The model library remains authoritative whenever it knows the
+      // alias or concrete model; this is the missing-library fallback.
+      const fromGlobalExample = valueAt(base, ["providers", alias]);
+      if (isPlainObject(fromGlobalExample)) return fromGlobalExample;
       return resolveDefaultModelLibraryProvider();
     },
 

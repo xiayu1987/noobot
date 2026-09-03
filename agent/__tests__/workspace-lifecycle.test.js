@@ -69,7 +69,7 @@ test("existing workspace receives managed template updates without replacing use
 
     const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
     assert.deepEqual(config, {
-      preferences: { added: true, preserved: "user" },
+      preferences: {},
     });
     assert.equal(
       await readFile(path.join(fixture.userPath, "services", "built-in.js"), "utf8"),
@@ -296,13 +296,40 @@ test("explicit workspace sync adds every nested config node through the config p
     assert.deepEqual(config, {
       providers: {
         primary: {
+          api_key: "${OPENAI_API_KEY}",
+          base_url: "${OPENAI_API_ADDRESS}",
+          description: "Generic OpenAI-compatible fallback model",
+          enabled: true,
+          model: "default-model",
+          multimodal_generation: {
+            support_generation: { enabled: false, support_scope: [] },
+          },
+          multimodal_parsing: { enabled: false, input_modalities: [] },
           reasoning_effort: "high",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
           tool_reasoning_effort: "medium",
-          capabilities: { web_search: true },
+          used_for_conversation: true,
         },
-        added: { enabled: true },
+        added: {
+          api_key: "${OPENAI_API_KEY}",
+          base_url: "${OPENAI_API_ADDRESS}",
+          description: "Generic OpenAI-compatible fallback model",
+          enabled: true,
+          model: "default-model",
+          multimodal_generation: {
+            support_generation: { enabled: false, support_scope: [] },
+          },
+          multimodal_parsing: { enabled: false, input_modalities: [] },
+          reasoning_effort: "medium",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
+          tool_reasoning_effort: "medium",
+          used_for_conversation: true,
+        },
       },
       tools: {
+        execute_script: { enabled: true },
         read_file: { enabled: true },
       },
     });

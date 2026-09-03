@@ -453,6 +453,7 @@ export function createDesktopConfigManager({
     const repair = repairConfigDocument({
       scope,
       baseValues,
+      overrideValues: templateJson,
       target: targetJson,
     });
     const merged = repair.document;
@@ -468,7 +469,11 @@ export function createDesktopConfigManager({
     return false;
   }
 
-  function synchronizeExistingUserConfigs({ workspaceRootPath, templateConfigPath } = {}) {
+  function synchronizeExistingUserConfigs({
+    workspaceRootPath,
+    templateConfigPath,
+    baseValues = {},
+  } = {}) {
     if (!fs.existsSync(workspaceRootPath)) return;
     const template = readJsonFile(templateConfigPath, null);
     if (!isPlainObject(template))
@@ -481,7 +486,8 @@ export function createDesktopConfigManager({
         const payload = readJsonFileForRepair(filePath);
         const repair = repairConfigDocument({
           scope: CONFIG_DOCUMENT_SCOPE.USER,
-          baseValues: exampleConfig,
+          baseValues,
+          overrideValues: template,
           target: payload,
         });
         const synchronized = repair.document;
@@ -562,7 +568,11 @@ export function createDesktopConfigManager({
         `desktop workspace default user config is missing or invalid: ${templateConfigPath}`,
       );
     fs.mkdirSync(workspaceRootPath, { recursive: true });
-    synchronizeExistingUserConfigs({ workspaceRootPath, templateConfigPath });
+    synchronizeExistingUserConfigs({
+      workspaceRootPath,
+      templateConfigPath,
+      baseValues: exampleConfig,
+    });
     const configParamsPath = ensureConfigParamsCatalog({
       workspaceRootPath,
       configFiles: [targetPath, templateConfigPath, templateExamplePath],

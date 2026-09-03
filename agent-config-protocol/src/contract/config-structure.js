@@ -117,6 +117,7 @@ const SECURITY_STRUCTURE = object(
         scope: string(),
         container_name: string(),
         image: string(),
+        lock_wait_timeout_ms: integer({ minimum: 1, policy: GLOBAL_ONLY }),
         mounts: array({ item: SANDBOX_MOUNT_STRUCTURE }),
       }),
     }),

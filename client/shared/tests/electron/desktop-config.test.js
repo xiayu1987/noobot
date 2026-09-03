@@ -202,11 +202,12 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
     manager.ensureDesktopGlobalConfig({ isPackaged: true, userDataPath: fixture.userDataPath });
 
     const config = JSON.parse(await readFile(globalConfigPath, "utf8"));
-    assert.equal(config.newly_added_config.nested.default_value, true);
-    assert.equal(config.newly_added_config.nested.preserved_value, "client");
+    assert.equal(config.newly_added_config, undefined);
     assert.equal(config.security.execution_isolation.mode, "host");
     assert.equal(config.security.path_policy, undefined);
-    assert.equal(config.attachments, undefined);
+    assert.deepEqual(config.attachments, {
+      limits: { max_file_size_bytes: 2048 },
+    });
     assert.deepEqual(config.multimodal.parsing.default_models, {
       audio: "openai",
       image: "openai",
@@ -415,7 +416,7 @@ test("packaged desktop startup refreshes the workspace template from the bundled
     );
     const refreshedTemplate = JSON.parse(await readFile(state.templateConfigPath, "utf8"));
     assert.deepEqual(workspaceExample, refreshedExample);
-    assert.equal(refreshedTemplate.tools.new_tool.enabled, true);
+    assert.equal(refreshedTemplate.tools.new_tool, undefined);
     assert.equal(refreshedTemplate.tools.access_connector.enabled, true);
   } finally {
     await fixture.restore();
@@ -653,7 +654,7 @@ test("packaged desktop startup preserves config params absent from current templ
       descriptions: { ACTIVE_API_KEY: "active", RETIRED_API_KEY: "retired" },
     });
     const globalConfig = JSON.parse(await readFile(globalConfigPath, "utf8"));
-    assert.equal(globalConfig.tools, undefined);
+    assert.deepEqual(globalConfig.tools, {});
     assert.deepEqual(state.missingParams, []);
     manager.saveConfigParamValues({
       workspaceRootPath: state.workspaceRootPath,

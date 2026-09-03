@@ -224,8 +224,13 @@ function repairContractNode({
   // A node's declared facts layer config over its template, then over the
   // library default, so repair always resolves to one declared answer instead
   // of inventing a value of its own.
+  const shouldNormalizeModel =
+    contract !== MODEL_PROVIDER_CONFIG_CONTRACT ||
+    Object.keys({ ...templateObject, ...valueObject, ...output }).some((key) =>
+      key.startsWith("reasoning_effort"),
+    );
   const normalized =
-    typeof contract.normalize === "function"
+    shouldNormalizeModel && typeof contract.normalize === "function"
       ? contract.normalize(output, {
           ...(contract === MODEL_PROVIDER_CONFIG_CONTRACT
             ? resolveDefaultModelLibraryProvider()
@@ -345,17 +350,23 @@ function repairStructureNode({ node, target, path, values, scope, changes }) {
   }
 
   if (!validatesStructureLeaf(target, node)) {
-    return resetFromValues({ path, values, changes, optional });
+    return resetFromValues({
+      path,
+      values,
+      changes,
+      optional,
+      reason: validatesStructureLeafType(target, node) ? "invalid_node_value" : "invalid_node_type",
+    });
   }
   return clone(target);
 }
 
-function resetFromValues({ path, values, changes, optional }) {
+function resetFromValues({ path, values, changes, optional, reason = "invalid_node_value" }) {
   if (!values.has(path)) {
-    recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL, "invalid_node_value");
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL, reason);
     return REMOVE_NODE;
   }
-  recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_node_value");
+  recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, reason);
   return clone(values.resolve(path));
 }
 
@@ -526,12 +537,29 @@ function repairModelReferences(document, values, changes) {
 
 export function repairConfigDocument({
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
-  baseValues = {},
+  // `template` is retained as a compatibility alias for callers of the
+  // original protocol.  It is deliberately folded into the value source;
+  // structure is still always CONFIG_STRUCTURE.
+  baseValues = undefined,
+  template = undefined,
+  // These two names were used by the early structural/value split prototype.
+  // Accepting them keeps the protocol migration lossless without making them
+  // part of the structure authority.
+  structureTemplate = undefined,
+  valueTemplate = undefined,
   overrideValues = null,
   target = {},
 } = {}) {
   if (!VALID_SCOPES.has(scope)) throw new TypeError(`unsupported config document scope: ${scope}`);
-  if (!isPlainObject(baseValues)) {
+  const suppliedBaseValues =
+    baseValues !== undefined
+      ? baseValues
+      : valueTemplate !== undefined
+        ? valueTemplate
+        : template !== undefined
+          ? template
+          : {};
+  if (!isPlainObject(suppliedBaseValues)) {
     throw new TypeError("config repair baseValues must be an object");
   }
   const sourceTarget = isPlainObject(target) ? target : {};
@@ -544,7 +572,7 @@ export function repairConfigDocument({
     recordChange(changes, [], CONFIG_REPAIR_ACTION.MIGRATE_PROTOCOL, "outdated_protocol");
   }
   const values = createConfigValueSource({
-    baseValues: migrateConfigFileToCurrentProtocol(baseValues),
+    baseValues: migrateConfigFileToCurrentProtocol(suppliedBaseValues),
     overrideValues: isPlainObject(overrideValues)
       ? migrateConfigFileToCurrentProtocol(overrideValues)
       : null,
