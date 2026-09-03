@@ -62,7 +62,8 @@ test("multimodal_generate: failed image generation returns diagnostics and stabl
           api_key: "test-key",
           base_url: "https://models.example.com/v1?token=secret",
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -127,7 +128,8 @@ test("multimodal_generate: model configuration is the only image API type author
           api_key: "test-key",
           base_url: "https://models.example.com/v1",
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -178,7 +180,8 @@ test("multimodal_generate: an unknown requested model is rejected before capabil
           api_key: "test-key",
           base_url: "https://models.example.com/v1",
           model: "configured-image",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           multimodal_generation: {
             support_generation: {
               enabled: true,
@@ -221,7 +224,8 @@ test("multimodal_generate: canonical provider merge preserves Windows default im
           api_key: "test-key",
           base_url: `${IMAGE_PROVIDER_BASE_URL}/chatgpt/v1`,
           model: "gpt-5.6-sol",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           multimodal_generation: {
             support_generation: {
               enabled: true,
@@ -285,7 +289,8 @@ test("multimodal_generate: Responses completion without an image artifact is a f
           api_key: "test-key",
           base_url: "https://models.example.com/v1",
           model: "image-model",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           multimodal_generation: {
             support_generation: {
               enabled: true,
@@ -324,7 +329,8 @@ test("multimodal_generate: images_async polls task endpoint without websocket ha
           api_key: "test-key",
           base_url: `http://127.0.0.1:${port}/v1`,
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -416,7 +422,8 @@ test("multimodal_generate: images_async uses the configured provider base URL", 
           api_key: "test-key",
           base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -521,7 +528,8 @@ test("multimodal_generate: images_async normalizes chatgpt base path to official
           api_key: "test-key",
           base_url: `${IMAGE_PROVIDER_BASE_URL}/chatgpt/v1`,
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -589,7 +597,8 @@ test("multimodal_generate: images_async applies official parameter defaults and 
           api_key: "test-key",
           base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2-beta",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {
@@ -660,7 +669,8 @@ test("multimodal_generate: images_async adds official HTTP status hints to diagn
           api_key: "test-key",
           base_url: IMAGE_PROVIDER_BASE_URL,
           model: "gpt-image-2",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "gpt_image_2",
           adapterId: "openai-compatible",
           multimodal_generation: {

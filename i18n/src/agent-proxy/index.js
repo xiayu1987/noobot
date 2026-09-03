@@ -15,8 +15,8 @@ export function resolveLocaleFromRequest(request = null) {
     const requestUrl = new URL(request?.url || "", "http://localhost");
     const explicitLocale = String(requestUrl.searchParams.get("locale") || "").trim();
     if (explicitLocale) return explicitLocale;
-  } catch (error) {
-    console.warn("[agent-proxy-i18n] request locale URL is invalid", error);
+  } catch {
+    // The transport layer validates and reports malformed request URLs.
   }
   const acceptLanguage = String(request?.headers?.["accept-language"] || "").trim();
   if (!acceptLanguage) return "";

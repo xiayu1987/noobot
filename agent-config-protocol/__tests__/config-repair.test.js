@@ -52,13 +52,13 @@ test("default user template is the user-scope source of truth for system-owned n
   const globalOnlyPaths = collectObjectOnlyPaths(globalTemplate, userTemplate).sort();
   const systemOwnedPaths = [
     ...listConfigNodePathsByPolicy({
-      policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+      policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
       representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
     }),
   ].sort();
   const systemOwnedRuntimePaths = [
     ...listConfigNodePathsByPolicy({
-      policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+      policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
       representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
     }),
   ].sort();
@@ -126,16 +126,28 @@ test("config repair recursively adds template nodes through one protocol", () =>
   assert.deepEqual(synchronized.providers.primary, {
     reasoning_effort: "high",
     tool_reasoning_effort: "medium",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort_parameter: "reasoning_effort",
     capabilities: { web_search: true },
   });
   assert.deepEqual(synchronized.providers.added, { enabled: true });
   assert.equal(synchronized.providers.custom.model, "custom-model");
-  assert.equal(synchronized.providers.custom.format, "openai_compatible");
+  assert.equal("format" in synchronized.providers.custom, false);
   assert.deepEqual(synchronized.tools, {
     execute_script: { enabled: true },
     read_file: { enabled: true },
     delegate_task_async: { enabled: true, waitTimeoutMs: 30000 },
   });
+});
+
+test("config repair separates structural fields from default values", () => {
+  const repaired = repairConfigDocument({
+    scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
+    structureTemplate: { preferences: { language: "" } },
+    valueTemplate: { preferences: { language: "zh-CN" } },
+    target: { preferences: {} },
+  });
+  assert.deepEqual(repaired.document, { preferences: { language: "zh-CN" } });
 });
 
 test("config repair restores invalid values and enforces node policies", () => {

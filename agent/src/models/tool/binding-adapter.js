@@ -14,20 +14,14 @@ function isCodexLikeModel(modelName = "", modelAlias = "") {
 }
 
 function resolveStrictToolSchemaPolicy(modelState = {}) {
-  const effectiveConfig = mergeConfig(
-    modelState?.globalConfig || {},
-    modelState?.userConfig || {},
-  );
+  const effectiveConfig = mergeConfig(modelState?.globalConfig || {}, modelState?.userConfig || {});
   const configuredStrict =
     effectiveConfig?.tools?.strict_tool_schema ??
     effectiveConfig?.tools?.strictToolSchema ??
     effectiveConfig?.tools?.binding?.strict ??
     effectiveConfig?.tools?.binding?.strictToolSchema;
   if (typeof configuredStrict === "boolean") return configuredStrict;
-  return isCodexLikeModel(
-    modelState?.activeModelName || "",
-    modelState?.activeModelAlias || "",
-  );
+  return isCodexLikeModel(modelState?.activeModelName || "", modelState?.activeModelAlias || "");
 }
 
 function collectModelSourceTokens(modelState = {}) {
@@ -51,11 +45,14 @@ function collectModelSourceTokens(modelState = {}) {
       spec?.providerName,
       spec?.base_url,
       spec?.baseURL,
-      spec?.format,
     );
   }
   return fields
-    .map((item) => String(item || "").trim().toLowerCase())
+    .map((item) =>
+      String(item || "")
+        .trim()
+        .toLowerCase(),
+    )
     .filter(Boolean)
     .join(" ");
 }
@@ -72,10 +69,7 @@ function removeToolSearchDeferral(toolItem = {}) {
   ) {
     return toolItem;
   }
-  const normalizedTool = Object.assign(
-    Object.create(Object.getPrototypeOf(toolItem)),
-    toolItem,
-  );
+  const normalizedTool = Object.assign(Object.create(Object.getPrototypeOf(toolItem)), toolItem);
   delete normalizedTool.defer_loading;
   delete normalizedTool.deferLoading;
   return normalizedTool;
@@ -90,7 +84,9 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
 
   for (const toolItem of sourceTools) {
     const toolName = String(toolItem?.name || "").trim();
-    const toolType = String(toolItem?.type || "").trim().toLowerCase();
+    const toolType = String(toolItem?.type || "")
+      .trim()
+      .toLowerCase();
     if (
       disableClaudeToolSearch &&
       (toolName.toLowerCase() === "tool_search" || toolType.startsWith("tool_search"))
@@ -104,9 +100,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
     }
     if (seenNames.has(toolName)) continue;
     seenNames.add(toolName);
-    validTools.push(
-      disableClaudeToolSearch ? removeToolSearchDeferral(toolItem) : toolItem,
-    );
+    validTools.push(disableClaudeToolSearch ? removeToolSearchDeferral(toolItem) : toolItem);
   }
   validTools.sort((left, right) =>
     String(left?.name || "").localeCompare(String(right?.name || ""), "en"),
@@ -128,8 +122,7 @@ export function adaptToolsForBinding(tools = [], modelState = {}) {
   return {
     tools: validTools,
     droppedToolNames,
-    strictDowngradedTools:
-      strictByPolicy && !strict ? strictIncompatibleTools : [],
+    strictDowngradedTools: strictByPolicy && !strict ? strictIncompatibleTools : [],
     bindOptions,
   };
 }

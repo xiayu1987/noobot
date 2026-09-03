@@ -21,7 +21,8 @@ test("request_help: model invoke receives runtime abort signal", async () => {
         fake: {
           alias: "fake",
           model: "fake-model",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "fake",
           adapterId: "openai-compatible",
         },
@@ -46,7 +47,7 @@ test("request_help: model invoke receives runtime abort signal", async () => {
 
   assert.equal(receivedRequest?.options?.signal, abortController.signal);
   assert.equal(receivedRequest?.model?.model, "fake-model");
-  assert.equal(receivedRequest?.model?.format, "openai_compatible");
+  assert.equal(receivedRequest?.model?.adapterId, "openai-compatible");
   assert.equal(receivedRequest?.messages?.[0]?.role, "system");
   assert.match(receivedRequest?.messages?.[0]?.content, /independent assistance model/i);
   assert.deepEqual(receivedRequest?.messages?.slice(1), [

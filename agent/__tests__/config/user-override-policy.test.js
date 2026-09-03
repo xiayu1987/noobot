@@ -121,8 +121,9 @@ test("mergeConfig: providers 应深度合并并保留 tool_reasoning_effort", ()
     {
       providers: {
         openai: {
-          format: "openai_compatible",
           model: "gpt-5.5",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           reasoning_effort: "high",
           tool_reasoning_effort: "low",
         },
@@ -138,7 +139,7 @@ test("mergeConfig: providers 应深度合并并保留 tool_reasoning_effort", ()
     },
   );
 
-  assert.equal(out.providers.openai.format, "openai_compatible");
+  assert.equal(out.providers.openai.reasoning_effort_parameter, "reasoning_effort");
   assert.equal(out.providers.openai.model, "gpt-5.5");
   assert.equal(out.providers.openai.reasoning_effort, "high");
   assert.equal(out.providers.openai.tool_reasoning_effort, "medium");

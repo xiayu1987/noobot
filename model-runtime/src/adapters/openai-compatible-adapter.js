@@ -3,17 +3,19 @@
  * SPDX-License-Identifier: MIT
  */
 import { ChatOpenAI } from "@langchain/openai";
-import { compileProviderModelKwargs } from "../policies/cache-policy-engine.js";
+import {
+  applyPromptCacheMessages,
+  compileProviderModelKwargs,
+  resolvePromptCacheHeaders,
+} from "../policies/cache-policy-engine.js";
 import { normalizeRuntimeModelSpec } from "../normalization/spec-normalizer.js";
 import { classifyTransportError } from "../policies/default-retry-policy.js";
 import { executeOpenAiOperation } from "./openai-capability-adapter.js";
 
-const OPENAI_COMPATIBLE_FORMAT = "openai_compatible";
-
 export function resolveUseResponsesApi(spec = {}) {
   if (typeof spec.useResponsesApi === "boolean") return spec.useResponsesApi;
   if (typeof spec.use_responses_api === "boolean") return spec.use_responses_api;
-  return spec.format === OPENAI_COMPATIBLE_FORMAT && /codex/.test(spec.model.toLowerCase());
+  return /codex/.test(String(spec.model || "").toLowerCase());
 }
 
 function applyInvocationOverrides(target, overrides = {}) {
@@ -35,7 +37,12 @@ function applyInvocationOverrides(target, overrides = {}) {
   return target;
 }
 
-export function bindOpenAiCompatibleTools(client, tools = [], toolOptions = {}, invokeOverrides = {}) {
+export function bindOpenAiCompatibleTools(
+  client,
+  tools = [],
+  toolOptions = {},
+  invokeOverrides = {},
+) {
   const bound = client.bindTools(tools, toolOptions);
   applyInvocationOverrides(bound, invokeOverrides);
   applyInvocationOverrides(bound?.completions, invokeOverrides);
@@ -54,10 +61,11 @@ export function createOpenAiCompatibleClient({
   const modelKwargs = compileProviderModelKwargs(spec, flow);
   const promptCacheKey = modelKwargs.prompt_cache_key;
   const promptCacheRetention = modelKwargs.prompt_cache_retention;
-  const defaultHeaders = { ...headers };
+  const defaultHeaders = { ...headers, ...resolvePromptCacheHeaders(spec, flow) };
   const configuration = { defaultHeaders, ...(spec.base_url ? { baseURL: spec.base_url } : {}) };
   const sampling = {};
-  if (spec.temperature !== undefined && spec.top_p === undefined) sampling.temperature = Number(spec.temperature);
+  if (spec.temperature !== undefined && spec.top_p === undefined)
+    sampling.temperature = Number(spec.temperature);
   return new ChatOpenAI({
     model: spec.model,
     ...sampling,
@@ -74,13 +82,15 @@ export function createOpenAiCompatibleClient({
 
 export const openAiCompatibleAdapter = Object.freeze({
   id: "openai-compatible",
-  formats: Object.freeze([OPENAI_COMPATIBLE_FORMAT]),
   classifyError: classifyTransportError,
   createClient(input) {
     return createOpenAiCompatibleClient(input);
   },
   bindTools({ client, tools, toolOptions, invokeOptions }) {
     return bindOpenAiCompatibleTools(client, tools, toolOptions, invokeOptions);
+  },
+  prepareMessages({ modelSpec, messages }) {
+    return applyPromptCacheMessages(normalizeRuntimeModelSpec(modelSpec), messages);
   },
   executeOperation(input) {
     return executeOpenAiOperation(input);

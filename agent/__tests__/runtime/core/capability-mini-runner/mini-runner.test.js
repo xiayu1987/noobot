@@ -23,7 +23,8 @@ import { createConfigSnapshot } from "@noobot/agent-config-protocol";
 const modelSpec = Object.freeze({
   alias: "test",
   model: "test-model",
-  format: "openai_compatible",
+  reasoning_effort_parameter: "reasoning_effort",
+  reasoning_effort_options: ["none", "low", "medium", "high"],
   providerId: "test",
   adapterId: "openai-compatible",
 });
@@ -238,6 +239,8 @@ test("mini-runner isolates explicit model selection and plugin headers", async (
 
   await invoker({
     model: "planning-model",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
     purpose: "planning",
     domain: "workflow",
     pluginFlow: "plan",

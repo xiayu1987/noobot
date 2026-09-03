@@ -7,11 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { classifyExecutionEvent } from "../../src/observability/event-log/log-normalizer.js";
-import {
-  createEventEnvelope,
-  EVENT_FAMILY,
-  validateProtocolEvent,
-} from "@noobot/event-protocol";
+import { createEventEnvelope, EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
@@ -22,7 +18,10 @@ import {
   emitMessageEvent,
 } from "../../src/events/message-event-stream.js";
 
-function runtimeForTurn({ messageId = "turn-message-1", presentationMessageId = "presentation-1" } = {}) {
+function runtimeForTurn({
+  messageId = "turn-message-1",
+  presentationMessageId = "presentation-1",
+} = {}) {
   let sequence = 0;
   const runtime = {
     runConfig: { messageId, presentationMessageId },
@@ -62,7 +61,12 @@ test("authoritative message events declare the message-event sequence domain", a
   const emitted = [];
   const runtime = runtimeForTurn();
   beginAssistantMessageEventStream(runtime);
-  const envelope = await emitMessageEvent({ onEvent: (event) => emitted.push(event) }, runtime, "llm_delta", { text: "token" });
+  const envelope = await emitMessageEvent(
+    { onEvent: (event) => emitted.push(event) },
+    runtime,
+    "llm_delta",
+    { text: "token" },
+  );
 
   assert.equal(envelope.ordering.domain, MESSAGE_EVENT_SEQUENCE_DOMAIN);
   assert.equal(envelope.ordering.scopeId, envelope.identity.messageId);
@@ -120,7 +124,10 @@ test("one Turn Aggregate owns a contiguous event sequence across model messages"
   const next = await emitMessageEvent(listener, runtime, "llm_delta", { text: "next" });
 
   assert.notEqual(nextMessageId, firstMessageId);
-  assert.deepEqual([first.ordering.sequence, second.ordering.sequence, next.ordering.sequence], [1, 2, 3]);
+  assert.deepEqual(
+    [first.ordering.sequence, second.ordering.sequence, next.ordering.sequence],
+    [1, 2, 3],
+  );
   assert.equal(first.ordering.scopeId, "turn-message-1");
   assert.equal(next.ordering.scopeId, "turn-message-1");
 });
@@ -146,10 +153,14 @@ test("model streams keep independent identities while sharing the run presentati
 
 test("Turn message event identity is immutable after binding", () => {
   const runtime = runtimeForTurn();
-  assert.throws(() => bindAssistantMessageEventStream(runtime, {
-    messageId: "other-message",
-    presentationMessageId: "presentation-1",
-  }), /messageId conflict/);
+  assert.throws(
+    () =>
+      bindAssistantMessageEventStream(runtime, {
+        messageId: "other-message",
+        presentationMessageId: "presentation-1",
+      }),
+    /messageId conflict/,
+  );
 });
 
 test("workflow ownership is immutable and emitted by the common message stream", async () => {
@@ -160,7 +171,11 @@ test("workflow ownership is immutable and emitted by the common message stream",
       workflowRunId: "workflow-run-1",
       workflowNodeExecutionId: "node-execution-1",
     },
-    systemRuntime: { sessionId: "child-session", parentSessionId: "root-session", turnScopeId: "turn-workflow" },
+    systemRuntime: {
+      sessionId: "child-session",
+      parentSessionId: "root-session",
+      turnScopeId: "turn-workflow",
+    },
   };
   let sequence = 0;
   runtime.sessionManager = {
@@ -170,7 +185,13 @@ test("workflow ownership is immutable and emitted by the common message stream",
         committed: true,
         envelope: createEventEnvelope({
           family: EVENT_FAMILY.MESSAGE_TIMELINE,
-          identity: { eventId: `workflow-event-${sequence}`, eventType: MESSAGE_EVENT_WIRE_EVENT, sessionId, turnScopeId, messageId },
+          identity: {
+            eventId: `workflow-event-${sequence}`,
+            eventType: MESSAGE_EVENT_WIRE_EVENT,
+            sessionId,
+            turnScopeId,
+            messageId,
+          },
           ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: messageId, sequence },
           producer: { type: "test", id: "workflow-message-event-commit" },
           occurredAt: "2026-01-01T00:00:00.000Z",
@@ -187,32 +208,53 @@ test("workflow ownership is immutable and emitted by the common message stream",
     nodeExecutionId: "node-execution-1",
   });
   beginAssistantMessageEventStream(runtime);
-  const envelope = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", { text: "token" });
+  const envelope = await emitMessageEvent({ onEvent() {} }, runtime, "llm_delta", {
+    text: "token",
+  });
   assert.equal(envelope.payload.parentSessionId, "root-session");
   assert.equal(envelope.payload.workflowRunId, "workflow-run-1");
   assert.equal(envelope.payload.nodeExecutionId, "node-execution-1");
-  assert.throws(() => bindAssistantMessageEventStream(runtime, {
-    messageId: "workflow-message",
-    presentationMessageId: "workflow-presentation",
-    parentSessionId: "root-session",
-    workflowRunId: "workflow-run-1",
-    nodeExecutionId: "node-execution-2",
-  }), /nodeExecutionId conflict/);
+  assert.throws(
+    () =>
+      bindAssistantMessageEventStream(runtime, {
+        messageId: "workflow-message",
+        presentationMessageId: "workflow-presentation",
+        parentSessionId: "root-session",
+        workflowRunId: "workflow-run-1",
+        nodeExecutionId: "node-execution-2",
+      }),
+    /nodeExecutionId conflict/,
+  );
 });
 
 test("authoritative message envelope validation rejects partial events", () => {
   const envelope = createEventEnvelope({
     family: EVENT_FAMILY.MESSAGE_TIMELINE,
-    identity: { eventId: "evt-1", eventType: MESSAGE_EVENT_WIRE_EVENT, sessionId: "session-1", turnScopeId: "turn-1", messageId: "message-1" },
+    identity: {
+      eventId: "evt-1",
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      messageId: "message-1",
+    },
     ordering: { domain: MESSAGE_EVENT_SEQUENCE_DOMAIN, scopeId: "message-1", sequence: 1 },
     producer: { type: "test", id: "message-event-validation" },
     occurredAt: "2026-01-01T00:00:00.000Z",
     payload: { eventType: "llm_delta", presentationMessageId: "presentation-1", text: "token" },
   });
   assert.equal(validateProtocolEvent(envelope).valid, true);
-  assert.equal(validateProtocolEvent({ ...envelope, payload: { ...envelope.payload, text: undefined } }).valid, false);
-  assert.equal(validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, messageId: "" } }).valid, false);
-  assert.equal(validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, eventId: "" } }).valid, false);
+  assert.equal(
+    validateProtocolEvent({ ...envelope, payload: { ...envelope.payload, text: undefined } }).valid,
+    false,
+  );
+  assert.equal(
+    validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, messageId: "" } }).valid,
+    false,
+  );
+  assert.equal(
+    validateProtocolEvent({ ...envelope, identity: { ...envelope.identity, eventId: "" } }).valid,
+    false,
+  );
 });
 
 test("classifyExecutionEvent classifies structured execution events", () => {

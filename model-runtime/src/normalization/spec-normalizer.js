@@ -3,30 +3,32 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { resolveModelAdapterId, resolveModelOperatorId } from "@noobot/model-protocol";
+import {
+  normalizeModelReasoningConfiguration,
+  resolveModelAdapterId,
+  resolveModelOperatorId,
+} from "@noobot/model-protocol";
 
-export const MODEL_DEFAULT_FIELDS_BY_FORMAT = Object.freeze({
-  openai_compatible: Object.freeze({
-    default: Object.freeze({
-      temperature: 0.7,
-      max_tokens: 10000,
-    }),
-    gemini: Object.freeze({
-      temperature: 1,
-      top_p: 0.95,
-    }),
-    gpt: Object.freeze({ temperature: 0.7 }),
-    gpt_5: Object.freeze({ temperature: 0.7 }),
-    gpt_codex: Object.freeze({ temperature: 0.7 }),
-    gemini_flash: Object.freeze({ temperature: 1, top_p: 0.95 }),
-    gemini_pro: Object.freeze({ temperature: 1, top_p: 0.95 }),
-    nano_banana: Object.freeze({ temperature: 0.5 }),
+const TRANSPORT_DEFAULT_FIELDS = Object.freeze({
+  default: Object.freeze({
+    temperature: 0.7,
+    max_tokens: 10000,
   }),
+  gemini: Object.freeze({
+    temperature: 1,
+    top_p: 0.95,
+  }),
+  gpt: Object.freeze({ temperature: 0.7 }),
+  gpt_5: Object.freeze({ temperature: 0.7 }),
+  gpt_codex: Object.freeze({ temperature: 0.7 }),
+  gemini_flash: Object.freeze({ temperature: 1, top_p: 0.95 }),
+  gemini_pro: Object.freeze({ temperature: 1, top_p: 0.95 }),
+  nano_banana: Object.freeze({ temperature: 0.5 }),
 });
 
-// Defaults are layered in this order: transport format -> operator -> model
-// family -> concrete model. Explicit fields in the user's model config always
-// win over every inferred default.
+// Defaults are layered in this order: transport -> operator -> model family ->
+// concrete model. Explicit fields in the user's model config always win over
+// every inferred default.
 const OPERATOR_DEFAULT_FIELDS = Object.freeze({
   openai: Object.freeze({}),
   anthropic: Object.freeze({}),
@@ -93,36 +95,29 @@ function resolveModelProfiles(modelSpec = {}) {
 }
 
 export function getRuntimeModelDefaultFields(modelSpec = {}) {
-  const formatDefaults =
-    MODEL_DEFAULT_FIELDS_BY_FORMAT[
-      String(modelSpec.format || "")
-        .trim()
-        .toLowerCase()
-    ];
-  if (!formatDefaults) return {};
-  const defaults = { ...formatDefaults.default };
+  const defaults = { ...TRANSPORT_DEFAULT_FIELDS.default };
   for (const profile of resolveModelProfiles(modelSpec)) {
-    Object.assign(defaults, formatDefaults[profile] || {});
+    Object.assign(defaults, TRANSPORT_DEFAULT_FIELDS[profile] || {});
   }
-  if (
-    String(modelSpec.format || "")
-      .trim()
-      .toLowerCase() === "openai_compatible" &&
-    hasOwn(modelSpec, "top_p") &&
-    !hasOwn(modelSpec, "temperature")
-  ) {
+  if (hasOwn(modelSpec, "top_p") && !hasOwn(modelSpec, "temperature")) {
     delete defaults.temperature;
   }
   return defaults;
 }
 
+/**
+ * The model family drives sampling defaults only. Transport contracts such as
+ * the reasoning parameter are declared by the provider, never inferred here.
+ */
 function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
+  if (/grok|xai/.test(model)) return "grok";
   if (/claude|anthropic/.test(model)) return "claude";
   if (/gemini|nano[-_.]?banana/.test(model)) return "gemini";
   if (/qwen|qianwen/.test(model)) return "qwen";
   if (/glm|zhipu/.test(model)) return "glm";
   if (/deepseek/.test(model)) return "deepseek";
+  if (/kimi|moonshot/.test(model)) return "kimi";
   if (/gpt|codex|\bo[1-9]/.test(model)) return "gpt";
   return "generic";
 }
@@ -134,22 +129,18 @@ function resolveConcreteModelDefaults(model = "") {
   return CONCRETE_MODEL_RULES.find(({ match }) => match.test(normalized))?.defaults || {};
 }
 
-export function normalizeRuntimeModelSpec(input = {}) {
+export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   const out = { ...input };
   delete out.providerId;
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();
-  out.format = String(out.format || "")
-    .trim()
-    .toLowerCase();
   if (!out.model) throw new TypeError("model spec.model is required");
-  if (!out.format) throw new TypeError("model spec.format is required");
   out.operatorId = resolveModelOperatorId({
-    format: out.format,
     baseUrl: out.base_url || out.baseUrl || "",
   });
   out.modelFamily = classifyModelFamily(out);
-  out.adapterId = resolveModelAdapterId(out.format);
+  out.adapterId = resolveModelAdapterId();
+  Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
   const defaults = getRuntimeModelDefaultFields(out);
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
@@ -157,7 +148,7 @@ export function normalizeRuntimeModelSpec(input = {}) {
   // OpenAI defines temperature and top_p as alternative sampling controls.
   // Apply this invariant after every default layer so a family default cannot
   // reintroduce temperature when the user selected top_p explicitly.
-  if (out.format === "openai_compatible" && hasOwn(out, "top_p") && !hasOwn(out, "temperature")) {
+  if (hasOwn(out, "top_p") && !hasOwn(out, "temperature")) {
     delete defaults.temperature;
   }
   for (const [key, value] of Object.entries(defaults)) {

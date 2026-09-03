@@ -26,7 +26,7 @@ export function normalizeProviderAlias(modelName = "") {
   return /^[0-9]/.test(normalized) ? `model_${normalized}` : normalized;
 }
 
-export function resolveEnvNamesByFormat(format = "", modelName = "") {
+export function resolveProviderEnvNames(modelName = "") {
   const model = String(modelName || "")
     .trim()
     .toLowerCase();
@@ -74,7 +74,6 @@ export function resolveEnvNamesByFormat(format = "", modelName = "") {
 
 export function buildProviderFromTemplate({
   providerTemplate,
-  format,
   modelName,
   apiKeyVar,
   baseUrlVar,
@@ -103,7 +102,6 @@ export function buildProviderFromTemplate({
   baseProvider.api_key = apiKeyVar;
   baseProvider.base_url = baseUrlVar;
   baseProvider.model = modelName;
-  baseProvider.format = format;
 
   if (forceConversationDefaults) {
     baseProvider.multimodal_parsing = {

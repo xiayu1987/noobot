@@ -49,20 +49,25 @@ function terminalLifecycle({
 }
 
 test("message-local lifecycle fields cannot become authoritative terminal facts", () => {
-  const session = normalizeSessionEntity({
-    sessionId: "s1",
-    messages: [{
-      messageUid: "sm_noncanonical_terminal_user",
-      role: "user",
-      content: "noncanonical",
-      turnScopeId: "t1",
-      state: "user_stopped",
-      status: "user_stopped",
-      channelState: "user_stopped",
-      stopState: "user_stopped",
-      monotonicState: "monotonic",
-    }],
-  }, { now });
+  const session = normalizeSessionEntity(
+    {
+      sessionId: "s1",
+      messages: [
+        {
+          messageUid: "sm_noncanonical_terminal_user",
+          role: "user",
+          content: "noncanonical",
+          turnScopeId: "t1",
+          state: "user_stopped",
+          status: "user_stopped",
+          channelState: "user_stopped",
+          stopState: "user_stopped",
+          monotonicState: "monotonic",
+        },
+      ],
+    },
+    { now },
+  );
 
   assert.deepEqual(session.turnLifecycle.turns, {});
   const message = session.messages[0];
@@ -72,18 +77,23 @@ test("message-local lifecycle fields cannot become authoritative terminal facts"
 });
 
 test("summary projects only the authoritative lifecycle snapshot", () => {
-  const session = normalizeSessionEntity({
-    sessionId: "s-lifecycle",
-    updatedAt: now(),
-    messages: [{
-      messageUid: "sm_lifecycle_assistant",
-      role: "assistant",
-      content: "done",
-      turnScopeId: "t1",
-      dialogProcessId: "dp1",
-    }],
-    turnLifecycle: terminalLifecycle(),
-  }, { now });
+  const session = normalizeSessionEntity(
+    {
+      sessionId: "s-lifecycle",
+      updatedAt: now(),
+      messages: [
+        {
+          messageUid: "sm_lifecycle_assistant",
+          role: "assistant",
+          content: "done",
+          turnScopeId: "t1",
+          dialogProcessId: "dp1",
+        },
+      ],
+      turnLifecycle: terminalLifecycle(),
+    },
+    { now },
+  );
 
   const summary = buildSessionDisplaySummary(session);
   assert.equal(summary.schemaVersion, SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION);
@@ -91,7 +101,10 @@ test("summary projects only the authoritative lifecycle snapshot", () => {
   assert.equal(summary.turnLifecycleSnapshot.sessionId, "s-lifecycle");
   assert.equal(summary.turnLifecycleSnapshot.sequence, 2);
   assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].state, "completed");
-  assert.equal(summary.turnLifecycleSnapshot.recentTerminalTurns[0].terminalStatus.status, "completed");
+  assert.equal(
+    summary.turnLifecycleSnapshot.recentTerminalTurns[0].terminalStatus.status,
+    "completed",
+  );
   assert.ok(summary.turnLifecycleSnapshot.commandId);
 });
 
@@ -121,21 +134,30 @@ test("action failure before message persistence remains terminal after summary h
 });
 
 test("parent and child sessions own independent lifecycle aggregates", () => {
-  const parent = normalizeSessionEntity({
-    sessionId: "parent",
-    turnLifecycle: terminalLifecycle({ turnScopeId: "parent-turn", dialogProcessId: "parent-dialog" }),
-  }, { now });
-  const child = normalizeSessionEntity({
-    sessionId: "child",
-    parentSessionId: "parent",
-    turnLifecycle: terminalLifecycle({
-      turnScopeId: "child-turn",
-      dialogProcessId: "child-dialog",
-      state: "processing_failed",
-      status: "error",
-      reason: "run_error",
-    }),
-  }, { now });
+  const parent = normalizeSessionEntity(
+    {
+      sessionId: "parent",
+      turnLifecycle: terminalLifecycle({
+        turnScopeId: "parent-turn",
+        dialogProcessId: "parent-dialog",
+      }),
+    },
+    { now },
+  );
+  const child = normalizeSessionEntity(
+    {
+      sessionId: "child",
+      parentSessionId: "parent",
+      turnLifecycle: terminalLifecycle({
+        turnScopeId: "child-turn",
+        dialogProcessId: "child-dialog",
+        state: "processing_failed",
+        status: "error",
+        reason: "run_error",
+      }),
+    },
+    { now },
+  );
 
   assert.deepEqual(Object.keys(parent.turnLifecycle.turns), ["parent-turn"]);
   assert.deepEqual(Object.keys(child.turnLifecycle.turns), ["child-turn"]);
@@ -144,25 +166,37 @@ test("parent and child sessions own independent lifecycle aggregates", () => {
 });
 
 test("synthetic placeholders cannot enter persistence or summary", () => {
-  const session = normalizeSessionEntity({
-    sessionId: "s-placeholder",
-    messages: [{
-      messageUid: "sm_placeholder_assistant",
-      role: "assistant",
-      content: "本轮异常停止",
-      turnScopeId: "t1",
-      synthetic: true,
-      placeholder: true,
-      turnStatusPlaceholder: true,
-      turnStatus: { turnScopeId: "t1", status: "error" },
-      state: "error",
-      status: "error",
-    }],
-  }, { now });
+  const session = normalizeSessionEntity(
+    {
+      sessionId: "s-placeholder",
+      messages: [
+        {
+          messageUid: "sm_placeholder_assistant",
+          role: "assistant",
+          content: "本轮异常停止",
+          turnScopeId: "t1",
+          synthetic: true,
+          placeholder: true,
+          turnStatusPlaceholder: true,
+          turnStatus: { turnScopeId: "t1", status: "error" },
+          state: "error",
+          status: "error",
+        },
+      ],
+    },
+    { now },
+  );
 
   assert.deepEqual(session.turnLifecycle.turns, {});
   const message = session.messages[0];
-  for (const key of ["synthetic", "placeholder", "turnStatusPlaceholder", "turnStatus", "state", "status"]) {
+  for (const key of [
+    "synthetic",
+    "placeholder",
+    "turnStatusPlaceholder",
+    "turnStatus",
+    "state",
+    "status",
+  ]) {
     assert.equal(message[key], undefined);
   }
   const summary = buildSessionDisplaySummary(session);

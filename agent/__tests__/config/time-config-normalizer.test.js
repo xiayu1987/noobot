@@ -6,10 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  normalizeTimeMs,
-  resolveTimeMs,
-} from "@noobot/agent-config-protocol";
+import { normalizeTimeMs, resolveTimeMs } from "@noobot/agent-config-protocol";
 
 test("normalizeTimeMs: 非法值应回退 fallback", () => {
   assert.equal(normalizeTimeMs(undefined, { fallback: 30000, min: 1000 }), 30000);

@@ -27,11 +27,12 @@ function createBaseGlobalConfig(overrides = {}) {
     ...overrides,
     providers: {
       openai: {
-        format: "openai_compatible",
         baseUrl: "https://api.openai.com/v1",
         apiKey: "${OPENAI_API_KEY}",
         enabled: true,
         model: "gpt-4",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         contextWindow: 8192,
         maxTokens: 4096,
         models: {
@@ -40,11 +41,12 @@ function createBaseGlobalConfig(overrides = {}) {
         },
       },
       anthropic: {
-        format: "openai_compatible",
         baseUrl: "https://api.anthropic.com/v1",
         apiKey: "${ANTHROPIC_API_KEY}",
         enabled: true,
         model: "claude-3-opus",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         contextWindow: 200000,
         maxTokens: 4096,
         models: {
@@ -124,6 +126,8 @@ describe("5. 配置优先级测试", () => {
             type: "openai",
             apiKey: "user-custom-key",
             model: "gpt-4-turbo",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
           },
         },
       });
@@ -137,8 +141,9 @@ describe("5. 配置优先级测试", () => {
       const globalConfig = createBaseGlobalConfig({
         providers: {
           openai: {
-            format: "openai_compatible",
             model: "gpt-5.6-sol",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             enabled: true,
             multimodal_generation: {
               support_generation: {
@@ -448,6 +453,8 @@ describe("7. 模型切换测试", () => {
             type: "openai",
             apiKey: "key",
             model: "gpt-3.5-turbo",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
           },
         },
       });

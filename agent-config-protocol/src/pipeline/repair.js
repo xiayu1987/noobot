@@ -7,28 +7,27 @@ import {
   MODEL_PROVIDER_CONFIG_CONTRACT,
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
+  resolveModelLibraryProviderByModel,
   supportsModelMultimodalGeneration,
   supportsModelMultimodalParsing,
 } from "@noobot/model-protocol";
 import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
-  CONFIG_PATH_REPRESENTATION,
   CONFIG_REPAIR_ACTION,
-  listConfigNodePathsByPolicy,
 } from "../contract/repair.js";
-import {
-  CONFIG_EXTENSION_ENTRY_CONTRACTS,
-  CONFIG_OPTIONAL_ROOT_CONTRACTS,
-} from "../contract/extension-config.js";
 import { migrateConfigFileToCurrentProtocol } from "./migration.js";
 import { isPlainObject } from "../utils.js";
+import {
+  CONFIG_STRUCTURE,
+  CONFIG_STRUCTURE_KIND,
+  CONFIG_STRUCTURE_PLACEHOLDER,
+  listStructureModelReferences,
+  structureAllowsScope,
+} from "../contract/config-structure.js";
+import { createConfigValueSource } from "../contract/config-values.js";
 
 const REMOVE_NODE = Symbol("remove_config_node");
-const OPEN_COLLECTION_PATHS = new Set([
-  "providers",
-  ...Object.keys(CONFIG_EXTENSION_ENTRY_CONTRACTS),
-]);
 const VALID_SCOPES = new Set(Object.values(CONFIG_DOCUMENT_SCOPE));
 
 function clone(value) {
@@ -39,13 +38,19 @@ function pathText(path) {
   return path.length ? path.join(".") : "$";
 }
 
-function validatesScalar(value, contract = {}) {
+function validatesScalarType(value, contract = {}) {
   const type = contract.type;
   if (type === "array") return Array.isArray(value);
   if (type === "object") return isPlainObject(value);
   if (type === "number" && (typeof value !== "number" || !Number.isFinite(value))) return false;
   if (type === "integer" && !Number.isInteger(value)) return false;
   if (!["number", "integer"].includes(type) && typeof value !== type) return false;
+  return true;
+}
+
+function validatesScalar(value, contract = {}) {
+  if (!validatesScalarType(value, contract)) return false;
+  const type = contract.type;
   if (type === "string" && contract.nonEmpty && !value.trim()) return false;
   if (Array.isArray(contract.values) && !contract.values.includes(value)) return false;
   if (typeof value === "number" && contract.minimum !== undefined && value < contract.minimum)
@@ -94,37 +99,69 @@ function repairInvalidNode({ template, path, changes, reason }) {
   return REMOVE_NODE;
 }
 
-function repairContractNode({ contract, template, target, path, changes }) {
+function repairContractNode({
+  contract,
+  template,
+  valueTemplate = template,
+  target,
+  path,
+  changes,
+  normalizationFallback = {},
+}) {
   if (target === undefined) {
-    if (template === undefined) return REMOVE_NODE;
+    if (valueTemplate === undefined) return REMOVE_NODE;
     recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-    return clone(template);
+    return clone(valueTemplate);
   }
   if (Array.isArray(contract.oneOf)) {
     const variant = contract.oneOf.find((item) => validatesContract(target, item));
     if (!variant) {
-      return repairInvalidNode({ template, path, changes, reason: "invalid_node_value" });
+      return repairInvalidNode({
+        template: valueTemplate,
+        path,
+        changes,
+        reason: "invalid_node_value",
+      });
     }
-    return repairContractNode({ contract: variant, template, target, path, changes });
+    return repairContractNode({
+      contract: variant,
+      template,
+      valueTemplate,
+      target,
+      path,
+      changes,
+    });
   }
   if (!validatesScalar(target, contract)) {
-    return repairInvalidNode({ template, path, changes, reason: "invalid_node_value" });
+    return repairInvalidNode({
+      template: valueTemplate,
+      path,
+      changes,
+      reason: "invalid_node_value",
+    });
   }
   if (contract.type === "array") {
     if (!contract.items || target.every((item) => validatesContract(item, contract.items))) {
       return clone(target);
     }
-    return repairInvalidNode({ template, path, changes, reason: "invalid_array_item" });
+    return repairInvalidNode({
+      template: valueTemplate,
+      path,
+      changes,
+      reason: "invalid_array_item",
+    });
   }
   if (contract.type !== "object") return clone(target);
 
   const output = {};
   const templateObject = isPlainObject(template) ? template : {};
+  const valueObject = isPlainObject(valueTemplate) ? valueTemplate : {};
   const properties = isPlainObject(contract.properties) ? contract.properties : {};
   for (const [key, childContract] of Object.entries(properties)) {
     const child = repairContractNode({
       contract: childContract,
       template: templateObject[key],
+      valueTemplate: valueObject[key],
       target: target[key],
       path: [...path, key],
       changes,
@@ -151,6 +188,7 @@ function repairContractNode({ contract, template, target, path, changes }) {
       const repaired = repairContractNode({
         contract: contract.additionalProperties,
         template: child,
+        valueTemplate: valueObject[key],
         target: target[key],
         path: [...path, key],
         changes,
@@ -183,141 +221,177 @@ function repairContractNode({ contract, template, target, path, changes }) {
       "unsupported_node",
     );
   }
-  return output;
-}
-
-function repairUnknownProvider({ target, path, changes }) {
-  const template = resolveDefaultModelLibraryProvider();
-  const repaired = repairContractNode({
-    contract: MODEL_PROVIDER_CONFIG_CONTRACT,
-    template,
-    target: isPlainObject(target) ? target : {},
-    path,
-    changes,
-  });
-  if (repaired === REMOVE_NODE) return clone(template);
-  return repaired;
-}
-
-function repairCollectionEntry({ collectionPath, template, target, path, changes }) {
-  // Provider aliases are user-owned model configurations and their key and
-  // valid values must survive repair. Unknown providers use only the generic
-  // library template to fill missing or invalid fields.
-  if (collectionPath === "providers" && template === undefined) {
-    const libraryTemplate = resolveModelLibraryProvider(path.at(-1));
-    if (libraryTemplate) {
-      return repairContractNode({
-        contract: MODEL_PROVIDER_CONFIG_CONTRACT,
-        template: libraryTemplate,
-        target,
-        path,
-        changes,
-      });
-    }
-    return repairUnknownProvider({ target, path, changes });
-  }
-  const contract =
-    collectionPath === "providers"
-      ? MODEL_PROVIDER_CONFIG_CONTRACT
-      : CONFIG_EXTENSION_ENTRY_CONTRACTS[collectionPath];
-  // The plugin collection is closed by the configuration template. A plugin
-  // absent from the current template is not supported by this runtime and
-  // must not survive repair as an opaque legacy node.
-  if (collectionPath === "plugins") return template === undefined ? REMOVE_NODE : null;
-  if (!contract) return isPlainObject(target) ? clone(target) : REMOVE_NODE;
-  const repaired = repairContractNode({ contract, template, target, path, changes });
-  if (repaired === REMOVE_NODE) return repaired;
-  if (template === undefined && !validatesContract(repaired, contract)) {
+  // A node's declared facts layer config over its template, then over the
+  // library default, so repair always resolves to one declared answer instead
+  // of inventing a value of its own.
+  const normalized =
+    typeof contract.normalize === "function"
+      ? contract.normalize(output, {
+          ...(contract === MODEL_PROVIDER_CONFIG_CONTRACT
+            ? resolveDefaultModelLibraryProvider()
+            : {}),
+          ...normalizationFallback,
+          ...valueObject,
+        })
+      : output;
+  for (const [key, value] of Object.entries(normalized)) {
+    if (JSON.stringify(output[key]) === JSON.stringify(value)) continue;
+    output[key] = clone(value);
     recordChange(
       changes,
-      path,
-      CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
-      "incomplete_extension_entry",
+      [...path, key],
+      CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT,
+      "normalized_contract_value",
     );
-    return REMOVE_NODE;
-  }
-  return repaired;
-}
-
-function matchesTemplateType(template, target) {
-  if (Array.isArray(template)) return Array.isArray(target);
-  if (isPlainObject(template)) return isPlainObject(target);
-  if (typeof template === "number") return typeof target === "number" && Number.isFinite(target);
-  return typeof target === typeof template;
-}
-
-function repairTemplateObject({ template, target, path, changes, scope }) {
-  const targetObject = isPlainObject(target) ? target : {};
-  const output = {};
-  const currentPath = pathText(path) === "$" ? "" : pathText(path);
-  for (const [key, defaultValue] of Object.entries(template)) {
-    const childPath = [...path, key];
-    if (!Object.prototype.hasOwnProperty.call(targetObject, key)) {
-      output[key] = clone(defaultValue);
-      recordChange(changes, childPath, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
-      continue;
-    }
-    const targetValue = targetObject[key];
-    if (!matchesTemplateType(defaultValue, targetValue)) {
-      output[key] = clone(defaultValue);
-      recordChange(changes, childPath, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_node_type");
-      continue;
-    }
-    if (!isPlainObject(defaultValue)) {
-      output[key] = clone(targetValue);
-      continue;
-    }
-    const collectionEntry = OPEN_COLLECTION_PATHS.has(currentPath)
-      ? repairCollectionEntry({
-          collectionPath: currentPath,
-          template: defaultValue,
-          target: targetValue,
-          path: childPath,
-          changes,
-        })
-      : null;
-    output[key] =
-      collectionEntry === null
-        ? repairTemplateObject({
-            template: defaultValue,
-            target: targetValue,
-            path: childPath,
-            changes,
-            scope,
-          })
-        : collectionEntry;
-  }
-
-  const optionalRootContracts = CONFIG_OPTIONAL_ROOT_CONTRACTS[scope] || {};
-  for (const [key, targetValue] of Object.entries(targetObject)) {
-    const childPath = [...path, key];
-    if (Object.prototype.hasOwnProperty.call(output, key)) continue;
-    if (
-      path.length === 0 &&
-      optionalRootContracts[key]?.policy === CONFIG_NODE_POLICY.USER_OPTIONAL
-    ) {
-      const repaired = repairContractNode({
-        contract: optionalRootContracts[key].contract,
-        target: targetValue,
-        path: childPath,
-        changes,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-      continue;
-    }
-    if (OPEN_COLLECTION_PATHS.has(currentPath)) {
-      const repaired = repairCollectionEntry({
-        collectionPath: currentPath,
-        target: targetValue,
-        path: childPath,
-        changes,
-      });
-      if (repaired !== REMOVE_NODE) output[key] = repaired;
-      continue;
-    }
-    recordChange(changes, childPath, CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED, "unsupported_node");
   }
   return output;
+}
+
+/**
+ * Repair one node against the STRUCTURE contract. Structure decides what may
+ * exist; the value source decides what stands in when the target's own value is
+ * missing or invalid. Neither role is ever taken from the other.
+ */
+function repairStructureNode({ node, target, path, values, scope, changes }) {
+  if (!structureAllowsScope(node, scope)) {
+    if (target !== undefined) {
+      recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_SCOPE_FORBIDDEN, "scope_forbidden");
+    }
+    return REMOVE_NODE;
+  }
+  const optional = node.policy === CONFIG_NODE_POLICY.USER_OPTIONAL;
+
+  // A provider entry's fields belong to the model protocol, so its own contract
+  // walker owns the entry and the model library owns its values.
+  if (node.delegatedContract) {
+    const providerValues = values.resolveProviderValues(path.at(-1));
+    return repairContractNode({
+      contract: node.delegatedContract,
+      template: providerValues,
+      valueTemplate: providerValues,
+      target,
+      path,
+      changes,
+    });
+  }
+
+  if (target === undefined) {
+    if (optional) return REMOVE_NODE;
+    if (!values.has(path)) return REMOVE_NODE;
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.ADD_DEFAULT, "missing_defaulted_node");
+    return clone(values.resolve(path));
+  }
+
+  if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) {
+    if (!isPlainObject(target)) return resetFromValues({ path, values, changes, optional });
+    const output = {};
+    for (const [key, entryTarget] of Object.entries(target)) {
+      const repaired = repairStructureNode({
+        node: node.entry,
+        target: entryTarget,
+        path: [...path, key],
+        values,
+        scope,
+        changes,
+      });
+      if (repaired !== REMOVE_NODE) output[key] = repaired;
+    }
+    // Entries the value source declares are restored when absent, so a
+    // collection never silently loses a shipped entry.
+    for (const key of collectionValueKeys({ node, path, values })) {
+      if (Object.prototype.hasOwnProperty.call(output, key)) continue;
+      const repaired = repairStructureNode({
+        node: node.entry,
+        target: undefined,
+        path: [...path, key],
+        values,
+        scope,
+        changes,
+      });
+      if (repaired !== REMOVE_NODE) output[key] = repaired;
+    }
+    return output;
+  }
+
+  if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT) {
+    if (!isPlainObject(target)) return resetFromValues({ path, values, changes, optional });
+    if (node.open) return clone(target);
+    const output = {};
+    for (const [key, child] of Object.entries(node.fields)) {
+      const repaired = repairStructureNode({
+        node: child,
+        target: target[key],
+        path: [...path, key],
+        values,
+        scope,
+        changes,
+      });
+      if (repaired !== REMOVE_NODE) output[key] = repaired;
+    }
+    for (const key of Object.keys(target)) {
+      if (Object.prototype.hasOwnProperty.call(output, key)) continue;
+      if (node.fields[key]) continue;
+      recordChange(
+        changes,
+        [...path, key],
+        CONFIG_REPAIR_ACTION.REMOVE_UNSUPPORTED,
+        "unsupported_node",
+      );
+    }
+    for (const key of node.requiredFields || []) {
+      if (!Object.prototype.hasOwnProperty.call(output, key)) return REMOVE_NODE;
+    }
+    return output;
+  }
+
+  if (!validatesStructureLeaf(target, node)) {
+    return resetFromValues({ path, values, changes, optional });
+  }
+  return clone(target);
+}
+
+function resetFromValues({ path, values, changes, optional }) {
+  if (!values.has(path)) {
+    recordChange(changes, path, CONFIG_REPAIR_ACTION.REMOVE_INVALID_OPTIONAL, "invalid_node_value");
+    return REMOVE_NODE;
+  }
+  recordChange(changes, path, CONFIG_REPAIR_ACTION.RESET_TO_DEFAULT, "invalid_node_value");
+  return clone(values.resolve(path));
+}
+
+function collectionValueKeys({ node, path, values }) {
+  if (pathText(path) === "providers") return values.listProviderAliases();
+  const declared = values.has(path) ? values.resolve(path) : null;
+  return isPlainObject(declared) ? Object.keys(declared) : [];
+}
+
+function validatesStructureLeafType(value, node) {
+  const { kind } = node;
+  if (kind === CONFIG_STRUCTURE_KIND.ARRAY) {
+    if (!Array.isArray(value)) return false;
+    return node.item ? value.every((item) => validatesStructureLeaf(item, node.item)) : true;
+  }
+  if (kind === CONFIG_STRUCTURE_KIND.OBJECT) {
+    if (!isPlainObject(value)) return false;
+    if (node.open || node.delegatedContract) return true;
+    return Object.entries(node.fields).every(
+      ([key, child]) => value[key] === undefined || validatesStructureLeaf(value[key], child),
+    );
+  }
+  if (kind === CONFIG_STRUCTURE_KIND.INTEGER) return Number.isInteger(value);
+  if (kind === CONFIG_STRUCTURE_KIND.NUMBER)
+    return typeof value === "number" && Number.isFinite(value);
+  return typeof value === kind;
+}
+
+function validatesStructureLeaf(value, node) {
+  const { kind } = node;
+  if (!validatesStructureLeafType(value, node)) return false;
+  if (kind === CONFIG_STRUCTURE_KIND.STRING && node.nonEmpty && !value.trim()) return false;
+  if (Array.isArray(node.values) && !node.values.includes(value)) return false;
+  if (typeof value === "number" && node.minimum !== undefined && value < node.minimum) return false;
+  if (typeof value === "number" && node.maximum !== undefined && value > node.maximum) return false;
+  return true;
 }
 
 function removePath(root, path, changes = null) {
@@ -369,9 +443,9 @@ function providerSupportsReference(provider, requirement) {
   return true;
 }
 
-function restoreProviderReferenceDefaults({ document, template, alias, requirement, changes }) {
+function restoreProviderReferenceDefaults({ document, values, alias, requirement, changes }) {
   const provider = document.providers?.[alias];
-  const providerTemplate = template.providers?.[alias];
+  const providerTemplate = values.resolveProviderValues(alias);
   if (!isPlainObject(provider) || !isPlainObject(providerTemplate)) return;
   const relativePaths = [["enabled"]];
   if (requirement === "conversation") relativePaths.push(["used_for_conversation"]);
@@ -391,50 +465,48 @@ function restoreProviderReferenceDefaults({ document, template, alias, requireme
   }
 }
 
+/**
+ * Expand the structure's declared model references onto this document, so a
+ * reference path exists once in the contract rather than twice in code.
+ */
 function collectReferenceRules(document) {
-  const rules = [
-    { path: ["default_provider"], requirement: "conversation" },
-    { path: ["tools", "web_search", "responses_api", "model"], requirement: "model" },
-    { path: ["tools", "request_help", "help_model"], requirement: "model" },
-    { path: ["plugins", "workflow", "semanticModel"], requirement: "model" },
-  ];
-  for (const modality of ["audio", "document", "image", "video"]) {
-    rules.push({
-      path: ["multimodal", "parsing", "default_models", modality],
-      requirement: `parse:${modality}`,
-    });
-  }
-  rules.push({
-    path: ["multimodal", "generation", "default_models", "image"],
-    requirement: "generate:image",
-  });
-  for (const key of Object.keys(document?.scenarios?.definitions || {})) {
-    rules.push({ path: ["scenarios", "definitions", key, "model"], requirement: "model" });
-  }
-  for (const key of Object.keys(document?.plugins?.harness?.stepModels || {})) {
-    rules.push({ path: ["plugins", "harness", "stepModels", key], requirement: "model" });
+  const rules = [];
+  for (const { path, requirement } of listStructureModelReferences()) {
+    const placeholderIndex = path.indexOf(CONFIG_STRUCTURE_PLACEHOLDER);
+    if (placeholderIndex < 0) {
+      // A collection declared as a reference has model aliases for values.
+      const node = valueAt(document, path);
+      if (isPlainObject(node)) {
+        for (const key of Object.keys(node)) rules.push({ path: [...path, key], requirement });
+        continue;
+      }
+      rules.push({ path: [...path], requirement });
+      continue;
+    }
+    const parentPath = path.slice(0, placeholderIndex);
+    const suffix = path.slice(placeholderIndex + 1);
+    const parent = valueAt(document, parentPath);
+    if (!isPlainObject(parent)) continue;
+    for (const key of Object.keys(parent)) {
+      rules.push({ path: [...parentPath, key, ...suffix], requirement });
+    }
   }
   return rules;
 }
 
-function repairModelReferences(document, template, changes) {
+function repairModelReferences(document, values, changes) {
   const providers = isPlainObject(document.providers) ? document.providers : {};
-  const templateProviders = isPlainObject(template.providers) ? template.providers : {};
   for (const rule of collectReferenceRules(document)) {
     const alias = valueAt(document, rule.path);
     if (typeof alias !== "string" || !alias) continue;
     if (providerSupportsReference(providers[alias], rule.requirement)) continue;
-    const fallback = valueAt(template, rule.path);
-    if (
-      typeof fallback !== "string" ||
-      !fallback ||
-      !providerSupportsReference(templateProviders[fallback], rule.requirement)
-    ) {
-      throw new TypeError(`config template has no valid model reference at ${pathText(rule.path)}`);
+    const fallback = values.resolve(rule.path);
+    if (typeof fallback !== "string" || !fallback) {
+      throw new TypeError(`config value source has no model reference at ${pathText(rule.path)}`);
     }
     restoreProviderReferenceDefaults({
       document,
-      template,
+      values,
       alias: fallback,
       requirement: rule.requirement,
       changes,
@@ -454,12 +526,14 @@ function repairModelReferences(document, template, changes) {
 
 export function repairConfigDocument({
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
-  template = {},
+  baseValues = {},
+  overrideValues = null,
   target = {},
 } = {}) {
   if (!VALID_SCOPES.has(scope)) throw new TypeError(`unsupported config document scope: ${scope}`);
-  if (!isPlainObject(template)) throw new TypeError("config repair template must be an object");
-  const currentTemplate = migrateConfigFileToCurrentProtocol(template);
+  if (!isPlainObject(baseValues)) {
+    throw new TypeError("config repair baseValues must be an object");
+  }
   const sourceTarget = isPlainObject(target) ? target : {};
   const currentTarget = migrateConfigFileToCurrentProtocol(sourceTarget);
   const changes = [];
@@ -469,27 +543,23 @@ export function repairConfigDocument({
   if (JSON.stringify(sourceTarget) !== JSON.stringify(currentTarget)) {
     recordChange(changes, [], CONFIG_REPAIR_ACTION.MIGRATE_PROTOCOL, "outdated_protocol");
   }
-  const scopedTemplate = clone(currentTemplate);
-  const scopedTarget = clone(currentTarget);
-  if (scope !== CONFIG_DOCUMENT_SCOPE.GLOBAL) {
-    for (const path of listConfigNodePathsByPolicy({
-      policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
-      representation: CONFIG_PATH_REPRESENTATION.PERSISTED,
-    })) {
-      removePath(scopedTemplate, path);
-      removePath(scopedTarget, path, changes);
-    }
-  }
-  const document = repairTemplateObject({
-    template: scopedTemplate,
-    target: scopedTarget,
-    path: [],
-    changes,
-    scope,
+  const values = createConfigValueSource({
+    baseValues: migrateConfigFileToCurrentProtocol(baseValues),
+    overrideValues: isPlainObject(overrideValues)
+      ? migrateConfigFileToCurrentProtocol(overrideValues)
+      : null,
   });
-  repairModelReferences(document, scopedTemplate, changes);
+  const document = repairStructureNode({
+    node: CONFIG_STRUCTURE,
+    target: clone(currentTarget),
+    path: [],
+    values,
+    scope,
+    changes,
+  });
+  repairModelReferences(document === REMOVE_NODE ? {} : document, values, changes);
   return Object.freeze({
-    document,
+    document: document === REMOVE_NODE ? {} : document,
     report: Object.freeze({ changed: changes.length > 0, changes: Object.freeze(changes) }),
   });
 }

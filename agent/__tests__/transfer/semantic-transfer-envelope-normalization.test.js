@@ -34,14 +34,16 @@ test("V2 envelopes use one payload model and reject path-shaped fields", () => {
     messageId: attachmentIdentity.messageId,
     identity: attachmentIdentity,
     direction: "output",
-    attachments: [{
-      identity: { attachmentId: "att-1", sessionId: "session-test-1", attachmentSource: "model" },
-      role: "primary",
-      name: "result.md",
-      mimeType: "text/markdown",
-      size: 12,
-      preview: "preview",
-    }],
+    attachments: [
+      {
+        identity: { attachmentId: "att-1", sessionId: "session-test-1", attachmentSource: "model" },
+        role: "primary",
+        name: "result.md",
+        mimeType: "text/markdown",
+        size: 12,
+        preview: "preview",
+      },
+    ],
     intent: { source: "tool", reason: "result", scenario: "tool", strategy: "tool_output" },
   });
   assert.deepEqual(attachment.payload.attachments[0].identity, {
@@ -49,7 +51,10 @@ test("V2 envelopes use one payload model and reject path-shaped fields", () => {
     sessionId: "session-test-1",
     attachmentSource: "model",
   });
-  assert.throws(() => assertTransferEnvelope({ ...attachment, path: "/forbidden" }), /forbidden_path_field/);
+  assert.throws(
+    () => assertTransferEnvelope({ ...attachment, path: "/forbidden" }),
+    /forbidden_path_field/,
+  );
 });
 
 test("semantic transfer emits validated V2 envelopes for direct tool output", async () => {

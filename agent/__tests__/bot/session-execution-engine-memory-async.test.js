@@ -50,8 +50,16 @@ function createEngine({
     memory,
     attach: {},
     skill: {},
-    configService: { async loadUserConfig() { return {}; } },
-    workspaceService: { async ensureUserWorkspace() { return "/tmp"; } },
+    configService: {
+      async loadUserConfig() {
+        return {};
+      },
+    },
+    workspaceService: {
+      async ensureUserWorkspace() {
+        return "/tmp";
+      },
+    },
     errorLogger: { async log() {} },
     botManager: {},
     agentRunner: async () => ({ output: "ok" }),
@@ -91,10 +99,7 @@ test("_finalizeRunSession forwards thinkingStartedAt to turn timing persistence"
   await engine._finalizeRunSession(buildFinalizeInput({ memory: { postprocess_async: true } }));
 
   assert.equal(appendTurnPayloads.length, 1);
-  assert.equal(
-    appendTurnPayloads[0].turnTimingThinkingStartedAt,
-    "2026-07-08T16:49:44.113Z",
-  );
+  assert.equal(appendTurnPayloads[0].turnTimingThinkingStartedAt, "2026-07-08T16:49:44.113Z");
   assert.ok(appendTurnPayloads[0].turnTimingThinkingFinishedAt);
   assert.equal(appendTurnPayloads[0].thinkingStartedAt, "");
   assert.equal(appendTurnPayloads[0].thinkingFinishedAt, "");

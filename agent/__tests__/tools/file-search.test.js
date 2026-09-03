@@ -18,7 +18,11 @@ test("ripgrep file search treats a leading-dash query as a literal pattern", asy
   }
   const rootPath = await mkdtemp(path.join(tmpdir(), "noobot-file-search-"));
   try {
-    await writeFile(path.join(rootPath, "theme.css"), ":root { --surface-color: white; }\n", "utf8");
+    await writeFile(
+      path.join(rootPath, "theme.css"),
+      ":root { --surface-color: white; }\n",
+      "utf8",
+    );
 
     const result = await searchFilesWithRipgrep({
       rootPath,

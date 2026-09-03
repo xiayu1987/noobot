@@ -17,7 +17,11 @@ async function makeTempDir() {
 
 async function readJsonLines(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function createInMemorySessionRepository() {
@@ -84,13 +88,7 @@ test("getBundle and appendLog preserve scoped persistence context", async () => 
   const repo = new ExecutionLogRepository({ executionRepository });
 
   await repo.getBundle("u1", "child-1", "parent-1", persistenceContext);
-  await repo.appendLog(
-    "u1",
-    "child-1",
-    { event: "start" },
-    "parent-1",
-    persistenceContext,
-  );
+  await repo.appendLog("u1", "child-1", { event: "start" }, "parent-1", persistenceContext);
 
   assert.equal(calls[0][0], "getBundle");
   assert.equal(calls[0][1][3], persistenceContext);
@@ -121,7 +119,10 @@ test("appendLog uses metadata-only reads when the execution store supports them"
 
   await repo.appendLog("u1", "s1", { event: "heartbeat" }, "p1");
 
-  assert.deepEqual(calls.map(([name]) => name), ["getBundleMetadata", "appendLog"]);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ["getBundleMetadata", "appendLog"],
+  );
   assert.equal(calls[1][1][2].dialogProcessId, "d1");
   assert.equal("logs" in calls[1][1][3], false);
 });
@@ -157,16 +158,29 @@ test("appendLog mirrors session execution logs to runtime-events session events"
     workspaceRoot,
   });
 
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d1",
-    event: "tool_call_start",
-    category: "tool",
-    type: "tool_call",
-    data: { tool: "read_file" },
-    ts: "2026-05-13T00:00:01.000Z",
-  }, "p1");
+  await repo.appendLog(
+    "u1",
+    "s1",
+    {
+      dialogProcessId: "d1",
+      event: "tool_call_start",
+      category: "tool",
+      type: "tool_call",
+      data: { tool: "read_file" },
+      ts: "2026-05-13T00:00:01.000Z",
+    },
+    "p1",
+  );
 
-  const runtimeEventFile = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events", "interaction.jsonl");
+  const runtimeEventFile = path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "p1",
+    "events",
+    "interaction.jsonl",
+  );
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "agent");
@@ -186,19 +200,24 @@ test("appendLog mirrors context identity diagnostics to their dedicated runtime-
   const sessionRepository = createInMemorySessionRepository();
   const repo = new ExecutionLogRepository({ sessionRepository, workspaceRoot });
 
-  await repo.appendLog("u1", "s1", {
-    dialogProcessId: "d1",
-    event: "agent.contextIdentity.modelContextCreated",
-    category: "context_identity",
-    type: "context_identity_debug",
-    data: {
-      debugType: "context-identity",
-      turnScopeId: "t1",
-      sourceMessageUid: "sm_1",
-      contentProjectionId: "sm_1",
-      userMetaProjectionId: "sm_1::user_meta",
+  await repo.appendLog(
+    "u1",
+    "s1",
+    {
+      dialogProcessId: "d1",
+      event: "agent.contextIdentity.modelContextCreated",
+      category: "context_identity",
+      type: "context_identity_debug",
+      data: {
+        debugType: "context-identity",
+        turnScopeId: "t1",
+        sourceMessageUid: "sm_1",
+        contentProjectionId: "sm_1",
+        userMetaProjectionId: "sm_1::user_meta",
+      },
     },
-  }, "p1");
+    "p1",
+  );
 
   const runtimeEventFile = path.join(
     workspaceRoot,

@@ -5,10 +5,18 @@
  */
 import test from "node:test";
 import {
-  assert, fs, os, path, createRunner, finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_STATE,
+  assert,
+  fs,
+  os,
+  path,
+  createRunner,
+  finalizeAgentTurn,
+  AGENT_LIFECYCLE_BRANCH_STATE,
+  AGENT_LIFECYCLE_EVENT,
+  AGENT_LIFECYCLE_STATE,
   loadStoppedModelMessageSnapshot,
-  collectLifecycleStates, findStoppedLifecycleEvent,
+  collectLifecycleStates,
+  findStoppedLifecycleEvent,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
 test("runSession emits interrupted branch lifecycle state for non-user abort errors", async () => {
@@ -40,7 +48,9 @@ test("runSession emits interrupted branch lifecycle state for non-user abort err
     AGENT_LIFECYCLE_STATE.RUNNING,
     AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
   ]);
-  const interruptedEvent = events.find((item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);
+  const interruptedEvent = events.find(
+    (item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED,
+  );
   assert.equal(interruptedEvent.data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.INTERRUPTED);
   assert.equal(interruptedEvent.data.canResume, false);
   assert.equal(interruptedEvent.data.stoppedSnapshotPersistence.reason, "non_user_abort");
@@ -97,11 +107,15 @@ test("runSession persists stopped model message snapshot from runtime candidate 
       parentSessionId: "",
       dialogProcessId: "dialog-1",
       turnScopeId: "turn-1",
-      messages: [{ type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" }],
+      messages: [
+        { type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+      ],
       messageBlocks: {
         system: [{ type: "system", content: "system" }],
         history: [],
-        incremental: [{ type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" }],
+        incremental: [
+          { type: "human", content: "hello", dialogProcessId: "dialog-1", turnScopeId: "turn-1" },
+        ],
       },
     },
   };
@@ -166,7 +180,9 @@ test("runSession persists stopped model message snapshot from runtime candidate 
 test("runSession persists stopped model message snapshot for plain user_stop error objects", async () => {
   const callOrder = [];
   const events = [];
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-runner-plain-user-stop-snapshot-"),
+  );
   const runtime = {
     attachmentMetas: [],
     globalConfig: { workspaceRoot },
@@ -229,7 +245,9 @@ test("runSession persists stopped model message snapshot for plain user_stop err
 test("runSession seals stopped snapshot only after the abort reaches the terminal catch", async () => {
   const callOrder = [];
   const events = [];
-  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-runner-stop-signal-snapshot-"));
+  const workspaceRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-runner-stop-signal-snapshot-"),
+  );
   const abortController = new AbortController();
   const runtime = {
     attachmentMetas: [],
@@ -276,12 +294,13 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   });
 
   await assert.rejects(
-    () => runner.runSession({
-      userId: "u1",
-      sessionId: "s1",
-      message: "hello",
-      abortSignal: abortController.signal,
-    }),
+    () =>
+      runner.runSession({
+        userId: "u1",
+        sessionId: "s1",
+        message: "hello",
+        abortSignal: abortController.signal,
+      }),
     /aborted after signal/,
   );
 
@@ -297,10 +316,7 @@ test("runSession seals stopped snapshot only after the abort reaches the termina
   assert.equal(loaded.messages[0].content, "system");
   assert.equal(loaded.messages.at(-1).content, "terminal hook injection after stop signal");
   assert.equal(loaded.messages.at(-1).injectedMessage, true);
-  assert.equal(
-    loaded.messages.at(-1).injectedMessageType,
-    "separate_model_relay:guidance",
-  );
+  assert.equal(loaded.messages.at(-1).injectedMessageType, "separate_model_relay:guidance");
   const savedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_saved");
   assert.equal(savedEvent?.data?.source, "runner_user_stop_catch");
   const stoppedEvent = findStoppedLifecycleEvent(events);
@@ -344,11 +360,15 @@ test("runSession emits stopped snapshot diagnostic when abort candidate is incom
     /aborted/,
   );
 
-  const skippedEvent = events.find((item) => item.event === "stopped_model_message_snapshot_save_skipped");
+  const skippedEvent = events.find(
+    (item) => item.event === "stopped_model_message_snapshot_save_skipped",
+  );
   assert.equal(skippedEvent?.data?.reason, "missing_identity");
   assert.deepEqual(skippedEvent?.data?.missingIdentityFields, ["turnScopeId"]);
   const stoppedEvent = findStoppedLifecycleEvent(events);
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.status, "skipped");
   assert.equal(stoppedEvent?.data?.stoppedSnapshotPersistence?.reason, "missing_identity");
-  assert.deepEqual(stoppedEvent?.data?.stoppedSnapshotPersistence?.missingIdentityFields, ["turnScopeId"]);
+  assert.deepEqual(stoppedEvent?.data?.stoppedSnapshotPersistence?.missingIdentityFields, [
+    "turnScopeId",
+  ]);
 });

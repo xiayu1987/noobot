@@ -34,7 +34,7 @@ import {
   alignInitialModelReferences,
   buildProviderFromTemplate,
   normalizeProviderAlias,
-  resolveEnvNamesByFormat,
+  resolveProviderEnvNames,
   resolveProviderTemplate,
 } from "./provider.js";
 import {
@@ -62,7 +62,7 @@ async function initializeGlobalConfigWhenMissing({
   }
 
   const providerAlias = normalizeProviderAlias(answers.modelName);
-  const { apiKeyEnv, baseUrlEnv } = resolveEnvNamesByFormat(answers.format, answers.modelName);
+  const { apiKeyEnv, baseUrlEnv } = resolveProviderEnvNames(answers.modelName);
   const apiKeyTemplateValue = `\${${apiKeyEnv}}`;
   const baseUrlTemplateValue = `\${${baseUrlEnv}}`;
 
@@ -84,7 +84,6 @@ async function initializeGlobalConfigWhenMissing({
   const providerSeed = resolveProviderTemplate(providers, providerAlias);
   providers[providerAlias] = buildProviderFromTemplate({
     providerTemplate: providerSeed,
-    format: answers.format,
     modelName: answers.modelName,
     apiKeyVar: apiKeyTemplateValue,
     baseUrlVar: baseUrlTemplateValue,
@@ -107,6 +106,7 @@ async function initializeGlobalConfigWhenMissing({
     workspaceRootAbsolutePath,
     workspaceTemplateAbsolutePath,
     superAdminUserId: answers.superAdminUserId,
+    baseValues: globalExampleConfig,
     locale: answers.setupLocale,
   });
 
@@ -153,7 +153,7 @@ async function syncWhenGlobalConfigExists({
 
   const globalRepair = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template: globalExampleConfig,
+    baseValues: globalExampleConfig,
     target: globalConfig,
   });
   const mergedGlobal = globalRepair.document;
@@ -186,6 +186,7 @@ async function syncWhenGlobalConfigExists({
     workspaceRootAbsolutePath,
     workspaceTemplateAbsolutePath,
     superAdminUserId,
+    baseValues: globalExampleConfig,
     locale: normalizeSetupLocale(
       process.env.NOOBOT_SETUP_LANG || process.env.NOOBOT_LANG || process.env.LANG,
       "zh",

@@ -45,9 +45,7 @@ test("session display projection joins current attachment state by canonical ide
     },
   });
 
-  assert.deepEqual(calls, [
-    { userId: "admin", sessionId: "session-1", attachmentSource: "user" },
-  ]);
+  assert.deepEqual(calls, [{ userId: "admin", sessionId: "session-1", attachmentSource: "user" }]);
   assert.deepEqual(projected.messages[0].attachments[0].relations, [relation]);
   assert.equal(source.messages[0].attachments[0].relations, undefined);
 });

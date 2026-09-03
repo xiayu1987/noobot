@@ -39,20 +39,45 @@ test("compact model view retains only V2 transfer envelopes and canonical attach
     attachments: [attachment("att-1", "generated.txt")],
     intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
   });
-  const compacted = JSON.parse(compactToolResultTextForModel(JSON.stringify({ toolName: "tool", transferEnvelopes: [envelope] })));
+  const compacted = JSON.parse(
+    compactToolResultTextForModel(
+      JSON.stringify({ toolName: "tool", transferEnvelopes: [envelope] }),
+    ),
+  );
   assert.deepEqual(COMPACT_TRANSFER_PAYLOAD_FIELDS, ["transferEnvelopes"]);
   assert.deepEqual(Object.keys(compacted), ["toolName", "transferEnvelopes"]);
-  assert.deepEqual(compacted.transferEnvelopes[0].payload.attachments[0].identity, attachment("att-1").identity);
-  assert.deepEqual(Object.keys(compacted.transferEnvelopes[0].payload.attachments[0]).sort(), COMPACT_TRANSFER_FILE_FIELDS.slice().sort());
+  assert.deepEqual(
+    compacted.transferEnvelopes[0].payload.attachments[0].identity,
+    attachment("att-1").identity,
+  );
+  assert.deepEqual(
+    Object.keys(compacted.transferEnvelopes[0].payload.attachments[0]).sort(),
+    COMPACT_TRANSFER_FILE_FIELDS.slice().sort(),
+  );
 });
 
 test("consumer returns only validated V2 envelopes and canonical attachment references", () => {
   const envelopes = [
-    attachmentTransfer({ ...identity({ transferId: "t-1", messageId: "m-1" }), identity: identity({ transferId: "t-1", messageId: "m-1" }), direction: "output", attachments: [attachment("att-1")] , intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" } }),
-    attachmentTransfer({ ...identity({ transferId: "t-2", messageId: "m-2" }), identity: identity({ transferId: "t-2", messageId: "m-2" }), direction: "output", attachments: [attachment("att-2")] , intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" } }),
+    attachmentTransfer({
+      ...identity({ transferId: "t-1", messageId: "m-1" }),
+      identity: identity({ transferId: "t-1", messageId: "m-1" }),
+      direction: "output",
+      attachments: [attachment("att-1")],
+      intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
+    }),
+    attachmentTransfer({
+      ...identity({ transferId: "t-2", messageId: "m-2" }),
+      identity: identity({ transferId: "t-2", messageId: "m-2" }),
+      direction: "output",
+      attachments: [attachment("att-2")],
+      intent: { source: "tool", reason: "tool_result", scenario: "tool", strategy: "tool_output" },
+    }),
   ];
   assert.equal(getTransferEnvelopes({ transferEnvelopes: envelopes }).length, 2);
-  assert.deepEqual(getTransferAttachments(envelopes).map((item) => item.identity.attachmentId), ["att-1", "att-2"]);
+  assert.deepEqual(
+    getTransferAttachments(envelopes).map((item) => item.identity.attachmentId),
+    ["att-1", "att-2"],
+  );
   assert.throws(
     () => getTransferAttachments({ attachmentMetas: [{ attachmentId: "legacy" }] }),
     /invalid_transfer_envelope:unknown_envelope_field:attachmentMetas/,

@@ -150,7 +150,8 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
       providers: {
         main: {
           model: "gpt-5.5",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "openai",
           adapterId: "openai-compatible",
         },
@@ -164,7 +165,7 @@ test("createGlobalConfigBuilder: providers 只通过唯一 ModelSpec 规范化�
   assert.equal(built.rawConfig.providers.main.top_p, undefined);
 });
 
-test("createGlobalConfigBuilder: 旧的不完整 provider 不阻断运行时构建", async () => {
+test("createGlobalConfigBuilder: provider 无需 format 也通过唯一 ModelSpec 入口规范化", async () => {
   const legacyAlias = ["GLM", "5", "1"].join("_");
   const builder = createGlobalConfigBuilder({
     source: async () => ({
@@ -172,7 +173,8 @@ test("createGlobalConfigBuilder: 旧的不完整 provider 不阻断运行时构�
       providers: {
         current: {
           model: "gpt-5.4",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
         },
         [legacyAlias]: {
           enabled: true,
@@ -180,6 +182,8 @@ test("createGlobalConfigBuilder: 旧的不完整 provider 不阻断运行时构�
           api_key: "${DASHSCOPE_API_KEY}",
           base_url: "${DASHSCOPE_API_ADDRESS}",
           model: "ZHIPU/GLM-5.1",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
         },
       },
     }),
@@ -193,7 +197,30 @@ test("createGlobalConfigBuilder: 旧的不完整 provider 不阻断运行时构�
   });
 
   assert.equal(built.resolvedConfig.providers.current.model, "gpt-5.4");
-  assert.equal(built.resolvedConfig.providers[legacyAlias], undefined);
+  assert.equal(built.resolvedConfig.providers[legacyAlias].model, "ZHIPU/GLM-5.1");
+  assert.equal(built.resolvedConfig.providers[legacyAlias].modelFamily, "glm");
+  assert.equal(built.resolvedConfig.providers[legacyAlias].adapterId, "openai-compatible");
+});
+
+test("createGlobalConfigBuilder: provider reasoning facts resolve from the model library by concrete model", async () => {
+  const builder = createGlobalConfigBuilder({
+    source: async () => ({
+      providers: {
+        custom_gpt: {
+          model: "gpt-5.5",
+          api_key: "key",
+          base_url: "https://api.example.com/v1",
+        },
+      },
+    }),
+  });
+
+  const built = await builder.build();
+  const provider = built.rawConfig.providers.custom_gpt;
+  assert.deepEqual(provider.reasoning_effort_options, ["none", "low", "medium", "high", "xhigh"]);
+  assert.equal(provider.reasoning_effort, "medium");
+  assert.equal(provider.tool_reasoning_effort, "medium");
+  assert.equal(provider.reasoning_effort_parameter, "reasoning_effort");
 });
 
 test("createGlobalConfigBuilder: derives protocol identities and removes providerId overrides", async () => {
@@ -202,7 +229,8 @@ test("createGlobalConfigBuilder: derives protocol identities and removes provide
       providers: {
         configured: {
           model: "gpt-4",
-          format: "openai_compatible",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           providerId: "untrusted-override",
           adapterId: "untrusted-override",
         },

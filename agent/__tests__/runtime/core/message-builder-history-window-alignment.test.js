@@ -23,13 +23,10 @@ function createMessageBuilderScope({ runtime = {}, history = [] } = {}) {
 }
 
 function buildRoundContents(fromRound, toRound) {
-  return Array.from(
-    { length: Math.max(0, toRound - fromRound + 1) },
-    (_, index) => {
-      const number = fromRound + index;
-      return [`u-${number}`, `a-${number}`];
-    },
-  ).flat();
+  return Array.from({ length: Math.max(0, toRound - fromRound + 1) }, (_, index) => {
+    const number = fromRound + index;
+    return [`u-${number}`, `a-${number}`];
+  }).flat();
 }
 
 function buildDefaultHistoryRounds() {
@@ -82,16 +79,21 @@ test("buildContextMessages keeps explicit history dialog groups in natural order
     { currentUserMessage: null },
   );
 
-  assert.equal(messages.some((item) => item?.content === "当前对话注入"), true);
-  assert.equal(messages.some((item) => item?.content === "旧对话注入"), true);
+  assert.equal(
+    messages.some((item) => item?.content === "当前对话注入"),
+    true,
+  );
+  assert.equal(
+    messages.some((item) => item?.content === "旧对话注入"),
+    true,
+  );
 });
 
 test("buildContextMessages applies main model recent round window by default", () => {
   const history = buildDefaultHistoryRounds();
-  const messages = buildContextMessages(
-    createMessageBuilderScope({ history }),
-    { currentUserMessage: null },
-  );
+  const messages = buildContextMessages(createMessageBuilderScope({ history }), {
+    currentUserMessage: null,
+  });
 
   assert.deepEqual(
     messages

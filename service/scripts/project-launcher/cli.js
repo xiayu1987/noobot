@@ -5,7 +5,7 @@
  */
 import process from "node:process";
 import { resolveServiceGlobalConfigPath } from "../../services/global-config-source.js";
-import { DEFAULT_TEMPLATE_PATH, DEFAULT_WORKSPACE_ROOT, MODEL_FORMAT_VALUES } from "./constants.js";
+import { DEFAULT_TEMPLATE_PATH, DEFAULT_WORKSPACE_ROOT } from "./constants.js";
 import { firstNonEmptyString } from "./utils.js";
 
 export function parseCliOptions(argv = []) {
@@ -61,12 +61,4 @@ export function resolveLauncherGlobalConfigPath({
     cwd: serviceRoot,
     env,
   });
-}
-
-export function normalizeModelFormat(input = "") {
-  const format = String(input || "")
-    .trim()
-    .toLowerCase();
-  if (!format) return "";
-  return MODEL_FORMAT_VALUES.has(format) ? format : "";
 }

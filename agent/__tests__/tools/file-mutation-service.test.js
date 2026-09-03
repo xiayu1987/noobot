@@ -28,7 +28,10 @@ test("file mutation persists before snapshot and diff, then reads the same recor
     });
     assert.equal(await readFile(target, "utf8"), "after\n");
     await stat(path.join(root, "file-mutations", `${result.mutations[0].id}.json`));
-    const record = await readFileMutation({ mutationRoot: resolveFileMutationRoot(root), mutationId: result.mutations[0].id });
+    const record = await readFileMutation({
+      mutationRoot: resolveFileMutationRoot(root),
+      mutationId: result.mutations[0].id,
+    });
     assert.equal(record.snapshots.before, "before\n");
     assert.deepEqual(record.snapshots.diff.lines, [
       { type: "removed", oldLine: 1, newLine: null, text: "before" },
@@ -73,7 +76,10 @@ test("delete mutation persists the before snapshot and a removal diff", async ()
       mutationRoot: resolveFileMutationRoot(root),
     });
     await assert.rejects(stat(target), { code: "ENOENT" });
-    const record = await readFileMutation({ mutationRoot: resolveFileMutationRoot(root), mutationId: result.mutations[0].id });
+    const record = await readFileMutation({
+      mutationRoot: resolveFileMutationRoot(root),
+      mutationId: result.mutations[0].id,
+    });
     assert.equal(record.snapshots.before, "before\n");
     assert.deepEqual(record.snapshots.diff.lines, [
       { type: "removed", oldLine: 1, newLine: null, text: "before" },

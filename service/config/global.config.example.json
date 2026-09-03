@@ -144,9 +144,6 @@
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "claude-opus-5",
-      "format": "openai_compatible",
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
       "description": "擅长编码",
       "multimodal_parsing": {
         "enabled": true,
@@ -157,7 +154,11 @@
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "gpt_5_6_sol": {
       "enabled": true,
@@ -165,9 +166,6 @@
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "gpt-5.6-sol",
-      "format": "openai_compatible",
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
       "description": "擅长编码",
       "capabilities": {
         "web_search": true
@@ -182,7 +180,11 @@
           "support_scope": ["image"],
           "api_type": "openai_responses"
         }
-      }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "gemini_3_7_flash": {
       "enabled": true,
@@ -190,15 +192,21 @@
       "api_key": "${GEMINI_API_KEY}",
       "base_url": "${GEMINI_API_ADDRESS}",
       "model": "gemini-3.7-flash",
-      "format": "openai_compatible",
       "description": "Google 多模态模型",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document", "audio", "video"]
       },
       "multimodal_generation": {
-        "support_generation": { "enabled": false, "support_scope": [] }
-      }
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "thinking_level"
     },
     "deepseek_v4_pro": {
       "enabled": true,
@@ -206,10 +214,21 @@
       "api_key": "${DEEPSEEK_API_KEY}",
       "base_url": "${DEEPSEEK_API_ADDRESS}",
       "model": "deepseek-v4-pro",
-      "format": "openai_compatible",
       "description": "DeepSeek 推理与编程模型",
-      "multimodal_parsing": { "enabled": false, "input_modalities": [] },
-      "multimodal_generation": { "support_generation": { "enabled": false, "support_scope": [] } }
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "reasoning_effort": "low",
+      "tool_reasoning_effort": "low",
+      "reasoning_effort_options": ["low", "high", "max"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "grok_4_6": {
       "enabled": true,
@@ -217,10 +236,21 @@
       "api_key": "${XAI_API_KEY}",
       "base_url": "${XAI_API_ADDRESS}",
       "model": "grok-4.6",
-      "format": "openai_compatible",
       "description": "xAI 推理与视觉模型",
-      "multimodal_parsing": { "enabled": true, "input_modalities": ["image", "video"] },
-      "multimodal_generation": { "support_generation": { "enabled": false, "support_scope": [] } }
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "qwen3_7_max": {
       "enabled": true,
@@ -228,11 +258,24 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.7-max",
-      "format": "openai_compatible",
       "description": "通义千问最新文本模型",
-      "capabilities": { "web_search": true },
-      "multimodal_parsing": { "enabled": false, "input_modalities": [] },
-      "multimodal_generation": { "support_generation": { "enabled": false, "support_scope": [] } }
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "medium"],
+      "reasoning_effort_parameter": "enable_thinking"
     },
     "nano_banana": {
       "enabled": true,
@@ -240,9 +283,6 @@
       "api_key": "${OPENAI_API_KEY}",
       "base_url": "${OPENAI_API_ADDRESS}",
       "model": "nano-banana",
-      "format": "openai_compatible",
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
       "description": "擅长图片生成",
       "multimodal_parsing": {
         "enabled": false
@@ -253,7 +293,11 @@
           "support_scope": ["image"],
           "api_type": "images_async"
         }
-      }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "thinking_level"
     },
     "qwen3_5_omni_plus": {
       "enabled": true,
@@ -261,7 +305,6 @@
       "api_key": "${DASHSCOPE_API_KEY}",
       "base_url": "${DASHSCOPE_API_ADDRESS}",
       "model": "qwen3.5-omni-plus",
-      "format": "openai_compatible",
       "description": "多模态解析",
       "multimodal_parsing": {
         "enabled": true,
@@ -272,7 +315,11 @@
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "medium"],
+      "reasoning_effort_parameter": "enable_thinking"
     },
     "glm_5_3": {
       "enabled": true,
@@ -280,16 +327,21 @@
       "api_key": "${ZAI_API_KEY}",
       "base_url": "${ZAI_API_ADDRESS}",
       "model": "glm-5.3",
-      "format": "openai_compatible",
       "description": "智谱最新推理模型",
-      "reasoning_effort": "low",
-      "multimodal_parsing": { "enabled": false, "input_modalities": [] },
+      "multimodal_parsing": {
+        "enabled": false,
+        "input_modalities": []
+      },
       "multimodal_generation": {
         "support_generation": {
           "enabled": false,
           "support_scope": []
         }
-      }
+      },
+      "reasoning_effort": "low",
+      "tool_reasoning_effort": "low",
+      "reasoning_effort_options": ["low", "high", "max"],
+      "reasoning_effort_parameter": "reasoning_effort"
     },
     "kimi_k3": {
       "enabled": true,
@@ -297,11 +349,21 @@
       "api_key": "${MOONSHOT_API_KEY}",
       "base_url": "${MOONSHOT_API_ADDRESS}",
       "model": "kimi-k3",
-      "format": "openai_compatible",
-      "reasoning_effort": "low",
       "description": "Moonshot Kimi K3 多模态模型",
-      "multimodal_parsing": { "enabled": true, "input_modalities": ["image", "video"] },
-      "multimodal_generation": { "support_generation": { "enabled": false, "support_scope": [] } }
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "video"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      },
+      "reasoning_effort": "low",
+      "tool_reasoning_effort": "low",
+      "reasoning_effort_options": ["low", "high", "max"],
+      "reasoning_effort_parameter": "reasoning_effort"
     }
   },
   "services": {

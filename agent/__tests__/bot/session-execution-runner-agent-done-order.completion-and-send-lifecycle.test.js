@@ -5,10 +5,18 @@
  */
 import test from "node:test";
 import {
-  assert, fs, os, path, createRunner, finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_STATE,
+  assert,
+  fs,
+  os,
+  path,
+  createRunner,
+  finalizeAgentTurn,
+  AGENT_LIFECYCLE_BRANCH_STATE,
+  AGENT_LIFECYCLE_EVENT,
+  AGENT_LIFECYCLE_STATE,
   loadStoppedModelMessageSnapshot,
-  collectLifecycleStates, createCurrentTurnMessagesStore,
+  collectLifecycleStates,
+  createCurrentTurnMessagesStore,
   createTestAgentExecutionScope,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
@@ -196,4 +204,3 @@ test("runSession keeps resume snapshot identity separate from current run identi
   assert.equal(events[0].data.turnScopeId, "turn-current");
   assert.equal(events[0].data.resumeFromStoppedSnapshot, true);
 });
-

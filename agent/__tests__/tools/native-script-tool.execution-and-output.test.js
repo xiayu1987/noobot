@@ -15,11 +15,7 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import {
-  IDENTITY,
-  createRuntime,
-  hasFfmpegCapabilities,
-} from "./native-script-tool.fixtures.js";
+import { IDENTITY, createRuntime, hasFfmpegCapabilities } from "./native-script-tool.fixtures.js";
 
 test("execute_native_script injects capabilities and persists task output", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-"));
@@ -261,4 +257,3 @@ await files.writeText(target, "");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].name, "empty.bin");
   assert.equal(result.transferEnvelopes[0].payload.attachments[0].size, 0);
 });
-

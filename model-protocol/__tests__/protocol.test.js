@@ -5,12 +5,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildModelReasoningEffortTransport,
   createModelRequest,
   createModelResponse,
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_INPUT_PROCESSING_KIND,
   MODEL_OPERATION_KIND,
   MODEL_PROTOCOL_VERSION,
+  normalizeModelReasoningConfiguration,
+  resolveModelMinimumReasoningEffort,
   listModelLibraryOptions,
   resolveDefaultModelLibraryProvider,
   resolveModelLibraryProvider,
@@ -75,6 +78,11 @@ test("model library exposes copy-safe provider templates", () => {
     options.some((item) => item.key === "glm_5_3"),
     true,
   );
+  for (const item of options) {
+    assert.equal(Array.isArray(item.reasoning_effort_options), true);
+    assert.equal(item.reasoning_effort_options.includes(item.reasoning_effort), true);
+    assert.equal(item.reasoning_effort_options.includes(item.tool_reasoning_effort), true);
+  }
   assert.equal(resolveModelLibraryProvider("kimi_k3").model, "kimi-k3");
   assert.equal(resolveModelLibraryProvider("kimi_k3").api_key, "${MOONSHOT_API_KEY}");
   assert.deepEqual(resolveModelLibraryProvider("kimi_k3").multimodal_parsing.input_modalities, [
@@ -109,7 +117,6 @@ const invocation = {
 };
 const model = {
   model: "gpt-5",
-  format: "openai_compatible",
   operatorId: "openai",
   adapterId: "openai-compatible",
   capabilities: { web_search: true },
@@ -297,10 +304,17 @@ test("model request requires one explicit context sequence policy", () => {
   );
 });
 
-test("model request requires transport identity and derives provider/adapter identities", () => {
+test("model request derives provider and adapter identities", () => {
+  // The transport is a protocol constant carried by adapterId, so a spec that
+  // still names a format is a non-converged producer rather than a valid input.
   assert.throws(
-    () => createModelRequest({ invocation, model: { ...model, format: "" }, messages: [] }),
-    /model spec.format is required/,
+    () =>
+      createModelRequest({
+        invocation,
+        model: { ...model, format: "openai_compatible" },
+        messages: [],
+      }),
+    /format is not part of this protocol/,
   );
   const derived = createModelRequest({
     invocation,
@@ -377,4 +391,85 @@ test("model operation capabilities are governed only by explicit model configura
       }),
     /does not declare web_search capability/,
   );
+});
+
+test("reasoning transport is declared by the provider, never inferred from a model name", () => {
+  // A model name that looks like Gemini must not select Gemini's parameter.
+  const misleading = {
+    model: "gemini-3.7-flash",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["low", "high"],
+    reasoning_effort: "high",
+  };
+  assert.deepEqual(buildModelReasoningEffortTransport(misleading, "high"), {
+    reasoning_effort: "high",
+  });
+  const declared = {
+    model: "in-house-model",
+    reasoning_effort_parameter: "thinking_level",
+    reasoning_effort_options: ["low", "medium"],
+  };
+  assert.deepEqual(buildModelReasoningEffortTransport(declared, "medium"), {
+    thinking_level: "medium",
+  });
+});
+
+test("a switch-shaped reasoning parameter carries a boolean on the wire", () => {
+  const provider = {
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
+  };
+  assert.deepEqual(buildModelReasoningEffortTransport(provider, "medium"), {
+    enable_thinking: true,
+  });
+  assert.deepEqual(buildModelReasoningEffortTransport(provider, "none"), {
+    enable_thinking: false,
+  });
+});
+
+test("reasoning declarations are validated rather than silently defaulted", () => {
+  assert.throws(
+    () => normalizeModelReasoningConfiguration({ reasoning_effort_parameter: "reasoning_effort" }),
+    /reasoning_effort_options is required/,
+  );
+  assert.throws(
+    () => normalizeModelReasoningConfiguration({ reasoning_effort_options: ["low"] }),
+    /reasoning_effort_parameter/,
+  );
+  assert.throws(
+    () =>
+      normalizeModelReasoningConfiguration({
+        reasoning_effort_options: ["low"],
+        reasoning_effort_parameter: "thinking_budget",
+      }),
+    /unsupported model provider reasoning_effort_parameter/,
+  );
+});
+
+test("an effort outside the declared options resolves to the lowest declared level", () => {
+  const normalized = normalizeModelReasoningConfiguration({
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["high", "max"],
+    reasoning_effort: "medium",
+    tool_reasoning_effort: "invalid",
+  });
+  assert.equal(normalized.reasoning_effort, "high");
+  assert.equal(normalized.tool_reasoning_effort, "high");
+  assert.equal(resolveModelMinimumReasoningEffort(normalized), "high");
+});
+
+test("every library provider declares a canonical reasoning contract", () => {
+  for (const option of listModelLibraryOptions()) {
+    const provider = resolveModelLibraryProvider(option.key);
+    assert.deepEqual(
+      normalizeModelReasoningConfiguration(provider),
+      {
+        reasoning_effort_parameter: provider.reasoning_effort_parameter,
+        reasoning_effort_options: provider.reasoning_effort_options,
+        reasoning_effort: provider.reasoning_effort,
+        tool_reasoning_effort: provider.tool_reasoning_effort,
+      },
+      `${option.key} declares a non-canonical reasoning contract`,
+    );
+  }
 });

@@ -29,7 +29,6 @@ function projectObservableModel(model = {}) {
   return Object.freeze({
     alias: String(model.alias || "").trim(),
     model: String(model.model || "").trim(),
-    format: String(model.format || "").trim(),
     operatorId: String(model.operatorId || "").trim(),
     modelFamily: String(model.modelFamily || "").trim(),
     adapterId: String(model.adapterId || "").trim(),
@@ -174,7 +173,6 @@ export function createModelRequestExecutor({
           provider: {
             operatorId: requestBase.model.operatorId,
             adapterId: adapter.id,
-            format: requestBase.model.format,
           },
         });
       }
@@ -224,7 +222,6 @@ export function createModelRequestExecutor({
               model: {
                 alias: String(request.model.alias || "").trim(),
                 name: String(request.model.model || "").trim(),
-                format: String(request.model.format || "").trim(),
                 streaming,
                 boundToolCount: request.tools.length,
               },
@@ -245,6 +242,7 @@ export function createModelRequestExecutor({
               return await runModelAttempt({
                 adapter,
                 client,
+                modelSpec: request.model,
                 messages: request.messages,
                 tools: request.tools,
                 toolOptions: request.options.toolBinding || {},
@@ -354,7 +352,6 @@ export function createModelRequestExecutor({
         provider: {
           operatorId: requestBase.model.operatorId,
           adapterId: adapter.id,
-          format: requestBase.model.format,
         },
       });
     },

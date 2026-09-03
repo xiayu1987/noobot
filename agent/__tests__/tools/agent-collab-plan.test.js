@@ -25,7 +25,8 @@ function installFakeModel(runtime, content, onRequest = null) {
     fake: {
       alias: "fake",
       model: "fake-model",
-      format: "openai_compatible",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
       providerId: "fake",
       adapterId: "openai-compatible",
     },
@@ -148,7 +149,7 @@ test("plan_multi_task_collaboration: model invoke receives runtime abort signal"
 
   assert.equal(receivedRequest?.options?.signal, abortController.signal);
   assert.equal(receivedRequest?.model?.model, "fake-model");
-  assert.equal(receivedRequest?.model?.format, "openai_compatible");
+  assert.equal(receivedRequest?.model?.adapterId, "openai-compatible");
   assert.equal(receivedRequest?.messages?.[0]?.role, "system");
   assert.equal(receivedRequest?.messages?.[1]?.role, "user");
 });

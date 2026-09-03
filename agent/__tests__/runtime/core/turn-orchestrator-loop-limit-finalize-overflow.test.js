@@ -79,7 +79,14 @@ function createModelState(llm, defaultModelSpec = null) {
   const resolvedModelSpec =
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
-      : { alias: "test_alias", model: "test-model" };
+      : {
+          alias: "test_alias",
+          model: "test-model",
+          reasoning_effort: "medium",
+          tool_reasoning_effort: "medium",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
+        };
   const modelState = {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
@@ -105,7 +112,7 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
     name: "execute_script",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
@@ -168,8 +175,9 @@ test("loop over max turns: inject finalize prompt, allow 5-turn buffer, then no-
   const secondInvocationMessages = capturedInvocations[1] || [];
   const finalizePromptMessage = [...secondInvocationMessages]
     .reverse()
-    .find((messageItem) =>
-      String(messageItem?.additional_kwargs?.noobotInternalMessageType || "") ===
+    .find(
+      (messageItem) =>
+        String(messageItem?.additional_kwargs?.noobotInternalMessageType || "") ===
         "tool_loop_limit_finalize_prompt",
     );
   assert.ok(finalizePromptMessage);
@@ -191,7 +199,7 @@ test("canonical main-flow instruction enforces one no-tools round even when tool
     name: "execute_script",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([
@@ -229,7 +237,7 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
     name: "execute_script",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
@@ -243,14 +251,18 @@ test("main flow final-no-tools instruction from before_llm hook skips with-tools
 
   const modelState = createModelState(llm);
   const hookManager = createHookManager();
-  hookManager.on("agent.before_llm_call", (ctx = {}) => {
-    if (ctx.mode !== "with_tools") return;
-    modelState.runtime.systemRuntime.mainFlowControlInstruction = {
-      action: "final_no_tools_turn",
-      reason: "context_overflow_after_summary",
-      source: "harness_summary_overflow",
-    };
-  }, { id: "test-main-flow-final-instruction" });
+  hookManager.on(
+    "agent.before_llm_call",
+    (ctx = {}) => {
+      if (ctx.mode !== "with_tools") return;
+      modelState.runtime.systemRuntime.mainFlowControlInstruction = {
+        action: "final_no_tools_turn",
+        reason: "context_overflow_after_summary",
+        source: "harness_summary_overflow",
+      };
+    },
+    { id: "test-main-flow-final-instruction" },
+  );
   modelState.runtime.hookManager = hookManager;
 
   const result = await runFunctionCallLoop({
@@ -273,7 +285,7 @@ test("post-summary char overflow enters final no-tools before the next with-tool
     name: "task_summary",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const longUserMessage = { role: "user", content: "x".repeat(32), summarized: false };
@@ -317,7 +329,7 @@ test("loop over max turns: next turn no-tool response returns directly", async (
     name: "execute_script",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedNoToolInvokeOptions } = createToolCallingLlm([

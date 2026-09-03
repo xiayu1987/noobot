@@ -21,69 +21,69 @@ function createAgentContext() {
   const waitCalls = [];
 
   const agentContext = createTestAgentExecutionScope({
-      userId: "primary-user",
-      botManager: {
-        runAsyncSession: (payload = {}) => {
-          runCalls.push(payload);
-          return {
-            ok: true,
-            status: "running",
+    userId: "primary-user",
+    botManager: {
+      runAsyncSession: (payload = {}) => {
+        runCalls.push(payload);
+        return {
+          ok: true,
+          status: "running",
+          sessionId: payload.sessionId,
+          parentSessionId: payload.parentSessionId,
+          parentAsyncResultContainer: payload.parentAsyncResultContainer,
+        };
+      },
+      waitAsyncSession: async (payload = {}) => {
+        waitCalls.push(payload);
+        return {
+          ok: true,
+          status: "completed",
+          sessionId: payload.sessionId,
+          parentSessionId: payload.parentSessionId,
+          startedAt: "2026-05-14T00:00:00.000Z",
+          endedAt: "2026-05-14T00:00:01.000Z",
+          result: {
+            answer: "子任务完成",
             sessionId: payload.sessionId,
             parentSessionId: payload.parentSessionId,
-            parentAsyncResultContainer: payload.parentAsyncResultContainer,
-          };
-        },
-        waitAsyncSession: async (payload = {}) => {
-          waitCalls.push(payload);
-          return {
-            ok: true,
-            status: "completed",
-            sessionId: payload.sessionId,
-            parentSessionId: payload.parentSessionId,
-            startedAt: "2026-05-14T00:00:00.000Z",
-            endedAt: "2026-05-14T00:00:01.000Z",
-            result: {
-              answer: "子任务完成",
-              sessionId: payload.sessionId,
-              parentSessionId: payload.parentSessionId,
-              dialogProcessId: "dp_child_1",
-            },
-          };
-        },
-      },
-      attachmentService: {
-        ingestGeneratedArtifacts: async (payload = {}) => {
-          ingestCalls.push(payload);
-          return (payload?.artifacts || []).map((item, index) => ({
-            attachmentId: `att_${index + 1}`,
-            sessionId: payload.sessionId,
-            attachmentSource: payload.attachmentSource,
-            generationSource: payload.generationSource,
-            name: item.name,
-            mimeType: item.mimeType,
-            size: 12,
-            path: `/tmp/${item.name}`,
-            relativePath: item.name,
-          }));
-        },
-      },
-      systemRuntime: {
-        sessionId: parentSessionId,
-        dialogProcessId: "dp_parent_1",
-      },
-      sessionManager: {
-        getSessionTree: async () => ({
-          nodes: {
-            [parentSessionId]: { parentSessionId: "" },
+            dialogProcessId: "dp_child_1",
           },
-        }),
-        hasDialogProcessIdInSession: async () => true,
+        };
       },
-      childAsyncResultContainers: [],
-      sharedTools: {},
-      globalConfig: {},
-      userConfig: {},
-    });
+    },
+    attachmentService: {
+      ingestGeneratedArtifacts: async (payload = {}) => {
+        ingestCalls.push(payload);
+        return (payload?.artifacts || []).map((item, index) => ({
+          attachmentId: `att_${index + 1}`,
+          sessionId: payload.sessionId,
+          attachmentSource: payload.attachmentSource,
+          generationSource: payload.generationSource,
+          name: item.name,
+          mimeType: item.mimeType,
+          size: 12,
+          path: `/tmp/${item.name}`,
+          relativePath: item.name,
+        }));
+      },
+    },
+    systemRuntime: {
+      sessionId: parentSessionId,
+      dialogProcessId: "dp_parent_1",
+    },
+    sessionManager: {
+      getSessionTree: async () => ({
+        nodes: {
+          [parentSessionId]: { parentSessionId: "" },
+        },
+      }),
+      hasDialogProcessIdInSession: async () => true,
+    },
+    childAsyncResultContainers: [],
+    sharedTools: {},
+    globalConfig: {},
+    userConfig: {},
+  });
 
   return { agentContext, runCalls, waitCalls, ingestCalls };
 }

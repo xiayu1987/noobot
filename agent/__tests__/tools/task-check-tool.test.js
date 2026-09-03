@@ -27,7 +27,12 @@ test("task_check returns only a receipt and creates no flow-control state", asyn
   const payload = JSON.parse(await tool.invoke({ checkContent }));
   assert.equal(payload.toolName, "task_check");
   assert.equal(payload.protocolVersion, 1);
-  assert.deepEqual(Object.keys(payload.summary).sort(), ["abstract", "contentHash", "nextAction", "state"]);
+  assert.deepEqual(Object.keys(payload.summary).sort(), [
+    "abstract",
+    "contentHash",
+    "nextAction",
+    "state",
+  ]);
   assert.equal(JSON.stringify(payload).includes(checkContent), false);
   assert.equal(payload.summary.details, undefined);
   assert.equal(systemRuntime.taskCheckLoopCount, 0);

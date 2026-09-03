@@ -37,43 +37,34 @@ test("adaptToolsForBinding returns tools in stable name order", () => {
 });
 
 test("adaptToolsForBinding enables strict by default for codex-like model", () => {
-  const adapted = adaptToolsForBinding(
-    [{ name: "task_summary" }],
-    {
-      activeModelName: "gpt-5.3-codex",
-      activeModelAlias: "codex",
-      globalConfig: {},
-      userConfig: {},
-    },
-  );
+  const adapted = adaptToolsForBinding([{ name: "task_summary" }], {
+    activeModelName: "gpt-5.3-codex",
+    activeModelAlias: "codex",
+    globalConfig: {},
+    userConfig: {},
+  });
 
   assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
 });
 
 test("adaptToolsForBinding respects explicit strict tool schema config", () => {
-  const adapted = adaptToolsForBinding(
-    [{ name: "task_summary" }],
-    {
-      activeModelName: "gpt-4o-mini",
-      activeModelAlias: "default",
-      globalConfig: { tools: { strict_tool_schema: true } },
-      userConfig: {},
-    },
-  );
+  const adapted = adaptToolsForBinding([{ name: "task_summary" }], {
+    activeModelName: "gpt-4o-mini",
+    activeModelAlias: "default",
+    globalConfig: { tools: { strict_tool_schema: true } },
+    userConfig: {},
+  });
 
   assert.deepEqual(adapted.bindOptions, { tool_choice: "auto", strict: true });
 });
 
 test("adaptToolsForBinding downgrades strict when call_service is present", () => {
-  const adapted = adaptToolsForBinding(
-    [{ name: "call_service" }],
-    {
-      activeModelName: "gpt-5.3-codex",
-      activeModelAlias: "codex",
-      globalConfig: {},
-      userConfig: {},
-    },
-  );
+  const adapted = adaptToolsForBinding([{ name: "call_service" }], {
+    activeModelName: "gpt-5.3-codex",
+    activeModelAlias: "codex",
+    globalConfig: {},
+    userConfig: {},
+  });
 
   assert.deepEqual(adapted.bindOptions, { tool_choice: "auto" });
   assert.deepEqual(adapted.strictDowngradedTools, ["call_service"]);
@@ -114,6 +105,8 @@ test("adaptToolsForBinding keeps standard tool_choice for AWS Bedrock compatible
       provider: "aws_bedrock",
       base_url: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
       model: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
     },
     globalConfig: {},
     userConfig: {},
@@ -130,6 +123,8 @@ test("adaptToolsForBinding keeps standard tool_choice for Claude compatible prov
       alias: "third_party_claude",
       base_url: "https://llm-gateway.example.com/v1",
       model: "claude-sonnet-via-gateway",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
     },
     globalConfig: {},
     userConfig: {},

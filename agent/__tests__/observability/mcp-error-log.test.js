@@ -16,7 +16,11 @@ async function makeTempDir() {
 
 async function readJsonLines(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 test("appendMcpErrorLog writes session MCP errors to runtime-events session events", async () => {
@@ -41,7 +45,15 @@ test("appendMcpErrorLog writes session MCP errors to runtime-events session even
   });
 
   assert.equal(record.sessionId, "s1");
-  const runtimeEventFile = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events", "system.jsonl");
+  const runtimeEventFile = path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "p1",
+    "events",
+    "system.jsonl",
+  );
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "call_mcp_task");
@@ -56,10 +68,7 @@ test("appendMcpErrorLog writes session MCP errors to runtime-events session even
   assert.equal(records[0].data.modelName, "demo-model");
   assert.deepEqual(records[0].data.details, { code: "E_MCP" });
 
-  await assert.rejects(
-    fs.access(path.join(basePath, "mcp-error.log")),
-    /ENOENT/,
-  );
+  await assert.rejects(fs.access(path.join(basePath, "mcp-error.log")), /ENOENT/);
 });
 
 test("appendMcpErrorLog keeps non-session MCP errors in local fallback file", async () => {
@@ -87,7 +96,17 @@ test("appendMcpErrorLog keeps non-session MCP errors in local fallback file", as
   assert.equal(records[0].mcpName, "startup-mcp");
 
   await assert.rejects(
-    fs.access(path.join(workspaceRoot, "u1", "runtime", "session", "unknown-session", "events", "system.jsonl")),
+    fs.access(
+      path.join(
+        workspaceRoot,
+        "u1",
+        "runtime",
+        "session",
+        "unknown-session",
+        "events",
+        "system.jsonl",
+      ),
+    ),
     /ENOENT/,
   );
 });

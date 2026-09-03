@@ -46,4 +46,3 @@ test("browserLikeFetch throws recoverable error when redirects exceed limit", as
     globalThis.fetch = originalFetch;
   }
 });
-

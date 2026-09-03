@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { devices } from "@playwright/test";
-import path from "node:path";
+import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
 import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {

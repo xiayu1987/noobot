@@ -14,23 +14,25 @@ import { classifyToolInputPath, TOOL_PATH_VIEWS } from "@noobot/path-resolver";
 import { ERROR_CODE } from "../../src/shared/errors/constants.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
 
-
 function buildAgentContext(basePath = "", userId = "u-test", overrides = {}) {
   const runtimeOverrides =
     overrides?.runtime && typeof overrides.runtime === "object" ? overrides.runtime : {};
-  return createTestAgentExecutionScope({
-          basePath,
-          userId,
-          globalConfig: {},
-          userConfig: {},
-          systemRuntime: {
-            userId,
-            sessionId: "s-1",
-            rootSessionId: "s-1",
-            config: {},
-          },
+  return createTestAgentExecutionScope(
+    {
+      basePath,
+      userId,
+      globalConfig: {},
+      userConfig: {},
+      systemRuntime: {
+        userId,
+        sessionId: "s-1",
+        rootSessionId: "s-1",
+        config: {},
+      },
       ...runtimeOverrides,
-    }, { identity: { userId } });
+    },
+    { identity: { userId } },
+  );
 }
 
 async function mkWorkspace(prefix) {
@@ -122,9 +124,18 @@ test("resolvePatchRoot: 非工作区相对子目录 root 一律拒绝", async ()
     await fs.writeFile(path.join(basePath, "a.txt"), "one\ntwo\n", "utf8");
     const agentContext = buildAgentContext(basePath);
 
-    assert.equal(classifyToolInputPath("/etc", { agentContext }).view, TOOL_PATH_VIEWS.HOST_ABSOLUTE);
-    assert.equal(classifyToolInputPath("/project", { agentContext }).view, TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE);
-    assert.equal(classifyToolInputPath("project", { agentContext }).view, TOOL_PATH_VIEWS.VIRTUAL_RELATIVE);
+    assert.equal(
+      classifyToolInputPath("/etc", { agentContext }).view,
+      TOOL_PATH_VIEWS.HOST_ABSOLUTE,
+    );
+    assert.equal(
+      classifyToolInputPath("/project", { agentContext }).view,
+      TOOL_PATH_VIEWS.SANDBOX_ABSOLUTE,
+    );
+    assert.equal(
+      classifyToolInputPath("project", { agentContext }).view,
+      TOOL_PATH_VIEWS.VIRTUAL_RELATIVE,
+    );
 
     const invalidRoots = ["..", "../escape", "/etc", "/project", "project", "project/agent"];
     for (const root of invalidRoots) {
@@ -137,7 +148,11 @@ test("resolvePatchRoot: 非工作区相对子目录 root 一律拒绝", async ()
           }),
         (error) => {
           assert.equal(error.code, ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE, `root=${root} code`);
-          assert.match(error.message, /patch root must be a workspace-relative child directory/, `root=${root} msg`);
+          assert.match(
+            error.message,
+            /patch root must be a workspace-relative child directory/,
+            `root=${root} msg`,
+          );
           return true;
         },
         `root=${root} should be rejected`,

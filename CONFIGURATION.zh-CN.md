@@ -206,29 +206,28 @@ Session 日志 WebSocket：
 
 可直接复制的当前模型配置维护在 [`model-protocol/model-library.json`](model-protocol/model-library.json)。运行时仍只读取已复制到实际配置中的 provider 能力声明。
 
-| 键名                                                                       | 类型        | 说明                                                  |
-| -------------------------------------------------------------------------- | ----------- | ----------------------------------------------------- |
-| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                              |
-| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                                        |
-| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）                        |
-| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                                          |
-| `providers.<alias>.model`                                                  | string      | 模型名                                                |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible`                                   |
-| `providers.<alias>.reasoning_effort`                                       | string      | 推理强度（模型支持时）                                |
-| `providers.<alias>.enable_thinking`                                        | boolean     | 模型系列声明支持时使用的可选思考开关                  |
-| `providers.<alias>.temperature`                                            | number      | 采样温度                                              |
-| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                                        |
-| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                            |
-| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                                      |
-| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                                      |
-| `providers.<alias>.preserve_thinking`                                      | boolean     | 是否保留思考（模型支持时）                            |
-| `providers.<alias>.thinking_budget`                                        | number      | 思考预算（模型支持时）                                |
-| `providers.<alias>.description`                                            | string      | 提供方说明                                            |
-| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                                    |
-| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | 明确支持的输入：`image`、`document`、`audio`、`video` |
-| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                                    |
-| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                            |
-| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填：`openai_responses` / `images_async`   |
+| 键名                                                                       | 类型        | 说明                                                                              |
+| -------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------- |
+| `providers.<alias>.enabled`                                                | boolean     | 是否启用                                                                          |
+| `providers.<alias>.used_for_conversation`                                  | boolean     | 是否可用于会话                                                                    |
+| `providers.<alias>.api_key`                                                | string      | 模型密钥（支持 `${VAR_NAME}`）                                                    |
+| `providers.<alias>.base_url`                                               | string(url) | 模型网关地址                                                                      |
+| `providers.<alias>.model`                                                  | string      | 模型名                                                                            |
+| `providers.<alias>.reasoning_effort`                                       | string      | 普通请求推理强度（模型库默认 `medium`）                                           |
+| `providers.<alias>.tool_reasoning_effort`                                  | string      | 工具调用推理强度                                                                  |
+| `providers.<alias>.reasoning_effort_options`                               | string[]    | 该模型支持的推理强度可选项，最低档在前                                            |
+| `providers.<alias>.reasoning_effort_parameter`                             | string      | 承载推理强度的传输参数：`reasoning_effort`、`thinking_level` 或 `enable_thinking` |
+| `providers.<alias>.temperature`                                            | number      | 采样温度                                                                          |
+| `providers.<alias>.max_tokens`                                             | number      | 最大输出 token                                                                    |
+| `providers.<alias>.top_p`                                                  | number      | 可选 nucleus sampling 参数                                                        |
+| `providers.<alias>.frequency_penalty`                                      | number      | 可选频率惩罚参数                                                                  |
+| `providers.<alias>.presence_penalty`                                       | number      | 可选存在惩罚参数                                                                  |
+| `providers.<alias>.description`                                            | string      | 提供方说明                                                                        |
+| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | 是否启用多模态解析                                                                |
+| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | 明确支持的输入：`image`、`document`、`audio`、`video`                             |
+| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | 是否支持多模态生成                                                                |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | 生成范围（如 `["image"]`）                                                        |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | 生成启用时必填：`openai_responses` / `images_async`                               |
 
 模型系列默认参数、Prompt Cache 命中优化、`use_responses_api` 策略见：`docs/model-provider-adaptation-cache.md`。
 
@@ -331,3 +330,5 @@ Session 日志 WebSocket：
 - 协议迁移和修复共用同一条流水线；运行时消费者不维护另一套配置结构。
 
 手动修改服务端配置后执行 `./start.sh` 重启，使启动修复和有效配置生效。
+
+模型库中的两个推理字段默认值均为 `medium`；模型不支持 `medium` 时使用该模型可选项中的第一项。运行时请求缺少对应字段时优先使用 `low`，不支持 `low` 时使用第一项。模型适配层会把统一配置转换为提供方所需的请求参数。

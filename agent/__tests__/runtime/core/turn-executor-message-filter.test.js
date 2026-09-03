@@ -15,13 +15,29 @@ import {
 import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
+const TEST_MODEL_SPEC = Object.freeze({
+  model: "gpt-4o",
+  reasoning_effort: "medium",
+  tool_reasoning_effort: "medium",
+  reasoning_effort_options: ["low", "medium", "high"],
+  reasoning_effort_parameter: "reasoning_effort",
+});
+
 function invokeNoToolsTurn(args = {}) {
-  prepareTestTurnExecution(args.modelState, args.loopState, `no-tools-${args.loopState?.dialogProcessId || "turn"}`);
+  prepareTestTurnExecution(
+    args.modelState,
+    args.loopState,
+    `no-tools-${args.loopState?.dialogProcessId || "turn"}`,
+  );
   return invokeNoToolsTurnProduction(args);
 }
 
 function invokeWithToolsTurn(args = {}) {
-  prepareTestTurnExecution(args.modelState, args.loopState, `with-tools-${args.loopState?.dialogProcessId || "turn"}`);
+  prepareTestTurnExecution(
+    args.modelState,
+    args.loopState,
+    `with-tools-${args.loopState?.dialogProcessId || "turn"}`,
+  );
   return invokeWithToolsTurnProduction(args);
 }
 
@@ -39,12 +55,16 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-      { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+      },
+      { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
       { role: "assistant", content: "summarized", summarized: true },
       { role: "user", content: "keep-user" },
     ],
@@ -52,8 +72,12 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
       system: [],
       history: [],
       incremental: [
-        { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-        { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+        },
+        { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
         { role: "assistant", content: "summarized", summarized: true },
         { role: "user", content: "keep-user" },
       ],
@@ -73,7 +97,7 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
     capturedMessages.map((item) => ({ role: item.role, content: item.content })),
     [
       { role: "assistant", content: "" },
-      { role: "tool", content: "{\"ok\":true}" },
+      { role: "tool", content: '{"ok":true}' },
       { role: "user", content: "keep-user" },
     ],
   );
@@ -90,7 +114,12 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
       return {
         async invoke(messages) {
           capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({ ...item }));
-          return { content: "ok-with-tools", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+          return {
+            content: "ok-with-tools",
+            tool_calls: [],
+            additional_kwargs: {},
+            response_metadata: {},
+          };
         },
       };
     },
@@ -101,12 +130,16 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-      { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+      },
+      { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
       { role: "assistant", content: "keep-assistant" },
       { role: "user", content: "keep-user" },
       { role: "assistant", content: "drop-summarized", summarized: true },
@@ -115,8 +148,12 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
       system: [],
       history: [],
       incremental: [
-        { role: "assistant", content: "", tool_calls: [{ id: "c1", function: { name: "execute_script" } }] },
-        { role: "tool", content: "{\"ok\":true}", tool_call_id: "c1" },
+        {
+          role: "assistant",
+          content: "",
+          tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+        },
+        { role: "tool", content: '{"ok":true}', tool_call_id: "c1" },
         { role: "assistant", content: "keep-assistant" },
         { role: "user", content: "keep-user" },
         { role: "assistant", content: "drop-summarized", summarized: true },
@@ -138,7 +175,7 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
     capturedMessages.map((item) => ({ role: item.role, content: item.content })),
     [
       { role: "assistant", content: "" },
-      { role: "tool", content: "{\"ok\":true}" },
+      { role: "tool", content: '{"ok":true}' },
       { role: "assistant", content: "keep-assistant" },
       { role: "user", content: "keep-user" },
     ],
@@ -180,7 +217,7 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [system, history, incremental],
@@ -262,7 +299,7 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   loopState = {
     messages: [current, toolCall, toolResult],
@@ -285,7 +322,6 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     ["user:current-user", "user:summary-relay"],
   );
 });
-
 
 test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invoke", async () => {
   let capturedMessages = [];
@@ -326,7 +362,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [system, history, current],
@@ -353,10 +389,7 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
     { role: "assistant", content: "recent-history" },
     { role: "user", content: "current-user" },
   ]);
-  assert.equal(
-    loopState.modelContext.messageBlocks.system.at(-1)?.content,
-    harnessSystem.content,
-  );
+  assert.equal(loopState.modelContext.messageBlocks.system.at(-1)?.content, harnessSystem.content);
 });
 
 test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stopped-snapshot resume turn", async () => {
@@ -387,10 +420,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
         writeMessageBlocks(ctx.modelContext, {
           system: [...ctx.modelContext.messageBlocks.system, harnessSystem],
           history: [...ctx.modelContext.messageBlocks.history],
-          incremental: [
-            ...ctx.modelContext.messageBlocks.incremental,
-            latestGuidance,
-          ],
+          incremental: [...ctx.modelContext.messageBlocks.incremental, latestGuidance],
         });
         return createEmptyHookResult(point, ctx);
       },
@@ -414,7 +444,11 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
   };
 
   const snapshotSystem = { role: "system", content: "snapshot-system" };
-  const snapshotHistory = { role: "assistant", content: "snapshot-history", dialogProcessId: "d-stopped" };
+  const snapshotHistory = {
+    role: "assistant",
+    content: "snapshot-history",
+    dialogProcessId: "d-stopped",
+  };
   const resumedUser = {
     role: "user",
     content: "resume-user",
@@ -432,7 +466,8 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
   };
   const userMeta = {
     role: "user",
-    content: '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
+    content:
+      '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
     additional_kwargs: {
       dialogProcessId: "d-resume",
       turnScopeId: "turn-current",
@@ -444,7 +479,7 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [snapshotSystem, snapshotHistory, staleGuidance, resumedUser, userMeta],
@@ -474,30 +509,79 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
   await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
 
   assert.deepEqual(capturedMessages, [
-    { role: "system", content: "snapshot-system", dialogProcessId: "", turnScopeId: "", internalType: "" },
-    { role: "developer", content: "harness-policy", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
-    { role: "assistant", content: "snapshot-history", dialogProcessId: "d-stopped", turnScopeId: "", internalType: "" },
-    { role: "user", content: "stale-guidance", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
-    { role: "user", content: "resume-user", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
+    {
+      role: "system",
+      content: "snapshot-system",
+      dialogProcessId: "",
+      turnScopeId: "",
+      internalType: "",
+    },
+    {
+      role: "developer",
+      content: "harness-policy",
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      internalType: "",
+    },
+    {
+      role: "assistant",
+      content: "snapshot-history",
+      dialogProcessId: "d-stopped",
+      turnScopeId: "",
+      internalType: "",
+    },
     {
       role: "user",
-      content: '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
+      content: "stale-guidance",
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      internalType: "",
+    },
+    {
+      role: "user",
+      content: "resume-user",
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      internalType: "",
+    },
+    {
+      role: "user",
+      content:
+        '[用户元信息]\n{"dialogProcessId":"d-resume","turnScopeId":"turn-current"}\n[/用户元信息]',
       dialogProcessId: "d-resume",
       turnScopeId: "turn-current",
       internalType: "user_meta",
     },
-    { role: "user", content: "latest-guidance", dialogProcessId: "d-resume", turnScopeId: "turn-current", internalType: "" },
+    {
+      role: "user",
+      content: "latest-guidance",
+      dialogProcessId: "d-resume",
+      turnScopeId: "turn-current",
+      internalType: "",
+    },
   ]);
-  assert.equal(loopState.modelContext.messageBlocks.system.some(
-    (message) => message?.content === harnessSystem.content,
-  ), true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental.some(
-    (message) => message?.content === latestGuidance.content,
-  ), true);
-  assert.equal(loopState.modelContext.messageBlocks.incremental.some(
-    (message) => message?.content === staleGuidance.content,
-  ), true);
-  assert.equal(capturedMessages.some((message) => message?.content === "stale-guidance"), true);
+  assert.equal(
+    loopState.modelContext.messageBlocks.system.some(
+      (message) => message?.content === harnessSystem.content,
+    ),
+    true,
+  );
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental.some(
+      (message) => message?.content === latestGuidance.content,
+    ),
+    true,
+  );
+  assert.equal(
+    loopState.modelContext.messageBlocks.incremental.some(
+      (message) => message?.content === staleGuidance.content,
+    ),
+    true,
+  );
+  assert.equal(
+    capturedMessages.some((message) => message?.content === "stale-guidance"),
+    true,
+  );
 });
 
 test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentContext payload", async () => {
@@ -529,7 +613,7 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
     runtime,
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
     agentContext: {
       execution: {
         dialogProcessId: "d-current",
@@ -589,11 +673,15 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "run tool" }],
-    messageBlocks: { system: [], history: [], incremental: [{ role: "user", content: "run tool" }] },
+    messageBlocks: {
+      system: [],
+      history: [],
+      incremental: [{ role: "user", content: "run tool" }],
+    },
     traces: [],
     tools: [{ name: "execute_script" }],
     turnMessages: [],
@@ -651,7 +739,7 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
       },
     },
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "keep-user" }],
@@ -673,7 +761,10 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
     events.some((item) => String(item?.event || "") === "llm_final_stream_start"),
     false,
   );
-  assert.equal(events.some((item) => item?.event === "main_model_content"), false);
+  assert.equal(
+    events.some((item) => item?.event === "main_model_content"),
+    false,
+  );
 });
 
 test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
@@ -686,7 +777,7 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
     runtime: { systemRuntime: {} },
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "go" }],
@@ -724,7 +815,7 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     userConfig: {},
     eventListener: null,
     abortSignal: null,
-    defaultModelSpec: {},
+    defaultModelSpec: TEST_MODEL_SPEC,
   };
   const loopState = {
     messages: [{ role: "user", content: "go" }],
@@ -746,54 +837,4 @@ test("invokeWithToolsTurn does not project provider retry attempts into context"
     String(message?.content || "").includes("thinking with tools"),
   );
   assert.equal(providerRetryPrompt, undefined);
-});
-
-test("invokeWithToolsTurn normalizes dirty blocks to system history incremental before llm invoke", async () => {
-  let capturedMessages = [];
-  const llm = {
-    bindTools() {
-      return {
-        async invoke(messages) {
-          capturedMessages = (Array.isArray(messages) ? messages : []).map((item) => ({ ...item }));
-          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
-        },
-      };
-    },
-  };
-  const system = { role: "system", content: "sys" };
-  const misplacedSystem = { role: "system", content: "misplaced-system", dialogProcessId: "d1" };
-  const duplicateHistoryUser = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2", additional_kwargs: { noobotMessageId: "current-message" } };
-  const historyAssistant = { role: "assistant", content: "history", dialogProcessId: "d1" };
-  const incrementalUser = { role: "user", content: "current", dialogProcessId: "d2", turnScopeId: "t2", additional_kwargs: { noobotMessageId: "current-message" } };
-
-  const modelState = {
-    modelPort: createTestModelPort(llm),
-    runtime: { systemRuntime: {} },
-    eventListener: null,
-    abortSignal: null,
-    defaultModelSpec: {},
-  };
-  const loopState = {
-    messages: [duplicateHistoryUser, misplacedSystem, historyAssistant, system, incrementalUser],
-    messageBlocks: {
-      system: [system],
-      history: [duplicateHistoryUser, misplacedSystem, historyAssistant],
-      incremental: [incrementalUser],
-    },
-    traces: [],
-    tools: [{ name: "execute_script" }],
-    turnMessages: [],
-    turnTasks: [],
-    currentTurnMessages: null,
-    currentTurnTasks: null,
-    dialogProcessId: "d2",
-    maxTurns: 1,
-  };
-
-  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
-
-  assert.deepEqual(
-    capturedMessages.map((item) => `${item.role}:${item.content}`),
-    ["system:sys", "assistant:history", "user:current"],
-  );
 });

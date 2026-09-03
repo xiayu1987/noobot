@@ -106,15 +106,17 @@ test("BotManager replaceSessionTurn ingests uploads before persisting the replac
     attach: {
       async ingest(payload) {
         calls.push(["ingest", payload]);
-        return [{
-          attachmentId: "canonical-1",
-          sessionId: payload.sessionId,
-          attachmentSource: "user",
-          name: "new.txt",
-          mimeType: "text/plain",
-          path: "/workspace/u1/runtime/attach/new.txt",
-          relativePath: "runtime/attach/new.txt",
-        }];
+        return [
+          {
+            attachmentId: "canonical-1",
+            sessionId: payload.sessionId,
+            attachmentSource: "user",
+            name: "new.txt",
+            mimeType: "text/plain",
+            path: "/workspace/u1/runtime/attach/new.txt",
+            relativePath: "runtime/attach/new.txt",
+          },
+        ];
       },
     },
     session: {
@@ -132,17 +134,22 @@ test("BotManager replaceSessionTurn ingests uploads before persisting the replac
     attachments: [{ name: "new.txt", mimeType: "text/plain", contentBase64: "bmV3" }],
   });
 
-  assert.deepEqual(calls.map(([name]) => name), ["ensure", "config", "ingest", "replace"]);
+  assert.deepEqual(
+    calls.map(([name]) => name),
+    ["ensure", "config", "ingest", "replace"],
+  );
   assert.equal(calls[2][1].attachments[0].contentBase64, "bmV3");
-  assert.deepEqual(calls[3][1].attachments, [{
-    attachmentId: "canonical-1",
-    sessionId: "s1",
-    attachmentSource: "user",
-    name: "new.txt",
-    mimeType: "text/plain",
-    path: "/workspace/u1/runtime/attach/new.txt",
-    relativePath: "runtime/attach/new.txt",
-  }]);
+  assert.deepEqual(calls[3][1].attachments, [
+    {
+      attachmentId: "canonical-1",
+      sessionId: "s1",
+      attachmentSource: "user",
+      name: "new.txt",
+      mimeType: "text/plain",
+      path: "/workspace/u1/runtime/attach/new.txt",
+      relativePath: "runtime/attach/new.txt",
+    },
+  ]);
   assert.equal(result.attachments[0].attachmentId, "canonical-1");
 });
 
@@ -180,8 +187,8 @@ test("BotManager should cleanup session-scoped tool-result-overflow directories"
   const sessionKeepDir = path.join(overflowRoot, "session-keep");
   await fs.mkdir(sessionDeleteDir, { recursive: true });
   await fs.mkdir(sessionKeepDir, { recursive: true });
-  await fs.writeFile(path.join(sessionDeleteDir, "sample.json"), "{\"ok\":true}", "utf8");
-  await fs.writeFile(path.join(sessionKeepDir, "sample.json"), "{\"ok\":true}", "utf8");
+  await fs.writeFile(path.join(sessionDeleteDir, "sample.json"), '{"ok":true}', "utf8");
+  await fs.writeFile(path.join(sessionKeepDir, "sample.json"), '{"ok":true}', "utf8");
 
   const manager = createBotManagerWithMocks({
     workspaceService: {

@@ -510,7 +510,10 @@ test("read_file: global sandbox mounts extend the logical workspace view", async
   assert.equal(result.toolName, "read_file");
   assert.equal(result.ok, true);
   assert.equal(result.content, "1 | project-mounted-ok");
-  assert.deepEqual(result.path, { view: "workspace", path: "/project/agent/src/tools/execution/file-tool.js" });
+  assert.deepEqual(result.path, {
+    view: "workspace",
+    path: "/project/agent/src/tools/execution/file-tool.js",
+  });
 });
 
 test("file tools reject direct and nested symbolic-link escapes", async () => {
@@ -536,7 +539,9 @@ test("file tools reject direct and nested symbolic-link escapes", async () => {
 });
 
 test("file tools classify a broken symbolic link as out of scope", async () => {
-  const workspacePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-broken-symlink-workspace-"));
+  const workspacePath = await fs.mkdtemp(
+    path.join(os.tmpdir(), "noobot-broken-symlink-workspace-"),
+  );
   await fs.symlink("missing-target.txt", path.join(workspacePath, "broken-link.txt"));
   const context = buildAgentContext(workspacePath, "u-test");
   const readTool = createFileTool({ agentContext: context }).find(

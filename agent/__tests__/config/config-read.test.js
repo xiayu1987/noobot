@@ -60,6 +60,8 @@ test("ConfigService.loadUserConfig: 应读取用户配置并合并 config-params
         providers: {
           openai: {
             model: "gpt-4o",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             api_key: "${API_KEY}",
           },
         },
@@ -161,6 +163,8 @@ test("ConfigService.loadUserConfig: 应按 user、workspace、env 顺序解析�
         providers: {
           openai: {
             model: "gpt-4o",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             api_key: "${API_KEY}",
             base_url: "${BASE_URL}",
             env_fallback: "${ENV_ONLY}",

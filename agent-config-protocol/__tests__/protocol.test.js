@@ -454,7 +454,6 @@ test("config migration preserves an explicit DashScope GLM provider", () => {
         api_key: "${DASHSCOPE_API_KEY}",
         base_url: "${DASHSCOPE_API_ADDRESS}",
         model: "ZHIPU/GLM-5.3",
-        format: "openai_compatible",
       },
     },
   };
@@ -468,7 +467,10 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
     api_key: "${DASHSCOPE_API_KEY}",
     base_url: "${DASHSCOPE_API_ADDRESS}",
     model: "ZHIPU/GLM-5.3",
-    format: "openai_compatible",
+    reasoning_effort: "low",
+    tool_reasoning_effort: "low",
+    reasoning_effort_options: ["low", "high", "max"],
+    reasoning_effort_parameter: "reasoning_effort",
   };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
@@ -488,7 +490,17 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
       providers: { ["glm_5_3"]: explicitProvider },
     },
   });
-  assert.deepEqual(repaired.document.providers["glm_5_3"], explicitProvider);
+  assert.deepEqual(repaired.document.providers["glm_5_3"], {
+    reasoning_effort: "low",
+    tool_reasoning_effort: "low",
+    reasoning_effort_options: ["low", "high", "max"],
+    reasoning_effort_parameter: "reasoning_effort",
+    enabled: true,
+    used_for_conversation: true,
+    api_key: "${DASHSCOPE_API_KEY}",
+    base_url: "${DASHSCOPE_API_ADDRESS}",
+    model: "ZHIPU/GLM-5.3",
+  });
 });
 
 test("config params document is the only values, descriptions, and catalog authority", () => {
@@ -626,7 +638,10 @@ test("config repair enforces defaulted, optional, and system-owned node policies
         enabled: true,
         used_for_conversation: true,
         model: "primary-model",
-        format: "openai_compatible",
+        reasoning_effort: "medium",
+        tool_reasoning_effort: "medium",
+        reasoning_effort_options: ["low", "medium", "high"],
+        reasoning_effort_parameter: "reasoning_effort",
       },
     },
     tools: {
@@ -644,7 +659,6 @@ test("config repair enforces defaulted, optional, and system-owned node policies
           enabled: false,
           used_for_conversation: true,
           model: "primary-model",
-          format: "openai_compatible",
           temperature: 0.4,
         },
         custom: {
@@ -666,9 +680,9 @@ test("config repair enforces defaulted, optional, and system-owned node policies
     },
   });
 
-  assert.equal(CONFIG_NODE_POLICY.USER_DEFAULTED, "user_defaulted");
+  assert.equal(CONFIG_NODE_POLICY.USER_CONFIGURABLE, "user_configurable");
   assert.equal(CONFIG_NODE_POLICY.USER_OPTIONAL, "user_optional");
-  assert.equal(CONFIG_NODE_POLICY.SYSTEM_OWNED, "system_owned");
+  assert.equal(CONFIG_NODE_POLICY.GLOBAL_ONLY, "global_only");
   assert.equal(first.document.tools.read_file.enabled, true);
   assert.equal(first.document.tools.execute_native_script.enabled, false);
   assert.equal(first.document.providers.primary.temperature, 0.4);
@@ -676,7 +690,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
   assert.equal(first.document.providers.custom.top_p, 0.8);
   assert.equal(first.document.providers.custom.cache_control, false);
   assert.equal(first.document.providers.incomplete.model, "missing-format");
-  assert.equal(first.document.providers.incomplete.format, "openai_compatible");
+  assert.equal("format" in first.document.providers.incomplete, false);
   assert.equal(first.document.default_provider, "incomplete");
   assert.deepEqual(first.document.context, { customSection: { enabled: true } });
   assert.deepEqual(first.document.session, {});
@@ -699,7 +713,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
     },
   });
   assert.equal(unsupportedFormat.document.providers.removed.model, "qwen");
-  assert.equal(unsupportedFormat.document.providers.removed.format, "openai_compatible");
+  assert.equal("format" in unsupportedFormat.document.providers.removed, false);
 
   const repairedKnownLegacy = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
@@ -718,7 +732,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
     },
   });
   assert.ok(repairedKnownLegacy.document.providers.gpt_5_4);
-  assert.equal(repairedKnownLegacy.document.providers.gpt_5_4.format, "openai_compatible");
+  assert.equal("format" in repairedKnownLegacy.document.providers.gpt_5_4, false);
   assert.equal(repairedKnownLegacy.document.providers.gpt_5_4.api_key, "${CUSTOM_KEY}");
 
   const second = repairConfigDocument({

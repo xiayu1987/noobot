@@ -30,22 +30,32 @@ test("list_skills uses the shared path authorization and resource protocol", asy
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-skill-tool-"));
   await fs.mkdir(path.join(basePath, "skills", "analysis"), { recursive: true });
   await fs.writeFile(path.join(basePath, "skills", "analysis", "SKILL.md"), "# Analysis", "utf8");
-  const [tool] = createSkillTool({ agentContext: createTestAgentExecutionScope(createRuntime(basePath)) });
+  const [tool] = createSkillTool({
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+  });
 
   const result = JSON.parse(await tool.invoke({}));
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.items.length, 2);
   assert.equal(result.resources.length, 2);
   assert.deepEqual(result.items[0].path, { view: "workspace", path: "skills/analysis" });
-  assert.equal(result.resources.every((item) => item.resourceId.startsWith("res_")), true);
-  assert.equal(result.items.every((item) => item.resourceId), true);
+  assert.equal(
+    result.resources.every((item) => item.resourceId.startsWith("res_")),
+    true,
+  );
+  assert.equal(
+    result.items.every((item) => item.resourceId),
+    true,
+  );
 });
 
 test("list_skills rejects a parentSkill outside the authorized skills root", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-skill-scope-"));
   await fs.mkdir(path.join(basePath, "skills"), { recursive: true });
   await fs.mkdir(path.join(basePath, "outside"), { recursive: true });
-  const [tool] = createSkillTool({ agentContext: createTestAgentExecutionScope(createRuntime(basePath)) });
+  const [tool] = createSkillTool({
+    agentContext: createTestAgentExecutionScope(createRuntime(basePath)),
+  });
 
   await assert.rejects(
     () => tool.invoke({ parentSkill: "../outside" }),

@@ -18,11 +18,7 @@ test("AgentRuntimeFacade.buildRunTurnContext keeps runtime object reference for 
   const abortSignal = { aborted: false };
   const out = engine.agentRuntimeFacade.buildRunTurnContext(agentContext, abortSignal);
 
-  assert.equal(
-    out.bindings.runtime,
-    runtime,
-    "runtime 引用应保持一致，避免工具侧与模型侧状态分叉",
-  );
+  assert.equal(out.bindings.runtime, runtime, "runtime 引用应保持一致，避免工具侧与模型侧状态分叉");
   assert.equal(runtime.abortSignal, abortSignal);
 
   runtime.runtimeModel = "gpt_5_3_codex";
@@ -120,13 +116,10 @@ test("SessionExecutionEngine exposes the complete authority event repository por
   assert.deepEqual(await engine.recordAuthorityEventAttempt(payload), { recorded: true });
   assert.deepEqual(await engine.acknowledgeAuthorityEvent(payload), { acknowledged: true });
   assert.deepEqual(await engine.compactAuthorityEvents(payload), { compacted: true });
-  assert.deepEqual(calls.map(([operation]) => operation), [
-    "commit",
-    "pending",
-    "attempt",
-    "acknowledge",
-    "compact",
-  ]);
+  assert.deepEqual(
+    calls.map(([operation]) => operation),
+    ["commit", "pending", "attempt", "acknowledge", "compact"],
+  );
 });
 
 test("detached sub-session runner inherits userInteractionBridge from parent runtime", async () => {
@@ -138,7 +131,11 @@ test("detached sub-session runner inherits userInteractionBridge from parent run
   let lifecycleSequence = 0;
   const engine = new SessionExecutionEngine({
     workspaceService: { getWorkspacePath: () => "/tmp" },
-    configService: { async loadUserConfig() { return {}; } },
+    configService: {
+      async loadUserConfig() {
+        return {};
+      },
+    },
     session: {
       createScopedPersistenceContext() {
         return Object.freeze({ marker: "scoped" });

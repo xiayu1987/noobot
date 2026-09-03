@@ -15,25 +15,25 @@ function parseToolJson(text = "") {
 
 test("wait_async_task_result treats invalid_request container as failed summary", async () => {
   const agentContext = createTestAgentExecutionScope({
-      userId: "primary-user",
-      botManager: {
-        waitAsyncSession: async () => ({ ok: true, status: "completed", result: {} }),
+    userId: "primary-user",
+    botManager: {
+      waitAsyncSession: async () => ({ ok: true, status: "completed", result: {} }),
+    },
+    systemRuntime: {
+      sessionId: "11111111-1111-4111-8111-111111111111",
+      dialogProcessId: "dp_1",
+    },
+    childAsyncResultContainers: [
+      {
+        id: "c1",
+        parentSessionId: "",
+        tasks: [],
       },
-      systemRuntime: {
-        sessionId: "11111111-1111-4111-8111-111111111111",
-        dialogProcessId: "dp_1",
-      },
-      childAsyncResultContainers: [
-        {
-          id: "c1",
-          parentSessionId: "",
-          tasks: [],
-        },
-      ],
-      globalConfig: {},
-      userConfig: {},
-      sharedTools: {},
-    });
+    ],
+    globalConfig: {},
+    userConfig: {},
+    sharedTools: {},
+  });
 
   const tools = createAgentCollabTool({ agentContext });
   const waitTool = tools.find((item) => item?.name === "wait_async_task_result");
@@ -46,4 +46,3 @@ test("wait_async_task_result treats invalid_request container as failed summary"
   assert.equal(payload.ok, false);
   assert.equal(payload.status, "failed");
 });
-

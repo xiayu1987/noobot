@@ -27,12 +27,13 @@ test("materializeOutputResult creates direct V2 envelope below the threshold", a
 
 test("materializeOutputResult does not silently fall back when attachment persistence is unavailable", async () => {
   await assert.rejects(
-    () => materializeOutputResult({
-      content: "abcdef",
-      policy: { preference: "attachment", allowAttachment: false },
-      identity: identity(),
-      runtime: { userId: "u1" },
-    }),
+    () =>
+      materializeOutputResult({
+        content: "abcdef",
+        policy: { preference: "attachment", allowAttachment: false },
+        identity: identity(),
+        runtime: { userId: "u1" },
+      }),
     /attachment_persistence_required/,
   );
 });
