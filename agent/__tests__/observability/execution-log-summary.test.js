@@ -67,10 +67,7 @@ test("summarizeExecutionLogs renders tool results as readable frontend text", ()
 
   assert.deepEqual(
     summary.steps.map((step) => step.text),
-    [
-      "开始：读取文件：/project/agent/package.json",
-      "完成：读取文件：/project/agent/package.json",
-    ],
+    ["开始：读取文件：/project/agent/package.json", "完成：读取文件：/project/agent/package.json"],
   );
   assert.equal(summary.toolCallCount, 1);
   assert.equal(summary.toolResultCount, 1);

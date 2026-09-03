@@ -206,29 +206,28 @@ Current plugin defaults in repo:
 
 Copy-ready current model entries are maintained in [`model-protocol/model-library.json`](model-protocol/model-library.json). Runtime capability checks still use only the provider entry copied into the active configuration.
 
-| Key                                                                        | Type        | Description                                                         |
-| -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------- |
-| `providers.<alias>.enabled`                                                | boolean     | Enable this provider                                                |
-| `providers.<alias>.used_for_conversation`                                  | boolean     | Can be used in chat                                                 |
-| `providers.<alias>.api_key`                                                | string      | API key (`${VAR_NAME}` supported)                                   |
-| `providers.<alias>.base_url`                                               | string(url) | Model API base URL                                                  |
-| `providers.<alias>.model`                                                  | string      | Model name                                                          |
-| `providers.<alias>.format`                                                 | enum        | `openai_compatible`                                                 |
-| `providers.<alias>.reasoning_effort`                                       | string      | Optional (if supported)                                             |
-| `providers.<alias>.enable_thinking`                                        | boolean     | Optional thinking switch when declared by the model family          |
-| `providers.<alias>.temperature`                                            | number      | Sampling temperature                                                |
-| `providers.<alias>.max_tokens`                                             | number      | Max output tokens                                                   |
-| `providers.<alias>.top_p`                                                  | number      | Optional nucleus sampling parameter                                 |
-| `providers.<alias>.frequency_penalty`                                      | number      | Optional frequency penalty                                          |
-| `providers.<alias>.presence_penalty`                                       | number      | Optional presence penalty                                           |
-| `providers.<alias>.preserve_thinking`                                      | boolean     | Optional (if supported)                                             |
-| `providers.<alias>.thinking_budget`                                        | number      | Optional (if supported)                                             |
-| `providers.<alias>.description`                                            | string      | Provider description                                                |
-| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | Multi-modal parsing enabled                                         |
-| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | Explicit accepted inputs: `image`, `document`, `audio`, `video`     |
-| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | Multi-modal generation enabled                                      |
-| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | e.g. `["image"]`                                                    |
-| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | `openai_responses` / `images_async`; required when generation is on |
+| Key                                                                        | Type        | Description                                                                                             |
+| -------------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------- |
+| `providers.<alias>.enabled`                                                | boolean     | Enable this provider                                                                                    |
+| `providers.<alias>.used_for_conversation`                                  | boolean     | Can be used in chat                                                                                     |
+| `providers.<alias>.api_key`                                                | string      | API key (`${VAR_NAME}` supported)                                                                       |
+| `providers.<alias>.base_url`                                               | string(url) | Model API base URL                                                                                      |
+| `providers.<alias>.model`                                                  | string      | Model name                                                                                              |
+| `providers.<alias>.reasoning_effort`                                       | string      | Normal-request reasoning level (defaults to `medium` in the library)                                    |
+| `providers.<alias>.tool_reasoning_effort`                                  | string      | Tool-call reasoning effort                                                                              |
+| `providers.<alias>.reasoning_effort_options`                               | string[]    | Reasoning levels supported by this model, lowest first                                                  |
+| `providers.<alias>.reasoning_effort_parameter`                             | string      | Wire parameter carrying the reasoning level: `reasoning_effort`, `thinking_level`, or `enable_thinking` |
+| `providers.<alias>.temperature`                                            | number      | Sampling temperature                                                                                    |
+| `providers.<alias>.max_tokens`                                             | number      | Max output tokens                                                                                       |
+| `providers.<alias>.top_p`                                                  | number      | Optional nucleus sampling parameter                                                                     |
+| `providers.<alias>.frequency_penalty`                                      | number      | Optional frequency penalty                                                                              |
+| `providers.<alias>.presence_penalty`                                       | number      | Optional presence penalty                                                                               |
+| `providers.<alias>.description`                                            | string      | Provider description                                                                                    |
+| `providers.<alias>.multimodal_parsing.enabled`                             | boolean     | Multi-modal parsing enabled                                                                             |
+| `providers.<alias>.multimodal_parsing.input_modalities`                    | string[]    | Explicit accepted inputs: `image`, `document`, `audio`, `video`                                         |
+| `providers.<alias>.multimodal_generation.support_generation.enabled`       | boolean     | Multi-modal generation enabled                                                                          |
+| `providers.<alias>.multimodal_generation.support_generation.support_scope` | string[]    | e.g. `["image"]`                                                                                        |
+| `providers.<alias>.multimodal_generation.support_generation.api_type`      | enum        | `openai_responses` / `images_async`; required when generation is on                                     |
 
 ### 3.7 MCP Servers (`mcp_servers.<name>`)
 
@@ -329,3 +328,5 @@ Example:
 - Protocol migration and repair happen through the same pipeline; runtime consumers do not maintain alternate config shapes.
 
 Restart with `./start.sh` after manual server-side changes so startup repair and effective configuration are applied.
+
+The model library sets both reasoning fields to `medium` by default, falling back to the first model-supported option when `medium` is unavailable. Runtime requests use `low` when a field is missing, or the first supported option when `low` is unavailable. Adapters translate the canonical setting to provider-specific request parameters.

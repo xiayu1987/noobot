@@ -15,11 +15,7 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import {
-  IDENTITY,
-  createRuntime,
-  hasChromiumCapability,
-} from "./native-script-tool.fixtures.js";
+import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
 
 test("execute_native_script uses the installed Chromium path with an isolated task HOME", async (t) => {
   if (!(await hasChromiumCapability())) {
@@ -87,4 +83,3 @@ await page.close();
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.match(result.stdout, /Native browser ready/);
 });
-

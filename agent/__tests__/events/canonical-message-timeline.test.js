@@ -12,30 +12,31 @@ import {
 } from "@noobot/event-protocol/message-event";
 import { reduceCanonicalToolTimeline } from "../../src/events/canonical-message-timeline.js";
 
-const event = (eventType, eventId, sequence, extra = {}) => createEventEnvelope({
-  family: EVENT_FAMILY.MESSAGE_TIMELINE,
-  identity: {
-    eventId,
-    eventType: MESSAGE_EVENT_WIRE_EVENT,
-    sessionId: "session-1",
-    turnScopeId: "turn-1",
-    messageId: "model-message-1",
-  },
-  ordering: {
-    domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
-    scopeId: "model-message-1",
-    sequence,
-  },
-  producer: { type: "test", id: "canonical-message-timeline" },
-  occurredAt: `2026-07-29T01:00:0${sequence}.000Z`,
-  payload: {
-    eventType,
-    presentationMessageId: "presentation-1",
-    toolCallId: "call-1",
-    tool: "read_file",
-    ...extra,
-  },
-});
+const event = (eventType, eventId, sequence, extra = {}) =>
+  createEventEnvelope({
+    family: EVENT_FAMILY.MESSAGE_TIMELINE,
+    identity: {
+      eventId,
+      eventType: MESSAGE_EVENT_WIRE_EVENT,
+      sessionId: "session-1",
+      turnScopeId: "turn-1",
+      messageId: "model-message-1",
+    },
+    ordering: {
+      domain: MESSAGE_EVENT_SEQUENCE_DOMAIN,
+      scopeId: "model-message-1",
+      sequence,
+    },
+    producer: { type: "test", id: "canonical-message-timeline" },
+    occurredAt: `2026-07-29T01:00:0${sequence}.000Z`,
+    payload: {
+      eventType,
+      presentationMessageId: "presentation-1",
+      toolCallId: "call-1",
+      tool: "read_file",
+      ...extra,
+    },
+  });
 
 test("canonical tool reducer merges call and result by stable toolCallId", () => {
   let timeline = reduceCanonicalToolTimeline(

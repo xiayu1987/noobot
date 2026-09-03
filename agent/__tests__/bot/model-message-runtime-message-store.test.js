@@ -13,12 +13,15 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
   const canonicalIncremental = { role: "assistant", content: "drop-by-id", summarized: true };
-  const ctx = { modelContext: createModelContext({ messageBlocks: {
-      system: [{ role: "system", content: "sys" }],
-      history: [],
-      incremental: [canonicalIncremental],
-    },
-  }) };
+  const ctx = {
+    modelContext: createModelContext({
+      messageBlocks: {
+        system: [{ role: "system", content: "sys" }],
+        history: [],
+        incremental: [canonicalIncremental],
+      },
+    }),
+  };
 
   const resolved = resolver({ ctx });
 
@@ -31,12 +34,15 @@ test("ModelMessageRuntimeHelpers resolveModelMessages uses explicit block arrays
 test("ModelMessageRuntimeHelpers ignores stray block id views", () => {
   const helpers = new ModelMessageRuntimeHelpers();
   const resolver = helpers.createResolveModelMessages();
-  const ctx = { modelContext: createModelContext({ messageBlocks: {
-      system: [{ role: "system", content: "sys" }],
-      history: [{ role: "user", content: "hist", dialogProcessId: "d1" }],
-      incremental: [{ role: "user", content: "cur", dialogProcessId: "d2" }],
-    },
-  }) };
+  const ctx = {
+    modelContext: createModelContext({
+      messageBlocks: {
+        system: [{ role: "system", content: "sys" }],
+        history: [{ role: "user", content: "hist", dialogProcessId: "d1" }],
+        incremental: [{ role: "user", content: "cur", dialogProcessId: "d2" }],
+      },
+    }),
+  };
   ctx.modelContext.messageBlocks.systemIds = ["stale-system-id"];
   ctx.modelContext.messageBlocks.historyIds = ["stale-history-id"];
   ctx.modelContext.messageBlocks.incrementalIds = ["stale-incremental-id"];

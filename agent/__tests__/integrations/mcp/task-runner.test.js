@@ -73,17 +73,17 @@ function createFakeModelPort() {
 const QWEN_MODEL = Object.freeze({
   alias: "qwen-test",
   model: "qwen-max",
-  format: "openai_compatible",
+  reasoning_effort_parameter: "enable_thinking",
+  reasoning_effort_options: ["none", "medium"],
   operatorId: "alibaba",
   adapterId: "openai-compatible",
-  preserve_thinking: true,
-  thinking_budget: 4096,
 });
 
 const OPENAI_MODEL = Object.freeze({
   alias: "openai-alias",
   model: "gpt-test",
-  format: "openai_compatible",
+  reasoning_effort_parameter: "reasoning_effort",
+  reasoning_effort_options: ["none", "low", "medium", "high"],
   providerId: "openai",
   adapterId: "openai-compatible",
   reasoning_effort: "high",

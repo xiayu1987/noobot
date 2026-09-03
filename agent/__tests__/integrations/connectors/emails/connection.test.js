@@ -46,10 +46,7 @@ test("normalizeEmailConnectionInfo defaults for missing ports", () => {
 });
 
 test("normalizeEmailConnectionInfo throws on missing username/password", () => {
-  assert.throws(
-    () => normalizeEmailConnectionInfo({}),
-    /username\/password/,
-  );
+  assert.throws(() => normalizeEmailConnectionInfo({}), /username\/password/);
 });
 
 test("normalizeEmailConnectionInfo throws on missing hosts", () => {
@@ -60,10 +57,7 @@ test("normalizeEmailConnectionInfo throws on missing hosts", () => {
 });
 
 test("normalizeEmailConnectionInfo throws on null input", () => {
-  assert.throws(
-    () => normalizeEmailConnectionInfo(null),
-    /username\/password/,
-  );
+  assert.throws(() => normalizeEmailConnectionInfo(null), /username\/password/);
 });
 
 test("normalizeEmailConnectionInfo fromEmail defaults to username", () => {

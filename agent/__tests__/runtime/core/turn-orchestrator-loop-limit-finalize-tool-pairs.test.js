@@ -80,7 +80,14 @@ function createModelState(llm, defaultModelSpec = null) {
   const resolvedModelSpec =
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
-      : { alias: "test_alias", model: "test-model" };
+      : {
+          alias: "test_alias",
+          model: "test-model",
+          reasoning_effort: "medium",
+          tool_reasoning_effort: "medium",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
+        };
   const modelState = {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
@@ -104,7 +111,7 @@ test("completed tool loop keeps matching tool_call and tool_result in turnMessag
   const tool = {
     name: "execute_script",
     async invoke() {
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm } = createToolCallingLlm([
@@ -215,7 +222,8 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
   ]);
   assert.equal(
     Math.max(...toolTimings.map((item) => item.startedAt)) -
-      Math.min(...toolTimings.map((item) => item.startedAt)) < 45,
+      Math.min(...toolTimings.map((item) => item.startedAt)) <
+      45,
     true,
     "multiple tools should start in parallel",
   );
@@ -245,18 +253,21 @@ test("multiple tool calls stay in one tool turn and advance loop turns by tool c
     userPromptMessages.some((item = {}) =>
       /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
         String(item?.content || ""),
-      )),
+      ),
+    ),
     false,
     "tool-batch-limit prompt should be model-context-only and not appear in frontend turn messages",
   );
 
   const secondInvocationMessages = capturedInvocations[1] || [];
   assert.equal(
-    secondInvocationMessages.some((messageItem) =>
-      messageItem instanceof HumanMessage &&
-      /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
-        String(messageItem?.content || ""),
-      )),
+    secondInvocationMessages.some(
+      (messageItem) =>
+        messageItem instanceof HumanMessage &&
+        /不要一次返回 3 条及以上工具|do not return 3 or more at once/i.test(
+          String(messageItem?.content || ""),
+        ),
+    ),
     false,
     "split synthetic batches should no longer inject tool-batch-limit prompts",
   );

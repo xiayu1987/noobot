@@ -11,6 +11,7 @@ import {
   createModelRequestExecutor,
   createOpenAiCompatibleClient,
   createProviderAdapterRegistry,
+  applyPromptCacheMessages,
   resolveUseResponsesApi,
 } from "../src/index.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
@@ -30,7 +31,6 @@ const invocation = {
 };
 const model = {
   model: "m",
-  format: "openai_compatible",
   operatorId: "test",
   adapterId: "test",
   capabilities: { web_search: true },
@@ -50,7 +50,8 @@ test("openai-compatible adapter applies bound invocation overrides without mutat
     credential: "test-key",
     modelSpec: {
       model: "gpt-5.5",
-      format: "openai_compatible",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
       operatorId: "openai",
       adapterId: "openai-compatible",
       base_url: "http://localhost",
@@ -69,8 +70,9 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
     flow: "agent.main",
     modelSpec: {
       model: "gpt-5.6-sol",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
       modelFamily: "gpt",
-      format: "openai_compatible",
       operatorId: "generic",
       adapterId: "openai-compatible",
       base_url: "http://localhost",
@@ -82,12 +84,63 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
 
+test("xAI Grok cache protocol emits a stable prompt cache key without GPT-only options", () => {
+  const grok = compileProviderModelKwargs(
+    {
+      operatorId: "generic",
+      adapterId: "openai-compatible",
+      model: "grok-4.6",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+      modelFamily: "grok",
+    },
+    "agent.main",
+  );
+
+  assert.equal(grok.prompt_cache_key, undefined);
+  assert.equal("prompt_cache_options" in grok, false);
+  assert.equal("prompt_cache_retention" in grok, false);
+  const grokClient = createOpenAiCompatibleClient({
+    credential: "test-key",
+    modelSpec: {
+      model: "grok-4.6",
+      base_url: "http://localhost",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh"],
+    },
+  });
+  assert.equal(grokClient.clientConfig.defaultHeaders["x-grok-conv-id"], "noobot-main-grok-4-6");
+});
+
+test("normalized Grok clients use the xAI cache key protocol for each flow", () => {
+  const client = createOpenAiCompatibleClient({
+    credential: "test-key",
+    flow: "plugin.analysis",
+    modelSpec: {
+      model: "grok-4.6",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+      base_url: "http://localhost",
+    },
+  });
+  const params = client.invocationParams({});
+
+  assert.equal(params.prompt_cache_key, undefined);
+  assert.equal(params.prompt_cache_options, undefined);
+  assert.equal(params.prompt_cache_retention, undefined);
+  assert.equal(
+    client.clientConfig.defaultHeaders["x-grok-conv-id"],
+    "noobot-plugin-analysis-grok-4-6",
+  );
+});
+
 test("Qwen uses the canonical OpenAI-compatible invocation", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
     modelSpec: {
       model: "qwen3.6-plus",
-      format: "openai_compatible",
+      reasoning_effort_parameter: "enable_thinking",
+      reasoning_effort_options: ["none", "medium"],
       operatorId: "generic",
       adapterId: "openai-compatible",
       base_url: "http://localhost",
@@ -99,11 +152,40 @@ test("Qwen uses the canonical OpenAI-compatible invocation", () => {
   assert.equal(params.reasoning_effort, "low");
 });
 
+test("Claude and Qwen cache markers are message-level and immutable", () => {
+  const messages = [
+    { role: "system", content: "stable instructions" },
+    { role: "user", content: "question" },
+  ];
+  const marked = applyPromptCacheMessages(
+    { model: "claude-sonnet-5", modelFamily: "claude" },
+    messages,
+  );
+  assert.deepEqual(messages[0], { role: "system", content: "stable instructions" });
+  assert.deepEqual(marked[0].content, [
+    { type: "text", text: "stable instructions", cache_control: { type: "ephemeral" } },
+  ]);
+  const qwenBlocks = applyPromptCacheMessages({ model: "qwen3.7-max", modelFamily: "qwen" }, [
+    {
+      role: "system",
+      content: [
+        { type: "text", text: "a" },
+        { type: "image_url", image_url: "x" },
+      ],
+    },
+  ]);
+  assert.deepEqual(qwenBlocks[0].content[0], {
+    type: "text",
+    text: "a",
+    cache_control: { type: "ephemeral" },
+  });
+  assert.deepEqual(qwenBlocks[0].content[1], { type: "image_url", image_url: "x" });
+});
+
 test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: true }),
     createClient: () => ({
       invoke: async () => {
@@ -136,7 +218,6 @@ test("executor observation protocol cannot be overridden with model credentials"
   const events = [];
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({ invoke: async () => ({ content: "ok" }) }),
   };
@@ -161,7 +242,6 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -207,7 +287,6 @@ test("non-streaming invocation never enables streaming during semantic retries",
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: ({ streaming }) => {
       streamingAttempts.push(streaming);
@@ -240,7 +319,6 @@ test("tool calls are not discarded when the provider also returns reasoning", as
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({
       bindTools: function bindTools() {
@@ -277,7 +355,6 @@ test("executor is the single model context trace authority at each provider atte
   let attempts = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: true }),
     createClient: () => {
       const client = {
@@ -331,7 +408,6 @@ test("executor is the single model context trace authority at each provider atte
     assert.deepEqual(data.model, {
       alias: "primary",
       model: model.model,
-      format: model.format,
       operatorId: model.operatorId,
       modelFamily: "",
       adapterId: "openai-compatible",
@@ -343,30 +419,17 @@ test("executor is the single model context trace authority at each provider atte
 
 test("provider registry resolves only the explicit adapter identity", () => {
   const registry = createProviderAdapterRegistry();
-  assert.throws(
-    () => registry.resolve({ adapterId: "dashscope", format: "openai_compatible" }),
-    /unknown provider adapter/,
-  );
-  assert.equal(
-    registry.resolve({ adapterId: "openai-compatible", format: "openai_compatible" }).id,
-    "openai-compatible",
-  );
-  assert.throws(() => registry.resolve({ format: "openai_compatible" }), /adapterId is required/);
-  assert.throws(
-    () => registry.resolve({ adapterId: "unknown", format: "openai_compatible" }),
-    /unknown provider adapter/,
-  );
-  assert.throws(
-    () => registry.resolve({ adapterId: "dashscope", format: "openai_compatible" }),
-    /unknown provider adapter/,
-  );
+  assert.throws(() => registry.resolve({ adapterId: "dashscope" }), /unknown provider adapter/);
+  assert.equal(registry.resolve({ adapterId: "openai-compatible" }).id, "openai-compatible");
+  assert.throws(() => registry.resolve({}), /adapterId is required/);
+  assert.throws(() => registry.resolve({ adapterId: "unknown" }), /unknown provider adapter/);
+  assert.throws(() => registry.resolve({ adapterId: "dashscope" }), /unknown provider adapter/);
 });
 
 test("non-chat operations execute only through the resolved provider adapter", async () => {
   const calls = [];
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({ invoke: async () => ({ content: "unused" }) }),
     executeOperation: async ({ operation }) => {
@@ -404,12 +467,14 @@ test("non-chat operations execute only through the resolved provider adapter", a
 });
 
 test("cache parameters are isolated by interface protocol, model family, and operator", () => {
-  const common = { format: "openai_compatible", adapterId: "openai-compatible" };
+  const common = { adapterId: "openai-compatible", modelFamily: "gpt" };
   const openAi = compileProviderModelKwargs(
     {
       ...common,
       operatorId: "openai",
       model: "gpt-5.6",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
       modelFamily: "gpt",
       extra_body: { cached_content: "leak", cache_control: { type: "ephemeral" } },
     },
@@ -424,14 +489,20 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     ...common,
     operatorId: "anthropic",
     model: "claude-opus",
+    modelFamily: "claude",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     extra_body: { prompt_cache_key: "leak", cached_content: "leak" },
   });
-  assert.deepEqual(anthropic, { cache_control: { type: "ephemeral" } });
+  assert.deepEqual(anthropic, {});
 
   const gemini = compileProviderModelKwargs({
     ...common,
     operatorId: "gemini",
     model: "gemini-pro",
+    modelFamily: "gemini",
+    reasoning_effort_parameter: "thinking_level",
+    reasoning_effort_options: ["low", "medium", "high"],
     cached_content: "cachedContents/1",
     extra_body: { prompt_cache_retention: "leak", cache_control: { type: "ephemeral" } },
   });
@@ -441,18 +512,20 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     ...common,
     operatorId: "deepseek",
     model: "deepseek-chat",
+    modelFamily: "deepseek",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     extra_body: { prompt_cache_key: "leak", cache_control: { type: "ephemeral" } },
   });
   assert.deepEqual(deepseek, {});
 
   const alibaba = compileProviderModelKwargs({
-    format: "openai_compatible",
     operatorId: "alibaba",
     adapterId: "openai-compatible",
+    modelFamily: "qwen",
     model: "qwen-max",
-    enable_thinking: true,
-    preserve_thinking: false,
-    thinking_budget: 2000,
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
     extra_body: { prompt_cache_retention: "leak" },
   });
   assert.deepEqual(alibaba, {});
@@ -462,7 +535,8 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const openai = normalizeRuntimeModelSpec({
     model: "gpt-5.6",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     operatorId: "openai",
     adapterId: "openai-compatible",
   });
@@ -476,7 +550,8 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
   const openaiTopP = normalizeRuntimeModelSpec({
     model: "gpt-4.1",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     operatorId: "openai",
     adapterId: "openai-compatible",
     top_p: 0.9,
@@ -487,7 +562,8 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
   const qwen = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
     operatorId: "alibaba",
     adapterId: "openai-compatible",
   });
@@ -497,10 +573,10 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
   const thinking = normalizeRuntimeModelSpec({
     model: "qwen3.6-plus",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
     operatorId: "alibaba",
     adapterId: "openai-compatible",
-    enable_thinking: true,
   });
   assert.deepEqual(
     { temperature: thinking.temperature, top_p: thinking.top_p, top_k: thinking.top_k },
@@ -514,7 +590,8 @@ test("runtime model normalization rejects invalid parameter facts instead of con
     () =>
       normalizeRuntimeModelSpec({
         model: "gpt-5.6",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
         temperature: "0.8",
       }),
     /temperature must be a number/,
@@ -523,7 +600,8 @@ test("runtime model normalization rejects invalid parameter facts instead of con
     () =>
       normalizeRuntimeModelSpec({
         model: "gpt-5.6",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
         top_p: 2,
       }),
     /top_p must be a number between/,
@@ -532,7 +610,8 @@ test("runtime model normalization rejects invalid parameter facts instead of con
     () =>
       normalizeRuntimeModelSpec({
         model: "gpt-5.6",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
         max_tokens: 10.5,
       }),
     /max_tokens must be a positive integer/,
@@ -543,23 +622,86 @@ test("reasoning effort remains controlled by model configuration", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const spec = normalizeRuntimeModelSpec({
     model: "ZHIPU/GLM-5.3",
-    format: "openai_compatible",
-    preserve_thinking: false,
-    enable_thinking: false,
-    thinking_budget: 0,
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     reasoning_effort: "medium",
   });
   assert.equal(spec.reasoning_effort, "medium");
-  assert.equal(spec.enable_thinking, false);
-  assert.equal(spec.preserve_thinking, false);
-  assert.equal(spec.thinking_budget, 0);
+});
+
+test("reasoning effort defaults and invalid values follow model options", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const glm = normalizeRuntimeModelSpec({
+    model: "glm-5.3",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["low", "high", "max"],
+    reasoning_effort: "invalid",
+    tool_reasoning_effort: "invalid",
+  });
+  assert.deepEqual(glm.reasoning_effort_options, ["low", "high", "max"]);
+  assert.equal(glm.reasoning_effort, "low");
+  assert.equal(glm.tool_reasoning_effort, "low");
+  // A spec without declared reasoning facts never reaches the transport with an
+  // invented default: config repair fills them from the library template first.
+  assert.throws(
+    () => normalizeRuntimeModelSpec({ model: "custom" }),
+    /reasoning_effort_options is required/,
+  );
+});
+
+test("normalized ordinary requests compile their configured reasoning effort", async () => {
+  const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
+  const { compileProviderModelKwargs } = await import("../src/policies/cache-policy-engine.js");
+  const spec = normalizeRuntimeModelSpec({
+    model: "grok-4.6",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
+    reasoning_effort: "high",
+  });
+  assert.equal(compileProviderModelKwargs(spec).reasoning_effort, "high");
+});
+
+test("model series use their provider reasoning parameter names", async () => {
+  const { compileProviderModelKwargs } = await import("../src/policies/cache-policy-engine.js");
+  const common = {
+    operatorId: "google",
+    modelFamily: "gemini",
+    model: "gemini-3.7-flash",
+    reasoning_effort_parameter: "thinking_level",
+    reasoning_effort_options: ["low", "medium", "high"],
+    reasoning_effort: "medium",
+  };
+  assert.equal(compileProviderModelKwargs(common).thinking_level, "medium");
+  assert.equal(
+    compileProviderModelKwargs({
+      operatorId: "alibaba",
+      modelFamily: "qwen",
+      model: "qwen3.7-plus",
+      reasoning_effort_parameter: "enable_thinking",
+      reasoning_effort_options: ["none", "medium"],
+      reasoning_effort: "high",
+    }).enable_thinking,
+    true,
+  );
+  assert.equal(
+    compileProviderModelKwargs({
+      operatorId: "alibaba",
+      modelFamily: "qwen",
+      model: "qwen3.7-plus",
+      reasoning_effort_parameter: "enable_thinking",
+      reasoning_effort_options: ["none", "medium"],
+      reasoning_effort: "none",
+    }).enable_thinking,
+    false,
+  );
 });
 
 test("multimodal generation transport remains an explicit configured fact", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const unconfigured = normalizeRuntimeModelSpec({
     model: "gpt-image-2",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     multimodal_generation: {
       support_generation: { enabled: true, support_scope: ["image"] },
     },
@@ -568,7 +710,8 @@ test("multimodal generation transport remains an explicit configured fact", asyn
 
   const explicit = normalizeRuntimeModelSpec({
     model: "gpt-image-2",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     multimodal_generation: {
       support_generation: {
         enabled: true,
@@ -584,7 +727,8 @@ test("model identity and defaults layer operator, family, concrete model, then e
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const proxiedGpt = normalizeRuntimeModelSpec({
     model: "gpt-5.6-sol",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     base_url: "https://third-party.example.com/v1",
     modelFamily: "qwen",
     adapterId: "openai-compatible",
@@ -596,9 +740,9 @@ test("model identity and defaults layer operator, family, concrete model, then e
 
   const explicit = normalizeRuntimeModelSpec({
     model: "qwen3-thinking",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    enable_thinking: true,
     temperature: 0.2,
     top_p: 0.7,
   });
@@ -610,19 +754,19 @@ test("model identity and defaults layer operator, family, concrete model, then e
 
   const proxiedGlm = normalizeRuntimeModelSpec({
     model: "ZHIPU/GLM-5.1",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     base_url: "https://api.zhipu.ai/v4",
   });
   assert.equal(proxiedGlm.operatorId, "generic");
   assert.equal(proxiedGlm.modelFamily, "glm");
   assert.equal(proxiedGlm.adapterId, "openai-compatible");
-  assert.equal(proxiedGlm.format, "openai_compatible");
+  assert.equal("format" in proxiedGlm, false);
 });
 
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({
       invoke: async () => ({ content: "", additional_kwargs: { reasoning_content: "thinking" } }),
@@ -648,7 +792,6 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
   let calls = 0;
   const adapter = {
     id: "openai-compatible",
-    formats: ["openai_compatible"],
     classifyError: () => ({ retryable: false }),
     createClient: () => ({
       invoke: async () =>
@@ -680,23 +823,25 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
 });
 
 test("responses API and cache key selection are deterministic", () => {
-  assert.equal(resolveUseResponsesApi({ format: "openai_compatible", model: "codex-mini" }), true);
+  assert.equal(resolveUseResponsesApi({ model: "codex-mini" }), true);
   assert.equal(
     resolveUseResponsesApi({
-      format: "openai_compatible",
       model: "qwen-max",
+      reasoning_effort_parameter: "enable_thinking",
+      reasoning_effort_options: ["none", "medium"],
       use_responses_api: true,
     }),
     true,
   );
-  assert.equal(resolveUseResponsesApi({ format: "openai_compatible", model: "gpt-5" }), false);
+  assert.equal(resolveUseResponsesApi({ model: "gpt-5" }), false);
   assert.equal(
     buildPromptCacheKey(
       {
         operatorId: "openai",
         model: "gpt-5",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
         modelFamily: "gpt",
-        format: "openai_compatible",
       },
       "agent.main",
     ),

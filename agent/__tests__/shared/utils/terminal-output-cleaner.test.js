@@ -31,7 +31,10 @@ test("cleanTerminalOutputForLLM normalizes line endings", () => {
 
 test("cleanTerminalOutputForLLM truncates long output", () => {
   const longText = "A".repeat(10000);
-  const result = cleanTerminalOutputForLLM({ stdout: longText, stderr: "", code: 0 }, { maxChars: 100 });
+  const result = cleanTerminalOutputForLLM(
+    { stdout: longText, stderr: "", code: 0 },
+    { maxChars: 100 },
+  );
   assert.equal(result.truncated, true);
   assert.equal(result.stdout_original_length, 10000);
   assert.equal(result.truncate_limit_chars, 256);

@@ -20,7 +20,9 @@ test("summary command is acknowledged once only after the unified checkpoint com
   const runtime = {
     systemRuntime: {},
     currentTurnMessages: {
-      toArray() { return [{ role: "user", content: "keep" }]; },
+      toArray() {
+        return [{ role: "user", content: "keep" }];
+      },
     },
     async commitSummaryCheckpoint(payload) {
       calls.push(payload);
@@ -59,11 +61,14 @@ test("summary checkpoint failures expose exact unresolved identities without mes
     summarizedMessageIds: ["sm_found", "sm_missing"],
   });
 
-  await assert.rejects(consumeSummaryCheckpointCommand({
-    runtime,
-    eventListener: { onEvent: (payload) => events.push(payload) },
-    turn: 4,
-  }), /unresolved canonical identity/);
+  await assert.rejects(
+    consumeSummaryCheckpointCommand({
+      runtime,
+      eventListener: { onEvent: (payload) => events.push(payload) },
+      turn: 4,
+    }),
+    /unresolved canonical identity/,
+  );
 
   const failure = events.find((item) => item.event === "summary_checkpoint_failed");
   assert.deepEqual(failure?.data?.requestedMessageIds, ["sm_found", "sm_missing"]);

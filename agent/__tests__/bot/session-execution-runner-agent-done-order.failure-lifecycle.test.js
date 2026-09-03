@@ -5,8 +5,15 @@
  */
 import test from "node:test";
 import {
-  assert, fs, os, path, createRunner, finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_STATE,
+  assert,
+  fs,
+  os,
+  path,
+  createRunner,
+  finalizeAgentTurn,
+  AGENT_LIFECYCLE_BRANCH_STATE,
+  AGENT_LIFECYCLE_EVENT,
+  AGENT_LIFECYCLE_STATE,
   loadStoppedModelMessageSnapshot,
   collectLifecycleStates,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
@@ -44,8 +51,14 @@ test("runSession does not persist stopped snapshot for non-abort errors", async 
     /model failed/,
   );
 
-  assert.equal(events.some((item) => item.event === "stopped_model_message_snapshot_saved"), false);
-  assert.equal(events.some((item) => item.event === "stopped_model_message_snapshot_save_skipped"), false);
+  assert.equal(
+    events.some((item) => item.event === "stopped_model_message_snapshot_saved"),
+    false,
+  );
+  assert.equal(
+    events.some((item) => item.event === "stopped_model_message_snapshot_save_skipped"),
+    false,
+  );
 });
 
 test("runSession emits failed branch lifecycle state for non-abort errors", async () => {
@@ -75,7 +88,9 @@ test("runSession emits failed branch lifecycle state for non-abort errors", asyn
     AGENT_LIFECYCLE_STATE.RUNNING,
     AGENT_LIFECYCLE_BRANCH_STATE.FAILED,
   ]);
-  const failedEvent = events.find((item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.FAILED);
+  const failedEvent = events.find(
+    (item) => item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.FAILED,
+  );
   assert.equal(failedEvent.data.branchState, AGENT_LIFECYCLE_BRANCH_STATE.FAILED);
   assert.equal(failedEvent.data.error, "model failed");
 });

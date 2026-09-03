@@ -40,18 +40,27 @@ test("phase summary loop threshold requires the explicit frontend threshold mode
 });
 
 test("task check threshold requires the explicit frontend threshold mode", () => {
-  assert.equal(resolveTaskCheckLoopTurns({
-    runConfig: { summaryPolicy: { taskCheckLoopTurns: 2 } },
-  }), BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns);
-  assert.equal(resolveTaskCheckLoopTurns({
-    runConfig: {
-      frontendThresholdsEnabled: true,
-      summaryPolicy: { taskCheckLoopTurns: 2 },
-    },
-  }), 2);
-  assert.equal(resolveTaskCheckLoopTurns({
-    runConfig: { taskCheckLoopTurns: 1, pluginModelConfig: { taskCheckLoopTurns: 3 } },
-  }), BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns);
+  assert.equal(
+    resolveTaskCheckLoopTurns({
+      runConfig: { summaryPolicy: { taskCheckLoopTurns: 2 } },
+    }),
+    BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+  );
+  assert.equal(
+    resolveTaskCheckLoopTurns({
+      runConfig: {
+        frontendThresholdsEnabled: true,
+        summaryPolicy: { taskCheckLoopTurns: 2 },
+      },
+    }),
+    2,
+  );
+  assert.equal(
+    resolveTaskCheckLoopTurns({
+      runConfig: { taskCheckLoopTurns: 1, pluginModelConfig: { taskCheckLoopTurns: 3 } },
+    }),
+    BUILTIN_THRESHOLDS.taskCheck.taskCheckLoopTurns,
+  );
   assert.equal(resolveTaskCheckLoopTurns(), TURN_THRESHOLDS.agent.taskCheckLoopTurns);
 });
 

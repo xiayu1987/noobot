@@ -4,7 +4,7 @@
 
 ## 代码边界
 
-- `model-protocol/src/model/provider-spec.js`：provider 配置字段、format、operator 和 adapter 契约。
+- `model-protocol/src/model/provider-spec.js`：provider 配置字段、推理传输参数表、operator 和 adapter 契约。
 - `model-runtime/src/normalization/spec-normalizer.js`：运行时默认参数与模型系列分类。
 - `model-runtime/src/policies/cache-policy-engine.js`：供应商缓存参数与采样参数编译。
 - `model-runtime/src/adapters/openai-compatible-adapter.js`：OpenAI-compatible 客户端和 Responses API 选择。
@@ -15,23 +15,29 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ## 统一传输格式与供应商识别
 
-当前唯一模型传输格式是 `openai_compatible`。`format` 只选择 adapter，供应商由解析后的 `base_url` 主机确定：
+当前唯一模型传输协议是 OpenAI-compatible，它由 `adapterId` 承载，不是配置字段：`format` 已从协议移除，配置中出现该字段会被修复流程删除。供应商由解析后的 `base_url` 主机确定：
 
-| API 主机                            | `operatorId` |
-| ----------------------------------- | ------------ |
-| `api.openai.com`                    | `openai`     |
-| `api.anthropic.com`                 | `anthropic`  |
-| `generativelanguage.googleapis.com` | `google`     |
-| `dashscope.aliyuncs.com`            | `alibaba`    |
-| `open.bigmodel.cn`                  | `zhipu`      |
-| `api.deepseek.com`                  | `deepseek`   |
-| 其他主机或尚未解析的地址占位符      | `generic`    |
+| API 主机                              | `operatorId` |
+| ------------------------------------- | ------------ |
+| `api.openai.com`                      | `openai`     |
+| `api.anthropic.com`                   | `anthropic`  |
+| `generativelanguage.googleapis.com`   | `google`     |
+| `dashscope.aliyuncs.com`              | `alibaba`    |
+| `open.bigmodel.cn`                    | `zhipu`      |
+| `api.deepseek.com`                    | `deepseek`   |
+| `api.x.ai`                            | `xai`        |
+| `api.moonshot.cn` / `api.moonshot.ai` | `kimi`       |
+| 其他主机或尚未解析的地址占位符        | `generic`    |
 
-模型系列只根据实际 `model` 名称分类；配置 alias 不参与模型系列识别。环境变量名也不用于推断供应商。
+模型系列只根据实际 `model` 名称分类；配置 alias 不参与模型系列识别。环境变量名也不用于推断供应商。系列能力由运行时适配层统一维护，模型库不重复声明缓存字段。
+
+推理传输参数不由模型名推导，而是每个 provider 用 `reasoning_effort_parameter` 显式声明，取值限于 `reasoning_effort`、`thinking_level`、`enable_thinking`。参数名到线上值形态的映射维护在 `model-protocol/src/model/provider-spec.js`：前两者携带强度枚举，`enable_thinking` 是布尔开关，`reasoning_effort=none` 转为 `false`，其他档位转为 `true`。
+
+`reasoning_effort_options` 是该 provider 支持的档位全集，最低档在前。超出该集合的配置值不是受支持的事实，会回落到最低档；需要抑制思考时使用最低档，而不是硬编码某个字面量。
 
 ## 运行时默认参数
 
-配置文件可以省略采样参数。运行时按“format → operator → 模型系列 → 具体模型”应用默认值，用户显式配置始终优先。默认参数维护在 `model-runtime/src/normalization/spec-normalizer.js`，不要复制到模型库条目中。
+配置文件可以省略采样参数。运行时按“传输 → operator → 模型系列 → 具体模型”应用默认值，用户显式配置始终优先。模型系列分类只服务于采样默认值，不参与任何传输契约决策。默认参数维护在 `model-runtime/src/normalization/spec-normalizer.js`，不要复制到模型库条目中。
 
 当 OpenAI-compatible 配置显式给出 `top_p` 而未给出 `temperature` 时，运行时不会再补 `temperature`，避免同时发送两种采样控制。
 
@@ -41,7 +47,7 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### OpenAI GPT
 
-仅当 `format=openai_compatible` 且模型系列为 GPT 时：
+仅当模型系列为 GPT 时：
 
 - 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
 - GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
@@ -51,15 +57,23 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### Anthropic
 
-`operatorId=anthropic` 时使用 `cache_control`，默认 `{ "type": "ephemeral" }`。可显式关闭或配置支持的 TTL。OpenAI 和 Gemini 缓存字段不会透传。
+Claude 系列在首个稳定 system 文本块上写入 `cache_control: { "type": "ephemeral" }`（或显式配置的 TTL）。这是 Anthropic/Qwen 的消息内容协议，不是顶层模型参数。OpenAI 和 Gemini 缓存字段不会透传。
 
 ### Google / Gemini
 
-`operatorId=google|gemini` 时，仅在显式配置 `cached_content` 或 `gemini_cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
+Gemini 系列仅在显式配置 `cached_content` 或 `gemini_cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
 
-### Alibaba、Zhipu、DeepSeek 与通用网关
+### Grok
 
-当前不自动添加供应商专用缓存字段。Noobot 仍通过稳定的 system 前缀和按名称排序的工具 schema 提高服务端自动缓存命中率。
+Grok 系列生成稳定的 `prompt_cache_key`，并由适配层映射为官方要求的 `x-grok-conv-id` 请求头；不发送 GPT 专用 retention/options。
+
+### Qwen
+
+Qwen 系列使用与 DashScope 官方兼容的消息级 `cache_control` 标记，默认标记首个稳定 system 文本块。其隐式前缀缓存由服务端自动管理。
+
+### DeepSeek、GLM、Kimi 与通用网关
+
+DeepSeek、GLM 和 Kimi 官方 API 采用服务端自动前缀缓存，没有需要客户端发送的显式缓存 key/control 字段，因此不伪造参数；Noobot 通过稳定的 system 前缀和按名称排序的工具 schema 提高自动命中率。
 
 ## Responses API
 
@@ -88,7 +102,10 @@ Noobot 不保存或复用 `previous_response_id`。Session、编辑重发、分�
   "api_key": "${OPENAI_API_KEY}",
   "base_url": "${OPENAI_API_ADDRESS}",
   "model": "gpt-5.6-sol",
-  "format": "openai_compatible"
+  "reasoning_effort": "medium",
+  "tool_reasoning_effort": "medium",
+  "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+  "reasoning_effort_parameter": "reasoning_effort"
 }
 ```
 

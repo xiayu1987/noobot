@@ -43,7 +43,8 @@ export async function createFixture() {
       providers: {
         openai: {
           model: "gpt",
-          format: "openai_compatible",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
           enabled: true,
           used_for_conversation: true,
           multimodal_parsing: {
@@ -60,7 +61,8 @@ export async function createFixture() {
         },
         selected: {
           model: "selected-model",
-          format: "openai_compatible",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
           enabled: false,
           used_for_conversation: false,
           reasoning_effort: "high",
@@ -89,7 +91,8 @@ export async function createFixture() {
       providers: {
         openai: {
           model: "gpt",
-          format: "openai_compatible",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
           enabled: true,
           used_for_conversation: true,
           multimodal_parsing: {
@@ -106,7 +109,8 @@ export async function createFixture() {
         },
         selected: {
           model: "selected-model",
-          format: "openai_compatible",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
           enabled: false,
           used_for_conversation: false,
           reasoning_effort: "high",

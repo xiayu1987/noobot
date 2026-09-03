@@ -32,7 +32,10 @@ test("AsyncSessionRunner marks only explicit user_stop abort as user_stopped", a
     abortSignal: abortController.signal,
   });
 
-  await assert.rejects(jobs.get(`${PARENT_SESSION_ID}::${SESSION_ID}`)?.promise, /aborted by upstream/);
+  await assert.rejects(
+    jobs.get(`${PARENT_SESSION_ID}::${SESSION_ID}`)?.promise,
+    /aborted by upstream/,
+  );
   assert.equal(jobs.get(`${PARENT_SESSION_ID}::${SESSION_ID}`)?.status, "failed");
 });
 

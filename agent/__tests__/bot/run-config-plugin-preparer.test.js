@@ -20,10 +20,18 @@ function entry({ id, hooks = [], emits = [], executionIntent, activate } = {}) {
       name: id,
       version: "1.0.0",
       entries: { agent: "agent.js" },
-      contributes: { agent: {
-        hooks: { registers: hooks.map((point) => ({ id: point === "agent.before_turn" ? "before" : "dispatch", point })), emits },
-        ...(executionIntent ? { executionIntent } : {}),
-      } },
+      contributes: {
+        agent: {
+          hooks: {
+            registers: hooks.map((point) => ({
+              id: point === "agent.before_turn" ? "before" : "dispatch",
+              point,
+            })),
+            emits,
+          },
+          ...(executionIntent ? { executionIntent } : {}),
+        },
+      },
       requires: { ports, permissions: [], authenticatedRoutes: [] },
       enabledByDefault: true,
     },
@@ -41,7 +49,7 @@ function activation(id, hostAction = () => {}) {
 function preparer(entries) {
   return new RunConfigPluginPreparer({
     loadedDynamicPlugins: { registry: new Map(entries.map((item) => [item.pluginId, item])) },
-    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
+    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 }
@@ -83,7 +91,9 @@ test("activates selected Manifest ids and scopes declared hook registrations", (
 test("rejects registration of an undeclared hook", () => {
   const demo = entry({
     id: "demo",
-    activate: activation("demo", (host) => host.hooks.register("agent.before_turn", () => {}, { id: "hidden" })),
+    activate: activation("demo", (host) =>
+      host.hooks.register("agent.before_turn", () => {}, { id: "hidden" }),
+    ),
   });
   assert.throws(
     () => preparer([demo]).prepareRunConfig({ runConfig: { selectedPlugins: ["demo"] } }),
@@ -143,7 +153,7 @@ test("configuration mode cannot select a workflow omitted from the turn protocol
   const instance = new RunConfigPluginPreparer({
     globalConfig: { plugins: { workflow: { enabled: true, mode: "on" } } },
     loadedDynamicPlugins: { registry: new Map([["workflow", workflow]]) },
-    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
+    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 
@@ -169,7 +179,7 @@ test("an unavailable plugin cannot be activated by selectedPlugins", () => {
   const instance = new RunConfigPluginPreparer({
     globalConfig: { plugins: { demo: { enabled: false, mode: "on" } } },
     loadedDynamicPlugins: { registry: new Map([["demo", demo]]) },
-    normalizeStringArray: (input) => Array.isArray(input) ? input : [],
+    normalizeStringArray: (input) => (Array.isArray(input) ? input : []),
     createPluginResolveModelMessages: () => () => [],
   });
 

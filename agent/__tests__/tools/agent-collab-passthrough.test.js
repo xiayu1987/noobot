@@ -127,7 +127,6 @@ test("delegate_task_async: 配置后透传 toolPolicy（拷贝）", async () => 
   assert.notStrictEqual(childRunConfig.toolPolicy, parentToolPolicy);
 });
 
-
 test("delegate_task_async: 透传父 runConfig 显式 streaming=false", async () => {
   const { agentContext, runCalls, events } = createAgentContext({
     parentStreamingSet: true,
@@ -164,8 +163,6 @@ test("delegate_task_async: 记录 runconfig 透传事件日志", async () => {
   assert.equal(passthroughEvent.data?.passthrough?.toolPolicy, true);
   assert.equal(passthroughEvent.data?.effectiveRunConfig?.safeConfirm, false);
   assert.equal(passthroughEvent.data?.effectiveRunConfig?.hasToolPolicy, true);
-  assert.deepEqual(passthroughEvent.data?.effectiveRunConfig?.toolPolicyKeys, [
-    "allowToolNames",
-  ]);
+  assert.deepEqual(passthroughEvent.data?.effectiveRunConfig?.toolPolicyKeys, ["allowToolNames"]);
   assert.equal(passthroughEvent.data?.taskCount, 1);
 });

@@ -14,7 +14,7 @@ import {
 } from "../contract/repair.js";
 
 const USER_CONFIG_SYSTEM_OWNED_PATHS = listConfigNodePathsByPolicy({
-  policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+  policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
   representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
 });
 

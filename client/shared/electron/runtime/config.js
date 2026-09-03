@@ -443,6 +443,7 @@ export function createDesktopConfigManager({
   function syncJsonFileIncremental({
     templateFilePath,
     targetFilePath,
+    baseValues = {},
     scope = CONFIG_DOCUMENT_SCOPE.USER,
   } = {}) {
     const templateJson = readJsonFile(templateFilePath, null);
@@ -451,7 +452,7 @@ export function createDesktopConfigManager({
     const targetJson = targetExists ? readJsonFileForRepair(targetFilePath) : {};
     const repair = repairConfigDocument({
       scope,
-      template: templateJson,
+      baseValues,
       target: targetJson,
     });
     const merged = repair.document;
@@ -480,7 +481,7 @@ export function createDesktopConfigManager({
         const payload = readJsonFileForRepair(filePath);
         const repair = repairConfigDocument({
           scope: CONFIG_DOCUMENT_SCOPE.USER,
-          template,
+          baseValues: exampleConfig,
           target: payload,
         });
         const synchronized = repair.document;
@@ -518,7 +519,7 @@ export function createDesktopConfigManager({
     );
     const globalRepair = repairConfigDocument({
       scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-      template: exampleConfig,
+      baseValues: exampleConfig,
       target: currentConfig,
     });
     const mergedConfig = globalRepair.document;
@@ -548,6 +549,7 @@ export function createDesktopConfigManager({
       syncJsonFileIncremental({
         templateFilePath: templateExamplePath,
         targetFilePath: templateConfigPath,
+        baseValues: exampleConfig,
         scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
       });
     }

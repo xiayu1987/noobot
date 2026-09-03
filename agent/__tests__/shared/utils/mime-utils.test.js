@@ -60,21 +60,12 @@ test("parseDataUrl invalid", () => {
 });
 
 test("sanitizeGeneratedArtifactName adds extension", () => {
-  assert.equal(
-    sanitizeGeneratedArtifactName("photo", "image/jpeg", 1),
-    "photo.jpg",
-  );
-  assert.equal(
-    sanitizeGeneratedArtifactName("", "image/png", 3),
-    "generated_media_3.png",
-  );
+  assert.equal(sanitizeGeneratedArtifactName("photo", "image/jpeg", 1), "photo.jpg");
+  assert.equal(sanitizeGeneratedArtifactName("", "image/png", 3), "generated_media_3.png");
 });
 
 test("sanitizeGeneratedArtifactName skips duplicate extension", () => {
-  assert.equal(
-    sanitizeGeneratedArtifactName("report.pdf", "application/pdf", 1),
-    "report.pdf",
-  );
+  assert.equal(sanitizeGeneratedArtifactName("report.pdf", "application/pdf", 1), "report.pdf");
 });
 
 test("sanitizeGeneratedArtifactName strips unsafe chars", () => {

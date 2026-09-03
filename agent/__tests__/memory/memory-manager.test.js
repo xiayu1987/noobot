@@ -20,7 +20,8 @@ function createMemoryConfig(workspaceRoot, alias = "mock-memory-model") {
       [alias]: {
         alias,
         model: alias,
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         providerId: alias,
         adapterId: "openai-compatible",
         api_key: "test-key",
@@ -237,7 +238,8 @@ test("maybeSummarize uses configured memoryModel for long memory and experience 
   globalConfig.providers["selected-memory-model"] = {
     alias: "selected-memory-model",
     model: "selected-memory-model",
-    format: "openai_compatible",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
     providerId: "selected-memory-model",
     adapterId: "openai-compatible",
     api_key: "test-key",

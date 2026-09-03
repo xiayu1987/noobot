@@ -9,18 +9,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const toolsRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../src/tools",
-);
+const toolsRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../src/tools");
 
 async function listJavaScriptFiles(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true });
-  const nested = await Promise.all(entries.map(async (entry) => {
-    const absolutePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return listJavaScriptFiles(absolutePath);
-    return entry.isFile() && entry.name.endsWith(".js") ? [absolutePath] : [];
-  }));
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const absolutePath = path.join(directory, entry.name);
+      if (entry.isDirectory()) return listJavaScriptFiles(absolutePath);
+      return entry.isFile() && entry.name.endsWith(".js") ? [absolutePath] : [];
+    }),
+  );
   return nested.flat();
 }
 

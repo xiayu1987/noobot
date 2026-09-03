@@ -238,4 +238,3 @@ log(converted.output, (await files.readText(converted.output)).length);
   assert.equal(result.output_file_count, 0);
   assert.deepEqual(result.transferEnvelopes, []);
 });
-

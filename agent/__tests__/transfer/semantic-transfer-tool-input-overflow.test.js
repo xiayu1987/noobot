@@ -51,7 +51,10 @@ test("write_file overflow preserves tool policy metadata without path fields in 
   const result = await transferSemanticContent({
     scenario: "tool",
     strategy: "tool_input",
-    call: { name: "write_file", args: { filePath: "large.txt", content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1) } },
+    call: {
+      name: "write_file",
+      args: { filePath: "large.txt", content: "x".repeat(TOOL_INPUT_OVERFLOW_CHARS + 1) },
+    },
     identity: identity(),
     runtime: runtime(),
   });

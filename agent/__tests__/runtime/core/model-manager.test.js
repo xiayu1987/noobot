@@ -104,14 +104,16 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
         providers: {
           openai: {
             model: "gpt-4o",
-            format: "openai_compatible",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             providerId: "openai",
             adapterId: "openai-compatible",
             enabled: true,
           },
           anthropic: {
             model: "gpt-4.1-mini",
-            format: "openai_compatible",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             providerId: "anthropic",
             adapterId: "openai-compatible",
             enabled: true,
@@ -122,6 +124,8 @@ test("resolveLlmForTurn should switch model by runtimeModel and emit model_switc
       defaultModelSpec: {
         alias: "openai",
         model: "gpt-4o",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
       },
     };
 
@@ -164,14 +168,16 @@ test("resolveLlmForTurn should select the canonical defaultModelSpec without cre
         providers: {
           scenario_default: {
             model: "scenario-default-model",
-            format: "openai_compatible",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             providerId: "scenario_default",
             adapterId: "openai-compatible",
             enabled: true,
           },
           selected_alias: {
             model: "selected-model",
-            format: "openai_compatible",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             providerId: "selected_alias",
             adapterId: "openai-compatible",
             enabled: true,
@@ -182,7 +188,8 @@ test("resolveLlmForTurn should select the canonical defaultModelSpec without cre
       defaultModelSpec: {
         alias: "selected_alias",
         model: "selected-model",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         providerId: "selected_alias",
         adapterId: "openai-compatible",
         enabled: true,

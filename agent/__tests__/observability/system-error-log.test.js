@@ -16,7 +16,11 @@ async function makeTempDir() {
 
 async function readJsonLines(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+  return content
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 test("appendSystemErrorLog writes session errors to runtime-events session events", async () => {
@@ -38,7 +42,15 @@ test("appendSystemErrorLog writes session errors to runtime-events session event
   });
 
   assert.equal(record.sessionId, "s1");
-  const runtimeEventFile = path.join(workspaceRoot, "u1", "runtime", "session", "p1", "events", "system.jsonl");
+  const runtimeEventFile = path.join(
+    workspaceRoot,
+    "u1",
+    "runtime",
+    "session",
+    "p1",
+    "events",
+    "system.jsonl",
+  );
   const records = await readJsonLines(runtimeEventFile);
   assert.equal(records.length, 1);
   assert.equal(records[0].category, "system");
@@ -48,10 +60,7 @@ test("appendSystemErrorLog writes session errors to runtime-events session event
   assert.equal(records[0].sessionId, "s1");
   assert.deepEqual(records[0].data.extra, { code: "E_TEST" });
 
-  await assert.rejects(
-    fs.access(path.join(basePath, "system-error.log")),
-    /ENOENT/,
-  );
+  await assert.rejects(fs.access(path.join(basePath, "system-error.log")), /ENOENT/);
 });
 
 test("appendSystemErrorLog keeps non-session errors in local fallback file", async () => {
@@ -77,7 +86,17 @@ test("appendSystemErrorLog keeps non-session errors in local fallback file", asy
   assert.equal(records[0].message, "startup boom");
 
   await assert.rejects(
-    fs.access(path.join(workspaceRoot, "u1", "runtime", "session", "unknown-session", "events", "system.jsonl")),
+    fs.access(
+      path.join(
+        workspaceRoot,
+        "u1",
+        "runtime",
+        "session",
+        "unknown-session",
+        "events",
+        "system.jsonl",
+      ),
+    ),
     /ENOENT/,
   );
 });

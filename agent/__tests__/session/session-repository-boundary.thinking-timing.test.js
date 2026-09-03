@@ -10,13 +10,14 @@ import path from "node:path";
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readSessionArtifact, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import {
+  readSessionArtifact,
+  writeSessionArtifact,
+} from "../../src/session/session-artifact-store.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 
 async function withTempWorkspace(fn) {
-  const workspaceRoot = await mkdtemp(
-    path.join(os.tmpdir(), "noobot-session-boundary-"),
-  );
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));
   try {
     return await fn(workspaceRoot);
   } finally {
@@ -33,31 +34,6 @@ async function exists(filePath) {
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 test("session save persists thinking timing fields to full session and display summary", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
     const userId = "u-thinking";
@@ -72,7 +48,13 @@ test("session save persists thinking timing fields to full session and display s
     await runtime.sessionCrudService.ensureSession(userId, "S", "");
     const session = await runtime.repositories.sessionRepository.findById(userId, "S", "");
     session.messages = [
-      { messageUid: "sm_thinking_user", role: "user", content: "hello", turnScopeId: "turn-1", dialogProcessId: "dp-1" },
+      {
+        messageUid: "sm_thinking_user",
+        role: "user",
+        content: "hello",
+        turnScopeId: "turn-1",
+        dialogProcessId: "dp-1",
+      },
       {
         messageUid: "sm_thinking_assistant_1",
         role: "assistant",
@@ -94,7 +76,9 @@ test("session save persists thinking timing fields to full session and display s
 
     const scope = await runtime.repositories.sessionRepository.resolveSessionScope(userId, "S", "");
     const full = await readSessionArtifact({ sessionDir: scope.sessionDir });
-    const displaySummary = JSON.parse(await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"));
+    const displaySummary = JSON.parse(
+      await readFile(path.join(scope.sessionDir, "session-summary.json"), "utf8"),
+    );
 
     const fullAssistant = full.messages.filter((item) => item.role === "assistant");
     assert.equal(fullAssistant[0].thinkingStartedAt, "2026-07-08T10:00:00.000Z");

@@ -151,6 +151,7 @@ export async function ensureUserWorkspaceInitialized({
   workspaceRoot,
   workspaceTemplatePath = "",
   userId,
+  globalConfig = {},
 }) {
   const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
@@ -175,7 +176,7 @@ export async function ensureUserWorkspaceInitialized({
         });
       }
       await migrateLegacyMemoryFiles(base);
-      await syncDirectoryIncremental(templateBase, base);
+      await syncDirectoryIncremental(templateBase, base, "", globalConfig);
       return base;
     }
 
@@ -231,7 +232,7 @@ export async function resetUserWorkspaceKeepRuntimeInitialized({
   });
 }
 
-async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "") {
+async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "", baseValues = {}) {
   await mkdir(userDir, { recursive: true });
   const entries = await readdir(templateDir, { withFileTypes: true });
   for (const entry of entries) {
@@ -241,7 +242,7 @@ async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "")
     const rootName = String(relativePath || "").split(path.sep)[0] || "";
     const preserveExisting = SYNC_PRESERVE_EXISTING_ROOTS.has(rootName);
     if (entry.isDirectory()) {
-      await syncDirectoryIncremental(src, dst, relativePath);
+      await syncDirectoryIncremental(src, dst, relativePath, baseValues);
       continue;
     }
     if (!entry.isFile()) continue;
@@ -253,7 +254,7 @@ async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "")
       const templateJson = JSON.parse(templateRaw);
       const merged = repairConfigDocument({
         scope: CONFIG_DOCUMENT_SCOPE.USER,
-        template: templateJson,
+        baseValues,
         target: userJson,
       }).document;
       await writeConfigDocument(dst, merged);
@@ -267,6 +268,7 @@ export async function syncUserWorkspaceFromTemplate({
   workspaceRoot,
   workspaceTemplatePath = "",
   userId,
+  baseValues = {},
 }) {
   const { base, templateBase, mutationLockDir } = await resolveWorkspaceInitPaths({
     workspaceRoot,
@@ -276,7 +278,7 @@ export async function syncUserWorkspaceFromTemplate({
   return withWorkspaceMutation(mutationLockDir, async () => {
     await mkdir(base, { recursive: true });
     await migrateLegacyMemoryFiles(base);
-    await syncDirectoryIncremental(templateBase, base);
+    await syncDirectoryIncremental(templateBase, base, "", baseValues);
     return base;
   });
 }

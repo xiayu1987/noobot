@@ -15,18 +15,33 @@ test("buildAgentContextFromBuilder triggers before/after context build hooks", a
   const beforePayloads = [];
   const afterPayloads = [];
 
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
-    beforePayloads.push(ctx);
-  }, { id: "test.context.before" });
-  hookManager.on(HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD, async (ctx = {}) => {
-    afterPayloads.push(ctx);
-  }, { id: "test.context.after" });
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+    async (ctx = {}) => {
+      beforePayloads.push(ctx);
+    },
+    { id: "test.context.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.AFTER_CONTEXT_BUILD,
+    async (ctx = {}) => {
+      afterPayloads.push(ctx);
+    },
+    { id: "test.context.after" },
+  );
 
   const contextBuilder = {
     async buildInitialContext() {
       return createTestAgentExecutionScope(
         { hookManager },
-        { messageBlocks: { history: [{ role: "user", content: "a" }, { role: "assistant", content: "b" }] } },
+        {
+          messageBlocks: {
+            history: [
+              { role: "user", content: "a" },
+              { role: "assistant", content: "b" },
+            ],
+          },
+        },
       );
     },
     async buildContinueContext() {
@@ -69,14 +84,22 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
   const calls = [];
   const errorPayloads = [];
 
-  hookManager.on(HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD, async (ctx = {}) => {
-    assert.equal(ctx.sessionId, "s_ctx_2");
-    calls.push("before");
-  }, { id: "test.context-error.before" });
-  hookManager.on(HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR, async (ctx = {}) => {
-    calls.push(`error:${ctx?.error?.message || ""}`);
-    errorPayloads.push(ctx);
-  }, { id: "test.context-error.observe" });
+  hookManager.on(
+    HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+    async (ctx = {}) => {
+      assert.equal(ctx.sessionId, "s_ctx_2");
+      calls.push("before");
+    },
+    { id: "test.context-error.before" },
+  );
+  hookManager.on(
+    HOOK_POINT.AGENT.CONTEXT_BUILD_ERROR,
+    async (ctx = {}) => {
+      calls.push(`error:${ctx?.error?.message || ""}`);
+      errorPayloads.push(ctx);
+    },
+    { id: "test.context-error.observe" },
+  );
 
   const contextBuilder = {
     async buildInitialContext() {
@@ -118,11 +141,12 @@ test("buildAgentContextFromBuilder triggers context_build_error hook on failure"
 test("buildAgentContextFromBuilder rejects unknown context modes", async () => {
   const factory = new AgentContextFactory({});
   await assert.rejects(
-    () => factory.buildAgentContextFromBuilder({
-      mode: "typo_mode",
-      sessionId: "s1",
-      contextBuilder: {},
-    }),
+    () =>
+      factory.buildAgentContextFromBuilder({
+        mode: "typo_mode",
+        sessionId: "s1",
+        contextBuilder: {},
+      }),
     (error) => error?.errorCode === "INVALID_CONTEXT_MODE",
   );
 });

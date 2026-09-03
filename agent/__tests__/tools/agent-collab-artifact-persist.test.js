@@ -14,7 +14,11 @@ import { TASK_STATUS } from "../../src/bot/async/constants.js";
 
 async function readJsonl(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return content.trim().split(/\n+/).filter(Boolean).map((line) => JSON.parse(line));
+  return content
+    .trim()
+    .split(/\n+/)
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 test("collab artifact persistor writes failed attachment persistence to runtime-events session system event", async () => {
@@ -46,24 +50,20 @@ test("collab artifact persistor writes failed attachment persistence to runtime-
       parentSessionId: "parent-s1",
       tasks: [],
     },
-    taskResults: [{
-      status: TASK_STATUS.COMPLETED,
-      request: { sessionId: "child-s1", taskName: "Child Task" },
-      result: "done",
-    }],
+    taskResults: [
+      {
+        status: TASK_STATUS.COMPLETED,
+        request: { sessionId: "child-s1", taskName: "Child Task" },
+        result: "done",
+      },
+    ],
   });
 
   assert.deepEqual(result, { attachments: [], transferEnvelopes: [] });
 
-  const records = await readJsonl(path.join(
-    workspaceRoot,
-    "u1",
-    "runtime",
-    "session",
-    "parent-s1",
-    "events",
-    "system.jsonl",
-  ));
+  const records = await readJsonl(
+    path.join(workspaceRoot, "u1", "runtime", "session", "parent-s1", "events", "system.jsonl"),
+  );
   assert.equal(records.length, 1);
   assert.equal(records[0].source, "agent");
   assert.equal(records[0].channel, "direct");

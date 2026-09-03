@@ -51,6 +51,17 @@ function resolveProcessCommand(command) {
   };
 }
 
+function spawnCommandProcess(command, cwd) {
+  const processCommand = resolveProcessCommand(command);
+  return spawn(processCommand.executable, processCommand.args, {
+    cwd,
+    shell: processCommand.shell,
+    detached: usesDetachedProcessGroup(process.platform),
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
 async function normalizeCommandOutputFile(filePath) {
   const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
   if (!bytes.length) return;
@@ -67,11 +78,54 @@ function appendCapture(chunks, chunk, state, maxBytes) {
   state.bytes += retained.length;
 }
 
+function createTerminationController(child, abortSignal, timeoutMs, onTerminate) {
+  let timedOut = false;
+  let aborted = abortSignal?.aborted === true;
+  let forceKillTimer = null;
+  let terminationHookCalled = false;
+  const terminate = (reason = "timeout") => {
+    if (reason === "timeout") timedOut = true;
+    else aborted = true;
+    if (!terminationHookCalled) {
+      terminationHookCalled = true;
+      Promise.resolve(onTerminate?.()).catch(() => undefined);
+    }
+    void terminateProcessTree(child, "SIGTERM");
+    if (!forceKillTimer) {
+      forceKillTimer = setTimeout(
+        () => void terminateProcessTree(child, "SIGKILL"),
+        FORCE_KILL_GRACE_MS,
+      );
+      forceKillTimer.unref?.();
+    }
+  };
+  const onAbort = () => terminate("abort");
+  abortSignal?.addEventListener?.("abort", onAbort, { once: true });
+  if (aborted) terminate("abort");
+  const timeout =
+    Number(timeoutMs || 0) > 0 ? setTimeout(() => terminate("timeout"), Number(timeoutMs)) : null;
+  return {
+    get timedOut() {
+      return timedOut;
+    },
+    get aborted() {
+      return aborted;
+    },
+    get forceKillTimer() {
+      return forceKillTimer;
+    },
+    timeout,
+    onAbort,
+    dispose() {
+      if (timeout) clearTimeout(timeout);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      abortSignal?.removeEventListener?.("abort", onAbort);
+    },
+  };
+}
+
 export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = resolveOutputDir(
-    options?.generatedDataRoot,
-    "executeScriptForeground",
-  );
+  const outputDir = resolveOutputDir(options?.generatedDataRoot, "executeScriptForeground");
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
   const stderrPath = path.join(outputDir, "stderr.txt");
@@ -81,44 +135,18 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return new Promise((resolve) => {
-    const processCommand = resolveProcessCommand(cmd);
-    const child = spawn(processCommand.executable, processCommand.args, {
-      cwd,
-      shell: processCommand.shell,
-      detached: usesDetachedProcessGroup(process.platform),
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawnCommandProcess(cmd, cwd);
     const stdoutChunks = [];
     const stderrChunks = [];
     const stdoutCapture = { bytes: 0 };
     const stderrCapture = { bytes: 0 };
     let spawnError = null;
-    let timedOut = false;
-    let aborted = abortSignal?.aborted === true;
-    let forceKillTimer = null;
-    let terminationHookCalled = false;
-    const terminate = (reason = "timeout") => {
-      if (reason === "timeout") timedOut = true;
-      else aborted = true;
-      if (!terminationHookCalled) {
-        terminationHookCalled = true;
-        Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
-      }
-      void terminateProcessTree(child, "SIGTERM");
-      if (!forceKillTimer) {
-        forceKillTimer = setTimeout(
-          () => void terminateProcessTree(child, "SIGKILL"),
-          FORCE_KILL_GRACE_MS,
-        );
-        forceKillTimer.unref?.();
-      }
-    };
-    const onAbort = () => terminate("abort");
-    abortSignal?.addEventListener?.("abort", onAbort, { once: true });
-    if (aborted) terminate("abort");
-    const timeout =
-      Number(timeoutMs || 0) > 0 ? setTimeout(() => terminate("timeout"), Number(timeoutMs)) : null;
+    const termination = createTerminationController(
+      child,
+      abortSignal,
+      timeoutMs,
+      options?.onTerminate,
+    );
 
     pipeReadableToWritable(child.stdout, stdoutStream, (chunk) =>
       appendCapture(stdoutChunks, chunk, stdoutCapture, FOREGROUND_CAPTURE_BYTES),
@@ -130,9 +158,7 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       spawnError = error;
     });
     child.on("close", async (code, signal) => {
-      if (timeout) clearTimeout(timeout);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      abortSignal?.removeEventListener?.("abort", onAbort);
+      termination.dispose();
       await Promise.allSettled([stdoutFinished, stderrFinished]);
       await Promise.all([
         normalizeCommandOutputFile(stdoutPath),
@@ -154,14 +180,14 @@ export async function run(cmd, cwd, timeoutMs, abortSignal = null, options = {})
       );
       const fallbackStderr =
         spawnError?.message ||
-        (timedOut
+        (termination.timedOut
           ? `command timed out after ${Number(timeoutMs)}ms`
-          : aborted
+          : termination.aborted
             ? "command aborted"
             : "");
       const resultCode =
-        timedOut || aborted
-          ? timedOut
+        termination.timedOut || termination.aborted
+          ? termination.timedOut
             ? 124
             : 130
           : Number.isFinite(Number(code))
@@ -222,10 +248,7 @@ function pipeReadableToWritable(readable, writable, onChunk = null) {
 }
 
 export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, options = {}) {
-  const outputDir = resolveOutputDir(
-    options?.generatedDataRoot,
-    "executeScriptBackground",
-  );
+  const outputDir = resolveOutputDir(options?.generatedDataRoot, "executeScriptBackground");
   await mkdir(outputDir, { recursive: true });
   const stdoutPath = path.join(outputDir, "stdout.txt");
   const stderrPath = path.join(outputDir, "stderr.txt");
@@ -235,40 +258,14 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
   const stderrFinished = waitForWritableFinished(stderrStream);
 
   return await new Promise((resolve) => {
-    const processCommand = resolveProcessCommand(cmd);
-    const child = spawn(processCommand.executable, processCommand.args, {
-      cwd,
-      shell: processCommand.shell,
-      detached: usesDetachedProcessGroup(process.platform),
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const child = spawnCommandProcess(cmd, cwd);
     let spawnError = null;
-    let timedOut = false;
-    let aborted = abortSignal?.aborted === true;
-    let forceKillTimer = null;
-    let terminationHookCalled = false;
-    const terminate = (reason = "timeout") => {
-      if (reason === "timeout") timedOut = true;
-      else aborted = true;
-      if (!terminationHookCalled) {
-        terminationHookCalled = true;
-        Promise.resolve(options?.onTerminate?.()).catch(() => undefined);
-      }
-      void terminateProcessTree(child, "SIGTERM");
-      if (!forceKillTimer) {
-        forceKillTimer = setTimeout(
-          () => void terminateProcessTree(child, "SIGKILL"),
-          FORCE_KILL_GRACE_MS,
-        );
-        forceKillTimer.unref?.();
-      }
-    };
-    const onAbort = () => terminate("abort");
-    abortSignal?.addEventListener?.("abort", onAbort, { once: true });
-    if (aborted) terminate("abort");
-    const timeout =
-      Number(timeoutMs || 0) > 0 ? setTimeout(() => terminate("timeout"), Number(timeoutMs)) : null;
+    const termination = createTerminationController(
+      child,
+      abortSignal,
+      timeoutMs,
+      options?.onTerminate,
+    );
 
     pipeReadableToWritable(child.stdout, stdoutStream);
     pipeReadableToWritable(child.stderr, stderrStream);
@@ -276,18 +273,18 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       spawnError = error;
     });
     child.on("close", async (code, signal) => {
-      if (timeout) clearTimeout(timeout);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      abortSignal?.removeEventListener?.("abort", onAbort);
+      termination.dispose();
       try {
         await Promise.all([stdoutFinished, stderrFinished]);
       } catch (error) {
         spawnError ||= error;
       }
-      if (spawnError || timedOut || aborted) {
+      if (spawnError || termination.timedOut || termination.aborted) {
         const fallbackMessage =
           spawnError?.message ||
-          (timedOut ? `command timed out after ${Number(timeoutMs)}ms` : "command aborted");
+          (termination.timedOut
+            ? `command timed out after ${Number(timeoutMs)}ms`
+            : "command aborted");
         const existingStderr = await readFile(stderrPath, "utf8").catch(() => "");
         if (!existingStderr) await writeFile(stderrPath, fallbackMessage, "utf8");
       }
@@ -298,8 +295,8 @@ export async function runFileBacked(cmd, cwd, timeoutMs, abortSignal = null, opt
       const stdoutStat = await stat(stdoutPath).catch(() => ({ size: 0 }));
       const stderrStat = await stat(stderrPath).catch(() => ({ size: 0 }));
       const resultCode =
-        timedOut || aborted
-          ? timedOut
+        termination.timedOut || termination.aborted
+          ? termination.timedOut
             ? 124
             : 130
           : Number.isFinite(Number(code))

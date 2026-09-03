@@ -33,11 +33,10 @@ test("agent lifecycle machine emits normalized state change payload", () => {
   machine.transition(AGENT_LIFECYCLE_STATE.RUNNING);
   machine.transition(AGENT_LIFECYCLE_BRANCH_STATE.FAILED, { error: "boom" });
 
-  assert.deepEqual(events.map((item) => item.event), [
-    AGENT_LIFECYCLE_EVENT,
-    AGENT_LIFECYCLE_EVENT,
-    AGENT_LIFECYCLE_EVENT,
-  ]);
+  assert.deepEqual(
+    events.map((item) => item.event),
+    [AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_EVENT],
+  );
   assert.equal(events[0].data.state, "resume_initializing");
   assert.equal(events[0].data.phase, "继续初始化");
   assert.equal(events[0].data.previousState, "");
@@ -85,13 +84,16 @@ test("agent lifecycle phase methods and terminal branch payloads are standardize
   machine.enterMemory();
   machine.complete();
 
-  assert.deepEqual(events.map((item) => item.data.state), [
-    AGENT_LIFECYCLE_STATE.INITIALIZING,
-    AGENT_LIFECYCLE_STATE.RUNNING,
-    AGENT_LIFECYCLE_STATE.PERSISTING,
-    AGENT_LIFECYCLE_STATE.MEMORY,
-    AGENT_LIFECYCLE_STATE.COMPLETED,
-  ]);
+  assert.deepEqual(
+    events.map((item) => item.data.state),
+    [
+      AGENT_LIFECYCLE_STATE.INITIALIZING,
+      AGENT_LIFECYCLE_STATE.RUNNING,
+      AGENT_LIFECYCLE_STATE.PERSISTING,
+      AGENT_LIFECYCLE_STATE.MEMORY,
+      AGENT_LIFECYCLE_STATE.COMPLETED,
+    ],
+  );
 
   assert.equal(typeof machine.stop, "undefined");
 

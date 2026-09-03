@@ -9,6 +9,8 @@ export * from "./contract/documents.js";
 export * from "./contract/errors.js";
 export * from "./contract/run-config.js";
 export * from "./contract/repair.js";
+export * from "./contract/config-structure.js";
+export * from "./contract/config-values.js";
 export * from "./contract/extension-config.js";
 export * from "./enums.js";
 export * from "./normalization/keys.js";

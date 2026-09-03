@@ -79,7 +79,12 @@ function createModelState(modelPort, defaultModelSpec = null) {
   const resolvedModelSpec =
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
-      : { alias: "test_alias", model: "test-model" };
+      : {
+          alias: "test_alias",
+          model: "test-model",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
+        };
   const modelState = {
     modelPort,
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
@@ -102,11 +107,16 @@ function createModelState(modelPort, defaultModelSpec = null) {
   return modelState;
 }
 
-test("bound tool requests use openai_compatible tool_reasoning_effort when configured", () => {
+const GPT_REASONING = {
+  reasoning_effort_parameter: "reasoning_effort",
+  reasoning_effort_options: ["none", "low", "medium", "high", "xhigh"],
+};
+
+test("bound tool requests use the configured tool reasoning effort", () => {
   assert.deepEqual(
     resolveBoundToolModelRequestOverrides({
-      format: "openai_compatible",
       model: "gpt-5.5",
+      ...GPT_REASONING,
       reasoning_effort: "high",
       tool_reasoning_effort: "medium",
     }),
@@ -114,14 +124,61 @@ test("bound tool requests use openai_compatible tool_reasoning_effort when confi
   );
 });
 
-test("bound tool requests keep configured reasoning_effort when tool override is absent", () => {
+test("bound tool requests fall back to the lowest declared level when tool effort is absent", () => {
   assert.deepEqual(
     resolveBoundToolModelRequestOverrides({
-      format: "openai_compatible",
       model: "gpt-5.5",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
+      ...GPT_REASONING,
       reasoning_effort: "high",
     }),
+    { reasoning_effort: "none" },
+  );
+});
+
+test("an unsupported tool effort resolves to the lowest declared level", () => {
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({
+      model: "glm-5.3",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["high", "max"],
+      tool_reasoning_effort: "invalid",
+    }),
     { reasoning_effort: "high" },
+  );
+});
+
+test("bound tool requests use the provider's declared reasoning parameter", () => {
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({
+      model: "gemini-3.7-flash",
+      reasoning_effort_parameter: "thinking_level",
+      reasoning_effort_options: ["low", "medium", "high"],
+      reasoning_effort: "high",
+      tool_reasoning_effort: "medium",
+    }),
+    { thinking_level: "medium" },
+  );
+});
+
+test("a switch-shaped reasoning parameter carries a boolean for bound tool rounds", () => {
+  const qwen = {
+    model: "qwen3.7-plus",
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
+  };
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({ ...qwen, tool_reasoning_effort: "medium" }),
+    {
+      enable_thinking: true,
+    },
+  );
+  assert.deepEqual(
+    resolveBoundToolModelRequestOverrides({ ...qwen, tool_reasoning_effort: "none" }),
+    {
+      enable_thinking: false,
+    },
   );
 });
 
@@ -143,8 +200,10 @@ test("bound tool openai_compatible request overrides are passed to invoke option
 
   const result = await runFunctionCallLoop({
     modelState: createModelState(modelPort, {
-      format: "openai_compatible",
       model: "gpt-5.5",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["none", "low", "medium", "high"],
+      ...GPT_REASONING,
       reasoning_effort: "high",
     }),
     loopState: createLoopState({ maxTurns: 1, tool }),
@@ -152,7 +211,7 @@ test("bound tool openai_compatible request overrides are passed to invoke option
   });
 
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "high");
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "none");
   assert.equal(result.output, "完成");
 });
 
@@ -166,12 +225,13 @@ test("bound tool overrides use active model spec when it differs from default sp
     },
   ]);
   const modelState = createModelState(modelPort, {
-    format: "openai_compatible",
     model: "qwen3.6-plus",
+    reasoning_effort_parameter: "enable_thinking",
+    reasoning_effort_options: ["none", "medium"],
   });
   modelState.activeModelSpec = {
-    format: "openai_compatible",
     model: "gpt-5.5",
+    ...GPT_REASONING,
     reasoning_effort: "high",
   };
   const invokeBoundLlmWithToolChoice = createBoundLlmToolChoiceInvoker({
@@ -186,9 +246,7 @@ test("bound tool overrides use active model spec when it differs from default sp
 
   await invokeBoundLlmWithToolChoice("auto");
 
-  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "high");
-  assert.equal(capturedNoToolInvokeOptions[0]?.preserve_thinking, undefined);
-  assert.equal(capturedNoToolInvokeOptions[0]?.thinking_budget, undefined);
+  assert.equal(capturedNoToolInvokeOptions[0]?.reasoning_effort, "none");
 });
 
 test("bound tool invocations are non-streaming across tool rounds", async () => {
@@ -278,8 +336,8 @@ test("only the final no-tools streaming stage owns delta callbacks", async () =>
     eventListener,
     globalConfig: {},
     userConfig: {},
-    defaultModelSpec: {},
-    activeModelSpec: {},
+    defaultModelSpec: { ...GPT_REASONING },
+    activeModelSpec: { ...GPT_REASONING },
     abortSignal: null,
   };
   prepareTestTurnExecution(modelState, createLoopState(), "final-stream-callback-owner");

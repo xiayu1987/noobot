@@ -11,9 +11,14 @@ export const CONFIG_DOCUMENT_SCOPE = Object.freeze({
 });
 
 export const CONFIG_NODE_POLICY = Object.freeze({
-  USER_DEFAULTED: "user_defaulted",
+  USER_CONFIGURABLE: "user_configurable",
   USER_OPTIONAL: "user_optional",
-  SYSTEM_OWNED: "system_owned",
+  GLOBAL_ONLY: "global_only",
+});
+
+export const CONFIG_ITEM_TYPE = Object.freeze({
+  BUILTIN: "builtin",
+  EXPLICIT: "explicit",
 });
 
 export const CONFIG_PATH_REPRESENTATION = Object.freeze({
@@ -47,7 +52,7 @@ export const USER_CONFIG_OVERRIDE_POLICY = Object.freeze({
 
 const systemOwnedRule = (persistedPath, runtimePath = persistedPath) =>
   Object.freeze({
-    policy: CONFIG_NODE_POLICY.SYSTEM_OWNED,
+    policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
     persistedPath,
     runtimePath,
   });

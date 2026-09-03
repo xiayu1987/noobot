@@ -54,7 +54,10 @@ test("scoped resolver confines a run to its allowed user-relative root", async (
   await assert.rejects(() => resolver.resolveSessionScope("bob", "child"), /user does not match/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", ""), /requires a sessionId/);
   await assert.rejects(() => resolver.resolveSessionScope("alice", "other"), /id does not match/);
-  await assert.rejects(() => resolver.resolveParentSessionId("alice", "child", "other"), /parent does not match/);
+  await assert.rejects(
+    () => resolver.resolveParentSessionId("alice", "child", "other"),
+    /parent does not match/,
+  );
 });
 
 test("scoped resolver rejects absolute, escaping, similar-prefix, and default-session targets", () => {
@@ -65,38 +68,77 @@ test("scoped resolver rejects absolute, escaping, similar-prefix, and default-se
     scopeId: "agent:child",
     allowedRoot: "runtime/workflow/session",
   };
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, relativeDir: "/tmp/node" }), /relative/);
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/session/../other" }), /escapes/);
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/session" }), /child/);
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/other" }), /escapes/);
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/session-other/node" }), /escapes/);
-  assert.throws(() => new ScopedSessionLocationResolver({ ...options, allowedRoot: "runtime", relativeDir: "runtime/session/node" }), /default session root/);
+  assert.throws(
+    () => new ScopedSessionLocationResolver({ ...options, relativeDir: "/tmp/node" }),
+    /relative/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({
+        ...options,
+        relativeDir: "runtime/workflow/session/../other",
+      }),
+    /escapes/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/session" }),
+    /child/,
+  );
+  assert.throws(
+    () => new ScopedSessionLocationResolver({ ...options, relativeDir: "runtime/workflow/other" }),
+    /escapes/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({
+        ...options,
+        relativeDir: "runtime/workflow/session-other/node",
+      }),
+    /escapes/,
+  );
+  assert.throws(
+    () =>
+      new ScopedSessionLocationResolver({
+        ...options,
+        allowedRoot: "runtime",
+        relativeDir: "runtime/session/node",
+      }),
+    /default session root/,
+  );
 });
 
 test("persistence contexts are immutable and execution-local", () => {
-  const first = createPersistenceContext({ locationResolver: {
-    userId: "alice",
-    sessionId: "child",
-    parentSessionId: "parent",
-    scopeId: "agent:child",
-    resolveSessionScope() {},
-  } });
-  const second = createPersistenceContext({ locationResolver: {
-    userId: "alice",
-    sessionId: "child-2",
-    scopeId: "agent:child-2",
-    resolveSessionScope() {},
-  } });
+  const first = createPersistenceContext({
+    locationResolver: {
+      userId: "alice",
+      sessionId: "child",
+      parentSessionId: "parent",
+      scopeId: "agent:child",
+      resolveSessionScope() {},
+    },
+  });
+  const second = createPersistenceContext({
+    locationResolver: {
+      userId: "alice",
+      sessionId: "child-2",
+      scopeId: "agent:child-2",
+      resolveSessionScope() {},
+    },
+  });
   assert.ok(Object.isFrozen(first));
   assert.notEqual(first.locationResolver, second.locationResolver);
   assert.equal(first.kind, "noobot.session_persistence_scope");
   assert.equal(first.version, 1);
-  assert.equal(assertPersistenceContextIdentity(first, {
-    userId: "alice",
-    sessionId: "child",
-    parentSessionId: "parent",
-    scopeId: "agent:child",
-  }), first);
+  assert.equal(
+    assertPersistenceContextIdentity(first, {
+      userId: "alice",
+      sessionId: "child",
+      parentSessionId: "parent",
+      scopeId: "agent:child",
+    }),
+    first,
+  );
   assert.throws(
     () => assertPersistenceContextIdentity(first, { sessionId: "other" }),
     /sessionId does not match/,

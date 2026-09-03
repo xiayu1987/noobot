@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -113,4 +112,3 @@ test("session summary uses the canonical tool presentation protocol", () => {
   assert.equal(native.call.summary, "execute_native_script · 1 input · phase=probe");
   assert.equal(native.resultEvent.summary, "execute_native_script · result.txt · 10 B");
 });
-

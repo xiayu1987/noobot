@@ -20,16 +20,11 @@ test("trimPromptPayloadByCharLimit removes oldest one-third repeatedly", () => {
   }));
   const trimmed = trimPromptPayloadByCharLimit(payload, { maxChars: 150000 });
   assert.equal(trimmed.length, 2);
-  assert.equal(
-    trimmed[0]?.records?.[0]?.content?.startsWith("msg-7-"),
-    true,
-  );
+  assert.equal(trimmed[0]?.records?.[0]?.content?.startsWith("msg-7-"), true);
 });
 
 test("trimPromptPayloadByCharLimit can shrink to empty when single item exceeds limit", () => {
-  const payload = [
-    { records: [{ role: "user", content: "x".repeat(200000) }] },
-  ];
+  const payload = [{ records: [{ role: "user", content: "x".repeat(200000) }] }];
   const trimmed = trimPromptPayloadByCharLimit(payload, { maxChars: 150000 });
   assert.deepEqual(trimmed, []);
 });

@@ -23,7 +23,8 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
       return {
         alias: modelName,
         model: "glm-5.1",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         providerId: "zhipu",
         adapterId: "openai-compatible",
       };
@@ -79,6 +80,8 @@ test("capability mini-runner requires and uses the host ModelPort", async () => 
 
   const result = await invoker({
     model: "GLM_5_1",
+    reasoning_effort_parameter: "reasoning_effort",
+    reasoning_effort_options: ["none", "low", "medium", "high"],
     purpose: "workflow_semantic",
     domain: "botPlugin",
     signal: invocationAbortController.signal,

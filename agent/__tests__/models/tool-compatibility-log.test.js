@@ -54,4 +54,3 @@ test("appendToolCompatibilityLog writes file under workspace root", async () => 
   assert.equal(logPath, path.join(root, "tool-compatibility.log"));
   assert.equal(content.includes("tool_binding_adapter_dropped_tools"), true);
 });
-

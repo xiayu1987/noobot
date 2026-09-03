@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { buildModelReasoningEffortTransport } from "@noobot/model-protocol";
+
 const OPENAI_MODELS = [/^gpt-4\.1(?:\b|[-_.])/, /^gpt-5(?:\b|[-_.])/];
+
 const PROVIDER_IDS = new Set([
   "openai",
   "anthropic",
@@ -12,6 +15,8 @@ const PROVIDER_IDS = new Set([
   "deepseek",
   "alibaba",
   "zhipu",
+  "kimi",
+  "xai",
   "generic",
 ]);
 
@@ -24,14 +29,17 @@ function operatorId(spec = {}) {
   return value;
 }
 
-function usesOpenAiPromptCacheProtocol(spec = {}) {
-  const format = String(spec.format || "")
+function modelFamily(spec = {}) {
+  const value = String(spec.modelFamily || "")
     .trim()
     .toLowerCase();
-  const family = String(spec.modelFamily || "")
-    .trim()
-    .toLowerCase();
-  return format === "openai_compatible" && family === "gpt";
+  if (!value) throw new TypeError("model spec.modelFamily is required");
+  return value;
+}
+
+/** GPT is the only family carrying the `prompt_cache_key` request field. */
+function usesPromptCacheKeyProtocol(spec = {}) {
+  return modelFamily(spec) === "gpt";
 }
 
 function segment(value) {
@@ -50,8 +58,70 @@ export function resolveCacheVendor(spec = {}) {
   return operatorId(spec);
 }
 
-export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
-  if (!usesOpenAiPromptCacheProtocol(spec)) return "";
+/** Grok carries its cache identity in a request header rather than the body. */
+export function resolvePromptCacheHeaders(spec = {}, flow = "agent.main") {
+  if (modelFamily(spec) !== "grok") return {};
+  const key =
+    String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
+    buildCacheIdentity(spec, flow);
+  return key ? { "x-grok-conv-id": key } : {};
+}
+
+function cacheControlValue(spec = {}) {
+  const value = spec.cache_control ?? spec.prompt_cache_control ?? spec.promptCacheControl;
+  if (value === false) return null;
+  return value && typeof value === "object"
+    ? { type: value.type || "ephemeral", ...(value.ttl === "1h" ? { ttl: "1h" } : {}) }
+    : { type: "ephemeral" };
+}
+
+/**
+ * Apply message-level cache markers required by Anthropic and DashScope/Qwen.
+ * The operation is immutable and only marks the final text block of the first
+ * stable system message, which is the provider-defined cache prefix boundary.
+ */
+export function applyPromptCacheMessages(spec = {}, messages = []) {
+  const family = modelFamily(spec);
+  if (family !== "claude" && family !== "qwen") return messages;
+  const marker = cacheControlValue(spec);
+  if (!marker) return messages;
+  const source = Array.isArray(messages) ? messages : [];
+  const index = source.findIndex(
+    (message) => String(message?.role || "").toLowerCase() === "system",
+  );
+  if (index < 0) return source;
+  const message = source[index] || {};
+  const content = message.content;
+  if (Array.isArray(content)) {
+    const blocks = content.map((block) =>
+      block && typeof block === "object" ? { ...block } : block,
+    );
+    for (let i = blocks.length - 1; i >= 0; i -= 1) {
+      if (
+        blocks[i] &&
+        typeof blocks[i] === "object" &&
+        String(blocks[i].type || "text") === "text"
+      ) {
+        blocks[i] = { ...blocks[i], cache_control: marker };
+        return source.map((item, itemIndex) =>
+          itemIndex === index ? { ...message, content: blocks } : item,
+        );
+      }
+    }
+    return source;
+  }
+  if (typeof content === "string" && content) {
+    return source.map((item, itemIndex) =>
+      itemIndex === index
+        ? { ...message, content: [{ type: "text", text: content, cache_control: marker }] }
+        : item,
+    );
+  }
+  return source;
+}
+
+/** The flow-scoped cache identity, independent of how a provider carries it. */
+function buildCacheIdentity(spec = {}, flow = "agent.main") {
   const model = segment(spec.model);
   if (!model) return "";
   const normalizedFlow = segment(flow);
@@ -60,6 +130,10 @@ export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
       ? `noobot-${normalizedFlow}-${model}`
       : `noobot-main-${model}`
   ).slice(0, 200);
+}
+
+export function buildPromptCacheKey(spec = {}, flow = "agent.main") {
+  return usesPromptCacheKeyProtocol(spec) ? buildCacheIdentity(spec, flow) : "";
 }
 
 function gptVersion(name = "") {
@@ -82,10 +156,10 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   ])
     delete out[key];
 
-  if (usesOpenAiPromptCacheProtocol(spec)) {
+  if (usesPromptCacheKeyProtocol(spec)) {
     const key =
       String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
-      buildPromptCacheKey(spec, flow);
+      buildCacheIdentity(spec, flow);
     if (key) out.prompt_cache_key = key;
     const version = gptVersion(spec.model);
     if (version?.major === 5 && version.minor >= 6) {
@@ -98,29 +172,22 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     }
   }
 
-  if (vendor === "anthropic") {
-    const value = spec.cache_control ?? spec.prompt_cache_control ?? spec.promptCacheControl;
-    if (value !== false) {
-      out.cache_control =
-        value && typeof value === "object"
-          ? { type: value.type || "ephemeral", ...(value.ttl === "1h" ? { ttl: "1h" } : {}) }
-          : { type: "ephemeral" };
-    }
-  }
-
-  if (vendor === "google" || vendor === "gemini") {
+  if (modelFamily(spec) === "gemini" || vendor === "google" || vendor === "gemini") {
     const value = String(
       spec.cached_content ?? spec.cachedContent ?? spec.gemini_cached_content ?? "",
     ).trim();
     if (value) out.cached_content = value;
   }
 
-  for (const key of ["reasoning_effort", "frequency_penalty", "presence_penalty"]) {
+  if (spec.reasoning_effort !== undefined) {
+    Object.assign(out, buildModelReasoningEffortTransport(spec, spec.reasoning_effort));
+  }
+  for (const key of ["frequency_penalty", "presence_penalty"]) {
     if (spec[key] !== undefined) out[key] = spec[key];
   }
   if (
     spec.top_p !== undefined &&
-    !(usesOpenAiPromptCacheProtocol(spec) && String(spec.model).toLowerCase().includes("gpt-5"))
+    !(modelFamily(spec) === "gpt" && String(spec.model).toLowerCase().includes("gpt-5"))
   ) {
     out.top_p = spec.top_p;
   }

@@ -15,11 +15,7 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import {
-  IDENTITY,
-  createRuntime,
-  hasChromiumCapability,
-} from "./native-script-tool.fixtures.js";
+import { IDENTITY, createRuntime, hasChromiumCapability } from "./native-script-tool.fixtures.js";
 
 test("execute_native_script rejects host runtime escape syntax before execution", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-native-script-guard-"));
@@ -281,4 +277,3 @@ await page.goto("file:///etc/passwd");
   assert.equal(result.ok, false);
   assert.match(result.stderr, /HTTP\(S\)/);
 });
-

@@ -41,8 +41,14 @@ test("subagent results are separate V2 envelopes with producer identity", async 
     ],
   });
   assert.equal(result.transferEnvelopes.length, 2);
-  assert.deepEqual(result.transferEnvelopes.map((item) => item.identity.producer.id), ["node-a", "node-b"]);
-  assert.deepEqual(result.transferEnvelopes.map((item) => item.payload.attachments[0].identity.attachmentId), ["stage-bot-plugin-node-a-result.md", "stage-bot-plugin-node-b-result.md"]);
+  assert.deepEqual(
+    result.transferEnvelopes.map((item) => item.identity.producer.id),
+    ["node-a", "node-b"],
+  );
+  assert.deepEqual(
+    result.transferEnvelopes.map((item) => item.payload.attachments[0].identity.attachmentId),
+    ["stage-bot-plugin-node-a-result.md", "stage-bot-plugin-node-b-result.md"],
+  );
 });
 
 test("agent plugin stage stores detail as an attachment reference and final message stays direct", async () => {
@@ -56,6 +62,9 @@ test("agent plugin stage stores detail as an attachment reference and final mess
   });
   assertTransferProtocolOnly(assert, staged);
   assert.equal(staged.transferEnvelopes[0].payload.mode, "attachment");
-  assert.equal(staged.transferEnvelopes[0].payload.attachments[0].identity.attachmentId, "stage-agent-plugin-stage-detail.md");
+  assert.equal(
+    staged.transferEnvelopes[0].payload.attachments[0].identity.attachmentId,
+    "stage-agent-plugin-stage-detail.md",
+  );
   assert.equal("path" in staged.transferEnvelopes[0], false);
 });

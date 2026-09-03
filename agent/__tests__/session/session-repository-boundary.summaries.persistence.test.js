@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -12,7 +11,10 @@ import { mkdir, readFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
-import { withTempWorkspace, canonicalMessages } from "./session-repository-boundary.summaries.fixtures.js";
+import {
+  withTempWorkspace,
+  canonicalMessages,
+} from "./session-repository-boundary.summaries.fixtures.js";
 
 test("session save refreshes the display projection with live activity timeline", async () => {
   await withTempWorkspace(async (workspaceRoot) => {
@@ -201,4 +203,3 @@ test("concurrent saves for different sessions preserve every sessions summary en
     assert.equal(summary.sessions.find((item) => item.sessionId === "B").title, "updated B");
   });
 });
-

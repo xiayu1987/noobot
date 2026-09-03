@@ -11,14 +11,12 @@ import {
   DEFAULT_TEMPLATE_PATH,
   DEFAULT_WORKSPACE_ROOT,
 } from "./constants.js";
-import { normalizeModelFormat } from "./cli.js";
 import { normalizeSetupLocale, resolveConfigLanguage, t } from "./i18n.js";
 
 export function validateCollectedAnswers(raw = {}) {
   const setupLocale = normalizeSetupLocale(raw.setupLocale, "zh");
   const workspaceRoot = String(raw.workspaceRoot || "").trim();
   const workspaceTemplatePath = String(raw.workspaceTemplatePath || "").trim();
-  const format = normalizeModelFormat(raw.format);
   const modelName = String(raw.modelName || "").trim();
   const apiKey = String(raw.apiKey || "").trim();
   const baseUrl = String(raw.baseUrl || "").trim();
@@ -27,7 +25,6 @@ export function validateCollectedAnswers(raw = {}) {
 
   if (!workspaceRoot) throw new Error(t(setupLocale, "errWorkspaceRootRequired"));
   if (!workspaceTemplatePath) throw new Error(t(setupLocale, "errWorkspaceTemplatePathRequired"));
-  if (!format) throw new Error(t(setupLocale, "errFormatInvalid"));
   if (!modelName) throw new Error(t(setupLocale, "errModelRequired"));
   if (!apiKey) throw new Error(t(setupLocale, "errApiKeyRequired"));
   if (!baseUrl) throw new Error(t(setupLocale, "errBaseUrlRequired"));
@@ -39,7 +36,6 @@ export function validateCollectedAnswers(raw = {}) {
     configLanguage: resolveConfigLanguage(setupLocale),
     workspaceRoot,
     workspaceTemplatePath,
-    format,
     modelName,
     apiKey,
     baseUrl,
@@ -61,7 +57,6 @@ export function collectAnswersFromEnv(cliOptions = {}) {
     setupLocale,
     workspaceRoot: process.env.NOOBOT_WORKSPACE_ROOT || DEFAULT_WORKSPACE_ROOT,
     workspaceTemplatePath: process.env.NOOBOT_WORKSPACE_TEMPLATE_PATH || DEFAULT_TEMPLATE_PATH,
-    format: process.env.NOOBOT_MODEL_FORMAT || "openai_compatible",
     modelName: process.env.NOOBOT_MODEL_NAME || "",
     apiKey: process.env.NOOBOT_MODEL_API_KEY || "",
     baseUrl: process.env.NOOBOT_MODEL_BASE_URL || "",
@@ -172,13 +167,6 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       defaultValue: DEFAULT_TEMPLATE_PATH,
       required: true,
     });
-    const format = await askChoice({
-      locale: setupLocale,
-      title: t(setupLocale, "chooseFormat"),
-      hint: t(setupLocale, "chooseFormatHint"),
-      options: [{ value: "openai_compatible", label: "OpenAI-compatible API" }],
-      defaultValue: "openai_compatible",
-    });
     const modelName = await ask({
       locale: setupLocale,
       label: t(setupLocale, "stepModelName"),
@@ -211,7 +199,6 @@ export async function askInteractiveQuestions(cliOptions = {}) {
       setupLocale,
       workspaceRoot,
       workspaceTemplatePath,
-      format,
       modelName,
       apiKey,
       baseUrl,

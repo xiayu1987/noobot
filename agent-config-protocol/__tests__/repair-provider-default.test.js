@@ -27,9 +27,12 @@ test("config repair fills only invalid fields for an unknown provider", () => {
 
   const provider = repaired.document.providers.GLM_5_1;
   assert.equal(provider.model, "ZHIPU/GLM-5.1");
-  assert.equal(provider.format, "openai_compatible");
+  assert.equal("format" in provider, false);
   assert.equal(provider.api_key, "${DASHSCOPE_API_KEY}");
   assert.equal(provider.base_url, "${DASHSCOPE_API_ADDRESS}");
+  assert.deepEqual(provider.reasoning_effort_options, ["low", "medium", "high"]);
+  assert.equal(provider.reasoning_effort, "medium");
+  assert.equal(provider.tool_reasoning_effort, "medium");
 });
 
 test("config repair adds the character plugin to legacy configuration", () => {

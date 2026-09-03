@@ -4,10 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 import { getSystemRuntimeFromRuntime } from "../../context/agent-context-accessor.js";
+import {
+  buildModelReasoningEffortTransport,
+  normalizeModelReasoningConfiguration,
+  resolveModelMinimumReasoningEffort,
+} from "@noobot/model-protocol";
+
+/** Bound tool rounds run at the effort the model declares for tool use. */
 export function resolveBoundToolModelRequestOverrides(modelSpec = {}) {
-  return {
-    reasoning_effort: modelSpec?.tool_reasoning_effort || modelSpec?.reasoning_effort || "low",
-  };
+  const { tool_reasoning_effort: effort } = normalizeModelReasoningConfiguration(modelSpec);
+  return buildModelReasoningEffortTransport(modelSpec, effort);
+}
+
+/** Suppressing reasoning means the model's lowest declared effort level. */
+function suppressedReasoningOverrides(modelSpec = {}) {
+  return buildModelReasoningEffortTransport(
+    modelSpec,
+    resolveModelMinimumReasoningEffort(modelSpec),
+  );
 }
 export function isRequiredToolChoiceUnsupportedError(error = null) {
   const message = String(error?.message || "").toLowerCase();
@@ -23,10 +37,8 @@ export function resolveNonThinkingCallOverrides(runtime = {}, toolChoice = "", m
   const normalizedToolChoice = String(toolChoice || "")
     .trim()
     .toLowerCase();
-  if (normalizedToolChoice === "required") {
-    return { reasoning_effort: "low" };
-  }
+  if (normalizedToolChoice === "required") return suppressedReasoningOverrides(modelSpec);
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
   if (!systemRuntime || systemRuntime.forceNonThinkingMode !== true) return {};
-  return { reasoning_effort: "low" };
+  return suppressedReasoningOverrides(modelSpec);
 }

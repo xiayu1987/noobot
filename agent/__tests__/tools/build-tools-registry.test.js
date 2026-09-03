@@ -16,7 +16,8 @@ function createContext({
       parse_model: {
         enabled: true,
         model: "gpt-5.4",
-        format: "openai_compatible",
+        reasoning_effort_parameter: "reasoning_effort",
+        reasoning_effort_options: ["none", "low", "medium", "high"],
         multimodal_parsing: { enabled: true, input_modalities: ["image"] },
       },
     },
@@ -142,7 +143,8 @@ test("buildTools: every path-aware tool declares an authoritative path contract"
           parse_model: {
             enabled: true,
             model: "gpt-5.4",
-            format: "openai_compatible",
+            reasoning_effort_parameter: "reasoning_effort",
+            reasoning_effort_options: ["none", "low", "medium", "high"],
             multimodal_parsing: { enabled: true, input_modalities: ["image"] },
           },
         },

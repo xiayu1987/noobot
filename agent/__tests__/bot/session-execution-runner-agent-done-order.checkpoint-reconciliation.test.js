@@ -5,8 +5,15 @@
  */
 import test from "node:test";
 import {
-  assert, fs, os, path, createRunner, finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE, AGENT_LIFECYCLE_EVENT, AGENT_LIFECYCLE_STATE,
+  assert,
+  fs,
+  os,
+  path,
+  createRunner,
+  finalizeAgentTurn,
+  AGENT_LIFECYCLE_BRANCH_STATE,
+  AGENT_LIFECYCLE_EVENT,
+  AGENT_LIFECYCLE_STATE,
   loadStoppedModelMessageSnapshot,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
@@ -105,10 +112,10 @@ test("runSession compares the complete durable turn without treating it as a che
 
   assert.deepEqual(capturedFinalizePayload.persistedTurnMessages, []);
   assert.deepEqual(capturedFinalizePayload.durableTurnMessages, durableMessages);
-  assert.deepEqual(
-    capturedFinalizePayload.persistedTurnMessageUids.sort(),
-    ["sm_assistant", "sm_tool"],
-  );
+  assert.deepEqual(capturedFinalizePayload.persistedTurnMessageUids.sort(), [
+    "sm_assistant",
+    "sm_tool",
+  ]);
 });
 
 test("runSession upserts summarized messages created after a checkpoint", async () => {
@@ -177,8 +184,15 @@ test("runSession upserts summarized messages created after a checkpoint", async 
     ["sm_checkpoint-tool", "sm_tail-tool", "sm_final-assistant"].sort(),
   );
   assert.deepEqual(
-    capturedFinalizePayload.durableTurnMessages.map((message) => [message.messageUid, message.summarized]),
-    [["sm_checkpoint-tool", true], ["sm_tail-tool", false], ["sm_final-assistant", false]],
+    capturedFinalizePayload.durableTurnMessages.map((message) => [
+      message.messageUid,
+      message.summarized,
+    ]),
+    [
+      ["sm_checkpoint-tool", true],
+      ["sm_tail-tool", false],
+      ["sm_final-assistant", false],
+    ],
   );
 });
 
@@ -199,15 +213,38 @@ test("runSession restores checkpoint messages by exact persistent UID when avail
       assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { messageId: "message-retained", messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        {
+          messageId: "message-retained",
+          messageUid: "sm_retained",
+          role: "tool",
+          content: "retained-persisted",
+        },
         { messageId: "message-tail", messageUid: "sm_tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
     }),
     getSessionTurns: async () => [
-      { messageUid: "sm_first", role: "assistant", content: "persisted-1", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
-      { messageUid: "sm_unrelated", role: "assistant", content: "inserted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
-      { messageUid: "sm_retained", role: "tool", content: "retained-persisted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+      {
+        messageUid: "sm_first",
+        role: "assistant",
+        content: "persisted-1",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+      },
+      {
+        messageUid: "sm_unrelated",
+        role: "assistant",
+        content: "inserted",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+      },
+      {
+        messageUid: "sm_retained",
+        role: "tool",
+        content: "retained-persisted",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+      },
     ],
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
@@ -240,7 +277,12 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
       assistantMessageId: "message-tail",
       traces: [],
       turnMessages: [
-        { messageId: "message-retained", messageUid: "sm_retained", role: "tool", content: "retained-persisted" },
+        {
+          messageId: "message-retained",
+          messageUid: "sm_retained",
+          role: "tool",
+          content: "retained-persisted",
+        },
         { messageId: "message-tail", messageUid: "sm_tail", role: "assistant", content: "tail" },
       ],
       turnTasks: [],
@@ -250,8 +292,20 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
       receipts: [{ persistedMessageUids: ["sm_first", "sm_retained"] }],
     }),
     getSessionTurns: async () => [
-      { messageUid: "sm_first", role: "assistant", content: "persisted-1", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
-      { messageUid: "sm_retained", role: "tool", content: "retained-persisted", turnScopeId: "turn-a", dialogProcessId: "dialog-1" },
+      {
+        messageUid: "sm_first",
+        role: "assistant",
+        content: "persisted-1",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+      },
+      {
+        messageUid: "sm_retained",
+        role: "tool",
+        content: "retained-persisted",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+      },
     ],
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
@@ -259,7 +313,12 @@ test("runSession recovers checkpoint UIDs and active prefix from the durable rec
     },
   });
 
-  await runner.runSession({ userId: "u1", sessionId: "s1", message: "hello", turnScopeId: "turn-a" });
+  await runner.runSession({
+    userId: "u1",
+    sessionId: "s1",
+    message: "hello",
+    turnScopeId: "turn-a",
+  });
 
   assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
   assert.deepEqual(
@@ -279,14 +338,16 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
     dispatchRuntime: {
       timelineCheckpointPersistedMessageUids: ["sm_assistant"],
     },
-    getSessionTurns: async () => [{
-      messageUid: "sm_assistant",
-      role: "assistant",
-      type: "tool_call",
-      turnScopeId: "turn-a",
-      dialogProcessId: "dialog-1",
-      activityTimeline: [{ eventId: "guidance-analysis:1" }],
-    }],
+    getSessionTurns: async () => [
+      {
+        messageUid: "sm_assistant",
+        role: "assistant",
+        type: "tool_call",
+        turnScopeId: "turn-a",
+        dialogProcessId: "dialog-1",
+        activityTimeline: [{ eventId: "guidance-analysis:1" }],
+      },
+    ],
     getTurnSummaryCheckpointState: null,
     finalizeRunSession: async (payload = {}) => {
       capturedFinalizePayload = payload;
@@ -297,12 +358,14 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
     parentDialogProcessId: "",
     caller: "user",
     agentResult: {
-      turnMessages: [{
-        messageUid: "sm_assistant",
-        role: "assistant",
-        type: "tool_call",
-        activityTimeline: [],
-      }],
+      turnMessages: [
+        {
+          messageUid: "sm_assistant",
+          role: "assistant",
+          type: "tool_call",
+          activityTimeline: [],
+        },
+      ],
     },
     executionStartIndex: 0,
     userConfig: {},
@@ -312,7 +375,10 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
   });
 
   assert.equal(capturedFinalizePayload.persistedTurnMessages.length, 1);
-  assert.equal(capturedFinalizePayload.persistedTurnMessages[0].activityTimeline[0].eventId, "guidance-analysis:1");
+  assert.equal(
+    capturedFinalizePayload.persistedTurnMessages[0].activityTimeline[0].eventId,
+    "guidance-analysis:1",
+  );
   assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
 });
 
@@ -324,7 +390,8 @@ function collectLifecycleStates(events) {
 
 function findStoppedLifecycleEvent(events) {
   return events.find(
-    (item) => item.event === AGENT_LIFECYCLE_EVENT && item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
+    (item) =>
+      item.event === AGENT_LIFECYCLE_EVENT &&
+      item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
   );
 }
-

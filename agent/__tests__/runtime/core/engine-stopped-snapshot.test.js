@@ -15,9 +15,13 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   const errorHookContexts = [];
   const hookManager = createHookManager();
   const stopController = new AbortController();
-  hookManager.on("agent.before_llm_call", () => {
-    stopController.abort({ type: "user_stop", reason: "user stop action" });
-  }, { id: "test.engine-stop.before-llm" });
+  hookManager.on(
+    "agent.before_llm_call",
+    () => {
+      stopController.abort({ type: "user_stop", reason: "user stop action" });
+    },
+    { id: "test.engine-stop.before-llm" },
+  );
   hookManager.on("agent.on_abort", (context) => abortHookContexts.push(context), {
     id: "test.engine-stop.on-abort",
   });
@@ -32,9 +36,10 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
       providers: {
         test_model: {
           enabled: true,
-          format: "openai_compatible",
           operatorId: "openai",
           model: "test-model",
+          reasoning_effort_parameter: "reasoning_effort",
+          reasoning_effort_options: ["none", "low", "medium", "high"],
           api_key: "test-key",
           baseUrl: "http://localhost/test",
         },
@@ -62,23 +67,29 @@ test("runAgentTurn completes terminal hooks before the runner seals a stopped sn
   const agentContext = createTestAgentExecutionScope(runtime);
 
   await assert.rejects(
-    () => runAgentTurn({
-      agentContext,
-      currentUserMessage: {
-        messageUid: "sm_engine_stop",
-        role: "user",
-        content: "stop after snapshot candidate",
-        dialogProcessId: "dialog-engine-stop",
-        turnScopeId: "turn-engine-stop",
-      },
-    }),
+    () =>
+      runAgentTurn({
+        agentContext,
+        currentUserMessage: {
+          messageUid: "sm_engine_stop",
+          role: "user",
+          content: "stop after snapshot candidate",
+          dialogProcessId: "dialog-engine-stop",
+          turnScopeId: "turn-engine-stop",
+        },
+      }),
     (error) => error?.type === "user_stop" && error?.reason === "user stop action",
   );
 
-  assert.equal(events.some((event) => event?.event === "stopped_model_message_snapshot_saved"), false);
-  assert.ok(runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.some(
-    (message) => String(message.content || "").includes("stop after snapshot candidate"),
-  ));
+  assert.equal(
+    events.some((event) => event?.event === "stopped_model_message_snapshot_saved"),
+    false,
+  );
+  assert.ok(
+    runtime.stoppedModelMessageSnapshotCandidate.messageBlocks.incremental.some((message) =>
+      String(message.content || "").includes("stop after snapshot candidate"),
+    ),
+  );
   assert.equal(abortHookContexts.length, 1);
   assert.equal(errorHookContexts.length, 0);
   assert.equal(abortHookContexts[0].contextProtocolVersion, 2);

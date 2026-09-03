@@ -87,11 +87,11 @@ export async function upsertConfigParams({
 export async function syncJsonFileIncremental({
   templateFilePath,
   targetFilePath,
+  baseValues = {},
   locale = "zh",
   scope = CONFIG_DOCUMENT_SCOPE.USER,
 } = {}) {
-  const templateJson = await readJsonStrict(templateFilePath, t(locale, "labelTemplateConfig"));
-  if (!isPlainObject(templateJson)) return false;
+  await readJsonStrict(templateFilePath, t(locale, "labelTemplateConfig"));
 
   const targetExists = await fileExists(targetFilePath);
   const targetRead = targetExists
@@ -100,7 +100,7 @@ export async function syncJsonFileIncremental({
   const targetJson = targetRead.document;
   const repair = repairConfigDocument({
     scope,
-    template: templateJson,
+    baseValues,
     target: targetJson,
   });
   const merged = repair.document;
@@ -188,6 +188,7 @@ export async function syncTemplateAndUserConfigs({
   workspaceRootAbsolutePath,
   workspaceTemplateAbsolutePath,
   superAdminUserId,
+  baseValues = {},
   locale = "zh",
 } = {}) {
   await mkdir(workspaceTemplateAbsolutePath, { recursive: true });
@@ -212,6 +213,7 @@ export async function syncTemplateAndUserConfigs({
     await syncJsonFileIncremental({
       templateFilePath: templateExamplePath,
       targetFilePath: templateConfigPath,
+      baseValues,
       locale,
       scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
     });
@@ -219,6 +221,7 @@ export async function syncTemplateAndUserConfigs({
     await syncJsonFileIncremental({
       templateFilePath: templateConfigPath,
       targetFilePath: templateExamplePath,
+      baseValues,
       locale,
       scope: CONFIG_DOCUMENT_SCOPE.USER_DEFAULT,
     });
@@ -244,6 +247,7 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: templateConfigPath,
         targetFilePath: path.join(userBasePath, "config.json"),
+        baseValues,
         locale,
         scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
@@ -251,6 +255,7 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.json"),
+        baseValues,
         locale,
         scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
@@ -259,6 +264,7 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: templateExamplePath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
+        baseValues,
         locale,
         scope: CONFIG_DOCUMENT_SCOPE.USER,
       });
@@ -266,6 +272,7 @@ export async function syncTemplateAndUserConfigs({
       await syncJsonFileIncremental({
         templateFilePath: finalTemplateSeedPath,
         targetFilePath: path.join(userBasePath, "config.example.json"),
+        baseValues,
         locale,
         scope: CONFIG_DOCUMENT_SCOPE.USER,
       });

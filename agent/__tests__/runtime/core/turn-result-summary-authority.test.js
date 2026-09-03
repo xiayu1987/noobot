@@ -6,9 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  finalizeTurnMessagesBeforeReturn,
-} from "../../../src/runtime/turn/turn-result-aggregator.js";
+import { finalizeTurnMessagesBeforeReturn } from "../../../src/runtime/turn/turn-result-aggregator.js";
 
 test("turn result aggregation does not declare the turn complete before final hooks", () => {
   const messages = [

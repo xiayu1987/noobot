@@ -10,9 +10,7 @@ import {
   EXPERIENCE_PATCH_SCHEMA,
   getExperiencePatchPromptMeta,
 } from "../../src/memory/experience/schema-config.js";
-import {
-  collectPatchItemsByFieldMap,
-} from "../../src/memory/experience/patch-utils.js";
+import { collectPatchItemsByFieldMap } from "../../src/memory/experience/patch-utils.js";
 import { normalizeWeeklySummaryOutput } from "../../src/memory/experience/weekly/parser.js";
 import { normalizeMonthlySummaryOutput } from "../../src/memory/experience/monthly/parser.js";
 import { normalizeYearlySummaryOutput } from "../../src/memory/experience/yearly/parser.js";
@@ -24,10 +22,7 @@ test("schema-config exposes prompt protocol/example for all layers", () => {
     const meta = getExperiencePatchPromptMeta(key);
     assert.ok(meta.protocol.includes("ADD/UPDATE/DELETE"));
     assert.ok(meta.example.startsWith("ADD "));
-    assert.equal(
-      String(EXPERIENCE_PATCH_SCHEMA[key]?.promptProtocol || "").trim(),
-      meta.protocol,
-    );
+    assert.equal(String(EXPERIENCE_PATCH_SCHEMA[key]?.promptProtocol || "").trim(), meta.protocol);
   }
 });
 
@@ -38,7 +33,7 @@ test("collectPatchItemsByFieldMap maps aliases/types and required fields", () =>
       'UPDATE Z[1] category="架构/设计" experiences="经验2"',
       'ADD Z[2] category="待删除" experiences="经验x"',
       "DELETE Z[2]",
-      "ADD Z[3] experiences=\"无分类\"",
+      'ADD Z[3] experiences="无分类"',
     ].join("\n"),
     idPrefix: "Z",
     fieldMap: {
@@ -94,10 +89,10 @@ test("monthly/yearly parser groups category sub-items by schema", () => {
   );
   assert.equal(monthly.categories.length, 1);
   assert.equal(monthly.categories[0].category_name, "研发效能");
-  assert.deepEqual(monthly.categories[0].subcategories.map((item) => item.subcategory_name), [
-    "测试",
-    "发布",
-  ]);
+  assert.deepEqual(
+    monthly.categories[0].subcategories.map((item) => item.subcategory_name),
+    ["测试", "发布"],
+  );
 
   const yearly = normalizeYearlySummaryOutput(
     'ADD Y[1] category="系统设计" subcategory="稳定性" principles="先观测" reflections="容量前置"',
@@ -127,8 +122,14 @@ test("builders inject schema protocol/example into i18n custom builders", () => 
     },
   });
   const meta = getExperiencePatchPromptMeta("daily");
-  assert.match(prompt, new RegExp(`protocol=${meta.protocol.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}`));
-  assert.match(prompt, new RegExp(`example=${meta.example.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}`));
+  assert.match(
+    prompt,
+    new RegExp(`protocol=${meta.protocol.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}`),
+  );
+  assert.match(
+    prompt,
+    new RegExp(`example=${meta.example.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}`),
+  );
 });
 
 test("en-US i18n memory prompt uses injected patch protocol/example", () => {

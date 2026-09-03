@@ -78,7 +78,14 @@ function createModelState(llm, defaultModelSpec = null) {
   const resolvedModelSpec =
     defaultModelSpec && typeof defaultModelSpec === "object"
       ? defaultModelSpec
-      : { alias: "test_alias", model: "test-model" };
+      : {
+          alias: "test_alias",
+          model: "test-model",
+          reasoning_effort: "medium",
+          tool_reasoning_effort: "medium",
+          reasoning_effort_options: ["low", "medium", "high"],
+          reasoning_effort_parameter: "reasoning_effort",
+        };
   const modelState = {
     modelPort: createTestModelPort(llm),
     activeModelName: String(resolvedModelSpec?.model || "test-model"),
@@ -102,7 +109,7 @@ test("when model returns no tool calls, return directly without a retry prompt",
   const tool = {
     name: "execute_script",
     async invoke() {
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([
@@ -137,7 +144,10 @@ test("when model returns no tool calls, return directly without a retry prompt",
   assert.equal(result.output, "我先直接回答");
   assert.equal(capturedInvocations.length, 1);
   assert.equal(capturedNoToolInvokeOptions[0]?.tool_choice, "auto");
-  assert.equal(events.some((item) => item?.event === "tool_choice_required_retry_prompted"), false);
+  assert.equal(
+    events.some((item) => item?.event === "tool_choice_required_retry_prompted"),
+    false,
+  );
   const retryPrompt = loopState.modelContext.messageBlocks.incremental.find((messageItem) => {
     const marker =
       messageItem?.additional_kwargs?.noobotInternalMessageType ||
@@ -153,7 +163,7 @@ test("safeConfirm does not force tool calls", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedInvocations } = createToolCallingLlm([
@@ -191,7 +201,7 @@ test("no-tool response returns immediately without retrying", async () => {
   const tool = {
     name: "execute_script",
     async invoke() {
-      return "{\"ok\":true}";
+      return '{"ok":true}';
     },
   };
   const { llm, capturedInvocations } = createToolCallingLlm([
@@ -215,7 +225,7 @@ test("final_answer tool: next model call uses tool_choice none and exits loop", 
     name: "final_answer",
     async invoke() {
       toolInvokeCount += 1;
-      return "{\"ok\":true,\"message\":\"对话结束请总结\"}";
+      return '{"ok":true,"message":"对话结束请总结"}';
     },
   };
   const { llm, capturedInvocations, capturedNoToolInvokeOptions } = createToolCallingLlm([

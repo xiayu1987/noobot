@@ -54,4 +54,3 @@ test("fetchRemoteMediaArtifact returns null when fetch throws", async () => {
   );
   assert.equal(artifact, null);
 });
-

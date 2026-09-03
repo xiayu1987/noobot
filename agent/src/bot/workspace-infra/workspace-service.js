@@ -29,6 +29,7 @@ export class WorkspaceService {
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
+      baseValues: this.globalConfig,
       globalConfig: this.globalConfig,
     });
   }
@@ -48,6 +49,7 @@ export class WorkspaceService {
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
+      baseValues: this.globalConfig,
       globalConfig: this.globalConfig,
     });
   }

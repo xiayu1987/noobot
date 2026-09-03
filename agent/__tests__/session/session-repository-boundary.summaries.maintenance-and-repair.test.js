@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-
 import test from "node:test";
 import assert from "node:assert/strict";
 import path from "node:path";
@@ -114,10 +113,10 @@ test("session discovery traverses only canonical Session directories", async () 
     await mkdir(nonSessionTree, { recursive: true });
     await writeFile(path.join(nonSessionTree, "session.json"), "{}", "utf8");
 
-    assert.deepEqual(
-      (await runtime.repositories.sessionRepository.listSessionIds(userId)).sort(),
-      ["child", "root"],
-    );
+    assert.deepEqual((await runtime.repositories.sessionRepository.listSessionIds(userId)).sort(), [
+      "child",
+      "root",
+    ]);
   });
 });
 

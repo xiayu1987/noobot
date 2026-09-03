@@ -17,7 +17,11 @@ function summaryContent(state = "CONTINUE") {
     "[DETAILS]",
     "唯一解析器、工具回执和状态控制已经实现并完成确定性验证。",
     "[NEXT_ACTION]",
-    state === "CONTINUE" ? "继续浏览器验证。" : state === "COMPLETE" ? "输出最终结果。" : "说明无法继续的原因。",
+    state === "CONTINUE"
+      ? "继续浏览器验证。"
+      : state === "COMPLETE"
+        ? "输出最终结果。"
+        : "说明无法继续的原因。",
   ].join("\n");
 }
 
@@ -40,7 +44,12 @@ test("task_summary returns only the derived receipt for CONTINUE", async () => {
 
   assert.equal(payload.toolName, "task_summary");
   assert.equal(payload.protocolVersion, 1);
-  assert.deepEqual(Object.keys(payload.summary).sort(), ["abstract", "contentHash", "nextAction", "state"]);
+  assert.deepEqual(Object.keys(payload.summary).sort(), [
+    "abstract",
+    "contentHash",
+    "nextAction",
+    "state",
+  ]);
   assert.equal(payload.summary.state, "CONTINUE");
   assert.match(payload.summary.contentHash, /^sha256:[a-f0-9]{64}$/);
   assert.equal(JSON.stringify(payload).includes(fullContent), false);

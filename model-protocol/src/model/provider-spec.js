@@ -11,15 +11,13 @@ export const MODEL_PROVIDER_ID = Object.freeze({
   GEMINI: "gemini",
   DEEPSEEK: "deepseek",
   ZHIPU: "zhipu",
+  KIMI: "kimi",
+  XAI: "xai",
   GENERIC: "generic",
 });
 
 export const MODEL_ADAPTER_ID = Object.freeze({
   OPENAI_COMPATIBLE: "openai-compatible",
-});
-
-const ADAPTER_ID_BY_FORMAT = Object.freeze({
-  openai_compatible: MODEL_ADAPTER_ID.OPENAI_COMPATIBLE,
 });
 
 export const MODEL_PROVIDER_CONFIG_VALUE_TYPE = Object.freeze({
@@ -46,20 +44,124 @@ const modalityListField = Object.freeze({
   items: modalityField,
 });
 
+/**
+ * The reasoning transport parameter each provider accepts, with the value shape
+ * it carries on the wire. This table is the only place a parameter name maps to
+ * a value shape; nothing infers either from a model name.
+ */
+export const MODEL_REASONING_EFFORT_PARAMETER = Object.freeze({
+  REASONING_EFFORT: "reasoning_effort",
+  THINKING_LEVEL: "thinking_level",
+  ENABLE_THINKING: "enable_thinking",
+});
+
+const REASONING_EFFORT_VALUE_SHAPE = Object.freeze({
+  [MODEL_REASONING_EFFORT_PARAMETER.REASONING_EFFORT]: "effort",
+  [MODEL_REASONING_EFFORT_PARAMETER.THINKING_LEVEL]: "effort",
+  [MODEL_REASONING_EFFORT_PARAMETER.ENABLE_THINKING]: "switch",
+});
+
+export const MODEL_REASONING_EFFORT_DISABLED = "none";
+
+const reasoningEffortParameterField = Object.freeze({
+  type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
+  nonEmpty: true,
+  values: Object.freeze(Object.keys(REASONING_EFFORT_VALUE_SHAPE)),
+});
+
+function identityText(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Project a provider's declared reasoning facts into their canonical form.
+ * A configured effort outside the declared options is not a supported fact and
+ * resolves to the provider's lowest declared option.
+ */
+export function normalizeModelReasoningConfiguration(provider = {}, fallback = {}) {
+  const source = provider && typeof provider === "object" ? provider : {};
+  const defaults = fallback && typeof fallback === "object" ? fallback : {};
+  const options = [
+    ...new Set(
+      (Array.isArray(source.reasoning_effort_options)
+        ? source.reasoning_effort_options
+        : Array.isArray(defaults.reasoning_effort_options)
+          ? defaults.reasoning_effort_options
+          : []
+      )
+        .map(identityText)
+        .filter(Boolean),
+    ),
+  ];
+  if (!options.length) {
+    throw new TypeError("model provider reasoning_effort_options is required");
+  }
+  const parameter =
+    identityText(source.reasoning_effort_parameter) ||
+    identityText(defaults.reasoning_effort_parameter);
+  if (!REASONING_EFFORT_VALUE_SHAPE[parameter]) {
+    throw new TypeError(
+      `unsupported model provider reasoning_effort_parameter: ${parameter || "missing"}`,
+    );
+  }
+  const normalize = (value, fallbackValue) => {
+    const requested = identityText(value) || identityText(fallbackValue);
+    return options.includes(requested) ? requested : options[0];
+  };
+  return Object.freeze({
+    reasoning_effort_parameter: parameter,
+    reasoning_effort_options: [...options],
+    reasoning_effort: normalize(source.reasoning_effort, defaults.reasoning_effort),
+    tool_reasoning_effort: normalize(source.tool_reasoning_effort, defaults.tool_reasoning_effort),
+  });
+}
+
+/** The wire value for an effort level, per the parameter's declared shape. */
+export function resolveModelReasoningEffortTransportValue(provider = {}, effort = "") {
+  const parameter = identityText(provider.reasoning_effort_parameter);
+  const shape = REASONING_EFFORT_VALUE_SHAPE[parameter];
+  if (!shape) {
+    throw new TypeError(
+      `unsupported model provider reasoning_effort_parameter: ${parameter || "missing"}`,
+    );
+  }
+  const value = identityText(effort);
+  return shape === "switch" ? value !== MODEL_REASONING_EFFORT_DISABLED : value;
+}
+
+/** The transport pair for an effort level, keyed by the declared parameter. */
+export function buildModelReasoningEffortTransport(provider = {}, effort = "") {
+  return {
+    [identityText(provider.reasoning_effort_parameter)]: resolveModelReasoningEffortTransportValue(
+      provider,
+      effort,
+    ),
+  };
+}
+
+/** The provider's lowest declared effort level, used to suppress reasoning. */
+export function resolveModelMinimumReasoningEffort(provider = {}) {
+  const options = Array.isArray(provider.reasoning_effort_options)
+    ? provider.reasoning_effort_options.map(identityText).filter(Boolean)
+    : [];
+  if (!options.length) {
+    throw new TypeError("model provider reasoning_effort_options is required");
+  }
+  return options[0];
+}
+
 export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
   type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
   additionalProperties: false,
+  normalize: normalizeModelReasoningConfiguration,
   properties: Object.freeze({
     enabled: booleanField,
     used_for_conversation: booleanField,
     api_key: stringField,
     base_url: stringField,
     model: nonEmptyStringField,
-    format: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.STRING,
-      nonEmpty: true,
-      values: Object.freeze(Object.keys(ADAPTER_ID_BY_FORMAT)),
-    }),
     description: stringField,
     temperature: Object.freeze({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.NUMBER,
@@ -97,12 +199,11 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
     }),
     reasoning_effort: nonEmptyStringField,
     tool_reasoning_effort: nonEmptyStringField,
-    enable_thinking: booleanField,
-    preserve_thinking: booleanField,
-    thinking_budget: Object.freeze({
-      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.INTEGER,
-      minimum: 0,
+    reasoning_effort_options: Object.freeze({
+      type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.ARRAY,
+      items: nonEmptyStringField,
     }),
+    reasoning_effort_parameter: reasoningEffortParameterField,
     use_responses_api: booleanField,
     extra_body: Object.freeze({
       type: MODEL_PROVIDER_CONFIG_VALUE_TYPE.OBJECT,
@@ -173,7 +274,7 @@ export const MODEL_PROVIDER_CONFIG_CONTRACT = Object.freeze({
       }),
     }),
   }),
-  required: Object.freeze(["format", "model"]),
+  required: Object.freeze(["model"]),
 });
 
 const OPERATOR_ID_BY_HOST = Object.freeze({
@@ -183,6 +284,9 @@ const OPERATOR_ID_BY_HOST = Object.freeze({
   "dashscope.aliyuncs.com": MODEL_PROVIDER_ID.ALIBABA,
   "open.bigmodel.cn": MODEL_PROVIDER_ID.ZHIPU,
   "api.deepseek.com": MODEL_PROVIDER_ID.DEEPSEEK,
+  "api.x.ai": MODEL_PROVIDER_ID.XAI,
+  "api.moonshot.cn": MODEL_PROVIDER_ID.KIMI,
+  "api.moonshot.ai": MODEL_PROVIDER_ID.KIMI,
 });
 
 function requireIdentity(value, field) {
@@ -194,25 +298,22 @@ function requireIdentity(value, field) {
 }
 
 export function normalizeProviderSpec(input = {}) {
-  const format = requireIdentity(input.format, "format");
   return Object.freeze({
     operatorId: requireIdentity(input.operatorId, "operatorId"),
-    adapterId: resolveModelAdapterId(format),
-    format,
+    adapterId: resolveModelAdapterId(),
     baseUrl: String(input.baseUrl || input.base_url || "").trim(),
   });
 }
 
-export function resolveModelAdapterId(format = "") {
-  const normalizedFormat = requireIdentity(format, "format");
-  const adapterId = ADAPTER_ID_BY_FORMAT[normalizedFormat];
-  if (!adapterId) throw new TypeError(`unsupported model spec.format: ${normalizedFormat}`);
-  return adapterId;
+/**
+ * Every provider in this protocol speaks the OpenAI-compatible transport, so
+ * the adapter identity is a protocol constant rather than a configured fact.
+ */
+export function resolveModelAdapterId() {
+  return MODEL_ADAPTER_ID.OPENAI_COMPATIBLE;
 }
 
-export function resolveModelOperatorId({ format = "", baseUrl = "" } = {}) {
-  const normalizedFormat = requireIdentity(format, "format");
-  resolveModelAdapterId(normalizedFormat);
+export function resolveModelOperatorId({ baseUrl = "" } = {}) {
   const endpoint = String(baseUrl || "").trim();
   if (!endpoint || /^\$\{[^}]+\}$/.test(endpoint)) return MODEL_PROVIDER_ID.GENERIC;
   let host = "";
