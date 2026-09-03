@@ -251,11 +251,10 @@ async function syncDirectoryIncremental(templateDir, userDir, relativeRoot = "",
         readFile(src, "utf8"),
         readConfigDocumentForRepair(dst),
       ]);
-      const templateJson = JSON.parse(templateRaw);
+      JSON.parse(templateRaw);
       const merged = repairConfigDocument({
         scope: CONFIG_DOCUMENT_SCOPE.USER,
         baseValues,
-        overrideValues: templateJson,
         target: userJson,
       }).document;
       await writeConfigDocument(dst, merged);

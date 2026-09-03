@@ -54,7 +54,7 @@ test("model input processing keeps directly readable text out of multimodal pars
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 21);
+  assert.equal(options.length, 20);
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),

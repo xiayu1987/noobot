@@ -196,7 +196,7 @@ function repairContractNode({
       if (repaired !== REMOVE_NODE) output[key] = repaired;
       continue;
     }
-    throw new TypeError(`config template contains unsupported node: ${pathText([...path, key])}`);
+    throw new TypeError(`config value source contains unsupported node: ${pathText([...path, key])}`);
   }
   for (const [key, child] of Object.entries(target)) {
     if (properties[key] || Object.prototype.hasOwnProperty.call(output, key)) continue;
@@ -537,29 +537,11 @@ function repairModelReferences(document, values, changes) {
 
 export function repairConfigDocument({
   scope = CONFIG_DOCUMENT_SCOPE.GLOBAL,
-  // `template` is retained as a compatibility alias for callers of the
-  // original protocol.  It is deliberately folded into the value source;
-  // structure is still always CONFIG_STRUCTURE.
-  baseValues = undefined,
-  template = undefined,
-  // These two names were used by the early structural/value split prototype.
-  // Accepting them keeps the protocol migration lossless without making them
-  // part of the structure authority.
-  structureTemplate = undefined,
-  valueTemplate = undefined,
-  overrideValues = null,
+  baseValues = {},
   target = {},
 } = {}) {
   if (!VALID_SCOPES.has(scope)) throw new TypeError(`unsupported config document scope: ${scope}`);
-  const suppliedBaseValues =
-    baseValues !== undefined
-      ? baseValues
-      : valueTemplate !== undefined
-        ? valueTemplate
-        : template !== undefined
-          ? template
-          : {};
-  if (!isPlainObject(suppliedBaseValues)) {
+  if (!isPlainObject(baseValues)) {
     throw new TypeError("config repair baseValues must be an object");
   }
   const sourceTarget = isPlainObject(target) ? target : {};
@@ -572,10 +554,7 @@ export function repairConfigDocument({
     recordChange(changes, [], CONFIG_REPAIR_ACTION.MIGRATE_PROTOCOL, "outdated_protocol");
   }
   const values = createConfigValueSource({
-    baseValues: migrateConfigFileToCurrentProtocol(suppliedBaseValues),
-    overrideValues: isPlainObject(overrideValues)
-      ? migrateConfigFileToCurrentProtocol(overrideValues)
-      : null,
+    baseValues: migrateConfigFileToCurrentProtocol(baseValues),
   });
   const document = repairStructureNode({
     node: CONFIG_STRUCTURE,

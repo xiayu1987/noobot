@@ -370,7 +370,7 @@ test("multimodal_parse passes audio and video files to the configured model", as
       providers: {
         "parse-model": {
           enabled: true,
-          model: "qwen3.5-omni-plus",
+          model: "gemini-3.7-flash",
           reasoning_effort_parameter: "enable_thinking",
           reasoning_effort_options: ["none", "medium"],
           multimodal_parsing: { enabled: true, input_modalities: ["audio", "video"] },

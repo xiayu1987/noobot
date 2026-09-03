@@ -417,28 +417,6 @@
         }
       }
     },
-    "qwen3_5_omni_plus": {
-      "enabled": true,
-      "used_for_conversation": true,
-      "api_key": "${DASHSCOPE_API_KEY}",
-      "base_url": "${DASHSCOPE_API_ADDRESS}",
-      "model": "qwen3.5-omni-plus",
-      "reasoning_effort": "medium",
-      "tool_reasoning_effort": "medium",
-      "reasoning_effort_options": ["none", "medium"],
-      "reasoning_effort_parameter": "enable_thinking",
-      "description": "Alibaba omni model for image, audio, and video understanding",
-      "multimodal_parsing": {
-        "enabled": true,
-        "input_modalities": ["image", "audio", "video"]
-      },
-      "multimodal_generation": {
-        "support_generation": {
-          "enabled": false,
-          "support_scope": []
-        }
-      }
-    },
     "glm_5_2": {
       "enabled": true,
       "used_for_conversation": true,

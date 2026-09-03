@@ -453,7 +453,6 @@ export function createDesktopConfigManager({
     const repair = repairConfigDocument({
       scope,
       baseValues,
-      overrideValues: templateJson,
       target: targetJson,
     });
     const merged = repair.document;
@@ -487,7 +486,6 @@ export function createDesktopConfigManager({
         const repair = repairConfigDocument({
           scope: CONFIG_DOCUMENT_SCOPE.USER,
           baseValues,
-          overrideValues: template,
           target: payload,
         });
         const synchronized = repair.document;
