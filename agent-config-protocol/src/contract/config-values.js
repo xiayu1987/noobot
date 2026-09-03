@@ -39,12 +39,10 @@ function valueAt(source, path) {
  * Create the value authority for one repair run.
  *
  * `baseValues` is the global example — the sole non-model value source.
- * `overrideValues` is an optional scope-owned override layer consulted first
- * for paths it explicitly declares.
+ * User configuration files are never value sources.
  */
-export function createConfigValueSource({ baseValues = {}, overrideValues = null } = {}) {
+export function createConfigValueSource({ baseValues = {} } = {}) {
   const base = isPlainObject(baseValues) ? baseValues : {};
-  const override = isPlainObject(overrideValues) ? overrideValues : null;
 
   const hasAt = (source, path) => {
     if (!path.length) return isPlainObject(source);
@@ -55,12 +53,11 @@ export function createConfigValueSource({ baseValues = {}, overrideValues = null
   return Object.freeze({
     /** Whether any value source declares this path. */
     has(path = []) {
-      return (override !== null && hasAt(override, path)) || hasAt(base, path);
+      return hasAt(base, path);
     },
 
     /** The authoritative value for a non-model path. */
     resolve(path = []) {
-      if (override !== null && hasAt(override, path)) return valueAt(override, path);
       return valueAt(base, path);
     },
 
@@ -81,19 +78,14 @@ export function createConfigValueSource({ baseValues = {}, overrideValues = null
       // global example still needs its declared capabilities and connection
       // fields.  The model library remains authoritative whenever it knows the
       // alias or concrete model; this is the missing-library fallback.
-      const fromGlobalExample = valueAt(base, ["providers", alias]);
-      if (isPlainObject(fromGlobalExample)) return fromGlobalExample;
       return resolveDefaultModelLibraryProvider();
     },
 
     /** Provider aliases the value sources declare, in declaration order. */
     listProviderAliases() {
       const aliases = new Set();
-      for (const source of [base, override]) {
-        const providers = isPlainObject(source) ? source.providers : null;
-        if (isPlainObject(providers))
-          for (const alias of Object.keys(providers)) aliases.add(alias);
-      }
+      const providers = isPlainObject(base) ? base.providers : null;
+      if (isPlainObject(providers)) for (const alias of Object.keys(providers)) aliases.add(alias);
       return Object.freeze([...aliases]);
     },
   });

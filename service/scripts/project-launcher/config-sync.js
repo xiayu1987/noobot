@@ -101,7 +101,6 @@ export async function syncJsonFileIncremental({
   const repair = repairConfigDocument({
     scope,
     baseValues,
-    overrideValues: await readJsonRelaxed(templateFilePath, {}),
     target: targetJson,
   });
   const merged = repair.document;

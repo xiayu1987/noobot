@@ -436,7 +436,7 @@ test("config migration does not infer a replacement for an unsupported provider 
   const source = {
     providers: {
       qwen: {
-        model: "qwen3.5-omni-plus",
+        model: "gemini-3.7-flash",
         format: "dashscope",
         api_key: "${DASHSCOPE_API_KEY}",
       },
@@ -626,7 +626,7 @@ test("template resolution has one explicit source order and unresolved policy", 
 test("config repair preserves a valid custom value and restores an invalid value from its template", () => {
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template: { workspace_root: "/template", workspace_template_path: "/template-default" },
+    baseValues: { workspace_root: "/template", workspace_template_path: "/template-default" },
     target: { workspace_root: { invalid: true }, workspace_template_path: "/custom-template" },
   });
 
@@ -662,7 +662,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
   };
   const first = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template,
+    baseValues: template,
     target: {
       default_provider: "incomplete",
       providers: {
@@ -714,7 +714,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
 
   const unsupportedFormat = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template,
+    baseValues: template,
     target: {
       ...template,
       providers: {
@@ -728,7 +728,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
 
   const repairedKnownLegacy = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template,
+    baseValues: template,
     target: {
       ...template,
       providers: {
@@ -748,7 +748,7 @@ test("config repair enforces defaulted, optional, and system-owned node policies
 
   const second = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template,
+    baseValues: template,
     target: first.document,
   });
   assert.equal(second.report.changed, false);
@@ -759,7 +759,7 @@ test("global repair preserves supported optional runtime nodes without adding mi
   const template = { preferences: { language: "zh-CN" } };
   const missing = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template,
+    baseValues: template,
     target: template,
   });
   assert.equal(missing.document.memory, undefined);
@@ -767,7 +767,7 @@ test("global repair preserves supported optional runtime nodes without adding mi
 
   const configured = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template,
+    baseValues: template,
     target: {
       ...template,
       memory: { summarizeTimeoutMs: 5000, postprocess_async: false },
