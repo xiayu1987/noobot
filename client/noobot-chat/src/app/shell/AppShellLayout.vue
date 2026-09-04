@@ -633,11 +633,6 @@ defineExpose({
   min-height: 0;
 }
 
-.chat-message-nav-scroll :deep(.chat-message-navigator) {
-  max-height: none;
-  overflow: visible;
-}
-
 .connector-overview-panel {
   width: 236px;
   max-width: 24vw;

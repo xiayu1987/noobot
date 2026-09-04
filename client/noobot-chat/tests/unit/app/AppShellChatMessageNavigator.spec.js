@@ -306,11 +306,9 @@ describe("AppShell chat message navigator", () => {
     expect(appShellLayoutSource).toContain(".chat-message-nav-panel.is-collapsed {");
     expect(appShellLayoutSource).toContain("width: var(--noobot-side-panel-collapsed-width);");
     expect(appShellLayoutSource).toContain(".chat-message-nav-scroll {");
-    expect(appShellLayoutSource).toContain(
-      ".chat-message-nav-scroll :deep(.chat-message-navigator)",
+    expect(appShellLayoutSource).not.toContain(
+      ".chat-message-nav-scroll :deep(.chat-message-navigator) {",
     );
-    expect(appShellLayoutSource).toContain("max-height: none;");
-    expect(appShellLayoutSource).toContain("overflow: visible;");
     expect(appShellLayoutSource).toContain("function toggleChatNavigator()");
     expect(appShellLayoutSource).toContain("if (nextVisible) featurePanelVisible.value = false;");
     expect(appShellLayoutSource).toContain("overflow: hidden;");
