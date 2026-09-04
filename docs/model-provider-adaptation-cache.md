@@ -59,7 +59,7 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### Anthropic
 
-Claude 系列在首个稳定 system 文本块上写入 `cache_control: { "type": "ephemeral" }`（或显式配置的 TTL）。这是 Anthropic/Qwen 的消息内容协议，不是顶层模型参数。OpenAI 和 Gemini 缓存字段不会透传。
+Claude 系列通过适配层在请求顶层写入 `cache_control: { "type": "ephemeral" }`（或显式配置的 TTL），使用 Anthropic 官方自动缓存断点。Claude 不再改写 OpenAI `messages` 内容块；网关必须将该顶层字段转换为 Anthropic Messages API 的顶层字段，或直接转发到原生 `/v1/messages`。
 
 ### Google / Gemini
 
