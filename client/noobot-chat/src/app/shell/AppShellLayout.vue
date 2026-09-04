@@ -585,9 +585,8 @@ defineExpose({
   box-sizing: border-box;
   width: 236px;
   max-width: 24vw;
-  max-height: calc(100vh - 36px);
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
@@ -631,6 +630,11 @@ defineExpose({
   width: 100%;
   box-sizing: border-box;
   min-height: 0;
+}
+
+.chat-message-nav-scroll :deep(.chat-message-navigator) {
+  max-height: none;
+  overflow: visible;
 }
 
 .connector-overview-panel {
