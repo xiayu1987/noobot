@@ -36,12 +36,14 @@ function modelFamily(spec = {}) {
 }
 
 /**
- * Every OpenAI-compatible model receives the canonical cache identity. The
- * provider adapter is responsible for mapping it to a provider-specific
- * transport (for example, xAI's x-grok-conv-id header).
+ * GPT and Claude expose a body-level prompt-cache identity in the transports
+ * used by this adapter. Other providers have different protocols (or only
+ * server-managed prefix caching), so their cache identity must not leak into
+ * OpenAI `prompt_cache_*` fields.
  */
 function usesPromptCacheKeyProtocol(spec = {}) {
-  return Boolean(String(spec.model || "").trim());
+  const family = modelFamily(spec);
+  return family === "gpt" || family === "claude";
 }
 
 function segment(value) {

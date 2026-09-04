@@ -84,7 +84,7 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
 
-test("xAI Grok cache protocol emits the shared stable prompt cache strategy", () => {
+test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
   const grok = compileProviderModelKwargs(
     {
       operatorId: "generic",
@@ -97,8 +97,8 @@ test("xAI Grok cache protocol emits the shared stable prompt cache strategy", ()
     "agent.main",
   );
 
-  assert.equal(grok.prompt_cache_key, "noobot-main-grok-4-6");
-  assert.equal(grok.prompt_cache_retention, "24h");
+  assert.equal("prompt_cache_key" in grok, false);
+  assert.equal("prompt_cache_retention" in grok, false);
   assert.equal("prompt_cache_options" in grok, false);
   const grokClient = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -125,9 +125,9 @@ test("normalized Grok clients use the xAI cache key protocol for each flow", () 
   });
   const params = client.invocationParams({});
 
-  assert.equal(params.prompt_cache_key, "noobot-plugin-analysis-grok-4-6");
+  assert.equal(params.prompt_cache_key, undefined);
   assert.equal(params.prompt_cache_options, undefined);
-  assert.equal(params.prompt_cache_retention, "24h");
+  assert.equal(params.prompt_cache_retention, undefined);
   assert.equal(
     client.clientConfig.defaultHeaders["x-grok-conv-id"],
     "noobot-plugin-analysis-grok-4-6",
@@ -522,8 +522,6 @@ test("cache parameters use the shared strategy while retaining provider-specific
     extra_body: { prompt_cache_retention: "leak", cache_control: { type: "ephemeral" } },
   });
   assert.deepEqual(gemini, {
-    prompt_cache_key: "noobot-main-gemini-pro",
-    prompt_cache_retention: "24h",
     cached_content: "cachedContents/1",
   });
 
@@ -537,8 +535,6 @@ test("cache parameters use the shared strategy while retaining provider-specific
     extra_body: { prompt_cache_key: "leak", cache_control: { type: "ephemeral" } },
   });
   assert.deepEqual(deepseek, {
-    prompt_cache_key: "noobot-main-deepseek-chat",
-    prompt_cache_retention: "24h",
   });
 
   const alibaba = compileProviderModelKwargs({
@@ -551,8 +547,6 @@ test("cache parameters use the shared strategy while retaining provider-specific
     extra_body: { prompt_cache_retention: "leak" },
   });
   assert.deepEqual(alibaba, {
-    prompt_cache_key: "noobot-main-qwen-max",
-    prompt_cache_retention: "24h",
   });
 });
 
