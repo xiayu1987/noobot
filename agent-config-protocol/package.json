@@ -1,6 +1,6 @@
 {
   "name": "@noobot/agent-config-protocol",
-  "version": "4.2.8",
+  "version": "4.2.9",
   "private": true,
   "type": "module",
   "main": "src/index.js",
