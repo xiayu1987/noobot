@@ -47,11 +47,11 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### 统一缓存策略
 
-所有模型都会生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 5.6 及以上模型默认使用 `prompt_cache_retention: "24h"`，5.6 及以上模型默认使用 `prompt_cache_options: { "ttl": "30m" }`。显式配置优先。该策略提供统一缓存身份，供应商适配仍决定该身份在线上的具体承载方式。
+缓存身份在运行时按供应商协议转换，不会把 GPT 专用字段发送给不支持它的模型。GPT（以及当前 Claude OpenAI-compatible 链路）生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 GPT/Claude 系列不生成 `prompt_cache_key`、`prompt_cache_retention` 或 `prompt_cache_options`，除非其官方协议在适配层明确声明了对应字段。显式配置优先。
 
 ### OpenAI GPT
 
-- 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
+- GPT（及 Claude 当前兼容链路）生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
 - GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
 - GPT 4.1 和其他 GPT 5 系列默认使用 `prompt_cache_retention: "24h"`。
 - GPT-5 不发送 `top_p`。
@@ -60,22 +60,27 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 ### Anthropic
 
 Claude 系列通过适配层在请求顶层写入 `cache_control: { "type": "ephemeral" }`（或显式配置的 TTL），使用 Anthropic 官方自动缓存断点。Claude 不再改写 OpenAI `messages` 内容块；网关必须将该顶层字段转换为 Anthropic Messages API 的顶层字段，或直接转发到原生 `/v1/messages`。
+官方依据：[Anthropic Prompt Caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)。
 
 ### Google / Gemini
 
 Gemini 系列仅在显式配置 `cached_content` 或 `gemini_cached_content` 后发送 `cached_content`。其他供应商缓存字段不会透传。
+官方依据：[Gemini Context caching](https://ai.google.dev/gemini-api/docs/caching)。
 
 ### Grok
 
-Grok 系列使用统一缓存身份，并由适配层映射为官方要求的 `x-grok-conv-id` 请求头。
+Grok 系列不发送 GPT 的 body 字段；缓存身份由适配层直接映射为官方要求的 `x-grok-conv-id` 请求头。
 
 ### Qwen
 
-Qwen 系列使用与 DashScope 官方兼容的消息级 `cache_control` 标记，默认标记首个稳定 system 文本块。其隐式前缀缓存由服务端自动管理。
+Qwen 系列使用与 DashScope 官方兼容的消息级 `cache_control` 标记，默认标记首个稳定 system 文本块；不发送顶层 `cache_control` 或 GPT 缓存字段。其隐式前缀缓存由服务端自动管理。
+官方依据：[Alibaba Cloud Model Studio Context cache](https://www.alibabacloud.com/help/en/model-studio/context-cache)。
+
+DeepSeek、GLM、Kimi 等仅在服务端提供前缀/KV 缓存的系列不需要客户端缓存字段；适配层会清除 `extra_body` 中误带的其他供应商缓存字段。Gemini 仅在显式配置缓存资源时发送 `cached_content`，隐式缓存不需要请求字段。DeepSeek 官方仅在 usage 中返回 `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens`，没有客户端 `prompt_cache_key` 字段（见 [KV cache](https://api-docs.deepseek.com/guides/kv_cache)）。
 
 ### DeepSeek、GLM、Kimi 与通用网关
 
-这些模型同样接收统一的缓存身份和 TTL 参数；供应商未定义专用承载字段时，参数通过 OpenAI-compatible 请求传输。Noobot 仍通过稳定的 system 前缀和按名称排序的工具 schema 提高服务端自动前缀缓存命中率。
+这些模型没有统一的客户端缓存字段；适配层不发送推导出的缓存身份或 TTL。服务端若提供自动前缀/KV 缓存，则由服务端按稳定请求前缀管理，Noobot 不伪造供应商协议字段。
 
 ## Responses API
 
