@@ -172,6 +172,28 @@
         }
       }
     },
+    "claude_fable_5_1": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "claude-fable-5-1",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "description": "Anthropic Fable 5.1 model accessed through an OpenAI-compatible gateway",
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "claude_opus_5": {
       "enabled": true,
       "used_for_conversation": true,
