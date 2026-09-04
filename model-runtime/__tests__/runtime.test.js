@@ -84,7 +84,7 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
 
-test("xAI Grok cache protocol emits a stable prompt cache key without GPT-only options", () => {
+test("xAI Grok cache protocol emits the shared stable prompt cache strategy", () => {
   const grok = compileProviderModelKwargs(
     {
       operatorId: "generic",
@@ -97,9 +97,9 @@ test("xAI Grok cache protocol emits a stable prompt cache key without GPT-only o
     "agent.main",
   );
 
-  assert.equal(grok.prompt_cache_key, undefined);
+  assert.equal(grok.prompt_cache_key, "noobot-main-grok-4-6");
+  assert.equal(grok.prompt_cache_retention, "24h");
   assert.equal("prompt_cache_options" in grok, false);
-  assert.equal("prompt_cache_retention" in grok, false);
   const grokClient = createOpenAiCompatibleClient({
     credential: "test-key",
     modelSpec: {
@@ -125,9 +125,9 @@ test("normalized Grok clients use the xAI cache key protocol for each flow", () 
   });
   const params = client.invocationParams({});
 
-  assert.equal(params.prompt_cache_key, undefined);
+  assert.equal(params.prompt_cache_key, "noobot-plugin-analysis-grok-4-6");
   assert.equal(params.prompt_cache_options, undefined);
-  assert.equal(params.prompt_cache_retention, undefined);
+  assert.equal(params.prompt_cache_retention, "24h");
   assert.equal(
     client.clientConfig.defaultHeaders["x-grok-conv-id"],
     "noobot-plugin-analysis-grok-4-6",
@@ -466,7 +466,7 @@ test("non-chat operations execute only through the resolved provider adapter", a
   );
 });
 
-test("cache parameters are isolated by interface protocol, model family, and operator", () => {
+test("cache parameters use the shared strategy while retaining provider-specific fields", () => {
   const common = { adapterId: "openai-compatible", modelFamily: "gpt" };
   const openAi = compileProviderModelKwargs(
     {
@@ -494,7 +494,10 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     extra_body: { prompt_cache_key: "leak", cached_content: "leak" },
   });
-  assert.deepEqual(anthropic, {});
+  assert.deepEqual(anthropic, {
+    prompt_cache_key: "noobot-main-claude-opus",
+    prompt_cache_retention: "24h",
+  });
 
   const gemini = compileProviderModelKwargs({
     ...common,
@@ -506,7 +509,11 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     cached_content: "cachedContents/1",
     extra_body: { prompt_cache_retention: "leak", cache_control: { type: "ephemeral" } },
   });
-  assert.deepEqual(gemini, { cached_content: "cachedContents/1" });
+  assert.deepEqual(gemini, {
+    prompt_cache_key: "noobot-main-gemini-pro",
+    prompt_cache_retention: "24h",
+    cached_content: "cachedContents/1",
+  });
 
   const deepseek = compileProviderModelKwargs({
     ...common,
@@ -517,7 +524,10 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     extra_body: { prompt_cache_key: "leak", cache_control: { type: "ephemeral" } },
   });
-  assert.deepEqual(deepseek, {});
+  assert.deepEqual(deepseek, {
+    prompt_cache_key: "noobot-main-deepseek-chat",
+    prompt_cache_retention: "24h",
+  });
 
   const alibaba = compileProviderModelKwargs({
     operatorId: "alibaba",
@@ -528,7 +538,10 @@ test("cache parameters are isolated by interface protocol, model family, and ope
     reasoning_effort_options: ["none", "medium"],
     extra_body: { prompt_cache_retention: "leak" },
   });
-  assert.deepEqual(alibaba, {});
+  assert.deepEqual(alibaba, {
+    prompt_cache_key: "noobot-main-qwen-max",
+    prompt_cache_retention: "24h",
+  });
 });
 
 test("model defaults follow provider-specific sampling guidance", async () => {

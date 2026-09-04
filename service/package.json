@@ -55,7 +55,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "jscpd": "^5.0.14",
-    "jsdom": "^30.0.1",
+    "jsdom": "^29.0.0",
     "libreoffice": "^0.4.5",
     "node-poppler": "^10.0.1",
     "@noobot/shared": "file:../shared",
