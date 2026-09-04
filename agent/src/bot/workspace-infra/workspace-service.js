@@ -12,8 +12,9 @@ import {
 import { tSystem } from "noobot-i18n/agent/system-text";
 
 export class WorkspaceService {
-  constructor({ globalConfig = {} } = {}) {
+  constructor({ globalConfig = {}, globalConfigRaw = null } = {}) {
     this.globalConfig = globalConfig;
+    this.globalConfigRaw = globalConfigRaw;
   }
 
   getWorkspacePath(userId) {
@@ -29,7 +30,7 @@ export class WorkspaceService {
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
-      baseValues: this.globalConfig,
+      baseValues: this.globalConfigRaw,
       globalConfig: this.globalConfig,
     });
   }
@@ -49,7 +50,7 @@ export class WorkspaceService {
       workspaceRoot: this.globalConfig.workspaceRoot,
       workspaceTemplatePath: this.globalConfig.workspaceTemplatePath,
       userId,
-      baseValues: this.globalConfig,
+      baseValues: this.globalConfigRaw,
       globalConfig: this.globalConfig,
     });
   }

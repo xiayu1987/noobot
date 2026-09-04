@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { loadGlobalConfig } from "./global-config-loader.js";
+import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 import {
   applyConfigMigrations,
   createConfigBuildResult,
@@ -14,7 +15,6 @@ import {
   resolveConfigTemplates,
   validateEffectiveConfig,
 } from "@noobot/agent-config-protocol";
-import { normalizeConfiguredModelProviders } from "./model-config-normalizer.js";
 
 function cloneConfig(value) {
   if (value === null || value === undefined) return value;
@@ -88,18 +88,21 @@ export function createGlobalConfigBuilder({
       migrations: normalizedMigrations,
       context: buildContext,
     });
-    const migratedRawConfig = normalizeConfiguredModelProviders(migrationResult.config || {});
+    const persistedConfig = migrationResult.config || {};
+    const migratedRawConfig = normalizeConfiguredModelProviders(persistedConfig);
     const resolvedConfig = resolveConfigTemplatesFn(migratedRawConfig, {
       lookup: createConfigValueLookup(configParams, env),
     });
     const warnings = await validateEffectiveConfig({
       rawConfig: migratedRawConfig,
+      persistedConfig,
       resolvedConfig,
       validators: normalizedValidators,
       context: buildContext,
     });
     return createConfigBuildResult({
       rawConfig: migratedRawConfig,
+      persistedConfig,
       resolvedConfig,
       metadata: {
         source:

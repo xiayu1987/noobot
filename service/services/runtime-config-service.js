@@ -27,22 +27,24 @@ export function createRuntimeConfigService({
     const configParams = paramsPayload.values || {};
     const builtConfig = await globalConfigBuilder.build({ configParams });
     const rawGlobalConfig = builtConfig?.rawConfig || {};
+    const persistedGlobalConfig = builtConfig?.persistedConfig;
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
     setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));
     const pluginRuntimeBundle = await createSessionPluginRuntimeBundle({
       pluginRootDir: startupContext?.paths?.pluginRootDir,
     });
     const bot = new BotManager(resolvedGlobalConfig, {
+      globalConfigRaw: persistedGlobalConfig,
       startupContext,
       pluginRuntimeBundle,
       connectorAccessPort: connectorPort,
     });
-    setGlobalConfigRaw(rawGlobalConfig);
+    setGlobalConfigRaw(persistedGlobalConfig);
     setGlobalConfig(resolvedGlobalConfig);
     setBot(bot);
     return {
       bot,
-      globalConfigRaw: rawGlobalConfig,
+      globalConfigRaw: persistedGlobalConfig,
       globalConfig: resolvedGlobalConfig,
       configParams,
     };

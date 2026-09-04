@@ -176,7 +176,9 @@ export async function ensureUserWorkspaceInitialized({
         });
       }
       await migrateLegacyMemoryFiles(base);
-      await syncDirectoryIncremental(templateBase, base, "", globalConfig);
+      // Runtime initialization only validates the workspace and performs
+      // legacy data migration. Config/template synchronization is a startup
+      // concern (or an explicit user action), never a per-run side effect.
       return base;
     }
 
