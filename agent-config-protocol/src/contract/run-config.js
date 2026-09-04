@@ -5,7 +5,9 @@
  */
 
 import { mergeConfig } from "../pipeline/effective-config.js";
-import { isPlainObject } from "../utils.js";
+import { isPlainObject, normalizeStringList } from "../utils.js";
+import { removeDeniedToolNamesFromAllow } from "../policy/tool-policy.js";
+import { readModelSelectionAlias } from "../policy/model-selection.js";
 
 export class RunConfigResolver {
   constructor({ globalConfig = {} } = {}) {
@@ -13,7 +15,7 @@ export class RunConfigResolver {
   }
 
   normalizeStringArray(input = []) {
-    return Array.isArray(input) ? input.map((item) => (item ?? "").trim()).filter(Boolean) : [];
+    return normalizeStringList(input);
   }
 
   normalizeToolItems(input = []) {
@@ -23,11 +25,7 @@ export class RunConfigResolver {
   }
 
   readModelSelectionValue(modelConfig = "") {
-    if (typeof modelConfig === "string") return modelConfig.trim();
-    if (!isPlainObject(modelConfig)) return "";
-    return String(
-      modelConfig?.value || modelConfig?.alias || modelConfig?.key || modelConfig?.model || "",
-    ).trim();
+    return readModelSelectionAlias(modelConfig);
   }
 
   mergeScenarioRestrictedList({ scenarioItems = [], currentItems = [], hasWildcard = false }) {
@@ -42,14 +40,10 @@ export class RunConfigResolver {
 
   normalizeToolPolicyConflicts(toolPolicy = {}) {
     if (!isPlainObject(toolPolicy)) return toolPolicy;
-    const allowToolNames = this.normalizeStringArray(toolPolicy?.allowToolNames);
-    if (!allowToolNames.length) return toolPolicy;
-    const denySet = new Set([...this.normalizeStringArray(toolPolicy?.denyToolNames)]);
-    if (!denySet.size) return toolPolicy;
-    return {
-      ...toolPolicy,
-      allowToolNames: allowToolNames.filter((toolName) => !denySet.has(toolName)),
-    };
+    return removeDeniedToolNamesFromAllow({
+      toolPolicy,
+      normalizeStringArray: (value) => this.normalizeStringArray(value),
+    });
   }
 
   normalizeRunConfigToolPolicyConflicts(runConfig = {}) {

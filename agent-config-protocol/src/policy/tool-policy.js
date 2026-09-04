@@ -5,12 +5,16 @@
  */
 
 import { PROGRAMMING_REQUIRED_TOOL_NAMES } from "./scenario-policy.js";
+import { normalizeStringList } from "../utils.js";
 
-function normalizeStringArrayFallback(input = []) {
-  return Array.isArray(input) ? input.map((item) => String(item || "").trim()).filter(Boolean) : [];
-}
+const normalizeStringArrayFallback = (input = []) => normalizeStringList(input);
 
-function removeDeniedToolNamesFromAllow({
+/**
+ * Authoritative allow/deny conflict resolution: a denied tool name can never
+ * survive in the allow list. Exported so every caller resolves the conflict
+ * through this single implementation.
+ */
+export function removeDeniedToolNamesFromAllow({
   toolPolicy = {},
   normalizeStringArray = normalizeStringArrayFallback,
 } = {}) {

@@ -102,20 +102,6 @@ export function normalizeProviderFormat(input = "") {
   return "";
 }
 
-export function normalizeModelProviderId(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
-  return Object.values(MODEL_PROVIDER_ID).includes(value) ? value : "";
-}
-
-export function normalizeModelAdapterId(input = "") {
-  const value = String(input || "")
-    .trim()
-    .toLowerCase();
-  return Object.values(MODEL_ADAPTER_ID).includes(value) ? value : "";
-}
-
 export function normalizeMcpServerType(input = "") {
   const value = String(input || "").trim();
   return Object.values(MCP_SERVER_TYPE).includes(value) ? value : "";

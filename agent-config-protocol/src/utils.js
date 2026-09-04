@@ -7,6 +7,20 @@
 export function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
+
+/**
+ * Single normalization contract for the protocol's string-list fields: trim,
+ * drop empties, and optionally collapse duplicates. Policy, projection and
+ * contract modules read list-shaped config through this function so the rule
+ * is stated exactly once.
+ */
+export function normalizeStringList(input = [], { dedupe = false } = {}) {
+  const values = (Array.isArray(input) ? input : [])
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+  return dedupe ? Array.from(new Set(values)) : values;
+}
+
 export function deepMerge(base, override) {
   const left = isPlainObject(base) ? base : {};
   const right = isPlainObject(override) ? override : {};
