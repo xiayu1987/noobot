@@ -3,20 +3,35 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { normalizeKnownConfigKeys } from "../normalization/keys.js";
+import { normalizeKnownConfigKeys, SNAKE_TO_CANONICAL_KEY_MAP } from "../normalization/keys.js";
 import { sanitizeScenarioConfig } from "./scenario-policy.js";
 import { isPlainObject } from "../utils.js";
 import {
+  CONFIG_DOCUMENT_SCOPE,
   CONFIG_NODE_POLICY,
   CONFIG_PATH_REPRESENTATION,
-  USER_CONFIG_OVERRIDE_POLICY,
-  listConfigNodePathsByPolicy,
+  USER_CONFIG_MERGE_MODE,
 } from "../contract/repair.js";
-
+import {
+  CONFIG_STRUCTURE,
+  listConfigNodePathsByPolicy,
+  structureAllowsScope,
+} from "../contract/config-structure.js";
 const USER_CONFIG_SYSTEM_OWNED_PATHS = listConfigNodePathsByPolicy({
   policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
   representation: CONFIG_PATH_REPRESENTATION.RUNTIME,
 });
+
+/**
+ * Which top-level keys a user document may carry is a structural fact, so it is
+ * derived from the scope declarations instead of restated as a key list here.
+ * This module only decides HOW an allowed key merges.
+ */
+const USER_OVERRIDABLE_TOP_LEVEL_KEYS = Object.freeze(
+  Object.entries(CONFIG_STRUCTURE.fields)
+    .filter(([, child]) => structureAllowsScope(child, CONFIG_DOCUMENT_SCOPE.USER))
+    .map(([key]) => SNAKE_TO_CANONICAL_KEY_MAP[key] || key),
+);
 
 const USER_OVERRIDE_TOP_LEVEL_DENY_KEYS = new Set(
   USER_CONFIG_SYSTEM_OWNED_PATHS.filter((path) => !path.includes(".")),
@@ -58,8 +73,7 @@ function cloneAllowedValue(key, value) {
   if (USER_OVERRIDE_TOP_LEVEL_DENY_KEYS.has(String(key || ""))) {
     return undefined;
   }
-  const mode = USER_CONFIG_OVERRIDE_POLICY[key];
-  if (!mode) return undefined;
+  const mode = USER_CONFIG_MERGE_MODE[key] || "deep";
   if (mode === "replace") {
     return typeof value === "string" ? value : undefined;
   }
@@ -73,7 +87,7 @@ function cloneAllowedValue(key, value) {
 export function sanitizeUserConfig(input = {}) {
   const src = normalizeKnownConfigKeys(isPlainObject(input) ? input : {});
   const out = {};
-  for (const key of Object.keys(USER_CONFIG_OVERRIDE_POLICY)) {
+  for (const key of USER_OVERRIDABLE_TOP_LEVEL_KEYS) {
     const value = cloneAllowedValue(key, src[key]);
     if (value === undefined) continue;
     if (isPlainObject(value) && !Object.keys(value).length) continue;

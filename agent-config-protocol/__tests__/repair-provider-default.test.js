@@ -11,7 +11,7 @@ import { repairConfigDocument } from "../src/pipeline/repair.js";
 test("config repair fills only invalid fields for an unknown provider", () => {
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: { providers: {} },
+    baseValues: { providers: {} },
     target: {
       providers: {
         GLM_5_1: {
@@ -38,7 +38,7 @@ test("config repair fills only invalid fields for an unknown provider", () => {
 test("config repair adds the character plugin to legacy configuration", () => {
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: {
+    baseValues: {
       plugins: {
         character: {
           enabled: true,
@@ -61,7 +61,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
 
   const customized = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: {
+    baseValues: {
       plugins: {
         character: {
           enabled: true,
@@ -89,7 +89,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
 
   const unsupportedPlugin = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: {
+    baseValues: {
       plugins: {
         character: { enabled: true, mode: "on" },
       },

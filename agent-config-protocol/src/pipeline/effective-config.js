@@ -7,7 +7,7 @@ import { deepMerge, isPlainObject } from "../utils.js";
 import { normalizeKnownConfigKeys } from "../normalization/keys.js";
 import { resolveBuiltinScenarios } from "../policy/scenario-policy.js";
 import { sanitizeUserConfig } from "../policy/user-override.js";
-import { USER_CONFIG_OVERRIDE_POLICY } from "../contract/repair.js";
+import { USER_CONFIG_MERGE_MODE } from "../contract/repair.js";
 
 export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const globalBase = normalizeKnownConfigKeys(
@@ -16,13 +16,13 @@ export function mergeConfig(globalConfig = {}, userConfig = {}) {
   const safeUser = sanitizeUserConfig(userConfig);
   const out = { ...globalBase };
   for (const [key, userValue] of Object.entries(safeUser)) {
-    const mode = USER_CONFIG_OVERRIDE_POLICY[key];
     if (key === "scenarios") continue;
-    if (mode === "deep") {
-      out[key] = deepMerge(globalBase[key], userValue);
+    // Anything the merge-mode map does not single out merges deeply.
+    if (USER_CONFIG_MERGE_MODE[key] === "replace") {
+      out[key] = userValue;
       continue;
     }
-    out[key] = userValue;
+    out[key] = deepMerge(globalBase[key], userValue);
   }
   out.scenarios = resolveBuiltinScenarios(globalBase?.scenarios, safeUser?.scenarios);
   delete out.configParams;

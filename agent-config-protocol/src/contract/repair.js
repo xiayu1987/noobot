@@ -36,69 +36,17 @@ export const CONFIG_REPAIR_ACTION = Object.freeze({
   RESET_TO_DEFAULT: "reset_to_default",
 });
 
-export const USER_CONFIG_OVERRIDE_POLICY = Object.freeze({
+// Which top-level keys a user may override is a structural fact, answered by the
+// scope declarations in the field/structure contract. This map only records HOW
+// an overridable key merges; anything not listed merges deeply.
+export const USER_CONFIG_MERGE_MODE = Object.freeze({
   defaultProvider: "replace",
-  providers: "deep",
-  multimodal: "deep",
-  session: "deep",
-  context: "deep",
-  services: "deep",
-  mcpServers: "deep",
-  tools: "deep",
   scenarios: "scenarios",
-  plugins: "deep",
-  preferences: "deep",
 });
 
-const systemOwnedRule = (persistedPath, runtimePath = persistedPath) =>
-  Object.freeze({
-    policy: CONFIG_NODE_POLICY.GLOBAL_ONLY,
-    persistedPath,
-    runtimePath,
-  });
-
-export const CONFIG_NODE_RULES = Object.freeze([
-  systemOwnedRule("workspace_root", "workspaceRoot"),
-  systemOwnedRule("workspace_template_path", "workspaceTemplatePath"),
-  systemOwnedRule("super_admin", "superAdmin"),
-  systemOwnedRule("security"),
-  systemOwnedRule("streaming"),
-  systemOwnedRule("desktop"),
-  systemOwnedRule("attachments"),
-  systemOwnedRule("tools.delegate_task_async.waitTimeoutMs"),
-  systemOwnedRule("tools.delegate_task_async.pollIntervalMs"),
-  systemOwnedRule("tools.delegate_task_async.maxSubAgentDepth"),
-  systemOwnedRule("tools.wait_async_task_result.pollIntervalMs"),
-  systemOwnedRule("tools.call_mcp_task.maxToolLoopTurns"),
-  systemOwnedRule("tools.execute_script"),
-  systemOwnedRule("tools.task_summary.phaseSummaryLoopTurns"),
-  systemOwnedRule("tools.task_summary.phaseSummaryMessageCharsThreshold"),
-  systemOwnedRule("tools.task_summary.maxToolLoopTurns"),
-  systemOwnedRule("tools.request_help.helpPromptLoopTurns"),
-  systemOwnedRule("tools.request_help.toolFailureHelpCount"),
-  systemOwnedRule("plugins.workflow.timeoutMs"),
-  systemOwnedRule("plugins.workflow.maxAutoTransitions"),
-  systemOwnedRule("plugins.workflow.maxParallelNodeAgents"),
-  systemOwnedRule("plugins.workflow.miniRunnerMaxTurns"),
-  systemOwnedRule("plugins.workflow.parallelNodeExecution"),
-]);
-
-export function listConfigNodePathsByPolicy({
-  policy,
-  representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
-} = {}) {
-  if (!Object.values(CONFIG_NODE_POLICY).includes(policy)) {
-    throw new TypeError(`unsupported config node policy: ${policy}`);
-  }
-  if (!Object.values(CONFIG_PATH_REPRESENTATION).includes(representation)) {
-    throw new TypeError(`unsupported config path representation: ${representation}`);
-  }
-  const pathKey =
-    representation === CONFIG_PATH_REPRESENTATION.RUNTIME ? "runtimePath" : "persistedPath";
-  return Object.freeze(
-    CONFIG_NODE_RULES.filter((rule) => rule.policy === policy).map((rule) => rule[pathKey]),
-  );
-}
+// Which path carries which policy is a structural fact. It is declared once in
+// the field/structure contract and read back through
+// `listConfigNodePathsByPolicy` there, never restated as a path list here.
 
 export function summarizeConfigRepairReport(report = {}) {
   const actionCounts = {};

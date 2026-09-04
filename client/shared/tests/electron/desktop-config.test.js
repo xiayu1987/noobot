@@ -40,6 +40,11 @@ export async function createFixture() {
           sandbox: { provider: "docker", scope: "user", mounts: [] },
         },
       },
+      tools: {
+        access_connector: { enabled: true },
+        execute_script: { enabled: true },
+        read_file: { enabled: true },
+      },
       providers: {
         openai: {
           model: "gpt",
@@ -654,7 +659,11 @@ test("packaged desktop startup preserves config params absent from current templ
       descriptions: { ACTIVE_API_KEY: "active", RETIRED_API_KEY: "retired" },
     });
     const globalConfig = JSON.parse(await readFile(globalConfigPath, "utf8"));
-    assert.deepEqual(globalConfig.tools, {});
+    assert.deepEqual(globalConfig.tools, {
+      access_connector: { enabled: true },
+      execute_script: { enabled: true },
+      read_file: { enabled: true },
+    });
     assert.deepEqual(state.missingParams, []);
     manager.saveConfigParamValues({
       workspaceRootPath: state.workspaceRootPath,

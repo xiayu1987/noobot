@@ -20,7 +20,13 @@
  */
 
 import { MODEL_PROVIDER_CONFIG_CONTRACT } from "@noobot/model-protocol";
-import { CONFIG_DOCUMENT_SCOPE, CONFIG_ITEM_TYPE, CONFIG_NODE_POLICY } from "./repair.js";
+import {
+  CONFIG_DOCUMENT_SCOPE,
+  CONFIG_ITEM_TYPE,
+  CONFIG_NODE_POLICY,
+  CONFIG_PATH_REPRESENTATION,
+} from "./repair.js";
+import { SNAKE_TO_CANONICAL_KEY_MAP } from "../normalization/keys.js";
 import { MCP_SERVER_TYPE } from "../enums.js";
 
 export const CONFIG_STRUCTURE_KIND = Object.freeze({
@@ -238,10 +244,7 @@ const MCP_SERVER_ENTRY_STRUCTURE = object(
 export const CONFIG_STRUCTURE = object({
   workspace_root: string({ policy: GLOBAL_ONLY }),
   workspace_template_path: string({ policy: GLOBAL_ONLY }),
-  super_admin: object(
-    { user_id: string(), connect_code: string() },
-    { policy: GLOBAL_ONLY, runtimePath: "superAdmin" },
-  ),
+  super_admin: object({ user_id: string(), connect_code: string() }, { policy: GLOBAL_ONLY }),
   streaming: boolean({ policy: GLOBAL_ONLY }),
   security: SECURITY_STRUCTURE,
   // Built-in nodes: the global example does not declare them, so repair
@@ -276,7 +279,7 @@ export const CONFIG_STRUCTURE = object({
   }),
   plugins: PLUGINS_STRUCTURE,
   services: collection(SERVICE_ENTRY_STRUCTURE),
-  mcp_servers: collection(MCP_SERVER_ENTRY_STRUCTURE, { runtimePath: "mcpServers" }),
+  mcp_servers: collection(MCP_SERVER_ENTRY_STRUCTURE),
   preferences: object({ language: string({ nonEmpty: true }) }),
 });
 
@@ -318,18 +321,67 @@ function walkStructure(node, path, visit) {
   }
 }
 
-/** Every declared path carrying the given policy, deepest-independent order. */
-export function listStructurePathsByPolicy(policy) {
+/**
+ * Project a persisted path into the runtime key spelling. The key contract
+ * already owns that spelling, so it is applied here instead of being restated
+ * once per node.
+ */
+function toRuntimePath(path) {
+  return path.map((key) => SNAKE_TO_CANONICAL_KEY_MAP[key] || key).join(".");
+}
+
+/**
+ * Collect the shallowest paths a scope may not carry. Descending past such a
+ * path would restate what its ancestor already settles, so collection stops at
+ * the boundary.
+ */
+function collectScopeForbiddenPaths(node, path, scope, paths) {
+  if (path.length && !structureAllowsScope(node, scope)) {
+    paths.push([...path]);
+    return;
+  }
+  if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && node.fields) {
+    for (const [key, child] of Object.entries(node.fields)) {
+      collectScopeForbiddenPaths(child, [...path, key], scope, paths);
+    }
+  }
+  if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION && node.entry) {
+    collectScopeForbiddenPaths(node.entry, [...path, CONFIG_STRUCTURE_PLACEHOLDER], scope, paths);
+  }
+}
+
+/**
+ * Every declared path carrying the given policy, in either path spelling.
+ *
+ * `GLOBAL_ONLY` is answered by scope rather than by the declared policy word,
+ * because a node is global-owned whenever no user scope may carry it — whether
+ * it declares that through `policy` or through an explicit `scopes` list.
+ */
+export function listConfigNodePathsByPolicy({
+  policy,
+  representation = CONFIG_PATH_REPRESENTATION.PERSISTED,
+} = {}) {
   if (!Object.values(CONFIG_NODE_POLICY).includes(policy)) {
     throw new TypeError(`unsupported config node policy: ${policy}`);
   }
+  if (!Object.values(CONFIG_PATH_REPRESENTATION).includes(representation)) {
+    throw new TypeError(`unsupported config path representation: ${representation}`);
+  }
   const paths = [];
-  walkStructure(CONFIG_STRUCTURE, [], (node, path) => {
-    if (!path.length) return;
-    const declared = node.policy || CONFIG_NODE_POLICY.USER_CONFIGURABLE;
-    if (declared === policy) paths.push(path.join("."));
-  });
-  return Object.freeze(paths);
+  if (policy === CONFIG_NODE_POLICY.GLOBAL_ONLY) {
+    collectScopeForbiddenPaths(CONFIG_STRUCTURE, [], CONFIG_DOCUMENT_SCOPE.USER, paths);
+  } else {
+    walkStructure(CONFIG_STRUCTURE, [], (node, path) => {
+      if (!path.length) return;
+      const declared = node.policy || CONFIG_NODE_POLICY.USER_CONFIGURABLE;
+      if (declared === policy) paths.push([...path]);
+    });
+  }
+  return Object.freeze(
+    paths.map((path) =>
+      representation === CONFIG_PATH_REPRESENTATION.RUNTIME ? toRuntimePath(path) : path.join("."),
+    ),
+  );
 }
 
 /** Every model-reference path and the capability each reference requires. */
