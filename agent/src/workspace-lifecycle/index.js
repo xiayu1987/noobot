@@ -19,7 +19,6 @@ import { CONFIG_DOCUMENT_SCOPE, repairConfigDocument } from "@noobot/agent-confi
 import { fatalSystemError } from "../shared/errors/index.js";
 import { tSystem } from "noobot-i18n/agent/system-text";
 import { ERROR_CODE } from "../shared/errors/constants.js";
-import { migrateLegacyMemoryFiles } from "../memory/migration.js";
 import { FileMutationCoordinator } from "../shared/storage/file-mutation-coordinator.js";
 import { writeFileAtomic } from "../shared/storage/atomic-file-write.js";
 
@@ -32,6 +31,12 @@ const RESET_SECTION_PATHS = {
 };
 
 const SYNC_PRESERVE_EXISTING_ROOTS = new Set(["memory"]);
+const CANONICAL_MEMORY_TEMPLATE_FILES = Object.freeze([
+  "memory/short-memory.json",
+  "memory/long-memory.md",
+  "memory/long-memory-model.md",
+  "memory/experience-model.md",
+]);
 const workspaceMutationCoordinator = new FileMutationCoordinator({
   timeoutMessage: "workspace mutation lock timeout",
   timeoutErrorCode: "WORKSPACE_MUTATION_BUSY",
@@ -147,6 +152,17 @@ function writeConfigDocument(filePath, document) {
   });
 }
 
+async function ensureCanonicalMemoryFiles(templateBase, base) {
+  for (const relativePath of CANONICAL_MEMORY_TEMPLATE_FILES) {
+    const sourcePath = path.join(templateBase, relativePath);
+    const targetPath = path.join(base, relativePath);
+    if (await pathExists(targetPath)) continue;
+    if (!(await pathExists(sourcePath))) continue;
+    await mkdir(path.dirname(targetPath), { recursive: true });
+    await cp(sourcePath, targetPath, { force: false, errorOnExist: false });
+  }
+}
+
 export async function ensureUserWorkspaceInitialized({
   workspaceRoot,
   workspaceTemplatePath = "",
@@ -175,15 +191,13 @@ export async function ensureUserWorkspaceInitialized({
           details: { base },
         });
       }
-      await migrateLegacyMemoryFiles(base);
-      // Runtime initialization only validates the workspace and performs
-      // legacy data migration. Config/template synchronization is a startup
-      // concern (or an explicit user action), never a per-run side effect.
+      await ensureCanonicalMemoryFiles(templateBase, base);
+      // Runtime initialization repairs missing canonical files from the user
+      // template without overwriting existing user state.
       return base;
     }
 
     await cp(templateBase, base, { recursive: true, force: false });
-    await migrateLegacyMemoryFiles(base);
     return base;
   });
 }
@@ -279,7 +293,6 @@ export async function syncUserWorkspaceFromTemplate({
   });
   return withWorkspaceMutation(mutationLockDir, async () => {
     await mkdir(base, { recursive: true });
-    await migrateLegacyMemoryFiles(base);
     await syncDirectoryIncremental(templateBase, base, "", baseValues);
     return base;
   });

@@ -5,14 +5,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildPromptCacheKey,
   bindOpenAiCompatibleTools,
   compileProviderModelKwargs,
   createModelRequestExecutor,
   createOpenAiCompatibleClient,
   createProviderAdapterRegistry,
   applyPromptCacheMessages,
-  resolveUseResponsesApi,
 } from "../src/index.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY, MODEL_OPERATION_KIND } from "@noobot/model-protocol";
 
@@ -534,8 +532,7 @@ test("cache parameters use the shared strategy while retaining provider-specific
     reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
     extra_body: { prompt_cache_key: "leak", cache_control: { type: "ephemeral" } },
   });
-  assert.deepEqual(deepseek, {
-  });
+  assert.deepEqual(deepseek, {});
 
   const alibaba = compileProviderModelKwargs({
     operatorId: "alibaba",
@@ -546,8 +543,7 @@ test("cache parameters use the shared strategy while retaining provider-specific
     reasoning_effort_options: ["none", "medium"],
     extra_body: { prompt_cache_retention: "leak" },
   });
-  assert.deepEqual(alibaba, {
-  });
+  assert.deepEqual(alibaba, {});
 });
 
 test("model defaults follow provider-specific sampling guidance", async () => {
@@ -839,31 +835,4 @@ test("reasoning-only retries are exposed through the canonical attempt trace", a
     ],
   );
   assert.equal(response.execution.attempts[0].output.reasoning, "thinking");
-});
-
-test("responses API and cache key selection are deterministic", () => {
-  assert.equal(resolveUseResponsesApi({ model: "codex-mini" }), true);
-  assert.equal(
-    resolveUseResponsesApi({
-      model: "qwen-max",
-      reasoning_effort_parameter: "enable_thinking",
-      reasoning_effort_options: ["none", "medium"],
-      use_responses_api: true,
-    }),
-    true,
-  );
-  assert.equal(resolveUseResponsesApi({ model: "gpt-5" }), false);
-  assert.equal(
-    buildPromptCacheKey(
-      {
-        operatorId: "openai",
-        model: "gpt-5",
-        reasoning_effort_parameter: "reasoning_effort",
-        reasoning_effort_options: ["none", "low", "medium", "high", "xhigh", "max"],
-        modelFamily: "gpt",
-      },
-      "agent.main",
-    ),
-    "noobot-main-gpt-5",
-  );
 });

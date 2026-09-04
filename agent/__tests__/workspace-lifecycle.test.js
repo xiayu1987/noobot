@@ -139,7 +139,7 @@ test("workspace mutation locks stay outside the workspace content tree", async (
   }
 });
 
-test("workspace initialization migrates legacy long memory before template synchronization", async () => {
+test("workspace initialization ignores legacy memory files", async () => {
   const fixture = await createFixture();
   try {
     await mkdir(path.join(fixture.userPath, "memory", "long-memory"), { recursive: true });
@@ -160,11 +160,11 @@ test("workspace initialization migrates legacy long memory before template synch
 
     assert.equal(
       await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      "1. migrated memory\n",
+      "template\n",
     );
-    assert.equal(
-      await readFile(path.join(fixture.userPath, "memory", "long-memory", "metadata.md"), "utf8"),
-      'M1 key="style" value="concise"\n',
+    await assert.rejects(
+      readFile(path.join(fixture.userPath, "memory", "long-memory", "metadata.md"), "utf8"),
+      { code: "ENOENT" },
     );
   } finally {
     await fixture.restore();
@@ -195,18 +195,24 @@ test("workspace initialization repairs an empty short-memory document", async ()
   }
 });
 
-test("workspace initialization migrates legacy experience files before normal reads", async () => {
+test("workspace initialization repairs missing canonical memory files from the template", async () => {
   const fixture = await createFixture();
   try {
-    await mkdir(path.join(fixture.userPath, "memory", "experience"), { recursive: true });
     await writeFile(
-      path.join(fixture.userPath, "memory", "experience", "metadata.json"),
-      JSON.stringify({ domainNames: ["coding"], updatedAt: "2026-08-19T00:00:00.000Z" }),
+      path.join(fixture.workspaceTemplatePath, "memory", "long-memory-model.md"),
+      "canonical model\n",
     );
     await writeFile(
-      path.join(fixture.userPath, "memory", "experience-model.json"),
-      JSON.stringify({ coding: { quality: ["protocol"] } }),
+      path.join(fixture.workspaceTemplatePath, "memory", "experience-model.md"),
+      "canonical experience\n",
     );
+    await writeFile(
+      path.join(fixture.workspaceTemplatePath, "memory", "short-memory.json"),
+      '{"items":[]}\n',
+    );
+    await mkdir(fixture.userPath, { recursive: true });
+    await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
+    await writeFile(path.join(fixture.userPath, "memory", "long-memory.json"), "{broken");
 
     await ensureUserWorkspaceInitialized({
       workspaceRoot: fixture.workspaceRoot,
@@ -214,41 +220,40 @@ test("workspace initialization migrates legacy experience files before normal re
       userId: "user-1",
     });
 
-    const metadata = await readFile(
-      path.join(fixture.userPath, "memory", "experience", "metadata.md"),
-      "utf8",
-    );
     const model = await readFile(
-      path.join(fixture.userPath, "memory", "experience-model.md"),
+      path.join(fixture.userPath, "memory", "long-memory-model.md"),
       "utf8",
     );
-    assert.match(metadata, /DOMAIN: coding/);
-    assert.match(metadata, /UPDATED_AT: 2026-08-19T00:00:00.000Z/);
-    assert.match(model, /DOMAIN: coding/);
-    assert.match(model, /CATEGORY: quality/);
-    assert.match(model, /- protocol/);
+    assert.equal(model, "canonical model\n");
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "experience-model.md"), "utf8"),
+      "canonical experience\n",
+    );
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "short-memory.json"), "utf8"),
+      '{"items":[]}\n',
+    );
+    await assert.rejects(
+      readFile(path.join(fixture.userPath, "memory", "long-memory.json"), "utf8"),
+      { code: "ENOENT" },
+    );
   } finally {
     await fixture.restore();
   }
 });
 
-test("legacy long-memory migration does not publish current files after parse failure", async () => {
+test("workspace initialization repairs a missing long-memory document from the template", async () => {
   const fixture = await createFixture();
   try {
     await mkdir(path.join(fixture.userPath, "memory"), { recursive: true });
-    await writeFile(path.join(fixture.userPath, "memory", "long-memory.json"), "{broken");
-
-    await assert.rejects(
-      ensureUserWorkspaceInitialized({
-        workspaceRoot: fixture.workspaceRoot,
-        workspaceTemplatePath: fixture.workspaceTemplatePath,
-        userId: "user-1",
-      }),
-      { code: "PERSISTED_JSON_CORRUPTED" },
-    );
-    await assert.rejects(
-      readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
-      { code: "ENOENT" },
+    await ensureUserWorkspaceInitialized({
+      workspaceRoot: fixture.workspaceRoot,
+      workspaceTemplatePath: fixture.workspaceTemplatePath,
+      userId: "user-1",
+    });
+    assert.equal(
+      await readFile(path.join(fixture.userPath, "memory", "long-memory.md"), "utf8"),
+      "template\n",
     );
   } finally {
     await fixture.restore();
