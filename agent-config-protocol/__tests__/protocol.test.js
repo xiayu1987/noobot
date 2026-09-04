@@ -474,7 +474,7 @@ test("config repair preserves an explicit DashScope GLM provider over the librar
   };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: {
+    baseValues: {
       default_provider: "glm_5_3",
       providers: {
         ["glm_5_3"]: {

@@ -70,7 +70,7 @@ test("default user template is the user-scope source of truth for system-owned n
   legacyUserConfig.tools.execute_native_script = { enabled: false };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.USER,
-    template: userTemplate,
+    baseValues: userTemplate,
     target: legacyUserConfig,
   });
   for (const path of systemOwnedPaths)
@@ -96,7 +96,7 @@ test("default user template is the user-scope source of truth for system-owned n
 test("config repair recursively adds template nodes through one protocol", () => {
   const synchronized = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template: {
+    baseValues: {
       workspace_root: "/template",
       providers: {
         primary: {
@@ -141,20 +141,22 @@ test("config repair recursively adds template nodes through one protocol", () =>
 });
 
 test("config repair separates structural fields from default values", () => {
+  // Structure is owned by the field contract; the value source only answers
+  // "what value stands here", so a value-only key can never add a field.
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    structureTemplate: { preferences: { language: "" } },
-    valueTemplate: { preferences: { language: "zh-CN" } },
+    baseValues: { preferences: { language: "zh-CN" }, undeclared_field: "ignored" },
     target: { preferences: {} },
   });
   assert.deepEqual(repaired.document, { preferences: { language: "zh-CN" } });
+  assert.equal("undeclared_field" in repaired.document, false);
 });
 
 test("config repair restores invalid values and enforces node policies", () => {
   const template = { workspace_root: "/template", workspace_template_path: "/template-default" };
   const repaired = repairConfigDocument({
     scope: CONFIG_DOCUMENT_SCOPE.GLOBAL,
-    template,
+    baseValues: template,
     target: { workspace_root: { invalid: true }, workspace_template_path: "/custom-template" },
   });
   assert.equal(repaired.document.workspace_root, "/template");
