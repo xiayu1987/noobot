@@ -5,8 +5,6 @@
 
 import { buildModelReasoningEffortTransport } from "@noobot/model-protocol";
 
-const OPENAI_MODELS = [/^gpt-4\.1(?:\b|[-_.])/, /^gpt-5(?:\b|[-_.])/];
-
 const PROVIDER_IDS = new Set([
   "openai",
   "anthropic",
@@ -37,9 +35,13 @@ function modelFamily(spec = {}) {
   return value;
 }
 
-/** GPT is the only family carrying the `prompt_cache_key` request field. */
+/**
+ * Every OpenAI-compatible model receives the canonical cache identity. The
+ * provider adapter is responsible for mapping it to a provider-specific
+ * transport (for example, xAI's x-grok-conv-id header).
+ */
 function usesPromptCacheKeyProtocol(spec = {}) {
-  return modelFamily(spec) === "gpt";
+  return Boolean(String(spec.model || "").trim());
 }
 
 function segment(value) {
@@ -165,7 +167,7 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     if (version?.major === 5 && version.minor >= 6) {
       out.prompt_cache_options = spec.prompt_cache_options ||
         spec.promptCacheOptions || { ttl: "30m" };
-    } else if (OPENAI_MODELS.some((pattern) => pattern.test(String(spec.model).toLowerCase()))) {
+    } else {
       out.prompt_cache_retention = String(
         spec.prompt_cache_retention || spec.promptCacheRetention || "24h",
       );

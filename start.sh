@@ -396,6 +396,20 @@ ensure_openvscode_server_binary() {
   return 0
 }
 
+ensure_playwright_chromium() {
+  local browser_path
+  browser_path="$(cd "$SERVICE_DIR" && node --input-type=module -e '
+import { chromium } from "playwright";
+process.stdout.write(chromium.executablePath());
+' 2>/dev/null || true)"
+  if [[ -n "$browser_path" && -x "$browser_path" ]]; then
+    return 0
+  fi
+
+  log "Chromium browser is missing; installing it once"
+  (cd "$SERVICE_DIR" && npm exec --no -- playwright install chromium)
+}
+
 clean_pm2_cache() {
   log "$(msg step_clean_pm2)"
   run_pm2 delete all >/dev/null 2>&1 || true
@@ -538,15 +552,19 @@ main() {
   log "$(msg step_install)"
   unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD || true
   if node -e "const p=require(process.argv[1]); process.exit(Array.isArray(p.workspaces)&&p.workspaces.length>0?0:1)" "$ROOT_DIR/package.json" >/dev/null 2>&1; then
-    npm --prefix "$ROOT_DIR" install --workspaces
+    # Dependency resolution must stay offline with respect to npm's audit and
+    # funding endpoints. Those network calls are not part of startup and can
+    # block the service indefinitely when the registry is unreachable.
+    npm --prefix "$ROOT_DIR" install --workspaces --ignore-scripts --no-audit --no-fund --no-progress
     (cd "$ROOT_DIR" && node "./scripts/check-workspace-runtime-dependencies.mjs" --quiet)
   else
-    npm --prefix "$CLIENT_DIR" install
-    npm --prefix "$SERVICE_DIR" install
-    npm --prefix "$AGENT_PROXY_DIR" install
-    npm --prefix "$MODEL_PROXY_DIR" install
-    npm --prefix "$SERVICE_DIR" run postinstall --if-present
+    npm --prefix "$CLIENT_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
+    npm --prefix "$SERVICE_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
+    npm --prefix "$AGENT_PROXY_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
+    npm --prefix "$MODEL_PROXY_DIR" install --ignore-scripts --no-audit --no-fund --no-progress
   fi
+
+  ensure_playwright_chromium
 
   ensure_openvscode_server_binary
 

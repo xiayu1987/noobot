@@ -43,11 +43,13 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ## 缓存策略
 
-`model-runtime/src/policies/cache-policy-engine.js` 会先从 `extra_body` 移除所有跨供应商缓存字段，再按已识别的 `operatorId` 和模型系列生成目标请求参数。
+`model-runtime/src/policies/cache-policy-engine.js` 会先从 `extra_body` 移除所有跨供应商缓存字段，再为每个模型生成统一的稳定缓存身份和 TTL 策略，最后按已识别的 `operatorId` 和模型系列补充供应商专用字段。
+
+### 统一缓存策略
+
+所有模型都会生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 5.6 及以上模型默认使用 `prompt_cache_retention: "24h"`，5.6 及以上模型默认使用 `prompt_cache_options: { "ttl": "30m" }`。显式配置优先。该策略提供统一缓存身份，供应商适配仍决定该身份在线上的具体承载方式。
 
 ### OpenAI GPT
-
-仅当模型系列为 GPT 时：
 
 - 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
 - GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
@@ -65,7 +67,7 @@ Gemini 系列仅在显式配置 `cached_content` 或 `gemini_cached_content` 后
 
 ### Grok
 
-Grok 系列生成稳定的 `prompt_cache_key`，并由适配层映射为官方要求的 `x-grok-conv-id` 请求头；不发送 GPT 专用 retention/options。
+Grok 系列使用统一缓存身份，并由适配层映射为官方要求的 `x-grok-conv-id` 请求头。
 
 ### Qwen
 
@@ -73,7 +75,7 @@ Qwen 系列使用与 DashScope 官方兼容的消息级 `cache_control` 标记�
 
 ### DeepSeek、GLM、Kimi 与通用网关
 
-DeepSeek、GLM 和 Kimi 官方 API 采用服务端自动前缀缓存，没有需要客户端发送的显式缓存 key/control 字段，因此不伪造参数；Noobot 通过稳定的 system 前缀和按名称排序的工具 schema 提高自动命中率。
+这些模型同样接收统一的缓存身份和 TTL 参数；供应商未定义专用承载字段时，参数通过 OpenAI-compatible 请求传输。Noobot 仍通过稳定的 system 前缀和按名称排序的工具 schema 提高服务端自动前缀缓存命中率。
 
 ## Responses API
 
