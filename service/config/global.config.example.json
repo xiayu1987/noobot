@@ -131,7 +131,7 @@
     },
     "character": {
       "enabled": true,
-      "mode": "on"
+      "mode": "off"
     }
   },
   "preferences": {
