@@ -12,6 +12,9 @@ import {
   MODEL_ERROR_KIND,
   ModelProtocolError,
   normalizeRetryPolicy,
+  NOOP_OBSERVATION_PORT,
+  requireCredentialPort,
+  requireObservationPort,
   SYSTEM_CLOCK_PORT,
 } from "@noobot/model-protocol";
 import { normalizeMessages } from "../normalization/message-normalizer.js";
@@ -35,16 +38,32 @@ function projectObservableModel(model = {}) {
   });
 }
 
+/**
+ * The transport headers every invocation carries. Both the operation path and
+ * the chat path derive them here so the header contract has one definition.
+ */
+function buildInvocationHeaders({ model = {}, invocation = {}, headers = {} } = {}) {
+  return {
+    "X-Model-Name": String(model.model || "").trim(),
+    "X-Plugin-Flow": invocation.flow,
+    "X-Plugin-Purpose": invocation.purpose,
+    "X-Plugin-Domain": invocation.domain,
+    ...(invocation.sessionId ? { "X-Plugin-Session-Id": invocation.sessionId } : {}),
+    ...(invocation.parentSessionId ? { parentSessionid: invocation.parentSessionId } : {}),
+    ...(headers || {}),
+  };
+}
+
 export function createModelRequestExecutor({
   registry = createProviderAdapterRegistry(),
   credentialPort,
-  observationPort = { emit() {} },
+  observationPort = NOOP_OBSERVATION_PORT,
   clock = SYSTEM_CLOCK_PORT,
   clientDecorator = null,
   providerRuntime = {},
 } = {}) {
-  if (!credentialPort || typeof credentialPort.resolve !== "function")
-    throw new TypeError("model runtime requires credentialPort.resolve");
+  requireCredentialPort(credentialPort);
+  requireObservationPort(observationPort);
   const modelObservationStates = new Map();
   const resolveModelObservationState = (modelSpec = {}) => {
     const key = JSON.stringify([
@@ -117,17 +136,11 @@ export function createModelRequestExecutor({
                 modelSpec: requestBase.model,
                 credential,
                 operation: requestBase.operation,
-                headers: {
-                  "X-Model-Name": String(requestBase.model.model || "").trim(),
-                  "X-Plugin-Flow": invocation.flow,
-                  "X-Plugin-Purpose": invocation.purpose,
-                  "X-Plugin-Domain": invocation.domain,
-                  ...(invocation.sessionId ? { "X-Plugin-Session-Id": invocation.sessionId } : {}),
-                  ...(invocation.parentSessionId
-                    ? { parentSessionid: invocation.parentSessionId }
-                    : {}),
-                  ...(requestBase.options.headers || {}),
-                },
+                headers: buildInvocationHeaders({
+                  model: requestBase.model,
+                  invocation,
+                  headers: requestBase.options.headers,
+                }),
                 signal: requestBase.options.signal,
                 locale: requestBase.options.locale,
                 clock,
@@ -182,15 +195,11 @@ export function createModelRequestExecutor({
           messages,
           options: { ...input.options, streaming },
         });
-        const baseHeaders = {
-          "X-Model-Name": String(request.model.model || "").trim(),
-          "X-Plugin-Flow": invocation.flow,
-          "X-Plugin-Purpose": invocation.purpose,
-          "X-Plugin-Domain": invocation.domain,
-          ...(invocation.sessionId ? { "X-Plugin-Session-Id": invocation.sessionId } : {}),
-          ...(invocation.parentSessionId ? { parentSessionid: invocation.parentSessionId } : {}),
-          ...(request.options.headers || {}),
-        };
+        const baseHeaders = buildInvocationHeaders({
+          model: request.model,
+          invocation,
+          headers: request.options.headers,
+        });
         const baseClient = adapter.createClient({
           modelSpec: request.model,
           credential,

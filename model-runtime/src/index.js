@@ -7,4 +7,3 @@ export * from "./normalization/spec-normalizer.js";
 export * from "./normalization/response-normalizer.js";
 export * from "./policies/index.js";
 export * from "./adapters/index.js";
-export * from "./observation/observed-model-port.js";

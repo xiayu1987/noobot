@@ -3,20 +3,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { buildModelReasoningEffortTransport } from "@noobot/model-protocol";
+import {
+  MODEL_FAMILY_ID,
+  MODEL_PROVIDER_ID,
+  buildModelReasoningEffortTransport,
+  requireModelFamilyId,
+} from "@noobot/model-protocol";
 
-const PROVIDER_IDS = new Set([
-  "openai",
-  "anthropic",
-  "google",
-  "gemini",
-  "deepseek",
-  "alibaba",
-  "zhipu",
-  "kimi",
-  "xai",
-  "generic",
-]);
+const PROVIDER_IDS = new Set(Object.values(MODEL_PROVIDER_ID));
 
 function operatorId(spec = {}) {
   const value = String(spec.operatorId || "")
@@ -28,11 +22,7 @@ function operatorId(spec = {}) {
 }
 
 function modelFamily(spec = {}) {
-  const value = String(spec.modelFamily || "")
-    .trim()
-    .toLowerCase();
-  if (!value) throw new TypeError("model spec.modelFamily is required");
-  return value;
+  return requireModelFamilyId(spec.modelFamily);
 }
 
 /**
@@ -43,7 +33,7 @@ function modelFamily(spec = {}) {
  */
 function usesPromptCacheKeyProtocol(spec = {}) {
   const family = modelFamily(spec);
-  return family === "gpt" || family === "claude";
+  return family === MODEL_FAMILY_ID.GPT || family === MODEL_FAMILY_ID.CLAUDE;
 }
 
 function segment(value) {
@@ -64,7 +54,7 @@ export function resolveCacheVendor(spec = {}) {
 
 /** Grok carries its cache identity in a request header rather than the body. */
 export function resolvePromptCacheHeaders(spec = {}, flow = "agent.main") {
-  if (modelFamily(spec) !== "grok") return {};
+  if (modelFamily(spec) !== MODEL_FAMILY_ID.GROK) return {};
   const key =
     String(spec.prompt_cache_key ?? spec.promptCacheKey ?? "").trim() ||
     buildCacheIdentity(spec, flow);
@@ -85,7 +75,7 @@ function cacheControlValue(spec = {}) {
  */
 export function applyPromptCacheMessages(spec = {}, messages = []) {
   const family = modelFamily(spec);
-  if (family !== "qwen") return messages;
+  if (family !== MODEL_FAMILY_ID.QWEN) return messages;
   const marker = cacheControlValue(spec);
   if (!marker) return messages;
   const source = Array.isArray(messages) ? messages : [];
@@ -175,12 +165,16 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
     }
   }
 
-  if (modelFamily(spec) === "claude") {
+  if (modelFamily(spec) === MODEL_FAMILY_ID.CLAUDE) {
     const marker = cacheControlValue(spec);
     if (marker) out.cache_control = marker;
   }
 
-  if (modelFamily(spec) === "gemini" || vendor === "google" || vendor === "gemini") {
+  if (
+    modelFamily(spec) === MODEL_FAMILY_ID.GEMINI ||
+    vendor === MODEL_PROVIDER_ID.GOOGLE ||
+    vendor === MODEL_PROVIDER_ID.GEMINI
+  ) {
     const value = String(
       spec.cached_content ?? spec.cachedContent ?? spec.gemini_cached_content ?? "",
     ).trim();
@@ -195,7 +189,10 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
   }
   if (
     spec.top_p !== undefined &&
-    !(modelFamily(spec) === "gpt" && String(spec.model).toLowerCase().includes("gpt-5"))
+    !(
+      modelFamily(spec) === MODEL_FAMILY_ID.GPT &&
+      String(spec.model).toLowerCase().includes("gpt-5")
+    )
   ) {
     out.top_p = spec.top_p;
   }

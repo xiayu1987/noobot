@@ -4,26 +4,17 @@
  * SPDX-License-Identifier: MIT
  */
 import {
+  MODEL_FAMILY_ID,
   normalizeModelReasoningConfiguration,
   resolveModelAdapterId,
   resolveModelOperatorId,
 } from "@noobot/model-protocol";
 
+// The transport baseline. Provider-, family- and model-specific values are
+// layered on top of it by `normalizeRuntimeModelSpec`.
 const TRANSPORT_DEFAULT_FIELDS = Object.freeze({
-  default: Object.freeze({
-    temperature: 0.7,
-    max_tokens: 10000,
-  }),
-  gemini: Object.freeze({
-    temperature: 1,
-    top_p: 0.95,
-  }),
-  gpt: Object.freeze({ temperature: 0.7 }),
-  gpt_5: Object.freeze({ temperature: 0.7 }),
-  gpt_codex: Object.freeze({ temperature: 0.7 }),
-  gemini_flash: Object.freeze({ temperature: 1, top_p: 0.95 }),
-  gemini_pro: Object.freeze({ temperature: 1, top_p: 0.95 }),
-  nano_banana: Object.freeze({ temperature: 0.5 }),
+  temperature: 0.7,
+  max_tokens: 10000,
 });
 
 // Defaults are layered in this order: transport -> operator -> model family ->
@@ -63,46 +54,8 @@ const CONCRETE_MODEL_RULES = Object.freeze([
   }),
 ]);
 
-const MODEL_PROFILE_RULES = Object.freeze([
-  Object.freeze({ match: /gemini/, profile: "gemini" }),
-  Object.freeze({ match: /gemini.*pro/, profile: "gemini_pro" }),
-  Object.freeze({ match: /gemini.*flash/, profile: "gemini_flash" }),
-  Object.freeze({ match: /nano[-_.]?banana/, profile: "nano_banana" }),
-  Object.freeze({ match: /gpt/, profile: "gpt" }),
-  Object.freeze({ match: /gpt-5|gpt5/, profile: "gpt_5" }),
-  Object.freeze({ match: /codex/, profile: "gpt_codex" }),
-  Object.freeze({ match: /qianwen/, profile: "qwen" }),
-  Object.freeze({ match: /qwen/, profile: "qwen" }),
-  Object.freeze({ match: /qwen.*coder/, profile: "qwen_coder" }),
-  Object.freeze({ match: /qwen.*omni/, profile: "qwen_omni" }),
-  Object.freeze({ match: /qwen.*flash/, profile: "qwen_flash" }),
-  Object.freeze({ match: /qwen.*thinking|thinking.*qwen/, profile: "qwen_thinking" }),
-]);
-
 function hasOwn(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
-}
-
-function resolveModelProfiles(modelSpec = {}) {
-  // An alias is a configuration label, not part of the provider's model
-  // identity. Only the actual model name may select a family/profile.
-  const identity = String(modelSpec.model || "")
-    .trim()
-    .toLowerCase();
-  return MODEL_PROFILE_RULES.filter(({ match }) => match.test(identity)).map(
-    ({ profile }) => profile,
-  );
-}
-
-export function getRuntimeModelDefaultFields(modelSpec = {}) {
-  const defaults = { ...TRANSPORT_DEFAULT_FIELDS.default };
-  for (const profile of resolveModelProfiles(modelSpec)) {
-    Object.assign(defaults, TRANSPORT_DEFAULT_FIELDS[profile] || {});
-  }
-  if (hasOwn(modelSpec, "top_p") && !hasOwn(modelSpec, "temperature")) {
-    delete defaults.temperature;
-  }
-  return defaults;
 }
 
 /**
@@ -111,15 +64,15 @@ export function getRuntimeModelDefaultFields(modelSpec = {}) {
  */
 function classifyModelFamily(modelSpec = {}) {
   const model = String(modelSpec.model || "").toLowerCase();
-  if (/grok|xai/.test(model)) return "grok";
-  if (/claude|anthropic/.test(model)) return "claude";
-  if (/gemini|nano[-_.]?banana/.test(model)) return "gemini";
-  if (/qwen|qianwen/.test(model)) return "qwen";
-  if (/glm|zhipu/.test(model)) return "glm";
-  if (/deepseek/.test(model)) return "deepseek";
-  if (/kimi|moonshot/.test(model)) return "kimi";
-  if (/gpt|codex|\bo[1-9]/.test(model)) return "gpt";
-  return "generic";
+  if (/grok|xai/.test(model)) return MODEL_FAMILY_ID.GROK;
+  if (/claude|anthropic/.test(model)) return MODEL_FAMILY_ID.CLAUDE;
+  if (/gemini|nano[-_.]?banana/.test(model)) return MODEL_FAMILY_ID.GEMINI;
+  if (/qwen|qianwen/.test(model)) return MODEL_FAMILY_ID.QWEN;
+  if (/glm|zhipu/.test(model)) return MODEL_FAMILY_ID.GLM;
+  if (/deepseek/.test(model)) return MODEL_FAMILY_ID.DEEPSEEK;
+  if (/kimi|moonshot/.test(model)) return MODEL_FAMILY_ID.KIMI;
+  if (/gpt|codex|\bo[1-9]/.test(model)) return MODEL_FAMILY_ID.GPT;
+  return MODEL_FAMILY_ID.GENERIC;
 }
 
 function resolveConcreteModelDefaults(model = "") {
@@ -141,7 +94,7 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   out.modelFamily = classifyModelFamily(out);
   out.adapterId = resolveModelAdapterId();
   Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
-  const defaults = getRuntimeModelDefaultFields(out);
+  const defaults = { ...TRANSPORT_DEFAULT_FIELDS };
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});
   Object.assign(defaults, MODEL_FAMILY_DEFAULT_FIELDS[out.modelFamily] || {});
   Object.assign(defaults, resolveConcreteModelDefaults(out.model));

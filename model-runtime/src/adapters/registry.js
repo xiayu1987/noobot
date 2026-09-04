@@ -2,18 +2,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { requireProviderAdapter } from "@noobot/model-protocol";
+
 import { openAiCompatibleAdapter } from "./openai-compatible-adapter.js";
 
 export function createProviderAdapterRegistry(adapters = [openAiCompatibleAdapter]) {
   const byId = new Map();
-  for (const adapter of adapters) {
-    if (
-      !adapter?.id ||
-      typeof adapter.createClient !== "function" ||
-      typeof adapter.classifyError !== "function"
-    ) {
-      throw new TypeError("provider adapter requires id, createClient and classifyError");
-    }
+  for (const candidate of adapters) {
+    const adapter = requireProviderAdapter(candidate);
     if (byId.has(adapter.id)) throw new TypeError(`duplicate provider adapter: ${adapter.id}`);
     byId.set(adapter.id, adapter);
   }
