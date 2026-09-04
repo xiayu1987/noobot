@@ -42,7 +42,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
       plugins: {
         character: {
           enabled: true,
-          mode: "on",
+          mode: "off",
           characterAssets: [],
           selectedCharacterAssetIds: [],
         },
@@ -53,7 +53,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
 
   assert.deepEqual(repaired.document.plugins.character, {
     enabled: true,
-    mode: "on",
+    mode: "off",
     characterAssets: [],
     selectedCharacterAssetIds: [],
   });
@@ -65,7 +65,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
       plugins: {
         character: {
           enabled: true,
-          mode: "on",
+          mode: "off",
           characterAssets: [],
           selectedCharacterAssetIds: [],
         },
@@ -82,7 +82,7 @@ test("config repair adds the character plugin to legacy configuration", () => {
       },
     },
   });
-  assert.equal(customized.document.plugins.character.mode, "on");
+  assert.equal(customized.document.plugins.character.mode, "off");
   assert.deepEqual(customized.document.plugins.character.characterAssets, [
     { assetId: "owned.asset" },
   ]);
@@ -91,12 +91,12 @@ test("config repair adds the character plugin to legacy configuration", () => {
     scope: CONFIG_DOCUMENT_SCOPE.USER,
     baseValues: {
       plugins: {
-        character: { enabled: true, mode: "on" },
+        character: { enabled: true, mode: "off" },
       },
     },
     target: {
       plugins: {
-        character: { enabled: true, mode: "on" },
+        character: { enabled: true, mode: "off" },
         retired_plugin: { enabled: true, custom: "legacy" },
       },
     },

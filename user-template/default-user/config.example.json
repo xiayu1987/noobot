@@ -144,7 +144,7 @@
     },
     "character": {
       "enabled": true,
-      "mode": "on",
+      "mode": "off",
       "characterAssets": [],
       "selectedCharacterAssetIds": []
     }

@@ -110,7 +110,7 @@
   "configuration": {
     "defaults": {
       "enabled": true,
-      "mode": "on",
+      "mode": "off",
       "selectedCharacterAssetIds": []
     }
   },
