@@ -294,21 +294,6 @@ export function structureAllowsScope(node = {}, scope = CONFIG_DOCUMENT_SCOPE.GL
   return ALL_SCOPES.includes(scope);
 }
 
-/** Resolve a node by its dotted path, treating collection keys as entries. */
-export function resolveStructureNode(path = [], root = CONFIG_STRUCTURE) {
-  let node = root;
-  for (const key of path) {
-    if (!node) return null;
-    if (node.kind === CONFIG_STRUCTURE_KIND.COLLECTION) {
-      node = node.entry;
-      continue;
-    }
-    if (node.kind !== CONFIG_STRUCTURE_KIND.OBJECT || !node.fields) return null;
-    node = node.fields[key];
-  }
-  return node || null;
-}
-
 function walkStructure(node, path, visit) {
   visit(node, path);
   if (node.kind === CONFIG_STRUCTURE_KIND.OBJECT && node.fields) {

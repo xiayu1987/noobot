@@ -8,10 +8,7 @@ import {
   resolveModelLibraryProvider,
   resolveModelLibraryProviderByModel,
 } from "@noobot/model-protocol";
-
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
+import { isPlainObject } from "@noobot/agent-config-protocol";
 
 export function normalizeConfiguredModelProviders(config = {}) {
   if (!isPlainObject(config.providers)) return config;

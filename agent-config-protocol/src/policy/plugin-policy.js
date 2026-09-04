@@ -5,7 +5,11 @@
  */
 
 import { isPlainObject } from "../utils.js";
-import { normalizePluginIds, resolvePluginSelection } from "../normalization/plugin-selection.js";
+import {
+  normalizePluginIds,
+  readPluginSelectionInput,
+  resolvePluginSelection,
+} from "../normalization/plugin-selection.js";
 
 export function mergeRunConfigPluginPolicy({ baseRunConfig = {}, runConfigPatch = {}, disabledPlugins = [] } = {}) {
   const merged = {
@@ -14,9 +18,8 @@ export function mergeRunConfigPluginPolicy({ baseRunConfig = {}, runConfigPatch 
   };
   const disabled = normalizePluginIds([...(merged.disabledPlugins || []), ...disabledPlugins]);
   const selection = resolvePluginSelection({
-    selectedPlugins: merged.selectedPlugins,
+    ...readPluginSelectionInput(merged),
     disabledPlugins: disabled,
-    mode: merged.pluginPolicy?.mode,
   });
   return {
     ...merged,

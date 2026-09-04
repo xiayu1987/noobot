@@ -4,14 +4,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { isPlainObject } from "../utils.js";
-import { resolvePluginSelection } from "../normalization/plugin-selection.js";
+import { readPluginSelectionInput, resolvePluginSelection } from "../normalization/plugin-selection.js";
 
 export function createPluginConfigPlan({ runConfig = {}, effectiveConfig = {}, manifests = [] } = {}) {
-  const selection = resolvePluginSelection({
-    selectedPlugins: runConfig.selectedPlugins,
-    disabledPlugins: runConfig.disabledPlugins,
-    mode: runConfig.pluginPolicy?.mode,
-  });
+  const selection = resolvePluginSelection(readPluginSelectionInput(runConfig));
   const selectedSet = new Set(selection.enabledPluginIds);
   return {
     ...selection,
