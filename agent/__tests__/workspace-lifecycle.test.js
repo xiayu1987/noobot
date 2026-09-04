@@ -42,7 +42,7 @@ async function createFixture() {
   };
 }
 
-test("existing workspace receives managed template updates without replacing user state", async () => {
+test("runtime workspace initialization does not synchronize existing user state", async () => {
   const fixture = await createFixture();
   try {
     await mkdir(path.join(fixture.userPath, "services"), { recursive: true });
@@ -68,12 +68,10 @@ test("existing workspace receives managed template updates without replacing use
     });
 
     const config = JSON.parse(await readFile(path.join(fixture.userPath, "config.json"), "utf8"));
-    assert.deepEqual(config, {
-      preferences: {},
-    });
+    assert.deepEqual(config, { preferences: { preserved: "user" }, userOnly: true });
     assert.equal(
       await readFile(path.join(fixture.userPath, "services", "built-in.js"), "utf8"),
-      "export default 'current';\n",
+      "export default 'stale';\n",
     );
     assert.deepEqual(
       JSON.parse(await readFile(path.join(fixture.userPath, "services", "package.json"), "utf8")),

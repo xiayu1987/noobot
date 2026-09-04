@@ -21,9 +21,17 @@ export * as hook from "./hook/index.js";
 export class BotManager {
   constructor(
     globalConfig,
-    { startupContext = {}, pluginRuntimeBundle = null, connectorAccessPort = null } = {},
+    {
+      globalConfigRaw = null,
+      startupContext = {},
+      pluginRuntimeBundle = null,
+      connectorAccessPort = null,
+    } = {},
   ) {
     this.globalConfig = globalConfig;
+    // Keep the persisted/normalized document separate from the runtime
+    // projection. Workspace repair must consume the former only.
+    this.globalConfigRaw = globalConfigRaw;
     this.startupContext = startupContext;
     this.pluginRuntimeBundle = pluginRuntimeBundle;
     this.connectorAccessPort = connectorAccessPort;
@@ -34,7 +42,10 @@ export class BotManager {
     this.memory = new MemoryManager(globalConfig);
     this.skill = new SkillService(globalConfig);
 
-    this.workspaceService = new WorkspaceService({ globalConfig });
+    this.workspaceService = new WorkspaceService({
+      globalConfig,
+      globalConfigRaw: this.globalConfigRaw,
+    });
     this.configService = new ConfigService();
     this.errorLogger = new SystemErrorLogger({
       globalConfig,
