@@ -78,13 +78,12 @@ function cacheControlValue(spec = {}) {
 }
 
 /**
- * Apply message-level cache markers required by Anthropic and DashScope/Qwen.
- * The operation is immutable and only marks the final text block of the first
- * stable system message, which is the provider-defined cache prefix boundary.
+ * Apply message-level cache markers required by DashScope/Qwen. Claude uses
+ * Anthropic's top-level automatic cache control and is compiled below.
  */
 export function applyPromptCacheMessages(spec = {}, messages = []) {
   const family = modelFamily(spec);
-  if (family !== "claude" && family !== "qwen") return messages;
+  if (family !== "qwen") return messages;
   const marker = cacheControlValue(spec);
   if (!marker) return messages;
   const source = Array.isArray(messages) ? messages : [];
@@ -172,6 +171,11 @@ export function compileProviderModelKwargs(spec = {}, flow = "agent.main") {
         spec.prompt_cache_retention || spec.promptCacheRetention || "24h",
       );
     }
+  }
+
+  if (modelFamily(spec) === "claude") {
+    const marker = cacheControlValue(spec);
+    if (marker) out.cache_control = marker;
   }
 
   if (modelFamily(spec) === "gemini" || vendor === "google" || vendor === "gemini") {

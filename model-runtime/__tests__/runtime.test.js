@@ -152,7 +152,7 @@ test("Qwen uses the canonical OpenAI-compatible invocation", () => {
   assert.equal(params.reasoning_effort, "low");
 });
 
-test("Claude and Qwen cache markers are message-level and immutable", () => {
+test("Claude uses top-level automatic caching and Qwen uses message-level caching", () => {
   const messages = [
     { role: "system", content: "stable instructions" },
     { role: "user", content: "question" },
@@ -161,10 +161,21 @@ test("Claude and Qwen cache markers are message-level and immutable", () => {
     { model: "claude-sonnet-5", modelFamily: "claude" },
     messages,
   );
-  assert.deepEqual(messages[0], { role: "system", content: "stable instructions" });
-  assert.deepEqual(marked[0].content, [
-    { type: "text", text: "stable instructions", cache_control: { type: "ephemeral" } },
-  ]);
+  assert.deepEqual(marked, messages);
+  assert.deepEqual(
+    compileProviderModelKwargs({
+      operatorId: "anthropic",
+      model: "claude-sonnet-5",
+      modelFamily: "claude",
+      reasoning_effort_parameter: "reasoning_effort",
+      reasoning_effort_options: ["low", "medium", "high"],
+    }),
+    {
+      prompt_cache_key: "noobot-main-claude-sonnet-5",
+      prompt_cache_retention: "24h",
+      cache_control: { type: "ephemeral" },
+    },
+  );
   const qwenBlocks = applyPromptCacheMessages({ model: "qwen3.7-max", modelFamily: "qwen" }, [
     {
       role: "system",
@@ -497,6 +508,7 @@ test("cache parameters use the shared strategy while retaining provider-specific
   assert.deepEqual(anthropic, {
     prompt_cache_key: "noobot-main-claude-opus",
     prompt_cache_retention: "24h",
+    cache_control: { type: "ephemeral" },
   });
 
   const gemini = compileProviderModelKwargs({
