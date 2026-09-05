@@ -85,21 +85,9 @@ export function createStateCommitter({
         throw new Error("Turn message event materializer is required");
       }
       const pendingProjection = runtime.materializePendingCurrentTurnMessageEvents();
-      const canonicalModelContent = {
-        eventId: `model-content:${messageId || presentationMessageId || "turn"}`,
-        event: "main_model_content",
-        type: "main_model_content",
-        text: String(content || ""),
-        output: String(content || ""),
-      };
-      const canonicalActivityTimeline = [
-        ...(Array.isArray(pendingProjection.activityTimeline)
-          ? pendingProjection.activityTimeline
-          : []),
-        ...(type === "tool_call" && String(content || "").trim()
-          ? [{ ...canonicalModelContent, log: canonicalModelContent }]
-          : []),
-      ];
+      const canonicalActivityTimeline = Array.isArray(pendingProjection.activityTimeline)
+        ? pendingProjection.activityTimeline
+        : [];
       const canonicalMessageUid = String(messageUid || "").trim() || createSessionMessageUid();
       let assistantMessage = {
         messageUid: canonicalMessageUid,

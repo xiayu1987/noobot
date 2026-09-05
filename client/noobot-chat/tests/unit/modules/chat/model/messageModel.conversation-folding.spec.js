@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  foldConversationMessages,
+} from "../../../../../src/modules/chat/model/messageModel.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
 
 describe("messageModel conversation folding", () => {
   it("does not merge a new pending assistant placeholder with previous turn state", () => {
@@ -70,17 +74,12 @@ describe("messageModel conversation folding", () => {
             },
           ],
           activityTimeline: [
-            {
-              activityId: "event:new-log-1",
+            canonicalActivityFact({
               eventId: "new-log-1",
-              event: "thinking",
-              type: "thinking",
               text: "new tool log",
-              sequence: 1,
               sequenceScopeId: "message-new",
-              sequenceDomain: "message-event",
-              authority: "authoritative",
-            },
+              turnScopeId: "client-turn:new-stream",
+            }),
           ],
           tool_calls: [{ id: "tool-new" }],
           executionLogTotal: 1,
@@ -91,17 +90,13 @@ describe("messageModel conversation folding", () => {
           turnScopeId: "client-turn:new-stream",
           dialogProcessId: "dp-new-stream",
           activityTimeline: [
-            {
-              activityId: "event:new-log-2",
+            canonicalActivityFact({
               eventId: "new-log-2",
-              event: "thinking",
-              type: "thinking",
               text: "new tool log 2",
               sequence: 2,
               sequenceScopeId: "message-new",
-              sequenceDomain: "message-event",
-              authority: "authoritative",
-            },
+              turnScopeId: "client-turn:new-stream",
+            }),
           ],
           executionLogTotal: 2,
         },
@@ -156,5 +151,4 @@ describe("messageModel conversation folding", () => {
     expect(messages[1].content).toContain("answer part 1");
     expect(messages[1].content).toContain("answer part 2");
   });
-
 });

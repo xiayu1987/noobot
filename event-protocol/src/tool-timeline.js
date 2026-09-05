@@ -5,6 +5,7 @@
  */
 
 import { MESSAGE_EVENT_TYPE, projectMessageEventToolFacets } from "./message-event.js";
+import { mergeCanonicalActivityTimelines } from "./activity-timeline.js";
 import { normalizeSecurityRiskLevel } from "@noobot/security-assessment-protocol";
 
 const text = (value) => String(value || "").trim();
@@ -23,7 +24,7 @@ export function countCanonicalThinkingDetailEvents({
 } = {}) {
   return (
     countCanonicalToolTimelineEvents(toolTimeline) +
-    (Array.isArray(activityTimeline) ? activityTimeline.length : 0)
+    mergeCanonicalActivityTimelines(activityTimeline).length
   );
 }
 

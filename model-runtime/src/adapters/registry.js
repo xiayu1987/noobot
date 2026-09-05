@@ -2,11 +2,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { requireProviderAdapter } from "@noobot/model-protocol";
+import { requireProviderAdapter, resolveModelAdapterId } from "@noobot/model-protocol";
 
 import { openAiCompatibleAdapter } from "./openai-compatible-adapter.js";
+import { anthropicMessagesAdapter } from "./anthropic-messages-adapter.js";
 
-export function createProviderAdapterRegistry(adapters = [openAiCompatibleAdapter]) {
+export function createProviderAdapterRegistry(
+  adapters = [openAiCompatibleAdapter, anthropicMessagesAdapter],
+) {
   const byId = new Map();
   for (const candidate of adapters) {
     const adapter = requireProviderAdapter(candidate);
@@ -15,7 +18,18 @@ export function createProviderAdapterRegistry(adapters = [openAiCompatibleAdapte
   }
   return Object.freeze({
     resolve(spec = {}) {
-      const adapterId = String(spec.adapterId || "")
+      const explicitAdapterId = String(spec.adapterId || "")
+        .trim()
+        .toLowerCase();
+      const modelFamily = String(spec.modelFamily || "")
+        .trim()
+        .toLowerCase();
+      if (!explicitAdapterId && !modelFamily) {
+        throw new TypeError("model spec.adapterId is required");
+      }
+      const adapterId = String(
+        modelFamily ? resolveModelAdapterId({ modelFamily }) : explicitAdapterId,
+      )
         .trim()
         .toLowerCase();
       if (!adapterId) throw new TypeError("model spec.adapterId is required");

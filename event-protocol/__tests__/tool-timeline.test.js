@@ -13,6 +13,7 @@ import {
   reduceCanonicalToolTimeline,
   resolveCanonicalToolTimelineStatus,
 } from "../src/tool-timeline.js";
+import { projectCanonicalActivityTimelineEvent } from "../src/activity-timeline.js";
 import { createEventEnvelope } from "../src/envelope.js";
 import { EVENT_FAMILY } from "../src/event-registry.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "../src/message-event.js";
@@ -38,6 +39,7 @@ function event(eventType, sequence, extra = {}) {
       eventId: `event-${sequence}`,
       eventType: MESSAGE_EVENT_WIRE_EVENT,
       sessionId: "session-1",
+      turnScopeId: "turn-1",
       messageId: "message-1",
     },
     causality: {},
@@ -112,7 +114,15 @@ test("canonical detail counts match the event records exposed to renderers", () 
   assert.equal(
     countCanonicalThinkingDetailEvents({
       toolTimeline,
-      activityTimeline: [{ eventId: "activity-1" }],
+      activityTimeline: [
+        projectCanonicalActivityTimelineEvent(
+          event("main_model_content", 3, {
+            toolCallId: undefined,
+            tool: undefined,
+            text: "model analysis",
+          }),
+        ),
+      ],
     }),
     4,
   );

@@ -3,5 +3,6 @@
  * SPDX-License-Identifier: MIT
  */
 export * from "./openai-compatible-adapter.js";
+export * from "./anthropic-messages-adapter.js";
 export * from "./registry.js";
 export * from "./openai-capability-adapter.js";

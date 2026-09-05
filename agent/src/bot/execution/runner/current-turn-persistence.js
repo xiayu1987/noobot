@@ -76,7 +76,8 @@ function projectPersistedMessage(message = {}) {
     activityTimeline: Array.isArray(message.activityTimeline)
       ? message.activityTimeline.slice(0, 64).map((activity = {}) => ({
           eventId: String(activity.eventId || "").trim(),
-          activityKind: String(activity.activityKind || activity.type || "").trim(),
+          eventType: String(activity.eventType || "").trim(),
+          activityKind: String(activity.activityKind || "").trim(),
           sequence: Number(activity.sequence || 0),
           sequenceDomain: String(activity.sequenceDomain || "").trim(),
           sequenceScopeId: String(activity.sequenceScopeId || "").trim(),

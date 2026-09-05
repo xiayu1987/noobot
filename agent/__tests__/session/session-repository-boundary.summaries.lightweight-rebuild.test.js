@@ -15,6 +15,7 @@ import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/sessio
 import {
   withTempWorkspace,
   exists,
+  canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 
@@ -111,15 +112,16 @@ test("session display summary should keep chat view lightweight and rebuild stal
           dialogProcessId: "dp-u1",
           content: longAssistantContent,
           activityTimeline: [
-            {
+            canonicalActivity({
               eventId: "activity-1",
-              event: "thinking",
-              sequence: 1,
-              sequenceDomain: "message-event",
-              sequenceScopeId: "a1",
-              authority: "authoritative",
               text: "full thinking",
-            },
+              sequenceScopeId: "a1",
+              sessionId: "A",
+              dialogProcessId: "dp-u1",
+              turnScopeId: "turn-scope-u1",
+              messageId: "a1",
+              presentationMessageId: "a1",
+            }),
           ],
           toolTimeline: [
             {
@@ -184,14 +186,16 @@ test("session display summary should keep chat view lightweight and rebuild stal
           chatPresentation: true,
           content: longWorkflowContent,
           activityTimeline: [
-            {
+            canonicalActivity({
               eventId: "workflow-activity-1",
-              event: "workflow_semantic_response",
-              sequence: 1,
-              sequenceDomain: "message-event",
+              activityKind: "workflow_semantic",
+              text: "workflow semantic response",
               sequenceScopeId: "w1",
-              authority: "authoritative",
-            },
+              sessionId: "A",
+              turnScopeId: "turn-scope-workflow",
+              messageId: "w1",
+              presentationMessageId: "w1",
+            }),
           ],
           pluginMessage: true,
           pluginMeta: {

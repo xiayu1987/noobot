@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { buildSessionDetailProjection } from "../../../../../../src/modules/session/model/list/sessionDetailProjection.js";
 import { selectActivityTimelineLogs } from "../../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
 import { selectCompletedToolArtifacts } from "../../../../../../src/modules/chat/runtime/engine/toolTimeline.js";
+import { canonicalActivityFact } from "../../../chat/helpers/messageEventFixture.js";
 
 const identity = (item) => ({ ...item });
 
@@ -93,16 +94,15 @@ describe("buildSessionDetailProjection", () => {
             turnScopeId: "client-turn:resend",
             tool_calls: [{ id: "call-1", name: "read_file" }],
             activityTimeline: [
-              {
+              canonicalActivityFact({
                 eventId: "activity-1",
-                event: "main_model_content",
-                type: "main_model_content",
+                eventType: "main_model_content",
                 text: "inspect first",
-                sequence: 1,
-                sequenceScopeId: "model-tool-call-1",
-                sequenceDomain: "message-event",
-                authority: "authoritative",
-              },
+                sessionId: "session-resend",
+                turnScopeId: "client-turn:resend",
+                messageId: "model-tool-call-1",
+                presentationMessageId: "assistant-resend",
+              }),
             ],
           },
           {

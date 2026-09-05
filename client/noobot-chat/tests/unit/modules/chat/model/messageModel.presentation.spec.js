@@ -4,8 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  foldConversationMessages,
+} from "../../../../../src/modules/chat/model/messageModel.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+import { canonicalActivityFact } from "../helpers/messageEventFixture.js";
 
 describe("messageModel presentation identity", () => {
   it("projects the canonical persisted model analysis onto the presentation message", () => {
@@ -20,22 +24,16 @@ describe("messageModel presentation identity", () => {
           type: "tool_call",
           content: "I should inspect the repository first.",
           activityTimeline: [
-            {
-              eventId: "model-content:msg-model-1",
-              sequence: 1,
-              sequenceScopeId: "msg-model-1",
-              sequenceDomain: "message-event",
-              authority: "authoritative",
-              event: "main_model_content",
-              type: "main_model_content",
+            canonicalActivityFact({
+              eventId: "activity-model-1",
+              eventType: "main_model_content",
               text: "I should inspect the repository first.",
-              log: {
-                eventId: "model-content:msg-model-1",
-                event: "main_model_content",
-                type: "main_model_content",
-                text: "I should inspect the repository first.",
-              },
-            },
+              sequenceScopeId: "msg-model-1",
+              messageId: "msg-model-1",
+              presentationMessageId: "msg-chat-1",
+              turnScopeId: "client-turn:refresh",
+              dialogProcessId: "dp-refresh",
+            }),
           ],
           turnScopeId: "client-turn:refresh",
           dialogProcessId: "dp-refresh",
@@ -65,7 +63,7 @@ describe("messageModel presentation identity", () => {
     });
     expect(selectActivityTimelineLogs(messages[0])).toEqual([
       expect.objectContaining({
-        event: "main_model_content",
+        eventType: "main_model_content",
         text: "I should inspect the repository first.",
       }),
     ]);
@@ -84,22 +82,15 @@ describe("messageModel presentation identity", () => {
           turnScopeId: "client-turn:canonical-presentation",
           tool_calls: [{ id: "call-1", name: "read_file" }],
           activityTimeline: [
-            {
+            canonicalActivityFact({
               eventId: "activity-1",
-              sequence: 1,
-              sequenceScopeId: "model-tool-call-1",
-              sequenceDomain: "message-event",
-              authority: "authoritative",
-              event: "main_model_content",
-              type: "main_model_content",
+              eventType: "main_model_content",
               text: "inspect first",
-              log: {
-                eventId: "activity-1",
-                event: "main_model_content",
-                type: "main_model_content",
-                text: "inspect first",
-              },
-            },
+              sequenceScopeId: "model-tool-call-1",
+              messageId: "model-tool-call-1",
+              presentationMessageId: "assistant-presentation-1",
+              turnScopeId: "client-turn:canonical-presentation",
+            }),
           ],
         },
         {
@@ -232,5 +223,4 @@ describe("messageModel presentation identity", () => {
       expect.objectContaining({ id: "tool-call-1", name: "write_file" }),
     ]);
   });
-
 });

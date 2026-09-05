@@ -88,11 +88,14 @@ export function normalizeRuntimeModelSpec(input = {}, reasoningFallback = {}) {
   out.model = String(out.model || "").trim();
   out.alias = String(out.alias || "").trim();
   if (!out.model) throw new TypeError("model spec.model is required");
+  // Adapter identity is a protocol fact, never a user-configurable field.
+  delete out.adapterId;
+  delete out.adapter_id;
   out.operatorId = resolveModelOperatorId({
     baseUrl: out.base_url || out.baseUrl || "",
   });
   out.modelFamily = classifyModelFamily(out);
-  out.adapterId = resolveModelAdapterId();
+  out.adapterId = resolveModelAdapterId({ modelFamily: out.modelFamily });
   Object.assign(out, normalizeModelReasoningConfiguration(out, reasoningFallback));
   const defaults = { ...TRANSPORT_DEFAULT_FIELDS };
   Object.assign(defaults, OPERATOR_DEFAULT_FIELDS[out.operatorId] || {});

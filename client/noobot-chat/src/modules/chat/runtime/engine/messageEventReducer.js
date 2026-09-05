@@ -20,12 +20,7 @@ import {
   resolveMessageEventLaneState,
   syncMessageEventAggregateState,
 } from "../../model/messageEventState.js";
-import {
-  reduceToolTimeline,
-  selectToolTimelineLogs,
-  TOOL_SEQUENCE_DOMAIN,
-  TOOL_TIMELINE_AUTHORITY,
-} from "./toolTimeline.js";
+import { reduceToolTimeline, selectToolTimelineLogs } from "./toolTimeline.js";
 import { reduceActivityTimeline } from "./activityTimeline.js";
 import {
   logToolLogWindowDebug,
@@ -82,7 +77,7 @@ function finalizeAppliedMessageEvent({ targetMessage, event, state, sequence, ga
   };
 }
 
-export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog } = {}) {
+export function reduceMessageEvent({ targetMessage, event } = {}) {
   const validation = validateProtocolEvent(event);
   if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
     return { result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: validation.errors };
@@ -100,7 +95,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
     return { result: MESSAGE_EVENT_REDUCE_RESULT.DUPLICATE };
   }
   const sequence = Number(event.ordering.sequence);
-  const sequenceScopeId = text(event.ordering.scopeId);
   const lastSequence = Number(state.lastSequence || 0);
   if (lastSequence && sequence <= lastSequence)
     return { result: MESSAGE_EVENT_REDUCE_RESULT.STALE };
@@ -153,17 +147,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       targetMessage.content = contentProjection.content;
     }
   } else {
-    const log = classifyRealtimeLog?.({
-      ...event.payload,
-      eventId: event.identity.eventId,
-      sessionId: event.identity.sessionId,
-      turnScopeId: event.identity.turnScopeId,
-      messageId: event.identity.messageId,
-      sequence: event.ordering.sequence,
-      sequenceDomain: event.ordering.domain,
-      sequenceScopeId,
-      timestamp: event.occurredAt,
-    });
     if (
       [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
         event.payload.eventType,
@@ -174,7 +157,6 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
         dialogProcessId: text(event.payload.dialogProcessId || targetMessage.dialogProcessId),
         turnScopeId: text(event.identity.turnScopeId || targetMessage.turnScopeId),
         envelope: summarizeToolLogWindowItem(event),
-        classified: log ? summarizeToolLogWindowItem(log) : null,
         previousLastSequence: lastSequence,
       }));
     }
@@ -191,28 +173,7 @@ export function reduceMessageEvent({ targetMessage, event, classifyRealtimeLog }
       );
       targetMessage.attachments = getMessageAttachments(targetMessage);
     }
-    targetMessage.activityTimeline = reduceActivityTimeline(
-      targetMessage.activityTimeline,
-      log
-        ? {
-            ...log,
-            eventId: event.identity.eventId,
-            sequence: event.ordering.sequence,
-            sequenceScopeId,
-            authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
-            sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
-          }
-        : {
-            ...event.payload,
-            eventId: event.identity.eventId,
-            sessionId: event.identity.sessionId,
-            turnScopeId: event.identity.turnScopeId,
-            sequence: event.ordering.sequence,
-            sequenceScopeId,
-            authority: TOOL_TIMELINE_AUTHORITY.AUTHORITATIVE,
-            sequenceDomain: TOOL_SEQUENCE_DOMAIN.MESSAGE,
-          },
-    );
+    targetMessage.activityTimeline = reduceActivityTimeline(targetMessage.activityTimeline, event);
     if (
       [MESSAGE_EVENT_TYPE.TOOL_CALL_START, MESSAGE_EVENT_TYPE.TOOL_CALL_END].includes(
         event.payload.eventType,

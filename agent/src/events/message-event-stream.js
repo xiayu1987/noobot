@@ -210,7 +210,7 @@ export async function emitMessageEvent(eventListener, runtime = {}, eventType = 
   if (!committed?.committed || !committed?.envelope) {
     throw new Error(`authoritative message event commit failed: ${committed?.reason || "unknown"}`);
   }
-  const projected = runtime?.projectCurrentTurnMessageEvent?.(committed.envelope);
+  const projected = await runtime?.projectCurrentTurnMessageEvent?.(committed.envelope);
   if (runtime?.projectCurrentTurnMessageEvent && !projected) {
     throw new Error(
       `canonical message event projector rejected event: ${committed.envelope.identity.eventId}`,

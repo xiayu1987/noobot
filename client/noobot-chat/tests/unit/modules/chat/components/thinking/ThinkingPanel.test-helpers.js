@@ -10,13 +10,14 @@ import ThinkingPanel from "../../../../../../src/modules/chat/components/thinkin
 import { contributeExtension } from "../../../../../../src/extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
 import { activate as activateHarnessFrontend } from "../../../../../../../../plugin/noobot-plugin-harness/frontend/index.js";
+export { canonicalActivityFact } from "../../helpers/messageEventFixture.js";
 
 if (!globalThis.localStorage?.getItem) {
   const values = new Map();
   Object.defineProperty(globalThis, "localStorage", {
     configurable: true,
     value: {
-      getItem: (key) => values.has(String(key)) ? values.get(String(key)) : null,
+      getItem: (key) => (values.has(String(key)) ? values.get(String(key)) : null),
       setItem: (key, value) => values.set(String(key), String(value)),
       removeItem: (key) => values.delete(String(key)),
       clear: () => values.clear(),
@@ -41,21 +42,41 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
     }),
     BaseThinkingLogLine: defineComponent({
       name: "BaseThinkingLogLine",
-      props: ["eventText", "contentText", "detailText", "detailValue", "tool", "tone", "expandable", "expanded"],
+      props: [
+        "eventText",
+        "contentText",
+        "detailText",
+        "detailValue",
+        "tool",
+        "tone",
+        "expandable",
+        "expanded",
+      ],
       emits: ["toggle"],
       setup(props, { emit }) {
-        return () => h("div", {
-          class: "execution-log-line",
-          "data-tool": String(props.tool === true),
-          "data-expandable": String(props.expandable === true),
-          onClick: () => emit("toggle"),
-        }, [props.contentText, props.expanded && (props.detailText || props.detailValue !== undefined)
-          ? h("pre", { class: "execution-log-detail" }, props.detailText || (
-              typeof props.detailValue === "string"
-                ? props.detailValue
-                : JSON.stringify(props.detailValue, null, 2)
-            ))
-          : null]);
+        return () =>
+          h(
+            "div",
+            {
+              class: "execution-log-line",
+              "data-tool": String(props.tool === true),
+              "data-expandable": String(props.expandable === true),
+              onClick: () => emit("toggle"),
+            },
+            [
+              props.contentText,
+              props.expanded && (props.detailText || props.detailValue !== undefined)
+                ? h(
+                    "pre",
+                    { class: "execution-log-detail" },
+                    props.detailText ||
+                      (typeof props.detailValue === "string"
+                        ? props.detailValue
+                        : JSON.stringify(props.detailValue, null, 2)),
+                  )
+                : null,
+            ],
+          );
       },
     }),
     BaseSectionHeader: defineComponent({
@@ -91,7 +112,8 @@ vi.mock("../../../../../../src/shared/public-api/ui.js", async () => {
       props: ["label"],
       emits: ["click"],
       setup(props, { slots, emit }) {
-        return () => h("button", { onClick: () => emit("click") }, [slots.default?.(), props.label]);
+        return () =>
+          h("button", { onClick: () => emit("click") }, [slots.default?.(), props.label]);
       },
     }),
   };
@@ -118,28 +140,38 @@ const ElTabPaneStub = defineComponent({
   },
   setup(props, { slots }) {
     const tabs = inject(TEST_TAB_CONTEXT);
-    return () => h("section", [
-      h("button", {
-        class: "tab-button",
-        "data-name": props.name,
-        onClick: () => tabs.activate(props.name),
-      }, props.label),
-      h("div", {
-        class: "tab-pane",
-        "data-label": props.label,
-        "data-name": props.name,
-        style: { display: tabs.activeName.value === props.name ? "" : "none" },
-      }, slots.default?.()),
-    ]);
+    return () =>
+      h("section", [
+        h(
+          "button",
+          {
+            class: "tab-button",
+            "data-name": props.name,
+            onClick: () => tabs.activate(props.name),
+          },
+          props.label,
+        ),
+        h(
+          "div",
+          {
+            class: "tab-pane",
+            "data-label": props.label,
+            "data-name": props.name,
+            style: { display: tabs.activeName.value === props.name ? "" : "none" },
+          },
+          slots.default?.(),
+        ),
+      ]);
   },
 });
 
 export function mountThinkingPanel(messageItem, props = {}) {
   void activateHarnessFrontend({
-    contributeExtension: (point, contribution) => contributeExtension(point, {
-      ...contribution,
-      pluginId: "harness",
-    }),
+    contributeExtension: (point, contribution) =>
+      contributeExtension(point, {
+        ...contribution,
+        pluginId: "harness",
+      }),
     extensionPoints: EXTENSION_POINTS,
     services: {},
   });
@@ -147,26 +179,45 @@ export function mountThinkingPanel(messageItem, props = {}) {
     props: { messageItem, allMessages: [], ...props },
     global: {
       stubs: {
-        BaseThinkingPanelShell: { template: '<section><slot name="title" /><slot /><slot name="footer" /></section>' },
+        BaseThinkingPanelShell: {
+          template: '<section><slot name="title" /><slot /><slot name="footer" /></section>',
+        },
         "el-tabs": ElTabsStub,
         ElTabs: ElTabsStub,
         ElTabPane: ElTabPaneStub,
         "el-tab-pane": ElTabPaneStub,
         "el-drawer": {
           props: ["modelValue", "title", "size"],
-          template: '<aside v-if="modelValue" class="thinking-detail-drawer" :data-title="title" :data-size="size"><slot /></aside>',
+          template:
+            '<aside v-if="modelValue" class="thinking-detail-drawer" :data-title="title" :data-size="size"><slot /></aside>',
         },
         BaseTabPanelBody: { template: '<div class="tab-body"><slot /></div>' },
         BaseThinkingLogLine: {
-          props: ["eventText", "contentText", "detailText", "detailValue", "tool", "tone", "expandable", "expanded"],
+          props: [
+            "eventText",
+            "contentText",
+            "detailText",
+            "detailValue",
+            "tool",
+            "tone",
+            "expandable",
+            "expanded",
+          ],
           emits: ["toggle"],
-          template: '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && (detailText || detailValue !== undefined)" class="execution-log-detail">{{ detailText || (typeof detailValue === "string" ? detailValue : JSON.stringify(detailValue, null, 2)) }}</pre></div>',
+          template:
+            '<div class="execution-log-line" :class="{ \'is-tool-result-failed\': tone === \'error\' }" :data-tool="String(tool === true)" :data-expandable="String(expandable === true)" @click="$emit(\'toggle\')">{{ contentText }}<pre v-if="expanded && (detailText || detailValue !== undefined)" class="execution-log-detail">{{ detailText || (typeof detailValue === "string" ? detailValue : JSON.stringify(detailValue, null, 2)) }}</pre></div>',
         },
-        BaseSectionHeader: { props: ["title"], template: '<header><span>{{ title }}</span><slot name="extra" /></header>' },
+        BaseSectionHeader: {
+          props: ["title"],
+          template: '<header><span>{{ title }}</span><slot name="extra" /></header>',
+        },
         BaseEmptyHint: { props: ["text"], template: '<p class="empty-hint">{{ text }}</p>' },
         BaseMetaLabel: { props: ["text"], template: '<div class="meta-label">{{ text }}</div>' },
-        BaseNoteBlock: { props: ["title", "content"], template: '<article><h4>{{ title }}</h4><p>{{ content }}</p></article>' },
-        BasePillButton: { props: ["label"], template: '<button><slot />{{ label }}</button>' },
+        BaseNoteBlock: {
+          props: ["title", "content"],
+          template: "<article><h4>{{ title }}</h4><p>{{ content }}</p></article>",
+        },
+        BasePillButton: { props: ["label"], template: "<button><slot />{{ label }}</button>" },
       },
     },
   });

@@ -290,7 +290,6 @@ export function createSendStreamEventHandler(context) {
     if (
       routeMessageProjectionEvent(event, data, {
         botMessage: botMsg,
-        classifyRealtimeLog,
         findCanonicalMessageById,
         findCanonicalMessagesById,
         materializeTurnPresentation,

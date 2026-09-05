@@ -224,6 +224,7 @@ test("state-committer checkpoints assistant and tool records with presentation i
   assert.equal(checkpointCount, 2);
   assert.equal(turnMessageStore.items[0].presentationMessageId, "msg_chat_checkpoint");
   assert.equal(turnMessageStore.items[0].chatPresentation, false);
+  assert.equal(turnMessageStore.items[0].activityTimeline, undefined);
   assert.equal(turnMessageStore.items[1].presentationMessageId, "msg_chat_checkpoint");
   assert.equal(turnMessageStore.items[1].messageId, turnMessageStore.items[1].messageUid);
 });

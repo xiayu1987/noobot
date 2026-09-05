@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { selectLatestAnalysisActivities } from "../runtime/engine/activityTimeline.js";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 
 function normalizeLogString(value = "") {
   return String(value || "")
@@ -11,27 +12,15 @@ function normalizeLogString(value = "") {
     .toLowerCase();
 }
 
-function isGuidanceAnalysisEventName(eventName = "") {
-  return (
-    eventName === "guidance_analysis_response" ||
-    eventName === "guidance_analysis"
-  );
-}
-
 export function isPluginAnalysisResponseLog(logItem = {}) {
-  const eventName = normalizeLogString(logItem?.event || logItem?.type);
-  const purpose = normalizeLogString(
-    logItem?.purpose || logItem?.data?.purpose,
-  );
+  const eventType = normalizeLogString(logItem?.eventType);
+  const activityKind = normalizeLogString(logItem?.activityKind);
+  const purpose = normalizeLogString(logItem?.purpose);
   const pluginFlow = normalizeLogString(logItem?.pluginFlow);
-  const chain = normalizeLogString(
-    logItem?.chain ||
-      logItem?.data?.chain ||
-      logItem?.executionScope ||
-      logItem?.data?.executionScope,
-  );
+  const chain = normalizeLogString(logItem?.chain);
   return (
-    isGuidanceAnalysisEventName(eventName) &&
+    eventType === MESSAGE_EVENT_TYPE.THINKING &&
+    activityKind === "guidance_analysis" &&
     purpose === "guidance" &&
     pluginFlow === "analysis" &&
     chain === "auxiliary"
@@ -39,88 +28,65 @@ export function isPluginAnalysisResponseLog(logItem = {}) {
 }
 
 export function isGuidanceAnalysisResponseLog(logItem = {}) {
-  const eventName = normalizeLogString(
-    logItem?.event || logItem?.type || logItem?.rawEvent,
+  return (
+    normalizeLogString(logItem?.eventType) === MESSAGE_EVENT_TYPE.THINKING &&
+    normalizeLogString(logItem?.activityKind) === "guidance_analysis"
   );
-  return isGuidanceAnalysisEventName(eventName);
 }
 
 export function isMainModelContentLog(logItem = {}) {
-  const eventName = normalizeLogString(
-    logItem?.event || logItem?.type || logItem?.rawEvent,
-  );
-  return eventName === "main_model_content";
+  return normalizeLogString(logItem?.eventType) === MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT;
 }
 
 function getMainModelContentLogOutput(logItem = {}) {
-  return String(
-    logItem?.output ??
-      logItem?.data?.output ??
-      logItem?.text ??
-      logItem?.data?.text ??
-      "",
-  ).trim();
+  return String(logItem?.text || "").trim();
 }
 
 function getPluginAnalysisLogOutput(logItem = {}) {
-  return String(logItem?.output || "").trim();
+  return String(logItem?.text || "").trim();
 }
 
 export function createThinkingAnalysisProjection({
   props,
   currentAnalysisProjection,
-  getAllRealtimeLogs,
-  getAllCompletedLogs,
   timelineMessage,
 }) {
   function getLatestMainModelContentLog(messageItem = {}) {
-    if (messageItem === props.messageItem) {
-      const logItem = currentAnalysisProjection.value.latestModelAnalysis;
-      const output = getMainModelContentLogOutput(logItem || {});
-      if (output) return { ...logItem, output };
-    }
-    const logs = [
-      ...getAllRealtimeLogs(messageItem),
-      ...getAllCompletedLogs(messageItem),
-    ].filter(isMainModelContentLog);
-    for (let index = logs.length - 1; index >= 0; index -= 1) {
-      const output = getMainModelContentLogOutput(logs[index]);
-      if (output) return { ...logs[index], output };
-    }
-    return null;
+    const projection =
+      messageItem === props.messageItem
+        ? currentAnalysisProjection.value
+        : selectLatestAnalysisActivities(timelineMessage(messageItem));
+    return getMainModelContentLogOutput(projection.latestModelAnalysis || {})
+      ? projection.latestModelAnalysis
+      : null;
   }
 
   function getLatestPluginAnalysisLog(messageItem = {}) {
-    if (messageItem === props.messageItem) {
-      const logItem = currentAnalysisProjection.value.latestGuidance;
-      const output = getPluginAnalysisLogOutput(logItem || {});
-      if (output) return { ...logItem, output };
-    }
-    const logs = [
-      ...getAllRealtimeLogs(messageItem),
-      ...getAllCompletedLogs(messageItem),
-    ].filter(isPluginAnalysisResponseLog);
-    for (let index = logs.length - 1; index >= 0; index -= 1) {
-      const output = getPluginAnalysisLogOutput(logs[index]);
-      if (output) return { ...logs[index], output };
-    }
-    return null;
+    const projection =
+      messageItem === props.messageItem
+        ? currentAnalysisProjection.value
+        : selectLatestAnalysisActivities(timelineMessage(messageItem));
+    return getPluginAnalysisLogOutput(projection.latestGuidance || {})
+      ? projection.latestGuidance
+      : null;
   }
 
   function summarizeAnalysisProjection(messageItem = {}) {
-    const projection = messageItem === props.messageItem
-      ? currentAnalysisProjection.value
-      : selectLatestAnalysisActivities(timelineMessage(messageItem));
+    const projection =
+      messageItem === props.messageItem
+        ? currentAnalysisProjection.value
+        : selectLatestAnalysisActivities(timelineMessage(messageItem));
     const latestGuidance = projection.latestGuidance;
     const latestModelAnalysis = projection.latestModelAnalysis;
     return {
       activityTimelineCount: projection.activityTimelineCount,
       latestGuidanceEventId: String(latestGuidance?.eventId || ""),
       latestGuidanceOutputLength: getPluginAnalysisLogOutput(latestGuidance || {}).length,
-      latestGuidanceTimestamp: String(latestGuidance?.timestamp || latestGuidance?.ts || ""),
+      latestGuidanceTimestamp: String(latestGuidance?.timestamp || ""),
       latestModelAnalysisEventId: String(latestModelAnalysis?.eventId || ""),
-      latestModelAnalysisOutputLength: getMainModelContentLogOutput(latestModelAnalysis || {}).length,
-      latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || latestModelAnalysis?.ts || ""),
+      latestModelAnalysisOutputLength: getMainModelContentLogOutput(latestModelAnalysis || {})
+        .length,
+      latestModelAnalysisTimestamp: String(latestModelAnalysis?.timestamp || ""),
     };
   }
 
@@ -133,7 +99,5 @@ export function createThinkingAnalysisProjection({
 
 export function sourceToProjectionLatencyMs(timestamp = "", projectedAtMs = Date.now()) {
   const sourceAtMs = Date.parse(String(timestamp || ""));
-  return Number.isFinite(sourceAtMs)
-    ? Math.max(0, projectedAtMs - sourceAtMs)
-    : null;
+  return Number.isFinite(sourceAtMs) ? Math.max(0, projectedAtMs - sourceAtMs) : null;
 }

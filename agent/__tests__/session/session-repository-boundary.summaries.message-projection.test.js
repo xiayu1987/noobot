@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
 
 test("session display summary projects persisted messageUid as canonical message identity", () => {
   const summary = buildSessionDisplaySummary({
@@ -163,7 +164,17 @@ test("session display summary does not duplicate an active Turn with persisted a
         presentationMessageId: "presentation-active",
         chatPresentation: false,
         turnScopeId: "turn-active",
-        activityTimeline: [{ eventId: "thinking-1", type: "thinking", text: "working" }],
+        activityTimeline: [
+          canonicalActivity({
+            eventId: "thinking-1",
+            text: "working",
+            sequenceScopeId: "model-tool-call",
+            sessionId: "active-turn-with-facts",
+            turnScopeId: "turn-active",
+            messageId: "model-tool-call",
+            presentationMessageId: "presentation-active",
+          }),
+        ],
       },
     ],
     turnLifecycle: {
@@ -199,16 +210,15 @@ test("session display summary projects one explicit assistant presentation from 
         chatPresentation: false,
         turnScopeId: "turn-1",
         activityTimeline: [
-          {
+          canonicalActivity({
             eventId: "thinking-1",
-            event: "thinking",
-            type: "thinking",
             text: "working",
-            sequence: 1,
             sequenceScopeId: "model-tool-call",
-            sequenceDomain: "message-event",
-            authority: "authoritative",
-          },
+            sessionId: "assistant-presentation-session",
+            turnScopeId: "turn-1",
+            messageId: "model-tool-call",
+            presentationMessageId: "presentation-1",
+          }),
         ],
         toolTimeline: [
           {

@@ -584,7 +584,6 @@ export function useChatSession({
     clearPendingInteractionIfObsolete,
     setPendingInteractionRequest,
     isInteractionRequestHandled,
-    classifyRealtimeLog,
     navigateToLastMessage,
     translate,
     onConversationState: trackConversationState,

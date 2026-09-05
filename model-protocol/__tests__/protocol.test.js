@@ -24,6 +24,9 @@ import {
   supportsModelMultimodalParsing,
   supportsModelCapability,
   validateModelResponse,
+  resolveModelAdapterId,
+  MODEL_ADAPTER_ID,
+  MODEL_PROVIDER_CONFIG_CONTRACT,
 } from "../src/index.js";
 
 test("model input processing keeps directly readable text out of multimodal parsing", () => {
@@ -54,17 +57,29 @@ test("model input processing keeps directly readable text out of multimodal pars
 
 test("model library exposes copy-safe provider templates", () => {
   const options = listModelLibraryOptions();
-  assert.equal(options.length, 21);
+  assert.equal(options.length, 22);
   assert.equal(options[0].key, "gpt_5_6_sol");
   assert.equal(
     options.some((item) => item.key === "gpt_5_4"),
+    true,
+  );
+  assert.equal(
+    options.some((item) => item.key === "gpt_6_astra"),
     true,
   );
   assert.deepEqual(
     options
       .filter(({ key }) => resolveModelLibraryProvider(key)?.capabilities?.web_search === true)
       .map(({ key }) => key),
-    ["gpt_5_6_sol", "gpt_5_6_terra", "gpt_5_6_luna", "gpt_5_4", "gpt_5_5", "qwen3_7_max"],
+    [
+      "gpt_5_6_sol",
+      "gpt_6_astra",
+      "gpt_5_6_terra",
+      "gpt_5_6_luna",
+      "gpt_5_4",
+      "gpt_5_5",
+      "qwen3_7_max",
+    ],
   );
   assert.equal(
     options.some((item) => item.key === "gemini_3_7_flash"),
@@ -83,6 +98,16 @@ test("model library exposes copy-safe provider templates", () => {
     assert.equal(item.reasoning_effort_options.includes(item.reasoning_effort), true);
     assert.equal(item.reasoning_effort_options.includes(item.tool_reasoning_effort), true);
   }
+  for (const key of [
+    "claude_fable_5",
+    "claude_fable_5_1",
+    "claude_opus_5",
+    "claude_sonnet_5",
+    "claude_haiku_4_5",
+  ]) {
+    const provider = resolveModelLibraryProvider(key);
+    assert.equal("adapter_id" in provider, false);
+  }
   assert.equal(resolveModelLibraryProvider("kimi_k3").model, "kimi-k3");
   assert.equal(resolveModelLibraryProvider("kimi_k3").api_key, "${MOONSHOT_API_KEY}");
   assert.deepEqual(resolveModelLibraryProvider("kimi_k3").multimodal_parsing.input_modalities, [
@@ -92,6 +117,14 @@ test("model library exposes copy-safe provider templates", () => {
   assert.equal(resolveModelLibraryProvider("glm_5_3").model, "glm-5.3");
   assert.equal(resolveModelLibraryProvider("glm_5_3").reasoning_effort, "low");
   assert.equal(resolveModelLibraryProvider("glm_5_3").multimodal_parsing.enabled, false);
+  const astra = resolveModelLibraryProvider("gpt_6_astra");
+  assert.equal(astra.model, "gpt-6-astra");
+  assert.equal(astra.use_responses_api, true);
+  assert.deepEqual(astra.reasoning_effort_options, ["low", "medium", "high", "xhigh", "max"]);
+  assert.equal(astra.reasoning_effort_options.includes("none"), false);
+  assert.equal(astra.capabilities.web_search, true);
+  assert.deepEqual(astra.multimodal_parsing.input_modalities, ["image"]);
+  assert.equal(astra.multimodal_generation.support_generation.enabled, false);
   assert.equal(Object.isFrozen(options[0]), true);
 
   const first = resolveModelLibraryProvider("gemini_3_7_flash");
@@ -305,8 +338,8 @@ test("model request requires one explicit context sequence policy", () => {
 });
 
 test("model request derives provider and adapter identities", () => {
-  // The transport is a protocol constant carried by adapterId, so a spec that
-  // still names a format is a non-converged producer rather than a valid input.
+  // The transport is a protocol fact derived from model family, so a spec
+  // that still names a format is a non-converged producer.
   assert.throws(
     () =>
       createModelRequest({
@@ -323,6 +356,19 @@ test("model request derives provider and adapter identities", () => {
   });
   assert.equal(derived.model.operatorId, "openai");
   assert.equal(derived.model.adapterId, "openai-compatible");
+});
+
+test("model-family facts select the transport adapter without config fields", () => {
+  assert.equal(resolveModelAdapterId({ modelFamily: "claude" }), MODEL_ADAPTER_ID.ANTHROPIC_MESSAGES);
+  assert.equal(resolveModelAdapterId({ modelFamily: "gpt" }), MODEL_ADAPTER_ID.OPENAI_COMPATIBLE);
+  const claude = createModelRequest({
+    invocation,
+    model: { model: "claude-fable-5-1", modelFamily: "claude", operatorId: "anthropic" },
+    messages: [],
+  });
+  assert.equal(claude.model.adapterId, MODEL_ADAPTER_ID.ANTHROPIC_MESSAGES);
+  assert.equal("adapter_id" in claude.model, false);
+  assert.equal("adapter_id" in MODEL_PROVIDER_CONFIG_CONTRACT.properties, false);
 });
 
 test("multimodal capabilities are governed only by explicit model configuration", () => {

@@ -136,7 +136,7 @@ describe("sub-session realtime message projection", () => {
       content: "",
     });
     expect(session.messages[1].activityTimeline).toEqual([
-      expect.objectContaining({ event: "thinking", text: "```mermaid\ngraph TD; A-->B\n```" }),
+      expect.objectContaining({ eventType: "thinking", text: "```mermaid\ngraph TD; A-->B\n```" }),
     ]);
     expect(session.messages[1].toolTimeline).toEqual([
       expect.objectContaining({ key: "call:call-1", result: "ok", status: "completed" }),

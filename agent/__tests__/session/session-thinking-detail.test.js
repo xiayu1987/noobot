@@ -11,6 +11,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { buildThinkingDetailPayload } from "../../src/session/session-thinking-detail.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import { readSessionTurn, writeSessionArtifact } from "../../src/session/session-artifact-store.js";
+import { canonicalActivity } from "./session-repository-boundary.summaries.fixtures.js";
 
 test("thinking detail message carries its session identity without duplicating scoped messages", () => {
   const payload = buildThinkingDetailPayload(
@@ -21,12 +22,14 @@ test("thinking detail message carries its session identity without duplicating s
           sessionId: "session-detail",
           rawMessages: [
             {
+              messageUid: "final-assistant-source",
               role: "assistant",
               type: "message",
               turnScopeId: "turn-detail",
               toolTimeline: [{ key: "call:one" }],
             },
             {
+              messageUid: "guidance-source",
               role: "assistant",
               type: "message",
               turnScopeId: "turn-detail",
@@ -43,6 +46,85 @@ test("thinking detail message carries its session identity without duplicating s
   assert.equal(payload.messageItem.sessionId, "session-detail");
   assert.equal(Object.hasOwn(payload, "allMessages"), false);
   assert.equal(payload.counts.injectedMessageCount, 1);
+  assert.deepEqual(payload.messageItem.thinkingContentTimeline, [
+    {
+      contentId: "message:guidance-source",
+      contentKind: "injected_message",
+      sourceMessageUid: "guidance-source",
+      text: "guidance",
+      timestamp: "",
+      sequence: 2,
+      sessionId: "",
+      dialogProcessId: "",
+      turnScopeId: "turn-detail",
+      messageId: "",
+      presentationMessageId: "",
+    },
+  ]);
+  assert.equal(payload.counts.thinkingContentCount, 1);
+});
+
+test("thinking detail projects assistant tool-call content once and excludes control injections", () => {
+  const payload = buildThinkingDetailPayload(
+    {
+      sessionId: "content-session",
+      sessions: [
+        {
+          sessionId: "content-session",
+          rawMessages: [
+            {
+              messageUid: "assistant-tool-source",
+              messageId: "presentation-content",
+              role: "assistant",
+              type: "tool_call",
+              turnScopeId: "content-turn",
+              presentationMessageId: "presentation-content",
+              content: "先确认当前真实状态。",
+              toolTimeline: [{ key: "call:one" }],
+              activityTimeline: [
+                canonicalActivity({
+                  eventId: "model-content-event",
+                  sessionId: "content-session",
+                  dialogProcessId: "content-dialog",
+                  turnScopeId: "content-turn",
+                  messageId: "presentation-content",
+                  presentationMessageId: "presentation-content",
+                }),
+              ],
+            },
+            {
+              messageUid: "control-source",
+              role: "user",
+              type: "context_control",
+              turnScopeId: "content-turn",
+              injectedMessage: true,
+              noobotInternalMessageType: "noobot.task_check_prompt",
+              content: "hidden control prompt",
+            },
+            {
+              messageUid: "final-source",
+              id: "presentation-content",
+              role: "assistant",
+              type: "message",
+              turnScopeId: "content-turn",
+              content: "done",
+            },
+          ],
+        },
+      ],
+    },
+    { turnScopeId: "content-turn" },
+  );
+
+  assert.deepEqual(
+    payload.messageItem.thinkingContentTimeline.map((item) => [item.contentKind, item.text]),
+    [
+      ["main_model_content", "先确认当前真实状态。"],
+      ["thinking", "analysis"],
+    ],
+  );
+  assert.equal(payload.counts.injectedMessageCount, 0);
+  assert.equal(payload.counts.thinkingContentCount, 2);
 });
 
 test("thinking detail projects the complete turn timeline onto the final assistant message", () => {
@@ -77,7 +159,16 @@ test("thinking detail projects the complete turn timeline onto the final assista
               type: "message",
               turnScopeId: "workflow-node:turn-1",
               content: "done",
-              activityTimeline: [{ eventId: "analysis-1", eventType: "thinking" }],
+              activityTimeline: [
+                canonicalActivity({
+                  eventId: "analysis-1",
+                  sessionId: "child-session",
+                  dialogProcessId: "dialog-workflow-node",
+                  turnScopeId: "workflow-node:turn-1",
+                  messageId: "final-assistant",
+                  presentationMessageId: "final-assistant",
+                }),
+              ],
             },
           ],
         },
