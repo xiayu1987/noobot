@@ -1,0 +1,15 @@
+{
+  "name": "@noobot/runtime-topology-protocol",
+  "version": "4.2.8",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./ports": "./src/ports.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test __tests__/*.test.js"
+  }
+}

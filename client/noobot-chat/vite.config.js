@@ -6,6 +6,11 @@
 import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+
+const runtimeTopology = resolveRuntimeTopology(process.env);
+const devServerPort = Number(addressPort(runtimeTopology.clientAddr));
+const devProxyTarget = `http://${runtimeTopology.agentProxyUpstream}`;
 
 const VENDOR_CHUNK_RULES = Object.freeze([
   ["vendor-vue", ["/vue/", "/@vue/", "/pinia/"]],
@@ -49,13 +54,13 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: "0.0.0.0",
-      port: 10060,
+      port: devServerPort,
       fs: {
         allow: [path.resolve(process.cwd(), "../..")],
       },
       proxy: {
         "/api/internal/connect": {
-          target: "http://localhost:10062",
+          target: devProxyTarget,
           changeOrigin: true,
           ws: true,
           rewrite: (requestPath) => requestPath.replace(/^\/api/, ""),
@@ -68,7 +73,7 @@ export default defineConfig(({ mode }) => {
             : {}),
         },
         "/api": {
-          target: "http://localhost:10062",
+          target: devProxyTarget,
           changeOrigin: true,
           ws: true,
           rewrite: (requestPath) => requestPath.replace(/^\/api/, ""),

@@ -26,6 +26,7 @@
     "noobot-i18n": "file:../i18n",
     "@noobot/shared": "file:../shared",
     "@noobot/runtime-events": "file:../runtime-events",
+    "@noobot/runtime-topology-protocol": "file:../runtime-topology-protocol",
     "@noobot/event-protocol": "file:../event-protocol"
   }
 }

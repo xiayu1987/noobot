@@ -5,6 +5,7 @@
  */
 import { app } from "electron";
 import { runBestEffort } from "@noobot/shared/best-effort";
+import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { clientFilePath as path } from "../path-resolver.js";
 import { fileURLToPath } from "node:url";
 import {
@@ -31,8 +32,15 @@ const packagedBackendRoot = path.join(process.resourcesPath, "backend");
 
 installEarlyDiagnostics({ app, filename: __filename, dirname: __dirname });
 
-const servicePort = Number.parseInt(process.env.NOOBOT_SERVICE_PORT || "10061", 10);
-const agentProxyPort = Number.parseInt(process.env.AGENT_PROXY_PORT || "10062", 10);
+const runtimeTopology = resolveRuntimeTopology(process.env);
+const servicePort = Number.parseInt(
+  process.env.NOOBOT_SERVICE_PORT || runtimeTopology.servicePort,
+  10,
+);
+const agentProxyPort = Number.parseInt(
+  process.env.AGENT_PROXY_PORT || runtimeTopology.agentProxyPort,
+  10,
+);
 const serviceOrigin = String(
   process.env.NOOBOT_SERVICE_URL || `http://127.0.0.1:${servicePort}`,
 ).replace(/\/$/, "");
@@ -41,7 +49,9 @@ const agentProxyOrigin = String(
   process.env.NOOBOT_AGENT_PROXY_URL || `http://127.0.0.1:${agentProxyPort}`,
 ).replace(/\/$/, "");
 const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
-const defaultClientUrl = process.env.NOOBOT_CLIENT_URL || "http://127.0.0.1:10060";
+const defaultClientUrl =
+  process.env.NOOBOT_CLIENT_URL ||
+  `http://127.0.0.1:${runtimePorts.clientAddr.replace(/^.*:/, "")}`;
 const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
 const startupDebugEnabled = /^(1|true|yes|on)$/i.test(

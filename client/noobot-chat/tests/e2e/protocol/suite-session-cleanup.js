@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
+import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { request as playwrightRequest } from "@playwright/test";
 
 const registryPath = String(process.env.NOOBOT_E2E_SESSION_REGISTRY || "").trim();
@@ -64,10 +65,9 @@ export default class SuiteSessionCleanupReporter {
     ) {
       return;
     }
-    const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060").replace(
-      /\/$/,
-      "",
-    );
+    const topology = resolveRuntimeTopology(process.env);
+    const defaultBaseUrl = `http://${topology.loopbackHost}:${addressPort(topology.clientAddr)}`;
+    const baseURL = String(process.env.NOOBOT_E2E_BASE_URL || defaultBaseUrl).replace(/\/$/, "");
     const context = await playwrightRequest.newContext({ baseURL });
     try {
       const apiKeyByUserId = new Map();

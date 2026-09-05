@@ -43,6 +43,7 @@
     "@noobot/model-protocol": "file:../../model-protocol",
     "@noobot/plugin-protocol": "file:../../plugin-protocol",
     "@noobot/plugin-runtime": "file:../../plugin-runtime",
+    "@noobot/runtime-topology-protocol": "file:../../runtime-topology-protocol",
     "@noobot/security-assessment-protocol": "file:../../security-assessment-protocol",
     "@noobot/semantic-transfer-protocol": "file:../../semantic-transfer-protocol",
     "@noobot/session-protocol": "file:../../session-protocol",

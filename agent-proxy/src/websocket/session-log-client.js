@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { config } from "../shared/config.js";
+import { resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import {
   createSessionChannelWebSocketClient,
   SESSION_CHANNELS,
@@ -11,7 +12,9 @@ import {
 
 function buildLogWebSocketUrl(apiKey = "") {
   try {
-    const target = new URL(config.upstreamHttpBase || "http://127.0.0.1:10061");
+    const target = new URL(
+      config.upstreamHttpBase || resolveRuntimeTopology({}).agentProxyUpstreamHttpBase,
+    );
     target.protocol = target.protocol === "https:" ? "wss:" : "ws:";
     target.pathname = "/logs/ws";
     target.search = apiKey ? `?apikey=${encodeURIComponent(apiKey)}` : "";
