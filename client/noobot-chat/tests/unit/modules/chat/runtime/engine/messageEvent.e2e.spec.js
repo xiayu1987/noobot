@@ -167,7 +167,7 @@ describe("authoritative message event end-to-end fidelity", () => {
     });
     expect(assistantMessage.activityTimeline).toEqual([
       expect.objectContaining({
-        event: "main_model_content",
+        eventType: "main_model_content",
         text: "```mermaid\ngraph TD; A-->B\n```",
       }),
     ]);

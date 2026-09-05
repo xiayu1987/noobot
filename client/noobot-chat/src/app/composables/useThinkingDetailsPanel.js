@@ -23,12 +23,15 @@ import {
 } from "../../modules/chat/model/thinkingDetailCache.js";
 import { selectToolTimelineCount } from "../../modules/chat/runtime/engine/toolTimeline.js";
 import { selectActivityTimelineLogs } from "../../modules/chat/runtime/engine/activityTimeline.js";
+import { selectThinkingDetailContentTimeline } from "@noobot/event-protocol/thinking-detail-content";
 import { logThinkingReplayDebug } from "../../modules/debug/loggers/thinkingReplayDebugLogger.js";
 import { logStateMachineDebug } from "../../modules/debug/loggers/stateMachineLogger.js";
 
 function hasCanonicalTimeline(messageItem = {}) {
   return (
-    selectToolTimelineCount(messageItem) > 0 || selectActivityTimelineLogs(messageItem).length > 0
+    selectToolTimelineCount(messageItem) > 0 ||
+    selectActivityTimelineLogs(messageItem).length > 0 ||
+    selectThinkingDetailContentTimeline(messageItem).length > 0
   );
 }
 
@@ -51,6 +54,7 @@ function summarizeThinkingTimeline(messageItem = {}) {
     hasThinkingDetails: messageItem?.hasThinkingDetails === true,
     thinkingDetailCount: Number(messageItem?.thinkingDetailCount || 0),
     activityTimelineCount: selectActivityTimelineLogs(messageItem).length,
+    thinkingContentCount: selectThinkingDetailContentTimeline(messageItem).length,
     toolTimelineCount: selectToolTimelineCount(messageItem),
     toolTimelineDetailCount: toolTimeline.filter(
       (entry = {}) => entry?.args !== undefined || entry?.result !== undefined,
@@ -68,12 +72,16 @@ function timelineRevision(messageItem = {}) {
   const activities = selectActivityTimelineLogs(messageItem);
   const lastTool = tools.at(-1) || {};
   const lastActivity = activities.at(-1) || {};
+  const thinkingContents = selectThinkingDetailContentTimeline(messageItem);
+  const lastThinkingContent = thinkingContents.at(-1) || {};
   return [
     Number(messageItem?.messageEventState?.lastSequence || 0),
     tools.length,
     lastTool?.resultEvent?.eventId || lastTool?.call?.eventId || "",
     activities.length,
-    lastActivity?.eventId || lastActivity?.activityId || "",
+    lastActivity?.eventId || "",
+    thinkingContents.length,
+    lastThinkingContent?.contentId || "",
   ].join(":");
 }
 

@@ -5,11 +5,7 @@
 -->
 <script setup>
 import { computed, nextTick, ref, watch } from "vue";
-import {
-  observeElementOffset,
-  observeElementRect,
-  useVirtualizer,
-} from "@tanstack/vue-virtual";
+import { observeElementOffset, observeElementRect, useVirtualizer } from "@tanstack/vue-virtual";
 import { QUANTITY_THRESHOLDS } from "@noobot/shared/quantity-thresholds";
 import {
   BaseEmptyHint,
@@ -138,11 +134,10 @@ watch(
   },
   { flush: "post" },
 );
-watch(
-  detailTimelineIdentity,
-  () => void synchronizeToolViewport({ alignStart: true }),
-  { immediate: true, flush: "post" },
-);
+watch(detailTimelineIdentity, () => void synchronizeToolViewport({ alignStart: true }), {
+  immediate: true,
+  flush: "post",
+});
 watch(
   () => rendererProjection.value.length,
   (count, previousCount) => {
@@ -163,7 +158,7 @@ const rendererProjectionSignature = computed(() =>
           .join("|"),
         props.thinkingContentItems
           .map((item = {}) =>
-            [item.eventId || "", item.sequence || 0, String(item.content || "").length].join(":"),
+            [item.contentId || "", item.sequence || 0, String(item.content || "").length].join(":"),
           )
           .join("|"),
       ].join("::"),
@@ -189,8 +184,8 @@ function toggleDetail(detailKey = "") {
   expandedDetailKeys.value = next;
 }
 function formatThinkingContentTitle(item = {}, index = 0) {
-  const source = String(item?.source || item?.event || item?.activityKind || "thinking").trim();
-  const timestamp = String(item?.timestamp || item?.timelineTimestamp || "").trim();
+  const source = String(item?.contentKind || "").trim();
+  const timestamp = String(item?.timestamp || "").trim();
   return `${index + 1}. ${source}${timestamp ? ` · ${timestamp}` : ""}`;
 }
 watch(
@@ -204,8 +199,8 @@ watch(
       itemCount: rendererProjection.value.length,
       thinkingContentCount: props.thinkingContentItems.length,
       thinkingContent: props.thinkingContentItems.slice(-32).map((item = {}) => ({
-        eventId: String(item.eventId || ""),
-        event: String(item.event || ""),
+        contentId: String(item.contentId || ""),
+        contentKind: String(item.contentKind || ""),
         sequence: Number(item.sequence || 0),
         contentLength: String(item.content || "").length,
       })),
@@ -302,7 +297,7 @@ watch(
           </div>
           <BaseNoteBlock
             v-for="(item, index) in thinkingContentItems"
-            :key="`thinking-content-${String(item.eventId || index)}`"
+            :key="String(item.contentId)"
             :title="formatThinkingContentTitle(item, index)"
             :content="String(item.content || '')" /><BaseEmptyHint
             v-if="!thinkingContentItems.length"

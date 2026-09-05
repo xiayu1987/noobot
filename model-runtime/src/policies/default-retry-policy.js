@@ -4,6 +4,22 @@
  */
 import { MODEL_ERROR_KIND } from "@noobot/model-protocol";
 
+const TIMEOUT_ERROR_CODES = new Set([
+  "etimedout",
+  "und_err_connect_timeout",
+  "und_err_headers_timeout",
+]);
+
+const TEMPORARY_NETWORK_ERROR_CODES = new Set([
+  "eai_again",
+  "econnrefused",
+  "econnreset",
+  "ehostunreach",
+  "enetunreach",
+  "epipe",
+  "und_err_socket",
+]);
+
 export function classifyTransportError(error = {}) {
   const name = String(error?.name || error?.cause?.name || "").toLowerCase();
   const code = String(error?.code || error?.cause?.code || "").toLowerCase();
@@ -17,10 +33,11 @@ export function classifyTransportError(error = {}) {
   if (status === 401 || status === 403)
     return { kind: MODEL_ERROR_KIND.AUTHENTICATION, retryable: false };
   if (status === 429) return { kind: MODEL_ERROR_KIND.RATE_LIMIT, retryable: true };
-  if (status === 408 || message.includes("timeout"))
+  if (status === 408 || TIMEOUT_ERROR_CODES.has(code) || message.includes("timeout"))
     return { kind: MODEL_ERROR_KIND.TIMEOUT, retryable: true };
   if (
     [409, 500, 502, 503, 504].includes(status) ||
+    TEMPORARY_NETWORK_ERROR_CODES.has(code) ||
     message.includes("temporarily unavailable") ||
     message.includes("internal server error") ||
     message.includes("server error")

@@ -5,7 +5,7 @@
  */
 import { takeReplayCacheGroupsForSession } from "./replayCache.js";
 import { applyReconnectReplayBatchToActiveSession } from "./messageReplay.js";
-import { _trimStr, normalizeExecutionLogForRealtime } from "./utils.js";
+import { _trimStr } from "./utils.js";
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 
 export async function consumeReconnectReplayCacheForSession({
@@ -48,7 +48,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
   messages,
   dialogProcessId,
   turnScopeId = "",
-  classifyRealtimeLog,
   envelopeCallbacks,
   navigateToLastMessage,
   processStore,
@@ -63,8 +62,6 @@ export async function applyReconnectMessagesToActiveSessionReplay({
     messages,
     dialogProcessId,
     turnScopeId,
-    classifyRealtimeLog,
-    normalizeExecutionLogForRealtime,
     envelopeCallbacks,
     navigateToLastMessage,
     processStore,

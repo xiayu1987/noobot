@@ -4,16 +4,26 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { mergeCanonicalActivityTimelines } from "@noobot/event-protocol/activity-timeline";
+import {
+  isThinkingDetailInjectedMessage,
+  projectThinkingDetailContentTimeline,
+} from "@noobot/event-protocol/thinking-detail-content";
+
 export function normalizeThinkingRoute(value = "") {
   return String(value || "").trim();
 }
 
 export function isInjectedThinkingMessage(message = {}) {
-  return message?.injectedMessage === true;
+  return isThinkingDetailInjectedMessage(message);
 }
 
 export function hasThinkingTimeline(message = {}) {
-  return Array.isArray(message?.toolTimeline) || Array.isArray(message?.activityTimeline);
+  return (
+    Array.isArray(message?.toolTimeline) ||
+    Array.isArray(message?.activityTimeline) ||
+    Array.isArray(message?.thinkingContentTimeline)
+  );
 }
 
 export function isMessageInThinkingRound(rootMessage = {}, candidateMessage = {}, filters = {}) {
@@ -21,7 +31,9 @@ export function isMessageInThinkingRound(rootMessage = {}, candidateMessage = {}
   if (turnScopeId) {
     return normalizeThinkingRoute(candidateMessage?.turnScopeId) === turnScopeId;
   }
-  const dialogProcessId = normalizeThinkingRoute(filters.dialogProcessId || rootMessage?.dialogProcessId);
+  const dialogProcessId = normalizeThinkingRoute(
+    filters.dialogProcessId || rootMessage?.dialogProcessId,
+  );
   if (dialogProcessId) {
     return normalizeThinkingRoute(candidateMessage?.dialogProcessId) === dialogProcessId;
   }
@@ -51,9 +63,11 @@ export function selectThinkingRootMessage(messages = [], filters = {}) {
     throw new TypeError("thinking detail invariant failed: presentation_message_identity_conflict");
   }
   if (presentationMessageIds.length !== 1) return {};
-  const source = roundMessages.find(
-    (item = {}) => normalizeThinkingRoute(item?.presentationMessageId) === presentationMessageIds[0],
-  ) || {};
+  const source =
+    roundMessages.find(
+      (item = {}) =>
+        normalizeThinkingRoute(item?.presentationMessageId) === presentationMessageIds[0],
+    ) || {};
   return {
     id: presentationMessageIds[0],
     messageId: presentationMessageIds[0],
@@ -95,20 +109,24 @@ export function projectThinkingTimeline(messages = [], rootMessage = {}, filters
     "toolTimeline",
     (item) => item?.key || item?.toolCallId || item?.tool_call_id,
   );
-  const activityTimeline = mergeTimeline(
+  const activityTimeline = mergeCanonicalActivityTimelines(
+    ...roundMessages.map((message) => message?.activityTimeline || []),
+  );
+  const thinkingContentTimeline = projectThinkingDetailContentTimeline(
     roundMessages,
-    "activityTimeline",
-    (item) => item?.eventId || item?.id,
+    activityTimeline,
   );
   return {
     rootMessage,
     roundMessages,
     toolTimeline,
     activityTimeline,
+    thinkingContentTimeline,
     projectedRootMessage: {
       ...rootMessage,
       toolTimeline,
       activityTimeline,
+      thinkingContentTimeline,
     },
   };
 }

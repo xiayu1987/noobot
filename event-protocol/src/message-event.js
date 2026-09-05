@@ -108,6 +108,9 @@ export function validateMessageEventPayload(value) {
   }
   const errors = [];
   for (const field of [
+    "event",
+    "type",
+    "rawEvent",
     "tool_call_id",
     "tool_call",
     "tool_result",
@@ -145,7 +148,10 @@ export function validateMessageEventPayload(value) {
       errors.push("invalid_transfer_envelopes");
     }
   }
-  if (eventType === MESSAGE_EVENT_TYPE.THINKING && typeof value?.text !== "string") {
+  if (
+    [MESSAGE_EVENT_TYPE.THINKING, MESSAGE_EVENT_TYPE.MAIN_MODEL_CONTENT].includes(eventType) &&
+    typeof value?.text !== "string"
+  ) {
     errors.push("missing_text");
   }
   if (eventType === MESSAGE_EVENT_TYPE.TOOL_CALL_START) {

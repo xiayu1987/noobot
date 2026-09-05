@@ -13,6 +13,8 @@
     "./turn-snapshot": "./src/turn-snapshot.js",
     "./tool-presentation": "./src/tool-presentation.js",
     "./tool-timeline": "./src/tool-timeline.js",
+    "./activity-timeline": "./src/activity-timeline.js",
+    "./thinking-detail-content": "./src/thinking-detail-content.js",
     "./workflow-runtime-event": "./src/workflow-runtime-event.js",
     "./plugin-artifact-event": "./src/plugin-artifact-event.js"
   },

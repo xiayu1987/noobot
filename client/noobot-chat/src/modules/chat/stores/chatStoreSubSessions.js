@@ -12,7 +12,6 @@ import {
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
-import { classifyRealtimeLog } from "../runtime/engine/realtimeLogClassifier.js";
 import { canonicalizeTurnScopeId, normalizeTurnScopeIdKey } from "../model/messageIdentity.js";
 import {
   resolveSessionTurnRuntime,
@@ -359,7 +358,6 @@ export function createSubSessionStore({
     const reduction = dispatchTurnEnvelope({
       targetMessage: nextMessage,
       envelope: incoming,
-      classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
     });
     if (!reduction.applied) {

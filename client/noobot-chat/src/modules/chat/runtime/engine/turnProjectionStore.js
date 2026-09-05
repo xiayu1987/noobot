@@ -20,7 +20,10 @@ import {
   resolveSessionRunMessageRuntimePatch,
   SESSION_RUN_MESSAGE_RUNTIME_ACTION,
 } from "../sessionRunStateMachine.js";
-import { selectTurnMessageRuntime, sessionRuntimeId } from "../run-state-machine/turnRuntimeRegistry.js";
+import {
+  selectTurnMessageRuntime,
+  sessionRuntimeId,
+} from "../run-state-machine/turnRuntimeRegistry.js";
 import { getMessageTurnScopeId, getMessageDialogProcessId } from "../../model/messageIdentity.js";
 import {
   applyRunStateMessagePatch,
@@ -43,23 +46,33 @@ export function projectTurnRuntimeToMessages({
   stateSnapshot = null,
 } = {}) {
   const registry = turnRuntimeRegistry?.value || turnRuntimeRegistry;
-  const resolvedState = stateSnapshot || selectTurnMessageRuntime(registry, {
-    sessionId: turn?.sessionId,
-    turnScopeId: turn?.turnScopeId,
-    dialogProcessId: turn?.dialogProcessId,
-  });
+  const resolvedState =
+    stateSnapshot ||
+    selectTurnMessageRuntime(registry, {
+      sessionId: turn?.sessionId,
+      turnScopeId: turn?.turnScopeId,
+      dialogProcessId: turn?.dialogProcessId,
+    });
   if (!resolvedState) {
     return { applied: false, patchedMessageCount: 0, reason: "turn_identity_conflict" };
   }
-  const sessionItems = Array.isArray(sessions?.value) ? sessions.value : Array.isArray(sessions) ? sessions : [];
+  const sessionItems = Array.isArray(sessions?.value)
+    ? sessions.value
+    : Array.isArray(sessions)
+      ? sessions
+      : [];
   const activeSessionValue = activeSession?.value || activeSession;
-  const targetSession = session
-    || sessionItems.find((item) => sessionRuntimeId(item) === resolvedState.sessionId)
-    || (sessionRuntimeId(activeSessionValue) === resolvedState.sessionId
-      ? activeSessionValue
-      : null);
+  const targetSession =
+    session ||
+    sessionItems.find((item) => sessionRuntimeId(item) === resolvedState.sessionId) ||
+    (sessionRuntimeId(activeSessionValue) === resolvedState.sessionId ? activeSessionValue : null);
   if (!targetSession) {
-    return { applied: false, patchedMessageCount: 0, reason: "session_not_found", stateSnapshot: resolvedState };
+    return {
+      applied: false,
+      patchedMessageCount: 0,
+      reason: "session_not_found",
+      stateSnapshot: resolvedState,
+    };
   }
   const messages = Array.isArray(targetSession.messages) ? targetSession.messages : [];
   if (!messages.length) {
@@ -68,10 +81,11 @@ export function projectTurnRuntimeToMessages({
   let patchedMessageCount = 0;
   let matchedMessageCount = 0;
   messages.forEach((message) => {
-    const sameTurn = resolvedState.turnScopeId
-      && getMessageTurnScopeId(message) === resolvedState.turnScopeId;
-    const sameDialog = resolvedState.dialogProcessId
-      && getMessageDialogProcessId(message) === resolvedState.dialogProcessId;
+    const sameTurn =
+      resolvedState.turnScopeId && getMessageTurnScopeId(message) === resolvedState.turnScopeId;
+    const sameDialog =
+      resolvedState.dialogProcessId &&
+      getMessageDialogProcessId(message) === resolvedState.dialogProcessId;
     if (resolvedState.turnScopeId ? !sameTurn : !sameDialog) return;
     matchedMessageCount += 1;
     const effect = resolveSessionRunMessageRuntimePatch({
@@ -89,11 +103,12 @@ export function projectTurnRuntimeToMessages({
     applied: patchedMessageCount > 0,
     patchedMessageCount,
     matchedMessageCount,
-    reason: patchedMessageCount > 0
-      ? "message_runtime_projected"
-      : matchedMessageCount > 0
-        ? "matching_message_requires_no_patch"
-        : "message_identity_not_found",
+    reason:
+      patchedMessageCount > 0
+        ? "message_runtime_projected"
+        : matchedMessageCount > 0
+          ? "matching_message_requires_no_patch"
+          : "message_identity_not_found",
   };
 }
 
@@ -108,7 +123,6 @@ const TURN_UI_SNAPSHOT_FIELDS = new Set([
 export function dispatchTurnEnvelope({
   targetMessage,
   envelope,
-  classifyRealtimeLog,
   source = TURN_PROJECTION_SOURCE.NORMAL_LIVE,
 } = {}) {
   const reducerObservedAtMs = Date.now();
@@ -164,10 +178,17 @@ export function dispatchTurnEnvelope({
     return observation;
   };
   if (!turnKey) {
-    return observe({ result: MESSAGE_EVENT_REDUCE_RESULT.INVALID, errors: ["turn_identity_missing"], reason: "missing_turn_identity" });
+    return observe({
+      result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
+      errors: ["turn_identity_missing"],
+      reason: "missing_turn_identity",
+    });
   }
   const envelopeValidation = validateProtocolEvent(envelope);
-  if (!envelopeValidation.valid || envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
+  if (
+    !envelopeValidation.valid ||
+    envelopeValidation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE
+  ) {
     return observe({
       result: MESSAGE_EVENT_REDUCE_RESULT.INVALID,
       errors: envelopeValidation.errors,
@@ -200,13 +221,13 @@ export function dispatchTurnEnvelope({
       receivedSequence: sequence,
     });
   }
-  const reduced = reduceMessageEvent({ targetMessage, event: envelope, classifyRealtimeLog });
+  const reduced = reduceMessageEvent({ targetMessage, event: envelope });
   if (reduced.applied) {
     let nextSequence = Number(state.lastSequence || 0) + 1;
     while (state.pendingEnvelopes?.[nextSequence]) {
       const pendingEnvelope = state.pendingEnvelopes[nextSequence];
       delete state.pendingEnvelopes[nextSequence];
-      reduceMessageEvent({ targetMessage, event: pendingEnvelope, classifyRealtimeLog });
+      reduceMessageEvent({ targetMessage, event: pendingEnvelope });
       nextSequence = Number(state.lastSequence || 0) + 1;
     }
     if (state.pendingEnvelopes && !Object.keys(state.pendingEnvelopes).length) {
@@ -223,22 +244,33 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   const identity = resolveTurnIdentity(snapshot);
   const targetIdentity = resolveTurnIdentity(targetMessage);
   const turnKey = createTurnKey(identity);
-  const observe = (values = {}) => createTurnObservation({
-    requestedSessionId: identity.sessionId,
-    canonicalSessionId: targetIdentity.sessionId || identity.sessionId,
-    turnKey,
-    sequence: throughSequence || snapshot?.throughSequence,
-    source: TURN_PROJECTION_SOURCE.SNAPSHOT,
-    authority: snapshot?.authority,
-    ...values,
-  });
+  const observe = (values = {}) =>
+    createTurnObservation({
+      requestedSessionId: identity.sessionId,
+      canonicalSessionId: targetIdentity.sessionId || identity.sessionId,
+      turnKey,
+      sequence: throughSequence || snapshot?.throughSequence,
+      source: TURN_PROJECTION_SOURCE.SNAPSHOT,
+      authority: snapshot?.authority,
+      ...values,
+    });
   if (!turnKey || !targetMessage || !messageOwnsTurn(targetMessage, identity)) {
-    return observe({ applied: false, result: "snapshot_identity_conflict", reason: "snapshot_identity_conflict" });
+    return observe({
+      applied: false,
+      result: "snapshot_identity_conflict",
+      reason: "snapshot_identity_conflict",
+    });
   }
   const currentSequence = Number(targetMessage?.messageEventState?.lastSequence || 0);
   const snapshotSequence = Number(throughSequence || snapshot?.throughSequence || 0);
   if (snapshotSequence < currentSequence) {
-    return observe({ applied: false, result: "snapshot_stale", reason: "snapshot_stale", currentSequence, snapshotSequence });
+    return observe({
+      applied: false,
+      result: "snapshot_stale",
+      reason: "snapshot_stale",
+      currentSequence,
+      snapshotSequence,
+    });
   }
   const pendingEnvelopes = targetMessage?.messageEventState?.pendingEnvelopes || {};
   const currentToolTimeline = targetMessage?.toolTimeline || [];
@@ -267,15 +299,9 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
     snapshotTransferEnvelopes,
   );
   if (Array.isArray(snapshot?.attachments)) {
-    targetMessage.attachments = mergeAttachmentSnapshot(
-      currentAttachments,
-      snapshot.attachments,
-    );
+    targetMessage.attachments = mergeAttachmentSnapshot(currentAttachments, snapshot.attachments);
   }
-  targetMessage.toolTimeline = mergeToolTimelines(
-    snapshot?.toolTimeline,
-    currentToolTimeline,
-  );
+  targetMessage.toolTimeline = mergeToolTimelines(snapshot?.toolTimeline, currentToolTimeline);
   targetMessage.activityTimeline = mergeActivityTimelines(
     snapshot?.activityTimeline,
     currentActivityTimeline,
@@ -283,10 +309,9 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   targetMessage.messageEventState = {
     ...snapshotState,
     lastSequence: Math.max(snapshotSequence, Number(snapshotState.lastSequence || 0)),
-    consumedEventIds: [...new Set([
-      ...(snapshotState.consumedEventIds || []),
-      ...currentConsumedEventIds,
-    ])].slice(-1000),
+    consumedEventIds: [
+      ...new Set([...(snapshotState.consumedEventIds || []), ...currentConsumedEventIds]),
+    ].slice(-1000),
     ...(Object.keys(pendingEnvelopes).length ? { pendingEnvelopes } : {}),
   };
   let nextSequence = Number(targetMessage.messageEventState.lastSequence || 0) + 1;
@@ -299,6 +324,13 @@ export function hydrateTurnSnapshot({ targetMessage, snapshot, throughSequence =
   if (
     targetMessage.messageEventState.pendingEnvelopes &&
     !Object.keys(targetMessage.messageEventState.pendingEnvelopes).length
-  ) delete targetMessage.messageEventState.pendingEnvelopes;
-  return observe({ applied: true, result: "snapshot_accepted", reason: "snapshot_accepted", currentSequence, snapshotSequence });
+  )
+    delete targetMessage.messageEventState.pendingEnvelopes;
+  return observe({
+    applied: true,
+    result: "snapshot_accepted",
+    reason: "snapshot_accepted",
+    currentSequence,
+    snapshotSequence,
+  });
 }

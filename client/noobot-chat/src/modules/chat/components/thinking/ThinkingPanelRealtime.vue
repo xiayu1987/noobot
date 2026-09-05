@@ -148,13 +148,13 @@ watch(
         <BaseMetaLabel
           class="thinking-analysis-title"
           :text="translate('message.analysisFlow')"
-        /><BaseNoteBlock :content="latestPluginAnalysisLog.output" />
+        /><BaseNoteBlock :content="latestPluginAnalysisLog.text" />
       </div>
       <div v-if="latestMainModelContentLog" class="thinking-analysis-block">
         <BaseMetaLabel
           class="thinking-analysis-title"
           :text="translate('message.modelAnalysis')"
-        /><BaseNoteBlock :content="latestMainModelContentLog.output" />
+        /><BaseNoteBlock :content="latestMainModelContentLog.text" />
       </div>
       <div
         v-if="taskCheckReceipt"

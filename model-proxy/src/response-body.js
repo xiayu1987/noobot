@@ -76,6 +76,85 @@ function extractToolCallsFromJsonPayload(payloadObject = null) {
   return [];
 }
 
+function normalizeResponsesOutputItem(item = {}) {
+  if (!item || typeof item !== 'object') return null;
+  if (item.type === 'function_call') {
+    return {
+      id: String(item.call_id || item.id || '').trim(),
+      type: 'function',
+      function: {
+        name: String(item.name || '').trim(),
+        arguments: String(item.arguments || '{}'),
+      },
+    };
+  }
+  return null;
+}
+
+function extractResponsesOutput(payloadObject = null) {
+  if (!Array.isArray(payloadObject?.output)) return { text: '', toolCalls: [], reasoning: [] };
+  const text = [];
+  const toolCalls = [];
+  const reasoning = [];
+  for (const item of payloadObject.output) {
+    if (!item || typeof item !== 'object') continue;
+    if (item.type === 'function_call') {
+      const normalized = normalizeResponsesOutputItem(item);
+      if (normalized) toolCalls.push(normalized);
+      continue;
+    }
+    if (item.type === 'reasoning') {
+      const summaries = Array.isArray(item.summary) ? item.summary : [];
+      for (const summary of summaries) {
+        const value = typeof summary === 'string' ? summary : summary?.text;
+        if (String(value || '').trim()) reasoning.push(String(value).trim());
+      }
+      continue;
+    }
+    if (item.type === 'message' && Array.isArray(item.content)) {
+      for (const block of item.content) {
+        if (block?.type === 'output_text' || block?.type === 'text') {
+          if (String(block.text || '').trim()) text.push(String(block.text).trim());
+        }
+      }
+    }
+  }
+  return { text: text.join(''), toolCalls, reasoning };
+}
+
+function extractAnthropicContent(payloadObject = null) {
+  if (!Array.isArray(payloadObject?.content)) return { text: '', toolCalls: [], reasoning: [] };
+  const text = [];
+  const toolCalls = [];
+  const reasoning = [];
+  for (const block of payloadObject.content) {
+    if (block?.type === 'text' && String(block.text || '').trim()) text.push(String(block.text).trim());
+    if (block?.type === 'thinking' && String(block.thinking || '').trim()) reasoning.push(String(block.thinking).trim());
+    if (block?.type === 'tool_use') {
+      toolCalls.push({
+        id: String(block.id || '').trim(),
+        type: 'function',
+        function: {
+          name: String(block.name || '').trim(),
+          arguments: JSON.stringify(block.input ?? {}),
+        },
+      });
+    }
+  }
+  return { text: text.join(''), toolCalls, reasoning };
+}
+
+function formatResponseProjection({ text = '', toolCalls = [], reasoning = [] } = {}) {
+  if (String(text || '').trim()) return String(text).trim();
+  if (toolCalls.length) {
+    return JSON.stringify({ type: 'tool_calls', tool_calls: toolCalls }, null, 2);
+  }
+  if (reasoning.length) {
+    return JSON.stringify({ type: 'reasoning', summary: reasoning }, null, 2);
+  }
+  return '';
+}
+
 function extractFinalTextFromJsonPayload(payloadObject = null) {
   if (!payloadObject || typeof payloadObject !== 'object') return '';
 
@@ -218,6 +297,10 @@ function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
     const payloadObject = tryParseJson(normalizedBodyText);
     const finalJsonText = extractFinalTextFromJsonPayload(payloadObject);
     if (finalJsonText) return finalJsonText;
+    const responsesProjection = formatResponseProjection(extractResponsesOutput(payloadObject));
+    if (responsesProjection) return responsesProjection;
+    const anthropicProjection = formatResponseProjection(extractAnthropicContent(payloadObject));
+    if (anthropicProjection) return anthropicProjection;
     return normalizeBodyText(normalizedBodyText, contentType);
   }
 
@@ -226,5 +309,7 @@ function resolveFinalResponseBodyText(bodyText = '', contentType = '') {
 
 export {
   decodeBodyByEncoding,
+  extractAnthropicContent,
+  extractResponsesOutput,
   resolveFinalResponseBodyText,
 };

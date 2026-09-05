@@ -7,6 +7,7 @@ import { ref, nextTick } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useThinkingDetailsPanel } from "../../../src/app/composables/useThinkingDetailsPanel.js";
 import { __resetThinkingDetailCacheForTests } from "../../../src/modules/chat/model/thinkingDetailCache.js";
+import { canonicalActivityFact } from "../modules/chat/helpers/messageEventFixture.js";
 
 function deferred() {
   let resolve;
@@ -222,15 +223,14 @@ describe("useThinkingDetailsPanel request isolation", () => {
     expect(panel.thinkingDetailsMessageItem.value).toEqual(updatedCanonicalMessage);
     expect(panel.thinkingDetailsMessageItem.value.toolTimeline[0].status).toBe("completed");
     expect(fetcher).not.toHaveBeenCalled();
-    const thinkingActivity = {
+    const thinkingActivity = canonicalActivityFact({
       eventId: "guidance:two",
-      event: "guidance_analysis_response",
       sequence: 3,
+      activityKind: "guidance_analysis",
+      text: "new realtime guidance",
       sequenceScopeId: "presentation-1",
-      authority: "authoritative",
-      sequenceDomain: "message-event",
-      output: "new realtime guidance",
-    };
+      presentationMessageId: "presentation-1",
+    });
     const nextCanonicalMessage = {
       ...updatedCanonicalMessage,
       activityTimeline: [thinkingActivity],

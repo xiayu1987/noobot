@@ -4,8 +4,33 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it } from "vitest";
-import { buildViewMessage, foldConversationMessages } from "../../../../../src/modules/chat/model/messageModel.js";
+import {
+  buildViewMessage,
+  foldConversationMessages,
+} from "../../../../../src/modules/chat/model/messageModel.js";
 import { selectActivityTimelineLogs } from "../../../../../src/modules/chat/runtime/engine/activityTimeline.js";
+
+function activity(eventId, sequence, text) {
+  return {
+    eventId,
+    eventType: "thinking",
+    text,
+    activityKind: "analysis",
+    purpose: "",
+    pluginFlow: "",
+    chain: "",
+    sequence,
+    sequenceScopeId: "message-logs",
+    sequenceDomain: "message-event",
+    authority: "authoritative",
+    timestamp: `2026-09-05T03:39:${String(sequence).padStart(2, "0")}.000Z`,
+    sessionId: "session-logs",
+    dialogProcessId: "dp-logs",
+    turnScopeId: "client-turn:logs",
+    messageId: "message-logs",
+    presentationMessageId: "presentation-logs",
+  };
+}
 
 describe("messageModel activity timeline folding", () => {
   it("keeps all canonical activities when merging completed assistant messages", () => {
@@ -16,17 +41,9 @@ describe("messageModel activity timeline folding", () => {
           content: "part 1",
           turnScopeId: "client-turn:logs",
           dialogProcessId: "dp-logs",
-          activityTimeline: Array.from({ length: 6 }, (_, index) => ({
-            activityId: `event:log-${index + 1}`,
-            eventId: `log-${index + 1}`,
-            event: "thinking",
-            type: "thinking",
-            text: `log-${index + 1}`,
-            sequence: index + 1,
-            sequenceScopeId: "message-logs",
-            sequenceDomain: "message-event",
-            authority: "authoritative",
-          })),
+          activityTimeline: Array.from({ length: 6 }, (_, index) =>
+            activity(`log-${index + 1}`, index + 1, `log-${index + 1}`),
+          ),
           executionLogTotal: 6,
         },
         {
@@ -34,17 +51,9 @@ describe("messageModel activity timeline folding", () => {
           content: "part 2",
           turnScopeId: "client-turn:logs",
           dialogProcessId: "dp-logs",
-          activityTimeline: Array.from({ length: 6 }, (_, index) => ({
-            activityId: `event:log-${index + 7}`,
-            eventId: `log-${index + 7}`,
-            event: "thinking",
-            type: "thinking",
-            text: `log-${index + 7}`,
-            sequence: index + 7,
-            sequenceScopeId: "message-logs",
-            sequenceDomain: "message-event",
-            authority: "authoritative",
-          })),
+          activityTimeline: Array.from({ length: 6 }, (_, index) =>
+            activity(`log-${index + 7}`, index + 7, `log-${index + 7}`),
+          ),
           executionLogTotal: 12,
         },
       ],

@@ -34,14 +34,16 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     roundMessages,
     toolTimeline,
     activityTimeline,
+    thinkingContentTimeline,
     projectedRootMessage,
   } = projectThinkingDetailRound(messages, { dialogProcessId, turnScopeId });
   const scopedMessages = roundMessages
-    .filter((item = {}) =>
-      isInjectedThinkingMessage(item) || hasThinkingTimeline(item) || item === rootMessage,
+    .filter(
+      (item = {}) =>
+        isInjectedThinkingMessage(item) || hasThinkingTimeline(item) || item === rootMessage,
     )
-    .map((item) => item === rootMessage ? projectedRootMessage : item);
-  const injectedMessages = scopedMessages.filter((item = {}) => isInjectedThinkingMessage(item));
+    .map((item) => (item === rootMessage ? projectedRootMessage : item));
+  const injectedMessages = roundMessages.filter((item = {}) => isInjectedThinkingMessage(item));
   const thinkingDetailCount = countCanonicalThinkingDetailEvents({
     toolTimeline,
     activityTimeline,
@@ -52,7 +54,8 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     sessionId: normalizeThinkingRoute(rootMessage?.sessionId || sessionId),
     toolTimeline,
     activityTimeline,
-    hasThinkingDetails: thinkingDetailCount > 0 || injectedMessages.length > 0,
+    thinkingContentTimeline,
+    hasThinkingDetails: thinkingDetailCount > 0 || thinkingContentTimeline.length > 0,
     thinkingDetailCount,
   };
   return {
@@ -63,6 +66,7 @@ export function buildThinkingDetailPayload(fullResult = {}, filters = {}) {
     counts: {
       executionLogCount: countCanonicalThinkingDetailEvents({ toolTimeline }),
       injectedMessageCount: injectedMessages.length,
+      thinkingContentCount: thinkingContentTimeline.length,
       messageCount: scopedMessages.length,
     },
   };

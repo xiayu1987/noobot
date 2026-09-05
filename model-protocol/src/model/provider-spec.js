@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { resolveModelAdapterId } from "./model-adapter.js";
+
+export {
+  MODEL_ADAPTER_ID,
+  MODEL_FAMILY_ADAPTER_FACTS,
+  resolveModelAdapterId,
+} from "./model-adapter.js";
+
 export const MODEL_PROVIDER_ID = Object.freeze({
   OPENAI: "openai",
   ANTHROPIC: "anthropic",
@@ -14,10 +22,6 @@ export const MODEL_PROVIDER_ID = Object.freeze({
   KIMI: "kimi",
   XAI: "xai",
   GENERIC: "generic",
-});
-
-export const MODEL_ADAPTER_ID = Object.freeze({
-  OPENAI_COMPATIBLE: "openai-compatible",
 });
 
 export const MODEL_PROVIDER_CONFIG_VALUE_TYPE = Object.freeze({
@@ -300,17 +304,9 @@ function requireIdentity(value, field) {
 export function normalizeProviderSpec(input = {}) {
   return Object.freeze({
     operatorId: requireIdentity(input.operatorId, "operatorId"),
-    adapterId: resolveModelAdapterId(),
+    adapterId: resolveModelAdapterId({ modelFamily: input.modelFamily }),
     baseUrl: String(input.baseUrl || input.base_url || "").trim(),
   });
-}
-
-/**
- * Every provider in this protocol speaks the OpenAI-compatible transport, so
- * the adapter identity is a protocol constant rather than a configured fact.
- */
-export function resolveModelAdapterId() {
-  return MODEL_ADAPTER_ID.OPENAI_COMPATIBLE;
 }
 
 export function resolveModelOperatorId({ baseUrl = "" } = {}) {

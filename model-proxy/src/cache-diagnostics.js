@@ -23,21 +23,6 @@ function firstFiniteNumber(source, pathCandidates = []) {
   return null;
 }
 
-function collectProviderCacheFields(source, prefix = '', output = {}) {
-  if (!source || typeof source !== 'object') return output;
-  for (const [key, value] of Object.entries(source)) {
-    const fieldPath = prefix ? `${prefix}.${key}` : key;
-    const normalizedKey = String(key || '').toLowerCase();
-    if (normalizedKey.includes('cache') || normalizedKey.includes('cached')) {
-      output[fieldPath] = value;
-    }
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      collectProviderCacheFields(value, fieldPath, output);
-    }
-  }
-  return output;
-}
-
 function computeCommonPrefixLength(left = '', right = '') {
   const limit = Math.min(left.length, right.length);
   let index = 0;
@@ -144,8 +129,6 @@ function normalizeUsageCacheDiagnostics(responseObject = null) {
     cachedInputTokens: normalizeCacheDiagnosticsNumber(cachedInputTokens),
     cacheCreationInputTokens: normalizeCacheDiagnosticsNumber(cacheCreationInputTokens),
     cacheHit: cachedInputTokens !== null ? Number(cachedInputTokens) > 0 : null,
-    rawUsage: usage || null,
-    providerCacheFields: collectProviderCacheFields(responseObject || {}),
   };
 }
 

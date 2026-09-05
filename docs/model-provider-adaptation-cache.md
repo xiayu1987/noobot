@@ -4,10 +4,12 @@
 
 ## 代码边界
 
-- `model-protocol/src/model/provider-spec.js`：provider 配置字段、推理传输参数表、operator 和 adapter 契约。
+- `model-protocol/src/model/provider-spec.js`：provider 配置字段、推理传输参数表和 operator 契约。
+- `model-protocol/src/model/model-adapter.js`：模型系列到 wire adapter 的不可配置事实映射。
 - `model-runtime/src/normalization/spec-normalizer.js`：运行时默认参数与模型系列分类。
 - `model-runtime/src/policies/cache-policy-engine.js`：供应商缓存参数与采样参数编译。
 - `model-runtime/src/adapters/openai-compatible-adapter.js`：OpenAI-compatible 客户端和 Responses API 选择。
+- `model-runtime/src/adapters/anthropic-messages-adapter.js`：Anthropic 原生 Messages API 客户端。
 - `agent/src/models/tool/binding-adapter.js`：工具名称、排序和 strict schema 策略。
 - `model-proxy/src/cache-diagnostics.js`：代理侧缓存诊断。
 
@@ -15,7 +17,7 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ## 统一传输格式与供应商识别
 
-当前唯一模型传输协议是 OpenAI-compatible，它由 `adapterId` 承载，不是配置字段：`format` 已从协议移除，配置中出现该字段会被修复流程删除。供应商由解析后的 `base_url` 主机确定：
+传输 adapter 不是配置字段。`format` 和 `adapter_id` 已从配置协议移除；规范化阶段根据模型系列事实源生成内部 `adapterId`，并拒绝/忽略配置中的传输覆盖。当前事实映射为 Claude → `anthropic-messages`，其他已知系列 → `openai-compatible`。供应商由解析后的 `base_url` 主机确定：
 
 | API 主机                              | `operatorId` |
 | ------------------------------------- | ------------ |
@@ -29,7 +31,7 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 | `api.moonshot.cn` / `api.moonshot.ai` | `kimi`       |
 | 其他主机或尚未解析的地址占位符        | `generic`    |
 
-模型系列只根据实际 `model` 名称分类；配置 alias 不参与模型系列识别。环境变量名也不用于推断供应商。系列能力由运行时适配层统一维护，模型库不重复声明缓存字段。
+模型系列只根据实际 `model` 名称分类；配置 alias 不参与模型系列识别。环境变量名也不用于推断供应商。系列能力和传输 adapter 由协议事实源与运行时适配层统一维护，模型库不重复声明缓存字段。
 
 推理传输参数不由模型名推导，而是每个 provider 用 `reasoning_effort_parameter` 显式声明，取值限于 `reasoning_effort`、`thinking_level`、`enable_thinking`。参数名到线上值形态的映射维护在 `model-protocol/src/model/provider-spec.js`：前两者携带强度枚举，`enable_thinking` 是布尔开关，`reasoning_effort=none` 转为 `false`，其他档位转为 `true`。
 
@@ -37,7 +39,7 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ## 运行时默认参数
 
-配置文件可以省略采样参数。运行时按“传输 → operator → 模型系列 → 具体模型”应用默认值，用户显式配置始终优先。模型系列分类只服务于采样默认值，不参与任何传输契约决策。默认参数维护在 `model-runtime/src/normalization/spec-normalizer.js`，不要复制到模型库条目中。
+配置文件可以省略采样参数。运行时按“传输 → operator → 模型系列 → 具体模型”应用默认值，用户显式配置始终优先。模型系列分类同时用于采样默认值和查找不可配置的传输 adapter。默认参数维护在 `model-runtime/src/normalization/spec-normalizer.js`，不要复制到模型库条目中。
 
 当 OpenAI-compatible 配置显式给出 `top_p` 而未给出 `temperature` 时，运行时不会再补 `temperature`，避免同时发送两种采样控制。
 
@@ -47,11 +49,11 @@ Agent、插件和代理不得复制上述规则或自行识别供应商。
 
 ### 统一缓存策略
 
-缓存身份在运行时按供应商协议转换，不会把 GPT 专用字段发送给不支持它的模型。GPT（以及当前 Claude OpenAI-compatible 链路）生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 GPT/Claude 系列不生成 `prompt_cache_key`、`prompt_cache_retention` 或 `prompt_cache_options`，除非其官方协议在适配层明确声明了对应字段。显式配置优先。
+缓存身份在运行时按供应商协议转换，不会把 GPT 专用字段发送给不支持它的模型。GPT 生成 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。非 GPT/Claude 系列不生成 `prompt_cache_key`、`prompt_cache_retention` 或 `prompt_cache_options`，除非其官方协议在适配层明确声明了对应字段。显式配置优先。
 
 ### OpenAI GPT
 
-- GPT（及 Claude 当前兼容链路）生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
+- GPT 生成稳定的 `prompt_cache_key`，格式为 `noobot-<flow>-<model>`；主流程简化为 `noobot-main-<model>`。
 - GPT 5.6 及以上默认使用 `prompt_cache_options: { "ttl": "30m" }`。
 - GPT 4.1 和其他 GPT 5 系列默认使用 `prompt_cache_retention: "24h"`。
 - GPT-5 不发送 `top_p`。
@@ -102,6 +104,8 @@ Noobot 不保存或复用 `previous_response_id`。Session、编辑重发、分�
 ## 配置原则
 
 模型条目只声明身份、凭据地址、能力和用户确实需要覆盖的参数：
+
+`adapter_id` 不属于配置字段；Anthropic/Claude 的原生 Messages adapter 由模型系列事实自动绑定。
 
 ```json
 {

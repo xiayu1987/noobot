@@ -219,7 +219,8 @@ export function createSessionDetailApplicator({
             .slice(0, 64)
             .map((activity = {}) => ({
               eventId: String(activity.eventId || ""),
-              activityKind: String(activity.type || activity.activityKind || ""),
+              eventType: String(activity.eventType || ""),
+              activityKind: String(activity.activityKind || ""),
               sequence: Number(activity.sequence || 0),
               sequenceDomain: String(activity.sequenceDomain || ""),
               sequenceScopeId: String(activity.sequenceScopeId || ""),

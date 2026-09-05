@@ -49,7 +49,6 @@ export function applyReconnectEnvelopeToTargetMessage({
   findCanonicalMessagesById,
   materializeTurnPresentation,
   normalizedDpId = "",
-  classifyRealtimeLog,
 } = {}) {
   const validation = validateProtocolEvent(envelope);
   if (!validation.valid || validation.descriptor?.family !== EVENT_FAMILY.MESSAGE_TIMELINE) {
@@ -86,7 +85,6 @@ export function applyReconnectEnvelopeToTargetMessage({
     dispatchTurnEnvelope({
       targetMessage,
       envelope,
-      classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.HISTORY_REPLAY,
     }),
   );
@@ -114,7 +112,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
   findCanonicalMessagesById,
   materializeTurnPresentation,
   normalizedDpId = "",
-  classifyRealtimeLog,
 } = {}) {
   let appliedCount = 0;
   for (const envelope of _ensureArray(messages)) {
@@ -125,7 +122,6 @@ export function applyReconnectEnvelopeBatchToTargetMessage({
         findCanonicalMessagesById,
         materializeTurnPresentation,
         normalizedDpId,
-        classifyRealtimeLog,
       })
     )
       appliedCount += 1;
@@ -153,7 +149,6 @@ export async function applyReconnectReplayBatchToActiveSession({
   messages = [],
   dialogProcessId = "",
   turnScopeId = "",
-  classifyRealtimeLog,
   navigateToLastMessage,
 } = {}) {
   if (!activeSession?.value) return false;
@@ -200,7 +195,6 @@ export async function applyReconnectReplayBatchToActiveSession({
     findCanonicalMessagesById,
     materializeTurnPresentation,
     normalizedDpId,
-    classifyRealtimeLog,
   });
   if (appliedCount > 0) navigateToLastMessage?.();
   return appliedCount > 0;

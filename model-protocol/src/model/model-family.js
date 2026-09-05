@@ -4,8 +4,9 @@
  */
 
 /**
- * The model families this protocol recognises. A family is the sampling and
- * cache-protocol dialect a model speaks; it is not the operator that hosts it.
+ * The model families this protocol recognises. A family is the sampling,
+ * cache-protocol and wire-transport dialect a model speaks; it is not the
+ * operator that hosts it.
  * This enum is the only place a family identity is declared.
  */
 export const MODEL_FAMILY_ID = Object.freeze({

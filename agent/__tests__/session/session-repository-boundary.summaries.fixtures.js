@@ -37,3 +37,40 @@ export function canonicalMessages(messages = [], namespace = "summary") {
     };
   });
 }
+
+export function canonicalActivity({
+  eventId = "activity-1",
+  eventType = "thinking",
+  activityKind = "analysis",
+  text = "analysis",
+  sequence = 1,
+  sequenceScopeId = "message-1",
+  sessionId = "session-1",
+  dialogProcessId = "dialog-1",
+  turnScopeId = "turn-1",
+  messageId = "message-1",
+  presentationMessageId = "presentation-1",
+  purpose = "",
+  pluginFlow = "",
+  chain = "",
+} = {}) {
+  return {
+    eventId,
+    eventType,
+    text,
+    activityKind,
+    purpose,
+    pluginFlow,
+    chain,
+    sequence,
+    sequenceScopeId,
+    sequenceDomain: "message-event",
+    authority: "authoritative",
+    timestamp: `2026-09-05T03:39:${String(sequence).padStart(2, "0")}.000Z`,
+    sessionId,
+    dialogProcessId,
+    turnScopeId,
+    messageId,
+    presentationMessageId,
+  };
+}

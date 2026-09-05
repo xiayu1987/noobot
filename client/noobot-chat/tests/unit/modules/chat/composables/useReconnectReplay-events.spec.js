@@ -182,7 +182,6 @@ describe("useReconnectReplay", () => {
       sessionId: "s-1",
       dialogProcessId: "dp-t",
       seq: 1,
-      event: "execution_step",
       text: "thinking",
     });
 

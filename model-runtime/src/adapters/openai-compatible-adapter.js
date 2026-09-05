@@ -37,6 +37,21 @@ function applyInvocationOverrides(target, overrides = {}) {
   return target;
 }
 
+export function orderOpenAiResponsesRequestBody(request = {}) {
+  // The wire prefix is part of the provider cache contract. Keep stable
+  // request settings and tool definitions ahead of append-only conversation input.
+  const { input, ...stableRequest } = request;
+  return { ...stableRequest, input };
+}
+
+function applyOpenAiResponsesRequestOrder(client) {
+  const responses = client.responses;
+  const completionWithRetry = responses.completionWithRetry.bind(responses);
+  responses.completionWithRetry = (request, requestOptions) =>
+    completionWithRetry(orderOpenAiResponsesRequestBody(request), requestOptions);
+  return client;
+}
+
 export function bindOpenAiCompatibleTools(
   client,
   tools = [],
@@ -47,7 +62,7 @@ export function bindOpenAiCompatibleTools(
   applyInvocationOverrides(bound, invokeOverrides);
   applyInvocationOverrides(bound?.completions, invokeOverrides);
   applyInvocationOverrides(bound?.responses, invokeOverrides);
-  return bound;
+  return applyOpenAiResponsesRequestOrder(bound);
 }
 
 export function createOpenAiCompatibleClient({
@@ -66,7 +81,7 @@ export function createOpenAiCompatibleClient({
   const sampling = {};
   if (spec.temperature !== undefined && spec.top_p === undefined)
     sampling.temperature = Number(spec.temperature);
-  return new ChatOpenAI({
+  const client = new ChatOpenAI({
     model: spec.model,
     ...sampling,
     streaming: streaming === true,
@@ -78,6 +93,7 @@ export function createOpenAiCompatibleClient({
     ...(promptCacheRetention ? { promptCacheRetention } : {}),
     ...(Object.keys(modelKwargs).length ? { modelKwargs } : {}),
   });
+  return applyOpenAiResponsesRequestOrder(client);
 }
 
 export const openAiCompatibleAdapter = Object.freeze({

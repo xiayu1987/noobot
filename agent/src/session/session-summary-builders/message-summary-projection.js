@@ -6,6 +6,10 @@
 import { projectToolOperationSummary } from "@noobot/event-protocol/tool-presentation";
 import { countCanonicalThinkingDetailEvents } from "@noobot/event-protocol/tool-timeline";
 import {
+  mergeCanonicalActivityTimelines,
+  selectCanonicalActivityTimeline,
+} from "@noobot/event-protocol/activity-timeline";
+import {
   pickLightAttachments,
   pickLightPluginMeta,
   pickLightTransferEnvelopes,
@@ -123,17 +127,10 @@ export function buildThinkingDetailCountByMessage(messages = []) {
         : `message:${index}`;
     routeByMessage.set(message, route);
     const facts = factsByRoute.get(route) || { activityTimeline: [], toolTimeline: [] };
-    for (const item of Array.isArray(message?.activityTimeline) ? message.activityTimeline : []) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      const key = String(item?.eventId || item?.id || "").trim();
-      const existingIndex = key
-        ? facts.activityTimeline.findIndex(
-            (entry) => String(entry?.eventId || entry?.id || "").trim() === key,
-          )
-        : -1;
-      if (existingIndex >= 0) facts.activityTimeline[existingIndex] = item;
-      else facts.activityTimeline.push(item);
-    }
+    facts.activityTimeline = mergeCanonicalActivityTimelines(
+      facts.activityTimeline,
+      message?.activityTimeline || [],
+    );
     for (const item of Array.isArray(message?.toolTimeline) ? message.toolTimeline : []) {
       if (!item || typeof item !== "object" || Array.isArray(item)) continue;
       const key = String(item?.key || item?.toolCallId || item?.tool_call_id || "").trim();
@@ -167,8 +164,7 @@ export function buildDisplayMessageSummary(message = {}) {
   const hasCanonicalActivity =
     role === "assistant" &&
     String(message?.presentationMessageId || "").trim() &&
-    Array.isArray(message?.activityTimeline) &&
-    message.activityTimeline.length > 0;
+    selectCanonicalActivityTimeline(message).length > 0;
   if (role === "assistant" && message?.chatPresentation === false && !hasCanonicalActivity)
     return null;
   if (["tool_call", "tool_result"].includes(type) && !hasCanonicalActivity) return null;

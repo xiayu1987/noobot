@@ -31,7 +31,6 @@ import {
 import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-export const GUIDANCE_ANALYSIS_RESPONSE_EVENT = "guidance_analysis_response";
 
 function normalizeTextContent(content = "") {
   if (typeof content === "string") return content;
@@ -157,19 +156,12 @@ async function emitPluginCapabilityRealtimeLog({
     const runtime = resolveRuntime(ctx);
     const sessionMeta = resolveSessionMeta(ctx, runtime);
     const activityKind = isGuidanceAnalysisResponse ? "guidance_analysis" : "workflow_semantic";
-    const activityEvent = isGuidanceAnalysisResponse
-      ? GUIDANCE_ANALYSIS_RESPONSE_EVENT
-      : "workflow_semantic_response";
     await emitMessageEvent(runtime?.eventListener, runtime, MESSAGE_EVENT_TYPE.THINKING, {
-      event: activityEvent,
-      type: activityKind,
-      category: "system",
       text: canonicalOutput,
       purpose: String(data?.purpose || "").trim(),
       pluginFlow: String(data?.pluginFlow || "").trim(),
       chain: String(data?.chain || "").trim(),
       activityKind,
-      rawEvent: "plugin_capability_response",
       ...sessionMeta,
       dialogProcessId: String(ctx?.dialogProcessId || runtime?.dialogProcessId || "").trim(),
     });

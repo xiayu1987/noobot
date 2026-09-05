@@ -13,6 +13,7 @@ import { createSessionServices } from "../../src/session/index.js";
 import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
 import {
   withTempWorkspace,
+  canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 
@@ -209,7 +210,17 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
             call: { eventId: "tool-start" },
           },
         ],
-        activityTimeline: [{ eventId: "thinking-active", event: "thinking" }],
+        activityTimeline: [
+          canonicalActivity({
+            eventId: "thinking-active",
+            sequenceScopeId: "source-tool-message",
+            sessionId: "active-timeline-session",
+            dialogProcessId: "dialog-active-timeline",
+            turnScopeId,
+            messageId: "source-tool-message",
+            presentationMessageId,
+          }),
+        ],
       },
       {
         role: "assistant",
@@ -226,7 +237,18 @@ test("active Turn summary carries its authoritative thinking timelines", () => {
             call: { eventId: "tool-start-2" },
           },
         ],
-        activityTimeline: [{ eventId: "thinking-active-2", event: "thinking" }],
+        activityTimeline: [
+          canonicalActivity({
+            eventId: "thinking-active-2",
+            sequence: 2,
+            sequenceScopeId: "source-tool-message-2",
+            sessionId: "active-timeline-session",
+            dialogProcessId: "dialog-active-timeline",
+            turnScopeId,
+            messageId: "source-tool-message-2",
+            presentationMessageId,
+          }),
+        ],
       },
     ],
     turnLifecycle: {

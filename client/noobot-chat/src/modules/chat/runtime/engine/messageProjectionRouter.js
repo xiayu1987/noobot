@@ -94,7 +94,6 @@ function reduceProjectionTargets(messageEvent, targetMessages, context) {
     dispatchTurnEnvelope({
       targetMessage: message,
       envelope: messageEvent,
-      classifyRealtimeLog: context.classifyRealtimeLog,
       source: TURN_PROJECTION_SOURCE.NORMAL_LIVE,
     }),
   );

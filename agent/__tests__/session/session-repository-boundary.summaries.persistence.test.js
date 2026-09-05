@@ -13,6 +13,7 @@ import { createSessionServices } from "../../src/session/index.js";
 import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import {
   withTempWorkspace,
+  canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";
 
@@ -34,15 +35,19 @@ test("session save refreshes the display projection with live activity timeline"
           presentationMessageId: "presentation-live",
           turnScopeId: "turn-live",
           activityTimeline: [
-            {
+            canonicalActivity({
               eventId: "guidance-analysis:live",
               activityKind: "guidance_analysis",
-              sequence: 1,
-              sequenceDomain: "activity",
-              sequenceScopeId: "presentation-live",
-              authority: "authoritative",
+              purpose: "guidance",
+              pluginFlow: "analysis",
+              chain: "auxiliary",
               text: "analysis in progress",
-            },
+              sequenceScopeId: "model-live",
+              sessionId: "live",
+              turnScopeId: "turn-live",
+              messageId: "model-live",
+              presentationMessageId: "presentation-live",
+            }),
           ],
         },
       ],

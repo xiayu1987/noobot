@@ -3,22 +3,14 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import {
-  EVENT_FAMILY,
-  EVENT_PROTOCOL_NAME,
-  EVENT_PROTOCOL_VERSION,
-} from "@noobot/event-protocol";
+import { EVENT_FAMILY, EVENT_PROTOCOL_NAME, EVENT_PROTOCOL_VERSION } from "@noobot/event-protocol";
 import {
   MESSAGE_EVENT_SEQUENCE_DOMAIN,
   MESSAGE_EVENT_WIRE_EVENT,
 } from "@noobot/event-protocol/message-event";
+import { projectCanonicalActivityTimelineEvent } from "@noobot/event-protocol/activity-timeline";
 
-const IDENTITY_FIELDS = new Set([
-  "eventId",
-  "sessionId",
-  "turnScopeId",
-  "messageId",
-]);
+const IDENTITY_FIELDS = new Set(["eventId", "sessionId", "turnScopeId", "messageId"]);
 const ORDERING_FIELDS = new Set([
   "sequence",
   "sequenceDomain",
@@ -86,4 +78,20 @@ export function canonicalMessageEvent(overrides = {}) {
     occurredAt: values.occurredAt,
     payload,
   };
+}
+
+export function canonicalActivityFact(overrides = {}) {
+  const eventType = String(overrides.eventType || "thinking");
+  const messageId = String(overrides.messageId || overrides.sequenceScopeId || "message-1");
+  return projectCanonicalActivityTimelineEvent(
+    canonicalMessageEvent({
+      eventType,
+      eventId: "activity-1",
+      text: "analysis",
+      messageId,
+      sequenceScopeId: messageId,
+      ...(eventType === "thinking" ? { activityKind: "analysis" } : {}),
+      ...overrides,
+    }),
+  );
 }

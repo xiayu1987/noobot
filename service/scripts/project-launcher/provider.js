@@ -30,6 +30,12 @@ export function resolveProviderEnvNames(modelName = "") {
   const model = String(modelName || "")
     .trim()
     .toLowerCase();
+  if (/\bclaude\b|\banthropic\b/.test(model)) {
+    return {
+      apiKeyEnv: "ANTHROPIC_API_KEY",
+      baseUrlEnv: "ANTHROPIC_API_ADDRESS",
+    };
+  }
   if (/\bqwen|qianwen\b/.test(model)) {
     return {
       apiKeyEnv: "DASHSCOPE_API_KEY",

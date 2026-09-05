@@ -50,6 +50,32 @@
         }
       }
     },
+    "gpt_6_astra": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-6-astra",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "use_responses_api": true,
+      "description": "OpenAI flagship model for complex reasoning, coding, computer use, research, and document creation",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gpt_5_6_terra": {
       "enabled": true,
       "used_for_conversation": true,
@@ -153,14 +179,14 @@
     "claude_fable_5": {
       "enabled": true,
       "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-fable-5",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Anthropic's most capable broadly released model, accessed through an OpenAI-compatible gateway",
+      "description": "Anthropic's most capable broadly released model, accessed through the native Messages API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -175,14 +201,14 @@
     "claude_fable_5_1": {
       "enabled": true,
       "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-fable-5-1",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Anthropic Fable 5.1 model accessed through an OpenAI-compatible gateway",
+      "description": "Anthropic Fable 5.1 model accessed through the native Messages API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -197,14 +223,14 @@
     "claude_opus_5": {
       "enabled": true,
       "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-opus-5",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Anthropic model for complex agentic coding and enterprise work, accessed through an OpenAI-compatible gateway",
+      "description": "Anthropic model for complex agentic coding and enterprise work, accessed through the native Messages API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -219,14 +245,14 @@
     "claude_sonnet_5": {
       "enabled": true,
       "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-sonnet-5",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Anthropic speed and intelligence balanced model, accessed through an OpenAI-compatible gateway",
+      "description": "Anthropic speed and intelligence balanced model, accessed through the native Messages API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]
@@ -241,14 +267,14 @@
     "claude_haiku_4_5": {
       "enabled": true,
       "used_for_conversation": true,
-      "api_key": "${OPENAI_API_KEY}",
-      "base_url": "${OPENAI_API_ADDRESS}",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "base_url": "${ANTHROPIC_API_ADDRESS}",
       "model": "claude-haiku-4-5",
       "reasoning_effort": "medium",
       "tool_reasoning_effort": "medium",
       "reasoning_effort_options": ["low", "medium", "high"],
       "reasoning_effort_parameter": "reasoning_effort",
-      "description": "Anthropic fast near-frontier model, accessed through an OpenAI-compatible gateway",
+      "description": "Anthropic fast near-frontier model, accessed through the native Messages API",
       "multimodal_parsing": {
         "enabled": true,
         "input_modalities": ["image", "document"]

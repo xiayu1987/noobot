@@ -220,6 +220,35 @@ test("message payload rejects nested and aliased tool facts", () => {
   ]);
 });
 
+test("message activity payload rejects presentation aliases and preserves an explicit discriminator", () => {
+  assert.deepEqual(
+    validateMessageEventPayload(
+      payload({
+        eventType: MESSAGE_EVENT_TYPE.THINKING,
+        tool: undefined,
+        toolCallId: undefined,
+        text: "analysis",
+        event: "guidance_analysis_response",
+        type: "guidance_analysis",
+        rawEvent: "plugin_capability_response",
+      }),
+    ).errors,
+    ["noncanonical_event", "noncanonical_type", "noncanonical_rawEvent"],
+  );
+  assert.deepEqual(
+    validateMessageEventPayload(
+      payload({
+        eventType: MESSAGE_EVENT_TYPE.THINKING,
+        tool: undefined,
+        toolCallId: undefined,
+        text: "analysis",
+        activityKind: "guidance_analysis",
+      }),
+    ),
+    { valid: true, errors: [] },
+  );
+});
+
 test("message payload validates and projects canonical tool risk", () => {
   const securityAssessment = createSecurityAssessment({
     toolName: "read_file",

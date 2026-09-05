@@ -170,7 +170,7 @@ describe("useChatStore sub session projection", () => {
     expect(session?.messages).toHaveLength(2);
     expect(assistant).toMatchObject({ content: "hello", pending: true });
     expect(assistant.activityTimeline).toEqual([
-      expect.objectContaining({ event: "thinking", text: "plan" }),
+      expect.objectContaining({ eventType: "thinking", text: "plan" }),
     ]);
     expect(assistant.toolTimeline).toEqual([
       expect.objectContaining({ tool: "search", result: "ok", status: "completed" }),
@@ -709,7 +709,7 @@ describe("useChatStore sub session projection", () => {
       pluginMeta: { interaction: null },
     });
     expect(message.activityTimeline).toEqual([
-      expect.objectContaining({ event: "thinking", text: "Read the source" }),
+      expect.objectContaining({ eventType: "thinking", text: "Read the source" }),
     ]);
     expect(message).not.toHaveProperty("thinking");
   });

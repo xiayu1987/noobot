@@ -112,8 +112,6 @@ export async function emitAuthoritativeFinalMessageContent({ result = {}, runtim
   const event = await emitMessageEvent(eventListener, runtime, "authoritative_final_content", {
     text: finalOutput,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
-    category: "model",
-    type: "authoritative_final_content",
     source: "before_final_output_committed",
     ...(transferEnvelopes.length ? { transferEnvelopes } : {}),
     ...(attachments.length ? { attachments } : {}),
@@ -206,8 +204,6 @@ export async function emitFinalStreamingAppendDeltaAfterHooks({ result = {}, run
     text: appendedText,
     dialogProcessId: String(runtime?.systemRuntime?.dialogProcessId || "").trim(),
     sessionId: String(systemRuntime?.sessionId || runtime?.sessionId || "").trim(),
-    category: "model",
-    type: "final_output_append_delta",
     source: "before_final_output_append",
   });
   emitEvent(eventListener, "llm_final_stream_append_delta_emitted", {

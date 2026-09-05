@@ -8,14 +8,14 @@ export function requireModelSpec(input = {}) {
   const model = String(input.model || "").trim();
   if (!model) throw new TypeError("model spec.model is required");
   const provider = normalizeProviderSpec(input);
-  // The transport is a protocol constant carried by adapterId. A spec still
-  // naming a format comes from a producer that has not been converged, so it is
-  // rejected rather than silently tolerated.
+  // Transport is derived from the model-family fact source. A spec still
+  // naming a format comes from a producer that has not been converged.
   if (input.format !== undefined) {
     throw new TypeError("model spec.format is not part of this protocol");
   }
+  const { adapterId: _adapterId, adapter_id: _adapter_id, ...canonicalInput } = input;
   return Object.freeze({
-    ...input,
+    ...canonicalInput,
     model,
     alias: String(input.alias || "").trim(),
     operatorId: provider.operatorId,

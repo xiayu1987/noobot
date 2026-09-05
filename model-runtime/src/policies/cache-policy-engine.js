@@ -69,6 +69,10 @@ function cacheControlValue(spec = {}) {
     : { type: "ephemeral" };
 }
 
+export function cacheControlValueForRuntime(spec = {}) {
+  return cacheControlValue(spec);
+}
+
 /**
  * Apply message-level cache markers required by DashScope/Qwen. Claude uses
  * Anthropic's top-level automatic cache control and is compiled below.
