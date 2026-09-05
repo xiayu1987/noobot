@@ -1,6 +1,6 @@
 {
   "name": "noobot-i18n",
-  "version": "4.2.8",
+  "version": "4.2.9",
   "private": true,
   "type": "module",
   "main": "src/shared/index.js",

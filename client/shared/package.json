@@ -1,7 +1,7 @@
 {
   "name": "@noobot/client-shared",
   "private": true,
-  "version": "4.2.8",
+  "version": "4.2.9",
   "type": "module",
   "exports": {
     "./path-resolver": "./path-resolver.js",

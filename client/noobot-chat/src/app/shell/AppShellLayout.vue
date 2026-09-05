@@ -585,9 +585,8 @@ defineExpose({
   box-sizing: border-box;
   width: 236px;
   max-width: 24vw;
-  max-height: calc(100vh - 36px);
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: var(--noobot-space-md);
   background: var(--noobot-panel-bg);
   transition:
