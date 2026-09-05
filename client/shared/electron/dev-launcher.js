@@ -5,6 +5,10 @@
  * SPDX-License-Identifier: MIT
  */
 import { spawn } from "node:child_process";
+import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
+
+const runtimeTopology = resolveRuntimeTopology(process.env);
+const devClientUrl = `http://${runtimeTopology.loopbackHost}:${addressPort(runtimeTopology.clientAddr)}`;
 
 const electronCommand = process.platform === "win32" ? "electron.cmd" : "electron";
 const child = spawn(electronCommand, ["."], {
@@ -12,7 +16,7 @@ const child = spawn(electronCommand, ["."], {
   windowsHide: true,
   env: {
     ...process.env,
-    NOOBOT_CLIENT_URL: process.env.NOOBOT_CLIENT_URL || "http://127.0.0.1:10060",
+    NOOBOT_CLIENT_URL: process.env.NOOBOT_CLIENT_URL || devClientUrl,
   },
 });
 

@@ -8,15 +8,15 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chromium } from "playwright";
+import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const outputPath = path.join(repositoryRoot, "docs/assets/noobot-character-animation-runtime.gif");
 const frameRoot = path.join(repositoryRoot, "test-results/character-animation-runtime-frames");
-const baseUrl = String(process.env.NOOBOT_E2E_BASE_URL || "http://127.0.0.1:10060").replace(
-  /\/$/,
-  "",
-);
+const clientTopology = resolveRuntimeTopology(process.env);
+const defaultBaseUrl = `http://${clientTopology.loopbackHost}:${addressPort(clientTopology.clientAddr)}`;
+const baseUrl = String(process.env.NOOBOT_E2E_BASE_URL || defaultBaseUrl).replace(/\/$/, "");
 const userId = String(process.env.NOOBOT_E2E_USER_ID || "").trim();
 const connectCode = String(process.env.NOOBOT_E2E_CONNECT_CODE || "").trim();
 const modelAlias = String(process.env.NOOBOT_E2E_MODEL_ALIAS || "gpt_5_4").trim();

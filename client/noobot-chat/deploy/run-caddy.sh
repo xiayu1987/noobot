@@ -6,6 +6,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$PROJECT_DIR/../.." && pwd)"
+
+# Runtime port defaults come from @noobot/runtime-topology-protocol; PM2 already
+# injects CADDY_ADDR/API_UPSTREAM, this keeps standalone runs consistent.
+eval "$(node "$REPO_ROOT/scripts/lib/runtime-topology-cli.mjs" --shell)"
 cd "$PROJECT_DIR"
 
 LOCAL_CADDY_BIN="$PROJECT_DIR/deploy/bin/caddy"
@@ -119,6 +124,6 @@ export SITE_ROOT
 echo "[run-caddy] using Caddy bin: $CADDY_BIN"
 echo "[run-caddy] using config: $CONFIG_FILE"
 echo "[run-caddy] site_root=$SITE_ROOT"
-echo "[run-caddy] addr=${CADDY_ADDR:-0.0.0.0:10060}, api=${API_UPSTREAM:-127.0.0.1:10061}"
+echo "[run-caddy] addr=${CADDY_ADDR:-$NOOBOT_TOPOLOGY_CLIENT_ADDR}, api=${API_UPSTREAM:-$NOOBOT_TOPOLOGY_API_UPSTREAM}"
 
 exec "$CADDY_BIN" run --config "$CONFIG_FILE" --adapter caddyfile

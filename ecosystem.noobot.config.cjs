@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 const path = require("node:path");
+const { toProcessEnv } = require("@noobot/runtime-topology-protocol");
 
 const root = __dirname;
-const servicePort = process.env.PORT || "10061";
+const runtimeEnv = toProcessEnv(process.env);
 const serviceEnv = {
-  PORT: servicePort,
+  PORT: runtimeEnv.PORT,
   ...(process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS
     ? { NOOBOT_USER_INTERACTION_TIMEOUT_MS: process.env.NOOBOT_USER_INTERACTION_TIMEOUT_MS }
     : {}),
@@ -41,12 +42,10 @@ module.exports = {
       wait_ready: false,
       merge_logs: true,
       env: {
-        AGENT_PROXY_PORT: process.env.AGENT_PROXY_PORT || "10062",
-        AGENT_PROXY_HOST: process.env.AGENT_PROXY_HOST || "127.0.0.1",
-        AGENT_PROXY_UPSTREAM_WS_URL:
-          process.env.AGENT_PROXY_UPSTREAM_WS_URL || `ws://127.0.0.1:${servicePort}/chat/ws`,
-        AGENT_PROXY_UPSTREAM_HTTP_BASE:
-          process.env.AGENT_PROXY_UPSTREAM_HTTP_BASE || `http://127.0.0.1:${servicePort}`,
+        AGENT_PROXY_PORT: runtimeEnv.AGENT_PROXY_PORT,
+        AGENT_PROXY_HOST: runtimeEnv.AGENT_PROXY_HOST,
+        AGENT_PROXY_UPSTREAM_WS_URL: runtimeEnv.AGENT_PROXY_UPSTREAM_WS_URL,
+        AGENT_PROXY_UPSTREAM_HTTP_BASE: runtimeEnv.AGENT_PROXY_UPSTREAM_HTTP_BASE,
       },
     },
     {
@@ -73,8 +72,8 @@ module.exports = {
       wait_ready: false,
       merge_logs: true,
       env: {
-        CADDY_ADDR: process.env.CADDY_ADDR || ":10060",
-        AGENT_PROXY_UPSTREAM: process.env.AGENT_PROXY_UPSTREAM || "127.0.0.1:10062",
+        CADDY_ADDR: runtimeEnv.CADDY_ADDR,
+        AGENT_PROXY_UPSTREAM: runtimeEnv.AGENT_PROXY_UPSTREAM,
       },
     },
   ],

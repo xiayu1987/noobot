@@ -6,6 +6,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readOptionalJsonObjectConfigSync } from "@noobot/shared/config-file";
+import { RUNTIME_PORT_TOPOLOGY } from "@noobot/runtime-topology-protocol/ports";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { LENGTH_THRESHOLDS } from "@noobot/shared/length-thresholds";
 import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
@@ -83,17 +84,17 @@ function normalizePathPrefix(value) {
 }
 
 export const config = {
-  proxyPort: envNumber("AGENT_PROXY_PORT", "proxyPort", 10062, 1),
+  proxyPort: envNumber("AGENT_PROXY_PORT", "proxyPort", RUNTIME_PORT_TOPOLOGY.agentProxyPort, 1),
   proxyHost: envString("AGENT_PROXY_HOST", "proxyHost", "0.0.0.0"),
   upstreamWsUrl: envString(
     "AGENT_PROXY_UPSTREAM_WS_URL",
     "upstreamWsUrl",
-    "ws://127.0.0.1:10061/chat/ws",
+    `ws://${RUNTIME_PORT_TOPOLOGY.loopbackHost}:${RUNTIME_PORT_TOPOLOGY.servicePort}/chat/ws`,
   ),
   upstreamHttpBase: envString(
     "AGENT_PROXY_UPSTREAM_HTTP_BASE",
     "upstreamHttpBase",
-    "http://127.0.0.1:10061",
+    `http://${RUNTIME_PORT_TOPOLOGY.loopbackHost}:${RUNTIME_PORT_TOPOLOGY.servicePort}`,
   ),
   connectToken: envString("AGENT_PROXY_CONNECT_TOKEN", "connectToken", ""),
   connectTokenHeader: envString(
