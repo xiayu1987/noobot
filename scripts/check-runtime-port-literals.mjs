@@ -50,10 +50,18 @@ const SKIPPED_DIRECTORIES = new Set([
   "coverage",
   ".cache",
   "runtime",
+  "vendor",
+  "workspace",
 ]);
 
 const SCANNED_EXTENSIONS = new Set([".js", ".mjs", ".cjs", ".ts", ".vue", ".sh", ".json"]);
 const SCANNED_FILE_NAMES = new Set([".env.example"]);
+const SKIPPED_FILE_NAMES = new Set([
+  "agent-proxy.config.json",
+  "model-proxy.config.json",
+  "global.config.json",
+  "config.json",
+]);
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]s$/i;
 const PORT_LITERAL = /\b1006[0-9]\b/;
 
@@ -67,6 +75,7 @@ function collectFiles(directory, results = []) {
       continue;
     }
     if (!entry.isFile()) continue;
+    if (SKIPPED_FILE_NAMES.has(entry.name)) continue;
     if (TEST_FILE.test(entry.name)) continue;
     if (!SCANNED_EXTENSIONS.has(path.extname(entry.name)) && !SCANNED_FILE_NAMES.has(entry.name)) {
       continue;
