@@ -13,12 +13,14 @@ import {
 } from "../helpers/browser-actions.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 test("@full PBE-015 双标签页生命周期一致性", async ({
   noobot,
   protocolCapture,
   browser,
 }, testInfo) => {
+  test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page session provision"));
   const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForLifecycle(
@@ -89,7 +91,7 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
   protocolCapture,
   browser,
 }, testInfo) => {
-  test.setTimeout(600000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(noobot.page, uniquePrompt(testInfo, "multi-page workflow provision"));
   const provision = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
   await waitForLifecycle(
@@ -104,7 +106,7 @@ test("@full PBE-046 双标签页 Workflow 消息与卡片一致性", async ({
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: provision.identity.turnScopeId,
-    timeoutMs: 240000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
   const secondContext = await browser.newContext();

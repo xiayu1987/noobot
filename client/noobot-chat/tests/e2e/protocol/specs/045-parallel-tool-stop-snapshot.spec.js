@@ -29,6 +29,7 @@ import {
 } from "../helpers/scenario-assertions.js";
 import { toolEventsForTurn } from "../helpers/thinking-tool-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 function firstMainTraceForTurn(records = [], turnScopeId = "") {
   return modelInvocationTraces(records)
@@ -43,7 +44,7 @@ test("@full PBE-045 并行工具停止时结果完整进入快照并由 Continue
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(600000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, []);
 
   const commands = [
@@ -88,7 +89,7 @@ test("@full PBE-045 并行工具停止时结果完整进入快照并由 Continue
           .length >= 2
       );
     },
-    { timeoutMs: 240000 },
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
   );
   await stopActiveTurn(noobot.page);
   await waitForLifecycle(
@@ -155,7 +156,7 @@ test("@full PBE-045 并行工具停止时结果完整进入快照并由 Continue
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: continued.identity.turnScopeId,
-    timeoutMs: 240000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
   const finalRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);

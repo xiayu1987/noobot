@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { randomUUID } from "node:crypto";
 import { test, expect } from "../fixtures/noobot.fixture.js";
 import {
   selectPlugins,
@@ -34,6 +35,7 @@ import {
   toolEventsForTurn,
   waitForToolSet,
 } from "../helpers/thinking-tool-assertions.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 const EXPECTED_TOOLS = Object.freeze([
   "write_file",
@@ -165,12 +167,12 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(900000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.toolChain);
   await selectPlugins(noobot.page, ["harness"]);
   await setHarnessCapability(noobot.page, "Planning", false);
   await setHarnessCapability(noobot.page, "Planning Acceptance", false);
   await setHarnessGuidanceAnalysisIntensity(noobot.page, 9);
-  const generatedFileName = `case036-${Date.now()}.txt`;
+  const generatedFileName = `case036-${randomUUID().slice(0, 8)}.txt`;
   const generatedFilePath = `runtime/ops_workdir/${generatedFileName}`;
   await sendMessage(
     noobot.page,
@@ -321,7 +323,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(900000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.harness + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, []);
   await sendMessage(
     noobot.page,
@@ -329,12 +331,12 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
       testInfo,
       [
         "严格按顺序且每种只调用一次以下七个工具；即使某个外部服务失败，也必须继续后续步骤，不得调用 switch_model：",
-        '1) execute_native_script 不传输入，执行 await files.writeText(output.file(\'case036-native.svg\'), \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">CASE036-NATIVE</text></svg>\');；',
-        "2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 gpt_5_4，提示词为 Extract the exact visible text；",
-        "3) multimodal_generate 生成一张简洁的红色正方形图片，n=1；",
+        '1) execute_native_script 不传输入，先 const target = await output.file(\'case036-native.svg\'); 再执行 await files.writeText(target, \'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="80"><text x="10" y="45">CASE036-NATIVE</text></svg>\');；',
+        "2) multimodal_parse 解析上一步返回的 case036-native.svg 附件身份，model_name 使用 GLM_5_3，提示词为 Extract the exact visible text；",
+        "3) multimodal_generate 使用 model_name=GLM_5_3 生成一张简洁的红色正方形图片，n=1；",
         "4) call_service 调用 weather_service.get_weather，queryString.city=Shanghai，custom_param=j1；",
         "5) web_search 搜索 Noobot GitHub；",
-        "6) request_help 使用 requestType=experience，helpContent=Summarize relevant tool-testing experience；",
+        "6) request_help 使用 requestType=experience_help，helpContent=Summarize relevant tool-testing experience；",
         "7) call_mcp_task 调用 china-railway，任务为查询上海到苏州的可用能力；",
         "每一步必须等到工具返回后再继续。最终按七个工具的真实返回逐项报告成功或失败，不得把未调用的工具报告为已执行。",
       ].join(" "),
@@ -346,7 +348,7 @@ test("@full PBE-043 普通用户原生、多模态与外部工具结果闭环", 
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
-    timeoutMs: 720000,
+    timeoutMs: PROTOCOL_TIMEOUTS.harness,
   });
 
   let events = [];

@@ -138,7 +138,9 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   harness: {
-    hookTimeoutMs: TIME_TIERS.fiveMinutesMs,
+    // Harness before-LLM hooks may run an auxiliary model invocation. Keep
+    // their lifecycle budget aligned with the model contract.
+    hookTimeoutMs: TIME_TIERS.oneHourMs,
     manifestDebounceMs: TIME_TIERS.fastProbeMs,
     manifestCacheMaxAgeMs: 10 * MINUTE_MS,
     manifestCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,

@@ -208,6 +208,31 @@
       "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
       "reasoning_effort_parameter": "reasoning_effort"
     },
+    "gpt_5_6_terra": {
+      "enabled": true,
+      "used_for_conversation": true,
+      "api_key": "${OPENAI_API_KEY}",
+      "base_url": "${OPENAI_API_ADDRESS}",
+      "model": "gpt-5.6-terra",
+      "description": "OpenAI balanced model for coding and general-purpose agent workloads",
+      "reasoning_effort": "medium",
+      "tool_reasoning_effort": "medium",
+      "reasoning_effort_options": ["none", "low", "medium", "high", "xhigh", "max"],
+      "reasoning_effort_parameter": "reasoning_effort",
+      "capabilities": {
+        "web_search": true
+      },
+      "multimodal_parsing": {
+        "enabled": true,
+        "input_modalities": ["image", "document"]
+      },
+      "multimodal_generation": {
+        "support_generation": {
+          "enabled": false,
+          "support_scope": []
+        }
+      }
+    },
     "gpt_6_astra": {
       "enabled": true,
       "used_for_conversation": true,

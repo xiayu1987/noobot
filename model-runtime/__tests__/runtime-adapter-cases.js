@@ -60,14 +60,23 @@ const sdkTool = {
 
 test("model output keeps Responses reasoning and complete output sequence for continuation", () => {
   const output = normalizeModelOutput({
-    content: [{ type: "reasoning", reasoning: "summary" }, { type: "text", text: "done" }],
+    content: [
+      { type: "reasoning", reasoning: "summary" },
+      { type: "text", text: "done" },
+    ],
     additional_kwargs: {
       reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
     },
     response_metadata: {
       output: [
         { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
-        { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+        {
+          id: "fc_1",
+          type: "function_call",
+          call_id: "call_1",
+          name: "read_file",
+          arguments: "{}",
+        },
       ],
     },
   });
@@ -84,7 +93,6 @@ test("model output keeps Responses reasoning and complete output sequence for co
   assert.equal(output.responseOutput[1].type, "function_call");
 });
 
-
 test("OpenAI Responses requests serialize stable settings and tools before input", async () => {
   const ordered = orderOpenAiResponsesRequestBody({
     input: [{ role: "user", content: "incremental" }],
@@ -94,13 +102,7 @@ test("OpenAI Responses requests serialize stable settings and tools before input
     tool_choice: "auto",
   });
 
-  assert.deepEqual(Object.keys(ordered), [
-    "model",
-    "temperature",
-    "tools",
-    "tool_choice",
-    "input",
-  ]);
+  assert.deepEqual(Object.keys(ordered), ["model", "temperature", "tools", "tool_choice", "input"]);
   assert.equal(
     JSON.stringify(ordered).indexOf('"tools"') < JSON.stringify(ordered).indexOf('"input"'),
     true,
@@ -137,7 +139,6 @@ test("OpenAI Responses requests serialize stable settings and tools before input
   assert.deepEqual(Object.keys(transportedRequest), ["model", "tools", "input"]);
 });
 
-
 test("openai-compatible adapter applies bound invocation overrides without mutating model defaults", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -156,7 +157,6 @@ test("openai-compatible adapter applies bound invocation overrides without mutat
   assert.equal(client.invocationParams({}).reasoning_effort, "high");
   assert.equal(bound.invocationParams({}).reasoning_effort, "low");
 });
-
 
 test("bound OpenAI Responses clients preserve stable fields before input", async () => {
   const client = createOpenAiCompatibleClient({
@@ -189,7 +189,6 @@ test("bound OpenAI Responses clients preserve stable fields before input", async
   assert.deepEqual(Object.keys(transportedRequest), ["model", "tools", "input"]);
 });
 
-
 test("openai-compatible GPT cache protocol is compiled independently of operator identity", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -209,7 +208,6 @@ test("openai-compatible GPT cache protocol is compiled independently of operator
   assert.equal(params.prompt_cache_key, "noobot-main-gpt-5-6-sol");
   assert.deepEqual(params.prompt_cache_options, { ttl: "30m" });
 });
-
 
 test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
   const grok = compileProviderModelKwargs(
@@ -239,7 +237,6 @@ test("xAI Grok cache protocol uses only the x-grok-conv-id header", () => {
   assert.equal(grokClient.clientConfig.defaultHeaders["x-grok-conv-id"], "noobot-main-grok-4-6");
 });
 
-
 test("normalized Grok clients use the xAI cache key protocol for each flow", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -262,7 +259,6 @@ test("normalized Grok clients use the xAI cache key protocol for each flow", () 
   );
 });
 
-
 test("Qwen uses the canonical OpenAI-compatible invocation", () => {
   const client = createOpenAiCompatibleClient({
     credential: "test-key",
@@ -280,7 +276,6 @@ test("Qwen uses the canonical OpenAI-compatible invocation", () => {
 
   assert.equal(params.reasoning_effort, "low");
 });
-
 
 test("Claude uses top-level automatic caching and Qwen uses message-level caching", () => {
   const messages = [
@@ -323,7 +318,6 @@ test("Claude uses top-level automatic caching and Qwen uses message-level cachin
   assert.deepEqual(qwenBlocks[0].content[1], { type: "image_url", image_url: "x" });
 });
 
-
 test("Anthropic Messages adapter preserves tool-use/result protocol", () => {
   const messages = convertMessages([
     { role: "system", content: "rules" },
@@ -331,7 +325,13 @@ test("Anthropic Messages adapter preserves tool-use/result protocol", () => {
     {
       role: "assistant",
       content: "I will run this.",
-      tool_calls: [{ id: "call_1", type: "function", function: { name: "run", arguments: JSON.stringify({ x: 1 }) } }],
+      tool_calls: [
+        {
+          id: "call_1",
+          type: "function",
+          function: { name: "run", arguments: JSON.stringify({ x: 1 }) },
+        },
+      ],
     },
     { role: "tool", tool_call_id: "call_1", content: JSON.stringify({ ok: true }) },
   ]);
@@ -344,16 +344,24 @@ test("Anthropic Messages adapter preserves tool-use/result protocol", () => {
   });
   assert.deepEqual(messages.at(-1), {
     role: "user",
-    content: [{ type: "tool_result", tool_use_id: "call_1", content: JSON.stringify({ ok: true }) }],
+    content: [
+      { type: "tool_result", tool_use_id: "call_1", content: JSON.stringify({ ok: true }) },
+    ],
   });
   assert.deepEqual(convertTools([sdkTool]), [
-    { name: "execute_script", description: "execute script", input_schema: sdkTool.function.parameters },
+    {
+      name: "execute_script",
+      description: "execute script",
+      input_schema: sdkTool.function.parameters,
+    },
   ]);
   assert.deepEqual(convertToolChoice("auto"), { type: "auto" });
   assert.deepEqual(convertToolChoice("required"), { type: "any" });
-  assert.equal(createProviderAdapterRegistry().resolve({ adapterId: "anthropic-messages" }).id, "anthropic-messages");
+  assert.equal(
+    createProviderAdapterRegistry().resolve({ adapterId: "anthropic-messages" }).id,
+    "anthropic-messages",
+  );
 });
-
 
 test("Anthropic Messages adapter preserves LangChain system, assistant, and tool roles", () => {
   const messages = convertMessages([
@@ -382,7 +390,6 @@ test("Anthropic Messages adapter preserves LangChain system, assistant, and tool
   ]);
 });
 
-
 test("Anthropic Messages adapter preserves LangChain tool schemas", () => {
   const tool = new DynamicStructuredTool({
     name: "read_file",
@@ -406,7 +413,6 @@ test("Anthropic Messages adapter preserves LangChain tool schemas", () => {
   ]);
 });
 
-
 test("Anthropic Messages preserves thinking blocks across tool-result turns", () => {
   const thinking = { type: "thinking", thinking: "reason", signature: "sig_1" };
   const toolUse = { type: "tool_use", id: "tool_1", name: "read_file", input: { filePath: "a" } };
@@ -417,32 +423,42 @@ test("Anthropic Messages preserves thinking blocks across tool-result turns", ()
     usage: {},
   });
   assert.deepEqual(response.content, [thinking, toolUse]);
-  assert.deepEqual(convertMessages([
-    { role: "assistant", content: response.content, tool_calls: response.tool_calls },
-    { role: "tool", tool_call_id: "tool_1", content: "ok" },
-  ]), [
-    { role: "assistant", content: [thinking, toolUse] },
-    {
-      role: "user",
-      content: [{ type: "tool_result", tool_use_id: "tool_1", content: "ok" }],
-    },
-  ]);
+  assert.deepEqual(
+    convertMessages([
+      { role: "assistant", content: response.content, tool_calls: response.tool_calls },
+      { role: "tool", tool_call_id: "tool_1", content: "ok" },
+    ]),
+    [
+      { role: "assistant", content: [thinking, toolUse] },
+      {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "tool_1", content: "ok" }],
+      },
+    ],
+  );
 });
-
 
 test("Anthropic Messages adapter sends native endpoint and exposes cache usage", async () => {
   const previousFetch = globalThis.fetch;
   let request;
   globalThis.fetch = async (url, init) => {
     request = { url, init, body: JSON.parse(init.body) };
-    return new Response(JSON.stringify({
-      id: "msg_1",
-      type: "message",
-      role: "assistant",
-      content: [{ type: "text", text: "ok" }],
-      stop_reason: "end_turn",
-      usage: { input_tokens: 10, output_tokens: 2, cache_creation_input_tokens: 100, cache_read_input_tokens: 500 },
-    }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        stop_reason: "end_turn",
+        usage: {
+          input_tokens: 10,
+          output_tokens: 2,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 500,
+        },
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
   };
   try {
     const client = anthropicMessagesAdapter.createClient({
@@ -480,18 +496,20 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
   }
 });
 
-
 test("Anthropic Messages keeps reasoning/cache fields before the append-only messages field", async () => {
   const previousFetch = globalThis.fetch;
   let request;
   globalThis.fetch = async (url, init) => {
     request = { url, body: JSON.parse(init.body) };
-    return new Response(JSON.stringify({
-      type: "message",
-      role: "assistant",
-      content: [{ type: "text", text: "ok" }],
-      usage: { input_tokens: 1, output_tokens: 1 },
-    }), { status: 200 });
+    return new Response(
+      JSON.stringify({
+        type: "message",
+        role: "assistant",
+        content: [{ type: "text", text: "ok" }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      { status: 200 },
+    );
   };
   try {
     const tool = new DynamicStructuredTool({
@@ -511,11 +529,16 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
         cache_control: { type: "ephemeral" },
       },
     });
-    await anthropicMessagesAdapter.bindTools({
-      client,
-      tools: [tool],
-      toolOptions: { tool_choice: "auto" },
-    }).invoke([{ role: "system", content: "rules" }, { role: "user", content: "hello" }]);
+    await anthropicMessagesAdapter
+      .bindTools({
+        client,
+        tools: [tool],
+        toolOptions: { tool_choice: "auto" },
+      })
+      .invoke([
+        { role: "system", content: "rules" },
+        { role: "user", content: "hello" },
+      ]);
 
     assert.deepEqual(Object.keys(request.body), [
       "model",
@@ -541,4 +564,3 @@ test("Anthropic Messages keeps reasoning/cache fields before the append-only mes
     globalThis.fetch = previousFetch;
   }
 });
-

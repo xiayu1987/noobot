@@ -95,7 +95,9 @@ test("harness initial planning keeps scenario policy out of text protocol and re
     /Dynamic test scenario policy/.test(String(item?.content || "")),
   );
   const responsibilityIndex = messages.findIndex((item = {}) =>
-    /请根据上下文进行「规划」，按文本协议返回（如果有）。/.test(String(item?.content || "")),
+    /只返回「规划」结果；有文本协议时必须遵守。不得执行或继续任务。/.test(
+      String(item?.content || ""),
+    ),
   );
 
   assert.equal(planningIndex >= 0, true);

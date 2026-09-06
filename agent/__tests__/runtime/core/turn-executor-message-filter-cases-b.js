@@ -114,7 +114,6 @@ test("invokeWithToolsTurn reconciles replaced hook messageBlocks before llm invo
   assert.equal(loopState.modelContext.messageBlocks.system.at(-1)?.content, harnessSystem.content);
 });
 
-
 test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stopped-snapshot resume turn", async () => {
   let capturedMessages = [];
   const harnessSystem = {
@@ -307,7 +306,6 @@ test("invokeWithToolsTurn adopts explicitly scoped hook messages on first stoppe
   );
 });
 
-
 test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentContext payload", async () => {
   let capturedMessages = [];
   const runtime = {
@@ -376,7 +374,6 @@ test("invokeWithToolsTurn does not rehydrate missing blocks from legacy agentCon
   assert.deepEqual(capturedMessages, [{ role: "user", content: "current-user" }]);
 });
 
-
 test("invokeWithToolsTurn stores assistant tool-call message in incremental block", async () => {
   const llm = {
     bindTools() {
@@ -435,4 +432,3 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
     result.turnMessageStore.toArray().at(-1).messageUid,
   );
 });
-

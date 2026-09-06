@@ -76,7 +76,6 @@ test("transport errors classify nested Undici timeouts as retryable", () => {
   );
 });
 
-
 test("transport errors classify temporary socket failures as retryable", () => {
   const socketFailure = new TypeError("fetch failed", {
     cause: { code: "ECONNRESET" },
@@ -86,7 +85,6 @@ test("transport errors classify temporary socket failures as retryable", () => {
     retryable: true,
   });
 });
-
 
 test("executor is the single attempt and retry authority", async () => {
   let attempts = 0;
@@ -120,7 +118,6 @@ test("executor is the single attempt and retry authority", async () => {
   assert.equal(result.execution.attemptCount, 2);
 });
 
-
 test("executor observation protocol cannot be overridden with model credentials", async () => {
   const events = [];
   const adapter = {
@@ -143,7 +140,6 @@ test("executor observation protocol cannot be overridden with model credentials"
     assert.equal("base_url" in event.data.model, false);
   }
 });
-
 
 test("tool-call mismatch streaming downgrade is one-way within an invocation", async () => {
   const streamingAttempts = [];
@@ -190,7 +186,6 @@ test("tool-call mismatch streaming downgrade is one-way within an invocation", a
   );
 });
 
-
 test("non-streaming invocation never enables streaming during semantic retries", async () => {
   const streamingAttempts = [];
   let calls = 0;
@@ -223,7 +218,6 @@ test("non-streaming invocation never enables streaming during semantic retries",
 
   assert.deepEqual(streamingAttempts, [false, false]);
 });
-
 
 test("tool calls are not discarded when the provider also returns reasoning", async () => {
   let calls = 0;
@@ -259,7 +253,6 @@ test("tool calls are not discarded when the provider also returns reasoning", as
   assert.equal(calls, 1);
   assert.equal(response.output.toolCalls[0].id, "call_tool");
 });
-
 
 test("executor is the single model context trace authority at each provider attempt", async () => {
   const events = [];
@@ -328,7 +321,6 @@ test("executor is the single model context trace authority at each provider atte
   }
 });
 
-
 test("provider registry resolves canonical adapter or model-family fact", () => {
   const registry = createProviderAdapterRegistry();
   assert.throws(() => registry.resolve({ adapterId: "dashscope" }), /unknown provider adapter/);
@@ -342,7 +334,6 @@ test("provider registry resolves canonical adapter or model-family fact", () => 
     "anthropic-messages",
   );
 });
-
 
 test("non-chat operations execute only through the resolved provider adapter", async () => {
   const calls = [];
@@ -383,4 +374,3 @@ test("non-chat operations execute only through the resolved provider adapter", a
     /provider adapter openai-compatible does not support operation: web_search/,
   );
 });
-

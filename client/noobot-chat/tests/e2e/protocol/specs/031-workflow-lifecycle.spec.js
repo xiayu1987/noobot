@@ -29,6 +29,7 @@ import {
   waitForLifecycle,
 } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 async function assertCompletedWorkflowChildPresentation(page) {
   const restoredDrawer = page.locator(".workflow-node-session-drawer:visible");
@@ -59,8 +60,8 @@ async function assertCompletedWorkflowChildPresentation(page) {
 }
 
 test("@full PBE-031 Workflow 运行中停止并继续", async ({ noobot, protocolCapture }, testInfo) => {
-  const workflowCompletionTimeoutMs = 360000;
-  test.setTimeout(workflowCompletionTimeoutMs + 180000);
+  const workflowCompletionTimeoutMs = PROTOCOL_TIMEOUTS.workflow;
+  test.setTimeout(workflowCompletionTimeoutMs + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const beforeSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(

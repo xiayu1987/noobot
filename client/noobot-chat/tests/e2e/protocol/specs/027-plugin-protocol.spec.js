@@ -33,6 +33,7 @@ import { assertNoForbiddenErrors } from "../helpers/log-assertions.js";
 import { sendAndStop, uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 function assertActivationIdentity(record, command, sessionId) {
   expect(record.data.protocolVersion).toBe(PLUGIN_PROTOCOL_VERSION);
@@ -101,7 +102,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(420000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.harness + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, ["workflow", "harness"]);
   const file = fixedAttachment("pbe-028.txt");
   const childFilePath = `runtime/ops_workdir/pbe-028-child-${Date.now()}.txt`;
@@ -110,7 +111,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     noobot.page,
     uniquePrompt(
       testInfo,
-      `execute one workflow child that first calls write_file exactly once for ${childFilePath} with content PBE028-CHILD-FILE and overwrite=true, riskLevel=low, then reads the attached file with read_file riskLevel=low and reports both exact contents`,
+      `Run one workflow child. Call write_file once for ${childFilePath} with content PBE028-CHILD-FILE, overwrite=true, riskLevel=low. Then call read_file on the attachment with riskLevel=low. Report only successful tool outputs.`,
     ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
@@ -119,7 +120,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 420000,
+    timeoutMs: PROTOCOL_TIMEOUTS.toolChain,
   });
   expect(send.input.attachments).toHaveLength(1);
   const events = await waitForPluginRuntimeEvents(noobot.userId, noobot.sessionId, (records) =>
@@ -323,7 +324,7 @@ test("@full PBE-028 Workflow + Harness 带附件遵循同一插件协议", async
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: failureSend.identity.turnScopeId,
-    timeoutMs: 420000,
+    timeoutMs: PROTOCOL_TIMEOUTS.toolChain,
   });
 
   const failureEvents = await waitForSessionExecutionEventTree(
@@ -404,14 +405,14 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(240000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.model + PROTOCOL_TIMEOUTS.audit);
   const file = fixedPngAttachment("pbe-038-source.png");
   await addAttachment(noobot.page, file);
   await sendMessage(
     noobot.page,
     uniquePrompt(
       testInfo,
-      "直接调用 multimodal_parse 解析用户上传的 pbe-038-source.png，model_name 使用 gpt_5_4，并报告解析结果文件名；不要创建子会话",
+      "直接调用 multimodal_parse 解析用户上传的 pbe-038-source.png，model_name 使用 gpt_5_6_terra，并报告解析结果文件名；不要创建子会话",
     ),
   );
   const send = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
@@ -422,14 +423,16 @@ test("@full PBE-038 用户附件解析结果保持 canonical identity 并可预�
   await expect(userCard).toBeVisible();
   await expect(noobot.page.locator(".stop-float-btn")).toBeVisible();
   await expect
-    .poll(() => userCard.locator(".parsed-result-action").count(), { timeout: 120000 })
+    .poll(() => userCard.locator(".parsed-result-action").count(), {
+      timeout: PROTOCOL_TIMEOUTS.model,
+    })
     .toBe(2);
   await waitForNaturalCompletion({
     page: noobot.page,
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 240000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
   await expect

@@ -28,9 +28,10 @@ import {
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { MODEL_CONTEXT_SEQUENCE_POLICY } from "@noobot/model-protocol";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
-const HARNESS_COMPLETION_TIMEOUT_MS = 780000;
-const HARNESS_AUDIT_TIMEOUT_MS = 120000;
+const HARNESS_COMPLETION_TIMEOUT_MS = PROTOCOL_TIMEOUTS.harness;
+const HARNESS_AUDIT_TIMEOUT_MS = PROTOCOL_TIMEOUTS.audit;
 
 const EXPECTED_CAPABILITY_PURPOSES = Object.freeze([
   "planning",
@@ -304,7 +305,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
         candidate.run?.status === "success" && [...requiredEvents].every((name) => names.has(name))
       );
     },
-    { timeoutMs: 30000 },
+    { timeoutMs: HARNESS_AUDIT_TIMEOUT_MS },
   );
   assertHarnessRun(harness.run, {
     dialogProcessId: processing.dialogProcessId,

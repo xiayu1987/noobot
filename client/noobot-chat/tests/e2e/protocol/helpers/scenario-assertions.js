@@ -4,37 +4,67 @@
  * SPDX-License-Identifier: MIT
  */
 import { expect } from "@playwright/test";
-import { assertAgentTransportCommand, assertUniqueCommandIds } from "./agent-transport-assertions.js";
+import {
+  assertAgentTransportCommand,
+  assertUniqueCommandIds,
+} from "./agent-transport-assertions.js";
 import { assertLifecycleSequence, assertSingleTerminal } from "./lifecycle-assertions.js";
-import { findAgentCommands, findLifecycleEnvelopes, findLifecycleReceipts, waitForCaptured } from "./websocket-capture.js";
+import {
+  findAgentCommands,
+  findLifecycleEnvelopes,
+  findLifecycleReceipts,
+  waitForCaptured,
+} from "./websocket-capture.js";
+import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 export function commandsForSession(capture, sessionId) {
-  return findAgentCommands(capture.websocketSent).filter((item) => item.identity?.sessionId === sessionId);
+  return findAgentCommands(capture.websocketSent).filter(
+    (item) => item.identity?.sessionId === sessionId,
+  );
 }
 
 export function lifecycleForSession(capture, sessionId) {
-  return findLifecycleEnvelopes(capture.websocketReceived).filter((item) => item.sessionId === sessionId);
+  return findLifecycleEnvelopes(capture.websocketReceived).filter(
+    (item) => item.sessionId === sessionId,
+  );
 }
 
 export async function waitForCommand(capture, sessionId, commandType, after = 0) {
-  return waitForCaptured(() => commandsForSession(capture, sessionId)
-    .slice(after).find((command) => command.commandType === commandType));
+  return waitForCaptured(() =>
+    commandsForSession(capture, sessionId)
+      .slice(after)
+      .find((command) => command.commandType === commandType),
+  );
 }
 
 export async function waitForLifecycle(capture, sessionId, eventType, after = 0, turnScopeId = "") {
-  return waitForCaptured(() => lifecycleForSession(capture, sessionId)
-    .slice(after).find((event) => event.eventType === eventType && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs: 120000 });
+  return waitForCaptured(
+    () =>
+      lifecycleForSession(capture, sessionId)
+        .slice(after)
+        .find(
+          (event) =>
+            event.eventType === eventType && (!turnScopeId || event.turnScopeId === turnScopeId),
+        ),
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
+  );
 }
 
 export async function waitForTurnTerminal(
   capture,
   sessionId,
   turnScopeId = "",
-  { timeoutMs = 120000 } = {},
+  { timeoutMs = PROTOCOL_TIMEOUTS.model } = {},
 ) {
   const terminalTypes = new Set(["turn.completed", "turn.stop_completed", "turn.failed"]);
-  return waitForCaptured(() => lifecycleForSession(capture, sessionId)
-    .find((event) => terminalTypes.has(event.eventType) && (!turnScopeId || event.turnScopeId === turnScopeId)), { timeoutMs });
+  return waitForCaptured(
+    () =>
+      lifecycleForSession(capture, sessionId).find(
+        (event) =>
+          terminalTypes.has(event.eventType) && (!turnScopeId || event.turnScopeId === turnScopeId),
+      ),
+    { timeoutMs },
+  );
 }
 
 export function assertCommandChain(capture, sessionId) {
@@ -46,12 +76,17 @@ export function assertCommandChain(capture, sessionId) {
 }
 
 export function assertTurnLifecycle(capture, sessionId, turnScopeId) {
-  const events = lifecycleForSession(capture, sessionId).filter((event) => event.turnScopeId === turnScopeId);
+  const events = lifecycleForSession(capture, sessionId).filter(
+    (event) => event.turnScopeId === turnScopeId,
+  );
   assertLifecycleSequence(events);
   assertSingleTerminal(events);
-  const receipts = findLifecycleReceipts(capture.websocketSent)
-    .filter((receipt) => receipt.sessionId === sessionId && receipt.turnScopeId === turnScopeId);
-  expect(new Set(receipts.map((receipt) => receipt.eventId))).toEqual(new Set(events.map((event) => event.eventId)));
+  const receipts = findLifecycleReceipts(capture.websocketSent).filter(
+    (receipt) => receipt.sessionId === sessionId && receipt.turnScopeId === turnScopeId,
+  );
+  expect(new Set(receipts.map((receipt) => receipt.eventId))).toEqual(
+    new Set(events.map((event) => event.eventId)),
+  );
   expect(receipts.every((receipt) => receipt.protocolVersion === 1)).toBe(true);
   return events;
 }
