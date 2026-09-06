@@ -4,18 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 
+function normalizeTaskStatus(value = "") {
+  const status = String(value || "").trim();
+  return status === "start" || status === "completed" ? status : "";
+}
+
+function normalizeTaskMeta(value = null) {
+  return value && typeof value === "object" ? value : {};
+}
+
 export function normalizeTaskEntity(task = {}) {
-  const taskId = String(task?.taskId || "").trim();
-  const taskStatus = String(task?.taskStatus || "").trim();
   return {
-    taskId,
+    taskId: String(task?.taskId || "").trim(),
     skillName: String(task?.skillName || "").trim(),
     taskName: String(task?.taskName || "").trim(),
-    taskStatus:
-      taskStatus === "start" || taskStatus === "completed" ? taskStatus : "",
+    taskStatus: normalizeTaskStatus(task?.taskStatus),
     startedAt: String(task?.startedAt || "").trim(),
     endedAt: String(task?.endedAt || "").trim(),
     result: String(task?.result || "").trim(),
-    meta: task?.meta && typeof task.meta === "object" ? task.meta : {},
+    meta: normalizeTaskMeta(task?.meta),
   };
 }

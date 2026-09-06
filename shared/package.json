@@ -13,6 +13,7 @@
     "./runtime-events-config": "./runtime-events-config.js",
     "./time-thresholds": "./time-thresholds.js",
     "./turn-thresholds": "./turn-thresholds.js",
+    "./tool-name": "./tool-name.js",
     "./package.json": "./package.json"
   }
 }

@@ -26,23 +26,15 @@ import {
   FLOW_CONTROL_ROLE,
   createFlowControlContextPolicy,
 } from "@noobot/context-protocol/tool/context-policy";
+import { resolveToolCallName } from "@noobot/shared/tool-name";
 
 export const TASK_SUMMARY_TOOL_NAME = TOOL_NAME.TASK_SUMMARY;
-
-function normalizeToolNameFromToolCall(toolCall = {}) {
-  if (!toolCall || typeof toolCall !== "object") return "";
-  if (toolCall.name) return String(toolCall.name || "").trim();
-  const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
-  return String(fn.name || "").trim();
-}
 
 export function isTaskSummaryMessage(messageItem = {}) {
   const role = String(messageItem?.role || "").trim();
   if (role === "assistant") {
     const toolCalls = Array.isArray(messageItem?.tool_calls) ? messageItem.tool_calls : [];
-    return toolCalls.some(
-      (toolCall) => normalizeToolNameFromToolCall(toolCall) === TASK_SUMMARY_TOOL_NAME,
-    );
+    return toolCalls.some((toolCall) => resolveToolCallName(toolCall) === TASK_SUMMARY_TOOL_NAME);
   }
   if (role === "tool") {
     const toolName = String(messageItem?.toolName || messageItem?.tool_name || "").trim();

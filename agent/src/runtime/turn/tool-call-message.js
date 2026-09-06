@@ -47,28 +47,37 @@ export function formatToolCallsForLangChain(toolCalls = []) {
     .filter((call) => call.name);
 }
 
-export function buildAssistantModelMessageForToolCalls({
-  ai = {},
-  contentText = "",
-  toolCalls = [],
-  noobotMessageId = "",
-} = {}) {
-  const rawContent =
-    typeof ai?.content === "string" || Array.isArray(ai?.content)
-      ? ai.content
-      : String(contentText || "");
+function resolveAssistantRawContent(ai = {}, contentText = "") {
+  if (typeof ai?.content === "string" || Array.isArray(ai?.content)) return ai.content;
+  return String(contentText || "");
+}
+
+function buildAssistantAdditionalKwargs(ai = {}, noobotMessageId = "") {
   const additionalKwargs = clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {};
   if (ai?.responseReasoning && typeof ai.responseReasoning === "object") {
     additionalKwargs.reasoning = ai.responseReasoning;
   }
   const canonicalMessageId = String(noobotMessageId || "").trim();
   if (canonicalMessageId) additionalKwargs.noobotMessageId = canonicalMessageId;
+  return additionalKwargs;
+}
+
+function buildAssistantResponseMetadata(ai = {}) {
   const responseMetadata = clonePlainObjectWithoutToolCalls(ai?.response_metadata) || {};
   if (Array.isArray(ai?.responseOutput)) responseMetadata.output = ai.responseOutput;
+  return responseMetadata;
+}
+
+export function buildAssistantModelMessageForToolCalls({
+  ai = {},
+  contentText = "",
+  toolCalls = [],
+  noobotMessageId = "",
+} = {}) {
   return new AIMessage({
-    content: rawContent,
+    content: resolveAssistantRawContent(ai, contentText),
     tool_calls: formatToolCallsForLangChain(toolCalls),
-    additional_kwargs: additionalKwargs,
-    response_metadata: responseMetadata,
+    additional_kwargs: buildAssistantAdditionalKwargs(ai, noobotMessageId),
+    response_metadata: buildAssistantResponseMetadata(ai),
   });
 }

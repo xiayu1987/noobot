@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { HOOK_POINT } from "@noobot/hook-protocol";
+import { resolveToolCallName } from "@noobot/shared/tool-name";
 import { relaySeparateModelOutputAsUserMessage } from "../shared/relay-model-output.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
@@ -61,13 +62,6 @@ function resolveUnsummarizedMessageChars(messages = []) {
     const content = extractRawTextContent(message?.content ?? message);
     return total + String(content || "").length;
   }, 0);
-}
-
-function resolveToolNameFromToolCall(toolCall = {}) {
-  if (!toolCall || typeof toolCall !== "object") return "";
-  if (toolCall.name) return String(toolCall.name || "").trim();
-  const fn = toolCall.function && typeof toolCall.function === "object" ? toolCall.function : {};
-  return String(fn.name || "").trim();
 }
 
 function normalizePositiveInteger(value = 0, fallback = 0) {
@@ -183,7 +177,7 @@ function maybeScheduleSummaryByToolBurst(ctx = {}, meta = {}) {
   if (!Array.isArray(calls) || calls.length < threshold) return false;
   const holder = ensureHarnessBucket(ctx);
   if (!holder || holder.state?.pending?.summary === true) return false;
-  const toolNames = calls.map((call) => resolveToolNameFromToolCall(call)).filter(Boolean);
+  const toolNames = calls.map((call) => resolveToolCallName(call)).filter(Boolean);
   if (toolNames.includes(TASK_SUMMARY_TOOL_NAME)) return false;
   setPendingStateWithMeta(holder.state, "summary", true);
   holder.state.flags.summaryByCharsPrompted = false;
