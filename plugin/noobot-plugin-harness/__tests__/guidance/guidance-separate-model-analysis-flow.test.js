@@ -188,6 +188,124 @@ test("separate_model skips analysis for LangChain AIMessage tool call with conte
   assert.equal(agentContext.payload.harness.state.pending.analysis, true);
 });
 
+test("separate_model skip guard uses canonical Anthropic text and tool-use projection", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const ctx = {
+    messages: [
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "先判断应调用哪个工具", signature: "sig-1" },
+          { type: "text", text: "先确认当前真实状态。" },
+          { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
+        ],
+        tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
+      },
+      { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
+    ],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return createTestModelResponse("不应调用");
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+
+  assert.equal(invocations.length, 0);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+});
+
+test("separate_model skip guard uses canonical OpenAI Responses text and function-call projection", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const ctx = {
+    messages: [
+      {
+        role: "assistant",
+        content: [{ type: "output_text", text: "先确认当前真实状态。" }],
+        tool_calls: [{ id: "call-1", name: "read_file", args: {} }],
+        response_metadata: {
+          output: [
+            { id: "rs-1", type: "reasoning", summary: [] },
+            {
+              id: "msg-1",
+              type: "message",
+              role: "assistant",
+              content: [{ type: "output_text", text: "先确认当前真实状态。" }],
+            },
+            {
+              id: "fc-1",
+              type: "function_call",
+              call_id: "call-1",
+              name: "read_file",
+              arguments: "{}",
+            },
+          ],
+        },
+      },
+      { role: "tool", tool_call_id: "call-1", content: "读取完成" },
+    ],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return createTestModelResponse("不应调用");
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+
+  assert.equal(invocations.length, 0);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, true);
+});
+
+test("separate_model analyzes when canonical assistant tool call has no visible content", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const invocations = [];
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  const ctx = {
+    messages: [
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "内部推理", signature: "sig-1" },
+          { type: "tool_use", id: "toolu-1", name: "read_file", input: {} },
+        ],
+        tool_calls: [{ id: "toolu-1", name: "read_file", args: {} }],
+      },
+      { role: "tool", tool_call_id: "toolu-1", content: "读取完成" },
+    ],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async (payload = {}) => {
+        invocations.push(payload);
+        return createTestModelResponse("分析完成");
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+
+  assert.equal(invocations.length, 1);
+  assert.equal(agentContext.payload.harness.state.pending.analysis, false);
+});
+
 test("analysis waits for the separate model before the before_llm_call hook completes", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const agentContext = createAgentContext({ pending: { analysis: true } });

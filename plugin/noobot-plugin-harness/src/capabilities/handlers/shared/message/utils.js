@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { LOCALE } from "../constants.js";
-import { resolveContextMessageRole } from "@noobot/context-protocol/message/codec";
+import {
+  resolveContextMessageContent,
+  resolveContextMessageRole,
+  resolveContextToolCalls,
+} from "@noobot/context-protocol/message/codec";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "../i18n.js";
 
 export function isHarnessInjectedMessage(message = {}, { role = "", type = "" } = {}) {
@@ -33,16 +37,6 @@ export function extractRawTextContent(input) {
     .trim();
 }
 
-function resolveMessageToolCalls(message = {}) {
-  if (Array.isArray(message?.tool_calls)) return message.tool_calls;
-  if (Array.isArray(message?.toolCalls)) return message.toolCalls;
-  if (Array.isArray(message?.additional_kwargs?.tool_calls)) {
-    return message.additional_kwargs.tool_calls;
-  }
-  if (Array.isArray(message?.lc_kwargs?.tool_calls)) return message.lc_kwargs.tool_calls;
-  return [];
-}
-
 export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
   const items = Array.isArray(messages) ? messages : [];
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -51,9 +45,13 @@ export function shouldSkipAnalysisForTrailingToolCallContent(messages = []) {
     if (isHarnessInjectedMessage(message)) continue;
     const role = resolveContextMessageRole(message);
     if (role !== "assistant") continue;
-    const toolCalls = resolveMessageToolCalls(message);
+    // The context protocol owns the canonical assistant projection.  Provider
+    // adapters (Anthropic blocks, Chat Completions content, Responses output)
+    // must be normalized before reaching this guard; do not infer provider
+    // format or inspect response metadata here.
+    const toolCalls = resolveContextToolCalls(message);
     if (!toolCalls.length) return false;
-    const content = extractRawTextContent(message?.content ?? message?.lc_kwargs?.content ?? "");
+    const content = resolveContextMessageContent(message);
     return Boolean(String(content || "").trim());
   }
   return false;
