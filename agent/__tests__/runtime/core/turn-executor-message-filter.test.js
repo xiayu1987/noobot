@@ -5,7 +5,11 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol";
+import {
+  appendContextMessage,
+  createModelContext,
+  writeMessageBlocks,
+} from "@noobot/context-protocol";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import {
@@ -241,6 +245,71 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     capturedMessages.map((item) => `${item.role}:${item.content}`),
     ["system:sys", "assistant:hist", "user:current"],
   );
+});
+
+test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook", async () => {
+  let capturedMessages = [];
+  const runtime = {
+    systemRuntime: {},
+    hookManager: {
+      async emit(point, ctx = {}) {
+        if (point !== "agent.before_llm_call") return createEmptyHookResult(point, ctx);
+        appendContextMessage(
+          ctx.modelContext,
+          {
+            role: "user",
+            content: "[来自harness外部模型输出/guidance]\\n分析结果",
+            injectedMessage: true,
+            injectedBy: "harness-plugin",
+            injectedMessageType: "separate_model_relay:guidance",
+            purpose: "guidance",
+            pluginFlow: "analysis",
+            chain: "auxiliary",
+          },
+          { block: "incremental" },
+        );
+        return createEmptyHookResult(point, ctx);
+      },
+    },
+  };
+  const llm = {
+    bindTools() {
+      return {
+        async invoke(messages) {
+          capturedMessages = messages;
+          return { content: "ok", tool_calls: [], additional_kwargs: {}, response_metadata: {} };
+        },
+      };
+    },
+  };
+  const current = { role: "user", content: "current-user", dialogProcessId: "d-current" };
+  const modelState = {
+    modelPort: createTestModelPort(llm),
+    runtime,
+    eventListener: null,
+    abortSignal: null,
+    defaultModelSpec: TEST_MODEL_SPEC,
+  };
+  const loopState = {
+    messages: [current],
+    messageBlocks: { system: [], history: [], incremental: [current] },
+    traces: [],
+    tools: [{ name: "execute_script" }],
+    turnMessages: [],
+    turnTasks: [],
+    currentTurnMessages: null,
+    currentTurnTasks: null,
+    dialogProcessId: "d-current",
+    maxTurns: 1,
+  };
+
+  await invokeWithToolsTurn({ modelState, loopState, turn: 1 });
+
+  const relay = capturedMessages.find((item = {}) => item?.injectedMessageType);
+  assert.equal(relay?.role, "user");
+  assert.equal(relay?.pluginFlow, "analysis");
+  assert.equal(relay?.chain, "auxiliary");
+  assert.match(String(relay?.content || ""), /分析结果/);
 });
 
 test("invokeWithToolsTurn commits a separate-model summary checkpoint before model projection", async () => {

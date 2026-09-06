@@ -521,7 +521,7 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     content: responseText,
     timestamp: new Date().toISOString(),
   });
-  relaySeparateModelOutputAsUserMessage(ctx, {
+  const relayInjected = relaySeparateModelOutputAsUserMessage(ctx, {
     locale,
     purpose,
     pluginFlow: workflowPurpose === "analysis" ? "analysis" : undefined,
@@ -529,6 +529,18 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
     content: relayText,
     transferPayload: normalizeTransferPayload(relayAttachments),
   });
+  if (!relayInjected) {
+    appendCapabilityLog(ctx, {
+      domain: CAPABILITY_DOMAIN.GUIDANCE,
+      event: GUIDANCE_EVENTS.separateModelRelayFailed,
+      detail: {
+        purpose,
+        workflowPurpose,
+        hasResponseText: Boolean(responseText),
+      },
+    });
+    return false;
+  }
   if (purpose === "summary") {
     recordLatestSummaryFullText(ctx, responseText);
     const mergedSummaryText = applySummaryText(ctx, summaryMergeText);

@@ -321,6 +321,33 @@ test("model response accepts only the canonical protocol shape", () => {
   );
 });
 
+test("model response preserves structured provider content blocks", () => {
+  const output = {
+    text: "answer",
+    reasoning: "thinking",
+    toolCalls: [],
+    finishReason: "stop",
+    usage: {},
+    content: [
+      { type: "thinking", thinking: "thinking" },
+      { type: "text", text: "answer" },
+    ],
+  };
+  const response = createModelResponse({
+    invocation,
+    output,
+    attempts: [{ attempt: 1, status: "completed", kind: "chat", streaming: false, output }],
+    model,
+    provider: { operatorId: "anthropic", adapterId: "anthropic-messages" },
+  });
+  assert.equal(validateModelResponse(response), response);
+  assert.deepEqual(response.output.content, output.content);
+  assert.throws(
+    () => validateModelResponse({ ...response, output: { ...output, content: 42 } }),
+    /output\.content must be a string or array/,
+  );
+});
+
 test("model request requires one explicit context sequence policy", () => {
   assert.throws(
     () =>

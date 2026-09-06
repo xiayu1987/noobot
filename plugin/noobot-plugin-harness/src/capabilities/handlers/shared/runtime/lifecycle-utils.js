@@ -17,6 +17,10 @@ const TURN_END_POINTS = new Set([
 const TURN_START_POINTS = new Set([
   HOOK_POINT.AGENT.BEFORE_TURN,
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
+  // A model call is an active turn boundary as well. This clears stale
+  // terminal state when a reused execution context reaches the authoritative
+  // before-LLM hook without receiving the earlier lifecycle callback.
+  HOOK_POINT.AGENT.BEFORE_LLM_CALL,
 ]);
 const MAX_COMPLETED_DIALOG_IDS = QUANTITY_THRESHOLDS.harness.completedDialogIds;
 
@@ -38,11 +42,13 @@ export function markHarnessTurnLifecycle(point = "", ctx = {}) {
 
   if (TURN_START_POINTS.has(normalizedPoint)) {
     state.flags.agentTurnEnded = false;
-    state.flags.acceptanceRequested = false;
-    state.flags.acceptanceReviewing = false;
-    state.flags.acceptanceCompleted = false;
-    state.flags.planRefinementRequested = false;
-    state.flags.checklistArtifactsAttached = false;
+    if (normalizedPoint !== HOOK_POINT.AGENT.BEFORE_LLM_CALL) {
+      state.flags.acceptanceRequested = false;
+      state.flags.acceptanceReviewing = false;
+      state.flags.acceptanceCompleted = false;
+      state.flags.planRefinementRequested = false;
+      state.flags.checklistArtifactsAttached = false;
+    }
     if (dialogProcessId) {
       state.signals.activeDialogProcessId = dialogProcessId;
       const index = completedIds.indexOf(dialogProcessId);
