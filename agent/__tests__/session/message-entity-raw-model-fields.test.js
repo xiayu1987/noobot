@@ -21,13 +21,17 @@ test("normalizeMessageEntity preserves the canonical internal control message ty
   assert.equal("additional_kwargs" in normalized, false);
 });
 
-test("normalizeMessageEntity does not persist heavy raw model fields", () => {
+test("normalizeMessageEntity persists assistant protocol blocks but not diagnostics", () => {
   const normalized = normalizeMessageEntity({
     role: "assistant",
     content: "fallback",
     rawModelContent: [{ type: "text", text: "x", thought_signature: "sig" }],
-    modelAdditionalKwargs: { opaque: true, tool_calls: [{ id: "call_1" }] },
+    modelAdditionalKwargs: {
+      reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+      opaque: true,
+    },
     modelResponseMetadata: {
+      output: [{ id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] }],
       finish_reason: "tool_calls",
       model_name: "qwen3.6-plus-2026-04-02",
       model_provider: "openai",
@@ -35,9 +39,16 @@ test("normalizeMessageEntity does not persist heavy raw model fields", () => {
     },
   });
 
-  assert.equal("rawModelContent" in normalized, false);
-  assert.equal("modelAdditionalKwargs" in normalized, false);
-  assert.equal("modelResponseMetadata" in normalized, false);
+  assert.deepEqual(normalized.rawModelContent, [
+    { type: "text", text: "x", thought_signature: "sig" },
+  ]);
+  assert.notEqual(normalized.rawModelContent, normalized.content);
+  assert.deepEqual(normalized.modelAdditionalKwargs, {
+    reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+  });
+  assert.deepEqual(normalized.modelResponseMetadata, {
+    output: [{ id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] }],
+  });
 });
 
 test("normalizeMessageEntity persists compact transferEnvelopes", () => {

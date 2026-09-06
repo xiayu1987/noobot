@@ -90,7 +90,7 @@ describe("2. 字段对齐测试", () => {
       assert.equal(normalized.summarized, false, "summarized 默认应为 false");
     });
 
-    it("rawModelContent 不落盘（由 execution 日志保留完整信息）", () => {
+    it("assistant 协议内容块必须落盘以支持 thinking/tool 轮次恢复", () => {
       const raw1 = { role: "user", content: "test", rawModelContent: "raw text" };
       const n1 = normalizeMessageEntity(raw1);
       assert.ok(!("rawModelContent" in n1), "string rawModelContent 默认不落盘");
@@ -101,21 +101,34 @@ describe("2. 字段对齐测试", () => {
         rawModelContent: [{ type: "text", text: "x", thought_signature: "sig-1" }],
       };
       const nSig = normalizeMessageEntity(rawSig);
-      assert.ok(!("rawModelContent" in nSig), "thought_signature array 也不落盘");
+      assert.deepEqual(nSig.rawModelContent, rawSig.rawModelContent);
+      assert.notEqual(nSig.rawModelContent, rawSig.rawModelContent);
 
       const raw2 = { role: "user", content: "test", rawModelContent: 123 };
       const n2 = normalizeMessageEntity(raw2);
       assert.ok(!("rawModelContent" in n2), "非 string/array rawModelContent 不应保留");
     });
 
-    it("modelAdditionalKwargs 不落盘", () => {
+    it("仅 OpenAI Responses 协议字段落盘，诊断字段不落盘", () => {
       const raw1 = {
-        role: "user",
+        role: "assistant",
         content: "test",
-        modelAdditionalKwargs: { key: "val", tool_calls: [{ id: "c1" }] },
+        modelAdditionalKwargs: {
+          reasoning: { type: "reasoning", id: "rs_1", encrypted_content: "enc" },
+          key: "val",
+        },
+        modelResponseMetadata: {
+          output: [{ type: "reasoning", id: "rs_1", encrypted_content: "enc" }],
+          finish_reason: "tool_calls",
+        },
       };
       const n1 = normalizeMessageEntity(raw1);
-      assert.ok(!("modelAdditionalKwargs" in n1), "modelAdditionalKwargs 不落盘");
+      assert.deepEqual(n1.modelAdditionalKwargs, {
+        reasoning: { type: "reasoning", id: "rs_1", encrypted_content: "enc" },
+      });
+      assert.deepEqual(n1.modelResponseMetadata, {
+        output: [{ type: "reasoning", id: "rs_1", encrypted_content: "enc" }],
+      });
 
       const raw2 = { role: "user", content: "test", modelAdditionalKwargs: [1, 2] };
       const n2 = normalizeMessageEntity(raw2);

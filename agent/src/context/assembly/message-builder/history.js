@@ -96,11 +96,23 @@ export function buildHistoryMessages({
         typeof msg?.rawModelContent === "string" || Array.isArray(msg?.rawModelContent)
           ? msg.rawModelContent
           : msg.content || "";
+      const additionalKwargs = {
+        ...projectContextMessageIdentityMetadata(msg),
+        ...(msg?.modelAdditionalKwargs?.reasoning &&
+        typeof msg.modelAdditionalKwargs.reasoning === "object"
+          ? { reasoning: msg.modelAdditionalKwargs.reasoning }
+          : {}),
+      };
+      const responseMetadata =
+        Array.isArray(msg?.modelResponseMetadata?.output)
+          ? { output: msg.modelResponseMetadata.output }
+          : {};
       history.push(
         new AIMessage({
           content: resolvedAssistantContent,
           tool_calls: toolCalls,
-          additional_kwargs: projectContextMessageIdentityMetadata(msg),
+          additional_kwargs: additionalKwargs,
+          response_metadata: responseMetadata,
         }),
       );
       continue;

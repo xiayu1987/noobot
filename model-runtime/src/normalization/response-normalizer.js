@@ -94,7 +94,24 @@ export function normalizeToolCalls(response = {}) {
 }
 
 export function normalizeModelOutput(response = {}) {
+  const responseOutput = Array.isArray(response?.response_metadata?.output)
+    ? response.response_metadata.output
+    : null;
+  const responseReasoning =
+    response?.additional_kwargs?.reasoning &&
+    typeof response.additional_kwargs.reasoning === "object" &&
+    !Array.isArray(response.additional_kwargs.reasoning)
+      ? response.additional_kwargs.reasoning
+      : null;
   return Object.freeze({
+    // Keep the provider content blocks as protocol data. Anthropic adaptive
+    // thinking requires the exact thinking/tool_use blocks to be echoed on the
+    // following tool-result request; reducing them to text loses that binding.
+    ...(typeof response.content === "string" || Array.isArray(response.content)
+      ? { content: response.content }
+      : {}),
+    ...(responseOutput ? { responseOutput } : {}),
+    ...(responseReasoning ? { responseReasoning } : {}),
     text: extractResponseText(response),
     reasoning: extractReasoningText(response),
     toolCalls: normalizeToolCalls(response),

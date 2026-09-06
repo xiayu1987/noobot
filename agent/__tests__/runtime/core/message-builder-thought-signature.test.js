@@ -78,3 +78,34 @@ test("buildContextMessages preserves thought-signature payload/tool_calls and om
   });
   assert.deepEqual(aiMessage.response_metadata || {}, {});
 });
+
+test("buildContextMessages restores OpenAI Responses reasoning output sequence", () => {
+  const output = [
+    { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+  ];
+  const history = toConversationMessages([
+    {
+      messageUid: "message-responses",
+      role: "assistant",
+      content: "",
+      modelAdditionalKwargs: { reasoning: output[0] },
+      modelResponseMetadata: { output },
+      tool_calls: [{ id: "call_1", function: { name: "read_file", arguments: "{}" } }],
+      dialogProcessId: "dialog-responses",
+      turnScopeId: "turn-responses",
+    },
+  ]);
+  const messages = buildContextMessages(
+    createTestAgentExecutionScope(
+      { systemRuntime: { sessionId: "session-responses", dialogProcessId: "dialog-responses", turnScopeId: "turn-responses" } },
+      { messageBlocks: { system: [], history } },
+    ),
+    { currentUserMessage: null },
+  );
+  const aiMessage = messages.find((messageItem) => messageItem instanceof AIMessage);
+  assert.ok(aiMessage);
+  assert.deepEqual(aiMessage.response_metadata.output, output);
+  assert.deepEqual(aiMessage.additional_kwargs.reasoning, output[0]);
+  assert.equal(aiMessage.tool_calls[0].id, "call_1");
+});

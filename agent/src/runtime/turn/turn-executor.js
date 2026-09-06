@@ -504,9 +504,15 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
 
   await stateCommitter.pushAssistantMessage({
     content: finalAiContentText,
-    rawModelContent: ai?.text ?? null,
-    modelAdditionalKwargs: { reasoning: ai?.reasoning || "" },
-    modelResponseMetadata: { finishReason: ai?.finishReason || "", usage: ai?.usage || {} },
+    rawModelContent: ai?.content ?? ai?.text ?? null,
+    modelAdditionalKwargs: ai?.responseReasoning
+      ? { reasoning: ai.responseReasoning }
+      : null,
+    modelResponseMetadata: {
+      ...(ai?.responseOutput ? { output: ai.responseOutput } : {}),
+      ...(ai?.finishReason ? { finishReason: ai.finishReason } : {}),
+      ...(ai?.usage ? { usage: ai.usage } : {}),
+    },
     type: calls.length ? "tool_call" : "message",
     toolCalls: calls.length ? formatToolCallsForStorage(calls) : [],
     modelAlias: currentModelInfo.modelAlias,

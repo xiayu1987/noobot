@@ -41,7 +41,15 @@ export function createTestModelPort(providerModel = {}) {
       });
       return {
         output: {
-          text: String(response?.text ?? response?.content ?? ""),
+          ...(typeof response?.content === "string" || Array.isArray(response?.content)
+            ? { content: response.content }
+            : {}),
+          text:
+            response?.text !== undefined
+              ? String(response.text)
+              : typeof response?.content === "string"
+                ? response.content
+                : "",
           toolCalls: Array.isArray(response?.toolCalls)
             ? response.toolCalls
             : Array.isArray(response?.tool_calls)
