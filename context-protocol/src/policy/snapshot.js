@@ -37,6 +37,8 @@ const SERIALIZATION_KEYS = new Set([
   "name",
   "status",
   "artifact",
+  "response_metadata",
+  "usage_metadata",
 ]);
 
 function cloneJson(value) {
@@ -101,6 +103,15 @@ export function serializeContextMessage(message = {}) {
     serialized.invalid_tool_calls = Array.isArray(message?.invalid_tool_calls)
       ? cloneJson(message.invalid_tool_calls) || []
       : [];
+    if (
+      message?.response_metadata &&
+      typeof message.response_metadata === "object" &&
+      Array.isArray(message.response_metadata.output)
+    ) {
+      serialized.response_metadata = {
+        output: cloneJson(message.response_metadata.output) || [],
+      };
+    }
   }
   if (normalizedType === "tool") {
     serialized.tool_call_id =
@@ -130,6 +141,15 @@ export function deserializeContextMessageRecord(item = {}) {
   if (item?.type === "ai") {
     message.tool_calls = cloneJson(item?.tool_calls) || [];
     message.invalid_tool_calls = cloneJson(item?.invalid_tool_calls) || [];
+    if (
+      item?.response_metadata &&
+      typeof item.response_metadata === "object" &&
+      Array.isArray(item.response_metadata.output)
+    ) {
+      message.response_metadata = {
+        output: cloneJson(item.response_metadata.output) || [],
+      };
+    }
   }
   if (item?.type === "tool") {
     message.tool_call_id = item?.tool_call_id || "";

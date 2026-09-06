@@ -40,8 +40,14 @@ export async function commitNoToolsTurnState({
   await stateCommitter.pushAssistantMessage({
     content: responseContentText,
     rawModelContent: modelResponse?.content ?? null,
-    modelAdditionalKwargs: modelResponse?.additional_kwargs ?? null,
-    modelResponseMetadata: modelResponse?.response_metadata ?? null,
+    modelAdditionalKwargs: modelResponse?.responseReasoning
+      ? { reasoning: modelResponse.responseReasoning }
+      : null,
+    modelResponseMetadata: {
+      ...(modelResponse?.responseOutput ? { output: modelResponse.responseOutput } : {}),
+      ...(modelResponse?.finishReason ? { finishReason: modelResponse.finishReason } : {}),
+      ...(modelResponse?.usage ? { usage: modelResponse.usage } : {}),
+    },
     type: "message",
     toolCalls: [],
     modelAlias: currentModelInfo.modelAlias,

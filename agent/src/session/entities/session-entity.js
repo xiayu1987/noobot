@@ -250,6 +250,36 @@ function applyMessageRuntimeFields(target, message) {
   ) {
     target.pluginMeta = message.pluginMeta;
   }
+  // Anthropic Messages thinking/tool blocks are protocol state, not a
+  // presentation preview. Assistant history must retain the exact block
+  // array so a resumed tool turn can echo thinking signatures unchanged.
+  if (target.role === "assistant" && Array.isArray(message?.rawModelContent)) {
+    target.rawModelContent = message.rawModelContent.map((block) =>
+      block && typeof block === "object" ? { ...block } : block,
+    );
+  }
+  if (
+    target.role === "assistant" &&
+    message?.modelAdditionalKwargs?.reasoning &&
+    typeof message.modelAdditionalKwargs.reasoning === "object" &&
+    !Array.isArray(message.modelAdditionalKwargs.reasoning) &&
+    message.modelAdditionalKwargs.reasoning.type === "reasoning"
+  ) {
+    target.modelAdditionalKwargs = {
+      reasoning: { ...message.modelAdditionalKwargs.reasoning },
+    };
+  }
+  if (
+    target.role === "assistant" &&
+    Array.isArray(message?.modelResponseMetadata?.output) &&
+    message.modelResponseMetadata.output.every(
+      (item) => item && typeof item === "object" && typeof item.type === "string",
+    )
+  ) {
+    target.modelResponseMetadata = {
+      output: message.modelResponseMetadata.output.map((item) => ({ ...item })),
+    };
+  }
   for (const key of ["done", "pending", "error"]) {
     if (message?.[key] !== undefined) target[key] = message[key];
   }

@@ -658,7 +658,10 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
       return {
         async invoke() {
           return {
-            content: "",
+            content: [
+              { type: "thinking", thinking: "inspect", signature: "sig_1" },
+              { type: "tool_use", id: "call_1", name: "execute_script", input: {} },
+            ],
             tool_calls: [{ id: "call_1", name: "execute_script", args: {} }],
             additional_kwargs: {},
             response_metadata: {},
@@ -698,6 +701,10 @@ test("invokeWithToolsTurn stores assistant tool-call message in incremental bloc
   const assistantToolCall = loopState.modelContext.messages.at(-1);
   assert.equal(Array.isArray(assistantToolCall.tool_calls), true);
   assert.equal(loopState.modelContext.messageBlocks.incremental.at(-1), assistantToolCall);
+  assert.deepEqual(result.turnMessageStore.toArray().at(-1).rawModelContent, [
+    { type: "thinking", thinking: "inspect", signature: "sig_1" },
+    { type: "tool_use", id: "call_1", name: "execute_script", input: {} },
+  ]);
   assert.equal(
     assistantToolCall.additional_kwargs.noobotMessageId,
     result.turnMessageStore.toArray().at(-1).messageUid,

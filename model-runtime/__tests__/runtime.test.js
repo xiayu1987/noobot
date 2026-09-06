@@ -14,9 +14,11 @@ import {
   convertMessages,
   convertToolChoice,
   convertTools,
+  responseFromAnthropic,
   anthropicMessagesAdapter,
   classifyTransportError,
   orderOpenAiResponsesRequestBody,
+  normalizeModelOutput,
 } from "../src/index.js";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
@@ -55,6 +57,32 @@ const sdkTool = {
     parameters: { type: "object", properties: {} },
   },
 };
+
+test("model output keeps Responses reasoning and complete output sequence for continuation", () => {
+  const output = normalizeModelOutput({
+    content: [{ type: "reasoning", reasoning: "summary" }, { type: "text", text: "done" }],
+    additional_kwargs: {
+      reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    },
+    response_metadata: {
+      output: [
+        { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+        { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+      ],
+    },
+  });
+  assert.deepEqual(output.responseOutput, [
+    { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+  ]);
+  assert.deepEqual(output.responseReasoning, {
+    id: "rs_1",
+    type: "reasoning",
+    encrypted_content: "encrypted",
+    summary: [],
+  });
+  assert.equal(output.responseOutput[1].type, "function_call");
+});
 
 test("OpenAI Responses requests serialize stable settings and tools before input", async () => {
   const ordered = orderOpenAiResponsesRequestBody({
@@ -363,6 +391,28 @@ test("Anthropic Messages adapter preserves LangChain tool schemas", () => {
         required: ["filePath"],
         additionalProperties: false,
       },
+    },
+  ]);
+});
+
+test("Anthropic Messages preserves thinking blocks across tool-result turns", () => {
+  const thinking = { type: "thinking", thinking: "reason", signature: "sig_1" };
+  const toolUse = { type: "tool_use", id: "tool_1", name: "read_file", input: { filePath: "a" } };
+  const response = responseFromAnthropic({
+    role: "assistant",
+    content: [thinking, toolUse],
+    stop_reason: "tool_use",
+    usage: {},
+  });
+  assert.deepEqual(response.content, [thinking, toolUse]);
+  assert.deepEqual(convertMessages([
+    { role: "assistant", content: response.content, tool_calls: response.tool_calls },
+    { role: "tool", tool_call_id: "tool_1", content: "ok" },
+  ]), [
+    { role: "assistant", content: [thinking, toolUse] },
+    {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "tool_1", content: "ok" }],
     },
   ]);
 });

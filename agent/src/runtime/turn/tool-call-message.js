@@ -58,12 +58,17 @@ export function buildAssistantModelMessageForToolCalls({
       ? ai.content
       : String(contentText || "");
   const additionalKwargs = clonePlainObjectWithoutToolCalls(ai?.additional_kwargs) || {};
+  if (ai?.responseReasoning && typeof ai.responseReasoning === "object") {
+    additionalKwargs.reasoning = ai.responseReasoning;
+  }
   const canonicalMessageId = String(noobotMessageId || "").trim();
   if (canonicalMessageId) additionalKwargs.noobotMessageId = canonicalMessageId;
+  const responseMetadata = clonePlainObjectWithoutToolCalls(ai?.response_metadata) || {};
+  if (Array.isArray(ai?.responseOutput)) responseMetadata.output = ai.responseOutput;
   return new AIMessage({
     content: rawContent,
     tool_calls: formatToolCallsForLangChain(toolCalls),
     additional_kwargs: additionalKwargs,
-    response_metadata: clonePlainObjectWithoutToolCalls(ai?.response_metadata) || {},
+    response_metadata: responseMetadata,
   });
 }

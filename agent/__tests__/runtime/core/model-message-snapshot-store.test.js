@@ -120,6 +120,46 @@ test("stopped model message snapshot keeps message tool calls and tool results",
   );
 });
 
+test("stopped snapshot round trip preserves Anthropic thinking blocks and OpenAI Responses reasoning output", async () => {
+  const workspaceRoot = await createWorkspace();
+  const anthropicAi = new AIMessage({
+    content: [
+      { type: "thinking", thinking: "inspect", signature: "sig_1" },
+      { type: "tool_use", id: "tool_1", name: "read_file", input: {} },
+    ],
+    tool_calls: [{ id: "tool_1", name: "read_file", args: {}, type: "tool_call" }],
+  });
+  const anthropicResult = new ToolMessage({ content: "ok", tool_call_id: "tool_1" });
+  const openAiAi = new AIMessage({
+    content: [{ type: "reasoning", reasoning: "summary" }],
+    tool_calls: [{ id: "call_1", name: "read_file", args: {}, type: "tool_call" }],
+    additional_kwargs: {
+      reasoning: { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+    },
+    response_metadata: {
+      output: [
+        { id: "rs_1", type: "reasoning", encrypted_content: "encrypted", summary: [] },
+        { id: "fc_1", type: "function_call", call_id: "call_1", name: "read_file", arguments: "{}" },
+      ],
+    },
+  });
+  const openAiResult = new ToolMessage({ content: "ok", tool_call_id: "call_1" });
+  await saveStoppedModelMessageSnapshot({
+    globalConfig: { workspaceRoot },
+    identity,
+    messageBlocks: { system: [], history: [anthropicAi, anthropicResult, openAiAi, openAiResult], incremental: [] },
+  });
+  const loaded = await loadStoppedModelMessageSnapshot({ globalConfig: { workspaceRoot }, identity });
+  const loadedAnthropic = loaded.messageBlocks.history[0];
+  assert.deepEqual(loadedAnthropic.content, anthropicAi.content);
+  assert.equal(loaded.messageBlocks.history[1].tool_call_id, "tool_1");
+  const loadedOpenAi = loaded.messageBlocks.history[2];
+  assert.deepEqual(loadedOpenAi.response_metadata.output, openAiAi.response_metadata.output);
+  assert.deepEqual(loadedOpenAi.additional_kwargs.reasoning, openAiAi.additional_kwargs.reasoning);
+  assert.deepEqual(loadedOpenAi.tool_calls, openAiAi.tool_calls);
+  assert.equal(loaded.messageBlocks.history[3].tool_call_id, "call_1");
+});
+
 test("stopped model message snapshot v3 preserves ids, summary state, lc metadata and arbitrary fields", async () => {
   const workspaceRoot = await createWorkspace();
   const message = new HumanMessage({

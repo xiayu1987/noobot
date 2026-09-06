@@ -28,7 +28,20 @@ function textBlocks(content) {
   return content.flatMap((block) => {
     if (typeof block === "string") return block ? [{ type: "text", text: block }] : [];
     if (!block || typeof block !== "object") return [];
-    if (block.type === "text") return [{ type: "text", text: String(block.text || "") }];
+    if (block.type === "text") return [{ ...block, text: String(block.text || "") }];
+    // Anthropic thinking/tool blocks are protocol data, not display text. Keep
+    // them byte-for-byte available for the next request so thinking-enabled
+    // tool loops satisfy Anthropic's preserved-thinking contract.
+    if (
+      block.type === "thinking" ||
+      block.type === "redacted_thinking" ||
+      block.type === "tool_use" ||
+      block.type === "tool_result" ||
+      block.type === "server_tool_use" ||
+      block.type === "server_tool_result"
+    ) {
+      return [{ ...block }];
+    }
     if (block.type === "image_url" && block.image_url?.url) {
       return [{ type: "image", source: { type: "url", url: block.image_url.url } }];
     }
@@ -85,11 +98,16 @@ function convertMessages(messages = []) {
     flushTools();
     if (role === "assistant") {
       const content = textBlocks(message.content);
+      const existingToolUseIds = new Set(
+        content.filter((block) => block?.type === "tool_use").map((block) => String(block.id || "")),
+      );
       for (const call of message.tool_calls || []) {
         const fn = call?.function || call || {};
+        const id = String(call.id || call.call_id || "");
+        if (id && existingToolUseIds.has(id)) continue;
         content.push({
           type: "tool_use",
-          id: String(call.id || call.call_id || ""),
+          id,
           name: String(fn.name || call.name || ""),
           input: parseJson(fn.arguments ?? call.args, {}),
         });
@@ -144,7 +162,9 @@ function responseFromAnthropic(raw = {}) {
   }));
   const usage = raw.usage || {};
   return {
-    content: text,
+    // Preserve the provider's exact content blocks. In particular, Fable 5.1
+    // requires thinking blocks to be echoed unchanged with tool results.
+    content: blocks.map((block) => ({ ...block })),
     reasoning_content: reasoning,
     tool_calls,
     response_metadata: {
