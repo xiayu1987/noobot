@@ -108,7 +108,6 @@ test("invokeWithToolsTurn does not final-stream when runConfig disables streamin
   );
 });
 
-
 test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
   const modelState = {
     modelPort: {
@@ -141,7 +140,6 @@ test("invokeNoToolsTurn consumes only the final ModelPort result", async () => {
   );
   assert.equal(providerRetryPrompt, undefined);
 });
-
 
 test("invokeWithToolsTurn does not project provider retry attempts into context", async () => {
   const modelState = {

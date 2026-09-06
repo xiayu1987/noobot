@@ -17,11 +17,13 @@ import {
 import { waitForSessionExecutionEventTree } from "../helpers/persistence-audit.js";
 import { waitForCommand, waitForLifecycle } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", async ({
   noobot,
   protocolCapture,
 }, testInfo) => {
+  test.setTimeout(PROTOCOL_TIMEOUTS.model + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(
     noobot.page,
     uniquePrompt(
@@ -98,7 +100,7 @@ test("@core PBE-013 运行中刷新后执行记录可展开并收敛到终态", 
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: send.identity.turnScopeId,
-    timeoutMs: 120000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
   await waitForLifecycle(
     protocolCapture,

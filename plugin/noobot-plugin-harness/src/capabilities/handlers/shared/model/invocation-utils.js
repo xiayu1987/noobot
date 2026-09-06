@@ -13,6 +13,16 @@ import { HARNESS_I18N_KEYSET, resolveLocale, translateI18nText } from "../i18n.j
 import { isHarnessAgentTurnEnded } from "../runtime/lifecycle-utils.js";
 import { resolveAuxiliarySnapshotMessages } from "./auxiliary-snapshot-store.js";
 
+const RESERVED_TOOL_PROTOCOL_PATTERN = /<\s*\/?\s*(?:tool_call|arg_value)\b/i;
+
+function assertAuxiliaryOutputProtocol(response = {}, purpose = "") {
+  const text = String(response?.output?.text || "").trim();
+  if (!RESERVED_TOOL_PROTOCOL_PATTERN.test(text)) return;
+  throw new TypeError(
+    `harness capability model emitted reserved tool protocol text: ${purpose || "unknown"}`,
+  );
+}
+
 function buildAuxiliaryModelNoScriptMessage(ctx = {}) {
   return declareAuxiliarySequenceIdentity(
     {
@@ -89,5 +99,6 @@ export async function invokeCapabilityModel({
   if (typeof appendModelTrace === "function") {
     await appendModelTrace(response);
   }
+  assertAuxiliaryOutputProtocol(response, purpose || payload.purpose);
   return response;
 }

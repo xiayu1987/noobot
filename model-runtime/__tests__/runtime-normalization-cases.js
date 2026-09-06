@@ -129,7 +129,6 @@ test("cache parameters use the shared strategy while retaining provider-specific
   assert.deepEqual(alibaba, {});
 });
 
-
 test("model defaults follow provider-specific sampling guidance", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const openai = normalizeRuntimeModelSpec({
@@ -183,7 +182,6 @@ test("model defaults follow provider-specific sampling guidance", async () => {
   );
 });
 
-
 test("runtime model normalization rejects invalid parameter facts instead of converting them", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   assert.throws(
@@ -218,7 +216,6 @@ test("runtime model normalization rejects invalid parameter facts instead of con
   );
 });
 
-
 test("reasoning effort remains controlled by model configuration", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const spec = normalizeRuntimeModelSpec({
@@ -229,7 +226,6 @@ test("reasoning effort remains controlled by model configuration", async () => {
   });
   assert.equal(spec.reasoning_effort, "medium");
 });
-
 
 test("reasoning effort defaults and invalid values follow model options", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
@@ -251,7 +247,6 @@ test("reasoning effort defaults and invalid values follow model options", async 
   );
 });
 
-
 test("normalized ordinary requests compile their configured reasoning effort", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const { compileProviderModelKwargs } = await import("../src/policies/cache-policy-engine.js");
@@ -263,7 +258,6 @@ test("normalized ordinary requests compile their configured reasoning effort", a
   });
   assert.equal(compileProviderModelKwargs(spec).reasoning_effort, "high");
 });
-
 
 test("model series use their provider reasoning parameter names", async () => {
   const { compileProviderModelKwargs } = await import("../src/policies/cache-policy-engine.js");
@@ -300,7 +294,6 @@ test("model series use their provider reasoning parameter names", async () => {
   );
 });
 
-
 test("multimodal generation transport remains an explicit configured fact", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const unconfigured = normalizeRuntimeModelSpec({
@@ -327,7 +320,6 @@ test("multimodal generation transport remains an explicit configured fact", asyn
   });
   assert.equal(explicit.multimodal_generation.support_generation.api_type, "openai_responses");
 });
-
 
 test("model identity and defaults layer operator, family, concrete model, then explicit config", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
@@ -370,7 +362,6 @@ test("model identity and defaults layer operator, family, concrete model, then e
   assert.equal("format" in proxiedGlm, false);
 });
 
-
 test("adapter identity comes from model-family facts and ignores config overrides", async () => {
   const { normalizeRuntimeModelSpec } = await import("../src/normalization/spec-normalizer.js");
   const claude = normalizeRuntimeModelSpec({
@@ -384,7 +375,6 @@ test("adapter identity comes from model-family facts and ignores config override
   assert.equal(claude.adapterId, "anthropic-messages");
   assert.equal("adapter_id" in claude, false);
 });
-
 
 test("reasoning-only exhaustion is a typed terminal protocol error", async () => {
   const adapter = {
@@ -409,7 +399,6 @@ test("reasoning-only exhaustion is a typed terminal protocol error", async () =>
       error?.code === "MODEL_REASONING_RETRY_EXHAUSTED" && error?.kind === "reasoning_only",
   );
 });
-
 
 test("reasoning-only retries are exposed through the canonical attempt trace", async () => {
   let calls = 0;

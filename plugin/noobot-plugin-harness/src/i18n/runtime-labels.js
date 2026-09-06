@@ -48,12 +48,9 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestSemanticValidationLabel: "语义验收",
     acceptanceChecklistArtifactsGeneratedNotice:
       "已生成 harness 清单附件，详见 transferEnvelopes(s)。",
-    acceptanceForcedReasonRebuiltArtifacts:
-      "补建验收报告_用于附件生成",
-    acceptanceForcedReasonOverflowFallback:
-      "上下文溢出_最终输出兜底强制验收",
-    acceptanceForcedReasonNoActiveRequest:
-      "未主动请求验收_最终输出兜底",
+    acceptanceForcedReasonRebuiltArtifacts: "补建验收报告_用于附件生成",
+    acceptanceForcedReasonOverflowFallback: "上下文溢出_最终输出兜底强制验收",
+    acceptanceForcedReasonNoActiveRequest: "未主动请求验收_最终输出兜底",
     acceptanceCompletePlanChecklistLabel: "完整计划清单",
     acceptanceLatestCompleteSummaryTitle: "## 最后一次完整小结",
     acceptanceCollapseAcceptanceTitle: "Harness-验收",
@@ -63,14 +60,13 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSignalSubtaskWaitKeywords: "等待|wait",
     planningToolDescriptionFallback: "（无说明）",
     auxiliaryModelNoScriptConstraint:
-      "Harness 非主链路输出约束：禁止直接输出可执行脚本或命令；仅返回当前流程要求的内容。",
+      "Harness 非主链路不能执行工具：禁止直接输出可执行脚本或命令，也禁止输出工具调用语法；仅返回当前流程要求的内容，不得把上下文工具结果未证明的动作或结果写成已执行。",
     planningLatestUserGoalFallback: "（未获取到用户目标）",
     planningPromptToolsHeader: "可用工具（name/description），规划必须参考：",
     planningContextSummaryHeader: "规划输入上下文摘要（精简）如下，必须完整参考：",
     planningSeparateModelEmptyRelay: "无",
     planningEmptyText: "（空）",
-    planningDefaultPlanText:
-      "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
+    planningDefaultPlanText: "1. 需求澄清与约束确认\n2. 实施并验证核心改动\n3. 最终验收与交付",
     postPlanFollowupPlanning:
       "计划已完成。建议调用工具按计划推进；复杂任务建议不要试图一次完成，可按计划分批推进；具体推进方式遵守系统场景策略。",
     postPlanFollowupRevision:
@@ -85,7 +81,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStagePhaseAcceptance: "阶段验收",
     responsibilityStageFinalAcceptance: "总体验收",
     responsibilityConstraintTemplate:
-      "请根据上下文进行「{stage}」，按文本协议返回（如果有）。",
+      "只返回「{stage}」结果；有文本协议时必须遵守。不得执行或继续任务。",
     responsibilityScenarioMismatchProtocol:
       "如果初始场景与当前用户实际意图不匹配，必须在本次输出中追加且只追加一个 [{block}] 文本协议块，返回当前实际场景；scenario 使用 general|text|programming，reason 简述不匹配原因，prompt 写当前实际场景对应的简洁处理策略。协议格式：\n[{block}]\nscenario = general|text|programming\nreason = 初始场景与当前实际意图不匹配\nprompt:\n<当前实际场景对应的处理策略>\n[/{block}]",
     scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.ZH_CN].general,
@@ -102,12 +98,9 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "目标：基于前面的上下文与 system 提供的计划修正后计划清单，仅进行当前阶段验收。",
     phaseAcceptanceRequestConstraint:
       "这不是总体验收；除非上下文能证明全部完成，否则不要判断整个任务已完成。",
-    finalAcceptanceRequestGoal:
-      "目标：基于 system 提供的完整主计划上下文与最终输出进行验收。",
-    phaseAcceptanceChecklistTitle:
-      "阶段验收清单 #{index}/{total}（总体验收时必须参考）：",
-    summaryChecklistTitle:
-      "小结清单 #{index}/{total}（阶段验收时必须参考）：",
+    finalAcceptanceRequestGoal: "目标：基于 system 提供的完整主计划上下文与最终输出进行验收。",
+    phaseAcceptanceChecklistTitle: "阶段验收清单 #{index}/{total}（总体验收时必须参考）：",
+    summaryChecklistTitle: "小结清单 #{index}/{total}（阶段验收时必须参考）：",
     planningMainPromptGoal:
       "目标：根据用户需求生成宏观主计划。仅限宏观步骤，严禁输出任何子计划或实施细节。",
     planningMainPromptGoalProgrammingFast:
@@ -119,23 +112,18 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainUserGoalHeader: "【用户目标】",
     planningMainCurrentTaskGoalProtocol:
       "在计划 patch 行之前，必须用以下文本协议输出当前任务目标：[CURRENT_TASK_GOAL]\\n<由计划模型提炼的一句话当前任务目标>\\n[PLAN]",
-    planningMainConstraint:
-      "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
+    planningMainConstraint: "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     planningMainExampleHeader: "【输出示例】",
     planningMainExampleAdd: "ADD [主计划ID] [主计划内容]",
     planningRevisionPromptGoal:
       "目标：基于当前上下文与计划清单修正宏观主计划。仅限操作主计划ID，严禁涉及子计划。",
     planningRevisionStatusHeader: "【当前状态】",
-    planningRevisionCountLine:
-      "已修正次数：{revisionCount}/{maxAttempts}",
+    planningRevisionCountLine: "已修正次数：{revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "当前主计划：",
-    planningRevisionConstraint:
-      "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
+    planningRevisionConstraint: "约束：主计划ID 必须是数字（仅阿拉伯数字）。",
     planningRevisionExampleHeader: "【输出示例】",
-    planningRevisionExampleUpdate:
-      "UPDATE [主计划ID] [修改后的主计划内容]",
-    planningRevisionExampleAdd:
-      "ADD [主计划ID] [新增主计划内容]",
+    planningRevisionExampleUpdate: "UPDATE [主计划ID] [修改后的主计划内容]",
+    planningRevisionExampleAdd: "ADD [主计划ID] [新增主计划内容]",
     planningRefinementPromptGoal:
       "目标：基于修正后的主计划，仅细化指定主计划ID，生成具体可执行的子步骤。",
     planningRefinementTargetsHeader: "【修正后的主计划（目标项）】",
@@ -144,16 +132,11 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "仅允许细化上述目标ID，禁止输出其他主计划ID下的子计划。",
     planningRefinementExistingSubstepsLabel: "已有子步骤：",
     planningRefinementExampleHeader: "【输出示例】",
-    planningRefinementExampleAdd:
-      "ADD [主序号.子序号] [抽象子步骤内容A]",
-    planningRefinementExampleUpdate:
-      "UPDATE [主序号.子序号] [抽象子步骤内容B]",
-    guidanceSummaryPromptGoal:
-      "请先对已完成内容进行小结（注意是小结，不是总结）。",
-    guidanceSummaryProtocolHint:
-      "请优先使用纯文本 summary_text_v2 协议：",
-    guidanceSummarySampleRiskHigh:
-      "2. [plan=8][status=todo][risk=高][evidence=...] ...",
+    planningRefinementExampleAdd: "ADD [主序号.子序号] [抽象子步骤内容A]",
+    planningRefinementExampleUpdate: "UPDATE [主序号.子序号] [抽象子步骤内容B]",
+    guidanceSummaryPromptGoal: "请先对已完成内容进行小结（注意是小结，不是总结）。",
+    guidanceSummaryProtocolHint: "请优先使用纯文本 summary_text_v2 协议：",
+    guidanceSummarySampleRiskHigh: "2. [plan=8][status=todo][risk=高][evidence=...] ...",
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=高][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
@@ -201,12 +184,9 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     protocolPlanningMainCanonicalItemTemplate: "{action} [主计划ID] ...",
     protocolPlanningRefinementTitle:
       "【ID+PATCH 协议语法】(子计划 ID 格式固定为 [主序号.子序号]，且 [主序号] 必须属于目标主计划 ID 集合)",
-    protocolPlanningRefinementActionAdd:
-      "ADD [主序号.子序号] [细化内容]",
-    protocolPlanningRefinementActionUpdate:
-      "UPDATE [主序号.子序号] [修改后的内容]",
-    protocolPlanningRefinementActionDelete:
-      "DELETE [主序号.子序号]",
+    protocolPlanningRefinementActionAdd: "ADD [主序号.子序号] [细化内容]",
+    protocolPlanningRefinementActionUpdate: "UPDATE [主序号.子序号] [修改后的内容]",
+    protocolPlanningRefinementActionDelete: "DELETE [主序号.子序号]",
     protocolPlanningRefinementHardConstraint:
       "硬性约束：主序号与子序号都必须是阿拉伯数字正整数（如 1.1、2.3），禁止 P1.1/A2.3/一.一 等非纯数字形式。",
     protocolPlanningRefinementOneLevelConstraint:
@@ -238,10 +218,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "通用场景必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=do|verify|inspect|ask_user|final，target=对象/动作/问题，iteration_mode=smallest_slice_loop，next_slice=下一最小切片，last_check=最近验证/检查|-，result_state=done|needs_fix|blocked|unknown，artifact_path=产物/代码路径|-，validation_cmd=验证命令|-，fallback_check=替代检查|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、循环字段、可选编程字段与问题说明；没有位置时使用 file=- line=-。",
     protocolSummaryTextDeliveryRules:
       "文本场景必须对齐当前完整计划清单；必须整合上一轮小结结果，不得遗漏仍有效的旧条目；已失效/已解决的旧条目必须说明状态变化、更新原因或删除原因；evidence 必须来自上下文、工具结果或模型最终输出，禁止编造；若使用 summary_text_v2，必须在 SUMMARY_DETAIL 后追加 [NEXT_EXECUTION_SUGGESTION]，其中必须且只允许包含 1 个 [NEXT_ACTION] 文本块（action=consume|extract|draft|expand|revise|verify|ask_user|final，target=文本来源/产物/处理对象/问题，batch_mode=deliverable_text_batch，batch_scope=本轮可交付文本批次，output_goal=本轮要产出的内容，coverage_check=来源覆盖/关键事实/格式检查|-，result_state=done|needs_more_text|needs_fix|blocked|unknown，artifact_path=产物路径|-，reason=简短原因，blocking=true|false）。若无法按协议输出，返回非空文本也可，但仍需写明计划ID、状态、证据、唯一下一步动作、批次字段、产物路径或 - 与问题说明。",
-    protocolAcceptanceTitlePhase:
-      "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
-    protocolAcceptanceTitleFinal:
-      "【验收 ID+PATCH 协议：acceptance_patch_v1 / 总体验收】",
+    protocolAcceptanceTitlePhase: "【验收 ID+PATCH 协议：acceptance_patch_v1 / 阶段验收】",
+    protocolAcceptanceTitleFinal: "【验收 ID+PATCH 协议：acceptance_patch_v1 / 总体验收】",
     protocolAcceptanceOutputRule:
       "每行输出一条命令。优先使用该协议；若无法严格遵循，仍需返回非空纯文本。",
     protocolAcceptanceCommandsHeader: "命令：",
@@ -251,8 +229,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "UPDATE A[验收ID] plan=计划ID status=[pass|warn|fail] risk=[low|medium|high] evidence=[简短证据] [验收结论]",
     protocolAcceptanceCommandDelete: "DELETE A[验收ID]",
     protocolAcceptanceIdRulesHeader: "ID 规则：",
-    protocolAcceptanceIdRule1:
-      "A[验收ID] 在本次验收报告内稳定，从 A1 开始按 1 递增。",
+    protocolAcceptanceIdRule1: "A[验收ID] 在本次验收报告内稳定，从 A1 开始按 1 递增。",
     protocolAcceptanceIdRule2:
       "plan=计划ID 必须引用 system 提供的计划清单 ID；若存在子计划，可使用 2.1 这类子计划 ID。",
     protocolAcceptanceStatusHeader: "状态语义：",
@@ -260,12 +237,9 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "pass = 有证据支撑且通过；warn = 部分通过或存在低/中风险；fail = 未满足、无证据或阻塞。",
     protocolAcceptanceEvidenceRule:
       "evidence 必须简短，并来自上下文、工具结果或最终输出；不要编造证据。",
-    planRefinementTargetMainStepIndexesDescription:
-      "可选：指定要细化的主计划 ID 列表，如 [2,3]。",
-    taskAcceptanceForcedReasonOverflowInFlow:
-      "上下文溢出_流程内强制验收",
-    taskAcceptanceForcedReasonToolRequested:
-      "工具主动请求强制验收",
+    planRefinementTargetMainStepIndexesDescription: "可选：指定要细化的主计划 ID 列表，如 [2,3]。",
+    taskAcceptanceForcedReasonOverflowInFlow: "上下文溢出_流程内强制验收",
+    taskAcceptanceForcedReasonToolRequested: "工具主动请求强制验收",
   }),
   [LOCALE.EN_US]: Object.freeze({
     forcedAcceptanceHeader: "[Harness-Forced-Acceptance]",
@@ -307,12 +281,10 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceDigestSemanticValidationLabel: "Semantic Validation",
     acceptanceChecklistArtifactsGeneratedNotice:
       "Harness checklist artifacts generated. See transferEnvelopes(s) for details.",
-    acceptanceForcedReasonRebuiltArtifacts:
-      "Rebuilt acceptance report for artifact generation",
+    acceptanceForcedReasonRebuiltArtifacts: "Rebuilt acceptance report for artifact generation",
     acceptanceForcedReasonOverflowFallback:
       "Context overflow (final-output fallback forced acceptance)",
-    acceptanceForcedReasonNoActiveRequest:
-      "No active acceptance request (final-output fallback)",
+    acceptanceForcedReasonNoActiveRequest: "No active acceptance request (final-output fallback)",
     acceptanceCompletePlanChecklistLabel: "Complete plan checklist",
     acceptanceLatestCompleteSummaryTitle: "## Latest complete summary",
     acceptanceCollapseAcceptanceTitle: "Harness-Acceptance",
@@ -322,7 +294,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     acceptanceSignalSubtaskWaitKeywords: "wait|等待",
     planningToolDescriptionFallback: "(no description)",
     auxiliaryModelNoScriptConstraint:
-      "Harness auxiliary-flow output constraint: Do not directly output executable scripts or commands. Return only the content requested by the current flow.",
+      "Harness auxiliary flows cannot execute tools. Do not output executable scripts, commands, or tool-call syntax. Return only the requested content, and never claim an action or result without a supporting tool result in the supplied context.",
     planningLatestUserGoalFallback: "N/A",
     planningPromptToolsHeader: "Available tools (name/description), must be referenced:",
     planningContextSummaryHeader: "Planning context summary (compact). Must be fully considered:",
@@ -344,7 +316,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     responsibilityStagePhaseAcceptance: "phase acceptance",
     responsibilityStageFinalAcceptance: "final acceptance",
     responsibilityConstraintTemplate:
-      "Use the context to perform {stage}; return using the text protocol if one is provided.",
+      "Return only the {stage} result using the text protocol when provided. Do not execute or continue the task.",
     responsibilityScenarioMismatchProtocol:
       "If the initial scenario does not match the user's current actual intent, append exactly one [{block}] text-protocol block in this output to return the current actual scenario. Use scenario=general|text|programming; reason briefly explains the mismatch; prompt contains the concise handling policy for the current actual scenario. Protocol format:\n[{block}]\nscenario = general|text|programming\nreason = initial scenario does not match current actual intent\nprompt:\n<handling policy for the current actual scenario>\n[/{block}]",
     scenarioPolicyGeneral: HARNESS_DEFAULT_SCENARIO_POLICY_TEXTS[LOCALE.EN_US].general,
@@ -353,7 +325,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     guidanceFailurePromptTemplate:
       "Guidance triggered by tool failure threshold ({reason}). Please analyze the causes of tool failures and provide suggestions for fixes.",
     guidanceAnalysisPromptGoal:
-      "Based on the current execution result, use one natural, professional sentence to summarize the current progress so it is immediately clear what has been done, whether there are new problems, questions, or risks, and what should be done next, with clear actionable guidance. Do not execute the task yourself. Avoid fixed templates, bullet points, or mechanical phrasing. If nothing has changed, reply with \"Analyzing\".",
+      'Based on the current execution result, use one natural, professional sentence to summarize the current progress so it is immediately clear what has been done, whether there are new problems, questions, or risks, and what should be done next, with clear actionable guidance. Do not execute the task yourself. Avoid fixed templates, bullet points, or mechanical phrasing. If nothing has changed, reply with "Analyzing".',
     dynamicPolicyPromptProtocolInstruction:
       "Optional dynamic policy prompt protocol:\nJudge from the user's actual intent whether the handling style should be adjusted. Only if the current task needs a more suitable scenario policy than the default matrix, append exactly one [{block}] block; otherwise omit it. scenario must match the user's actual intent.\nThe prompt should describe only the handling style/execution policy, not the concrete task, task conclusions, plan items, file names, or business content. Keep it concise and directly usable as the unified scenario policy block for the main flow, followups, and auxiliary harness calls.\n[{block}]\nscenario = general|text|programming\nreason = short reason\nprompt:\n<policy prompt replacing the default scenario prompt>\n[/{block}]\nText example:\n[{block}]\nscenario = text\nreason = task-specific text delivery policy\nprompt:\nText-scenario dynamic policy: complex tasks must be split into files first; make each file a deliverable unit and produce/maintain files one by one; do not put the full content into one file or one response; search/check while writing and producing instead of waiting until all material is collected; it is recommended to advance one deliverable unit each turn, such as a file, section, table, summary, checklist, comparison, or stage draft, and mark sources, assumptions, or items to verify; faithfully consume external text and preserve sources; check facts, sources, and format for each batch.\n[/{block}]\nProgramming example:\n[{block}]\nscenario = programming\nreason = task-specific coding verification policy\nprompt:\nProgramming-scenario dynamic policy: read relevant code, configuration, tests, and context to quickly locate the issue and impact scope; prefer reusing existing structures, methods, fields, conventions, and test entry points instead of bypassing the established design with a new path; for complex tasks, trace the full data chain, check missing fields, duplicated facts, and the single source of truth, and remove leftovers such as old entry points, legacy fields, compatibility branches, duplicate storage, and deprecated logic; then advance through multiple smallest slices, each reversible, verifiable, and moving toward completion; do not use temporary patch-style bypasses, and do not stop after only one tiny change; verification is required for completion, so prefer relevant tests, lint, type checks, or builds, fix failures based on feedback, and retry; final response must state changed files and verification results.\n[/{block}]",
     acceptanceMainPlanContextHeader:
@@ -379,16 +351,13 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningMainUserGoalHeader: "[User Goal]",
     planningMainCurrentTaskGoalProtocol:
       "Before plan patch lines, output the current task goal using this text protocol: [CURRENT_TASK_GOAL]\\n<one concise current task goal synthesized by the planning model>\\n[PLAN]",
-    planningMainConstraint:
-      "Constraint: main_plan_id must be numeric (Arabic digits only).",
+    planningMainConstraint: "Constraint: main_plan_id must be numeric (Arabic digits only).",
     planningMainExampleHeader: "[Example]",
-    planningMainExampleAdd:
-      "ADD [main_plan_id] [main plan content]",
+    planningMainExampleAdd: "ADD [main_plan_id] [main plan content]",
     planningRevisionPromptGoal:
       "Goal: Revise the high-level main plan based on the current context and plan checklist. Only operate on main_plan_id; do not include sub-steps.",
     planningRevisionStatusHeader: "[Current Status]",
-    planningRevisionCountLine:
-      "Revision count: {revisionCount}/{maxAttempts}",
+    planningRevisionCountLine: "Revision count: {revisionCount}/{maxAttempts}",
     planningRevisionCurrentPlanLabel: "Current main plan:",
     planningRevisionConstraint: "",
     planningRevisionExampleHeader: "",
@@ -404,12 +373,9 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     planningRefinementExampleHeader: "",
     planningRefinementExampleAdd: "",
     planningRefinementExampleUpdate: "",
-    guidanceSummaryPromptGoal:
-      "Provide a guidance summary of completed items and risks.",
-    guidanceSummaryProtocolHint:
-      "Use plain-text summary_text_v2 blocks:",
-    guidanceSummarySampleRiskHigh:
-      "2. [plan=8][status=todo][risk=high][evidence=...] ...",
+    guidanceSummaryPromptGoal: "Provide a guidance summary of completed items and risks.",
+    guidanceSummaryProtocolHint: "Use plain-text summary_text_v2 blocks:",
+    guidanceSummarySampleRiskHigh: "2. [plan=8][status=todo][risk=high][evidence=...] ...",
     guidanceSummarySampleRiskHighProgramming:
       "2. [plan=8][status=todo][risk=high][evidence=...][file=src/example.js][method=handleRequest][line=10-20,35,48-52] ...",
     guidanceSummaryProgrammingRules:
@@ -449,19 +415,16 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
     structuredEnvelopeConstraintHeader: "[Constraint context]",
     protocolPlanningMainTitle: "[ID+PATCH Syntax]",
     protocolPlanningMainActionAdd: "ADD [new_main_plan_id] [main plan content]",
-    protocolPlanningMainActionUpdate:
-      "UPDATE [existing_main_plan_id] [updated content]",
+    protocolPlanningMainActionUpdate: "UPDATE [existing_main_plan_id] [updated content]",
     protocolPlanningMainActionDelete: "DELETE [existing_main_plan_id]",
     protocolPlanningMainHardConstraint:
       "Hard constraint: main_plan_id must be Arabic digits only (1,2,3...). Do NOT use P1/A1/Step1/Chinese numerals.",
-    protocolPlanningMainCanonicalTemplate:
-      "Canonical output style (recommended): {canonical}",
+    protocolPlanningMainCanonicalTemplate: "Canonical output style (recommended): {canonical}",
     protocolPlanningMainCanonicalItemTemplate: "{action} [main_plan_id] ...",
     protocolPlanningRefinementTitle:
       "[ID+PATCH Syntax] (sub-plan ID format: [main-id.sub-id], and [main-id] must belong to target main plan IDs)",
     protocolPlanningRefinementActionAdd: "ADD [main-id.sub-id] [content]",
-    protocolPlanningRefinementActionUpdate:
-      "UPDATE [main-id.sub-id] [updated content]",
+    protocolPlanningRefinementActionUpdate: "UPDATE [main-id.sub-id] [updated content]",
     protocolPlanningRefinementActionDelete: "DELETE [main-id.sub-id]",
     protocolPlanningRefinementHardConstraint:
       "Hard constraint: main-id and sub-id must be Arabic digits only (e.g., 1.1, 2.3). Do NOT use P1.1/A2.3/Chinese numerals.",
@@ -469,8 +432,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "Constraint: only one-level sub-plan IDs are allowed. Do not output IDs like 1.1.1.",
     protocolPlanningRefinementCanonical:
       "Canonical output style (recommended): ADD [main-id.sub-id] ... / UPDATE [main-id.sub-id] ... / DELETE [main-id.sub-id] ...",
-    protocolSummaryTitle:
-      "Prefer summary_patch_v1 (independent from plan patch protocol).",
+    protocolSummaryTitle: "Prefer summary_patch_v1 (independent from plan patch protocol).",
     protocolSummarySyntaxHeader: "Syntax:",
     protocolSummaryGeneralAddCommand:
       "ADD S[summary_id] plan=[main_plan_id] status=[done|in_progress|risk|todo] evidence=[brief evidence] file=[file path|-] line=[line number/range|-] [summary content]",
@@ -495,10 +457,8 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "For general scenarios, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=do|verify|inspect|ask_user|final, target=object/action/question, iteration_mode=smallest_slice_loop, next_slice=next smallest slice, last_check=latest verification/inspection|-, result_state=done|needs_fix|blocked|unknown, artifact_path=artifact/code path|-, validation_cmd=validation command|-, fallback_check=fallback check|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, loop fields, optional programming fields, and issue notes; use file=- line=- when no location exists.",
     protocolSummaryTextDeliveryRules:
       "For text scenarios, align with the current complete plan checklist; integrate the previous summary results and do not omit still-valid previous items; for obsolete/resolved previous items, explain the status change, update reason, or deletion reason; evidence must come from context, tool results, or model final output and must not be fabricated; when using summary_text_v2, append [NEXT_EXECUTION_SUGGESTION] after SUMMARY_DETAIL, and it must contain exactly one [NEXT_ACTION] text block (action=consume|extract|draft|expand|revise|verify|ask_user|final, target=text source/artifact/object/question, batch_mode=deliverable_text_batch, batch_scope=current deliverable text batch, output_goal=output to produce in this turn, coverage_check=source coverage/key facts/format check|-, result_state=done|needs_more_text|needs_fix|blocked|unknown, artifact_path=artifact path|-, reason=brief reason, blocking=true|false). If protocol cannot be followed, any non-empty text is acceptable, but still include plan ID, status, evidence, the single next action, batch fields, artifact path or -, and issue notes.",
-    protocolAcceptanceTitlePhase:
-      "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
-    protocolAcceptanceTitleFinal:
-      "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / final]",
+    protocolAcceptanceTitlePhase: "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / phase]",
+    protocolAcceptanceTitleFinal: "[Acceptance ID+PATCH Protocol: acceptance_patch_v1 / final]",
     protocolAcceptanceOutputRule:
       "Output one command per line. Prefer this protocol; if impossible, still return non-empty plain text.",
     protocolAcceptanceCommandsHeader: "Commands:",
@@ -519,9 +479,7 @@ export const I18N_RUNTIME_LABELS = Object.freeze({
       "Evidence must be short and grounded in context/tool results/final output. Do not invent evidence.",
     planRefinementTargetMainStepIndexesDescription:
       "Optional: target main-plan ID list to refine, e.g. [2,3].",
-    taskAcceptanceForcedReasonOverflowInFlow:
-      "Context overflow (in-flow forced acceptance)",
-    taskAcceptanceForcedReasonToolRequested:
-      "Tool-requested forced acceptance",
+    taskAcceptanceForcedReasonOverflowInFlow: "Context overflow (in-flow forced acceptance)",
+    taskAcceptanceForcedReasonToolRequested: "Tool-requested forced acceptance",
   }),
 });

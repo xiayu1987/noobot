@@ -20,7 +20,7 @@ import {
   resolveGuidanceSummaryPromptProtocolSelection,
   buildPhaseAcceptanceRequestPromptText,
   buildPlanningMainPrompt,
-    resolveScenarioPolicyFlagsFromContext,
+  resolveScenarioPolicyFlagsFromContext,
   buildWorkflowResponsibilityConstraintUserPrompt,
   buildDefaultScenarioPolicyText,
 } from "../../src/capabilities/handlers/shared/workflow/prompts.js";
@@ -45,8 +45,14 @@ test("summary_text_v2 parser extracts overview and detail blocks", () => {
   ].join("\n");
   const parsed = parseSummaryOverviewAndDetailFromText(text);
   assert.equal(parsed.usedV2, true);
-  assert.match(String(parsed.overviewText || ""), /\[plan=2\]\[status=done\]\[file=src\/a\.js\]\[method=bootstrap\]\[line=12\]/);
-  assert.match(String(parsed.overviewText || ""), /\[plan=8\]\[status=todo\]\[risk=高\]\[file=src\/b\.js\]\[method=runWorker\]\[line=20-35,40,55-60\]/);
+  assert.match(
+    String(parsed.overviewText || ""),
+    /\[plan=2\]\[status=done\]\[file=src\/a\.js\]\[method=bootstrap\]\[line=12\]/,
+  );
+  assert.match(
+    String(parsed.overviewText || ""),
+    /\[plan=8\]\[status=todo\]\[risk=高\]\[file=src\/b\.js\]\[method=runWorker\]\[line=20-35,40,55-60\]/,
+  );
   assert.match(String(parsed.detailText || ""), /^## 详细明细/m);
   assert.doesNotMatch(String(parsed.detailText || ""), /\[NEXT_EXECUTION_SUGGESTION\]/);
   assert.match(String(parsed.nextSuggestionText || ""), /下一步先处理风险B/);
@@ -61,19 +67,23 @@ test("summary parser falls back to plain text when blocks missing", () => {
 });
 
 test("summary patch parser accepts protocol IDs with S prefix and bracketed numbers", () => {
-  const commands = parseSummaryPatchCommands([
-    "ADD S1 plan=1 status=done 完成主计划一",
-    "UPDATE S[2] status=todo 存在风险",
-    "DELETE S3",
-    "ADD 4 plan=4 status=done 兼容旧格式",
-  ].join("\n"));
+  const commands = parseSummaryPatchCommands(
+    [
+      "ADD S1 plan=1 status=done 完成主计划一",
+      "UPDATE S[2] status=todo 存在风险",
+      "DELETE S3",
+      "ADD 4 plan=4 status=done 兼容旧格式",
+    ].join("\n"),
+  );
   assert.equal(commands.length, 4);
-  assert.deepEqual(commands.map((item) => item.id), [1, 2, 3, 4]);
+  assert.deepEqual(
+    commands.map((item) => item.id),
+    [1, 2, 3, 4],
+  );
   assert.equal(commands[0].action, "ADD");
   assert.equal(commands[1].action, "UPDATE");
   assert.equal(commands[2].action, "DELETE");
 });
-
 
 test("summary prompts require file and line in every scenario, method only in programming mode", () => {
   const normalPrompt = buildGuidanceSummaryPromptText({ locale: "zh-CN" });
@@ -128,7 +138,10 @@ test("summary prompts require file and line in every scenario, method only in pr
   assert.match(programmingProtocol, /never fabricate file\/function\/line/);
   assert.match(programmingProtocol, /file=\[file path\|-\]/);
   assert.match(programmingProtocol, /method=\[method\/function name\|-\]/);
-  assert.match(programmingProtocol, /line=\[line number\/range\|-; comma-separated multi-segments allowed\]/);
+  assert.match(
+    programmingProtocol,
+    /line=\[line number\/range\|-; comma-separated multi-segments allowed\]/,
+  );
   assert.match(programmingProtocol, /file\/method\/line or -/);
 });
 
@@ -173,8 +186,14 @@ test("summary selection matrix uses explicit scenario without workflow mode", ()
     const profile = buildGuidanceSummarySelectionProfileText(item.options);
     assert.match(profile, new RegExp(`scenario = ${item.scenario}`));
     assert.doesNotMatch(profile, new RegExp("workflow" + "_mode"));
-    assert.match(profile, new RegExp(`instruction_prompt = ${item.promptId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`));
-    assert.match(profile, new RegExp(`patch_protocol = ${item.protocolId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`));
+    assert.match(
+      profile,
+      new RegExp(`instruction_prompt = ${item.promptId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`),
+    );
+    assert.match(
+      profile,
+      new RegExp(`patch_protocol = ${item.protocolId.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")}`),
+    );
   }
 });
 
@@ -184,10 +203,16 @@ test("text scenario summary prompt consumes external text and records path/text 
     textMode: true,
   });
   assert.match(instruction, /文本场景附加建议/);
-  assert.match(instruction, /外部文本信息一旦出现在用户输入、附件、工具结果、文件或其他来源中，建议在本轮优先消费并沉淀/);
+  assert.match(
+    instruction,
+    /外部文本信息一旦出现在用户输入、附件、工具结果、文件或其他来源中，建议在本轮优先消费并沉淀/,
+  );
   assert.match(instruction, /降低后续上下文裁剪导致丢失的风险/);
   assert.match(instruction, /\[path=docs\/input\.txt\]\[text=关键文本片段\/结论\]/);
-  assert.match(instruction, /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/);
+  assert.match(
+    instruction,
+    /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/,
+  );
   assert.match(instruction, /batch_mode = deliverable_text_batch/);
   assert.doesNotMatch(instruction, /summary_patch_v1/);
 
@@ -208,7 +233,10 @@ test("text scenario summary prompt consumes external text and records path/text 
     textMode: true,
   });
   assert.match(combined, /文本场景附加建议/);
-  assert.match(combined, /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/);
+  assert.match(
+    combined,
+    /action = consume\|extract\|draft\|expand\|revise\|verify\|ask_user\|final/,
+  );
   assert.match(combined, /path=\[文件路径\|-\]/);
 });
 
@@ -310,17 +338,18 @@ test("programming scenario uses programming action policy", () => {
 });
 
 test("post-plan followup prompt uses unified action workflow strategy", () => {
-  const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-  });
+  const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {});
   assert.match(executionPrompt, /具体推进方式遵守系统场景策略/);
   assert.doesNotMatch(executionPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
   assert.doesNotMatch(executionPrompt, new RegExp("风险" + "优先策略|风险" + "优先"));
 
-  const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
-  });
+  const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {});
   assert.match(riskPrompt, /具体推进方式遵守系统场景策略/);
   assert.doesNotMatch(riskPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
-  assert.doesNotMatch(riskPrompt, new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
+  assert.doesNotMatch(
+    riskPrompt,
+    new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"),
+  );
   assert.doesNotMatch(riskPrompt, new RegExp("风险" + "优先|消除.*风险|所有风险.*解除"));
 
   const defaultPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "refinement");
@@ -349,7 +378,6 @@ test("post-plan followup prompt uses the default action strategy consistently", 
   assert.doesNotMatch(refinementPrompt, /\[HARNESS_SCENARIO_POLICY\]/);
 });
 
-
 test("text scenario post-plan followup suggests consuming external text promptly", () => {
   const executionPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
     scenario: "text",
@@ -360,10 +388,12 @@ test("text scenario post-plan followup suggests consuming external text promptly
   const riskPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "revision", {
     data: { scenario: "text" },
   });
-  assert.doesNotMatch(riskPrompt, new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"));
+  assert.doesNotMatch(
+    riskPrompt,
+    new RegExp("先处理|风险" + "优先|风险.*消除|消除.*风险|风险.*解除"),
+  );
 
-  const generalPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {
-  });
+  const generalPrompt = buildPostPlanUserFollowupPrompt("zh-CN", "planning", {});
   assert.doesNotMatch(generalPrompt, /file、line、path、text/);
 });
 
@@ -418,7 +448,7 @@ test("text scenario consumption wording is advisory instead of mandatory", () =>
       locale: "zh-CN",
       data: { userGoal: "整理长文本" },
       textMode: true,
-      }),
+    }),
   ].join("\n");
   assert.match(texts, /建议|优先|尽量|降低/);
   assert.doesNotMatch(texts, /外部文本[^。；\n]*(必须|禁止|不得)/);
@@ -451,6 +481,7 @@ test("programming prompts add action-first execution principles only in programm
   );
   assert.doesNotMatch(normalResponsibilityPrompt, /编程场景策略/);
   assert.match(normalResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
+  assert.match(normalResponsibilityPrompt, /不得执行或继续任务/);
   assert.match(normalResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
   assert.match(normalResponsibilityPrompt, /scenario = general\|text\|programming/);
   assert.doesNotMatch(normalResponsibilityPrompt, new RegExp("workflow" + "_mode"));
@@ -460,6 +491,8 @@ test("programming prompts add action-first execution principles only in programm
     "revision",
   );
   assert.match(revisionResponsibilityPrompt, /初始场景与当前用户实际意图不匹配/);
+  assert.match(revisionResponsibilityPrompt, /只返回「计划修正」结果/);
+  assert.match(revisionResponsibilityPrompt, /不得执行或继续任务/);
   assert.match(revisionResponsibilityPrompt, /\[HARNESS_DYNAMIC_POLICY_PROMPT\]/);
 
   const refinementResponsibilityPrompt = buildWorkflowResponsibilityConstraintUserPrompt(

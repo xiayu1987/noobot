@@ -10,6 +10,7 @@ import { uniquePrompt } from "../helpers/turn-scenarios.js";
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { toolEventsForTurn, waitForToolSet } from "../helpers/thinking-tool-assertions.js";
 import { findProtocolObjects, waitForCaptured } from "../helpers/websocket-capture.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 const INTERACTION_TIMEOUT_MS = 3000;
 
@@ -17,7 +18,7 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(300000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.model + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, ["harness"]);
   await sendMessage(
     noobot.page,
@@ -41,7 +42,7 @@ test("@core PBE-037 user_interaction timeout closes the real modal and is not re
           event.data?.identity?.turnScopeId === command.identity.turnScopeId &&
           event.data?.payload?.lifecycle === "pending",
       ),
-    { timeoutMs: 60000 },
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
   );
   expect(interactionRequest.data?.payload?.timeoutMs).toBe(INTERACTION_TIMEOUT_MS);
   const interaction = noobot.page.locator(".interaction-card");

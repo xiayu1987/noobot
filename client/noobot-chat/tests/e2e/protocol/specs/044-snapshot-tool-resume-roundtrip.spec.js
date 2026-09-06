@@ -32,6 +32,7 @@ import {
   toolEventsForTurn,
 } from "../helpers/thinking-tool-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 function executeScriptEvents(records = [], turnScopeId = "") {
   return toolEventsForTurn(records, turnScopeId).filter(
@@ -47,7 +48,7 @@ async function waitForExecuteScriptResults(userId, sessionId, turnScopeId, minim
       executeScriptEvents(records, turnScopeId).filter(
         (record) => record.event === "tool_call_end" && record.data?.success === true,
       ).length >= minimum,
-    { timeoutMs: 240000 },
+    { timeoutMs: PROTOCOL_TIMEOUTS.model },
   );
 }
 
@@ -116,7 +117,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
   noobot,
   protocolCapture,
 }, testInfo) => {
-  test.setTimeout(900000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.toolChain + PROTOCOL_TIMEOUTS.audit);
   await selectPlugins(noobot.page, []);
 
   const baselineCommand = `node -e "console.log(JSON.stringify({phase:'baseline',ok:true}))"`;
@@ -133,7 +134,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: baseline.identity.turnScopeId,
-    timeoutMs: 240000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
   const baselineRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
   assertCanonicalToolPairs(executeScriptEvents(baselineRecords, baseline.identity.turnScopeId), [
@@ -218,7 +219,7 @@ test("@full PBE-044 工具链两次停止继续后的快照序列化与模型恢
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: secondContinue.identity.turnScopeId,
-    timeoutMs: 360000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
   const snapshots = await readSnapshots(noobot.userId, noobot.sessionId);

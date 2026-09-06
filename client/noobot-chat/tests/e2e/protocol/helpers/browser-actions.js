@@ -5,6 +5,7 @@
  */
 import { expect } from "@playwright/test";
 import { waitForTurnTerminal } from "./scenario-assertions.js";
+import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
 async function withComposerOptionsPanel(page, callback) {
   const overlay = page.locator(".more-panel-overlay");
@@ -228,7 +229,7 @@ export async function waitForNaturalCompletion({
   capture,
   sessionId,
   turnScopeId,
-  timeoutMs = 120000,
+  timeoutMs = PROTOCOL_TIMEOUTS.model,
 }) {
   const terminal = await waitForTurnTerminal(capture, sessionId, turnScopeId, { timeoutMs });
   expect(terminal.eventType, JSON.stringify(terminal.failure || {})).toBe("turn.completed");

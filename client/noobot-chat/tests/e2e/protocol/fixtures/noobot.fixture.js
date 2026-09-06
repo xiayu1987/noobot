@@ -24,8 +24,9 @@ import {
   waitForModelInvocationTraces,
 } from "../helpers/persistence-audit.js";
 import { registerSuiteSession } from "../suite-session-cleanup.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
-const E2E_MODEL_ALIAS = "gpt_5_4";
+const E2E_MODEL_ALIAS = "GLM_5_3";
 
 export async function installE2eModelPreferences(pageOrContext) {
   const e2eUserId = readE2eCredentials().userId;
@@ -59,6 +60,7 @@ export async function installE2eModelPreferences(pageOrContext) {
         ]),
       );
       setInitialValue("noobot_selected_model", modelAlias, { force: true });
+      setInitialValue("noobot_safe_confirm", "false", { force: true });
       setInitialValue("noobot_selected_model_by_scenario", JSON.stringify(scenarioModels), {
         force: true,
       });
@@ -102,7 +104,7 @@ async function auditModelObservation({ userId, sessionId, policy, testInfo }) {
       userId,
       sessionId,
       (observed) => observed.length > 0,
-      { timeoutMs: 120000 },
+      { timeoutMs: PROTOCOL_TIMEOUTS.model },
     );
   }
 

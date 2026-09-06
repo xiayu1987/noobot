@@ -21,15 +21,51 @@ import {
 import { waitForCommand } from "../helpers/scenario-assertions.js";
 import { findProtocolObjects } from "../helpers/websocket-capture.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
-const animationId = "e2e.character.wave";
+let animationId = "";
+const animationToolArguments = Object.freeze({
+  protocol: {
+    format: "noobot.animation.protocol",
+    version: 4,
+    duration: 2,
+    loop: false,
+    scene: {
+      coordinateSystem: "normalized_world",
+      unitHeight: 1,
+      groundY: 0,
+      collisionSpace: {
+        units: "normalized_world",
+        origin: [0, 0, 0],
+        detection: "continuous",
+        colliders: [],
+      },
+      camera: { presetId: "camera.static.wide" },
+      contactConstraints: [],
+    },
+    characters: [
+      {
+        characterId: "robot",
+        assetId: "sample.three.robot-expressive",
+        rootTransform: {
+          position: [0, 0, 0],
+          rotation: [0, 0, 0, 1],
+          scale: [1, 1, 1],
+        },
+        orientationMode: "auto",
+        segments: [{ type: "native_clip", start: 0, duration: 2, clip: "Wave" }],
+      },
+    ],
+    events: [],
+  },
+});
 
 test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一卡片", async ({
   noobot,
   protocolCapture,
   browser,
 }, testInfo) => {
-  test.setTimeout(420000);
+  test.setTimeout(PROTOCOL_TIMEOUTS.toolChain);
   const { page } = noobot;
   await selectPlugins(page, ["character"]);
 
@@ -53,7 +89,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     page,
     uniquePrompt(
       testInfo,
-      `Call character_animation_generate exactly once. Use animationId ${animationId}. Animate sample.three.robot-expressive at initialPosition [0,0,0] for 2 seconds, loop false, with native clip Wave from start 0 for duration 2. After success reply exactly CASE048-OK.`,
+      `Call character_animation_generate exactly once with these exact arguments: ${JSON.stringify(animationToolArguments)}. After success reply exactly CASE048-OK.`,
     ),
   );
   const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
@@ -62,7 +98,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
     capture: protocolCapture,
     sessionId: noobot.sessionId,
     turnScopeId: command.identity.turnScopeId,
-    timeoutMs: 420000,
+    timeoutMs: PROTOCOL_TIMEOUTS.model,
   });
 
   const records = await waitForSessionExecutionEventTree(
@@ -80,10 +116,9 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
         (event) =>
           event.event === "authority_event_committed" &&
           event.data?.envelope?.protocol?.family === "plugin.artifact" &&
-          event.data?.envelope?.payload?.pluginId === "character" &&
-          event.data?.envelope?.payload?.data?.protocol?.animationId === animationId,
+          event.data?.envelope?.payload?.pluginId === "character",
       ),
-    { timeoutMs: 120000 },
+    { timeoutMs: PROTOCOL_TIMEOUTS.audit },
   );
   const toolEnd = records.find(
     (event) =>
@@ -93,9 +128,10 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   );
   expect(JSON.parse(String(toolEnd.data.result))).toMatchObject({
     ok: true,
-    animationId,
     characterAssetIds: ["sample.three.robot-expressive"],
   });
+  animationId = String(JSON.parse(String(toolEnd.data.result)).animationId || "").trim();
+  expect(animationId).toMatch(/^animation\.[a-f0-9]{32}$/);
   const authority = records.find(
     (event) =>
       event.event === "authority_event_committed" &&

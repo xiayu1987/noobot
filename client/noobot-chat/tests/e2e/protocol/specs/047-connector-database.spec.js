@@ -15,6 +15,7 @@ import {
 import { reloadAndWaitForReconnect } from "../helpers/reconnect-scenarios.js";
 import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
+import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
 
 function requiredMysqlPassword() {
   const password = String(process.env.NOOBOT_E2E_MYSQL_PASSWORD || "");
@@ -74,6 +75,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
   protocolCapture,
   request,
 }, testInfo) => {
+  test.setTimeout(PROTOCOL_TIMEOUTS.model * 2 + PROTOCOL_TIMEOUTS.audit);
   await sendMessage(
     noobot.page,
     uniquePrompt(testInfo, "provision a local connector quality-assurance session; reply with OK"),
@@ -215,7 +217,7 @@ test("@full PBE-047 添加 MySQL 连接器、选择、查询及上下文与 Sess
         noobot.userId,
         noobot.sessionId,
         (records) => records.some((record) => record.turnScopeId === command.identity.turnScopeId),
-        { timeoutMs: 120000 },
+        { timeoutMs: PROTOCOL_TIMEOUTS.model },
       );
       traces = traces.filter((record) => record.turnScopeId === command.identity.turnScopeId);
     }

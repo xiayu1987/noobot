@@ -8,11 +8,17 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { readSessionArtifact } from "noobot-agent/session";
+import { PROTOCOL_TIMEOUTS } from "./protocol-timeouts.js";
 
-const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../../..");
+const repositoryRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../../../..",
+);
 
 export function workspaceRoot() {
-  return path.resolve(process.env.NOOBOT_E2E_WORKSPACE_ROOT || path.join(repositoryRoot, "workspace"));
+  return path.resolve(
+    process.env.NOOBOT_E2E_WORKSPACE_ROOT || path.join(repositoryRoot, "workspace"),
+  );
 }
 
 export function sessionRoot(userId, sessionId) {
@@ -38,7 +44,7 @@ async function findFilesNamed(directory, filename) {
   const matches = [];
   for (const entry of entries) {
     const child = path.join(directory, entry.name);
-    if (entry.isDirectory()) matches.push(...await findFilesNamed(child, filename));
+    if (entry.isDirectory()) matches.push(...(await findFilesNamed(child, filename)));
     else if (entry.isFile() && entry.name === filename) matches.push(child);
   }
   return matches;
@@ -65,8 +71,10 @@ export async function auditSessionSummaryArtifacts(
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  const indexedSession = (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : [])
-    .find((item) => String(item?.sessionId || "").trim() === sessionId) || null;
+  const indexedSession =
+    (Array.isArray(sessionsIndex?.sessions) ? sessionsIndex.sessions : []).find(
+      (item) => String(item?.sessionId || "").trim() === sessionId,
+    ) || null;
   const report = {
     protocolVersion: 1,
     authority: "session_summary_artifact",
@@ -82,23 +90,37 @@ export async function auditSessionSummaryArtifacts(
     sessions: [],
   };
   if (expectation === "forbidden") {
-    if (summaryFiles.length) failSummaryAudit(`unprovisioned session created summary artifacts: ${sessionId}`, report);
-    if (indexedSession) failSummaryAudit(`unprovisioned session created a sessions index entry: ${sessionId}`, report);
+    if (summaryFiles.length)
+      failSummaryAudit(`unprovisioned session created summary artifacts: ${sessionId}`, report);
+    if (indexedSession)
+      failSummaryAudit(
+        `unprovisioned session created a sessions index entry: ${sessionId}`,
+        report,
+      );
     return report;
   }
   if (expectation === "unavailable") {
     const reason = indexedSession?.unavailableReason;
-    if (indexedSession?.availability !== "unavailable"
-      || !Array.isArray(indexedSession?.messages) || indexedSession.messages.length
-      || Number(indexedSession?.messageCount) !== 0 || indexedSession?.lastMessage !== null
-      || !String(reason?.code || "").trim() || !String(reason?.message || "").trim()) {
+    if (
+      indexedSession?.availability !== "unavailable" ||
+      !Array.isArray(indexedSession?.messages) ||
+      indexedSession.messages.length ||
+      Number(indexedSession?.messageCount) !== 0 ||
+      indexedSession?.lastMessage !== null ||
+      !String(reason?.code || "").trim() ||
+      !String(reason?.message || "").trim()
+    ) {
       failSummaryAudit(`invalid unavailable sessions index projection: ${sessionId}`, report);
     }
     return report;
   }
-  if (expectation !== "required") failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
+  if (expectation !== "required")
+    failSummaryAudit(`invalid summary audit expectation: ${expectation}`, report);
   if (indexedSession?.availability !== "available") {
-    failSummaryAudit(`available session is missing its canonical sessions index projection: ${sessionId}`, report);
+    failSummaryAudit(
+      `available session is missing its canonical sessions index projection: ${sessionId}`,
+      report,
+    );
   }
   if (requiredTitlePrefix && !String(indexedSession.title || "").startsWith(requiredTitlePrefix)) {
     failSummaryAudit(
@@ -106,7 +128,8 @@ export async function auditSessionSummaryArtifacts(
       report,
     );
   }
-  if (!summaryFiles.length) failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
+  if (!summaryFiles.length)
+    failSummaryAudit(`session summary artifact is missing: ${sessionId}`, report);
 
   for (const summaryFile of summaryFiles) {
     const sessionDir = path.dirname(summaryFile);
@@ -127,9 +150,14 @@ export async function auditSessionSummaryArtifacts(
       const reference = String(ref?.file || "").replaceAll("\\", "/");
       const normalizedReference = path.normalize(reference);
       const detailFile = path.resolve(sessionDir, normalizedReference);
-      if (!reference || path.isAbsolute(reference) || reference.includes("\0")
-        || !reference.startsWith("session-summary-details/")
-        || detailFile === detailsRoot || !detailFile.startsWith(`${detailsRoot}${path.sep}`)) {
+      if (
+        !reference ||
+        path.isAbsolute(reference) ||
+        reference.includes("\0") ||
+        !reference.startsWith("session-summary-details/") ||
+        detailFile === detailsRoot ||
+        !detailFile.startsWith(`${detailsRoot}${path.sep}`)
+      ) {
         failSummaryAudit(`invalid session summary detail reference: ${reference}`, report);
       }
       if (referencedFiles.has(detailFile)) {
@@ -141,15 +169,22 @@ export async function auditSessionSummaryArtifacts(
       const presentationMessageId = String(
         message?.presentationMessageId || message?.messageId || message?.id || "",
       ).trim();
-      if (detailHash !== ref?.contentHash || detail?.presentationMessageId !== presentationMessageId) {
+      if (
+        detailHash !== ref?.contentHash ||
+        detail?.presentationMessageId !== presentationMessageId
+      ) {
         failSummaryAudit(`session summary detail identity or hash mismatch: ${reference}`, report);
       }
       const toolTimeline = Array.isArray(detail?.toolTimeline) ? detail.toolTimeline : [];
-      const activityTimeline = Array.isArray(detail?.activityTimeline) ? detail.activityTimeline : [];
-      const detailEventCount = toolTimeline.reduce(
-        (count, entry = {}) => count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
-        0,
-      ) + activityTimeline.length;
+      const activityTimeline = Array.isArray(detail?.activityTimeline)
+        ? detail.activityTimeline
+        : [];
+      const detailEventCount =
+        toolTimeline.reduce(
+          (count, entry = {}) =>
+            count + Number(Boolean(entry?.call)) + Number(Boolean(entry?.resultEvent)),
+          0,
+        ) + activityTimeline.length;
       if (detailEventCount !== Number(message?.thinkingDetailCount || 0)) {
         failSummaryAudit(`session summary detail count mismatch: ${reference}`, report);
       }
@@ -227,10 +262,13 @@ export async function readSessionRuntimeEvents(userId, sessionId) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  return (await Promise.all(names.map((name) => readJsonLinesIfPresent(
-    path.join(eventsDir, name),
-    { committedFramesOnly: true },
-  )))).flat();
+  return (
+    await Promise.all(
+      names.map((name) =>
+        readJsonLinesIfPresent(path.join(eventsDir, name), { committedFramesOnly: true }),
+      ),
+    )
+  ).flat();
 }
 
 export async function readSessionExecutionEvents(userId, sessionId) {
@@ -244,9 +282,13 @@ export async function readSessionExecutionEvents(userId, sessionId) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  return (await Promise.all(names.map((name) =>
-    readJsonLinesIfPresent(path.join(executionDir, name), { committedFramesOnly: true }),
-  ))).flat();
+  return (
+    await Promise.all(
+      names.map((name) =>
+        readJsonLinesIfPresent(path.join(executionDir, name), { committedFramesOnly: true }),
+      ),
+    )
+  ).flat();
 }
 
 async function findExecutionEventSegments(directory) {
@@ -268,12 +310,16 @@ async function findExecutionEventSegments(directory) {
       segments.push(...names.map((name) => path.join(child, name)));
       continue;
     }
-    segments.push(...await findExecutionEventSegments(child));
+    segments.push(...(await findExecutionEventSegments(child)));
   }
   return segments;
 }
 
-export async function readSessionExecutionEventTree(userId, sessionId, { rootSessionId = "" } = {}) {
+export async function readSessionExecutionEventTree(
+  userId,
+  sessionId,
+  { rootSessionId = "" } = {},
+) {
   const normalizedSessionId = String(sessionId || "").trim();
   const hasExplicitRoot = Boolean(String(rootSessionId || "").trim());
   const normalizedRootSessionId = String(rootSessionId || normalizedSessionId).trim();
@@ -282,19 +328,24 @@ export async function readSessionExecutionEventTree(userId, sessionId, { rootSes
   // session. A child id alone is not a filesystem scope and must never be
   // resolved as a top-level session.
   const segments = await findExecutionEventSegments(sessionRoot(userId, normalizedRootSessionId));
-  const records = (await Promise.all(segments.sort().map((segment) =>
-    readJsonLinesIfPresent(segment, { committedFramesOnly: true }),
-  ))).flat();
+  const records = (
+    await Promise.all(
+      segments
+        .sort()
+        .map((segment) => readJsonLinesIfPresent(segment, { committedFramesOnly: true })),
+    )
+  ).flat();
   return hasExplicitRoot
     ? records.filter((record) => String(record?.sessionId || "").trim() === normalizedSessionId)
     : records;
 }
 
 export function modelInvocationTraces(records) {
-  return records.filter((record) =>
-    record.event === "model_context_trace" &&
-    record.data?.stage === "llm_invoke_messages" &&
-    record.data?.authority === "model_invoke_port",
+  return records.filter(
+    (record) =>
+      record.event === "model_context_trace" &&
+      record.data?.stage === "llm_invoke_messages" &&
+      record.data?.authority === "model_invoke_port",
   );
 }
 
@@ -302,7 +353,7 @@ export async function waitForSessionExecutionEventTree(
   userId,
   sessionId,
   predicate,
-  { timeoutMs = 120000 } = {},
+  { timeoutMs = PROTOCOL_TIMEOUTS.audit } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   let records = [];
@@ -311,32 +362,41 @@ export async function waitForSessionExecutionEventTree(
     if (predicate(records)) return records;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`execution event tree did not converge for session ${sessionId}: ${JSON.stringify(records)}`);
+  throw new Error(
+    `execution event tree did not converge for session ${sessionId}: ${JSON.stringify(records)}`,
+  );
 }
 
 export async function waitForModelInvocationTraces(
   userId,
   sessionId,
   predicate,
-  { timeoutMs = 120000 } = {},
+  { timeoutMs = PROTOCOL_TIMEOUTS.model } = {},
 ) {
   let traces = [];
-  await waitForSessionExecutionEventTree(userId, sessionId, (records) => {
-    traces = modelInvocationTraces(records);
-    return predicate(traces);
-  }, { timeoutMs });
+  await waitForSessionExecutionEventTree(
+    userId,
+    sessionId,
+    (records) => {
+      traces = modelInvocationTraces(records);
+      return predicate(traces);
+    },
+    { timeoutMs },
+  );
   return traces;
 }
 
 export async function readAttachmentIndex(userId, sessionId, attachmentSource) {
-  return readJson(path.join(
-    workspaceRoot(),
-    userId,
-    "runtime/attach/scoped",
-    sessionId,
-    attachmentSource,
-    "attachments.json",
-  ));
+  return readJson(
+    path.join(
+      workspaceRoot(),
+      userId,
+      "runtime/attach/scoped",
+      sessionId,
+      attachmentSource,
+      "attachments.json",
+    ),
+  );
 }
 
 async function findFileMutationRecords(directory) {
@@ -356,9 +416,9 @@ async function findFileMutationRecords(directory) {
           .filter((item) => item.isFile() && item.name.endsWith(".json"))
           .map((item) => item.name)
           .sort();
-        records.push(...await Promise.all(names.map((name) => readJson(path.join(child, name)))));
+        records.push(...(await Promise.all(names.map((name) => readJson(path.join(child, name))))));
       } else {
-        records.push(...await findFileMutationRecords(child));
+        records.push(...(await findFileMutationRecords(child)));
       }
     }
   }
@@ -376,7 +436,12 @@ export async function readFileMutationRecords(userId, sessionId, { rootSessionId
   return records;
 }
 
-export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, { timeoutMs = 15000 } = {}) {
+export async function waitForPluginRuntimeEvents(
+  userId,
+  sessionId,
+  predicate,
+  { timeoutMs = 15000 } = {},
+) {
   const deadline = Date.now() + timeoutMs;
   let events = [];
   while (Date.now() < deadline) {
@@ -386,10 +451,17 @@ export async function waitForPluginRuntimeEvents(userId, sessionId, predicate, {
     if (predicate(events)) return events;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`plugin runtime events did not converge for session ${sessionId}: ${JSON.stringify(events)}`);
+  throw new Error(
+    `plugin runtime events did not converge for session ${sessionId}: ${JSON.stringify(events)}`,
+  );
 }
 
-export async function waitForPluginExecutionEvents(userId, sessionId, predicate, { timeoutMs = 15000 } = {}) {
+export async function waitForPluginExecutionEvents(
+  userId,
+  sessionId,
+  predicate,
+  { timeoutMs = 15000 } = {},
+) {
   const deadline = Date.now() + timeoutMs;
   let events = [];
   while (Date.now() < deadline) {
@@ -399,7 +471,9 @@ export async function waitForPluginExecutionEvents(userId, sessionId, predicate,
     if (predicate(events)) return events;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`plugin execution events did not converge for session ${sessionId}: ${JSON.stringify(events)}`);
+  throw new Error(
+    `plugin execution events did not converge for session ${sessionId}: ${JSON.stringify(events)}`,
+  );
 }
 
 export async function readHarnessRun(userId, dialogProcessId) {
@@ -412,8 +486,12 @@ export async function readHarnessRun(userId, dialogProcessId) {
   };
 }
 
-
-export async function waitForHarnessRun(userId, dialogProcessId, predicate, { timeoutMs = 120000 } = {}) {
+export async function waitForHarnessRun(
+  userId,
+  dialogProcessId,
+  predicate,
+  { timeoutMs = PROTOCOL_TIMEOUTS.harness } = {},
+) {
   const deadline = Date.now() + timeoutMs;
   let run = null;
   while (Date.now() < deadline) {
@@ -425,5 +503,7 @@ export async function waitForHarnessRun(userId, dialogProcessId, predicate, { ti
     }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`Harness run did not converge for dialog ${dialogProcessId}: ${JSON.stringify(run)}`);
+  throw new Error(
+    `Harness run did not converge for dialog ${dialogProcessId}: ${JSON.stringify(run)}`,
+  );
 }

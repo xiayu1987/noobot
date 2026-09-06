@@ -111,7 +111,6 @@ test("invokeNoToolsTurn filters only summarized messages before llm invoke", asy
   assert.equal(loopState.modelContext.messageBlocks.incremental.at(-1), finalResponse);
 });
 
-
 test("invokeWithToolsTurn filters only summarized messages before llm invoke", async () => {
   let capturedMessages = [];
   const llm = {
@@ -190,7 +189,6 @@ test("invokeWithToolsTurn filters only summarized messages before llm invoke", a
   assert.equal(loopState.modelContext.messageBlocks.incremental.at(-1), finalAssistant);
 });
 
-
 test("invokeWithToolsTurn sends system history incremental order after before_llm_call hooks", async () => {
   let capturedMessages = [];
   const runtime = {
@@ -248,7 +246,6 @@ test("invokeWithToolsTurn sends system history incremental order after before_ll
     ["system:sys", "assistant:hist", "user:current"],
   );
 });
-
 
 test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook", async () => {
   let capturedMessages = [];
@@ -314,7 +311,6 @@ test("invokeWithToolsTurn sends a before_llm analysis relay appended by the hook
   assert.equal(relay?.chain, "auxiliary");
   assert.match(String(relay?.content || ""), /分析结果/);
 });
-
 
 test("invokeWithToolsTurn commits a separate-model summary checkpoint before model projection", async () => {
   let capturedMessages = [];
@@ -395,4 +391,3 @@ test("invokeWithToolsTurn commits a separate-model summary checkpoint before mod
     ["user:current-user", "user:summary-relay"],
   );
 });
-

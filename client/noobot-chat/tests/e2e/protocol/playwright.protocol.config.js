@@ -8,6 +8,7 @@ import { clientFilePath as path } from "@noobot/client-shared/path-resolver";
 import { addressPort, resolveRuntimeTopology } from "@noobot/runtime-topology-protocol/ports";
 import { fileURLToPath } from "node:url";
 import { validateModelObservationPolicyCoverage } from "./helpers/model-observation-policy.js";
+import { PROTOCOL_TIMEOUTS } from "./helpers/protocol-timeouts.js";
 
 const protocolRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(protocolRoot, "../../../../..");
@@ -59,7 +60,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  timeout: 420000,
+  timeout: PROTOCOL_TIMEOUTS.model,
   expect: { timeout: 15000 },
   reporter: [
     ["line"],
