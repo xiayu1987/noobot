@@ -10,6 +10,7 @@ import {
   resolveExecutionAbortMessage,
   resolveExecutionAbortReason,
 } from "@noobot/session-protocol/execution-abort";
+import { resolveErrorHeaderValue } from "../../shared/utils/error-header.js";
 
 function resolveErrorStatus(error = {}) {
   const rawStatus =
@@ -24,33 +25,15 @@ function resolveErrorStatus(error = {}) {
   return Number.isFinite(status) ? status : undefined;
 }
 
-function resolveHeaderValue(headers = null, name = "") {
-  if (!headers || !name) return undefined;
-  const normalizedName = String(name || "").trim();
-  if (!normalizedName) return undefined;
-  if (typeof headers?.get === "function") {
-    return (
-      headers.get(normalizedName) ||
-      headers.get(normalizedName.toLowerCase()) ||
-      undefined
-    );
-  }
-  return (
-    headers?.[normalizedName] ??
-    headers?.[normalizedName.toLowerCase()] ??
-    undefined
-  );
-}
-
 function resolveRequestId(error = {}) {
   return (
     error?.request_id ??
     error?.requestId ??
     error?.requestID ??
-    resolveHeaderValue(error?.headers, "x-request-id") ??
-    resolveHeaderValue(error?.response?.headers, "x-request-id") ??
-    resolveHeaderValue(error?.cause?.headers, "x-request-id") ??
-    resolveHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.response?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.cause?.headers, "x-request-id") ??
+    resolveErrorHeaderValue(error?.cause?.response?.headers, "x-request-id") ??
     undefined
   );
 }
@@ -61,8 +44,7 @@ export function buildEngineErrorPayload({
   classification,
   metadata = {},
 } = {}) {
-  const normalizedClassification =
-    classification || classifyEngineError(error);
+  const normalizedClassification = classification || classifyEngineError(error);
   const status = resolveErrorStatus(error);
   const code =
     error?.code ??

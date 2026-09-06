@@ -8,6 +8,23 @@ import { HumanMessage } from "@langchain/core/messages";
 import { appendContextMessage } from "@noobot/context-protocol/mutation/context";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 
+function requireTurnContextStores({
+  turnMessageStore,
+  modelContext,
+  dialogProcessId,
+  turnScopeId,
+  internalType,
+}) {
+  if (!turnMessageStore?.push || !modelContext || !dialogProcessId || !turnScopeId) {
+    throw new Error(
+      "Turn context control message requires canonical Turn identity and message stores",
+    );
+  }
+  if (!internalType) {
+    throw new TypeError("Turn context control message internalType is required");
+  }
+}
+
 export function appendTurnContextControlMessage({
   runtime = null,
   loopState = null,
@@ -19,14 +36,13 @@ export function appendTurnContextControlMessage({
   const dialogProcessId = String(loopState?.dialogProcessId || "").trim();
   const turnScopeId = String(modelContext?.activeTurnIdentity?.turnScopeId || "").trim();
   const normalizedInternalType = String(internalType || "").trim();
-  if (!turnMessageStore?.push || !modelContext || !dialogProcessId || !turnScopeId) {
-    throw new Error(
-      "Turn context control message requires canonical Turn identity and message stores",
-    );
-  }
-  if (!normalizedInternalType) {
-    throw new TypeError("Turn context control message internalType is required");
-  }
+  requireTurnContextStores({
+    turnMessageStore,
+    modelContext,
+    dialogProcessId,
+    turnScopeId,
+    internalType: normalizedInternalType,
+  });
   const messageUid = createSessionMessageUid();
   const additionalKwargs = {
     noobotMessageId: messageUid,

@@ -237,11 +237,14 @@ function applyMessagePresentation(target, message) {
   applyMessageMonotonicity(target, message);
 }
 
-function applyMessageRuntimeFields(target, message) {
+function applyMessageThinkingTiming(target, message) {
   const thinkingStartedAt = String(message?.thinkingStartedAt || "").trim();
   const thinkingFinishedAt = String(message?.thinkingFinishedAt || "").trim();
   if (thinkingStartedAt) target.thinkingStartedAt = thinkingStartedAt;
   if (thinkingFinishedAt) target.thinkingFinishedAt = thinkingFinishedAt;
+}
+
+function applyMessagePluginFields(target, message) {
   if (message?.pluginMessage === true) target.pluginMessage = true;
   if (
     message?.pluginMeta &&
@@ -250,6 +253,9 @@ function applyMessageRuntimeFields(target, message) {
   ) {
     target.pluginMeta = message.pluginMeta;
   }
+}
+
+function applyAnthropicMessageContent(target, message) {
   // Anthropic Messages thinking/tool blocks are protocol state, not a
   // presentation preview. Assistant history must retain the exact block
   // array so a resumed tool turn can echo thinking signatures unchanged.
@@ -258,6 +264,9 @@ function applyMessageRuntimeFields(target, message) {
       block && typeof block === "object" ? { ...block } : block,
     );
   }
+}
+
+function applyOpenAiMessageMetadata(target, message) {
   if (
     target.role === "assistant" &&
     message?.modelAdditionalKwargs?.reasoning &&
@@ -280,9 +289,20 @@ function applyMessageRuntimeFields(target, message) {
       output: message.modelResponseMetadata.output.map((item) => ({ ...item })),
     };
   }
+}
+
+function applyMessageCompletionFields(target, message) {
   for (const key of ["done", "pending", "error"]) {
     if (message?.[key] !== undefined) target[key] = message[key];
   }
+}
+
+function applyMessageRuntimeFields(target, message) {
+  applyMessageThinkingTiming(target, message);
+  applyMessagePluginFields(target, message);
+  applyAnthropicMessageContent(target, message);
+  applyOpenAiMessageMetadata(target, message);
+  applyMessageCompletionFields(target, message);
 }
 
 function applyMessageToolFields(target, message) {
