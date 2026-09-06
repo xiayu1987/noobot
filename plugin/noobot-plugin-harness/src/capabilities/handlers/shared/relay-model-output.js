@@ -71,7 +71,17 @@ export function relaySeparateModelOutputAsUserMessage(
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.PLANNING,
       event: SHARED_EVENTS.separateModelRelaySkippedTurnEnded,
-      detail: { purpose: String(purpose || "").trim() || "unknown" },
+      detail: {
+        purpose: String(purpose || "").trim() || "unknown",
+        dialogProcessId: String(ctx?.dialogProcessId || "").trim() || undefined,
+        activeDialogProcessId:
+          String(
+            ctx?.agentContext?.bindings?.extensions?.harness?.state?.signals
+              ?.activeDialogProcessId || "",
+          ).trim() || undefined,
+        agentTurnEnded:
+          ctx?.agentContext?.bindings?.extensions?.harness?.state?.flags?.agentTurnEnded === true,
+      },
     });
     return false;
   }

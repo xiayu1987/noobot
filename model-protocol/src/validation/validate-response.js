@@ -21,7 +21,17 @@ const RESPONSE_KEYS = Object.freeze([
   "result",
   "execution",
 ]);
-const OUTPUT_KEYS = Object.freeze(["text", "reasoning", "toolCalls", "finishReason", "usage"]);
+// Provider content blocks are part of the canonical response when the
+// adapter must preserve structured output (for example Anthropic thinking
+// and tool_use blocks) for the following request.
+const OUTPUT_KEYS = Object.freeze([
+  "text",
+  "reasoning",
+  "toolCalls",
+  "finishReason",
+  "usage",
+  "content",
+]);
 const EXECUTION_KEYS = Object.freeze(["attemptCount", "attempts", "model", "provider"]);
 const ATTEMPT_KEYS = Object.freeze(["attempt", "status", "kind", "streaming", "output", "error"]);
 const ATTEMPT_STATUSES = new Set(["completed", "retry", "failed"]);
@@ -43,6 +53,13 @@ function rejectUnknownKeys(value, allowedKeys, path) {
 function validateOutput(value, path = "model response.output") {
   const output = requirePlainObject(value, path);
   rejectUnknownKeys(output, OUTPUT_KEYS, path);
+  if (
+    output.content !== undefined &&
+    typeof output.content !== "string" &&
+    !Array.isArray(output.content)
+  ) {
+    throw new TypeError(`${path}.content must be a string or array`);
+  }
   for (const key of ["text", "reasoning", "finishReason"]) {
     if (typeof output[key] !== "string") throw new TypeError(`${path}.${key} must be a string`);
   }

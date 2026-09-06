@@ -227,6 +227,42 @@ test("analysis waits for the separate model before the before_llm_call hook comp
   );
 });
 
+test("separate_model analysis is not successful when relay injection is blocked", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({ pending: { analysis: true } });
+  agentContext.payload.harness.state.flags.agentTurnEnded = true;
+  const ctx = {
+    messages: [{ role: "assistant", content: "工具已完成" }],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => createTestModelResponse("分析结果"),
+    },
+  };
+
+  const result = await handler({
+    capability: "guidance",
+    point: "agent.before_llm_call",
+    ctx,
+    meta,
+  });
+
+  assert.equal(result.changed, false);
+  assert.equal(
+    ctx.modelContext.messageBlocks.incremental.some((item = {}) =>
+      String(item?.content || "").includes("分析结果"),
+    ),
+    false,
+  );
+  const executionLog = agentContext.payload.harness.logs.guidance.find(
+    (item = {}) => item?.event === "workflow_execution_result",
+  );
+  assert.equal(executionLog?.detail?.executedPrimary, false);
+  assert.equal(executionLog?.detail?.changed, false);
+});
+
 test("separate_model guidance pending triggers guidance invoker without analysis flow", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   const invocations = [];

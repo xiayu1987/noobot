@@ -13,6 +13,10 @@ import {
 } from "@noobot/context-protocol";
 import { ensureTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import { appendMessage } from "../../src/core/message-store.js";
+import {
+  isHarnessAgentTurnEnded,
+  markHarnessTurnLifecycle,
+} from "../../src/capabilities/handlers/shared/runtime/lifecycle-utils.js";
 
 function withModelContext(ctx = {}) {
   return ensureTestHookContext(ctx);
@@ -29,6 +33,27 @@ function resolveFromBlocks({ ctx = {} } = {}) {
     incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
   }).messages;
 }
+
+test("before_llm_call reopens the active harness turn after stale terminal state", () => {
+  const ctx = withModelContext({
+    dialogProcessId: "dialog-1",
+    agentContext: {
+      payload: {
+        harness: {
+          state: {
+            flags: { agentTurnEnded: true },
+            signals: { activeDialogProcessId: "dialog-1" },
+          },
+        },
+      },
+    },
+    messages: [],
+  });
+
+  assert.equal(isHarnessAgentTurnEnded(ctx), true);
+  markHarnessTurnLifecycle("agent.before_llm_call", ctx);
+  assert.equal(isHarnessAgentTurnEnded(ctx), false);
+});
 
 test("capability runtime runs global bootstrap before capability handlers", async () => {
   const calls = [];
