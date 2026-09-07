@@ -152,13 +152,18 @@ async function collectFallbackMatches({
   return { matches, truncated: matches.length >= maxCount };
 }
 
-async function resolveSearchMatches({ matches, mountedSearch, searchPathRef, agentContext }) {
+async function resolveSearchMatches({
+  matches,
+  searchRoot,
+  searchPathRef,
+  agentContext,
+}) {
   const resolvedMatches = await Promise.all(
     matches.map(async (match) => {
       const relativeMatchPath = String(match?.filePath || "").trim();
-      const matchedPath = mountedSearch
-        ? path.join(searchPathRef.path, relativeMatchPath)
-        : relativeMatchPath;
+      const matchedPath = searchPathRef.view === "host"
+        ? path.resolve(searchRoot, relativeMatchPath)
+        : path.join(searchPathRef.path, relativeMatchPath);
       if (!matchedPath) return { match, resolution: null };
       const resolution = await resolveAuthorizedUserWorkspaceFilePath({
         filePath: matchedPath,
@@ -227,15 +232,10 @@ async function searchFilesSource({
     target: projectToolPathRef(searchPathRef),
     reason: "The final normalized resource requires confirmation under the server path policy.",
   });
-  const workspaceResolution = await resolveAuthorizedUserWorkspaceFilePath({
-    filePath: ".",
-    agentContext,
-    fieldName: "workspace",
-    mustExist: true,
-    capability: PATH_CAPABILITIES.FILE_SEARCH,
-  });
-  const mountedSearch = Boolean(searchResolution.toolPath.executionRoot);
-  const searchProjectionRoot = mountedSearch ? searchRoot : workspaceResolution.executionPath;
+  // Search implementations return paths relative to the directory they scan.
+  // Keep that same root for host searches so matches outside the user's workspace
+  // can be resolved back to their authorized host paths.
+  const searchProjectionRoot = searchRoot;
   const maxCount = toPositiveInt(maxResults, DEFAULT_SEARCH_MAX_RESULTS, 1, 500);
   let result = null;
   if (await hasRipgrep()) {
@@ -269,7 +269,7 @@ async function searchFilesSource({
   });
   const resolved = await resolveSearchMatches({
     matches: result.matches || [],
-    mountedSearch,
+    searchRoot,
     searchPathRef,
     agentContext,
   });
