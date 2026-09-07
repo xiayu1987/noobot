@@ -61,6 +61,31 @@ test("search: 支持搜索文件和文本", async () => {
   assert.equal(textResult.matches[0].line, 2);
 });
 
+test("search: super admin can search an external host directory", async () => {
+  const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-workspace-"));
+  const externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-external-"));
+  await fs.mkdir(path.join(externalRoot, "src"), { recursive: true });
+  const externalFile = path.join(externalRoot, "src", "external.js");
+  await fs.writeFile(externalFile, "external-search-token\n", "utf8");
+
+  const agentContext = buildAgentContext(basePath, "admin", {
+    runtime: { systemRuntime: { isSuperUser: true } },
+  });
+  const tool = createFileTool({ agentContext }).find((item) => item?.name === "search");
+  const result = parseToolResult(
+    await tool.invoke({
+      riskLevel: "low",
+      source: "files",
+      query: "external-search-token",
+      path: externalRoot,
+    }),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.matches.length, 1);
+  assert.deepEqual(result.matches[0].path, { view: "host", path: externalFile });
+});
+
 test("search: global sandbox mount is searched through its logical target", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-workspace-"));
   const mountedRoot = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-search-mounted-"));
