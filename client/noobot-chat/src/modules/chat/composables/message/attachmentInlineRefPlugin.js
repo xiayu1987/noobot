@@ -15,9 +15,9 @@ const REF_TERMINATOR_RE = /[\s<>"'`)\]}]/;
 
 function escapeHtmlAttribute(value = "") {
   return String(value || "")
-  .replace(/&/g, "&amp;")
+    .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
-  .replace(/</g, "&lt;")
+    .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 }
 
@@ -56,7 +56,7 @@ export function buildAttachmentRefIndex(attachmentItems = [], { resolveHref } = 
     }
     const href = String(resolveHref(attachmentItem) || "").trim();
     if (!href) continue;
-  index.set(key, {
+    index.set(key, {
       href,
       name: String(attachmentItem?.name || attachmentItem?.fileName || "").trim(),
     });
@@ -86,7 +86,7 @@ function renderMissingChip({ label, reason }) {
     ` data-attachment-missing-reason="${escapeHtmlAttribute(reason)}"`,
     ` title="${escapeHtmlAttribute(reason)}">`,
     `<span class="noobot-attachment-chip__icon" aria-hidden="true">📎</span>`,
-  `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
+    `<span class="noobot-attachment-chip__name">${escapeHtmlAttribute(label)}</span>`,
     "</span>",
   ].join("");
 }
@@ -154,7 +154,7 @@ function rewriteAttachmentLinkTokens(state) {
       const token = children[index];
       if (token.type !== "link_open") continue;
       const href = String(token.attrGet?.("href") || "");
-   if (!href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) continue;
+      if (!href.startsWith(ATTACHMENT_IDENTITY_REF_PREFIX)) continue;
       const identity = resolveIdentity(href);
       if (!identity) continue;
 
@@ -169,9 +169,9 @@ function rewriteAttachmentLinkTokens(state) {
           if (depth === 0) break;
         } else if (typeof cursorToken.content === "string") {
           labelParts.push(cursorToken.content);
-   }
-      closeIndex += 1;
-   }
+        }
+        closeIndex += 1;
+      }
       if (depth !== 0) continue;
 
       const replacement = new state.Token(ATTACHMENT_INLINE_TOKEN, "", 0);
@@ -189,7 +189,7 @@ function renderAttachmentToken(tokens, idx, options, env) {
   const matched = lookupAttachment(env, identity);
   if (!matched) {
     return renderMissingChip({
- label: label || identity.attachmentId,
+      label: label || identity.attachmentId,
       reason: "attachment_not_available",
     });
   }

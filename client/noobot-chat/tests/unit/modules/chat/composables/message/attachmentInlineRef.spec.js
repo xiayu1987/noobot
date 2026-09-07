@@ -76,11 +76,14 @@ describe("attachment inline ref rendering", () => {
   it("resolves refs nested inside collapse blocks", () => {
     const { renderMarkdown } = useMarkdownRenderer();
 
-    const html = renderMarkdown([
-      '<<<NOOBOT_COLLAPSE:start kind="detail" title="detail" default="open">>>',
-      REF,
-      '<<<NOOBOT_COLLAPSE:end kind="detail">>>',
-    ].join("\n"), { attachmentRefIndex: buildIndex() });
+    const html = renderMarkdown(
+      [
+        '<<<NOOBOT_COLLAPSE:start kind="detail" title="detail" default="open">>>',
+        REF,
+        '<<<NOOBOT_COLLAPSE:end kind="detail">>>',
+      ].join("\n"),
+      { attachmentRefIndex: buildIndex() },
+    );
 
     expect(html).toContain("noobot-attachment-chip");
     expect(html).toContain("报告.pdf");
