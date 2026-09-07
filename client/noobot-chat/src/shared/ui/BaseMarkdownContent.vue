@@ -10,10 +10,15 @@ import { useMermaidRender } from "../composables/useMermaidRender.js";
 const props = defineProps({
   content: { type: String, default: "" },
   renderMarkdown: { type: Function, required: true },
+  attachmentRefIndex: { type: Map, default: null },
 });
 
 const { mermaidHostRef } = useMermaidRender();
-const renderedHtml = computed(() => props.renderMarkdown(String(props.content || "")));
+const renderedHtml = computed(() =>
+  props.renderMarkdown(String(props.content || ""), {
+    attachmentRefIndex: props.attachmentRefIndex,
+  }),
+);
 
 function getHtml() {
   return String(mermaidHostRef.value?.innerHTML || "");
@@ -156,5 +161,36 @@ defineExpose({ getHtml });
   max-width: 100%;
   height: auto;
   display: block;
+}
+
+.base-markdown-content :deep(.noobot-attachment-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--noobot-space-xs);
+  max-width: 100%;
+  padding: 2px var(--noobot-space-sm);
+  border: 1px solid var(--noobot-msg-file-card-border);
+  border-radius: var(--noobot-radius-sm);
+  background: var(--noobot-msg-file-card-bg);
+  font-size: var(--noobot-font-size-sm);
+  line-height: 1.5;
+  text-decoration: none;
+  vertical-align: baseline;
+}
+
+.base-markdown-content :deep(a.noobot-attachment-chip:hover) {
+  background: var(--noobot-accent-soft);
+}
+
+.base-markdown-content :deep(.noobot-attachment-chip__name) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.base-markdown-content :deep(.noobot-attachment-chip--missing) {
+  opacity: 0.6;
+  cursor: not-allowed;
+  text-decoration: line-through;
 }
 </style>
