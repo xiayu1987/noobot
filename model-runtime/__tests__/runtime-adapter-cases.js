@@ -465,7 +465,7 @@ test("Anthropic Messages adapter sends native endpoint and exposes cache usage",
       credential: "sk-test",
       modelSpec: {
         model: "claude-fable-5-1",
-        base_url: "https://api.anthropic.com",
+        base_url: `https://api.anthropic.com${"/".repeat(32)}`,
         reasoning_effort: "none",
         reasoning_effort_options: ["none", "low", "medium", "high"],
         reasoning_effort_parameter: "reasoning_effort",
