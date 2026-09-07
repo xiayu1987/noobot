@@ -22,6 +22,7 @@ import { createDesktopWindowManager } from "./runtime/window.js";
 import { createDesktopBootstrap } from "./runtime/bootstrap.js";
 import { createStartupConfigRequesters, registerStartupIpcHandlers } from "./ipc/startup.js";
 import { createDependencyProcessTools } from "./dependencies/process.js";
+import { resolveDesktopClientUrl } from "./runtime/topology.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,9 +50,7 @@ const agentProxyOrigin = String(
   process.env.NOOBOT_AGENT_PROXY_URL || `http://127.0.0.1:${agentProxyPort}`,
 ).replace(/\/$/, "");
 const agentProxyHealthUrl = `${agentProxyOrigin}/health`;
-const defaultClientUrl =
-  process.env.NOOBOT_CLIENT_URL ||
-  `http://127.0.0.1:${runtimePorts.clientAddr.replace(/^.*:/, "")}`;
+const defaultClientUrl = resolveDesktopClientUrl(process.env);
 const startupTimeoutMs = Number.parseInt(process.env.NOOBOT_STARTUP_TIMEOUT_MS || "60000", 10);
 const pollIntervalMs = Number.parseInt(process.env.NOOBOT_STARTUP_POLL_MS || "1000", 10);
 const startupDebugEnabled = /^(1|true|yes|on)$/i.test(
