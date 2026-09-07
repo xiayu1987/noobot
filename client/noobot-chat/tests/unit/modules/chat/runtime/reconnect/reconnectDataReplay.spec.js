@@ -23,7 +23,12 @@ import {
 
 const REPLAY_ORDERING_DOMAIN = "turn-lifecycle";
 
-function snapshot({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, state = TURN_STATE.PROCESSING } = {}) {
+function snapshot({
+  sessionId = "s-1",
+  turnScopeId = "turn-1",
+  sequence = 4,
+  state = TURN_STATE.PROCESSING,
+} = {}) {
   return createTurnLifecycleSnapshot({
     commandId: `snapshot-${turnScopeId}`,
     sessionId,
@@ -42,11 +47,18 @@ function snapshot({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, sta
       executionState: state === TURN_STATE.PROCESSING ? "sending" : "completed",
       revision: 2,
       sequence,
+      startedAt: "2026-01-01T00:00:00.000Z",
     },
   });
 }
 
-function batch({ sessionId = "s-1", turnScopeId = "turn-1", sequence = 4, events = [], pendingInteractions = [] } = {}) {
+function batch({
+  sessionId = "s-1",
+  turnScopeId = "turn-1",
+  sequence = 4,
+  events = [],
+  pendingInteractions = [],
+} = {}) {
   const baseline = snapshot({ sessionId, turnScopeId, sequence });
   return createReplayBatch({
     sessionId,
@@ -92,7 +104,12 @@ function lifecycleEvent(sequence) {
       messageId: payload.messageId,
     },
     causality: { commandId: payload.commandId },
-    ordering: { domain: REPLAY_ORDERING_DOMAIN, scopeId: payload.sessionId, sequence, revision: payload.revision },
+    ordering: {
+      domain: REPLAY_ORDERING_DOMAIN,
+      scopeId: payload.sessionId,
+      sequence,
+      revision: payload.revision,
+    },
     producer: { type: "test", id: "reconnect-data-replay" },
     occurredAt: payload.occurredAt,
     payload,
@@ -155,27 +172,32 @@ describe("applyReconnectDataReplay", () => {
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
       ...f,
     });
-    expect(f.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(expect.objectContaining({
-      protocolVersion: baseline.protocolVersion,
-      eventType: baseline.eventType,
-      sessionId: baseline.sessionId,
-      sequence: baseline.sequence,
-      activeTurnScopeId: baseline.activeTurnScopeId,
-    }));
+    expect(f.applyTurnLifecycleSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        protocolVersion: baseline.protocolVersion,
+        eventType: baseline.eventType,
+        sessionId: baseline.sessionId,
+        sequence: baseline.sequence,
+        activeTurnScopeId: baseline.activeTurnScopeId,
+      }),
+    );
     expect(f.applyTurnLifecycleEnvelope).toHaveBeenCalledWith(event);
-    expect(f.applyTurnLifecycleSnapshot.mock.invocationCallOrder[0])
-      .toBeLessThan(f.applyTurnLifecycleEnvelope.mock.invocationCallOrder[0]);
+    expect(f.applyTurnLifecycleSnapshot.mock.invocationCallOrder[0]).toBeLessThan(
+      f.applyTurnLifecycleEnvelope.mock.invocationCallOrder[0],
+    );
   });
 
   it("rejects the removed dialog message replay branch", async () => {
     const f = fixture();
     await applyReconnectDataReplay({
       reconnectData: {
-        sessions: [{
-          sessionId: "s-1",
-          replayBatch: batch({ sequence: 4 }),
-          dialogProcesses: [],
-        }],
+        sessions: [
+          {
+            sessionId: "s-1",
+            replayBatch: batch({ sequence: 4 }),
+            dialogProcesses: [],
+          },
+        ],
       },
       ...f,
     });
@@ -193,7 +215,10 @@ describe("applyReconnectDataReplay", () => {
       reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ events: [event] }) }] },
       ...f,
     });
-    expect(f.reconcileSessionState).toHaveBeenCalledWith({ sessionId: "s-1", reason: "invalid_replay_batch" });
+    expect(f.reconcileSessionState).toHaveBeenCalledWith({
+      sessionId: "s-1",
+      reason: "invalid_replay_batch",
+    });
     expect(f.applyTurnLifecycleEnvelope).not.toHaveBeenCalled();
   });
 
@@ -201,7 +226,11 @@ describe("applyReconnectDataReplay", () => {
     const interaction = pendingInteraction("request-1");
     const f = fixture();
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
+      reconnectData: {
+        sessions: [
+          { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
+        ],
+      },
       ...f,
     });
     expect(f.applyPendingInteraction).toHaveBeenCalledWith({
@@ -215,12 +244,22 @@ describe("applyReconnectDataReplay", () => {
     const interaction = pendingInteraction("request-order");
     const order = [];
     const f = fixture({
-      ensureReconnectSessionActive: vi.fn(async () => { order.push("activate"); }),
-      hydrateActiveSessionBeforeReplay: vi.fn(async () => { order.push("hydrate"); }),
-      applyPendingInteraction: vi.fn(async () => { order.push("interaction"); }),
+      ensureReconnectSessionActive: vi.fn(async () => {
+        order.push("activate");
+      }),
+      hydrateActiveSessionBeforeReplay: vi.fn(async () => {
+        order.push("hydrate");
+      }),
+      applyPendingInteraction: vi.fn(async () => {
+        order.push("interaction");
+      }),
     });
     await applyReconnectDataReplay({
-      reconnectData: { sessions: [{ sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) }] },
+      reconnectData: {
+        sessions: [
+          { sessionId: "s-1", replayBatch: batch({ pendingInteractions: [interaction] }) },
+        ],
+      },
       ...f,
     });
     expect(order).toEqual(["activate", "hydrate", "interaction"]);

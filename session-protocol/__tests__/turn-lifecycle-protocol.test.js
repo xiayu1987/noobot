@@ -110,10 +110,32 @@ test("turn lifecycle snapshot carries authoritative replacement tombstones", () 
         presentationMessageId: "presentation-old",
         revision: 1,
         sequence: 7,
+        startedAt: "2026-08-02T09:59:00.000Z",
       },
     }).errors,
     ["replaced_turn_still_materialized"],
   );
+});
+
+test("active Turn snapshot requires its authoritative start time", () => {
+  const snapshot = createTurnLifecycleSnapshot({
+    commandId: "snapshot-active-timing",
+    sessionId: "session-active-timing",
+    sequence: 1,
+    activeTurnScopeId: "turn-active",
+    activeTurn: {
+      turnScopeId: "turn-active",
+      messageId: "message-active",
+      presentationMessageId: "presentation-active",
+      state: TURN_STATE.PROCESSING,
+      revision: 1,
+      sequence: 1,
+    },
+  });
+
+  assert.deepEqual(validateTurnLifecycleSnapshot(snapshot).errors, [
+    "missing_active_turn_started_at",
+  ]);
 });
 
 test("turn lifecycle receipt identifies one authoritative delivery without carrying state", () => {

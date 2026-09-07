@@ -71,6 +71,8 @@ export function lifecycle(
       action,
       executionState,
       capabilities: { actionLocked: true, canStop },
+      startedAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:01.000Z",
     }),
   );
 }
@@ -109,9 +111,9 @@ export function settleTerminal(
     createTurnTerminalResolution({
       commandId: `terminal-resolution-${terminalResolutionSequence}`,
       sessionId,
-    turnScopeId,
-    resolved: true,
-    aggregateVersion: 1,
+      turnScopeId,
+      resolved: true,
+      aggregateVersion: 1,
       turn: {
         turnScopeId,
         dialogProcessId,
@@ -147,6 +149,7 @@ export function snapshot(overrides = {}) {
       ? {
           messageId: `msg-event-${turn.turnScopeId}`,
           presentationMessageId: `msg-${turn.turnScopeId}`,
+          startedAt: "2026-01-01T00:00:00.000Z",
           ...turn,
         }
       : null;
@@ -165,6 +168,7 @@ export function snapshot(overrides = {}) {
           summaryVersion: 0,
           failure: null,
           capabilities: { actionLocked: true, canStop: true },
+          startedAt: "2026-01-01T00:00:00.000Z",
           createdAt: "2026-01-01T00:00:00.000Z",
           updatedAt: "2026-01-01T00:00:01.000Z",
         }

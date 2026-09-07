@@ -7,34 +7,58 @@ import { describe, expect, it } from "vitest";
 import { computed, nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
-import { applyTurnTerminalResolution, selectTurnMessageRuntime } from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
+import {
+  applyTurnTerminalResolution,
+  selectTurnMessageRuntime,
+} from "../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
 import { SESSION_RUN_EVENT } from "../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
 import { createTurnTerminalResolution } from "@noobot/session-protocol";
 
 function settleCompleted(registry, { sessionId, turnScopeId, updatedAt }) {
   const revision = 100;
   const completionCommitId = `commit-${turnScopeId}`;
-  return applyTurnTerminalResolution(registry, createTurnTerminalResolution({
-    commandId: `resolve-${turnScopeId}`,
-    sessionId,
-    turnScopeId,
-    resolved: true,
-    aggregateVersion: 1,
-    turn: { sessionId, turnScopeId, state: "completed", phase: "completion", revision, sequence: revision,
-      completionCommitId, summaryVersion: revision, updatedAt, capabilities: { actionLocked: false, canStop: false } },
-    materialization: { completionCommitId, summaryVersion: revision, revision, sequence: revision,
-      terminalStatus: { status: "completed" }, messages: [] },
-  }));
+  return applyTurnTerminalResolution(
+    registry,
+    createTurnTerminalResolution({
+      commandId: `resolve-${turnScopeId}`,
+      sessionId,
+      turnScopeId,
+      resolved: true,
+      aggregateVersion: 1,
+      turn: {
+        sessionId,
+        turnScopeId,
+        state: "completed",
+        phase: "completion",
+        revision,
+        sequence: revision,
+        completionCommitId,
+        summaryVersion: revision,
+        updatedAt,
+        capabilities: { actionLocked: false, canStop: false },
+      },
+      materialization: {
+        completionCommitId,
+        summaryVersion: revision,
+        revision,
+        sequence: revision,
+        terminalStatus: { status: "completed" },
+        messages: [],
+      },
+    }),
+  );
 }
 
 describe("useChatStore turn runtime actions", () => {
   it("publishes a new registry root after the first runtime event so selectors recompute", async () => {
     setActivePinia(createPinia());
     const store = useChatStore();
-    const runtime = computed(() => selectTurnMessageRuntime(store.turnRuntimeRegistry, {
-      sessionId: "session-1",
-      turnScopeId: "client-turn:abc:def",
-    }));
+    const runtime = computed(() =>
+      selectTurnMessageRuntime(store.turnRuntimeRegistry, {
+        sessionId: "session-1",
+        turnScopeId: "client-turn:abc:def",
+      }),
+    );
 
     expect(runtime.value.startedAt).toBe("");
     const before = store.turnRuntimeRegistry;
@@ -42,6 +66,7 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
+      thinkingStartedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     await nextTick();
@@ -55,12 +80,14 @@ describe("useChatStore turn runtime actions", () => {
   it("keeps the preallocated Session identity stable across backend events", () => {
     setActivePinia(createPinia());
     const store = useChatStore();
-    store.sessions = [{
-      sessionId: "session-1",
-      isLocal: true,
-      title: "New session",
-      messages: [],
-    }];
+    store.sessions = [
+      {
+        sessionId: "session-1",
+        isLocal: true,
+        title: "New session",
+        messages: [],
+      },
+    ];
     store.activeSessionId = "session-1";
 
     store.applyTurnRuntimeEvent({
@@ -99,6 +126,7 @@ describe("useChatStore turn runtime actions", () => {
       type: SESSION_RUN_EVENT.LOCAL_SEND_STARTED,
       sessionId: "session-1",
       turnScopeId: "client-turn:abc:def",
+      thinkingStartedAt: "2026-07-21T10:00:00.000Z",
       updatedAt: "2026-07-21T10:00:00.000Z",
     });
     const afterSending = store.turnRuntimeRegistry;
@@ -125,8 +153,11 @@ describe("useChatStore turn runtime actions", () => {
       turnScopeId: "client-turn:abc:def",
       updatedAt: "2026-07-21T10:00:59.000Z",
     });
-    settleCompleted(store.turnRuntimeRegistry, { sessionId: "session-1", turnScopeId: "client-turn:abc:def",
-      updatedAt: "2026-07-21T10:01:00.000Z" });
+    settleCompleted(store.turnRuntimeRegistry, {
+      sessionId: "session-1",
+      turnScopeId: "client-turn:abc:def",
+      updatedAt: "2026-07-21T10:01:00.000Z",
+    });
     const afterCompleted = store.turnRuntimeRegistry;
     store.applyTurnRuntimeEvent({
       type: SESSION_RUN_EVENT.BACKEND_CONVERSATION_STATE,
@@ -148,7 +179,10 @@ describe("useChatStore turn runtime actions", () => {
     });
     expect(wrongScopeRuntime.startedAt).toBe("");
 
-    const pruneResult = store.pruneTerminalTurns({ sessionId: "session-1", keepTurnScopeIds: ["client-turn:abc:def"] });
+    const pruneResult = store.pruneTerminalTurns({
+      sessionId: "session-1",
+      keepTurnScopeIds: ["client-turn:abc:def"],
+    });
     expect(pruneResult.applied).toBe(false);
     expect(store.turnRuntimeRegistry).toBe(afterCompleted);
     expect(afterSending).not.toBe(afterCompleted);

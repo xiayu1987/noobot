@@ -101,7 +101,7 @@ test("@full PBE-034 主流程低轮次 task_summary checkpoint 与模型输入�
       testInfo,
       [
         "完成一个三步只读计算链。",
-        "先调用 execute_script 生成一个随机十六进制 token；拿到实际 token 后，再调用 execute_script 计算该 token 的 SHA-256。",
+        "先调用 execute_script 生成一个随机十六进制 marker；拿到实际 marker 后，再调用 execute_script 计算该 marker 的 SHA-256。",
         "最后调用 execute_script 从实际 SHA-256 中提取前八位。每一步必须使用前一步的实际输出，不得并行执行，最后汇总三个结果。",
       ].join(" "),
     ),
