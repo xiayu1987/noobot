@@ -9,7 +9,8 @@ import { cacheControlValueForRuntime } from "../policies/cache-policy-engine.js"
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 function baseMessagesUrl(baseUrl = "") {
-  const value = String(baseUrl || "").replace(/\/+$/, "");
+  let value = String(baseUrl || "");
+  while (value.endsWith("/")) value = value.slice(0, -1);
   return /\/v1$/i.test(value) ? `${value}/messages` : `${value}/v1/messages`;
 }
 
@@ -50,7 +51,9 @@ function textBlocks(content) {
 }
 
 function resolveMessageRole(message = {}) {
-  const explicitRole = String(message?.role || "").trim().toLowerCase();
+  const explicitRole = String(message?.role || "")
+    .trim()
+    .toLowerCase();
   if (explicitRole) return explicitRole;
   const type = String(
     (typeof message?._getType === "function" ? message._getType() : "") ||
@@ -99,7 +102,9 @@ function convertMessages(messages = []) {
     if (role === "assistant") {
       const content = textBlocks(message.content);
       const existingToolUseIds = new Set(
-        content.filter((block) => block?.type === "tool_use").map((block) => String(block.id || "")),
+        content
+          .filter((block) => block?.type === "tool_use")
+          .map((block) => String(block.id || "")),
       );
       for (const call of message.tool_calls || []) {
         const fn = call?.function || call || {};
@@ -153,13 +158,21 @@ function convertToolChoice(value = "auto") {
 
 function responseFromAnthropic(raw = {}) {
   const blocks = Array.isArray(raw.content) ? raw.content : [];
-  const text = blocks.filter((b) => b?.type === "text").map((b) => b.text || "").join("");
-  const reasoning = blocks.filter((b) => b?.type === "thinking").map((b) => b.thinking || "").join("\n");
-  const tool_calls = blocks.filter((b) => b?.type === "tool_use").map((b) => ({
-    id: b.id,
-    type: "function",
-    function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
-  }));
+  const text = blocks
+    .filter((b) => b?.type === "text")
+    .map((b) => b.text || "")
+    .join("");
+  const reasoning = blocks
+    .filter((b) => b?.type === "thinking")
+    .map((b) => b.thinking || "")
+    .join("\n");
+  const tool_calls = blocks
+    .filter((b) => b?.type === "tool_use")
+    .map((b) => ({
+      id: b.id,
+      type: "function",
+      function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+    }));
   const usage = raw.usage || {};
   return {
     // Preserve the provider's exact content blocks. In particular, Fable 5.1
@@ -191,10 +204,10 @@ function createClient({ modelSpec, credential, headers = {}, tools = [], toolCho
       const payload = {
         model: spec.model,
         max_tokens: Number(spec.max_tokens || 10000),
-        ...(!spec.reasoning_effort || spec.reasoning_effort === "none") &&
+        ...((!spec.reasoning_effort || spec.reasoning_effort === "none") &&
         spec.temperature !== undefined
           ? { temperature: spec.temperature }
-          : {},
+          : {}),
         ...(tools.length
           ? { tools: convertTools(tools), tool_choice: convertToolChoice(toolChoice) }
           : {}),
@@ -221,7 +234,9 @@ function createClient({ modelSpec, credential, headers = {}, tools = [], toolCho
       const body = await response.text();
       const parsed = parseJson(body, { error: { message: body } });
       if (!response.ok) {
-        const error = new Error(parsed?.error?.message || `Anthropic API returned ${response.status}`);
+        const error = new Error(
+          parsed?.error?.message || `Anthropic API returned ${response.status}`,
+        );
         error.status = response.status;
         error.response = parsed;
         throw error;
