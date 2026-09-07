@@ -1,6 +1,8 @@
 # Noobot
 
-**支持工具调用、多模型路由、MCP 与多智能体工作流的自托管 AI Agent 工作空间。**
+告别 1 美元的 hello world 时代。
+
+**最便宜 省钱 支持工具调用、多模型路由、MCP 与多智能体工作流的自托管 AI Agent 工作空间。**
 
 中文 | [English](./README.md)
 
