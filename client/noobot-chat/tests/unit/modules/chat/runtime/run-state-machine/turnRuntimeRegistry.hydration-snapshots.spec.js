@@ -41,10 +41,7 @@ import {
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
 import { createEventEnvelope, EVENT_FAMILY, replayEventTail } from "@noobot/event-protocol";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_LIFECYCLE_WIRE_EVENT,
-} from "@noobot/session-protocol";
+import { createTurnLifecycleEnvelope, TURN_LIFECYCLE_WIRE_EVENT } from "@noobot/session-protocol";
 
 const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revision, sequence }) =>
   createTurnLifecycleEnvelope({
@@ -64,6 +61,7 @@ const lifecycleEvent = ({ eventType, eventId, state, phase, executionState, revi
     action: "send",
     executionState,
     capabilities: { actionLocked: state !== "completed", canStop: false },
+    startedAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:01.000Z",
     completionCommitId: state === "completed" ? "commit-t1" : "",
     summaryVersion: state === "completed" ? 1 : 0,
@@ -112,26 +110,28 @@ describe("turnRuntimeRegistry: hydration and snapshots", () => {
     const realtime = createTurnRuntimeRegistryState();
     for (const event of events) applyTurnLifecycleEnvelope(realtime, event);
 
-    const protocolEvents = events.map((payload) => createEventEnvelope({
-      family: EVENT_FAMILY.TURN_LIFECYCLE,
-      identity: {
-        eventId: payload.eventId,
-        eventType: TURN_LIFECYCLE_WIRE_EVENT,
-        sessionId: payload.sessionId,
-        turnScopeId: payload.turnScopeId,
-        messageId: payload.messageId,
-      },
-      causality: { commandId: payload.commandId },
-      ordering: {
-        domain: "session",
-        scopeId: payload.sessionId,
-        sequence: payload.sequence,
-        revision: payload.revision,
-      },
-      producer: { type: "test", id: "turn-runtime-registry" },
-      occurredAt: payload.occurredAt,
-      payload,
-    }));
+    const protocolEvents = events.map((payload) =>
+      createEventEnvelope({
+        family: EVENT_FAMILY.TURN_LIFECYCLE,
+        identity: {
+          eventId: payload.eventId,
+          eventType: TURN_LIFECYCLE_WIRE_EVENT,
+          sessionId: payload.sessionId,
+          turnScopeId: payload.turnScopeId,
+          messageId: payload.messageId,
+        },
+        causality: { commandId: payload.commandId },
+        ordering: {
+          domain: "session",
+          scopeId: payload.sessionId,
+          sequence: payload.sequence,
+          revision: payload.revision,
+        },
+        producer: { type: "test", id: "turn-runtime-registry" },
+        occurredAt: payload.occurredAt,
+        payload,
+      }),
+    );
 
     const recovered = createTurnRuntimeRegistryState();
     const baseline = snapshot({

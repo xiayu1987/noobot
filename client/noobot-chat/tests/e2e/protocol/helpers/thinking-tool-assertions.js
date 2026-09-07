@@ -8,6 +8,91 @@ import { waitForSessionExecutionEventTree } from "./persistence-audit.js";
 
 const text = (value) => String(value ?? "").trim();
 
+export function elapsedLabelSeconds(value = "") {
+  const match = text(value).match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return null;
+  const values = match
+    .slice(1)
+    .filter((item) => item !== undefined)
+    .map(Number);
+  return values.length === 3
+    ? values[0] * 3600 + values[1] * 60 + values[2]
+    : values[0] * 60 + values[1];
+}
+
+export async function readThinkingElapsedSeconds(page) {
+  const elapsed = page.locator(".thinking-realtime-shell.is-running .thinking-elapsed").last();
+  await expect(elapsed).toBeVisible({ timeout: 60000 });
+  return elapsedLabelSeconds(await elapsed.textContent());
+}
+
+export async function installRunningThinkingElapsedCapture(page) {
+  await page.addInitScript(() => {
+    const samples = [];
+    Object.defineProperty(window, "__NOOBOT_E2E_RUNNING_THINKING_ELAPSED__", {
+      value: samples,
+      configurable: false,
+      writable: false,
+    });
+    const capture = () => {
+      for (const node of document.querySelectorAll(
+        ".thinking-realtime-shell.is-running .thinking-elapsed",
+      )) {
+        const value = String(node.textContent || "").trim();
+        if (value && samples.at(-1) !== value) samples.push(value);
+      }
+    };
+    const observer = new MutationObserver(capture);
+    const observe = () => {
+      if (!document.documentElement) return;
+      observer.observe(document.documentElement, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      capture();
+    };
+    if (document.documentElement) observe();
+    else document.addEventListener("DOMContentLoaded", observe, { once: true });
+    document.addEventListener("DOMContentLoaded", () => {
+      capture();
+    });
+  });
+}
+
+export async function readFirstCapturedThinkingElapsedSeconds(page) {
+  let first = null;
+  await expect
+    .poll(
+      async () => {
+        const samples = await page.evaluate(
+          () => window.__NOOBOT_E2E_RUNNING_THINKING_ELAPSED__ || [],
+        );
+        first = samples.map((value) => elapsedLabelSeconds(value)).find(Number.isFinite) ?? null;
+        return first;
+      },
+      { timeout: 60000 },
+    )
+    .not.toBeNull();
+  return first;
+}
+
+export async function waitForThinkingElapsedSeconds(page, minimumSeconds = 1) {
+  let seconds = null;
+  await expect
+    .poll(
+      async () => {
+        seconds = await readThinkingElapsedSeconds(page);
+        return seconds;
+      },
+      { timeout: 60000 },
+    )
+    .toBeGreaterThanOrEqual(minimumSeconds);
+  return seconds;
+}
+
 async function readExpandedToolLine(line) {
   const trigger = line.locator(".base-thinking-log-line__text");
   await trigger.scrollIntoViewIfNeeded();

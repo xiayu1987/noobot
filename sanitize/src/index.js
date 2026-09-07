@@ -247,7 +247,7 @@ const SECRET_RULES = [
 ];
 const BEARER_SECRET = /\bBearer\s+([A-Za-z0-9._~+/=-]+)/gi;
 const SECRET_ASSIGNMENT =
-  /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(['"]?)([^\s'"]{8,})\1/gi;
+  /\b(?:api[_-]?key|secret|token|password|passwd|pwd|client[_-]?secret|access[_-]?token|refresh[_-]?token|private[_-]?key|auth)\b\s*[:=]\s*(?:(['"])([^'"]{8,})\1|([^\s'",;，；。]{8,}))/gi;
 function collectSecretRanges(text) {
   const value = String(text || "");
   const ranges = [];
@@ -261,7 +261,7 @@ function collectSecretRanges(text) {
     ranges.push([start, start + match[1].length]);
   }
   for (const match of value.matchAll(SECRET_ASSIGNMENT)) {
-    const secret = match[2];
+    const secret = match[2] || match[3];
     if (secret.length < 20 && shannonEntropy(secret) < 3) continue;
     const start = match.index + match[0].lastIndexOf(secret);
     ranges.push([start, start + secret.length]);

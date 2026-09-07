@@ -262,6 +262,13 @@ export function validateTurnLifecycleSnapshot(snapshot = {}) {
       canonicalizeTurnScopeId(snapshot.activeTurn.turnScopeId)
   )
     errors.push("active_turn_identity_mismatch");
+  if (
+    snapshot.activeTurn &&
+    !clean(snapshot.activeTurn.startedAt) &&
+    !clean(snapshot.activeTurn.thinkingStartedAt)
+  ) {
+    errors.push("missing_active_turn_started_at");
+  }
   return { valid: errors.length === 0, errors };
 }
 

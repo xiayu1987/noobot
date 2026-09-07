@@ -70,7 +70,7 @@ function resolveProjectedStart(current, currentValue, event, rawEvent) {
     return observed || currentValue.startedAt;
   }
   if (rawEvent.canonicalTimingObserved === true) return observed || currentValue.startedAt;
-  return currentValue.startedAt || observed || (!current ? event.updatedAt || event.timestamp : "");
+  return currentValue.startedAt || observed;
 }
 
 function resolveProjectedFinish(currentValue, event, rawEvent, terminal) {

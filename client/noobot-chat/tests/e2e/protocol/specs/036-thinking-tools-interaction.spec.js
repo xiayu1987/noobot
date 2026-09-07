@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 import { randomUUID } from "node:crypto";
-import { test, expect } from "../fixtures/noobot.fixture.js";
+import { test, expect, installE2eModelPreferences } from "../fixtures/noobot.fixture.js";
+import { connectThroughUi, readE2eCredentials } from "../fixtures/auth.fixture.js";
 import {
   selectPlugins,
   sendMessage,
@@ -30,9 +31,13 @@ import {
   assertCanonicalToolPairs,
   assertRealtimeToolDetails,
   assertThinkingDetailsDrawer,
+  installRunningThinkingElapsedCapture,
   observeRealtimeThinkingChanges,
+  readFirstCapturedThinkingElapsedSeconds,
+  readThinkingElapsedSeconds,
   readRealtimeToolProjection,
   toolEventsForTurn,
+  waitForThinkingElapsedSeconds,
   waitForToolSet,
 } from "../helpers/thinking-tool-assertions.js";
 import { PROTOCOL_TIMEOUTS } from "../helpers/protocol-timeouts.js";
@@ -166,6 +171,7 @@ async function assertFileMutationArtifacts(page, records, turnScopeId, filePath)
 test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async ({
   noobot,
   protocolCapture,
+  browser,
 }, testInfo) => {
   test.setTimeout(PROTOCOL_TIMEOUTS.toolChain);
   await selectPlugins(noobot.page, ["harness"]);
@@ -193,6 +199,31 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   );
   const command = await waitForCommand(protocolCapture, noobot.sessionId, "turn.send");
 
+  const elapsedBeforeSecondBrowser = await waitForThinkingElapsedSeconds(noobot.page);
+  const secondBrowser = await browser.browserType().launch({ chromiumSandbox: false });
+  const secondContext = await secondBrowser.newContext();
+  await installE2eModelPreferences(secondContext);
+  const secondPage = await secondContext.newPage();
+  await installRunningThinkingElapsedCapture(secondPage);
+  protocolCapture.bindPage(secondPage);
+  try {
+    const sessionUrl = new URL(
+      `/?session=${encodeURIComponent(noobot.sessionId)}`,
+      noobot.page.url(),
+    ).toString();
+    await secondPage.goto(sessionUrl);
+    await connectThroughUi(secondPage, readE2eCredentials());
+    await expect(secondPage.locator(".session-item.active")).toHaveAttribute(
+      "data-session-id",
+      noobot.sessionId,
+    );
+    expect(await readFirstCapturedThinkingElapsedSeconds(secondPage)).toBeGreaterThanOrEqual(
+      elapsedBeforeSecondBrowser,
+    );
+  } finally {
+    await secondBrowser.close();
+  }
+
   const realtimeObservation = observeRealtimeThinkingChanges(noobot.page);
   const interaction = noobot.page.locator(".interaction-card");
   await expect(interaction).toBeVisible({ timeout: 360000 });
@@ -208,6 +239,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
   await assertRealtimeToolDetails(shell, REALTIME_EXECUTION_WINDOW_SIZE);
   const pendingProjectionBeforeRefresh = await readRealtimeToolProjection(noobot.page);
   expect(pendingProjectionBeforeRefresh).toHaveLength(REALTIME_EXECUTION_WINDOW_SIZE);
+  const elapsedBeforeRefresh = await waitForThinkingElapsedSeconds(noobot.page);
 
   await reloadAndWaitForReconnect(noobot.page, protocolCapture);
   await expect(interaction).toBeVisible({ timeout: 60000 });
@@ -221,6 +253,7 @@ test("@full PBE-036 全工具、实时思考明细与交互结果闭环", async 
     filePath: generatedFilePath,
   });
   const pendingProjectionAfterRefresh = await readRealtimeToolProjection(noobot.page);
+  await waitForThinkingElapsedSeconds(noobot.page, elapsedBeforeRefresh);
   expect(pendingProjectionAfterRefresh.map(({ event }) => event)).toEqual(
     pendingProjectionBeforeRefresh.map(({ event }) => event),
   );
