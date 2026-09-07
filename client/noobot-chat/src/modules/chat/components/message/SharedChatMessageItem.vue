@@ -52,6 +52,7 @@ import {
 } from "../../../debug/loggers/workflowDiagnosticsLogger.js";
 import { chatMessageItemProps } from "../../model/messageItemProps.js";
 import FileMutationPreview from "../thinking/FileMutationPreview.vue";
+import MutationDiffSplit from "../thinking/MutationDiffSplit.vue";
 import { selectCompletedToolArtifacts } from "../../runtime/engine/toolTimeline.js";
 import { fileMutationPreviewService } from "../../../../infrastructure/api/fileMutation/fileMutationPreviewService.js";
 
@@ -133,12 +134,19 @@ const attachmentRefIndex = computed(() =>
       resolveAttachmentAccessMeta(attachmentItem, { userId: props.userId }).url,
   }),
 );
-const hasMessageArtifacts = computed(() =>
-  (artifactAttachments.value.length > 0 || writeMutations.value.length > 0 || patchMutations.value.length > 0),
+const hasMessageArtifacts = computed(
+  () =>
+    artifactAttachments.value.length > 0 ||
+    writeMutations.value.length > 0 ||
+    patchMutations.value.length > 0,
 );
 const artifactTab = ref("attachments");
 watch(
-  [() => artifactAttachments.value.length, () => writeMutations.value.length, () => patchMutations.value.length],
+  [
+    () => artifactAttachments.value.length,
+    () => writeMutations.value.length,
+    () => patchMutations.value.length,
+  ],
   () => {
     const availableTab = artifactAttachments.value.length
       ? "attachments"
@@ -165,10 +173,6 @@ const mutationPreviewKind = ref("file");
 const mutationPreviewContent = ref("");
 const mutationPreviewDiff = ref(null);
 let mutationPreviewGeneration = 0;
-const mutationPreviewDiffRows = computed(() => (mutationPreviewDiff.value?.lines || []).map((line) => ({
-  old: line.type === "added" ? null : line,
-  next: line.type === "removed" ? null : line,
-})));
 async function openMutationPreview({ mutation, kind } = {}) {
   const generation = ++mutationPreviewGeneration;
   const requestedMutation = mutation || null;
@@ -182,15 +186,28 @@ async function openMutationPreview({ mutation, kind } = {}) {
   mutationPreviewContent.value = "";
   mutationPreviewDiff.value = null;
   try {
-    const payload = requestedKind === "diff"
-      ? await fileMutationPreviewService.getDiff({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedMutation?.sessionScope, mutationId: requestedMutation?.id })
-      : await fileMutationPreviewService.getFile({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedMutation?.sessionScope, mutationId: requestedMutation?.id });
+    const payload =
+      requestedKind === "diff"
+        ? await fileMutationPreviewService.getDiff({
+            userId: props.userId,
+            sessionId: requestedSessionId,
+            sessionScope: requestedMutation?.sessionScope,
+            mutationId: requestedMutation?.id,
+          })
+        : await fileMutationPreviewService.getFile({
+            userId: props.userId,
+            sessionId: requestedSessionId,
+            sessionScope: requestedMutation?.sessionScope,
+            mutationId: requestedMutation?.id,
+          });
     if (generation !== mutationPreviewGeneration) return;
     if (requestedKind === "diff") mutationPreviewDiff.value = payload.diff || payload;
     else mutationPreviewContent.value = String(payload.content || "");
   } catch (error) {
     if (generation !== mutationPreviewGeneration) return;
-    mutationPreviewError.value = String(error?.message || error || translate("message.mutationLoadFailed"));
+    mutationPreviewError.value = String(
+      error?.message || error || translate("message.mutationLoadFailed"),
+    );
   } finally {
     if (generation === mutationPreviewGeneration) mutationPreviewLoading.value = false;
   }
@@ -562,8 +579,16 @@ function toggleAssistantContent() {
 
     <MonotonicMessageActions v-bind="defaultMonotonicMessageActionProps" />
 
-    <el-tabs v-if="hasMessageArtifacts" v-model="artifactTab" class="message-artifact-tabs noobot-tabs">
-      <el-tab-pane v-if="artifactAttachments.length" :label="translate('message.artifactAttachments')" name="attachments">
+    <el-tabs
+      v-if="hasMessageArtifacts"
+      v-model="artifactTab"
+      class="message-artifact-tabs noobot-tabs"
+    >
+      <el-tab-pane
+        v-if="artifactAttachments.length"
+        :label="translate('message.artifactAttachments')"
+        name="attachments"
+      >
         <BaseFileCardList>
           <BaseAttachmentFileCard
             v-for="attachmentItem in artifactAttachments"
@@ -585,7 +610,11 @@ function toggleAssistantContent() {
           />
         </BaseFileCardList>
       </el-tab-pane>
-      <el-tab-pane v-if="writeMutations.length" :label="translate('message.artifactWriteFiles')" name="write-files">
+      <el-tab-pane
+        v-if="writeMutations.length"
+        :label="translate('message.artifactWriteFiles')"
+        name="write-files"
+      >
         <FileMutationPreview
           v-if="writeMutations.length"
           :user-id="userId"
@@ -599,7 +628,11 @@ function toggleAssistantContent() {
           @download="downloadMutation"
         />
       </el-tab-pane>
-      <el-tab-pane v-if="patchMutations.length" :label="translate('message.artifactPatchFiles')" name="patch-files">
+      <el-tab-pane
+        v-if="patchMutations.length"
+        :label="translate('message.artifactPatchFiles')"
+        name="patch-files"
+      >
         <FileMutationPreview
           v-if="patchMutations.length"
           :user-id="userId"
@@ -626,18 +659,27 @@ function toggleAssistantContent() {
     <el-dialog
       v-if="mutationPreviewVisible"
       v-model="mutationPreviewVisible"
-      :title="translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.path || '' })"
+      :title="
+        translate('message.mutationPreviewTitle', { name: mutationPreviewMutation?.path || '' })
+      "
       :teleported="false"
       modal-class="noobot-file-preview-overlay"
       class="generated-file-preview-dialog"
       destroy-on-close
     >
       <el-skeleton v-if="mutationPreviewLoading" :rows="5" animated />
-      <el-alert v-else-if="mutationPreviewError" :title="mutationPreviewError" type="error" :closable="false" />
-      <div v-else-if="mutationPreviewKind === 'diff' && mutationPreviewDiff" class="mutation-diff-split" role="table">
-        <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewBefore') }}</div><div v-for="(row, index) in mutationPreviewDiffRows" :key="`modal-old-${index}`" class="mutation-diff-line" :class="row.old ? `is-${row.old.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.old?.oldLine || "" }}</span><span class="mutation-line-sign">{{ row.old?.type === "removed" ? "-" : "" }}</span><code>{{ row.old?.text || "" }}</code></div></div>
-        <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewAfter') }}</div><div v-for="(row, index) in mutationPreviewDiffRows" :key="`modal-new-${index}`" class="mutation-diff-line" :class="row.next ? `is-${row.next.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.next?.newLine || "" }}</span><span class="mutation-line-sign">{{ row.next?.type === "added" ? "+" : "" }}</span><code>{{ row.next?.text || "" }}</code></div></div>
-      </div>
+      <el-alert
+        v-else-if="mutationPreviewError"
+        :title="mutationPreviewError"
+        type="error"
+        :closable="false"
+      />
+      <MutationDiffSplit
+        v-else-if="mutationPreviewKind === 'diff' && mutationPreviewDiff"
+        :diff="mutationPreviewDiff"
+        :translate="translate"
+        key-prefix="modal-"
+      />
       <pre v-else class="mutation-file-content">{{ mutationPreviewContent }}</pre>
     </el-dialog>
 
@@ -708,13 +750,19 @@ function toggleAssistantContent() {
   border-radius: var(--noobot-radius-md);
   background: var(--noobot-msg-file-card-bg);
 }
-.message-artifact-tabs :deep(.el-tabs__header) { margin-bottom: var(--noobot-space-md); }
-.message-artifact-tabs :deep(.el-tabs__nav-wrap) { padding-inline: var(--noobot-space-xs); }
+.message-artifact-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--noobot-space-md);
+}
+.message-artifact-tabs :deep(.el-tabs__nav-wrap) {
+  padding-inline: var(--noobot-space-xs);
+}
 .message-artifact-tabs :deep(.el-tabs__content) {
   padding: var(--noobot-space-xs);
   background: var(--noobot-msg-file-card-bg);
 }
-.message-artifact-tabs :deep(.base-file-card-list) { margin-top: 0; }
+.message-artifact-tabs :deep(.base-file-card-list) {
+  margin-top: 0;
+}
 
 .message-runtime-panels.is-running {
   animation: message-runtime-panels-glow 2.4s ease-in-out infinite;
@@ -731,5 +779,4 @@ function toggleAssistantContent() {
     box-shadow: 0 0 12px color-mix(in srgb, var(--noobot-accent) 32%, transparent);
   }
 }
-
 </style>

@@ -7,6 +7,7 @@
 import { computed, ref, watch } from "vue";
 import { DocumentAdd, Download, EditPen } from "@element-plus/icons-vue";
 import { BaseFileCardList } from "../../../../shared/public-api/ui.js";
+import MutationDiffSplit from "./MutationDiffSplit.vue";
 
 const props = defineProps({
   userId: { type: String, default: "" },
@@ -30,12 +31,10 @@ let requestGeneration = 0;
 const selectedMutation = computed(() => props.mutations[selectedIndex.value] || null);
 const mutationId = computed(() => String(selectedMutation.value?.id || "").trim());
 const mutationIcon = computed(() => (props.previewKind === "diff" ? EditPen : DocumentAdd));
-const diffRows = computed(() => (diff.value?.lines || []).map((line) => ({
-  old: line.type === "added" ? null : line,
-  next: line.type === "removed" ? null : line,
-})));
 function translateOperation(operation = "") {
-  const normalized = String(operation || "").trim().toLowerCase();
+  const normalized = String(operation || "")
+    .trim()
+    .toLowerCase();
   return props.translate(`message.mutationOperationType.${normalized}`);
 }
 function mutationSummary(mutation = {}) {
@@ -56,20 +55,32 @@ async function loadTab(tab) {
       if (typeof props.service?.getDiff !== "function") {
         throw new Error(props.translate("message.mutationDiffServiceUnavailable"));
       }
-      const payload = await props.service.getDiff({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedSessionScope, mutationId: requestedMutationId });
+      const payload = await props.service.getDiff({
+        userId: props.userId,
+        sessionId: requestedSessionId,
+        sessionScope: requestedSessionScope,
+        mutationId: requestedMutationId,
+      });
       if (generation !== requestGeneration) return;
       diff.value = payload.diff || payload;
     } else if (tab === tabs.FILE) {
       if (typeof props.service?.getFile !== "function") {
         throw new Error(props.translate("message.mutationFileServiceUnavailable"));
       }
-      const payload = await props.service.getFile({ userId: props.userId, sessionId: requestedSessionId, sessionScope: requestedSessionScope, mutationId: requestedMutationId });
+      const payload = await props.service.getFile({
+        userId: props.userId,
+        sessionId: requestedSessionId,
+        sessionScope: requestedSessionScope,
+        mutationId: requestedMutationId,
+      });
       if (generation !== requestGeneration) return;
       fileContent.value = String(payload.content || "");
     }
   } catch (loadError) {
     if (generation !== requestGeneration) return;
-    error.value = String(loadError?.message || loadError || props.translate("message.mutationLoadFailed"));
+    error.value = String(
+      loadError?.message || loadError || props.translate("message.mutationLoadFailed"),
+    );
   } finally {
     if (generation === requestGeneration) loading.value = false;
   }
@@ -78,13 +89,17 @@ function changeTab(tab) {
   activeTab.value = tab;
   if (tab === tabs.DIFF || tab === tabs.FILE) void loadTab(tab);
 }
-watch([selectedIndex, mutationId], () => {
-  if (props.compact) return;
-  fileContent.value = "";
-  diff.value = null;
-  error.value = "";
-  void loadTab(activeTab.value);
-}, { immediate: true });
+watch(
+  [selectedIndex, mutationId],
+  () => {
+    if (props.compact) return;
+    fileContent.value = "";
+    diff.value = null;
+    error.value = "";
+    void loadTab(activeTab.value);
+  },
+  { immediate: true },
+);
 async function openCompactPreview(mutation) {
   emit("preview", { mutation, kind: props.previewKind });
 }
@@ -123,35 +138,55 @@ async function openCompactPreview(mutation) {
       </div>
     </BaseFileCardList>
     <template v-if="!compact">
-    <el-select v-if="mutations.length > 1" v-model="selectedIndex" class="mutation-select" size="small">
-      <el-option v-for="(mutation, index) in mutations" :key="mutation.id" :label="mutation.path" :value="index" />
-    </el-select>
-    <el-tabs :model-value="activeTab" class="noobot-tabs" @tab-change="changeTab">
-      <el-tab-pane :label="translate('message.mutationPreviewFile')" :name="tabs.FILE">
-        <el-skeleton v-if="loading" :rows="5" animated />
-        <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
-        <pre v-else class="mutation-file-content">{{ fileContent }}</pre>
-      </el-tab-pane>
-      <el-tab-pane :label="translate('message.mutationPreviewDiff')" :name="tabs.DIFF">
-        <el-skeleton v-if="loading" :rows="5" animated />
-        <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
-        <div v-else-if="diff" class="mutation-diff-split" role="table">
-          <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewBefore') }}</div><div v-for="(row, index) in diffRows" :key="`old-${index}`" class="mutation-diff-line" :class="row.old ? `is-${row.old.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.old?.oldLine || "" }}</span><span class="mutation-line-sign">{{ row.old?.type === "removed" ? "-" : "" }}</span><code>{{ row.old?.text || "" }}</code></div></div>
-          <div class="mutation-diff-pane"><div class="mutation-diff-heading">{{ translate('message.mutationPreviewAfter') }}</div><div v-for="(row, index) in diffRows" :key="`new-${index}`" class="mutation-diff-line" :class="row.next ? `is-${row.next.type}` : 'is-empty'"><span class="mutation-line-number">{{ row.next?.newLine || "" }}</span><span class="mutation-line-sign">{{ row.next?.type === "added" ? "+" : "" }}</span><code>{{ row.next?.text || "" }}</code></div></div>
-        </div>
-        <el-empty v-else :description="translate('message.mutationNoDiff')" :image-size="64" />
-      </el-tab-pane>
-      <el-tab-pane :label="translate('message.mutationPreviewMetadata')" :name="tabs.METADATA">
-        <el-descriptions v-if="selectedMutation" :column="1" border>
-          <el-descriptions-item :label="translate('message.mutationId')">{{ selectedMutation.id }}</el-descriptions-item>
-          <el-descriptions-item :label="translate('message.mutationPath')">{{ selectedMutation.path }}</el-descriptions-item>
-          <el-descriptions-item :label="translate('message.mutationOperation')">{{ translateOperation(selectedMutation.operation) }}</el-descriptions-item>
-          <el-descriptions-item :label="translate('message.mutationBeforeHash')">{{ selectedMutation.before?.sha256 || translate('message.mutationMissingFile') }}</el-descriptions-item>
-          <el-descriptions-item :label="translate('message.mutationAfterHash')">{{ selectedMutation.after?.sha256 || "" }}</el-descriptions-item>
-          <el-descriptions-item :label="translate('message.mutationChangedLines')">{{ selectedMutation.diff?.additions || 0 }} / {{ selectedMutation.diff?.deletions || 0 }}</el-descriptions-item>
-        </el-descriptions>
-      </el-tab-pane>
-    </el-tabs>
+      <el-select
+        v-if="mutations.length > 1"
+        v-model="selectedIndex"
+        class="mutation-select"
+        size="small"
+      >
+        <el-option
+          v-for="(mutation, index) in mutations"
+          :key="mutation.id"
+          :label="mutation.path"
+          :value="index"
+        />
+      </el-select>
+      <el-tabs :model-value="activeTab" class="noobot-tabs" @tab-change="changeTab">
+        <el-tab-pane :label="translate('message.mutationPreviewFile')" :name="tabs.FILE">
+          <el-skeleton v-if="loading" :rows="5" animated />
+          <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
+          <pre v-else class="mutation-file-content">{{ fileContent }}</pre>
+        </el-tab-pane>
+        <el-tab-pane :label="translate('message.mutationPreviewDiff')" :name="tabs.DIFF">
+          <el-skeleton v-if="loading" :rows="5" animated />
+          <el-alert v-else-if="error" :title="error" type="error" :closable="false" />
+          <MutationDiffSplit v-else-if="diff" :diff="diff" :translate="translate" />
+          <el-empty v-else :description="translate('message.mutationNoDiff')" :image-size="64" />
+        </el-tab-pane>
+        <el-tab-pane :label="translate('message.mutationPreviewMetadata')" :name="tabs.METADATA">
+          <el-descriptions v-if="selectedMutation" :column="1" border>
+            <el-descriptions-item :label="translate('message.mutationId')">{{
+              selectedMutation.id
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="translate('message.mutationPath')">{{
+              selectedMutation.path
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="translate('message.mutationOperation')">{{
+              translateOperation(selectedMutation.operation)
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="translate('message.mutationBeforeHash')">{{
+              selectedMutation.before?.sha256 || translate("message.mutationMissingFile")
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="translate('message.mutationAfterHash')">{{
+              selectedMutation.after?.sha256 || ""
+            }}</el-descriptions-item>
+            <el-descriptions-item :label="translate('message.mutationChangedLines')"
+              >{{ selectedMutation.diff?.additions || 0 }} /
+              {{ selectedMutation.diff?.deletions || 0 }}</el-descriptions-item
+            >
+          </el-descriptions>
+        </el-tab-pane>
+      </el-tabs>
     </template>
   </section>
 </template>
@@ -160,9 +195,27 @@ async function openCompactPreview(mutation) {
 <style src="../../../../shared/ui/file-mutation-preview-common.css"></style>
 
 <style scoped>
-.file-mutation-preview { margin-top: var(--noobot-space-xl); border-top: 1px solid var(--noobot-panel-border); padding-top: var(--noobot-space-sm); }
-.file-mutation-preview.is-compact { margin-top: 0; border-top: 0; padding-top: 0; }
-.mutation-select { width: min(100%, 28rem); margin-bottom: .5rem; }
-.mutation-file-item { color: inherit; text-align: left; cursor: pointer; }
-.mutation-file-item:focus-visible { outline: 2px solid var(--noobot-accent); outline-offset: 1px; }
+.file-mutation-preview {
+  margin-top: var(--noobot-space-xl);
+  border-top: 1px solid var(--noobot-panel-border);
+  padding-top: var(--noobot-space-sm);
+}
+.file-mutation-preview.is-compact {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+.mutation-select {
+  width: min(100%, 28rem);
+  margin-bottom: 0.5rem;
+}
+.mutation-file-item {
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.mutation-file-item:focus-visible {
+  outline: 2px solid var(--noobot-accent);
+  outline-offset: 1px;
+}
 </style>

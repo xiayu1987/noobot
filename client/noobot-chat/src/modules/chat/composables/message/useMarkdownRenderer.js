@@ -23,7 +23,8 @@ const MERMAID_PREFIXES = [
 ];
 function collapseMarkerNames() {
   return ["NOOBOT_COLLAPSE", ...provideExtensionValues(EXTENSION_POINTS.MARKDOWN_COLLAPSE_MARKERS)]
-    .map((value) => String(value || "").trim()).filter(Boolean);
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 }
 
 function looksLikeMermaidLine(rawLine = "") {
@@ -61,11 +62,12 @@ const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 attachmentInlineRefPlugin(md);
 const defaultFenceRenderer =
   md.renderer.rules.fence ||
-  ((tokens, idx, options, env, self) =>
-    self.renderToken(tokens, idx, options));
+  ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
 md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   const token = tokens[idx] || {};
-  const info = String(token?.info || "").trim().toLowerCase();
+  const info = String(token?.info || "")
+    .trim()
+    .toLowerCase();
   if (info === "mermaid") {
     const diagramCode = md.utils.escapeHtml(String(token?.content || ""));
     return `<div class="mermaid">${diagramCode}</div>`;
@@ -82,11 +84,13 @@ function escapeHtmlAttribute(value = "") {
 }
 
 function normalizeCssModifier(value = "") {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "unknown";
+  return (
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "unknown"
+  );
 }
 
 function parseMarkerAttributes(input = "") {
@@ -96,7 +100,7 @@ function parseMarkerAttributes(input = "") {
   let match = attrRe.exec(text);
   while (match) {
     attrs[match[1]] = match[2]
-      .replace(/&quot;/g, "\"")
+      .replace(/&quot;/g, '"')
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&amp;/g, "&");
@@ -115,7 +119,9 @@ function buildCollapseHtml({ attrs = {}, innerMarkdown = "", renderEnv = {} } = 
   const kind = String(attrs.kind || "unknown").trim() || "unknown";
   const kindClass = normalizeCssModifier(kind);
   const title = String(attrs.title || kind).trim() || kind;
-  const defaultState = String(attrs.default || "closed").trim().toLowerCase();
+  const defaultState = String(attrs.default || "closed")
+    .trim()
+    .toLowerCase();
   const openAttr = defaultState === "open" ? " open" : "";
   const renderedInner = renderMarkdownSegment(innerMarkdown, renderEnv);
   return [
@@ -185,11 +191,13 @@ function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
 
     flushPlain();
     if (!shouldHideCollapse({ attrs })) {
-      renderedParts.push(buildCollapseHtml({
-        attrs,
-        innerMarkdown: innerLines.join("\n"),
-        renderEnv,
-      }));
+      renderedParts.push(
+        buildCollapseHtml({
+          attrs,
+          innerMarkdown: innerLines.join("\n"),
+          renderEnv,
+        }),
+      );
     }
     index = endIndex;
   }

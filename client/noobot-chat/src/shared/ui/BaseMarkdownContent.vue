@@ -28,7 +28,11 @@ defineExpose({ getHtml });
 </script>
 
 <template>
-  <div ref="mermaidHostRef" class="base-markdown-content noobot-rich-content" v-html="renderedHtml" />
+  <div
+    ref="mermaidHostRef"
+    class="base-markdown-content noobot-rich-content"
+    v-html="renderedHtml"
+  />
 </template>
 
 <style scoped>
