@@ -6,6 +6,7 @@
 import MarkdownIt from "markdown-it";
 import { provideExtensionValues } from "../../../../extensions/extension-registry.js";
 import { EXTENSION_POINTS } from "@noobot/plugin-protocol/frontend";
+import { attachmentInlineRefPlugin } from "./attachmentInlineRefPlugin.js";
 
 const MERMAID_PREFIXES = [
   "graph ",
@@ -57,6 +58,7 @@ function normalizeMermaidMarkdown(inputText = "") {
 }
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+attachmentInlineRefPlugin(md);
 const defaultFenceRenderer =
   md.renderer.rules.fence ||
   ((tokens, idx, options, env, self) =>
@@ -103,19 +105,19 @@ function parseMarkerAttributes(input = "") {
   return attrs;
 }
 
-function renderMarkdownSegment(text = "") {
+function renderMarkdownSegment(text = "", renderEnv = {}) {
   const content = String(text || "");
   if (!content.trim()) return "";
-  return md.render(normalizeMermaidMarkdown(content));
+  return md.render(normalizeMermaidMarkdown(content), renderEnv);
 }
 
-function buildCollapseHtml({ attrs = {}, innerMarkdown = "" } = {}) {
+function buildCollapseHtml({ attrs = {}, innerMarkdown = "", renderEnv = {} } = {}) {
   const kind = String(attrs.kind || "unknown").trim() || "unknown";
   const kindClass = normalizeCssModifier(kind);
   const title = String(attrs.title || kind).trim() || kind;
   const defaultState = String(attrs.default || "closed").trim().toLowerCase();
   const openAttr = defaultState === "open" ? " open" : "";
-  const renderedInner = renderMarkdownSegment(innerMarkdown);
+  const renderedInner = renderMarkdownSegment(innerMarkdown, renderEnv);
   return [
     `<details class="noobot-collapse noobot-collapse--${escapeHtmlAttribute(kindClass)}" data-noobot-collapse="${escapeHtmlAttribute(kind)}"${openAttr}>`,
     `<summary>${escapeHtmlAttribute(title)}</summary>`,
@@ -129,11 +131,11 @@ function shouldHideCollapse({ attrs = {} } = {}) {
   return kind === "latest_complete_summary" || kind === "acceptance";
 }
 
-function renderCollapsibleMarkdown(text = "") {
+function renderCollapsibleMarkdown(text = "", renderEnv = {}) {
   const source = String(text || "");
   const markerNames = collapseMarkerNames();
   if (!markerNames.some((markerName) => source.includes(`<<<${markerName}:start`))) {
-    return renderMarkdownSegment(source);
+    return renderMarkdownSegment(source, renderEnv);
   }
   const markerPattern = markerNames.join("|");
   const collapseStartRe = new RegExp(`^\\s*<<<(?:${markerPattern}):start\\s+([\\s\\S]*?)>>>\\s*$`);
@@ -144,7 +146,7 @@ function renderCollapsibleMarkdown(text = "") {
 
   const flushPlain = () => {
     if (!plainBuffer.length) return;
-    renderedParts.push(renderMarkdownSegment(plainBuffer.join("\n")));
+    renderedParts.push(renderMarkdownSegment(plainBuffer.join("\n"), renderEnv));
     plainBuffer = [];
   };
 
@@ -186,6 +188,7 @@ function renderCollapsibleMarkdown(text = "") {
       renderedParts.push(buildCollapseHtml({
         attrs,
         innerMarkdown: innerLines.join("\n"),
+        renderEnv,
       }));
     }
     index = endIndex;
@@ -196,8 +199,8 @@ function renderCollapsibleMarkdown(text = "") {
 }
 
 export function useMarkdownRenderer() {
-  function renderMarkdown(text) {
-    return renderCollapsibleMarkdown(text || "");
+  function renderMarkdown(text, { attachmentRefIndex = null } = {}) {
+    return renderCollapsibleMarkdown(text || "", { attachmentRefIndex });
   }
 
   return {

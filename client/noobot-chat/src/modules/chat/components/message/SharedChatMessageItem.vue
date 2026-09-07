@@ -11,8 +11,10 @@ import { useMessagePreview } from "../../composables/message/useMessagePreview.j
 import { useMessageFiles } from "../../composables/message/useMessageFiles.js";
 import {
   resolveAttachmentDisplayKey,
+  resolveAttachmentAccessMeta,
   resolveParsedResultAccessMeta,
 } from "../../../../infrastructure/api/attachments/attachmentAccess.js";
+import { buildAttachmentRefIndex } from "../../composables/message/attachmentInlineRefPlugin.js";
 import { useMessageMeta } from "../../composables/message/useMessageMeta.js";
 import {
   getMessageDialogProcessId,
@@ -123,6 +125,13 @@ const writeMutations = computed(() => completedToolArtifacts.value.writeMutation
 const patchMutations = computed(() => completedToolArtifacts.value.patchMutations);
 const artifactAttachments = computed(() =>
   suppressDefaultAssets.value ? [] : displayedAttachments.value,
+);
+// 正文内联 ref 只允许命中本消息的权威附件集合；href 一律由 access meta 派生。
+const attachmentRefIndex = computed(() =>
+  buildAttachmentRefIndex(displayedAttachments.value, {
+    resolveHref: (attachmentItem) =>
+      resolveAttachmentAccessMeta(attachmentItem, { userId: props.userId }).url,
+  }),
 );
 const hasMessageArtifacts = computed(() =>
   (artifactAttachments.value.length > 0 || writeMutations.value.length > 0 || patchMutations.value.length > 0),
@@ -543,6 +552,7 @@ function toggleAssistantContent() {
       ref="messageMarkdownRef"
       :content="messageItem.content"
       :render-markdown="renderMarkdown"
+      :attachment-ref-index="attachmentRefIndex"
     />
 
     <ExtensionOutlet
