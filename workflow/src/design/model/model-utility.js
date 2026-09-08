@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IFlowto from "./flowto/interfaces/flowto.js";
-import INodeLineRLAT from "./flowto/interfaces/node-line-rlat.js";
-import INode from "./node/interfaces/node.js";
-import IStateNode from "./node/interfaces/state-node.js";
-
 class ModelUtility {
   constructor() {}
   static getStartNode(model) {}

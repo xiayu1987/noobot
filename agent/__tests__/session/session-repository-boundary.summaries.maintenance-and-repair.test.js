@@ -10,7 +10,6 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { writeSessionArtifact } from "../../src/session/session-artifact-store.js";
 import { SESSIONS_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
   canonicalMessages,

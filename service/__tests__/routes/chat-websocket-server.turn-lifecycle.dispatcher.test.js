@@ -6,11 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
-import {
-  commitTurnLifecycle,
-  createAuthoritativeTurnSnapshot,
-} from "@noobot/authoritative-state/application";
+import { commitTurnLifecycle } from "@noobot/authoritative-state/application";
 import {
   acknowledgeAuthorityEventDelivery,
   createPluginArtifactEnvelope,
@@ -18,18 +14,8 @@ import {
   PLUGIN_ARTIFACT_EVENT,
   recordAuthorityEventDeliveryAttempt,
 } from "@noobot/event-protocol";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_WIRE_EVENT,
-  TURN_COMMAND,
-  TURN_PHASE,
-  TURN_STATE,
-  SESSION_ERROR_CODE,
-} from "@noobot/session-protocol";
+import { TURN_EVENT, TURN_LIFECYCLE_WIRE_EVENT, TURN_PHASE } from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
-import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
 import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
 import { createOutboundEventSender } from "../../ws/chat-websocket/outbound-event-sender.js";
 import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
@@ -39,22 +25,8 @@ import {
   registerActiveRun,
   unregisterActiveRun,
 } from "../../ws/chat-websocket/run-registry.js";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
-import {
-  startServerWithWs,
-  closeServer,
-  callChatWs,
-  stopChatWs,
-  createProtocolTestCommand,
-} from "./chat-websocket-server.test-helpers.js";
 
-import {
-  createTestLifecycleEnvelope,
-  createAuthoritativeBot,
-  payload,
-  installLifecycleSnapshotReader,
-  requestTurnSnapshot,
-} from "./chat-websocket-server.turn-lifecycle.fixtures.js";
+import { createTestLifecycleEnvelope } from "./chat-websocket-server.turn-lifecycle.fixtures.js";
 
 test("plugin artifact outbox commit is sent through the active WebSocket before acknowledgement", async () => {
   const envelope = createPluginArtifactEnvelope({

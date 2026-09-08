@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IStateNode from '../../../../../design/model/node/interfaces/state-node.js';
-import IBizinst from '../../../interfaces/bizinst.js';
-import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
-import IStateNodeState from '../../../state/modelstate/interfaces/state-node-state.js';
-
 class IStateNodeBox {
   canForwardChange(bizinst) {}
   canBackwardChange(bizinst) {}
@@ -16,4 +11,4 @@ class IStateNodeBox {
   createNodeState(bizinstModel) {}
 }
 
-export default  IStateNodeBox;
+export default IStateNodeBox;

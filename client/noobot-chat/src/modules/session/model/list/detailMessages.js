@@ -11,13 +11,11 @@ import {
   resolveRootDialogProcessIdByChain,
 } from "../../../chat/model/dialogProcessChain.js";
 import {
-  canUseTurnScopedAssets,
   clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,
   isAssistantWithoutTurnScope,
-  normalizeTurnScopeIdKey,
 } from "../../../chat/model/messageIdentity.js";
 import { getMessageAttachments } from "../../../chat/model/messageModel.js";
 

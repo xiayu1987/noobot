@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../../can-persistence-base.js';
-import IFlowto from '../../../../design/model/flowto/interfaces/flowto.js';
+import CanPersistenceBase from "../../../../can-persistence-base.js";
 
 class FlowtoState extends CanPersistenceBase {
   constructor() {
@@ -27,4 +26,4 @@ class FlowtoState extends CanPersistenceBase {
   }
 }
 
-export default  FlowtoState;
+export default FlowtoState;

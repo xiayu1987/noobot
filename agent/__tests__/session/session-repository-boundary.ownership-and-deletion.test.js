@@ -7,14 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import {
-  readJsonlArtifactFile,
-  writeSessionArtifact,
-} from "../../src/session/session-artifact-store.js";
-import { buildSessionDisplaySummary } from "../../src/session/session-summary-builders.js";
+import { readJsonlArtifactFile } from "../../src/session/session-artifact-store.js";
 
 async function withTempWorkspace(fn) {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "noobot-session-boundary-"));

@@ -4,42 +4,18 @@
  * SPDX-License-Identifier: MIT
  */
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import path from "node:path";
 import test from "node:test";
 
 import {
-  RUNTIME_EVENTS_CONFIG_DEFAULTS,
-  RUNTIME_EVENTS_CONFIG_ENVS,
-} from "@noobot/shared/runtime-events-config";
-import {
   createRuntimeEventWriter,
-  normalizeRuntimeEvent,
   writeRoutedRuntimeEvent,
   writeRuntimeEvent,
   writeSessionRuntimeEvent,
   writeStartupEvent,
   writeSystemRuntimeEvent,
 } from "../src/index.js";
-import { writeSessionChannelEvent, SESSION_CHANNELS } from "../src/session-channel.js";
-import {
-  buildSessionLogRecord,
-  getSessionLogControlKey,
-  getSessionLogDebugControlKey,
-  normalizeSessionLogCategory,
-  SESSION_LOG_CATEGORIES,
-  SESSION_LOG_DEBUG_CATEGORY,
-  SESSION_LOG_DEFAULT_CATEGORY,
-  SESSION_LOG_RECORD_FIELDS,
-} from "../src/session-log-protocol.js";
-import {
-  markSessionDeleted,
-  pathExists,
-  persistSession,
-  readJsonl,
-  tempRoot,
-  writeArchive,
-} from "./runtime-events-test-fixtures.js";
+
+import { persistSession, readJsonl, tempRoot } from "./runtime-events-test-fixtures.js";
 
 test("session runtime event requires userId and sessionId", async () => {
   const result = await writeSessionRuntimeEvent({

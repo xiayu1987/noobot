@@ -4,13 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICompositeNode from '../../../../design/model/node/interfaces/composite-node.js';
-import IBizinst from '../../interfaces/bizinst.js';
-import BizinstBox from '../bizinstbox/bizinst-box.js';
-import CompositeNodeState from '../../state/modelstate/composite-node-state.js';
-import ICompositeNodeState from '../../state/modelstate/interfaces/composite-node-state.js';
-import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
-import NodeBoxBase from './node-box-base.js';
+import BizinstBox from "../bizinstbox/bizinst-box.js";
+import CompositeNodeState from "../../state/modelstate/composite-node-state.js";
+import NodeBoxBase from "./node-box-base.js";
 
 class CompositeNodeBox extends NodeBoxBase {
   constructor() {
@@ -27,4 +23,4 @@ class CompositeNodeBox extends NodeBoxBase {
   }
 }
 
-export default  CompositeNodeBox;
+export default CompositeNodeBox;

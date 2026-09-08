@@ -35,7 +35,6 @@ export const TRANSFER_SOURCE = Object.freeze({
   CONNECTOR: "connector",
 });
 
-const IDENTITY_KEYS = new Set(["sessionId", "turnScopeId", "runId", "producer"]);
 const PRODUCER_KEYS = new Set(["type", "id"]);
 const INTENT_KEYS = new Set([
   "source",

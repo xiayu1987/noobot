@@ -7,7 +7,6 @@ import {
   filePath as path,
   classifyToolInputPath,
   isAbsolutePathAnyPlatform,
-  isCaseInsensitivePathContext,
   normalizePathForPlatform,
   isPathWithinRoot,
   resolvePathRef,
@@ -29,19 +28,12 @@ import {
   normalizeSlash,
   toWorkspaceRelativePath,
 } from "../file-utils.js";
-import {
-  getBasePathFromAgentContext,
-  getRuntimeFromAgentContext,
-} from "../../../context/agent-context-accessor.js";
+import { getBasePathFromAgentContext } from "../../../context/agent-context-accessor.js";
 
 function normalizePatchPathInput(rawPath = "") {
   const trimmed = String(rawPath || "").trim();
   if (!trimmed) return "";
   return normalizePathForPlatform(trimmed);
-}
-
-function uniqueStrings(values = []) {
-  return Array.from(new Set(values.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
 function resolvePatchDefaultRoot(agentContext = {}) {
@@ -134,7 +126,7 @@ async function resolvePatchRoot({ root = "", agentContext = {} } = {}) {
   };
 }
 
-async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root = "" } = {}) {
+async function buildPatchPathCandidate(filePath = "", agentContext = {}, { root = "" } = {}) {
   const workspacePath = resolvePatchDefaultRoot(agentContext);
   const rootInfo = await resolvePatchRoot({ root, agentContext });
   const explicitRootPath = rootInfo.displayPath ? rootInfo.resolvedPath : "";
@@ -142,50 +134,20 @@ async function buildPatchPathCandidates(filePath = "", agentContext = {}, { root
   const inputPath = explicitRootPath
     ? normalizeSlash(path.join(rootInfo.inputPath, candidatePath))
     : candidatePath;
-  return [
-    {
-      candidatePath,
-      inputPath,
-      displayPath: explicitRootPath
-        ? formatDisplayPath({
-            workspacePath,
-            rootPath: explicitRootPath,
-            candidatePath,
-            resolvedPath: inputPath,
-          })
-        : candidatePath,
-      rootPath: explicitRootPath || workspacePath,
-      priority: 0,
-      reason: explicitRootPath ? "explicit-root" : "workspace",
-    },
-  ];
-}
-
-function dedupeResolvedCandidates(candidates = [], agentContext = {}) {
-  const seen = new Set();
-  const result = [];
-  const caseInsensitivePath = isCaseInsensitivePathContext(agentContext);
-  for (const item of candidates) {
-    const normalizedKey = normalizeSlash(path.resolve(item.resolvedPath || ""));
-    const key = caseInsensitivePath ? normalizedKey.toLowerCase() : normalizedKey;
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(item);
-  }
-  return result.sort((a, b) => a.priority - b.priority);
-}
-
-function throwAmbiguousPatchPath({ filePath = "", fieldName = "filePath", matches = [] } = {}) {
-  const options = matches.map((item) => item.displayPath || item.candidatePath).filter(Boolean);
-  throw recoverableToolError(`ambiguous patch path: ${filePath}`, {
-    code: ERROR_CODE.RECOVERABLE_INVALID_INPUT,
-    details: {
-      field: fieldName,
-      filePath,
-      options,
-      reasons: matches.map((item) => item.reason).filter(Boolean),
-    },
-  });
+  return {
+    candidatePath,
+    inputPath,
+    displayPath: explicitRootPath
+      ? formatDisplayPath({
+          workspacePath,
+          rootPath: explicitRootPath,
+          candidatePath,
+          resolvedPath: inputPath,
+        })
+      : candidatePath,
+    rootPath: explicitRootPath || workspacePath,
+    reason: explicitRootPath ? "explicit-root" : "workspace",
+  };
 }
 
 function buildDiagnosticPathMapper(agentContext = {}) {
@@ -202,37 +164,25 @@ function buildDiagnosticPathMapper(agentContext = {}) {
 function buildPathAttemptDetails({
   filePath = "",
   fieldName = "filePath",
-  candidates = [],
+  candidate,
   agentContext = {},
   root = "",
 } = {}) {
   const workspacePath = resolvePatchDefaultRoot(agentContext);
   const toDiagnosticPath = buildDiagnosticPathMapper(agentContext);
-  const suggestedRoots = uniqueStrings(
-    candidates
-      .filter((item) => item.reason && String(item.reason).includes("discovered-project-root"))
-      .map((item) => toWorkspaceRelativePath(workspacePath, item.rootPath || ""))
-      .filter(
-        (relativeRoot) =>
-          relativeRoot &&
-          relativeRoot !== ".." &&
-          !relativeRoot.startsWith("../") &&
-          !isAbsolutePathAnyPlatform(relativeRoot),
-      ),
-  );
   return {
     field: fieldName,
     filePath,
     root: normalizePatchPathInput(root),
     basePath: toDiagnosticPath(workspacePath),
-    attemptedPaths: candidates.map((item) => ({
-      path: item.displayPath || item.candidatePath,
-      inputPath: toDiagnosticPath(item.inputPath || item.candidatePath),
-      rootPath: toDiagnosticPath(item.rootPath || workspacePath),
-      reason: item.reason,
-    })),
-    suggestedRoots,
-    suggestedRoot: suggestedRoots.length === 1 ? suggestedRoots[0] : "",
+    attemptedPaths: [
+      {
+        path: candidate.displayPath || candidate.candidatePath,
+        inputPath: toDiagnosticPath(candidate.inputPath || candidate.candidatePath),
+        rootPath: toDiagnosticPath(candidate.rootPath || workspacePath),
+        reason: candidate.reason,
+      },
+    ],
     hint: root
       ? "Patch path was resolved under the requested root. Check strip/root or use a path that exists under root."
       : "Patch paths are resolved from the current workspace root. If target files are in a child project, include that project directory in the patch path or pass root.",
@@ -242,7 +192,7 @@ function buildPathAttemptDetails({
 function throwPatchFileNotFound({
   filePath = "",
   fieldName = "filePath",
-  candidates = [],
+  candidate,
   agentContext = {},
   root = "",
   cause = null,
@@ -250,111 +200,39 @@ function throwPatchFileNotFound({
   throw recoverableToolError(`file not found: ${filePath}`, {
     code: ERROR_CODE.RECOVERABLE_FILE_NOT_FOUND,
     cause,
-    details: buildPathAttemptDetails({ filePath, fieldName, candidates, agentContext, root }),
+    details: buildPathAttemptDetails({ filePath, fieldName, candidate, agentContext, root }),
   });
 }
 
-async function resolveCompatibleWorkspaceFilePath({
+async function resolveWorkspacePatchPath({
   filePath = "",
   agentContext = {},
   fieldName = "filePath",
   mustExist = false,
   root = "",
 } = {}) {
-  const candidates = await buildPatchPathCandidates(filePath, agentContext, { root });
-  let firstError = null;
-  if (mustExist) {
-    const matches = [];
-    for (const candidate of candidates) {
-      try {
-        const resolution = await resolveAuthorizedUserWorkspaceFilePath({
-          filePath: candidate.inputPath || candidate.candidatePath,
-          agentContext,
-          fieldName,
-          capability: PATH_CAPABILITIES.FILE_PATCH,
-          mustExist: false,
-        });
-        if (await exists(resolution.executionPath)) {
-          matches.push({
-            ...candidate,
-            resolvedPath: resolution.executionPath,
-            pathRef: resolution.pathRef,
-          });
-        }
-      } catch (error) {
-        firstError ||= error;
-      }
-    }
-    const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
-    if (uniqueMatches.length === 1) {
-      const match = uniqueMatches[0];
-      return {
-        displayPath: match.displayPath,
-        resolvedPath: match.resolvedPath,
-        pathRef: match.pathRef,
-      };
-    }
-    if (uniqueMatches.length > 1) {
-      throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
-    }
-    if (firstError) throw firstError;
+  const candidate = await buildPatchPathCandidate(filePath, agentContext, { root });
+  const resolution = await resolveAuthorizedUserWorkspaceFilePath({
+    filePath: candidate.inputPath || candidate.candidatePath,
+    agentContext,
+    fieldName,
+    capability: PATH_CAPABILITIES.FILE_PATCH,
+    mustExist: false,
+  });
+  if (mustExist && !(await exists(resolution.executionPath))) {
     throwPatchFileNotFound({
       filePath,
       fieldName,
-      candidates,
+      candidate,
       agentContext,
       root,
-      cause: firstError,
     });
   }
-
-  const matches = [];
-  for (const candidate of candidates) {
-    try {
-      const resolution = await resolveAuthorizedUserWorkspaceFilePath({
-        filePath: candidate.inputPath || candidate.candidatePath,
-        agentContext,
-        fieldName,
-        capability: PATH_CAPABILITIES.FILE_PATCH,
-        mustExist: false,
-      });
-      if (await exists(path.dirname(resolution.executionPath))) {
-        matches.push({
-          ...candidate,
-          resolvedPath: resolution.executionPath,
-          pathRef: resolution.pathRef,
-        });
-      }
-    } catch (error) {
-      firstError ||= error;
-    }
-  }
-  const uniqueMatches = dedupeResolvedCandidates(matches, agentContext);
-  if (uniqueMatches.length === 1) {
-    const match = uniqueMatches[0];
-    return {
-      displayPath: match.displayPath,
-      resolvedPath: match.resolvedPath,
-      pathRef: match.pathRef,
-    };
-  }
-  if (uniqueMatches.length > 1) {
-    throwAmbiguousPatchPath({ filePath, fieldName, matches: uniqueMatches });
-  }
-  if (firstError?.code === ERROR_CODE.RECOVERABLE_PATH_OUT_OF_SCOPE) throw firstError;
-  if (firstError && candidates.length === 1) throw firstError;
-  const fallback = candidates[0]?.candidatePath || filePath;
-  const fallbackResolution = await resolveAuthorizedUserWorkspaceFilePath({
-    filePath: fallback,
-    agentContext,
-    fieldName,
-    mustExist: false,
-    capability: PATH_CAPABILITIES.FILE_PATCH,
-  });
   return {
-    displayPath: fallback,
-    resolvedPath: fallbackResolution.executionPath,
-    pathRef: fallbackResolution.pathRef,
+    displayPath: candidate.displayPath,
+    resolvedPath: resolution.executionPath,
+    resourcePath: resolution.resourcePath,
+    pathRef: resolution.pathRef,
   };
 }
 
@@ -382,7 +260,7 @@ export async function resolvePatchTargetsWithOptions({
     }
     const oldInfo =
       oldPath && oldPath !== "/dev/null"
-        ? await resolveCompatibleWorkspaceFilePath({
+        ? await resolveWorkspacePatchPath({
             filePath: oldPath,
             agentContext,
             fieldName: "patch.oldPath",
@@ -394,7 +272,7 @@ export async function resolvePatchTargetsWithOptions({
       newPath && newPath !== "/dev/null"
         ? normalizedItem.mode !== "add" && oldPath === newPath && oldInfo.resolvedPath
           ? oldInfo
-          : await resolveCompatibleWorkspaceFilePath({
+          : await resolveWorkspacePatchPath({
               filePath: newPath,
               agentContext,
               fieldName: "patch.newPath",
@@ -408,6 +286,8 @@ export async function resolvePatchTargetsWithOptions({
       newPath: newInfo.displayPath || newPath,
       resolvedOldPath: oldInfo.resolvedPath,
       resolvedNewPath: newInfo.resolvedPath,
+      oldResourcePath: oldInfo.resourcePath || "",
+      newResourcePath: newInfo.resourcePath || "",
       oldPathRef: oldInfo.pathRef || null,
       newPathRef: newInfo.pathRef || null,
     });

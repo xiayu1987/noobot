@@ -8,15 +8,13 @@ import {
   createHarness,
   makeSession,
   makeTurnReplacementResponse,
-  assistantMessage,
-  emitChannelState,
   emitAuthorityProcessing,
 } from "../helpers/useChatEngineHarness.js";
 import {
   BackendChannelState,
   FrontendRunState,
 } from "../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
-import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
+import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
 
 describe("useChatEngine.resend replace turn", () => {
   it("does not start a stale resend stream after delete supersedes its pending replace command", async () => {

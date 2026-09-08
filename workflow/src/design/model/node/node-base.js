@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../can-persistence-base.js';
-import IModel from '../interfaces/model.js';
+import CanPersistenceBase from "../../../can-persistence-base.js";
 
 class NodeBase extends CanPersistenceBase {
   constructor() {
@@ -34,4 +33,4 @@ class NodeBase extends CanPersistenceBase {
   }
 }
 
-export default  NodeBase;
+export default NodeBase;

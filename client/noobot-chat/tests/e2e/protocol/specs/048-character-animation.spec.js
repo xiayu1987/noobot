@@ -446,7 +446,7 @@ test("@full PBE-048 导入勾选 GLB 后工具生成权威动画并渲染唯一�
   await expect(connectorPanel).toHaveClass(/is-collapsed/);
   await expect(featurePanel).toHaveClass(/is-collapsed/);
   const collapsedArtifactBox = await artifactPanelAfterReload.boundingBox();
-  const collapsedNavigatorBox = await chatNavigatorPanel.boundingBox();
+
   const collapsedToolBox = await rightToolPanels.boundingBox();
   const collapsedToolLeft = collapsedToolBox?.x ?? Number.POSITIVE_INFINITY;
   expect((collapsedArtifactBox?.x || 0) + (collapsedArtifactBox?.width || 0)).toBeLessThanOrEqual(

@@ -125,7 +125,7 @@ export function buildEvent({
 export function buildContextSnapshot({ ctx = {}, pluginName = "", pluginVersion = "" } = {}) {
   const agentContext = ctx.agentContext || {};
   const runtime = extractRuntime(ctx) || {};
-  const systemRuntime = runtime.systemRuntime || {};
+
   return {
     plugin: pluginName,
     version: pluginVersion,

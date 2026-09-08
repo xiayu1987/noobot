@@ -7,7 +7,7 @@
 import { VideoPause, MoreFilled, Microphone, Camera } from "@element-plus/icons-vue";
 import { useLocale } from "../../../shared/i18n/useLocale.js";
 
-const props = defineProps({
+defineProps({
   modelValue: { type: String, default: "" },
   sending: { type: Boolean, default: false },
   sendRequesting: { type: Boolean, default: false },
@@ -134,7 +134,9 @@ function onInputKeydown(event) {
   justify-content: center;
   align-items: center;
   flex-shrink: 0;
-  transition: background-color 0.2s ease, filter 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    filter 0.2s ease;
 }
 
 .stop-float-btn:hover,
@@ -179,7 +181,9 @@ function onInputKeydown(event) {
   border: 1px solid transparent;
   background: transparent;
   color: var(--noobot-text-secondary);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
   box-shadow: none;
 }
 
@@ -202,7 +206,9 @@ function onInputKeydown(event) {
   flex-shrink: 0;
   border: none;
   box-shadow: none;
-  transition: filter 0.2s ease, opacity 0.2s ease;
+  transition:
+    filter 0.2s ease,
+    opacity 0.2s ease;
 }
 
 .send-btn-wrap {
@@ -230,7 +236,11 @@ function onInputKeydown(event) {
 }
 
 @media (max-width: 768px) {
-  .stop-float-btn { top: -50px; width: 40px; height: 40px; }
+  .stop-float-btn {
+    top: -50px;
+    width: 40px;
+    height: 40px;
+  }
   .send-btn {
     height: 32px;
     justify-self: center;

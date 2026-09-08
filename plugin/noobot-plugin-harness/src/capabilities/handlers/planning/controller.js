@@ -25,7 +25,6 @@ import { resolveWorkflowMode, runWorkflowLifecycle } from "../shared/workflow/pa
 import { resolveWorkflowThresholdModeFromContext } from "../shared/workflow/prompts.js";
 import { enforceWorkflowInvariants } from "../shared/workflow/invariants.js";
 
-const TASK_SUMMARY_TOOL_NAME = WORKFLOW_PARAMS.planning.tools.summaryToolName;
 const PLANNING_DECISION = WORKFLOW_PARAMS.planning.decisions;
 const PLANNING_EVENTS = WORKFLOW_PARAMS.logging.events.planning;
 const ACCEPTANCE_EVENTS = WORKFLOW_PARAMS.logging.events.acceptance;

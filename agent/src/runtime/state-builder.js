@@ -62,7 +62,7 @@ export function createStateBuilder({
     const userConfig = runtime.userConfig || {};
     const effectiveConfig = mergeConfigFn(globalConfig, userConfig);
     const eventListener = runtime.eventListener || null;
-    const abortSignal = runtime.abortSignal || null;
+
     const tools = getToolsFromAgentContext(agentContext);
 
     normalizeSystemRuntimeCountersFn(sys, currentUserMessage.content);

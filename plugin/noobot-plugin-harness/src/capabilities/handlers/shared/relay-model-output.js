@@ -5,7 +5,7 @@
  */
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
-import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
+import { CAPABILITY_DOMAIN, LOCALE } from "./constants.js";
 import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
 import { injectMessageWithPolicy } from "./message/injection-utils.js";
 import { containsExecutableScriptText } from "./script-content-risk.js";

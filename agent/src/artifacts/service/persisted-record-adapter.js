@@ -14,7 +14,7 @@ import {
   isAbsolutePathAnyPlatform,
   isPathWithinRoot,
 } from "@noobot/path-resolver";
-import { safeNum, safeStr } from "../../shared/utils/shared-utils.js";
+import { safeStr } from "../../shared/utils/shared-utils.js";
 import { DEFAULT_MIME_TYPE } from "../constants.js";
 import { attachScopeRoot } from "./attachment-storage-layout.js";
 

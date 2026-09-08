@@ -10,8 +10,6 @@ import { BUILTIN_ATTACHMENT_POLICY } from "../../config/index.js";
 import { safeStr } from "../../shared/utils/shared-utils.js";
 
 export function resolveAttachmentPolicy(policy = {}) {
-  const config = policy && typeof policy === "object" ? policy : {};
-
   return {
     maxFileSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxFileSizeBytes,
     maxTotalSizeBytes: BUILTIN_ATTACHMENT_POLICY.maxTotalSizeBytes,

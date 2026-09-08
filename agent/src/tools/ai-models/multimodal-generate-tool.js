@@ -20,7 +20,6 @@ import {
 import { resolveModelSpecOrConfiguredDefault } from "../../models/index.js";
 import { toToolJsonResult } from "../core/tool-json-result.js";
 import { tTool } from "../core/tool-i18n.js";
-import { parseDataUrl, sanitizeGeneratedArtifactName } from "../../shared/utils/mime-utils.js";
 import { recoverableToolError } from "../../shared/errors/index.js";
 import { ERROR_CODE } from "../../shared/errors/constants.js";
 import { MIME_TYPE } from "../../shared/constants/index.js";
@@ -150,20 +149,6 @@ async function imageUrlToBase64(url = "", fetchImpl = null, runtime = {}) {
   return imageBytes.toString("base64");
 }
 
-function parseDataUrlToImageArtifact(dataUrl = "", fileName = "generated_image_1.png") {
-  const parsed = parseDataUrl(dataUrl);
-  if (!parsed) return null;
-  const finalFileName =
-    fileName === "generated_image_1.png"
-      ? sanitizeGeneratedArtifactName("generated_image_1", parsed.mimeType, 1)
-      : fileName;
-  return {
-    fileName: finalFileName,
-    b64Json: parsed.contentBase64,
-    url: "",
-  };
-}
-
 function normalizeImageSize(imageSize = "1024x1024") {
   const normalizedImageSize = String(imageSize || "1024x1024").trim();
   return normalizedImageSize || "1024x1024";
@@ -234,63 +219,6 @@ function resolveGenerationModelSpec({
     resolvedModelName,
     resolvedModelSpec,
   };
-}
-
-function extractImageArtifactsFromResponsesOutput(responseOutputItems = []) {
-  const normalizedOutputItems = Array.isArray(responseOutputItems) ? responseOutputItems : [];
-  const imageArtifacts = [];
-  let imageIndex = 0;
-  for (const outputItem of normalizedOutputItems) {
-    if (!outputItem || typeof outputItem !== "object") continue;
-    const outputItemType = String(outputItem?.type || "")
-      .trim()
-      .toLowerCase();
-    const directBase64 = String(
-      outputItem?.result || outputItem?.b64_json || outputItem?.image_base64 || "",
-    ).trim();
-    if (outputItemType.includes("image") && directBase64) {
-      imageIndex += 1;
-      imageArtifacts.push({
-        fileName: `generated_image_${imageIndex}.png`,
-        b64Json: directBase64,
-        url: "",
-      });
-      continue;
-    }
-    const outputContents = Array.isArray(outputItem?.content) ? outputItem.content : [];
-    for (const contentItem of outputContents) {
-      if (!contentItem || typeof contentItem !== "object") continue;
-      const contentItemType = String(contentItem?.type || "")
-        .trim()
-        .toLowerCase();
-      const contentItemBase64 = String(
-        contentItem?.result ||
-          contentItem?.b64_json ||
-          contentItem?.image_base64 ||
-          contentItem?.data ||
-          "",
-      ).trim();
-      const imageDataUrl = String(contentItem?.image_url?.url || "").trim();
-      if (contentItemType.includes("image") && contentItemBase64) {
-        imageIndex += 1;
-        imageArtifacts.push({
-          fileName: `generated_image_${imageIndex}.png`,
-          b64Json: contentItemBase64,
-          url: "",
-        });
-        continue;
-      }
-      if (contentItemType.includes("image") && imageDataUrl.startsWith("data:image/")) {
-        imageIndex += 1;
-        const parsedArtifact = parseDataUrlToImageArtifact(
-          imageDataUrl,
-          `generated_image_${imageIndex}.png`,
-        );
-        if (parsedArtifact) imageArtifacts.push(parsedArtifact);
-      }
-    }
-  }
-  return imageArtifacts;
 }
 
 export function createMultimodalGenerateTool({ agentContext }) {
@@ -393,9 +321,7 @@ export function createMultimodalGenerateTool({ agentContext }) {
             },
           );
         }
-        const modelNameForGeneration = String(
-          resolvedModelSpec?.model || resolvedModelName || "",
-        ).trim();
+
         generationApiType = resolveGenerationApiType(resolvedModelSpec || {});
         effectiveImageSize =
           String(size || image_size || "").trim() ||

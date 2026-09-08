@@ -14,6 +14,7 @@ import { createFileSourceSchema, resolveFileInput } from "../core/file-input.js"
 import { tTool } from "../core/tool-i18n.js";
 import { TOOL_NAME, TOOL_RESULT_STATE } from "../constants/index.js";
 import {
+  RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
   classifyResourceRisk,
 } from "@noobot/security-assessment-protocol";
@@ -21,6 +22,7 @@ import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import { applyFileMutation } from "./file-mutation-service.js";
 import {
   buildFileToolDescription,
+  resolveFileResourceRiskScope,
   mutationLogicalPath,
   resolveRuntimeFileMutationRoot,
   resourceFileName,
@@ -54,13 +56,21 @@ export function createWriteFileTool({ agentContext, runtime, workspaceIo }) {
         capability: PATH_CAPABILITIES.FILE_WRITE,
       });
       const resolvedPath = resolvedInput.executionPath;
+      const resourcePath = resolvedInput.resourcePath;
       const pathRef = resolvedInput.pathRef;
       await confirmToolOperation({
         runtime,
         declaredRiskLevel: riskLevel,
         serverEvidence: {
           source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-          riskLevel: classifyResourceRisk({ operation: "write", scope: pathRef.view }),
+          riskLevel: classifyResourceRisk({
+            operation: RESOURCE_OPERATION.WRITE,
+            scope: resolveFileResourceRiskScope({
+              pathRef,
+              resourcePath,
+              runtime,
+            }),
+          }),
         },
         toolName: TOOL_NAME.WRITE_FILE,
         operation: "write file",

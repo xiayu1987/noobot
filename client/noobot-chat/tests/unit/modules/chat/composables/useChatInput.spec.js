@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { useChatStore } from "../../../../../src/modules/chat/stores/useChatStore.js";
 import { useChatInput } from "../../../../../src/modules/chat/composables/useChatInput.js";
@@ -127,7 +127,9 @@ describe("useChatInput", () => {
     const file = new File(["fallback"], "fallback.txt", { type: "text/plain" });
     const { serializeAttachments } = useChatInput({ isImageMime: () => false });
 
-    const attachments = await serializeAttachments([{ ...file, name: file.name, mimeType: file.type, raw: file }]);
+    const attachments = await serializeAttachments([
+      { ...file, name: file.name, mimeType: file.type, raw: file },
+    ]);
     const expectedBase64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 
     expect(attachments[0].contentBase64).toBe(expectedBase64);

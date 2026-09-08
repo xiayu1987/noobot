@@ -3,13 +3,12 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { defineComponent, nextTick, onMounted, onUnmounted, reactive } from "vue";
+import { defineComponent, nextTick, reactive } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, getActivePinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ChatMessageListPanel from "../../../../../../src/modules/chat/components/navigation/ChatMessageListPanel.vue";
 import { RoleEnum } from "../../../../../../src/modules/chat/model/chatConstants.js";
-import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatStore.js";
 
 const chatMessageItemMock = vi.hoisted(() => ({
   field: "content",
@@ -19,7 +18,12 @@ const chatMessageItemMock = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../../../../src/modules/chat/components/message/ChatMessageItem.vue", async () => {
-  const { defineComponent: defineVueComponent, h, onMounted: onVueMounted, onUnmounted: onVueUnmounted } = await import("vue");
+  const {
+    defineComponent: defineVueComponent,
+    h,
+    onMounted: onVueMounted,
+    onUnmounted: onVueUnmounted,
+  } = await import("vue");
   return {
     default: defineVueComponent({
       name: "ChatMessageItem",
@@ -34,7 +38,11 @@ vi.mock("../../../../../../src/modules/chat/components/message/ChatMessageItem.v
         return () => {
           const messageItem = props.messageItem || {};
           chatMessageItemMock.render?.(props);
-          return h("div", { class: "chat-message-item-stub" }, String(messageItem?.[chatMessageItemMock.field] || ""));
+          return h(
+            "div",
+            { class: "chat-message-item-stub" },
+            String(messageItem?.[chatMessageItemMock.field] || ""),
+          );
         };
       },
     }),
@@ -108,7 +116,6 @@ describe("ChatMessageListPanel", () => {
     setActivePinia(createPinia());
   });
 
-
   it("does not show skeleton when loading detail but messages already exist", () => {
     const wrapper = mountPanel({
       loadingSessionDetail: true,
@@ -121,30 +128,56 @@ describe("ChatMessageListPanel", () => {
 
   it("marks only messages owned by the latest assistant turn as current", () => {
     const projections = [];
-    chatMessageItemMock.render = (itemProps) => projections.push({
-      turnScopeId: itemProps.messageItem?.turnScopeId,
-      currentTurn: itemProps.currentTurn,
-    });
+    chatMessageItemMock.render = (itemProps) =>
+      projections.push({
+        turnScopeId: itemProps.messageItem?.turnScopeId,
+        currentTurn: itemProps.currentTurn,
+      });
 
-    mountPanel({
-      activeSession: {
-        id: "session-current",
-        messages: [
-          { role: RoleEnum.USER, content: "old", sessionId: "session-current", turnScopeId: "turn-old" },
-          { role: RoleEnum.ASSISTANT, content: "old answer", sessionId: "session-current", turnScopeId: "turn-old" },
-          { role: RoleEnum.USER, content: "new", sessionId: "session-current", turnScopeId: "turn-current" },
-          { role: RoleEnum.ASSISTANT, content: "new answer", sessionId: "session-current", turnScopeId: "turn-current" },
-        ],
+    mountPanel(
+      {
+        activeSession: {
+          id: "session-current",
+          messages: [
+            {
+              role: RoleEnum.USER,
+              content: "old",
+              sessionId: "session-current",
+              turnScopeId: "turn-old",
+            },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "old answer",
+              sessionId: "session-current",
+              turnScopeId: "turn-old",
+            },
+            {
+              role: RoleEnum.USER,
+              content: "new",
+              sessionId: "session-current",
+              turnScopeId: "turn-current",
+            },
+            {
+              role: RoleEnum.ASSISTANT,
+              content: "new answer",
+              sessionId: "session-current",
+              turnScopeId: "turn-current",
+            },
+          ],
+        },
       },
-    }, { preserveChatMessageItemMock: true });
+      { preserveChatMessageItemMock: true },
+    );
 
     const assistantProjections = projections.filter((item) =>
       ["turn-old", "turn-current"].includes(item.turnScopeId),
     );
-    expect(assistantProjections).toEqual(expect.arrayContaining([
-      { turnScopeId: "turn-old", currentTurn: false },
-      { turnScopeId: "turn-current", currentTurn: true },
-    ]));
+    expect(assistantProjections).toEqual(
+      expect.arrayContaining([
+        { turnScopeId: "turn-old", currentTurn: false },
+        { turnScopeId: "turn-current", currentTurn: true },
+      ]),
+    );
   });
 
   it("message item key remains stable when only content changes", async () => {
@@ -197,7 +230,6 @@ describe("ChatMessageListPanel", () => {
     expect(counters.mounted).toBe(1);
     expect(counters.unmounted).toBe(0);
   });
-
 
   it("keeps assistant item mounted when dialogProcessId arrives for the same placeholder", async () => {
     const counters = reactive({ mounted: 0, unmounted: 0 });
@@ -342,7 +374,12 @@ describe("ChatMessageListPanel", () => {
       sessionId: "s-1",
       messages: [
         { role: RoleEnum.USER, content: "edited orphan", turnScopeId: "turn-live" },
-        { role: RoleEnum.ASSISTANT, content: "partial after refresh", pending: false, turnScopeId: "turn-live" },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "partial after refresh",
+          pending: false,
+          turnScopeId: "turn-live",
+        },
       ],
     };
 
@@ -429,7 +466,12 @@ describe("ChatMessageListPanel", () => {
           turnScopeId: "turn-old",
         },
         { role: RoleEnum.USER, content: "new q", turnScopeId: "turn-new" },
-        { role: RoleEnum.ASSISTANT, content: "new partial", pending: false, turnScopeId: "turn-new" },
+        {
+          role: RoleEnum.ASSISTANT,
+          content: "new partial",
+          pending: false,
+          turnScopeId: "turn-new",
+        },
       ],
     };
 
@@ -472,12 +514,15 @@ describe("ChatMessageListPanel", () => {
       },
     ];
 
-    mountPanel({
-      activeSession: {
-        messages: renderedMessages,
-        rawMessages: staleRawMessages,
+    mountPanel(
+      {
+        activeSession: {
+          messages: renderedMessages,
+          rawMessages: staleRawMessages,
+        },
       },
-    }, { preserveChatMessageItemMock: true });
+      { preserveChatMessageItemMock: true },
+    );
 
     expect(capturedProps).toHaveLength(renderedMessages.length);
     expect(capturedProps[2].messageItem.content).toBe("全仓回归测试");
@@ -492,8 +537,18 @@ describe("ChatMessageListPanel", () => {
     const wrapper = mountPanel({
       activeSession: {
         messages: [
-          { role: RoleEnum.USER, sessionId: "session-1", turnScopeId: "turn-user", content: "hello" },
-          { role: RoleEnum.ASSISTANT, sessionId: "session-1", turnScopeId: "turn-assistant", content: "hi" },
+          {
+            role: RoleEnum.USER,
+            sessionId: "session-1",
+            turnScopeId: "turn-user",
+            content: "hello",
+          },
+          {
+            role: RoleEnum.ASSISTANT,
+            sessionId: "session-1",
+            turnScopeId: "turn-assistant",
+            content: "hi",
+          },
         ],
       },
     });
@@ -501,14 +556,19 @@ describe("ChatMessageListPanel", () => {
     const anchors = wrapper.findAll("[data-chat-message-anchor]");
     expect(anchors).toHaveLength(2);
     expect(anchors[0].attributes("id")).toBe("chat-message-user-session-1--turn-user-0");
-    expect(anchors[0].attributes("data-chat-message-anchor")).toBe("chat-message-user-session-1--turn-user-0");
-    expect(wrapper.vm.getMessageAnchorId({
-      role: RoleEnum.ASSISTANT,
-      sessionId: "session-1",
-      turnScopeId: "turn-assistant",
-    }, 1)).toBe(
-      "chat-message-assistant-session-1--turn-assistant-1",
+    expect(anchors[0].attributes("data-chat-message-anchor")).toBe(
+      "chat-message-user-session-1--turn-user-0",
     );
+    expect(
+      wrapper.vm.getMessageAnchorId(
+        {
+          role: RoleEnum.ASSISTANT,
+          sessionId: "session-1",
+          turnScopeId: "turn-assistant",
+        },
+        1,
+      ),
+    ).toBe("chat-message-assistant-session-1--turn-assistant-1");
     expect(
       wrapper.vm.getMessageAnchorId(
         {

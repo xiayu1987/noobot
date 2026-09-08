@@ -118,8 +118,7 @@ export async function invokeNoToolsTurn({
 }) {
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
-  const { traces, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } =
-    loopState;
+  const { traces } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
 
   emitEvent(eventListener, "llm_call_start", { turn, mode: "no_tools" });
@@ -158,8 +157,7 @@ export async function invokeNoToolsTurn({
     turn,
     mode: "no_tools",
   });
-  const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const locale = String(systemRuntime?.locale || "zh-CN");
+
   let modelResponse = null;
   const assistantMessageId = beginAssistantMessageEventStream(runtime, { turn });
   const presentationMessageId = currentAssistantPresentationMessageId(runtime);
@@ -280,11 +278,9 @@ export async function invokeNoToolsTurn({
 export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   const modelContext = requireLoopStateModelContext(loopState);
   const messages = modelContext.messages;
-  const { traces, tools, turnMessages, currentTurnMessages, currentTurnTasks, dialogProcessId } =
-    loopState;
+  const { traces, tools, currentTurnMessages, currentTurnTasks, dialogProcessId } = loopState;
   const { eventListener, runtime, abortSignal } = modelState;
   const systemRuntime = getSystemRuntimeFromRuntime(runtime);
-  const locale = String(systemRuntime?.locale || "zh-CN");
 
   const { adaptedBinding, configuredToolChoice, boundTools, toolMap } = prepareToolBinding({
     tools,
@@ -505,9 +501,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
   await stateCommitter.pushAssistantMessage({
     content: finalAiContentText,
     rawModelContent: ai?.content ?? ai?.text ?? null,
-    modelAdditionalKwargs: ai?.responseReasoning
-      ? { reasoning: ai.responseReasoning }
-      : null,
+    modelAdditionalKwargs: ai?.responseReasoning ? { reasoning: ai.responseReasoning } : null,
     modelResponseMetadata: {
       ...(ai?.responseOutput ? { output: ai.responseOutput } : {}),
       ...(ai?.finishReason ? { finishReason: ai.finishReason } : {}),

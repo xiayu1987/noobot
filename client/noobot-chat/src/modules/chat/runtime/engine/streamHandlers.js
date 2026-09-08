@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 import { StreamEventEnum } from "../../model/chatConstants.js";
-import {
-  getMessageDialogProcessId,
-  getMessageRole,
-  getMessageTurnScopeId,
-} from "../../model/messageIdentity.js";
+import { getMessageRole, getMessageTurnScopeId } from "../../model/messageIdentity.js";
 import { normalizeTrimmedString } from "./utils.js";
 import {
   attachmentIdentityKey,
@@ -21,16 +17,10 @@ import {
   isTerminalInteraction,
   normalizeInteractionRequestPayload,
 } from "../interactionPayload.js";
-import { mergeAttachments } from "../../model/dialogProcessChain.js";
 
 function markFirstStreamEvent(botMessage) {
   if (!botMessage) return;
   botMessage.hasFirstStreamEvent = true;
-}
-
-function notifySendingStartedWhenDialogReady({ botMessage, locateSendingStartedMessageOnce }) {
-  if (!getMessageDialogProcessId(botMessage)) return;
-  locateSendingStartedMessageOnce?.();
 }
 
 function resolveFirstResponseNavigator({

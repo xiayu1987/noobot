@@ -3,7 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { AGENT_PROXY_ERROR, CONVERSATION_STATE } from "../../shared/constants.js";
+import { AGENT_PROXY_ERROR } from "../../shared/constants.js";
 import { config } from "../../shared/config.js";
 import { ensureConnectionId, nowMs, resolveMessageEventTrace } from "../../shared/utils.js";
 import { localizeAgentProxyMessage } from "noobot-i18n/agent-proxy";

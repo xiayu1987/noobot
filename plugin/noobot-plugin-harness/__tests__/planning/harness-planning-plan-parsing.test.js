@@ -8,14 +8,8 @@ import {
   assert,
   assertFlatCapabilityMessages,
   createAgentHookManager,
-  exists,
-  fs,
-  os,
-  path,
-  readJsonl,
   registerHarnessCore,
   test,
-  waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning accepts numbered plain-text plan output", async () => {

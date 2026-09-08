@@ -158,10 +158,7 @@ function convertToolChoice(value = "auto") {
 
 function responseFromAnthropic(raw = {}) {
   const blocks = Array.isArray(raw.content) ? raw.content : [];
-  const text = blocks
-    .filter((b) => b?.type === "text")
-    .map((b) => b.text || "")
-    .join("");
+
   const reasoning = blocks
     .filter((b) => b?.type === "thinking")
     .map((b) => b.thinking || "")

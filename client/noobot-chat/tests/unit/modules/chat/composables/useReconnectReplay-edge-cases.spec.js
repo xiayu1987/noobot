@@ -5,10 +5,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createAuthoritativeMessageEnvelope,
   createCanonicalAssistant,
   createFixture,
-  createFakeProcessStore,
   createInteractionEnvelope,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum, StreamEventEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -25,13 +23,13 @@ describe("useReconnectReplay", () => {
       dialogProcessId: "dp-order",
       turnScopeId: "turn-order",
     });
-    refs.activeSession.value.messages = [
-      { role: RoleEnum.USER, content: "q" },
-      assistant,
-    ];
+    refs.activeSession.value.messages = [{ role: RoleEnum.USER, content: "q" }, assistant];
     const result = await api.applyReconnectEvent(StreamEventEnum.CHANNEL_STATE, {
-      sessionId: "s-1", dialogProcessId: "dp-order", turnScopeId: "turn-order",
-      state: "error", seq: 3,
+      sessionId: "s-1",
+      dialogProcessId: "dp-order",
+      turnScopeId: "turn-order",
+      state: "error",
+      seq: 3,
     });
 
     expect(result).toEqual({ applied: false, reason: "transport_channel_state_ignored" });
@@ -47,7 +45,13 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: true,
+        statusLabel: "",
+        turnScopeId: "turn-missing",
+      },
     ];
 
     await api.applyReconnectData({ sessions: [{ sessionId: "s-1" }] });
@@ -71,19 +75,25 @@ describe("useReconnectReplay", () => {
     const { api, refs, mocks } = createFixture();
     refs.activeSession.value.messages = [
       { role: RoleEnum.USER, content: "q" },
-      { role: RoleEnum.ASSISTANT, content: "", pending: true, statusLabel: "", turnScopeId: "turn-missing" },
+      {
+        role: RoleEnum.ASSISTANT,
+        content: "",
+        pending: true,
+        statusLabel: "",
+        turnScopeId: "turn-missing",
+      },
     ];
 
-    const interaction = createInteractionEnvelope({
-      requestId: "req-late",
-      dialogProcessId: "dp-late",
-      interactionType: "confirm",
-      content: "continue?",
-    }, { sessionId: "s-1", turnScopeId: "turn-missing" });
-    const result = await api.applyReconnectEvent(
-      interaction.identity.eventType,
-      interaction,
+    const interaction = createInteractionEnvelope(
+      {
+        requestId: "req-late",
+        dialogProcessId: "dp-late",
+        interactionType: "confirm",
+        content: "continue?",
+      },
+      { sessionId: "s-1", turnScopeId: "turn-missing" },
     );
+    const result = await api.applyReconnectEvent(interaction.identity.eventType, interaction);
 
     expect(result?.applied).not.toBe(false);
     expect(mocks.setPendingInteractionRequest).toHaveBeenCalledWith(
@@ -99,5 +109,4 @@ describe("useReconnectReplay", () => {
     expect(mocks.notify).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
-
 });

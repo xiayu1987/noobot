@@ -19,19 +19,6 @@ function applyMessageEvent(store, eventName, data) {
   return store.reduceSubSessionMessageEvent(data, { source: "test" });
 }
 
-function applySessionSnapshot(store, sessionDoc) {
-  return store.applyWorkflowRuntimeEvent(
-    canonicalWorkflowSessionSnapshot({
-      aggregateVersion: 1,
-      parentSessionId: "root-session",
-      workflowRunId: "workflow-run-1",
-      nodeExecutionId: "node-execution-1",
-      ...sessionDoc,
-    }),
-    { source: "test_snapshot" },
-  );
-}
-
 function messageEvent(eventType, data = {}) {
   const messageId = data.messageId || "message-1";
   return canonicalMessageEvent({

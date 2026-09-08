@@ -4,32 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { describe, expect, it, beforeEach } from "vitest";
-import { ref } from "vue";
 import {
-  BackendChannelState,
-  BackendTerminalStates,
   FrontendRunState,
-  FrontendTerminalStates,
-  SESSION_RUN_EVENT,
-  SESSION_RUN_MESSAGE_RUNTIME_ACTION,
-  SESSION_RUN_MESSAGE_RUNTIME_MARK,
-  SESSION_RUN_MESSAGE_RUNTIME_REASON,
-  SESSION_RUN_TRANSITION_DECISION_REASON,
-  SESSION_RUN_TRANSITION_GUARDS,
-  SESSION_RUN_TRANSITION_TABLE,
   clearRememberedStopRequests,
-  createInitialSessionRunState,
-  evaluateSessionRunState,
-  normalizeSessionRunEvent,
   rememberStopRequestedEvent,
-  resolveEventScope,
   resolveRememberedStopRequestedEvent,
-  getMessageRuntimeChannelState,
-  isMessageInFlightAssistant,
-  isMessageRunning,
-  resolveSessionRunMessageRuntimeView,
-  resolveSessionRunMessageRuntimePatch,
-  resolveSessionRunStateForMessage,
 } from "../../../../../../src/modules/chat/runtime/sessionRunStateMachine.js";
 
 function installStorage() {
@@ -56,23 +35,29 @@ describe("sessionRunStateMachine remembered stop requests", () => {
       commandId: "stop:turn-1",
       timestamp: Date.now(),
     });
-    expect(resolveRememberedStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "d1",
-    })).toBeNull();
-    expect(resolveRememberedStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "d1",
-      turnScopeId: "turn-1",
-    })).toMatchObject({
+    expect(
+      resolveRememberedStopRequestedEvent({
+        sessionId: "s1",
+        dialogProcessId: "d1",
+      }),
+    ).toBeNull();
+    expect(
+      resolveRememberedStopRequestedEvent({
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+      }),
+    ).toMatchObject({
       state: FrontendRunState.USER_STOPPING,
       commandId: "stop:turn-1",
     });
     clearRememberedStopRequests({ sessionId: "s1", dialogProcessId: "d1", turnScopeId: "turn-1" });
-    expect(resolveRememberedStopRequestedEvent({
-      sessionId: "s1",
-      dialogProcessId: "d1",
-      turnScopeId: "turn-1",
-    })).toBeNull();
+    expect(
+      resolveRememberedStopRequestedEvent({
+        sessionId: "s1",
+        dialogProcessId: "d1",
+        turnScopeId: "turn-1",
+      }),
+    ).toBeNull();
   });
 });

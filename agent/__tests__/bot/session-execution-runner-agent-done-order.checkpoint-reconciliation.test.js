@@ -6,15 +6,8 @@
 import test from "node:test";
 import {
   assert,
-  fs,
-  os,
-  path,
   createRunner,
   finalizeAgentTurn,
-  AGENT_LIFECYCLE_BRANCH_STATE,
-  AGENT_LIFECYCLE_EVENT,
-  AGENT_LIFECYCLE_STATE,
-  loadStoppedModelMessageSnapshot,
 } from "./session-execution-runner-agent-done-order.fixtures.js";
 
 test("runSession restores only the checkpoint-persisted agent prefix at finalization", async () => {
@@ -381,17 +374,3 @@ test("finalizer preserves canonical activity from the timeline checkpoint", asyn
   );
   assert.equal(capturedFinalizePayload.alreadyPersistedTurnMessageCount, 1);
 });
-
-function collectLifecycleStates(events) {
-  return events
-    .filter((item) => item.event === AGENT_LIFECYCLE_EVENT)
-    .map((item) => item.data.state);
-}
-
-function findStoppedLifecycleEvent(events) {
-  return events.find(
-    (item) =>
-      item.event === AGENT_LIFECYCLE_EVENT &&
-      item.data?.state === AGENT_LIFECYCLE_BRANCH_STATE.USER_STOPPED,
-  );
-}

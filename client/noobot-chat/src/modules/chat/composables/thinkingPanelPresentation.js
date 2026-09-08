@@ -5,7 +5,6 @@
  */
 import { ref } from "vue";
 import {
-  getTurnUiState,
   isTurnDetailExpanded,
   setTurnThinkingOpenNames,
   toggleTurnDetailKey,
@@ -40,10 +39,7 @@ export function createThinkingPanelPresentation({
     });
   }
 
-  function getThinkingDetailItemKey(
-    _groupedToolLogs,
-    toolLogItem,
-  ) {
+  function getThinkingDetailItemKey(_groupedToolLogs, toolLogItem) {
     return toolLogDetailKey(toolLogItem);
   }
 

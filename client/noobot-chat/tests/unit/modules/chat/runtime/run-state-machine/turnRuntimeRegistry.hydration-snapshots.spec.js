@@ -7,37 +7,17 @@ import { describe, it, expect } from "vitest";
 import { nextTick, ref } from "vue";
 import {
   createTurnRuntimeRegistryState,
-  confirmTurnRuntimeDeletion,
-  applyTurnRuntimeEvent,
   resolveSessionTurnRuntime,
-  resolveLatestStoppedTurn,
   resolveLatestContinuableStoppedTurn,
   resolveTurnRuntimeByScope,
-  removeTurnRuntime,
-  removeSessionRuntime,
-  pruneTerminalTurns,
   selectSessionTurnRuntime,
-  selectTurnMessageRuntime,
-  turnRuntimeDisplayState,
   applyTurnLifecycleEnvelope,
   applyTurnLifecycleSnapshot,
   applyTurnTimingSnapshot,
-  applyTurnTerminalResolution,
-  applyExecutionSnapshot,
-  applyExecutionTree,
-  executionTurnKey,
   isTurnRuntimeDeleted,
 } from "../../../../../../src/modules/chat/runtime/run-state-machine/turnRuntimeRegistry.js";
-import {
-  SESSION_RUN_EVENT,
-  BackendChannelState,
-} from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
-import {
-  backendState,
-  sendStart,
-  settleTerminal,
-  snapshot,
-} from "./turnRuntimeRegistryTestFixtures.js";
+import { BackendChannelState } from "../../../../../../src/modules/chat/runtime/run-state-machine/constants.js";
+import { backendState, settleTerminal, snapshot } from "./turnRuntimeRegistryTestFixtures.js";
 import { createTurnRuntimeStoreActions } from "../../../../../../src/modules/chat/stores/chatStoreTurnRuntime.js";
 import { createComposerRuntimeState } from "../../../../../../src/modules/chat/runtime/session/composerRuntimeState.js";
 import { createEventEnvelope, EVENT_FAMILY, replayEventTail } from "@noobot/event-protocol";

@@ -5,9 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import {
   createTestHookContext,
@@ -16,12 +13,7 @@ import {
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import {
-  createAcceptanceHandler,
-  createGuidanceHandler,
-} from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 
 function assertFlatCapabilityMessages(messages = []) {
   assert.equal(Array.isArray(messages), true);
@@ -261,10 +253,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     agentContext,
     result: { output: "work is not complete" },
   });
-  await tool.invoke(
-    { mode: "active" },
-    { configurable: { noobotHookContext: toolCtx } },
-  );
+  await tool.invoke({ mode: "active" }, { configurable: { noobotHookContext: toolCtx } });
 
   assert.equal(state.flags.acceptanceRequested, true);
   assert.equal(state.flags.acceptanceReviewing, false);
@@ -273,9 +262,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
   assert.equal(state.pending.summaryCheckpointMessageIds, null);
   assert.equal(state.flags.summaryByCharsPrompted, false);
   assert.equal(
-    agentContext.payload.tools.registry.some(
-      (item) => item.name === "request_task_acceptance",
-    ),
+    agentContext.payload.tools.registry.some((item) => item.name === "request_task_acceptance"),
     false,
   );
   assert.deepEqual(acceptanceReviewingStates, [true, true]);
@@ -296,9 +283,7 @@ test("task acceptance clears queued summary, pauses only during review, and is e
     summaryInvocationCountAfterAcceptance,
   );
   assert.equal(
-    agentContext.payload.tools.registry.some(
-      (item) => item.name === "request_task_acceptance",
-    ),
+    agentContext.payload.tools.registry.some((item) => item.name === "request_task_acceptance"),
     false,
   );
 });
@@ -363,8 +348,5 @@ test("harness active request_task_acceptance falls back to closure meta when con
   assert.equal(result.phaseAcceptanceTriggered, true);
   assert.equal(result.report, undefined);
   assert.equal(result.acceptance.semanticValidation.status, "pass");
-  assert.equal(
-    agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status,
-    "pass",
-  );
+  assert.equal(agentContext.payload.harness.lastAcceptanceReport.semanticValidation.status, "pass");
 });

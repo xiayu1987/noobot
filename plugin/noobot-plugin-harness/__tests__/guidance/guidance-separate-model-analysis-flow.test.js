@@ -10,26 +10,7 @@ import { appendMessage } from "../../src/core/message-store.js";
 
 import {
   createGuidanceHandler,
-  createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
-  LLM_SUMMARY_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
-  FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
-  createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("separate_model analysis uses aligned agent context then user request and user responsibility", async () => {

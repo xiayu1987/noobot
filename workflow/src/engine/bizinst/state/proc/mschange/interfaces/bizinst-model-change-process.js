@@ -4,11 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../../interfaces/can-persistence.js';
-
 class IBizinstModelChangeProcess {
   setAddStepStateProcesses(addStepStateProcesses) {}
   getAddStepStateProcesses() {}
 }
 
-export default  IBizinstModelChangeProcess;
+export default IBizinstModelChangeProcess;

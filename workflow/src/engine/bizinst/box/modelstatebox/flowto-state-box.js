@@ -4,11 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IFlowtoState from '../../state/modelstate/interfaces/flowto-state.js';
-import IBizinstModel from '../../state/modelstate/interfaces/bizinst-model.js';
-import INodeState from '../../state/modelstate/interfaces/node-state.js';
-import IPathState from '../../state/modelstate/interfaces/path-state.js';
-import PathState from '../../state/modelstate/path-state.js';
+import PathState from "../../state/modelstate/path-state.js";
 
 class FlowtoStateBox {
   constructor() {
@@ -30,4 +26,4 @@ class FlowtoStateBox {
   }
 }
 
-export default  FlowtoStateBox;
+export default FlowtoStateBox;

@@ -3,20 +3,16 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { HOOK_POINT } from "@noobot/hook-protocol";
 import { randomUUID } from "node:crypto";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
-import { CAPABILITY_DOMAIN, LOCALE, PROMPT_ENVELOPE } from "./constants.js";
+import { CAPABILITY_DOMAIN, PROMPT_ENVELOPE } from "./constants.js";
 import { ensureHarnessBucket } from "./bucket-utils.js";
-import { HARNESS_I18N_KEYSET, translateI18nText } from "./i18n.js";
-import { injectMessageWithPolicy } from "./message/injection-utils.js";
-import { resolveDialogProcessIdFromContext } from "./runtime/dialog-process-id.js";
-import {
-  buildHarnessInjectedMessage,
-  resolveCurrentTurnMessagesStore,
-} from "./message/injected-message-utils.js";
+import { resolveCurrentTurnMessagesStore } from "./message/injected-message-utils.js";
 import { resolveModelMessages } from "../../../core/message-store.js";
-import { mergeTransferEnvelopes, normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
+import {
+  mergeTransferEnvelopes,
+  normalizeTransferEnvelopes,
+} from "@noobot/semantic-transfer-protocol";
 
 const SHARED_EVENTS = WORKFLOW_PARAMS.logging.events.shared;
 function isPlainObject(value) {

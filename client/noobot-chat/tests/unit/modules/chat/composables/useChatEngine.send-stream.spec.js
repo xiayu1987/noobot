@@ -31,7 +31,7 @@ describe("useChatEngine.send-stream", () => {
     const stream = vi.fn(async (payload) => {
       capturedPayload = payload;
     });
-    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, activeSession } = createHarness({
       sessionId: "s-user-message-identity",
       stream,
     });
@@ -674,7 +674,7 @@ describe("useChatEngine.send-stream", () => {
         attachments: [{ id: "log-att-1", name: "tool.log" }],
       };
     });
-    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-frontend-complete",
       stream,
       deps: {
@@ -741,7 +741,7 @@ describe("useChatEngine.send-stream", () => {
       assistant.attachments = [normalizedAttachment];
       assistant.pending = false;
     });
-    const { engine, activeSession, sending, canStop, activeTurnRuntime } = createHarness({
+    const { engine, activeSession, sending, canStop } = createHarness({
       sessionId: "local-channel-complete",
       stream,
       terminalResolutionRevision: 4,
@@ -834,7 +834,7 @@ describe("useChatEngine.send-stream", () => {
         state: "stop_completed",
       });
     });
-    const { engine, deps } = createHarness({
+    const { engine } = createHarness({
       sessionId: "local-stop-refresh",
       stream,
       deps: {

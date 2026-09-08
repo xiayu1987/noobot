@@ -9,18 +9,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { DEFAULT_HARNESS_DENY_TOOL_NAMES, normalizeOptions } from "../../src/core/options.js";
 import { appendJsonlBuffered, flushAllJsonlBuffers, readJson } from "../../src/store/store.js";
-import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import { HOOK_POINT } from "@noobot/hook-protocol";
-import { resolveFsmTargetByHook, HARNESS_FSM_STATES } from "../../src/fsm/transitions.js";
-import { buildEvent } from "../../src/data/record-builders.js";
-import {
-  createGuidanceHandler,
-  createPlanningHandler,
-} from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { relaySeparateModelOutputAsUserMessage } from "../../src/capabilities/handlers/shared.js";
 
 test("readJson returns fallback only for a missing persistence path", async () => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-json-read-"));

@@ -5,14 +5,11 @@
  */
 import {
   assert,
-  assertFlatCapabilityMessages,
   createAgentHookManager,
   createTestModelResponse,
-  exists,
   fs,
   os,
   path,
-  readJsonl,
   registerHarnessCore,
   test,
   waitForFile,

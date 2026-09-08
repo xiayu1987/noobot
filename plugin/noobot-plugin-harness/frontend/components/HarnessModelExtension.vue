@@ -48,10 +48,6 @@ function mapGuidanceAnalysisTurnsThresholdToIntensity(value = 1) {
   return 11 - turnsThreshold;
 }
 
-function getGuidanceAnalysisTurnsThreshold() {
-  return mapGuidanceAnalysisIntensityToTurnsThreshold(getGuidanceAnalysisIntensity());
-}
-
 function getGuidanceAnalysisIntensity() {
   return mapGuidanceAnalysisTurnsThresholdToIntensity(
     pluginConfig.value?.guidance?.analysis?.turnsThreshold,

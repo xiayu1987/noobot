@@ -163,7 +163,7 @@ export class ContextBuilder {
       ...this.additionalSystemMessages,
     ];
     const resolvedRuntimeBasePath = runtimeBasePath || this._resolveRuntimeBasePath();
-    const { sessionTree: resolvedSessionTree, rootSessionId: resolvedRootSessionId } =
+    const { rootSessionId: resolvedRootSessionId } =
       sessionTree && typeof sessionTree === "object" && String(rootSessionId || "").trim()
         ? {
             sessionTree,

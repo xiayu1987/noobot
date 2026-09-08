@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICompositeNode from '../../../../../design/model/node/interfaces/composite-node.js';
-import IBusiness from '../../../interfaces/business.js';
+class ICompositeNodeState {}
 
-class ICompositeNodeState {
-}
-
-export default  ICompositeNodeState;
+export default ICompositeNodeState;

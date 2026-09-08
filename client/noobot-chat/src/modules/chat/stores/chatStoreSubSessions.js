@@ -12,7 +12,6 @@ import {
 import { EVENT_FAMILY, validateProtocolEvent } from "@noobot/event-protocol";
 import { WORKFLOW_SEQUENCE_DOMAIN } from "@noobot/event-protocol/workflow-runtime-event";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
-import { canonicalizeTurnScopeId, normalizeTurnScopeIdKey } from "../model/messageIdentity.js";
 import {
   resolveSessionTurnRuntime,
   selectSessionTurnRuntime,
@@ -26,32 +25,6 @@ import {
 
 function text(value) {
   return String(value || "").trim();
-}
-
-const SUB_SESSION_TERMINAL_STATUSES = new Set([
-  "completed",
-  "succeeded",
-  "failed",
-  "cancelled",
-  "canceled",
-  "stopped",
-  "aborted",
-  "error",
-  "expired",
-  "timeout",
-  "no_conversation",
-]);
-
-function isSubSessionTerminalStatus(value) {
-  return SUB_SESSION_TERMINAL_STATUSES.has(text(value).toLowerCase());
-}
-
-function turnScopeKey(value) {
-  return normalizeTurnScopeIdKey(text(value));
-}
-
-function canonicalTurnScopeId(currentValue = "", incomingValue = "") {
-  return canonicalizeTurnScopeId(currentValue || incomingValue);
 }
 
 function eventTime(eventData = {}) {

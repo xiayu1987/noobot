@@ -10,7 +10,6 @@ import {
   confirmSessionIdentity,
 } from "../../../chat/model/sessionIdentity.js";
 import {
-  clearTurnScopedAssets,
   getMessageDialogProcessId,
   getMessageRole,
   getMessageTurnScopeId,

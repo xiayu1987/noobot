@@ -20,34 +20,6 @@ function executionRunConfig(turnScopeId, extra = {}) {
   };
 }
 
-function createBuilderForNormalizationTest() {
-  return new ContextBuilder({
-    config: {
-      globalConfig: {},
-      userConfig: {},
-    },
-    serviceContainer: {
-      sessionManager: null,
-      memoryService: null,
-      attachmentService: null,
-      skillService: null,
-      eventListener: null,
-      botManager: null,
-      userInteractionBridge: null,
-    },
-    sessionContext: {
-      userId: "u1",
-      sessionId: "s1",
-      caller: "user",
-      parentSessionId: "",
-      attachments: [],
-      runConfig: executionRunConfig("turn-1"),
-      abortSignal: null,
-      parentAsyncResultContainer: null,
-    },
-  });
-}
-
 function createBuilderForAttachmentRuntimeTest({
   attachments = [],
   userMessageAttachments = null,

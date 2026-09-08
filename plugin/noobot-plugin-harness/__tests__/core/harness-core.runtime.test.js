@@ -14,15 +14,8 @@ import {
   createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
-import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
-import {
-  applyDynamicPolicyPromptFromText,
-  buildDynamicPolicyPromptProtocolInstruction,
-} from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
-import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
-import { HARNESS_PROMPT_INJECTION_ID_FIELD } from "../../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+
+import { exists } from "../test-helpers.js";
 
 test("harness plugin writes manifest, events and context snapshot", async () => {
   const basePath = await fs.mkdtemp(path.join(os.tmpdir(), "noobot-harness-"));
@@ -39,32 +32,53 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
       dialogProcessId: "dp1",
       flags: { allowUserInteraction: true },
       models: { runtimeModel: "m1" },
-      controllers: { runtime: { basePath, userId: "u1", systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" } } },
+      controllers: {
+        runtime: {
+          basePath,
+          userId: "u1",
+          systemRuntime: { sessionId: "s1", dialogProcessId: "dp1" },
+        },
+      },
     },
-    session: { current: { id: "s1", attachments: [], connectors: {} }, parent: { id: "", caller: "user" } },
+    session: {
+      current: { id: "s1", attachments: [], connectors: {} },
+      parent: { id: "", caller: "user" },
+    },
     payload: {},
   };
 
-  await hookManager.emit("agent.after_context_build", createTestHookContext({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp1",
-    caller: "user",
-    status: "success",
-    agentContext,
-  }, {
-    messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
-  }));
-  await hookManager.emit("agent.after_turn", createTestHookContext({
-    userId: "u1",
-    sessionId: "s1",
-    dialogProcessId: "dp1",
-    caller: "user",
-    status: "success",
-    agentContext,
-  }, {
-    messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
-  }));
+  await hookManager.emit(
+    "agent.after_context_build",
+    createTestHookContext(
+      {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp1",
+        caller: "user",
+        status: "success",
+        agentContext,
+      },
+      {
+        messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
+      },
+    ),
+  );
+  await hookManager.emit(
+    "agent.after_turn",
+    createTestHookContext(
+      {
+        userId: "u1",
+        sessionId: "s1",
+        dialogProcessId: "dp1",
+        caller: "user",
+        status: "success",
+        agentContext,
+      },
+      {
+        messageBlocks: { system: [], history: [{ role: "user", content: "hi" }], incremental: [] },
+      },
+    ),
+  );
 
   const runDir = path.join(basePath, "runtime", "harness", "runs", "dp1");
   assert.equal(await exists(path.join(runDir, "harness-run.json")), true);
@@ -75,7 +89,9 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
   assert.equal(manifest.status, "success");
   assert.equal(manifest.dialogProcessId, "dp1");
 
-  const snapshot = JSON.parse(await fs.readFile(path.join(runDir, "context-snapshot.json"), "utf8"));
+  const snapshot = JSON.parse(
+    await fs.readFile(path.join(runDir, "context-snapshot.json"), "utf8"),
+  );
   assert.equal(snapshot.userId, "u1");
   assert.equal(snapshot.payload.historyMessageCount, 1);
 });
@@ -83,10 +99,7 @@ test("harness plugin writes manifest, events and context snapshot", async () => 
 test("harness plugin emits hook summary via client emitter by default", async () => {
   const hookManager = createAgentHookManager();
   const channelEvents = [];
-  registerHarnessCore(
-    { hookManager },
-    { trace: false, promptPolicy: false },
-  );
+  registerHarnessCore({ hookManager }, { trace: false, promptPolicy: false });
 
   await hookManager.emit("agent.before_turn", {
     userId: "u-channel",
@@ -97,9 +110,18 @@ test("harness plugin emits hook summary via client emitter by default", async ()
     },
   });
 
-  assert.equal(channelEvents.some((item) => item.event === "harness.hook_start"), false);
-  assert.equal(channelEvents.some((item) => item.event === "harness.capability_runtime_done"), true);
-  assert.equal(channelEvents.some((item) => item.event === "harness.hook_end"), false);
+  assert.equal(
+    channelEvents.some((item) => item.event === "harness.hook_start"),
+    false,
+  );
+  assert.equal(
+    channelEvents.some((item) => item.event === "harness.capability_runtime_done"),
+    true,
+  );
+  assert.equal(
+    channelEvents.some((item) => item.event === "harness.hook_end"),
+    false,
+  );
   const summary = channelEvents.find((item) => item.event === "harness.hook_summary");
   assert.ok(summary);
   assert.equal(summary.data?.point, "agent.before_turn");
@@ -125,8 +147,14 @@ test("harness plugin keeps hook start/end via client emitter in verbose mode", a
     },
   });
 
-  assert.equal(channelEvents.some((item) => item.event === "harness.hook_start"), true);
-  assert.equal(channelEvents.some((item) => item.event === "harness.capability_runtime_done"), true);
+  assert.equal(
+    channelEvents.some((item) => item.event === "harness.hook_start"),
+    true,
+  );
+  assert.equal(
+    channelEvents.some((item) => item.event === "harness.capability_runtime_done"),
+    true,
+  );
   const end = channelEvents.find((item) => item.event === "harness.hook_end");
   assert.ok(end);
   assert.equal(end.data?.point, "agent.before_turn");

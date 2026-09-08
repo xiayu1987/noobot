@@ -25,10 +25,7 @@ import { executePlanMutation } from "../shared/plan/mutation-facade.js";
 import { resetPlanAcceptanceStatusForPlanChange } from "../shared/plan/acceptance-status.js";
 import { extractChangedMainStepIndexes } from "../shared/plan/revision-helpers.js";
 import { resolveOperationDirectoryContext } from "../shared/operation-directory.js";
-import {
-  buildHarnessInjectedMessage,
-  persistHarnessMessageToCurrentTurn,
-} from "../shared/message/injected-message-utils.js";
+import { buildHarnessInjectedMessage } from "../shared/message/injected-message-utils.js";
 import { resolveDialogProcessIdFromContext } from "../shared/runtime/dialog-process-id.js";
 import {
   appendMessage,

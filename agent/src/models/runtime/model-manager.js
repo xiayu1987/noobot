@@ -21,7 +21,7 @@ function updateModelState(modelState, spec, shouldSwitch) {
 }
 
 export function resolveLlmForTurn(modelState) {
-  const { runtime, globalConfig, userConfig, defaultModelSpec, eventListener } = modelState;
+  const { runtime, globalConfig, userConfig, defaultModelSpec } = modelState;
   const runtimeModel = String(runtime?.runtimeModel || "").trim();
 
   let targetSpec = null;

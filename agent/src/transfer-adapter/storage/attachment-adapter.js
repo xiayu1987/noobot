@@ -5,7 +5,6 @@
  */
 import { Buffer } from "node:buffer";
 import {
-  attachmentTransfer,
   createAttachmentReference,
   createTransferEnvelope,
   directTransfer,

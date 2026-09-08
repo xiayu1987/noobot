@@ -7,11 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createRunner,
-  createTestBotHookManager,
-  createCanonicalHandledResult,
-  HOOK_POINT,
-  createAgentCapabilityModelInvoker,
-  createBotDispatchHandled,
   createTestAgentExecutionScope,
   createCurrentTurnMessagesStore,
 } from "./runner-bot-hook.fixtures.js";

@@ -16,7 +16,6 @@ import {
 } from "./utils.js";
 import {
   BackendChannelState,
-  FrontendRunState,
   clearRememberedStopRequests,
   getMessageRuntimeChannelState,
 } from "../sessionRunStateMachine.js";
@@ -26,12 +25,8 @@ import {
   getMessageTurnScopeId,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
-import { normalizeTimePair, nowIso, nowMs, parseTimeMs } from "../../model/timeFields.js";
+import { normalizeTimePair } from "../../model/timeFields.js";
 import { logResendDebug, summarizeDebugMessage } from "../../../debug/loggers/resendDebugLogger.js";
-
-function parseThinkingTimingMs(value) {
-  return parseTimeMs(value);
-}
 
 export function createChatEngineConversationState({
   activeSession,
@@ -82,23 +77,6 @@ export function createChatEngineConversationState({
     if (requestId) connectorConnectedAckedRequestIds.add(requestId);
     clearPendingInteraction(request);
     return true;
-  }
-
-  function emitSyntheticErrorConversationState({
-    sessionId = "",
-    dialogProcessId = "",
-    sourceEvent = "",
-  } = {}) {
-    if (typeof onConversationState !== "function") return;
-    onConversationState({
-      source: "stream",
-      state: BackendChannelState.ERROR,
-      sessionId: String(sessionId || "").trim(),
-      dialogProcessId: normalizeTrimmedString(dialogProcessId),
-      sourceEvent: String(sourceEvent || "").trim(),
-      seq: 0,
-      applied: true,
-    });
   }
 
   function getInteractionPayloadWaitKey({ sessionId = "", dialogProcessId = "" } = {}) {
@@ -285,19 +263,7 @@ export function createChatEngineConversationState({
       botMessage: summarizeDebugMessage(botMessage),
       targetAssistantMessage: summarizeDebugMessage(targetAssistantMessage),
     }));
-    const channelStateView = {
-      ...(targetAssistantMessage?.channelState &&
-      typeof targetAssistantMessage.channelState === "object" &&
-      !Array.isArray(targetAssistantMessage.channelState)
-        ? targetAssistantMessage.channelState
-        : {}),
-      state,
-      sessionId,
-      dialogProcessId,
-      turnScopeId,
-      sourceEvent: String(statePayload?.sourceEvent || "").trim(),
-      seq: Number(statePayload?.seq || 0),
-    };
+
     if (targetAssistantMessage && sessionId) {
       targetAssistantMessage.sessionId = targetAssistantMessage.sessionId || sessionId;
       targetAssistantMessage.session_id = targetAssistantMessage.session_id || sessionId;

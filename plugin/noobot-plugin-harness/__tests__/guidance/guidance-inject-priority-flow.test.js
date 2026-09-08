@@ -8,26 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   createGuidanceHandler,
-  createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
-  LLM_SUMMARY_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
-  FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
-  createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("inject mode: when turn-summary and revision are both pending, revision prompt is injected first", async () => {
@@ -59,11 +40,15 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   assert.equal(Number.isFinite(Number(executionLog?.detail?.durationMs)), true);
   assert.equal(executionLog?.detail?.retryCount, 0);
   assert.equal(
-    firstCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    firstCtx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-guidance-summary"),
+    ),
     false,
   );
   assert.equal(
-    firstCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    firstCtx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-planning-revision"),
+    ),
     true,
   );
   assert.equal(agentContext.payload.harness.state.pending.summary, true);
@@ -73,7 +58,9 @@ test("inject mode: when turn-summary and revision are both pending, revision pro
   const secondCtx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx: secondCtx, meta });
   assert.equal(
-    secondCtx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    secondCtx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-guidance-summary"),
+    ),
     true,
   );
 });
@@ -93,11 +80,15 @@ test("inject mode: revision keeps higher priority than overflow summary for cach
   const ctx = { messages: [{ role: "user", content: "继续" }], agentContext };
   await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
   assert.equal(
-    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-guidance-summary")),
+    ctx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-guidance-summary"),
+    ),
     false,
   );
   assert.equal(
-    ctx.modelContext.messages.some((msg = {}) => String(msg?.content || "").includes("harness-planning-revision")),
+    ctx.modelContext.messages.some((msg = {}) =>
+      String(msg?.content || "").includes("harness-planning-revision"),
+    ),
     true,
   );
 });

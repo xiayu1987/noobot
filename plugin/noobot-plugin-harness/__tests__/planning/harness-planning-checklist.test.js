@@ -5,16 +5,9 @@
  */
 import {
   assert,
-  assertFlatCapabilityMessages,
   createAgentHookManager,
-  exists,
-  fs,
-  os,
-  path,
-  readJsonl,
   registerHarnessCore,
   test,
-  waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning captures checklist and forces acceptance at final output", async () => {
@@ -72,7 +65,10 @@ test("harness planning captures checklist and forces acceptance at final output"
     agentContext,
   });
   assert.match(String(result.output), /^done/);
-  assert.doesNotMatch(String(result.output), /Harness-验收|NOOBOT_HARNESS_COLLAPSE|acceptanceReport|完整计划清单/);
+  assert.doesNotMatch(
+    String(result.output),
+    /Harness-验收|NOOBOT_HARNESS_COLLAPSE|acceptanceReport|完整计划清单/,
+  );
   assert.equal(Array.isArray(agentContext.payload.harness.acceptanceReports), true);
   assert.equal(agentContext.payload.harness.acceptanceReports.length, 1);
 });
@@ -98,12 +94,17 @@ test("harness planning retries injection when first response has no checklist", 
 
   assert.equal(agentContext.payload.harness.state.flags.planningCaptured, false);
   assert.equal(agentContext.payload.harness.state.flags.planningPromptInjected, false);
-  assert.equal(agentContext.execution.controllers.runtime.systemRuntime.config.forceTool, undefined);
+  assert.equal(
+    agentContext.execution.controllers.runtime.systemRuntime.config.forceTool,
+    undefined,
+  );
 
   const secondMessages = [{ role: "user", content: "继续" }];
   await hookManager.emit("agent.before_llm_call", { messages: secondMessages, agentContext });
   assert.equal(
-    secondMessages.some((item = {}) => /harness-planning-bootstrap/.test(String(item?.content || ""))),
+    secondMessages.some((item = {}) =>
+      /harness-planning-bootstrap/.test(String(item?.content || "")),
+    ),
     true,
   );
 
@@ -174,7 +175,10 @@ test("harness planning blocks tool-call turn without assistant text and schedule
     agentContext,
   });
   await hookManager.emit("agent.after_llm_call", {
-    ai: { content: "", tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }] },
+    ai: {
+      content: "",
+      tool_calls: [{ id: "c1", function: { name: "read_file", arguments: "{}" } }],
+    },
     modelResponse: { finish_reason: "tool_calls" },
     agentContext,
   });

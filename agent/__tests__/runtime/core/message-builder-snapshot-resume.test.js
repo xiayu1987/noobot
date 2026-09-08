@@ -5,10 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  buildContextMessages,
-  buildContextMessageBlocks,
-} from "../../../src/context/assembly/message-builder.js";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 

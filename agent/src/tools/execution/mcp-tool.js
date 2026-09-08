@@ -7,12 +7,7 @@ import { DynamicStructuredTool } from "@langchain/core/tools";
 import { runBestEffort } from "@noobot/shared/best-effort";
 import { z } from "zod";
 import { createMcpAgentTools } from "../../integrations/mcp/index.js";
-import {
-  BUILTIN_THRESHOLDS,
-  hasOwnConfigKey,
-  mergeConfig,
-  normalizeBoolean,
-} from "../../config/index.js";
+import { BUILTIN_THRESHOLDS, hasOwnConfigKey, normalizeBoolean } from "../../config/index.js";
 import {
   getSessionIdsFromAgentContext,
   getRuntimeFromAgentContext,
@@ -59,7 +54,7 @@ export function createMcpTool({ agentContext }) {
 
       const globalConfig = runtime?.globalConfig || {};
       const userConfig = runtime?.userConfig || {};
-      const effectiveConfig = mergeConfig(globalConfig, userConfig);
+
       const systemRuntime = runtime?.systemRuntime || {};
       const botManager = runtime?.botManager || null;
       const eventListener = runtime?.eventListener || null;

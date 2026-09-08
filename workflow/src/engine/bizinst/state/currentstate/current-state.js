@@ -4,10 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../../can-persistence-base.js';
-import EFlowDirection from '../../enums/flow-direction.js';
-import IStateNodeState from '../modelstate/interfaces/state-node-state.js';
-import IStepState from '../modelstate/interfaces/step-state.js';
+import CanPersistenceBase from "../../../../can-persistence-base.js";
 
 class CurrentState extends CanPersistenceBase {
   constructor() {
@@ -52,4 +49,4 @@ class CurrentState extends CanPersistenceBase {
   }
 }
 
-export default  CurrentState;
+export default CurrentState;

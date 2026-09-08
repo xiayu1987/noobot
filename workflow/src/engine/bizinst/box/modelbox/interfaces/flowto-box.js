@@ -4,11 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IFlowto from '../../../../../design/model/flowto/interfaces/flowto.js';
-import IBizinst from '../../../interfaces/bizinst.js';
-import IFlowtoState from '../../../state/modelstate/interfaces/flowto-state.js';
-import IBizinstModel from '../../../state/modelstate/interfaces/bizinst-model.js';
-
 class IFlowtoBox {
   setFlowto(flowto) {}
   getFlowto() {}
@@ -16,4 +11,4 @@ class IFlowtoBox {
   canFlow(bizinst) {}
 }
 
-export default  IFlowtoBox;
+export default IFlowtoBox;

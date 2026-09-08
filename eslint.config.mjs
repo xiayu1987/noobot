@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import eslint from "@eslint/js";
 import security from "eslint-plugin-security";
+import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
 import vue from "eslint-plugin-vue";
 
@@ -39,6 +39,9 @@ export default [
   security.configs.recommended,
   {
     files: ["**/*.{js,mjs,cjs,vue}"],
+    plugins: {
+      "unused-imports": unusedImports,
+    },
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
@@ -77,9 +80,20 @@ export default [
       "no-self-compare": "warn",
       "no-sparse-arrays": "warn",
       "no-unreachable": "warn",
+      "no-unused-vars": "off",
       "no-warning-comments": ["warn", { terms: ["todo", "fixme"], location: "anywhere" }],
       "object-shorthand": ["warn", "always"],
       "prefer-const": "warn",
+      "unused-imports/no-unused-imports": "error",
+      "unused-imports/no-unused-vars": [
+        "error",
+        {
+          vars: "all",
+          args: "none",
+          ignoreRestSiblings: true,
+          caughtErrors: "none",
+        },
+      ],
       "valid-typeof": "warn",
     },
   },

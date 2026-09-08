@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../interfaces/can-persistence.js';
-import IBizinst from '../bizinst.js';
-
 class IBizinstTreeRecord {
   setRootBizinst(bizinst) {}
   getRootBizinst() {}
@@ -14,4 +11,4 @@ class IBizinstTreeRecord {
   getActionRecords() {}
 }
 
-export default  IBizinstTreeRecord;
+export default IBizinstTreeRecord;

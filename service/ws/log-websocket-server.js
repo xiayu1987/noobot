@@ -17,7 +17,6 @@ import { HTTP_STATUS } from "#agent/constants";
 
 const MAX_LOG_MESSAGE_BYTES = MAX_SESSION_CHANNEL_MESSAGE_BYTES;
 const MAX_LOG_BATCH_SIZE = MAX_SESSION_CHANNEL_BATCH_SIZE;
-const DIAG_PREFIX = "[session-log-ws]";
 
 function envFlag(name, fallback = false) {
   const raw = String(process.env[name] || "")

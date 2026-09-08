@@ -4,20 +4,14 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActionNodeState from '../../state/modelstate/interfaces/action-node-state.js';
-import ICompositeNodeState from '../../state/modelstate/interfaces/composite-node-state.js';
-import IFlowtoState from '../../state/modelstate/interfaces/flowto-state.js';
-import IStateNodeState from '../../state/modelstate/interfaces/state-node-state.js';
-import IStepState from '../../state/modelstate/interfaces/step-state.js';
-import FlowtoStateBox from './flowto-state-box.js';
-import ActionNodeStateBox from './action-node-state-box.js';
-import CompositeNodeStateBox from './composite-node-state-box.js';
-import StateNodeStateBox from './state-node-state-box.js';
-import StepStateBox from './step-state-box.js';
+import FlowtoStateBox from "./flowto-state-box.js";
+import ActionNodeStateBox from "./action-node-state-box.js";
+import CompositeNodeStateBox from "./composite-node-state-box.js";
+import StateNodeStateBox from "./state-node-state-box.js";
+import StepStateBox from "./step-state-box.js";
 
 class ModelStateBoxFactory {
-  constructor() {
-  }
+  constructor() {}
   static getInstance() {
     if (!ModelStateBoxFactory.instance) ModelStateBoxFactory.instance = new ModelStateBoxFactory();
     return ModelStateBoxFactory.instance;
@@ -50,4 +44,4 @@ class ModelStateBoxFactory {
 }
 ModelStateBoxFactory.instance = new ModelStateBoxFactory();
 
-export default  ModelStateBoxFactory;
+export default ModelStateBoxFactory;

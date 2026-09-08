@@ -9,26 +9,7 @@ import assert from "node:assert/strict";
 
 import {
   createGuidanceHandler,
-  createPlanningHandler,
-  canAttemptPlanRevision,
-  runPlanUpdateAfterSummary,
-  LLM_SUMMARY_THRESHOLD,
-  LLM_SUMMARY_MESSAGE_CHARS_THRESHOLD,
-  MAX_PLAN_UPDATE_ATTEMPTS,
-  FULL_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  FULL_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  FULL_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  FULL_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  PROGRAMMING_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_SUMMARY_TRIGGER_TURNS_THRESHOLD,
-  TEXT_ANALYSIS_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PLAN_UPDATE_TRIGGER_TURNS_THRESHOLD,
-  TEXT_PHASE_ACCEPTANCE_TRIGGER_TURNS_THRESHOLD,
   createAgentContext,
-  createPlanningAgentContext,
 } from "../helpers/guidance-plan-update-threshold-helper.js";
 
 test("separate_model mode: when turn-summary and revision are both pending, planning_revision runs before summary", async () => {

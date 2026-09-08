@@ -10,7 +10,6 @@ import {
   getMessageSessionId,
   getMessageDialogProcessId,
   getMessageTurnScopeId,
-  isAssistantWithoutTurnScope,
   normalizeTurnMeta,
 } from "../../model/messageIdentity.js";
 import { getMessageAttachments as resolveRenderableMessageAttachments } from "../../model/messageModel.js";
@@ -92,12 +91,6 @@ function isFreshPendingAssistant(messageItem = {}) {
     getMessageRole(messageItem) === "assistant" &&
     messageItem?.pending === true &&
     messageItem?.hasFirstStreamEvent !== true
-  );
-}
-
-function isPluginInjectedMessage(messageItem = {}) {
-  return (
-    messageItem?.injectedMessage === true && Boolean(String(messageItem?.injectedBy || "").trim())
   );
 }
 

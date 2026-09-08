@@ -28,10 +28,7 @@ import {
   createTurnSnapshotCommand,
   createTurnStopCommand,
 } from "@noobot/agent-transport-protocol";
-import {
-  createTurnTerminalStatus,
-  materializeTurnTerminalMessages,
-} from "@noobot/session-protocol";
+import { materializeTurnTerminalMessages } from "@noobot/session-protocol";
 import { createChatRunService } from "../../services/chat-run-service.js";
 
 export function createProtocolTestCommand(payload = {}) {

@@ -4,13 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IContextBean from '../../../../interfaces/context-bean.js';
-import IActionNodeState from '../../../state/modelstate/interfaces/action-node-state.js';
-import ICompositeNodeState from '../../../state/modelstate/interfaces/composite-node-state.js';
-import IFlowtoState from '../../../state/modelstate/interfaces/flowto-state.js';
-import IStateNodeState from '../../../state/modelstate/interfaces/state-node-state.js';
-import IStepState from '../../../state/modelstate/interfaces/step-state.js';
-
 class IModelStateBoxFactory {
   getFlowtoStateBox(flowtoState) {}
   getActionNodeStateBox(actionNodeState) {}
@@ -19,4 +12,4 @@ class IModelStateBoxFactory {
   getStepStateBox(stepState) {}
 }
 
-export default  IModelStateBoxFactory;
+export default IModelStateBoxFactory;

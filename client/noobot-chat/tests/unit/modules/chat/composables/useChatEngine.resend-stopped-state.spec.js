@@ -6,10 +6,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createHarness,
-  activateRuntimeTurn,
   makeSession,
   makeTurnReplacementResponse,
-  assistantMessage,
   emitChannelState,
   emitAuthorityProcessing,
   emitAuthorityTerminal,
@@ -167,7 +165,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, activeSession } = createHarness({
       sessionId: "local-resend-stale-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -208,7 +206,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, turnRuntimeRegistry } = createHarness({
+    const { engine, activeSession } = createHarness({
       sessionId: "local-resend-repeat-stopped",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },
@@ -711,7 +709,7 @@ describe("useChatEngine.resend stopped state", () => {
       const mainSession = detail.sessions?.[0] || {};
       activeSession.value = { ...activeSession.value, ...mainSession };
     });
-    const { engine, activeSession, activeTurnRuntime, sending, canStop, deps } = createHarness({
+    const { engine, activeSession, deps } = createHarness({
       sessionId: "local-resend-state-mismatch",
       stream,
       deps: { replaceSessionTurnApi, applySessionDetail },

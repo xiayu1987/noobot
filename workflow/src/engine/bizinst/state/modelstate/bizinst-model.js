@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../../can-persistence-base.js';
-import IState from '../interfaces/state.js';
+import CanPersistenceBase from "../../../../can-persistence-base.js";
 
 class BizinstModel extends CanPersistenceBase {
   constructor() {
@@ -60,4 +59,4 @@ class BizinstModel extends CanPersistenceBase {
   }
 }
 
-export default  BizinstModel;
+export default BizinstModel;

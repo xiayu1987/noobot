@@ -33,20 +33,6 @@ export function useWorkflowRuntimeState(workflowPayload, runtimeRegistries = {})
     workflowNodeStateRegistry: runtimeRegistries.workflowNodeStateRegistry,
   });
 
-  const semanticNodeMap = computed(() => {
-    const map = new Map();
-    const nodes = Array.isArray(workflowPayload.value?.semantic?.nodes)
-      ? workflowPayload.value.semantic.nodes
-      : [];
-    for (const nodeItem of nodes) {
-      const id = String(nodeItem?.id || "").trim();
-      const name = String(nodeItem?.name || "").trim();
-      if (id) map.set(`id:${id}`, nodeItem);
-      if (name) map.set(`name:${name}`, nodeItem);
-    }
-    return map;
-  });
-
   const nodeRunByDialogProcessId = computed(() => {
     const map = new Map();
     const runs = Array.isArray(executionMeta.value?.nodeAgentRuns)

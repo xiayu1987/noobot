@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActionNode from '../../../../design/model/node/interfaces/action-node.js';
-import NodeStateBase from './node-state-base.js';
+import NodeStateBase from "./node-state-base.js";
 
 class ActionNodeState extends NodeStateBase {
   constructor() {
@@ -20,4 +19,4 @@ class ActionNodeState extends NodeStateBase {
   }
 }
 
-export default  ActionNodeState;
+export default ActionNodeState;

@@ -3,10 +3,6 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import { findSessionByAnyId as findSessionByAnyIdInList } from "../model/sessionIdentity.js";
-import { findLatestPendingAssistantAfterLastUser } from "../model/reconnectReplayModel.js";
-import { RoleEnum } from "../model/chatConstants.js";
-import { getMessageRole } from "../model/messageIdentity.js";
 import {
   isAutoResolvedInteraction,
   normalizeInteractionRequestPayload,
@@ -18,11 +14,7 @@ import {
 } from "../runtime/reconnect/interactionHandlers.js";
 import { applyReconnectDataReplay } from "../runtime/reconnect/reconnectDataReplay.js";
 import { applyReconnectEventReplay } from "../runtime/reconnect/reconnectEventReplay.js";
-import {
-  _ensureArray,
-  _isAssistantRole,
-  _matchesDialogProcessId,
-} from "../runtime/reconnect/utils.js";
+
 import { createReconnectReplayContext } from "../runtime/reconnect/context.js";
 import {
   ensureReconnectSessionActive as ensureReconnectSessionActiveWithContext,
@@ -33,17 +25,10 @@ import {
   consumeReconnectReplayCacheForSession,
 } from "../runtime/reconnect/replayCacheConsumer.js";
 import {
-  applyAssistantFailureState as applyAssistantFailureStateWithContext,
-  applyFoldedMessagesForDialogProcess as applyFoldedMessagesForDialogProcessWithContext,
-  applyFoldedMessagesToActiveSession as applyFoldedMessagesToActiveSessionWithContext,
   buildReconnectReplayEnvelopeCallbacks,
-  findAssistantMessageByDialogProcessId as findAssistantMessageByDialogProcessIdWithContext,
-  findAssistantMessageByTurnScopeId as findAssistantMessageByTurnScopeIdWithContext,
-  hasAssistantMessageWithContent as hasAssistantMessageWithContentWithContext,
   mergeAssistantAttachments as mergeAssistantAttachmentsWithContext,
 } from "../runtime/reconnect/messageReplay.js";
 import { createReconnectReplayPublicApi } from "../runtime/reconnect/publicApi.js";
-import { BackendChannelState } from "../runtime/sessionRunStateMachine.js";
 import { isTurnRuntimeDeleted } from "../runtime/run-state-machine/turnRuntimeRegistry.js";
 import { logWorkflowDiagnostics } from "../../debug/loggers/workflowDiagnosticsLogger.js";
 import {
@@ -93,18 +78,12 @@ export function useReconnectReplay({
   const reconnectReplayContext = createReconnectReplayContext();
   const { replayCache } = reconnectReplayContext;
   let { replayHydrationPromise } = reconnectReplayContext;
-  const protocolReconcileAttempts = new Map();
+
   const isDeletedTurn = ({ sessionId = "", turnScopeId = "" } = {}) =>
     isTurnRuntimeDeleted(turnRuntimeRegistry?.value || turnRuntimeRegistry, {
       sessionId,
       turnScopeId,
     });
-
-  const applyRunStateEvent = (event) => dispatchAuthoritativeRunStateEvent?.(event);
-  const applyRunStateEvents = (events) => {
-    const sourceEvents = Array.isArray(events) ? events : [];
-    return sourceEvents.map((event) => dispatchAuthoritativeRunStateEvent?.(event));
-  };
 
   const applyWorkflowRuntimeEvent = (record = {}, { source = "reconnect" } = {}) => {
     const event = String(record?.identity?.eventType || "");
@@ -129,14 +108,6 @@ export function useReconnectReplay({
     }
     return { applied: false, reason: "workflow_runtime_projection_unavailable" };
   };
-
-  function applyAssistantFailureState(targetAssistantMessage, errorMessage = "") {
-    return applyAssistantFailureStateWithContext({
-      targetAssistantMessage,
-      errorMessage,
-      translate,
-    });
-  }
 
   function mergeAssistantAttachments(targetAssistantMessage, attachments = []) {
     return mergeAssistantAttachmentsWithContext({
@@ -329,43 +300,6 @@ export function useReconnectReplay({
       applyReconnectMessagesToActiveSession,
       applySubSessionReplayMessages,
     });
-  }
-
-  function findAssistantMessageByDialogProcessId(dialogProcessId = "") {
-    return findAssistantMessageByDialogProcessIdWithContext(activeSession, dialogProcessId);
-  }
-
-  function findAssistantMessageByTurnScopeId(turnScopeId = "") {
-    return findAssistantMessageByTurnScopeIdWithContext(activeSession, turnScopeId);
-  }
-
-  function hasAssistantMessageWithContent(content = "") {
-    return hasAssistantMessageWithContentWithContext(activeSession, content);
-  }
-
-  function findReconnectChannelStateFallbackAssistant() {
-    const messages = Array.isArray(activeSession.value?.messages)
-      ? activeSession.value.messages
-      : [];
-    return (
-      findLatestPendingAssistantAfterLastUser(messages) ||
-      [...messages]
-        .reverse()
-        .find((messageItem) => getMessageRole(messageItem) === RoleEnum.ASSISTANT) ||
-      null
-    );
-  }
-
-  function applyFoldedMessagesToActiveSession(foldedMessages = []) {
-    return applyFoldedMessagesToActiveSessionWithContext(activeSession, foldedMessages);
-  }
-
-  function applyFoldedMessagesForDialogProcess(foldedMessages = [], dialogProcessId = "") {
-    return applyFoldedMessagesForDialogProcessWithContext(
-      activeSession,
-      foldedMessages,
-      dialogProcessId,
-    );
   }
 
   function logReconnectReplaySystemEvent(event, payload = {}) {

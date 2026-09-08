@@ -14,7 +14,6 @@ import { readSessionArtifact } from "../../src/session/session-artifact-store.js
 import { SESSION_DISPLAY_SUMMARY_SCHEMA_VERSION } from "../../src/session/session-summary-builders.js";
 import {
   withTempWorkspace,
-  exists,
   canonicalActivity,
   canonicalMessages,
 } from "./session-repository-boundary.summaries.fixtures.js";

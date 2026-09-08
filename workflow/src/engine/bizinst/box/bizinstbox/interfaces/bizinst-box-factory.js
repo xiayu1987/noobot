@@ -4,12 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IBizinst from '../../../interfaces/bizinst.js';
-import IBizinstTreeRecord from '../../../interfaces/bizinst-tree-record.js';
-
 class IBizinstBoxFactory {
   getBizinstBox(bizinst) {}
   getBizinstTreeBox(bizinst, bizinstTreeRecord) {}
 }
 
-export default  IBizinstBoxFactory;
+export default IBizinstBoxFactory;

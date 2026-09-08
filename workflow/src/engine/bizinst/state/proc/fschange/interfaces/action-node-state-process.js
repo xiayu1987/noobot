@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActionNode from '../../../../../../design/model/node/interfaces/action-node.js';
-import IStepState from '../../../modelstate/interfaces/step-state.js';
-
 class IActionNodeStateProcess {
   setStepState(stepState) {}
   getStepState() {}
@@ -14,4 +11,4 @@ class IActionNodeStateProcess {
   getActionNodeStateProcessHandleWay() {}
 }
 
-export default  IActionNodeStateProcess;
+export default IActionNodeStateProcess;

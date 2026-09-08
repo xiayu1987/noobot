@@ -26,7 +26,7 @@ export function createRuntimeConfigService({
     const paramsPayload = await readWorkspaceConfigParams({ createIfMissing: true });
     const configParams = paramsPayload.values || {};
     const builtConfig = await globalConfigBuilder.build({ configParams });
-    const rawGlobalConfig = builtConfig?.rawConfig || {};
+
     const persistedGlobalConfig = builtConfig?.persistedConfig;
     const resolvedGlobalConfig = builtConfig?.resolvedConfig || {};
     setApiKeyTtlMs(Number(resolvedGlobalConfig?.auth?.apiKeyTtlMs || 24 * 60 * 60 * 1000));

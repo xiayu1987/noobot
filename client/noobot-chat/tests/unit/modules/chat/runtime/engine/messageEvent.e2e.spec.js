@@ -16,18 +16,6 @@ import { useChatStore } from "../../../../../../src/modules/chat/stores/useChatS
 import { canonicalMessageEvent } from "../../helpers/messageEventFixture.js";
 import { canonicalWorkflowSessionSnapshot } from "../../helpers/workflowRuntimeEventFixture.js";
 
-function applyMessageEvent(store, eventName, data) {
-  return store.reduceSubSessionMessageEvent(
-    canonicalMessageEvent({
-      ...data,
-      eventType: data?.eventType || eventName,
-      eventId: data?.eventId,
-      sequence: data?.sequence,
-    }),
-    { source: "test" },
-  );
-}
-
 function applySessionSnapshot(store, sessionDoc) {
   return store.applyWorkflowRuntimeEvent(
     canonicalWorkflowSessionSnapshot({

@@ -5,29 +5,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  bindOpenAiCompatibleTools,
-  compileProviderModelKwargs,
   createModelRequestExecutor,
-  createOpenAiCompatibleClient,
   createProviderAdapterRegistry,
-  applyPromptCacheMessages,
-  convertMessages,
-  convertToolChoice,
-  convertTools,
-  responseFromAnthropic,
   anthropicMessagesAdapter,
   classifyTransportError,
-  orderOpenAiResponsesRequestBody,
-  normalizeModelOutput,
 } from "../src/index.js";
 import {
   MODEL_CONTEXT_SEQUENCE_POLICY,
   MODEL_ERROR_KIND,
   MODEL_OPERATION_KIND,
 } from "@noobot/model-protocol";
-import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from "@langchain/core/messages";
-import { DynamicStructuredTool } from "@langchain/core/tools";
-import { z } from "zod";
 
 const invocation = {
   requestId: "r",

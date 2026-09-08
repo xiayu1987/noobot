@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../can-persistence-base.js';
-import ICurrentState from './state/currentstate/interfaces/current-state.js';
+import CanPersistenceBase from "../../can-persistence-base.js";
 
 class CurrentStateRecord extends CanPersistenceBase {
   constructor() {
@@ -27,4 +26,4 @@ class CurrentStateRecord extends CanPersistenceBase {
   }
 }
 
-export default  CurrentStateRecord;
+export default CurrentStateRecord;

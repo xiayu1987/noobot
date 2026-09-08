@@ -77,15 +77,6 @@ function resolveRuntimeUserId(runtime = {}, agentContext = null) {
   ).trim();
 }
 
-function resolveRuntimeSessionId(runtime = {}, agentContext = null) {
-  return String(
-    runtime?.systemRuntime?.sessionId ||
-      runtime?.sessionId ||
-      agentContext?.context?.identity?.sessionId ||
-      "",
-  ).trim();
-}
-
 async function buildBackgroundOutputArtifact({ filePath = "", name = "", role = "" } = {}) {
   const bytes = await readFile(filePath).catch(() => Buffer.alloc(0));
   if (!bytes.length) return null;

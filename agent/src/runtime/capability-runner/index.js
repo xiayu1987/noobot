@@ -14,7 +14,6 @@ import { filterForModelContext } from "@noobot/context-protocol/policy/message";
 import {
   getRuntimeFromAgentContext,
   getSessionIdsFromAgentContext,
-  getSystemRuntimeFromRuntime,
   getToolsFromAgentContext,
 } from "../../context/agent-context-accessor.js";
 import { compactToolResultTextForModel } from "../../transfer-adapter/core/compact.js";
@@ -31,21 +30,6 @@ import {
 import { validateConfigSnapshot } from "@noobot/agent-config-protocol";
 
 export const MAX_MINI_RUNNER_TOOL_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-
-function normalizeTextContent(content = "") {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object" && typeof item.text === "string") {
-        return item.text;
-      }
-      return "";
-    })
-    .join("\n")
-    .trim();
-}
 
 function compactToolMessagesForMiniRunner(messages = []) {
   return (Array.isArray(messages) ? messages : []).map((messageItem = {}) => {

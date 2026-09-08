@@ -18,6 +18,7 @@
     }
   },
   "security": {
+    "trusted_directories": ["*"],
     "execution_isolation": {
       "mode": "sandbox",
       "sandbox": {

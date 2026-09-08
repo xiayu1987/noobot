@@ -6,7 +6,7 @@
 <script setup>
 import { Key } from "@element-plus/icons-vue";
 
-const props = defineProps({
+defineProps({
   name: { type: String, required: true },
   title: { type: String, required: true },
   itemClass: { type: [String, Array, Object], default: "" },
@@ -19,19 +19,25 @@ const emit = defineEmits(["insert-param"]);
 </script>
 
 <template>
-  <el-collapse-item
-    :name="name"
-    :title="title"
-    class="resource-collapse-item"
-    :class="itemClass"
-  >
-    <el-scrollbar class="tree-scroll" v-loading="loading" element-loading-background="var(--noobot-mask-bg)">
-      <el-tree :data="treeData" node-key="key" :props="{ label: 'label', children: 'children' }" class="custom-tree param-tree">
+  <el-collapse-item :name="name" :title="title" class="resource-collapse-item" :class="itemClass">
+    <el-scrollbar
+      class="tree-scroll"
+      v-loading="loading"
+      element-loading-background="var(--noobot-mask-bg)"
+    >
+      <el-tree
+        :data="treeData"
+        node-key="key"
+        :props="{ label: 'label', children: 'children' }"
+        class="custom-tree param-tree"
+      >
         <template #default="{ data }">
           <span class="tree-node param-row" @dblclick.stop="emit('insert-param', data.key)">
             <el-icon class="node-icon"><Key /></el-icon>
             <span class="node-label">{{ data.label }}</span>
-            <span class="param-desc" :title="data.description">{{ data.description || translate("settings.noDescription") }}</span>
+            <span class="param-desc" :title="data.description">{{
+              data.description || translate("settings.noDescription")
+            }}</span>
           </span>
         </template>
       </el-tree>

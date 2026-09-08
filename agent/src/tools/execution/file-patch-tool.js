@@ -30,13 +30,15 @@ import {
   buildFileToolDescription,
   buildLineNumberedNearbyContent,
   buildPatchFieldDescription,
+  resolveFileResourceRiskScope,
   mutationLogicalPath,
   resolveRuntimeFileMutationRoot,
 } from "./file-tool-shared.js";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
 import {
+  RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
-  classifyResourceRisk,
+  classifyResourceSetRisk,
 } from "@noobot/security-assessment-protocol";
 
 function buildPatchFailurePayload({ error, original = "", pathRef = null } = {}) {
@@ -293,19 +295,28 @@ function buildPatchResult({
 async function runPatchFile({ agentContext, runtime, workspaceIo, mutationScopeId, args }) {
   const { format, patch = "", strip = 1, root = "", dryRun = false, riskLevel } = args;
   const prepared = await preparePatchExecution({ format, patch, strip, root, agentContext });
-  const patchPathRefs = prepared.targets
-    .flatMap((item) => [item.oldPathRef, item.newPathRef])
-    .filter(Boolean)
-    .map((item) => resolvePathRef({ input: item, workspaceRoot: runtime?.basePath || "" }));
-  const pathView = patchPathRefs.some((item) => item.view === "host") ? "host" : "workspace";
+  const patchResources = prepared.targets
+    .flatMap((item) => [
+      { pathRef: item.oldPathRef, resourcePath: item.oldResourcePath },
+      { pathRef: item.newPathRef, resourcePath: item.newResourcePath },
+    ])
+    .filter((item) => item.pathRef && item.resourcePath);
+  const resourceScopes = patchResources.map((item) =>
+    resolveFileResourceRiskScope({
+      pathRef: item.pathRef,
+      resourcePath: item.resourcePath,
+      runtime,
+    }),
+  );
   await confirmToolOperation({
     runtime,
     declaredRiskLevel: riskLevel,
     serverEvidence: {
       source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-      riskLevel: dryRun
-        ? classifyResourceRisk({ operation: "read", scope: pathView })
-        : classifyResourceRisk({ operation: "patch", scope: pathView }),
+      riskLevel: classifyResourceSetRisk({
+        operation: dryRun ? RESOURCE_OPERATION.READ : RESOURCE_OPERATION.PATCH,
+        scopes: resourceScopes,
+      }),
     },
     toolName: TOOL_NAME.PATCH_FILE,
     operation: dryRun ? "validate file patch" : "apply file patch",

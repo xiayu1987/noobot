@@ -115,15 +115,6 @@ export function createMonotonicMessageActions({
   removeWorkflowOwnersForReplacedTurns,
   invalidateTerminalResolution,
 }) {
-  function notifyStateMismatch() {
-    notify({
-      type: "warning",
-      message:
-        translate("chat.sessionStateOutOfSync") ||
-        "Session state is out of sync. Refresh and try again.",
-    });
-  }
-
   function activeTurnRuntime() {
     const sessionId = sessionRuntimeId(activeSession?.value || activeSessionId?.value);
     return resolveSessionTurnRuntime(turnRuntimeRegistry?.value, sessionId);

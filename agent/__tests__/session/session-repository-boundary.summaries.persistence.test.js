@@ -10,7 +10,6 @@ import path from "node:path";
 import { mkdir, readFile } from "node:fs/promises";
 
 import { createSessionServices } from "../../src/session/index.js";
-import { readSessionArtifact } from "../../src/session/session-artifact-store.js";
 import {
   withTempWorkspace,
   canonicalActivity,

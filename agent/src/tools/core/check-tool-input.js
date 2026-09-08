@@ -9,7 +9,6 @@ import {
   PATH_CAPABILITIES,
   filePath as path,
   normalizePathForPlatform,
-  resolvePathPolicy,
   resolvePathRef,
   resolveToolInputPath,
   TOOL_PATH_RESOLUTION_ERROR,
@@ -31,6 +30,7 @@ import {
   EXECUTION_ISOLATION_MODE,
   resolveExecutionIsolation,
 } from "@noobot/execution-isolation-protocol";
+import { resolveConfiguredPathPolicy } from "../../config/core/path-policy-adapter.js";
 
 function tCheckInput(agentContext = {}, key = "") {
   const keyMap = {
@@ -363,11 +363,10 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       },
     });
   }
-  const configuredPathPolicy = resolvePathPolicy(runtime?.globalConfig || {});
+  const configuredPathPolicy = resolveConfiguredPathPolicy(runtime?.globalConfig);
   const principal = {
     userId: String(runtime?.userId || ""),
     role: isSuperUser ? "super_admin" : "regular_user",
-    isSuperUser,
   };
   const authorization = authorizePathRef({
     pathRef: logicalPathRef,
@@ -417,8 +416,10 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
       );
     }
   }
-  if (existingInfo && resolutionPolicy.requireRealPathForExistingTargets !== false) {
+  let resourcePath = resolvedTargetPath;
+  if (existingInfo) {
     const realTarget = await realpath(resolvedTargetPath);
+    resourcePath = realTarget;
     if (
       normalizedRequiredExecutionRoot &&
       !isPathWithinRoot(
@@ -459,12 +460,12 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
   }
   if (
     !existingInfo &&
-    resolutionPolicy.validateWriteParentRealPath !== false &&
     capability !== PATH_CAPABILITIES.FILE_READ &&
     capability !== PATH_CAPABILITIES.FILE_SEARCH
   ) {
     const realParent = await resolveExistingParent(resolvedTargetPath);
     const projectedTarget = path.join(realParent, path.basename(resolvedTargetPath));
+    resourcePath = projectedTarget;
     const parentDecision = authorizePathRef({
       pathRef: logicalPathRef,
       principal,
@@ -488,6 +489,7 @@ export async function resolveAuthorizedUserWorkspaceFilePath({
 
   return Object.freeze({
     executionPath: resolvedTargetPath,
+    resourcePath,
     pathRef: logicalPathRef,
     toolPath: Object.freeze({ ...resolvedToolPath }),
   });

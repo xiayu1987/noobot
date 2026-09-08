@@ -9,8 +9,6 @@ import {
   COMPACT_TRANSFER_FILE_FIELDS,
   COMPACT_TRANSFER_PAYLOAD_FIELDS,
   compactToolResultTextForModel,
-  createTransferEnvelope,
-  directTransfer,
   getTransferAttachments,
   getTransferEnvelopes,
   identity,

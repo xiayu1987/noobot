@@ -6,14 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import {
-  buildContextMessages,
-  buildContextMessageBlocks,
-} from "../../../src/context/assembly/message-builder.js";
-import { TURN_THRESHOLDS } from "@noobot/shared/turn-thresholds";
+import { buildContextMessageBlocks } from "../../../src/context/assembly/message-builder.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 
-const MAIN_MODEL_HISTORY_ROUND_LIMIT = TURN_THRESHOLDS.session.mainModelHistoryRoundLimit;
 import { createPersistedCurrentUserMessage } from "./message-builder-current-user-fixture.js";
 
 function createMessageBlockScope(runtime, messageBlocks) {

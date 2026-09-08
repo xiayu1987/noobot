@@ -5,7 +5,6 @@
  */
 import { ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { createHarness } from "../helpers/useChatEngineHarness.js";
 import { createSessionDetailApplicator } from "../../../../../src/modules/session/model/list/sessionDetailApply.js";
 import { SESSION_DETAIL_APPLY_MODE } from "../../../../../src/modules/chat/runtime/engine/messageStateGuards.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
@@ -53,11 +52,10 @@ function createApplySessionDetailHarness({ sessionId = "s-apply-mode", messages 
 describe("useChatEngine.session-detail", () => {
   it("keeps a locally completed turn timing when an early detail omits its finish", () => {
     const turnScopeId = "client-turn:timing-race";
-    const { activeSession, applySessionDetail, turnRuntimeRegistry } =
-      createApplySessionDetailHarness({
-        sessionId: "s-timing-race",
-        messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
-      });
+    const { applySessionDetail, turnRuntimeRegistry } = createApplySessionDetailHarness({
+      sessionId: "s-timing-race",
+      messages: [{ role: RoleEnum.ASSISTANT, turnScopeId, dialogProcessId: "dp-timing-race" }],
+    });
     applyTurnTimingSnapshot(turnRuntimeRegistry.value, {
       sessionId: "s-timing-race",
       turnTimings: [
@@ -95,10 +93,9 @@ describe("useChatEngine.session-detail", () => {
 
   it("keys a persisted timing by its canonical turnScopeId", () => {
     const turnScopeId = "client-turn:hydrated-timing";
-    const { activeSession, applySessionDetail, turnRuntimeRegistry } =
-      createApplySessionDetailHarness({
-        sessionId: "s-hydrated-timing",
-      });
+    const { applySessionDetail, turnRuntimeRegistry } = createApplySessionDetailHarness({
+      sessionId: "s-hydrated-timing",
+    });
 
     applySessionDetail({
       sessionId: "s-hydrated-timing",

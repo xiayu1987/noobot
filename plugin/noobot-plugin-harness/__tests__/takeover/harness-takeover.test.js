@@ -5,13 +5,9 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import { createTestHookManager as createAgentHookManager } from "../helpers/public-runtime-fixtures.js";
 import { registerHarnessCore } from "../../src/index.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
 import { createModelContext } from "@noobot/context-protocol";
 
 function withModelContext(ctx = {}, { messages = [], messageBlocks = null } = {}) {

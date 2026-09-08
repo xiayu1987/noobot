@@ -11,7 +11,6 @@ import {
   getMessageDialogProcessId,
   getMessageParentDialogProcessId,
   getMessageRole,
-  getMessageSessionId,
   getMessageTurnScopeId,
 } from "./messageIdentity.js";
 import { getMessageTimestamp, nowIso, nowMs } from "./timeFields.js";
@@ -272,6 +271,10 @@ function buildViewMessage(messageItem = {}, { userId = "" } = {}) {
   });
 }
 
+function createEmptyTurnArtifacts() {
+  return { envelopes: [], attachments: [], toolTimeline: [] };
+}
+
 function foldConversationMessages(messages = [], buildView) {
   const sourceMessages = normalizeArray(messages);
   const foldedMessages = sourceMessages
@@ -405,7 +408,7 @@ function foldConversationMessages(messages = [], buildView) {
     const isAssistant = getMessageRole(message) === "assistant";
     const envelopes = isAssistant ? getMessageTransferEnvelopes(message) : [];
     const attachments = isAssistant ? getMessageAttachments(message) : [];
-    const existing = turnArtifacts.get(key) || { envelopes: [], attachments: [], toolTimeline: [] };
+    const existing = turnArtifacts.get(key) || createEmptyTurnArtifacts();
     turnArtifacts.set(key, {
       envelopes: envelopes.length ? [...existing.envelopes, ...envelopes] : existing.envelopes,
       attachments: attachments.length
@@ -418,8 +421,7 @@ function foldConversationMessages(messages = [], buildView) {
   }
   for (const message of mergedMessages) {
     const key = resolveMessageTurnScopeMergeKey(message);
-    const artifacts =
-      turnArtifacts.get(key) || { envelopes: [], attachments: [], toolTimeline: [] };
+    const artifacts = turnArtifacts.get(key) || createEmptyTurnArtifacts();
     if (getMessageRole(message) !== "assistant") continue;
     if (artifacts.envelopes.length) {
       message.transferEnvelopes = artifacts.envelopes;

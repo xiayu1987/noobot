@@ -22,10 +22,6 @@ export const DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS =
   LENGTH_THRESHOLDS.semanticTransfer.toolResultInlineChars;
 const DEFAULT_PREVIEW_CHARS = LENGTH_THRESHOLDS.semanticTransfer.previewChars;
 
-function normalizeString(value = "") {
-  return String(value || "").trim();
-}
-
 function toSafePositiveInt(value, fallback = DEFAULT_TOOL_RESULT_INLINE_TEXT_CHARS, min = 0) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return Math.max(min, Number(fallback || 0));
@@ -138,31 +134,30 @@ export async function materializeTextForToolResult({
     });
   }
 
-  const persistedTransferEnvelopes = normalizeTransferEnvelopes(
-    persisted?.transferEnvelopes,
-  );
+  const persistedTransferEnvelopes = normalizeTransferEnvelopes(persisted?.transferEnvelopes);
   if (decision.mode === TRANSFER_MODE.ATTACHMENT && !persistedTransferEnvelopes.length) {
     throw new Error("semantic_transfer_attachment_persistence_required");
   }
-  const transferEnvelopes = decision.mode === TRANSFER_MODE.ATTACHMENT
-    ? persistedTransferEnvelopes
-    : [
-        createDirectTransferEnvelope({
-          identity,
-          content: normalizedText,
-          intent: {
-            source: intent.source,
-            reason: intent.reason,
-            scenario,
-            strategy,
-          },
-          meta: {
-            mimeType,
-            originalLength: normalizedText.length,
-            previewLength: normalizedText.length,
-          },
-        }),
-      ];
+  const transferEnvelopes =
+    decision.mode === TRANSFER_MODE.ATTACHMENT
+      ? persistedTransferEnvelopes
+      : [
+          createDirectTransferEnvelope({
+            identity,
+            content: normalizedText,
+            intent: {
+              source: intent.source,
+              reason: intent.reason,
+              scenario,
+              strategy,
+            },
+            meta: {
+              mimeType,
+              originalLength: normalizedText.length,
+              previewLength: normalizedText.length,
+            },
+          }),
+        ];
   const resultFields = buildTextResultFields({
     text: normalizedText,
     transferEnvelopes,

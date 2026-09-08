@@ -11,7 +11,6 @@ import {
   CONFIG_DOCUMENT_SCOPE,
   CONFIG_REPAIR_ACTION,
   ensureModelProviderInConfigFile,
-  migrateConfigFileToCurrentProtocol,
   normalizeConfigParamsDocument,
   repairConfigDocument,
   summarizeConfigRepairReport,
@@ -237,10 +236,6 @@ export function createDesktopConfigManager({
 
   function applySelectedModelToConfig(payload = {}, selectedModel = "") {
     return applyPrimaryModelReferencesToConfigFile(payload, selectedModel);
-  }
-
-  function deepClone(input) {
-    return JSON.parse(JSON.stringify(input));
   }
 
   function copyDirectoryContents({ from, to }) {

@@ -94,3 +94,16 @@ test("normalizeKnownConfigKeys: 全局隔离协议只规范化自己的配置树
     },
   });
 });
+
+test("normalizeKnownConfigKeys: 可信目录配置规范化为 camelCase", () => {
+  const out = normalizeKnownConfigKeys({
+    security: {
+      trusted_directories: ["/srv/project"],
+      path_policy: {
+        roles: { super_admin: { host: { denied_roots: ["/private"] } } },
+      },
+    },
+  });
+  assert.deepEqual(out.security.trustedDirectories, ["/srv/project"]);
+  assert.deepEqual(out.security.pathPolicy.roles.superAdmin.host.deniedRoots, ["/private"]);
+});

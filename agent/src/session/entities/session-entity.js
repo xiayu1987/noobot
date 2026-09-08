@@ -9,11 +9,7 @@ import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { compactTransferEnvelopes } from "../transfer-attachment-refs.js";
 import { normalizeTransferEnvelopes } from "@noobot/semantic-transfer-protocol";
 import { normalizeTurnLifecycleEntity } from "@noobot/authoritative-state/domain";
-import {
-  normalizeAuthorityEventOutbox,
-  projectPluginArtifacts,
-  validateProtocolEvent,
-} from "@noobot/event-protocol";
+import { normalizeAuthorityEventOutbox, validateProtocolEvent } from "@noobot/event-protocol";
 import { assertSessionAggregateInvariants } from "@noobot/session-protocol";
 import { normalizeDialogOrderEntity } from "./dialog-order-entity.js";
 import { normalizeSelectedConnectorIds } from "@noobot/connector-protocol";

@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../interfaces/can-persistence.js';
-import IStateNodeState from '../../modelstate/interfaces/state-node-state.js';
-import IStepState from '../../modelstate/interfaces/step-state.js';
-
 class ICurrentState {
   setCurrentStateSourceType(currentStateSourceType) {}
   getCurrentStateSourceType() {}
@@ -21,4 +17,4 @@ class ICurrentState {
   getStateNodeStates() {}
 }
 
-export default  ICurrentState;
+export default ICurrentState;

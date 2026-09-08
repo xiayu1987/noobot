@@ -6,14 +6,7 @@
 import { BUILTIN_SCENARIO_KEYS } from "./constants.js";
 import { applyPrimaryModelReferencesToConfigFile } from "@noobot/agent-config-protocol";
 import { resolveModelLibraryProvider } from "@noobot/model-protocol";
-import {
-  deepClone,
-  fileExists,
-  hasOwnProperty,
-  isPlainObject,
-  readJsonStrict,
-  writeJson,
-} from "./utils.js";
+import { deepClone, fileExists, isPlainObject, readJsonStrict, writeJson } from "./utils.js";
 
 export function normalizeProviderAlias(modelName = "") {
   const normalized = String(modelName || "")

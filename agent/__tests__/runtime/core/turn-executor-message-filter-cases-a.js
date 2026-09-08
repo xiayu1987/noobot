@@ -5,11 +5,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  appendContextMessage,
-  createModelContext,
-  writeMessageBlocks,
-} from "@noobot/context-protocol";
+import { appendContextMessage, writeMessageBlocks } from "@noobot/context-protocol";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
 import {

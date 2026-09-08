@@ -5,28 +5,14 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import {
   ensureTestAgentExecutionScope,
   createTestHookContext,
-  createTestHookManager as createAgentHookManager,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerHarnessCore } from "../../src/index.js";
-import { injectPrompt, resolvePolicyPromptSelection } from "../../src/tracing/buffer-manager.js";
-import { buildDefaultPolicyPrompt } from "../../src/tracing/policy-prompt-matrix.js";
-import {
-  applyDynamicPolicyPromptFromText,
-  buildDynamicPolicyPromptProtocolInstruction,
-} from "../../src/capabilities/handlers/shared/workflow/dynamic-policy-prompt.js";
+
 import { ensureHarnessBucket } from "../../src/capabilities/handlers/shared.js";
-import {
-  HARNESS_BUCKET_VERSION,
-  HARNESS_PROMPT_INJECTION_ID_FIELD,
-} from "../../src/capabilities/handlers/shared/constants.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
+import { HARNESS_BUCKET_VERSION } from "../../src/capabilities/handlers/shared/constants.js";
 
 test("ensureHarnessBucket fast-path keeps initialized references stable", async () => {
   const ctx = {

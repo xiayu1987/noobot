@@ -8,21 +8,8 @@ import {
   createAuthoritativeMessageEnvelope,
   createCanonicalAssistant,
   createFixture,
-  createFakeProcessStore,
 } from "../helpers/useReconnectReplayHelper.js";
 import { RoleEnum } from "../../../../../src/modules/chat/model/chatConstants.js";
-import { createReplayBatch } from "@noobot/event-protocol";
-import { createTurnLifecycleSnapshot } from "@noobot/session-protocol";
-
-function emptyAuthorityBatch(sessionId, commandId) {
-  return createReplayBatch({
-    sessionId,
-    streamId: `stream-${sessionId}`,
-    requestId: `reconnect-${sessionId}`,
-    snapshot: createTurnLifecycleSnapshot({ commandId, sessionId, sequence: 0 }),
-    snapshotSequence: 0,
-  });
-}
 
 afterEach(() => {
   vi.useRealTimers();
@@ -54,13 +41,19 @@ describe("useReconnectReplay", () => {
     refs.sessions.value.find((session) => session.id === "s-1").messages = [
       { role: RoleEnum.USER, content: "s1-q" },
       createCanonicalAssistant({
-        sessionId: "s-1", messageId: "message-s1", dialogProcessId: "dp-s1", turnScopeId: "turn-s1",
+        sessionId: "s-1",
+        messageId: "message-s1",
+        dialogProcessId: "dp-s1",
+        turnScopeId: "turn-s1",
       }),
     ];
     refs.sessions.value.find((session) => session.id === "s-2").messages = [
       { role: RoleEnum.USER, content: "s2-q" },
       createCanonicalAssistant({
-        sessionId: "s-2", messageId: "message-s2", dialogProcessId: "dp-s2", turnScopeId: "turn-s2",
+        sessionId: "s-2",
+        messageId: "message-s2",
+        dialogProcessId: "dp-s2",
+        turnScopeId: "turn-s2",
       }),
     ];
 
@@ -107,5 +100,4 @@ describe("useReconnectReplay", () => {
     expect(s1Assistant?.content).toBe("C");
     expect(s2Assistant?.content).toBe("AB");
   });
-
 });

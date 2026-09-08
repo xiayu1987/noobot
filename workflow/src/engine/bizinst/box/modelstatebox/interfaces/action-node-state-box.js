@@ -4,10 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import IActionNode from '../../../../../design/model/node/interfaces/action-node.js';
-import INodeState from '../../../state/modelstate/interfaces/node-state.js';
-import IStepState from '../../../state/modelstate/interfaces/step-state.js';
-
 class IActionNodeStateBox {
   getFirstStepState() {}
   getLastStepState() {}
@@ -15,4 +11,4 @@ class IActionNodeStateBox {
   addStepState(stepState, index) {}
 }
 
-export default  IActionNodeStateBox;
+export default IActionNodeStateBox;

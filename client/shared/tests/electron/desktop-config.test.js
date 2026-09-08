@@ -35,6 +35,7 @@ export async function createFixture() {
         },
       },
       security: {
+        trusted_directories: ["*"],
         execution_isolation: {
           mode: "sandbox",
           sandbox: { provider: "docker", scope: "user", mounts: [] },
@@ -208,6 +209,7 @@ test("packaged desktop startup incrementally adds any bundled global config fiel
 
     const config = JSON.parse(await readFile(globalConfigPath, "utf8"));
     assert.equal(config.newly_added_config, undefined);
+    assert.deepEqual(config.security.trusted_directories, ["*"]);
     assert.equal(config.security.execution_isolation.mode, "host");
     assert.equal(config.security.path_policy, undefined);
     assert.deepEqual(config.attachments, {

@@ -6,47 +6,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { WebSocket } from "ws";
-import { transitionTurnLifecycle } from "@noobot/authoritative-state/domain";
-import {
-  commitTurnLifecycle,
-  createAuthoritativeTurnSnapshot,
-} from "@noobot/authoritative-state/application";
-import {
-  acknowledgeAuthorityEventDelivery,
-  listPendingAuthorityEvents,
-  recordAuthorityEventDeliveryAttempt,
-} from "@noobot/event-protocol";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_WIRE_EVENT,
-  TURN_COMMAND,
-  TURN_PHASE,
-  TURN_STATE,
-  SESSION_ERROR_CODE,
-} from "@noobot/session-protocol";
+
+import { TURN_EVENT, TURN_PHASE, TURN_STATE } from "@noobot/session-protocol";
 import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
-import { recoverTurnFinalize } from "../../ws/chat-websocket/finalize-recovery.js";
-import { createTurnLifecycleBridge } from "../../ws/chat-websocket/turn-lifecycle-bridge.js";
-import { createAuthorityEventDispatcher } from "../../ws/chat-websocket/authority-event-dispatcher.js";
-import { createRunEventListener } from "../../ws/chat-websocket/run-event-listener.js";
-import {
-  attachRunTransport,
-  publishRunEvent,
-  registerActiveRun,
-  unregisterActiveRun,
-} from "../../ws/chat-websocket/run-registry.js";
-import { EXECUTION_QUERY_COMMAND } from "@noobot/session-protocol/execution-lifecycle";
+import { registerActiveRun, unregisterActiveRun } from "../../ws/chat-websocket/run-registry.js";
 import {
   startServerWithWs,
   closeServer,
   callChatWs,
-  stopChatWs,
   createProtocolTestCommand,
 } from "./chat-websocket-server.test-helpers.js";
 
 import {
-  createTestLifecycleEnvelope,
   createAuthoritativeBot,
   payload,
   installLifecycleSnapshotReader,
@@ -214,7 +185,10 @@ test("snapshot reconnect recovers a stale persisted turn lost after service rest
     assert.equal(first.payload.activeTurnScopeId, "");
     assert.equal(first.payload.recentTerminalTurns[0]?.turnScopeId, "turn-snapshot-restart");
     assert.equal(first.payload.recentTerminalTurns[0]?.state, TURN_STATE.PROCESSING_FAILED);
-    assert.equal(first.payload.recentTerminalTurns[0]?.failure?.code, "service_restart_orphaned_turn");
+    assert.equal(
+      first.payload.recentTerminalTurns[0]?.failure?.code,
+      "service_restart_orphaned_turn",
+    );
 
     const second = await requestTurnSnapshot({
       port: server.address().port,
@@ -292,4 +266,3 @@ test("snapshot reconnect does not terminate a matching live execution", async ()
     await closeServer(server);
   }
 });
-

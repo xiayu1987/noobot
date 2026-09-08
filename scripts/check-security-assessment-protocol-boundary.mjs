@@ -46,7 +46,7 @@ for (const [relativePath, marker] of [
   ["agent/src/tools/execution/file-read-tool.js", "classifyResourceRisk"],
   ["agent/src/tools/execution/file-write-tool.js", "classifyResourceRisk"],
   ["agent/src/tools/execution/file-search-tool.js", "classifyResourceRisk"],
-  ["agent/src/tools/execution/file-patch-tool.js", "classifyResourceRisk"],
+  ["agent/src/tools/execution/file-patch-tool.js", "classifyResourceSetRisk"],
   ["agent/src/tools/execution/script-tool.js", "classifyToolExecutionRisk"],
   ["event-protocol/src/message-event.js", "validateSecurityAssessment"],
   ["client/noobot-chat/src/shared/ui/BaseThinkingLogLine.vue", "normalizeSecurityRiskLevel"],

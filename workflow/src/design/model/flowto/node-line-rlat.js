@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../../can-persistence-base.js';
-import INode from '../node/interfaces/node.js';
+import CanPersistenceBase from "../../../can-persistence-base.js";
 
 class NodeLineRLAT extends CanPersistenceBase {
   constructor() {
@@ -34,4 +33,4 @@ class NodeLineRLAT extends CanPersistenceBase {
   }
 }
 
-export default  NodeLineRLAT;
+export default NodeLineRLAT;

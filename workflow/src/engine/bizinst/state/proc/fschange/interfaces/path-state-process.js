@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../../../../interfaces/can-persistence.js';
-import IPathState from '../../../modelstate/interfaces/path-state.js';
-
 class IPathStateProcess {
   setPathState(pathState) {}
   getPathState() {}
@@ -14,4 +11,4 @@ class IPathStateProcess {
   getDirection() {}
 }
 
-export default  IPathStateProcess;
+export default IPathStateProcess;

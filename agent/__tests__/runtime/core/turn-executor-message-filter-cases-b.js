@@ -5,18 +5,10 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  appendContextMessage,
-  createModelContext,
-  writeMessageBlocks,
-} from "@noobot/context-protocol";
+import { createModelContext, writeMessageBlocks } from "@noobot/context-protocol";
 import { createEmptyHookResult } from "@noobot/hook-protocol";
 
-import {
-  invokeNoToolsTurn as invokeNoToolsTurnProduction,
-  invokeWithToolsTurn as invokeWithToolsTurnProduction,
-} from "../../../src/runtime/turn/turn-executor.js";
-import { requestMainFlowSummaryCheckpoint } from "../../../src/runtime/main-flow-control.js";
+import { invokeWithToolsTurn as invokeWithToolsTurnProduction } from "../../../src/runtime/turn/turn-executor.js";
 import { createTestModelPort, prepareTestTurnExecution } from "./turn-runtime-test-helper.js";
 
 const TEST_MODEL_SPEC = Object.freeze({
@@ -26,15 +18,6 @@ const TEST_MODEL_SPEC = Object.freeze({
   reasoning_effort_options: ["low", "medium", "high"],
   reasoning_effort_parameter: "reasoning_effort",
 });
-
-function invokeNoToolsTurn(args = {}) {
-  prepareTestTurnExecution(
-    args.modelState,
-    args.loopState,
-    `no-tools-${args.loopState?.dialogProcessId || "turn"}`,
-  );
-  return invokeNoToolsTurnProduction(args);
-}
 
 function invokeWithToolsTurn(args = {}) {
   prepareTestTurnExecution(

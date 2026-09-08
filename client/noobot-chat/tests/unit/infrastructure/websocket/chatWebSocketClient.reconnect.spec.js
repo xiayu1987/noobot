@@ -17,7 +17,6 @@ import {
 } from "@noobot/agent-transport-protocol";
 import { canonicalMessageEvent } from "../../modules/chat/helpers/messageEventFixture.js";
 import {
-  flushPromises,
   MockWebSocket,
   setupWebSocketTestHooks,
   streamCommand,

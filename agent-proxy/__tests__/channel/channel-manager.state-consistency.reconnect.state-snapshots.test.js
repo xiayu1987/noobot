@@ -7,25 +7,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
   canonicalInteractionRequest,
   canonicalMessageEvent,
-  FakeUpstreamWebSocket,
   getEvent,
-  listEvents,
   sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { INTERACTION_EVENT_TYPE } from "@noobot/event-protocol";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_PROTOCOL_VERSION,
-} from "@noobot/session-protocol";
-import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
 
 test("reconnect state should be consistent for all same-user clients across channel statuses", () => {
   const manager = new ChannelManager({ OPEN: 1 });
@@ -40,14 +31,20 @@ test("reconnect state should be consistent for all same-user clients across chan
 
   for (const item of statusMatrix) {
     const sessionId = `session-${item.status}`;
-    const dpId = `dp-${item.status}`;
+
     const channelKey = createChannelKey({ userId: "user-1", sessionId });
     const channel = manager.ensureChannel(channelKey, { userId: "user-1", sessionId });
     channel.ownerApiKey = "api-key-1";
     channel.ownerUserId = "user-1";
-    manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({
-      sessionId, turnScopeId: `turn-${item.status}`, text: item.status,
-    }));
+    manager.pushChannelEvent(
+      channel,
+      MESSAGE_EVENT_WIRE_EVENT,
+      canonicalMessageEvent({
+        sessionId,
+        turnScopeId: `turn-${item.status}`,
+        text: item.status,
+      }),
+    );
     channel.status = item.status;
   }
 
@@ -98,7 +95,11 @@ test("reconnect state should be isolated between different users", () => {
   channel.status = "running";
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
-  manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent({ text: "hello" }));
+  manager.pushChannelEvent(
+    channel,
+    MESSAGE_EVENT_WIRE_EVENT,
+    canonicalMessageEvent({ text: "hello" }),
+  );
 
   const otherUserClient = createMockSocket({ apiKey: "api-key-2", userId: "user-2" });
   manager.handleReconnect(otherUserClient, {
@@ -118,14 +119,18 @@ test("reconnect should include pending interactions without a conversationStates
   channel.ownerApiKey = "api-key-1";
   channel.ownerUserId = "user-1";
   manager.pushChannelEvent(channel, MESSAGE_EVENT_WIRE_EVENT, canonicalMessageEvent());
-  manager.pushChannelEvent(channel, INTERACTION_EVENT_TYPE.REQUEST, canonicalInteractionRequest({
-    sessionId: "session-1",
-    dialogProcessId: "dp-1",
-    turnScopeId: "turn-1",
-    requestId: "req-1",
-    content: "confirm",
-    sequence: 2,
-  }));
+  manager.pushChannelEvent(
+    channel,
+    INTERACTION_EVENT_TYPE.REQUEST,
+    canonicalInteractionRequest({
+      sessionId: "session-1",
+      dialogProcessId: "dp-1",
+      turnScopeId: "turn-1",
+      requestId: "req-1",
+      content: "confirm",
+      sequence: 2,
+    }),
+  );
 
   const client = createMockSocket({ apiKey: "api-key-2", userId: "user-1" });
   manager.handleReconnect(client, {

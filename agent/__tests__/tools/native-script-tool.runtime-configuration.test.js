@@ -5,7 +5,6 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createNativeScriptTool } from "../../src/tools/execution/native-script-tool.js";
@@ -15,7 +14,7 @@ import {
   resolveBrowserProxyFromEnv,
 } from "../../src/tools/execution/native-script-runtime.js";
 import { createTestAgentExecutionScope } from "../helpers/agent-execution-scope.js";
-import { IDENTITY, createRuntime } from "./native-script-tool.fixtures.js";
+import { createRuntime } from "./native-script-tool.fixtures.js";
 
 test("native browser proxy derives Playwright options without exposing its URL", () => {
   assert.deepEqual(

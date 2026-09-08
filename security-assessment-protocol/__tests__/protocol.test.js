@@ -6,11 +6,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  RESOURCE_OPERATION,
+  RESOURCE_SCOPE,
   SECURITY_ASSESSMENT_PROTOCOL_NAME,
   SECURITY_ASSESSMENT_PROTOCOL_VERSION,
   SECURITY_EVIDENCE_SOURCE,
   SECURITY_RISK_LEVELS,
   classifyResourceRisk,
+  classifyResourceSetRisk,
   classifyToolCallBaselineRisk,
   classifyToolExecutionRisk,
   createSecurityAssessment,
@@ -69,10 +72,55 @@ test("tool, execution, and resource classification use one risk matrix", () => {
     }),
     "critical",
   );
-  assert.equal(classifyResourceRisk({ operation: "read", scope: "workspace" }), "low");
-  assert.equal(classifyResourceRisk({ operation: "write", scope: "workspace" }), "medium");
-  assert.equal(classifyResourceRisk({ operation: "delete", scope: "workspace" }), "high");
-  assert.equal(classifyResourceRisk({ operation: "write", scope: "host" }), "critical");
+  assert.equal(
+    classifyResourceRisk({ operation: RESOURCE_OPERATION.READ, scope: RESOURCE_SCOPE.WORKSPACE }),
+    "low",
+  );
+  assert.equal(
+    classifyResourceRisk({
+      operation: RESOURCE_OPERATION.READ,
+      scope: RESOURCE_SCOPE.TRUSTED_HOST,
+    }),
+    "low",
+  );
+  assert.equal(
+    classifyResourceRisk({ operation: RESOURCE_OPERATION.READ, scope: RESOURCE_SCOPE.ATTACHMENT }),
+    "low",
+  );
+  assert.equal(
+    classifyResourceRisk({ operation: RESOURCE_OPERATION.WRITE, scope: RESOURCE_SCOPE.WORKSPACE }),
+    "medium",
+  );
+  assert.equal(
+    classifyResourceRisk({
+      operation: RESOURCE_OPERATION.WRITE,
+      scope: RESOURCE_SCOPE.TRUSTED_HOST,
+    }),
+    "medium",
+  );
+  assert.equal(
+    classifyResourceRisk({ operation: RESOURCE_OPERATION.DELETE, scope: RESOURCE_SCOPE.WORKSPACE }),
+    "high",
+  );
+  assert.equal(
+    classifyResourceRisk({ operation: RESOURCE_OPERATION.WRITE, scope: RESOURCE_SCOPE.HOST }),
+    "critical",
+  );
+  assert.equal(
+    classifyResourceSetRisk({
+      operation: RESOURCE_OPERATION.PATCH,
+      scopes: [RESOURCE_SCOPE.WORKSPACE, RESOURCE_SCOPE.TRUSTED_HOST, RESOURCE_SCOPE.HOST],
+    }),
+    "critical",
+  );
+  assert.throws(
+    () => classifyResourceRisk({ operation: RESOURCE_OPERATION.READ, scope: "unknown" }),
+    /unsupported resource scope/,
+  );
+  assert.throws(
+    () => classifyResourceRisk({ operation: "unknown", scope: RESOURCE_SCOPE.WORKSPACE }),
+    /unsupported resource operation/,
+  );
   assert.equal(maxSecurityRiskLevel("low", "high", "medium"), "high");
 });
 

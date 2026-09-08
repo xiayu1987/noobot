@@ -39,6 +39,8 @@ export const RESOURCE_OPERATION = Object.freeze({
 
 export const RESOURCE_SCOPE = Object.freeze({
   WORKSPACE: "workspace",
+  ATTACHMENT: "attachment",
+  TRUSTED_HOST: "trusted_host",
   HOST: "host",
 });
 
@@ -57,6 +59,27 @@ const TOOL_BASELINE_PROFILES = Object.freeze({
   patch_file: SECURITY_RISK_LEVEL.MEDIUM,
   execute_script: SECURITY_RISK_LEVEL.MEDIUM,
   execute_native_script: SECURITY_RISK_LEVEL.MEDIUM,
+});
+
+const TRUSTED_RESOURCE_RISK_PROFILE = Object.freeze({
+  [RESOURCE_OPERATION.READ]: SECURITY_RISK_LEVEL.LOW,
+  [RESOURCE_OPERATION.SEARCH]: SECURITY_RISK_LEVEL.LOW,
+  [RESOURCE_OPERATION.WRITE]: SECURITY_RISK_LEVEL.MEDIUM,
+  [RESOURCE_OPERATION.PATCH]: SECURITY_RISK_LEVEL.MEDIUM,
+  [RESOURCE_OPERATION.DELETE]: SECURITY_RISK_LEVEL.HIGH,
+});
+
+const RESOURCE_RISK_PROFILES = Object.freeze({
+  [RESOURCE_SCOPE.WORKSPACE]: TRUSTED_RESOURCE_RISK_PROFILE,
+  [RESOURCE_SCOPE.ATTACHMENT]: TRUSTED_RESOURCE_RISK_PROFILE,
+  [RESOURCE_SCOPE.TRUSTED_HOST]: TRUSTED_RESOURCE_RISK_PROFILE,
+  [RESOURCE_SCOPE.HOST]: Object.freeze({
+    [RESOURCE_OPERATION.READ]: SECURITY_RISK_LEVEL.HIGH,
+    [RESOURCE_OPERATION.SEARCH]: SECURITY_RISK_LEVEL.HIGH,
+    [RESOURCE_OPERATION.WRITE]: SECURITY_RISK_LEVEL.CRITICAL,
+    [RESOURCE_OPERATION.PATCH]: SECURITY_RISK_LEVEL.CRITICAL,
+    [RESOURCE_OPERATION.DELETE]: SECURITY_RISK_LEVEL.CRITICAL,
+  }),
 });
 
 const text = (value) => String(value || "").trim();
@@ -98,19 +121,23 @@ export function classifyToolExecutionRisk({ toolName = "", executionView = "" } 
   return classifyToolCallBaselineRisk({ toolName: name });
 }
 
-export function classifyResourceRisk({ operation = "read", scope = "workspace" } = {}) {
-  const normalizedOperation = text(operation).toLowerCase();
-  const hostResource = text(scope).toLowerCase() === RESOURCE_SCOPE.HOST;
-  if (normalizedOperation === RESOURCE_OPERATION.DELETE) {
-    return hostResource ? SECURITY_RISK_LEVEL.CRITICAL : SECURITY_RISK_LEVEL.HIGH;
+export function classifyResourceRisk({ operation, scope } = {}) {
+  const declaredOperation = text(operation);
+  const declaredScope = text(scope);
+  const profile = RESOURCE_RISK_PROFILES[declaredScope];
+  if (!profile) throw new TypeError(`unsupported resource scope: ${declaredScope || "<empty>"}`);
+  const riskLevel = profile[declaredOperation];
+  if (!riskLevel) {
+    throw new TypeError(`unsupported resource operation: ${declaredOperation || "<empty>"}`);
   }
-  if (
-    normalizedOperation === RESOURCE_OPERATION.WRITE ||
-    normalizedOperation === RESOURCE_OPERATION.PATCH
-  ) {
-    return hostResource ? SECURITY_RISK_LEVEL.CRITICAL : SECURITY_RISK_LEVEL.MEDIUM;
+  return riskLevel;
+}
+
+export function classifyResourceSetRisk({ operation, scopes } = {}) {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    throw new TypeError("resource scope set must contain at least one scope");
   }
-  return hostResource ? SECURITY_RISK_LEVEL.HIGH : SECURITY_RISK_LEVEL.LOW;
+  return maxSecurityRiskLevel(...scopes.map((scope) => classifyResourceRisk({ operation, scope })));
 }
 
 function normalizeEvidence(evidence = {}) {

@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICanPersistence from '../../../interfaces/can-persistence.js';
-import IAction from '../action/interfaces/action.js';
-
 class IActionRecord {
   setAction(action) {}
   getAction() {}
@@ -16,4 +13,4 @@ class IActionRecord {
   getProcessRecords() {}
 }
 
-export default  IActionRecord;
+export default IActionRecord;

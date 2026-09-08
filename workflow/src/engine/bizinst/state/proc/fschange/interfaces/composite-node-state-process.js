@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: MIT
  */
 
-import ICompositeNode from '../../../../../../design/model/node/interfaces/composite-node.js';
-import IBizinst from '../../../../interfaces/bizinst.js';
-
 class ICompositeNodeStateProcess {
   setChildBizinst(childBizinst) {}
   getChildBizinst() {}
@@ -18,4 +15,4 @@ class ICompositeNodeStateProcess {
   getSourceNoteInfo() {}
 }
 
-export default  ICompositeNodeStateProcess;
+export default ICompositeNodeStateProcess;

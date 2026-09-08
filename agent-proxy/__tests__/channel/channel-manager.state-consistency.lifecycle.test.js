@@ -35,7 +35,7 @@ import {
   createPluginArtifactEnvelope,
   PLUGIN_ARTIFACT_EVENT,
 } from "@noobot/event-protocol/plugin-artifact-event";
-import { MESSAGE_EVENT_TYPE, MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
+import { MESSAGE_EVENT_TYPE } from "@noobot/event-protocol/message-event";
 import { ATTACHMENT_LIFECYCLE_WIRE_EVENT } from "@noobot/attachment-protocol";
 
 test("channel transport preserves strict event payloads during broadcast and replay", () => {

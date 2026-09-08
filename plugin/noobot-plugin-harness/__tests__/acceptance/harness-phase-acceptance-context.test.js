@@ -5,36 +5,12 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 
 import {
-  createTestHookManager as createAgentHookManager,
   createTestModelResponse,
   TestModelMessageRuntimeHelpers as ModelMessageRuntimeHelpers,
 } from "../helpers/public-runtime-fixtures.js";
-import { registerHarnessCore } from "../../src/index.js";
-import {
-  createAcceptanceHandler,
-  createGuidanceHandler,
-} from "../helpers/context-aware-handler-fixtures.js";
-import { markGuidanceSummarizedMessages } from "../../src/capabilities/handlers/guidance/signal-tracker.js";
-import { exists, waitForFile, readJsonl } from "../test-helpers.js";
-
-function assertFlatCapabilityMessages(messages = []) {
-  assert.equal(Array.isArray(messages), true);
-  assert.equal(messages.length >= 1, true);
-  const roles = messages.map((item = {}) => String(item?.role || "").trim());
-  assert.equal(
-    roles.every((role) => ["system", "user", "assistant", "tool"].includes(role)),
-    true,
-  );
-  const first = messages[0] || {};
-  const last = messages[messages.length - 1] || {};
-  assert.equal(["system", "user", "assistant", "tool"].includes(String(first.role || "")), true);
-  assert.equal(["system", "user", "assistant", "tool"].includes(String(last.role || "")), true);
-}
+import { createAcceptanceHandler } from "../helpers/context-aware-handler-fixtures.js";
 
 test("phase acceptance injects context, revised plan checklist, then phase request", async () => {
   const handler = createAcceptanceHandler({ shouldProcessPrimaryToolHooks: () => true });

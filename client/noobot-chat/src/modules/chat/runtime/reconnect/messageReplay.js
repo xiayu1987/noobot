@@ -9,14 +9,8 @@ import {
   patchMessageObjectPreservingUiState,
 } from "../../model/reconnectReplayModel.js";
 import { _ensureArray, _isAssistantRole, _trimStr } from "./utils.js";
-import {
-  findAssistantMessageByDialogProcessId,
-  hasAssistantMessageWithContent,
-} from "./messageLookup.js";
 
-export {
-  renderActiveSessionBeforeReplay,
-} from "./hydrationReplay.js";
+export { renderActiveSessionBeforeReplay } from "./hydrationReplay.js";
 export {
   applyReconnectReplayBatchToActiveSession,
   applyReconnectEnvelopeBatchToTargetMessage,
@@ -32,7 +26,11 @@ export {
   findLatestAssistantMessageForRealtimeLogs,
   hasAssistantMessageWithContent,
 } from "./messageLookup.js";
-export function applyAssistantFailureState({ targetAssistantMessage, errorMessage = "", translate } = {}) {
+export function applyAssistantFailureState({
+  targetAssistantMessage,
+  errorMessage = "",
+  translate,
+} = {}) {
   if (!targetAssistantMessage) return;
   targetAssistantMessage.error = _trimStr(errorMessage);
   if (!_trimStr(targetAssistantMessage.content)) {
@@ -51,8 +49,7 @@ export function mergeAssistantAttachments({
   if (!targetAssistantMessage || !Array.isArray(attachments) || !attachments.length) {
     return;
   }
-  const normalizedAttachments =
-    makeViewMessage({ attachments })?.attachments || attachments;
+  const normalizedAttachments = makeViewMessage({ attachments })?.attachments || attachments;
   targetAssistantMessage.attachments = mergeAttachments(
     _ensureArray(targetAssistantMessage.attachments),
     normalizedAttachments,
@@ -70,10 +67,7 @@ export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages
   }).map((nextMessage) => {
     const reusableMessage = findReusableMessageObject(nextMessage, existingMessages);
     return reusableMessage
-      ? patchMessageObjectPreservingUiState(
-        reusableMessage,
-        nextMessage,
-      )
+      ? patchMessageObjectPreservingUiState(reusableMessage, nextMessage)
       : nextMessage;
   });
   if (activeSession.value.messages !== existingMessages) {
@@ -83,19 +77,21 @@ export function applyFoldedMessagesToActiveSession(activeSession, foldedMessages
   return existingMessages;
 }
 
-export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessages = [], dialogProcessId = "") {
+export function applyFoldedMessagesForDialogProcess(
+  activeSession,
+  foldedMessages = [],
+  dialogProcessId = "",
+) {
   if (!activeSession?.value) return [];
   const normalizedDpId = _trimStr(dialogProcessId);
   if (!normalizedDpId) return applyFoldedMessagesToActiveSession(activeSession, foldedMessages);
   const existingMessages = Array.isArray(activeSession.value.messages)
     ? activeSession.value.messages
     : [];
-  const assistantMessagesForDialogProcess = (_ensureArray(foldedMessages))
-    .filter(
-      (messageItem) =>
-        _isAssistantRole(messageItem) &&
-        _trimStr(messageItem?.dialogProcessId) === normalizedDpId,
-    );
+  const assistantMessagesForDialogProcess = _ensureArray(foldedMessages).filter(
+    (messageItem) =>
+      _isAssistantRole(messageItem) && _trimStr(messageItem?.dialogProcessId) === normalizedDpId,
+  );
   if (!assistantMessagesForDialogProcess.length) return existingMessages;
 
   for (const nextMessage of assistantMessagesForDialogProcess) {
@@ -107,10 +103,7 @@ export function applyFoldedMessagesForDialogProcess(activeSession, foldedMessage
         _trimStr(messageItem?.presentationMessageId) === presentationMessageId,
     );
     if (!reusableMessage) continue;
-    patchMessageObjectPreservingUiState(
-      reusableMessage,
-      nextMessage,
-    );
+    patchMessageObjectPreservingUiState(reusableMessage, nextMessage);
   }
   return existingMessages;
 }

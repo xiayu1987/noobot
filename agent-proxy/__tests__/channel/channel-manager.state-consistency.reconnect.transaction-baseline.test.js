@@ -7,23 +7,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { ChannelManager } from "../../src/channel/channel-manager.js";
-import { CHANNEL_RETENTION_PHASE, CHANNEL_STATUS } from "../../src/shared/constants.js";
 import { createChannelKey } from "../../src/shared/utils.js";
 import {
   createMockSocket,
   canonicalMessageEvent,
-  FakeUpstreamWebSocket,
   getEvent,
-  listEvents,
-  sortReconnectSessions,
 } from "./channel-manager.state-consistency.test-helpers.js";
 import { MESSAGE_EVENT_WIRE_EVENT } from "@noobot/event-protocol/message-event";
-import {
-  createTurnLifecycleEnvelope,
-  TURN_EVENT,
-  TURN_LIFECYCLE_PROTOCOL_VERSION,
-} from "@noobot/session-protocol";
-import { authoritativeLifecycle } from "./channel-manager.state-consistency.reconnect.fixtures.js";
+import { TURN_LIFECYCLE_PROTOCOL_VERSION } from "@noobot/session-protocol";
 
 test("lifecycle replay gap waits for the authoritative snapshot before reconnect completes", async () => {
   const manager = new ChannelManager({ OPEN: 1 });

@@ -5,9 +5,7 @@
  */
 
 export function resolveWorkflowAgentContext(ctx = {}) {
-  return ctx?.agentContext && typeof ctx.agentContext === "object"
-    ? ctx.agentContext
-    : null;
+  return ctx?.agentContext && typeof ctx.agentContext === "object" ? ctx.agentContext : null;
 }
 
 export function resolveWorkflowRuntimeFromContext(ctx = {}) {
@@ -37,9 +35,15 @@ export function createWorkflowAbortError(ctx = {}) {
 }
 
 export function isWorkflowAbortError(error = null, ctx = {}) {
-  const name = String(error?.name || "").trim().toLowerCase();
-  const code = String(error?.code || "").trim().toUpperCase();
-  const message = String(error?.message || error || "").trim().toLowerCase();
+  const name = String(error?.name || "")
+    .trim()
+    .toLowerCase();
+  const code = String(error?.code || "")
+    .trim()
+    .toUpperCase();
+  const message = String(error?.message || error || "")
+    .trim()
+    .toLowerCase();
   return (
     resolveWorkflowAbortSignal(ctx)?.aborted === true ||
     name === "aborterror" ||
@@ -56,20 +60,17 @@ export function throwIfWorkflowAborted(ctx = {}) {
 }
 
 export function resolveWorkflowParentRunConfig(ctx = {}) {
-  const agentContext = resolveWorkflowAgentContext(ctx);
   const runtime = resolveWorkflowRuntimeFromContext(ctx);
   const runConfig = runtime?.runConfig;
-  return runConfig && typeof runConfig === "object" && !Array.isArray(runConfig)
-    ? runConfig
-    : {};
+  return runConfig && typeof runConfig === "object" && !Array.isArray(runConfig) ? runConfig : {};
 }
 
 export function hasOwnObjectKey(source = {}, key = "") {
   return Boolean(
     source &&
-      typeof source === "object" &&
-      !Array.isArray(source) &&
-      Object.prototype.hasOwnProperty.call(source, String(key || "").trim()),
+    typeof source === "object" &&
+    !Array.isArray(source) &&
+    Object.prototype.hasOwnProperty.call(source, String(key || "").trim()),
   );
 }
 

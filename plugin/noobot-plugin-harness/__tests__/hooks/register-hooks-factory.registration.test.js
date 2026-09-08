@@ -7,24 +7,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRegisterHarnessHooks } from "../../src/core/hooks.js";
-import { appendMessage } from "../../src/core/message-store.js";
-import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
-
-function resolveFromBlocks({ ctx = {} } = {}) {
-  const blocks = ctx?.modelContext?.messageBlocks && typeof ctx.modelContext.messageBlocks === "object" ? ctx.modelContext.messageBlocks : {};
-  return resolveMainModelFinalMessages({
-    systemMessages: Array.isArray(blocks.system) ? blocks.system : [],
-    historyMessages: Array.isArray(blocks.history) ? blocks.history : [],
-    incrementalMessages: Array.isArray(blocks.incremental) ? blocks.incremental : [],
-  }).messages;
-}
-
-const capabilityRuntimeWithBootstrap = {
-  async runHook(_point, _ctx, payload = {}) {
-    await payload?.harness?.globalBootstrap?.();
-  },
-};
-
 
 test("createRegisterHarnessHooks wires trace/flush handlers and executes success flow", async () => {
   const calls = [];
@@ -92,13 +74,15 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
 
   const disposers = registerHarnessHooks({ hookManager, options, capabilityRuntime, plugin });
   assert.equal(disposers.length, 2);
-  assert.equal(handlers.get("agent.before_llm_call")?.opts?.id, `${plugin.name}.trace.agent.before_llm_call`);
+  assert.equal(
+    handlers.get("agent.before_llm_call")?.opts?.id,
+    `${plugin.name}.trace.agent.before_llm_call`,
+  );
   assert.equal(handlers.get("agent.after_turn")?.opts?.id, `${plugin.name}.flush.agent.after_turn`);
 
-  const traceResult = await handlers.get("agent.before_llm_call").handler(
-    { userId: "u1" },
-    { signal: hookAbortController.signal },
-  );
+  const traceResult = await handlers
+    .get("agent.before_llm_call")
+    .handler({ userId: "u1" }, { signal: hookAbortController.signal });
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
   assert.equal(
     calls.find(([name]) => name === "capabilityModelInvoker")?.[1],
@@ -118,13 +102,7 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
           "flushAllJsonlBuffers",
         ].includes(name),
       ),
-    [
-      "runHook",
-      "injectPrompt",
-      "traceHook",
-      "flushAllManifests",
-      "flushAllJsonlBuffers",
-    ],
+    ["runHook", "injectPrompt", "traceHook", "flushAllManifests", "flushAllJsonlBuffers"],
   );
 });
 
@@ -172,6 +150,9 @@ test("createRegisterHarnessHooks emits hook_error and rethrows when trace handle
   });
 
   await assert.rejects(() => handlers.get("agent.before_turn")({}), /boom/);
-  assert.equal(progressEvents.some((item) => item.event === "hook_error"), true);
+  assert.equal(
+    progressEvents.some((item) => item.event === "hook_error"),
+    true,
+  );
   assert.equal(progressEvents.at(-1)?.data?.error, "safe_error");
 });

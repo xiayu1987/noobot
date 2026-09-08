@@ -382,7 +382,7 @@ test("repository save failure atomically preserves lifecycle, terminal status an
   assert.equal(h.reload().authorityEventOutbox.length, 0);
   assert.deepEqual(h.reload().turnLifecycle.turns, {});
 
-  const failed = await h.service.applyTurnLifecycleEvent(
+  await h.service.applyTurnLifecycleEvent(
     event(TURN_EVENT.ACTION_ACCEPTED, "atomic-a", 0, { action: "send", phase: TURN_PHASE.ACTION }),
   );
   await h.service.applyTurnLifecycleEvent(

@@ -160,14 +160,6 @@ function mountComposer(props = {}) {
   });
 }
 
-function findSendButton(wrapper) {
-  return wrapper.find(".send-btn");
-}
-
-function findMicButton(wrapper) {
-  return wrapper.find("[title='按住录音']");
-}
-
 function inputActions(wrapper) {
   return wrapper.findComponent(ComposerInputActions);
 }
@@ -211,14 +203,6 @@ function mockMediaDevices(stream) {
     },
   });
   return navigator.mediaDevices.getUserMedia;
-}
-
-async function triggerPointer(elementWrapper, type, options = {}) {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clientY", { configurable: true, value: options.clientY ?? 0 });
-  Object.defineProperty(event, "pointerId", { configurable: true, value: options.pointerId ?? 1 });
-  elementWrapper.element.dispatchEvent(event);
-  await nextTick();
 }
 
 async function dispatchDragEvent(element, type, dataTransfer) {

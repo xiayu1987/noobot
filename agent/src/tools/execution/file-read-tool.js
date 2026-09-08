@@ -21,11 +21,16 @@ import {
   toPositiveInt,
 } from "./file-utils.js";
 import {
+  RESOURCE_OPERATION,
   SECURITY_EVIDENCE_SOURCE,
   classifyResourceRisk,
 } from "@noobot/security-assessment-protocol";
 import { confirmToolOperation, createRiskLevelSchema } from "./tool-risk.js";
-import { buildFileToolDescription, resourceFileName } from "./file-tool-shared.js";
+import {
+  buildFileToolDescription,
+  resolveFileResourceRiskScope,
+  resourceFileName,
+} from "./file-tool-shared.js";
 
 export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
   return new DynamicStructuredTool({
@@ -82,13 +87,21 @@ export function createReadFileTool({ agentContext, runtime, workspaceIo }) {
         capability: PATH_CAPABILITIES.FILE_READ,
       });
       const resolvedPath = resolvedInput.executionPath;
+      const resourcePath = resolvedInput.resourcePath;
       const pathRef = resolvedInput.pathRef;
       await confirmToolOperation({
         runtime,
         declaredRiskLevel: riskLevel,
         serverEvidence: {
           source: SECURITY_EVIDENCE_SOURCE.NORMALIZED_RESOURCE,
-          riskLevel: classifyResourceRisk({ operation: "read", scope: pathRef.view }),
+          riskLevel: classifyResourceRisk({
+            operation: RESOURCE_OPERATION.READ,
+            scope: resolveFileResourceRiskScope({
+              pathRef,
+              resourcePath,
+              runtime,
+            }),
+          }),
         },
         toolName: TOOL_NAME.READ_FILE,
         operation: "read file",

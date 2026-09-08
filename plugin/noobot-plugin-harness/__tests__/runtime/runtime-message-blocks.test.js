@@ -7,10 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createCapabilityRuntime } from "../../src/capabilities/runtime.js";
-import {
-  createModelContext,
-  resolveModelFinalMessages as resolveMainModelFinalMessages,
-} from "@noobot/context-protocol";
+import { resolveModelFinalMessages as resolveMainModelFinalMessages } from "@noobot/context-protocol";
 import { ensureTestHookContext } from "../helpers/public-runtime-fixtures.js";
 import { appendMessage } from "../../src/core/message-store.js";
 import {

@@ -340,7 +340,7 @@ test("@full PBE-033 Harness 低轮次完整流程与模型注入闭环", async (
     await readSessionExecutionEventTree(noobot.userId, noobot.sessionId),
   ).filter((record) => record.turnScopeId === send.identity.turnScopeId);
   const messages = await readSessionTurnMessages(noobot.userId, noobot.sessionId);
-  const prefixAudit = assertModelInvocationTraceSet(modelTraces, {
+  assertModelInvocationTraceSet(modelTraces, {
     rootSessionId: noobot.sessionId,
   });
   const mainPrefixAudit = auditModelPrefixStability(modelTraces.filter(isMainAgentModelInvocation));

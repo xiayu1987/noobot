@@ -124,7 +124,6 @@ export async function addAttachment(page, file) {
 }
 
 export async function selectPlugins(page, pluginKeys = []) {
-  const panel = page.locator(".more-panel");
   const overlay = page.locator(".more-panel-overlay");
   if (!(await overlay.isVisible())) await page.locator(".composer-icon-btn").first().click();
   const buttons = page.locator(".plugin-option-button");

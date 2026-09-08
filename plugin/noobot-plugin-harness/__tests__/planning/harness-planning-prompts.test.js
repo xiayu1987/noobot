@@ -6,16 +6,9 @@
 import { createTestModelResponse } from "../helpers/public-runtime-fixtures.js";
 import {
   assert,
-  assertFlatCapabilityMessages,
   createAgentHookManager,
-  exists,
-  fs,
-  os,
-  path,
-  readJsonl,
   registerHarnessCore,
   test,
-  waitForFile,
 } from "../helpers/harness-planning-helper.js";
 
 test("harness planning prompt includes current tool names and descriptions", async () => {

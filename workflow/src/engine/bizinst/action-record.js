@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import CanPersistenceBase from '../../can-persistence-base.js';
-import IAction from './action/interfaces/action.js';
+import CanPersistenceBase from "../../can-persistence-base.js";
 
 class ActionRecord extends CanPersistenceBase {
   constructor() {
@@ -34,4 +33,4 @@ class ActionRecord extends CanPersistenceBase {
   }
 }
 
-export default  ActionRecord;
+export default ActionRecord;

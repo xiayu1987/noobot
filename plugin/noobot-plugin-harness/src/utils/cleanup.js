@@ -124,12 +124,10 @@ export async function cleanupOldRuns(basePath, options = {}) {
 
     const remaining = dirs.length - toDelete.size;
     if (remaining > maxRuns) {
-      let count = 0;
       for (const info of runInfo) {
         if (info.mtime > 0 && info.age < cleanupGraceMs) continue;
         if (!toDelete.has(info.dir)) {
           toDelete.add(info.dir);
-          count++;
           if (dirs.length - toDelete.size <= maxRuns) break;
         }
       }
