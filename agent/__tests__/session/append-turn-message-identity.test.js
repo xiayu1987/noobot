@@ -10,6 +10,10 @@ import {
   appendTurn,
   appendTurns,
 } from "../../src/session/services/session-message-service/append-turn.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 test("appendTurns upserts an ordered message batch with one Session save", async () => {
   const session = { currentTaskId: "", messages: [] };
@@ -68,6 +72,35 @@ test("appendTurns upserts an ordered message batch with one Session save", async
     session.messages.map((message) => message.content),
     ["tools", "one", "two"],
   );
+});
+
+test("appendTurns persists the canonical tool policy", async () => {
+  const session = { currentTaskId: "", messages: [] };
+  const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_BOUNDARY);
+  const service = {
+    now: () => "2026-07-25T00:01:00.000Z",
+    _withSessionMutation: async (_userId, _sessionId, mutation) => mutation(),
+    _resolveParentSessionId: async () => "",
+    sessionRepo: { findById: async () => session, save: async () => {} },
+  };
+
+  await appendTurns.call(service, {
+    userId: "u1",
+    sessionId: "s1",
+    turns: [
+      {
+        messageUid: "sm_boundary_result",
+        role: "tool",
+        content: "summary persisted",
+        dialogProcessId: "dp",
+        turnScopeId: "t",
+        tool_call_id: "summary_1",
+        contextPolicy: policy,
+      },
+    ],
+  });
+
+  assert.deepEqual(session.messages[0].contextPolicy, policy);
 });
 
 test("appendTurns persists the canonical internal control message type", async () => {

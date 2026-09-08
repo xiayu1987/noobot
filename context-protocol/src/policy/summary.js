@@ -16,6 +16,7 @@ import {
   resolveToolCallId,
   shouldMarkCurrentTurnSummarizedByPolicy,
 } from "./message.js";
+import { markContextMessageSummarized, resolveContextMessageSummarized } from "../message/codec.js";
 import { SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES } from "../message/injected-types.js";
 import { FLOW_CONTROL_ROLE, hasFlowControlRole } from "../tool/context-policy.js";
 
@@ -35,18 +36,6 @@ function collectLatestInjectedMessageIndexes(messages = []) {
     latest.set(`${owner}:${type}`, index);
   });
   return new Set(latest.values());
-}
-
-export function getModelMessageType(message = {}) {
-  if (typeof message?._getType === "function") return String(message._getType() || "");
-  return String(message?.lc_kwargs?.type || message?.type || "");
-}
-
-export function getMessageRole(message = {}) {
-  const role = String(message?.role || "").trim();
-  if (role) return role;
-  const type = getModelMessageType(message).trim().toLowerCase();
-  return { ai: "assistant", human: "user", system: "system", tool: "tool" }[type] || "";
 }
 
 function resolveToolCallName(call = {}) {
@@ -302,6 +291,51 @@ export function collectClosedToolCallBatchMessages(
   );
 }
 
+/**
+ * Resolve the single authoritative scope for a summary checkpoint.
+ *
+ * A checkpoint is allowed to span persisted history and the active turn.  The
+ * block layout is owned by the context protocol; consumers must not recreate
+ * that boundary (or apply a separate "history is already closed" rule).
+ * Tool-call batches are closed here and the same source is used for candidate
+ * selection and retention, so checkpoint ids and summarized flags cannot
+ * diverge between callers.
+ */
+export function resolveSummaryScope(
+  messageBlocks = {},
+  { messageIds = null, policyOptions = {} } = {},
+) {
+  const blocks = messageBlocks && typeof messageBlocks === "object" ? messageBlocks : {};
+  const history = Array.isArray(blocks.history) ? blocks.history : [];
+  const incremental = Array.isArray(blocks.incremental) ? blocks.incremental : [];
+  const sourceMessages = [...history, ...incremental];
+  const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages, {
+    retentionMessages: sourceMessages,
+  });
+  const wantedIds = Array.isArray(messageIds)
+    ? new Set(messageIds.map((id) => String(id || "").trim()).filter(Boolean))
+    : null;
+  const selectedCheckpointMessages = wantedIds
+    ? checkpointMessages.filter((message) => wantedIds.has(resolveMessageId(message)))
+    : checkpointMessages;
+  // Canonical checkpoint ids keep the commit boundary fixed. Retention is
+  // evaluated against the current complete protocol source so a summary relay
+  // appended by the auxiliary call can replace the previous retained summary.
+  const summaryMessages = collectDialogScopedMessagesToSummarize(selectedCheckpointMessages, {
+    maxMessages: selectedCheckpointMessages.length,
+    limitToProvidedMessagesOnly: true,
+    retentionMessages: sourceMessages,
+    policyOptions,
+  });
+  return Object.freeze({
+    history,
+    incremental,
+    sourceMessages,
+    checkpointMessages,
+    summaryMessages,
+  });
+}
+
 export function markCurrentTurnStoreSummarized(
   store = null,
   { policyOptions = {}, onMarked = null } = {},
@@ -325,10 +359,7 @@ export function mirrorSummarizedMessagesById(messages = [], messageIds = new Set
   const ids = messageIds instanceof Set ? messageIds : new Set(messageIds);
   for (const message of Array.isArray(messages) ? messages : []) {
     if (!ids.has(resolveMessageId(message))) continue;
-    message.summarized = true;
-    if (message?.lc_kwargs && typeof message.lc_kwargs === "object") {
-      message.lc_kwargs.summarized = true;
-    }
+    markContextMessageSummarized(message);
   }
 }
 
@@ -358,9 +389,7 @@ export function markCurrentTurnModelMessagesSummarized(messages = [], { policyOp
       })
     )
       continue;
-    message.summarized = true;
-    if (message?.lc_kwargs && typeof message.lc_kwargs === "object")
-      message.lc_kwargs.summarized = true;
+    markContextMessageSummarized(message);
   }
 }
 
@@ -398,7 +427,7 @@ export function collectScopedMessagesToSummarize(
   for (let index = 0; index < limit; index += 1) {
     const message = source[index];
     if (isSummaryCheckpointControlMessage(message)) {
-      if (message?.summarized !== true && message?.lc_kwargs?.summarized !== true) {
+      if (!resolveContextMessageSummarized(message)) {
         selectedMessages.push(message);
       }
       continue;
@@ -422,7 +451,7 @@ export function collectScopedMessagesToSummarize(
     ) {
       continue;
     }
-    if (message?.summarized === true || message?.lc_kwargs?.summarized === true) continue;
+    if (resolveContextMessageSummarized(message)) continue;
     selectedMessages.push(message);
   }
   return {
@@ -439,9 +468,7 @@ export function collectScopedMessagesToSummarize(
 export function markScopedMessagesSummarized(messages = [], options = {}) {
   const selected = collectScopedMessagesToSummarize(messages, options);
   for (const message of selected.messages) {
-    message.summarized = true;
-    if (message?.lc_kwargs && typeof message.lc_kwargs === "object")
-      message.lc_kwargs.summarized = true;
+    markContextMessageSummarized(message);
   }
   return {
     changedCount: selected.messages.length,

@@ -6,7 +6,10 @@
 
 import {
   CONTEXT_MESSAGE_ROLE,
+  markContextMessageSummarized,
+  normalizeContextMessageRole,
   readContextMessageField,
+  resolveContextMessageSummarized,
   resolveContextMessageFlags,
   resolveContextMessageId,
   resolveContextMessageRole,
@@ -50,6 +53,19 @@ function cloneJson(value) {
   }
 }
 
+/**
+ * Snapshot keeps its own on-disk vocabulary (system/ai/tool/human) which is
+ * deliberately distinct from the canonical role vocabulary. This table is the
+ * single mapping between the two; recognition of input tokens still comes from
+ * the codec alias table.
+ */
+const SNAPSHOT_TYPE_BY_ROLE = Object.freeze({
+  [CONTEXT_MESSAGE_ROLE.SYSTEM]: "system",
+  [CONTEXT_MESSAGE_ROLE.ASSISTANT]: "ai",
+  [CONTEXT_MESSAGE_ROLE.TOOL]: "tool",
+  [CONTEXT_MESSAGE_ROLE.USER]: "human",
+});
+
 function messageType(message = {}) {
   if (typeof message?._getType === "function")
     return String(message._getType() || "").toLowerCase();
@@ -64,14 +80,7 @@ export function normalizeSnapshotIdentity(identity = {}) {
 
 export function serializeContextMessage(message = {}) {
   const type = messageType(message);
-  const normalizedType =
-    type === "system"
-      ? "system"
-      : type === "ai" || type === "assistant"
-        ? "ai"
-        : type === "tool" || type === "tool_result"
-          ? "tool"
-          : "human";
+  const normalizedType = SNAPSHOT_TYPE_BY_ROLE[normalizeContextMessageRole(type)] || "human";
   const additionalKwargs =
     message?.additional_kwargs || message?.lc_kwargs?.additional_kwargs || {};
   const serialized = {
@@ -80,10 +89,7 @@ export function serializeContextMessage(message = {}) {
     content: typeof message?.content === "string" ? message.content : (message?.content ?? ""),
     additional_kwargs: cloneJson(additionalKwargs) || {},
     lc_kwargs: cloneJson(message?.lc_kwargs) || {},
-    summarized:
-      message?.summarized === true ||
-      message?.lc_kwargs?.summarized === true ||
-      additionalKwargs?.summarized === true,
+    summarized: resolveContextMessageSummarized(message),
   };
   for (const key of Object.keys(message || {})) {
     if (
@@ -157,8 +163,8 @@ export function deserializeContextMessageRecord(item = {}) {
     if (item?.status) message.status = item.status;
     if (item?.artifact !== undefined) message.artifact = cloneJson(item.artifact);
   }
-  if (item?.summarized === true || raw?.summarized === true || raw?.lc_kwargs?.summarized === true)
-    message.summarized = true;
+  if (item?.summarized === true || resolveContextMessageSummarized(raw))
+    markContextMessageSummarized(message);
   return message;
 }
 

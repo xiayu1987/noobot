@@ -12,6 +12,10 @@ import { settleToolCallInTurn } from "../../../src/runtime/tool-execution/tool-r
 import { bindAssistantMessageEventStream } from "../../../src/events/message-event-stream.js";
 import { createTestAgentExecutionScope } from "../../helpers/agent-execution-scope.js";
 import { createCanonicalMessageEventSessionManager } from "../../helpers/canonical-message-event-session-manager.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 const wait = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
 
@@ -128,6 +132,27 @@ test("processToolResults commits every settled parallel result before propagatin
     stopType: "user_stop",
   });
   assert.equal(JSON.parse(committed[3].toolResultText).ok, true);
+});
+
+test("processToolResults commits result policy from its authoritative batch call", async () => {
+  const runtime = createRuntime();
+  const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+  const committed = [];
+  const modelState = {
+    runtime,
+    abortSignal: null,
+    eventListener: () => {},
+    agentContext: createTestAgentExecutionScope(runtime),
+  };
+  await processToolResults({
+    modelState,
+    loopState: { errorLogger: null, toolConsecutiveFailureCount: 0 },
+    turn: 1,
+    calls: [{ id: "check-1", name: "task_check", args: {}, contextPolicy: policy }],
+    toolMap: new Map([["task_check", { contextPolicy: policy, async invoke() { return { ok: true }; } }]]),
+    stateCommitter: { async pushToolResult(result) { committed.push(result); } },
+  });
+  assert.deepEqual(committed[0].call.contextPolicy, policy);
 });
 
 test("settleToolCallInTurn pairs a pre-existing stop without invoking the tool", async () => {

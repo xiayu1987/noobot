@@ -3,8 +3,8 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
-import crypto from "node:crypto";
 import { TASK_CHECK_PROTOCOL_VERSION, TASK_CHECK_STATE } from "./check-receipt.js";
+import { createTaskProtocolReceipt } from "./protocol-receipt.js";
 import { parseTaskProtocolContent } from "./protocol-content-parser.js";
 
 export {
@@ -39,10 +39,5 @@ export function parseTaskCheckContent(value) {
 
 export function createTaskCheckReceipt(parsedCheck) {
   const parsed = parsedCheck?.content ? parsedCheck : parseTaskCheckContent(parsedCheck);
-  return Object.freeze({
-    state: parsed.state,
-    abstract: parsed.abstract,
-    nextAction: parsed.nextAction,
-    contentHash: `sha256:${crypto.createHash("sha256").update(parsed.content).digest("hex")}`,
-  });
+  return createTaskProtocolReceipt(parsed);
 }

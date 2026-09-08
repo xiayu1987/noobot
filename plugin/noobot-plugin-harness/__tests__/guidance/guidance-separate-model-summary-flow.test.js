@@ -75,6 +75,52 @@ test("separate_model summary uses the canonical checkpoint protocol", async () =
   );
 });
 
+test("failed separate-model summary remains pending until a checkpoint succeeds", async () => {
+  const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
+  const agentContext = createAgentContext({ pending: { summary: true } });
+  agentContext.execution = {
+    dialogProcessId: "dp-1",
+    controllers: { runtime: { systemRuntime: { turnScopeId: "turn-1" } } },
+  };
+  const ctx = {
+    messages: [
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [{ id: "c1", function: { name: "execute_script" } }],
+      },
+      {
+        role: "tool",
+        content: '{"ok":true}',
+        tool_call_id: "c1",
+        toolName: "execute_script",
+      },
+    ],
+    agentContext,
+  };
+  const meta = {
+    harness: {
+      planningGuidanceMode: "separate_model",
+      capabilityModelInvoker: async () => {
+        const error = new Error("capability model timeout (20ms)");
+        error.code = "CAPABILITY_MODEL_TIMEOUT";
+        throw error;
+      },
+    },
+  };
+
+  await handler({ capability: "guidance", point: "agent.before_llm_call", ctx, meta });
+
+  assert.equal(agentContext.payload.harness.state.pending.summary, true);
+  assert.ok(Array.isArray(agentContext.payload.harness.state.pending.summaryCheckpointMessageIds));
+  assert.equal(
+    agentContext.payload.harness.logs.guidance.some(
+      (entry = {}) => entry.event === "guidance_separate_model_call_failed",
+    ),
+    true,
+  );
+});
+
 test("separate_model summary request includes previous summary after complete plan checklist", async () => {
   const handler = createGuidanceHandler({ shouldProcessPrimaryToolHooks: () => true });
   let capturedMessages = [];

@@ -7,6 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { SessionTurnPersister } from "../../src/bot/execution/turn-persister.js";
+import {
+  FLOW_CONTROL_ROLE,
+  createFlowControlContextPolicy,
+} from "@noobot/context-protocol/tool/context-policy";
 
 test("appendAgentMessages uses one batch persistence call when the Session supports it", async () => {
   const batches = [];
@@ -38,6 +42,33 @@ test("appendAgentMessages uses one batch persistence call when the Session suppo
     batches[0].turns.map((turn) => turn.messageUid),
     ["sm_1", "sm_2"],
   );
+});
+
+test("appendAgentMessages preserves the canonical tool policy at the Session boundary", async () => {
+  const batches = [];
+  const policy = createFlowControlContextPolicy(FLOW_CONTROL_ROLE.CHECKPOINT_EVIDENCE);
+  const persister = new SessionTurnPersister({
+    session: {
+      appendExecutionLog: async () => {},
+      appendTurns: async (payload = {}) => batches.push(payload),
+    },
+  });
+
+  await persister.appendAgentMessages({
+    userId: "u1",
+    sessionId: "s1",
+    messages: [
+      {
+        messageUid: "sm_result",
+        role: "tool",
+        content: "result",
+        tool_call_id: "call_1",
+        contextPolicy: policy,
+      },
+    ],
+  });
+
+  assert.deepEqual(batches[0].turns[0].contextPolicy, policy);
 });
 
 test("appendAgentMessages keeps scoped persistence identity for logs and messages", async () => {

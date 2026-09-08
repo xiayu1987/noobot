@@ -25,29 +25,49 @@ export function readContextMessageField(message = {}, field = "") {
   );
 }
 
-export function resolveContextMessageRole(message = {}) {
-  const role = text(message?.role || message?.lc_kwargs?.role).toLowerCase();
-  if (["system", "developer"].includes(role)) return CONTEXT_MESSAGE_ROLE.SYSTEM;
-  if (["user", "human"].includes(role)) return CONTEXT_MESSAGE_ROLE.USER;
-  if (["assistant", "ai"].includes(role)) return CONTEXT_MESSAGE_ROLE.ASSISTANT;
-  if (["tool", "tool_result"].includes(role)) return CONTEXT_MESSAGE_ROLE.TOOL;
-  const type = text(
+export const CONTEXT_MESSAGE_ROLE_ALIASES = Object.freeze({
+  system: CONTEXT_MESSAGE_ROLE.SYSTEM,
+  developer: CONTEXT_MESSAGE_ROLE.SYSTEM,
+  user: CONTEXT_MESSAGE_ROLE.USER,
+  human: CONTEXT_MESSAGE_ROLE.USER,
+  assistant: CONTEXT_MESSAGE_ROLE.ASSISTANT,
+  ai: CONTEXT_MESSAGE_ROLE.ASSISTANT,
+  tool: CONTEXT_MESSAGE_ROLE.TOOL,
+  tool_result: CONTEXT_MESSAGE_ROLE.TOOL,
+});
+
+/**
+ * Reads the declared role field verbatim without alias normalization.
+ * Callers that must distinguish "declared but unknown" from "absent"
+ * (protocol required-field validation) depend on this raw form.
+ */
+export function readDeclaredContextMessageRole(message = {}) {
+  return text(message?.role || message?.lc_kwargs?.role).toLowerCase();
+}
+
+function readDeclaredContextMessageType(message = {}) {
+  return text(
     message?.type ||
       message?.lc_kwargs?.type ||
       (typeof message?._getType === "function" ? message._getType() : ""),
   ).toLowerCase();
+}
+
+/** Maps any declared role or type token onto the canonical role vocabulary. */
+export function normalizeContextMessageRole(role = "") {
+  return CONTEXT_MESSAGE_ROLE_ALIASES[text(role).toLowerCase()] || "";
+}
+
+export function resolveContextMessageRole(message = {}) {
   return (
-    {
-      system: CONTEXT_MESSAGE_ROLE.SYSTEM,
-      developer: CONTEXT_MESSAGE_ROLE.SYSTEM,
-      human: CONTEXT_MESSAGE_ROLE.USER,
-      user: CONTEXT_MESSAGE_ROLE.USER,
-      ai: CONTEXT_MESSAGE_ROLE.ASSISTANT,
-      assistant: CONTEXT_MESSAGE_ROLE.ASSISTANT,
-      tool: CONTEXT_MESSAGE_ROLE.TOOL,
-      tool_result: CONTEXT_MESSAGE_ROLE.TOOL,
-    }[type] || ""
+    normalizeContextMessageRole(readDeclaredContextMessageRole(message)) ||
+    normalizeContextMessageRole(readDeclaredContextMessageType(message))
   );
+}
+
+/** Single decision point for "does this message belong to the system block". */
+export function isContextSystemMessage(message = {}) {
+  return resolveContextMessageRole(message) === CONTEXT_MESSAGE_ROLE.SYSTEM;
 }
 
 export function resolveContextMessageId(message = {}) {
@@ -116,13 +136,29 @@ export function resolveContextToolCallId(value = {}) {
   );
 }
 
+/** Single read point for the summarized mark across all four carrier paths. */
+export function resolveContextMessageSummarized(message = {}) {
+  return (
+    message?.summarized === true ||
+    message?.lc_kwargs?.summarized === true ||
+    message?.additional_kwargs?.summarized === true ||
+    message?.lc_kwargs?.additional_kwargs?.summarized === true
+  );
+}
+
+/** Single write point for the summarized mark; mirrors onto lc_kwargs when present. */
+export function markContextMessageSummarized(message = {}) {
+  if (!message || typeof message !== "object") return message;
+  message.summarized = true;
+  if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
+    message.lc_kwargs.summarized = true;
+  }
+  return message;
+}
+
 export function resolveContextMessageFlags(message = {}) {
   return {
-    summarized:
-      message?.summarized === true ||
-      message?.lc_kwargs?.summarized === true ||
-      message?.additional_kwargs?.summarized === true ||
-      message?.lc_kwargs?.additional_kwargs?.summarized === true,
+    summarized: resolveContextMessageSummarized(message),
     naturalUser: resolveContextMessageOrigin(message) === "natural",
     injected:
       readContextMessageField(message, "injectedMessage").toLowerCase() === "true" ||

@@ -92,8 +92,11 @@ export async function processToolResults({
   }
 
   const commitToolResults = async () => {
-    for (const toolCallResult of toolCallResults) {
-      const call = toolCallResult?.call || {};
+    for (const [resultIndex, toolCallResult] of toolCallResults.entries()) {
+      const call = calls[resultIndex];
+      if (!call) {
+        throw new Error("tool result has no authoritative call in its execution batch");
+      }
       const toolResultText = String(toolCallResult?.toolResultText || "");
       await stateCommitter.pushToolResult({
         call,

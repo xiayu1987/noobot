@@ -5,13 +5,12 @@
  */
 
 import {
-  filterForModelContext,
-  isMessageSummarized,
-  isSystemLikeMessageRole,
-  resolveMessageDialogProcessId,
-  resolveMessageId,
-  resolveMessageRole,
-} from "./message.js";
+  isContextSystemMessage,
+  resolveContextMessageDialogProcessId,
+  resolveContextMessageId,
+  resolveContextMessageSummarized,
+} from "../message/codec.js";
+import { filterForModelContext } from "./message.js";
 
 function recentSlice(values = [], limit = Number.POSITIVE_INFINITY) {
   const source = Array.isArray(values) ? values : [];
@@ -22,7 +21,7 @@ function recentSlice(values = [], limit = Number.POSITIVE_INFINITY) {
 }
 
 function messageIdentity(message = {}) {
-  const explicitId = resolveMessageId(message);
+  const explicitId = resolveContextMessageId(message);
   return explicitId ? `id:${explicitId}` : "";
 }
 
@@ -37,23 +36,31 @@ function identities(messages) {
   return new Set((Array.isArray(messages) ? messages : []).map(messageIdentity).filter(Boolean));
 }
 
-export function resolveModelSystemMessages({ sourceMessages = [], policyOptions = {} } = {}) {
+/**
+ * System and incremental blocks apply the same model-context filter today but
+ * remain separate entry points because they are distinct protocol blocks.
+ */
+function resolveModelBlockMessages({ sourceMessages = [], policyOptions = {} } = {}) {
   return filterForModelContext(sourceMessages, policyOptions);
+}
+
+export function resolveModelSystemMessages(options = {}) {
+  return resolveModelBlockMessages(options);
 }
 
 export function resolveModelHistoryMessages({
   sourceMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
-  resolveHistoryDialogProcessId = resolveMessageDialogProcessId,
+  resolveHistoryDialogProcessId = resolveContextMessageDialogProcessId,
 } = {}) {
   const resolveDialog =
     typeof resolveHistoryDialogProcessId === "function"
       ? resolveHistoryDialogProcessId
-      : resolveMessageDialogProcessId;
+      : resolveContextMessageDialogProcessId;
   const source = (Array.isArray(sourceMessages) ? sourceMessages : []).filter((message) => {
     if (!resolveDialog(message)) return false;
-    if (isSystemLikeMessageRole(resolveMessageRole(message))) return false;
-    return !isMessageSummarized(message);
+    if (isContextSystemMessage(message)) return false;
+    return !resolveContextMessageSummarized(message);
   });
   const groups = new Map();
   source.forEach((message, index) => {
@@ -65,8 +72,8 @@ export function resolveModelHistoryMessages({
   return recentSlice([...groups.values()], historyLimit).flatMap((round) => round.messages);
 }
 
-export function resolveModelIncrementalMessages({ sourceMessages = [], policyOptions = {} } = {}) {
-  return filterForModelContext(sourceMessages, policyOptions);
+export function resolveModelIncrementalMessages(options = {}) {
+  return resolveModelBlockMessages(options);
 }
 
 export function resolveModelFinalMessages({
@@ -75,7 +82,7 @@ export function resolveModelFinalMessages({
   incrementalMessages = [],
   historyLimit = Number.POSITIVE_INFINITY,
   policyOptions = {},
-  resolveHistoryDialogProcessId = resolveMessageDialogProcessId,
+  resolveHistoryDialogProcessId = resolveContextMessageDialogProcessId,
 } = {}) {
   const system = resolveModelSystemMessages({ sourceMessages: systemMessages, policyOptions });
   const systemIdentities = identities(system);
@@ -83,7 +90,7 @@ export function resolveModelFinalMessages({
     resolveModelIncrementalMessages({ sourceMessages: incrementalMessages, policyOptions }),
     systemIdentities,
   );
-  const historyByStableIdentity = removeBlocked(
+  const history = removeBlocked(
     resolveModelHistoryMessages({
       sourceMessages: historyMessages,
       historyLimit,
@@ -91,7 +98,6 @@ export function resolveModelFinalMessages({
     }),
     new Set([...systemIdentities, ...identities(incremental)]),
   );
-  const history = historyByStableIdentity;
   return { system, history, incremental, messages: [...system, ...history, ...incremental] };
 }
 

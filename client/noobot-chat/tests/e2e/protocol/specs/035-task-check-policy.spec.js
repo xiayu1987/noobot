@@ -9,6 +9,8 @@ import { resolveContextInternalMessageType } from "@noobot/context-protocol/poli
 import {
   selectPlugins,
   sendMessage,
+  setHarnessCapability,
+  setHarnessRuntimeThresholds,
   setRunSummaryPolicy,
   waitForNaturalCompletion,
 } from "../helpers/browser-actions.js";
@@ -16,10 +18,15 @@ import {
   modelInvocationTraces,
   readSessionExecutionEventTree,
   readSessionTurnMessages,
+  waitForHarnessRun,
   waitForSessionExecutionEventTree,
 } from "../helpers/persistence-audit.js";
 import { isMainAgentModelInvocation } from "../helpers/model-message-assertions.js";
-import { commandsForSession, waitForCommand } from "../helpers/scenario-assertions.js";
+import {
+  commandsForSession,
+  waitForCommand,
+  waitForLifecycle,
+} from "../helpers/scenario-assertions.js";
 import { uniquePrompt } from "../helpers/turn-scenarios.js";
 
 const toolCallName = (call = {}) => String(call.name || call.function?.name || "").trim();
@@ -40,6 +47,12 @@ function taskCheckCalls(messages = []) {
     (Array.isArray(message.tool_calls) ? message.tool_calls : [])
       .filter((call) => toolCallName(call) === "task_check")
       .map((call) => ({ call, message, messageIndex })),
+  );
+}
+
+function harnessCapabilityEvents(records = []) {
+  return records.flatMap((record) =>
+    Array.isArray(record?.capabilityLogs) ? record.capabilityLogs : [],
   );
 }
 
@@ -277,10 +290,41 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
   await noobot.page.keyboard.press("Escape");
   await expect(thinkingDetailsPanel).toBeHidden();
 
+  await selectPlugins(noobot.page, ["harness"]);
+  await setHarnessCapability(noobot.page, "Planning", false);
+  await setHarnessCapability(noobot.page, "Planning Acceptance", false);
+  await setHarnessRuntimeThresholds(noobot.page, {
+    summaryTurns: 4,
+    planUpdateTurns: 12,
+    phaseAcceptanceTurns: 12,
+  });
+  await setRunSummaryPolicy(noobot.page, {
+    phaseSummaryLoopTurns: 12,
+    taskCheckLoopTurns: 12,
+  });
+  const resumedChainStatePath =
+    `runtime/ops_workdir/pbe035-resumed-chain-${Date.now()}-${testInfo.workerIndex}.json`;
+  const resumedChainCommand = [
+    'node -e "',
+    "const fs=require('fs');",
+    `const p='${resumedChainStatePath}';`,
+    "const s=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,'utf8')):{step:0};",
+    "if(s.step>=5)throw new Error('chain already complete');",
+    "s.step+=1;fs.mkdirSync('runtime/ops_workdir',{recursive:true});",
+    "fs.writeFileSync(p,JSON.stringify(s));console.log(JSON.stringify({step:s.step}));",
+    '"',
+  ].join("");
   const commandCountBeforeSecondSend = commandsForSession(protocolCapture, noobot.sessionId).length;
   await sendMessage(
     noobot.page,
-    uniquePrompt(testInfo, "根据上一轮结果，只回答最终字符数及其来源步骤。"),
+    uniquePrompt(
+      testInfo,
+      [
+        "继续上一轮 Session。严格串行调用下面完全相同的 execute_script 命令五次，每次必须等待上一条实际结果后才能调用下一次：",
+        resumedChainCommand,
+        "第五次成功后汇总五个实际 step 值并结束。不得并行调用，不得提前回答。",
+      ].join(" "),
+    ),
   );
   const secondSend = await waitForCommand(
     protocolCapture,
@@ -288,6 +332,36 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     "turn.send",
     commandCountBeforeSecondSend,
   );
+  const secondProcessing = await waitForLifecycle(
+    protocolCapture,
+    noobot.sessionId,
+    "turn.processing_started",
+    0,
+    secondSend.identity.turnScopeId,
+  );
+  const secondHarness = await waitForHarnessRun(
+    noobot.userId,
+    secondProcessing.dialogProcessId,
+    (candidate) => {
+      const events = harnessCapabilityEvents(candidate.events);
+      const failure = events.find((event) => event.event === "capability_flow_failed");
+      expect(failure, JSON.stringify(failure?.detail || {})).toBeFalsy();
+      const names = new Set(events.map((event) => event.event));
+      return (
+        names.has("summary_scheduled_by_turn_threshold") &&
+        names.has("summary_checkpoint_ready") &&
+        names.has("summary_generated_by_separate_model")
+      );
+    },
+  );
+  const secondHarnessEvents = harnessCapabilityEvents(secondHarness.events);
+  const secondSummarySchedule = secondHarnessEvents.find(
+    (event) => event.event === "summary_scheduled_by_turn_threshold",
+  );
+  expect(secondSummarySchedule.detail).toMatchObject({
+    triggerTurns: 4,
+    thresholdSource: "runtime",
+  });
   await waitForNaturalCompletion({
     page: noobot.page,
     capture: protocolCapture,
@@ -296,9 +370,16 @@ test("@full PBE-035 task_check 周期切片、checkpoint 保留与 history 模�
     timeoutMs: 120000,
   });
   const allRecords = await readSessionExecutionEventTree(noobot.userId, noobot.sessionId);
-  const secondInvocations = modelInvocationTraces(
-    allRecords.filter((item) => item.turnScopeId === secondSend.identity.turnScopeId),
-  ).filter(isMainAgentModelInvocation);
+  const secondScopedRecords = allRecords.filter(
+    (item) => item.turnScopeId === secondSend.identity.turnScopeId,
+  );
+  const secondInvocations = modelInvocationTraces(secondScopedRecords).filter(
+    isMainAgentModelInvocation,
+  );
+  expect(secondInvocations.length).toBeLessThanOrEqual(15);
+  expect(
+    secondScopedRecords.some((item) => item.event === "summary_checkpoint_committed"),
+  ).toBe(true);
   assertCompactExecutionContext(secondInvocations);
   expect(
     secondInvocations.every((invocation) =>

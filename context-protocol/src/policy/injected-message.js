@@ -6,7 +6,10 @@
 
 import { readMessageField } from "./message.js";
 
-export { CONTEXT_INJECTED_MESSAGE_TYPE } from "../message/injected-types.js";
+export {
+  CONTEXT_INJECTED_MESSAGE_TYPE,
+  SUMMARY_CHECKPOINT_CONTROL_MESSAGE_TYPES,
+} from "../message/injected-types.js";
 
 export function resolveContextInternalMessageType(message = {}) {
   return String(readMessageField(message, "noobotInternalMessageType") || "").trim();

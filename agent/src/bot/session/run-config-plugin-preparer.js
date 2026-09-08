@@ -34,8 +34,8 @@ import { TIME_THRESHOLDS } from "@noobot/shared/time-thresholds";
 import { commitPluginArtifact, getPluginArtifact } from "./plugin-artifact-committer.js";
 
 export const AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS = TURN_THRESHOLDS.capability.miniRunnerMaxToolTurns;
-export const AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS =
-  TIME_THRESHOLDS.capability.separateModelMinTimeoutMs;
+export const AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS =
+  TIME_THRESHOLDS.capability.harnessHookMinTimeoutMs;
 
 function plainObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -169,9 +169,9 @@ export class RunConfigPluginPreparer {
       if (next.planningGuidanceMode === "separate_model") {
         if (
           !Number.isFinite(Number(next.timeoutMs)) ||
-          Number(next.timeoutMs) < AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS
+          Number(next.timeoutMs) < AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS
         ) {
-          next.timeoutMs = AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS;
+          next.timeoutMs = AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS;
         }
         if (typeof next.capabilityModelInvoker !== "function") {
           next.capabilityModelInvoker = createAgentCapabilityModelInvoker({

@@ -4,15 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 import { GUIDANCE_REASON, TOOL_NAME_SET, ensureHarnessBucket } from "./deps.js";
-import {
-  collectClosedToolCallBatchMessages,
-  collectDialogScopedMessagesToSummarize,
-} from "@noobot/context-protocol/policy/summary";
+import { resolveSummaryScope } from "@noobot/context-protocol/policy/summary";
 import { setPendingStateWithMeta } from "../../pending-cleanup.js";
 import { WORKFLOW_PARAMS } from "../../../core/workflow-params.js";
 import {
   getMessageId,
-  resolveMessagesByIds,
   resolveModelMessageBlocks,
 } from "../../../core/message-store.js";
 import { requestSummaryCheckpointMainFlowInstruction } from "../shared/runtime/main-flow-control-instruction.js";
@@ -30,27 +26,14 @@ function resolveSummaryMarkBlocks(ctx = {}) {
   };
 }
 
-function assertSummaryHistoryClosed(history = []) {
-  const pendingHistoryMessages = collectDialogScopedMessagesToSummarize(history, {
-    maxMessages: history.length,
-    limitToProvidedMessagesOnly: true,
-    retentionMessages: history,
-  });
-  if (!pendingHistoryMessages.length) return;
-  const messageIds = pendingHistoryMessages.map((message) => getMessageId(message)).filter(Boolean);
-  const error = new Error("summary checkpoint history contains messages pending summarization");
-  error.pendingHistoryMessageIds = messageIds;
-  throw error;
-}
-
 export function captureGuidanceSummaryCheckpoint(ctx = {}, state = {}) {
   if (!state || typeof state !== "object") return [];
   const blocks = resolveSummaryMarkBlocks(ctx);
-  assertSummaryHistoryClosed(blocks.history);
-  const sourceMessages = blocks.incremental;
-  const checkpointMessages = collectClosedToolCallBatchMessages(sourceMessages);
+  const summaryScope = resolveSummaryScope(blocks);
   const messageIds = [
-    ...new Set(checkpointMessages.map((message) => getMessageId(message)).filter(Boolean)),
+    ...new Set(
+      summaryScope.checkpointMessages.map((message) => getMessageId(message)).filter(Boolean),
+    ),
   ];
   state.pending = state.pending && typeof state.pending === "object" ? state.pending : {};
   state.pending.summaryCheckpointMessageIds = messageIds;
@@ -67,18 +50,10 @@ export async function markGuidanceSummarizedMessages(ctx = {}, meta = {}) {
   const hasSummaryCheckpoint = Array.isArray(summaryCheckpointMessageIdsValue);
 
   const blocks = resolveSummaryMarkBlocks(ctx);
-  assertSummaryHistoryClosed(blocks.history);
-  const coveredMessages = blocks.incremental;
-  const scopedCurrentMessages = hasSummaryCheckpoint
-    ? resolveMessagesByIds(ctx, summaryCheckpointMessageIds)
-    : coveredMessages;
-  const scopedSet = new Set(scopedCurrentMessages);
-  const checkpointTargets = coveredMessages.filter((message) => scopedSet.has(message));
-  const summaryTargets = collectDialogScopedMessagesToSummarize(checkpointTargets, {
-    maxMessages: checkpointTargets.length,
-    limitToProvidedMessagesOnly: true,
-    retentionMessages: coveredMessages,
+  const summaryScope = resolveSummaryScope(blocks, {
+    messageIds: hasSummaryCheckpoint ? summaryCheckpointMessageIds : null,
   });
+  const summaryTargets = summaryScope.summaryMessages;
   requestSummaryCheckpointMainFlowInstruction(ctx, {
     source: "plugin.summary",
     summarizedMessageIds: [

@@ -84,10 +84,9 @@ test("createRegisterHarnessHooks wires trace/flush handlers and executes success
     .get("agent.before_llm_call")
     .handler({ userId: "u1" }, { signal: hookAbortController.signal });
   assert.deepEqual(traceResult, { fsmState: "planning", fsmRejected: false });
-  assert.equal(
-    calls.find(([name]) => name === "capabilityModelInvoker")?.[1],
-    hookAbortController.signal,
-  );
+  const capabilitySignal = calls.find(([name]) => name === "capabilityModelInvoker")?.[1];
+  assert.equal(capabilitySignal instanceof AbortSignal, true);
+  assert.notEqual(capabilitySignal, hookAbortController.signal);
   await handlers.get("agent.after_turn").handler();
 
   assert.deepEqual(

@@ -3,6 +3,7 @@
  * Contact: 126240622+xiayu1987@users.noreply.github.com
  * SPDX-License-Identifier: MIT
  */
+import { isContextSystemMessage } from "../message/codec.js";
 import { canonicalizeMessageStore } from "../message/store.js";
 import { attachModelContextRuntime } from "./model-runtime.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
@@ -23,29 +24,10 @@ function normalizeBlocks(value) {
   };
 }
 
-function resolveMessageRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
-  if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
-    .trim()
-    .toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
 function resolveInitialBlocks(messages = []) {
   const blocks = { system: [], history: [], incremental: [] };
   for (const message of Array.isArray(messages) ? messages : []) {
-    const blockName = ["system", "developer"].includes(resolveMessageRole(message))
-      ? "system"
-      : "incremental";
+    const blockName = isContextSystemMessage(message) ? "system" : "incremental";
     blocks[blockName].push(message);
   }
   return blocks;
