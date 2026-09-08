@@ -4,11 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
+/*
+ * Root entry is the public surface: every exported symbol of this package is
+ * reachable from here. Subpath exports in package.json exist for direct module
+ * access and must stay in sync with this list.
+ *
+ * Two modules are intentionally subpath-only because their symbols already
+ * reach the root through the policy facade that owns them:
+ *   - message/injected-types.js -> via policy/injected-message.js
+ *   - task/check-receipt.js     -> via task/check.js
+ * Adding `export *` for them here would raise a duplicate-export conflict.
+ *
+ * task/protocol-content-parser.js and task/protocol-receipt.js are internal
+ * shared implementations and are deliberately absent from both lists.
+ */
 export * from "./agent-context/accessors.js";
 export * from "./agent-context/envelope.js";
 export * from "./agent-context/identity.js";
 export * from "./agent-context/schema.js";
 export * from "./agent-context/validation.js";
+export * from "./assembly/auxiliary-history.js";
+export * from "./assembly/auxiliary-sequence.js";
 export * from "./assembly/build-receipt.js";
 export * from "./assembly/diagnostics.js";
 export * from "./assembly/scope.js";
@@ -17,6 +33,7 @@ export * from "./assembly/dual-lane.js";
 export * from "./assembly/hook-context.js";
 export * from "./assembly/model-runtime.js";
 export * from "./message/codec.js";
+export * from "./message/identity.js";
 export * from "./message/store.js";
 export * from "./message/session-projection.js";
 export * from "./mutation/context.js";

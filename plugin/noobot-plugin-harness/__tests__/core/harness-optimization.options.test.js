@@ -27,9 +27,17 @@ test("normalizeOptions applies schema defaults and coercion", () => {
   assert.equal(Object.hasOwn(options, "nonProgramming" + "Execution" + "First"), false);
   assert.equal(options.summaryOnToolBurstThreshold, false);
   assert.equal(options.clipNonMainModelContextMessages, false);
+  assert.equal(options.capabilityModelTimeoutMs, 180000);
   assert.deepEqual(options.denyToolNames, [...DEFAULT_HARNESS_DENY_TOOL_NAMES]);
   assert.equal(options.jsonlFlushStrategy.maxFileBytes, 5 * 1024 * 1024);
   assert.equal(options.jsonlFlushStrategy.maxFiles, 20);
+});
+
+test("normalizeOptions requires capability calls to finish before the hook deadline", () => {
+  assert.throws(
+    () => normalizeOptions({ timeoutMs: 1000, capabilityModelTimeoutMs: 1000 }),
+    /capabilityModelTimeoutMs/,
+  );
 });
 
 test("normalizeOptions does not expose workflow strategy options", () => {

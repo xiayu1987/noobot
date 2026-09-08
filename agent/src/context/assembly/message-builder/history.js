@@ -20,6 +20,7 @@ import {
   buildTaskSummaryFallbackHumanMessage,
   shouldSkipSummarizedHistoryMessage,
 } from "./task-summary.js";
+import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   buildHumanMessageContent,
   buildHumanMessagesForUser,
@@ -67,13 +68,17 @@ export function buildHistoryMessages({
   const history = [];
   const consumedMetaIndexes = new Set();
   const knownHistoryToolCallIds = new Set();
+  const historyToolCallsById = new Map();
   for (const msg of effectiveHistoryMessages) {
     if (shouldSkipSummarizedHistoryMessage(msg)) continue;
     if (resolveContextMessageRole(msg) !== MESSAGE_ROLE.ASSISTANT) continue;
     const normalizedToolCalls = toLangChainToolCalls(resolveContextToolCalls(msg));
     for (const toolCall of normalizedToolCalls) {
       const toolCallId = String(toolCall?.id || "").trim();
-      if (toolCallId) knownHistoryToolCallIds.add(toolCallId);
+      if (toolCallId) {
+        knownHistoryToolCallIds.add(toolCallId);
+        historyToolCallsById.set(toolCallId, toolCall);
+      }
     }
   }
   for (const [messageIndex, msg] of effectiveHistoryMessages.entries()) {
@@ -127,11 +132,16 @@ export function buildHistoryMessages({
         continue;
       }
       history.push(
-        new ToolMessage({
-          tool_call_id: toolCallId,
-          content: compactToolResultTextForModel(msg.content || ""),
-          additional_kwargs: projectContextMessageIdentityMetadata(msg),
-        }),
+        new ToolMessage(
+          projectToolContextPolicy(
+            {
+              tool_call_id: toolCallId,
+              content: compactToolResultTextForModel(msg.content || ""),
+              additional_kwargs: projectContextMessageIdentityMetadata(msg),
+            },
+            historyToolCallsById.get(toolCallId),
+          ),
+        ),
       );
       continue;
     }

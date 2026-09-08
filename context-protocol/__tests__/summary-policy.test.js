@@ -10,6 +10,7 @@ import {
   collectDialogScopedMessagesToSummarize,
   collectLatestCheckpointEvidenceMessageIndexes,
   collectScopedMessagesToSummarize,
+  resolveSummaryScope,
   markCurrentTurnArraySummarized,
   markScopedMessagesSummarized,
 } from "../src/policy/summary.js";
@@ -245,6 +246,31 @@ test("summary selection does not select an incomplete parallel tool-call batch",
   ];
 
   assert.deepEqual(collectScopedMessagesToSummarize(messages).messages, []);
+});
+
+test("summary scope is the protocol-owned history plus incremental closed boundary", () => {
+  const history = [
+    { role: "user", content: "prior", dialogProcessId: "d1", turnScopeId: "t0", id: "h1" },
+  ];
+  const call = {
+    role: "assistant",
+    dialogProcessId: "d1",
+    turnScopeId: "t1",
+    id: "c1",
+    tool_calls: [{ id: "tool-1", name: "read_file" }],
+  };
+  const result = {
+    role: "tool",
+    dialogProcessId: "d1",
+    turnScopeId: "t1",
+    id: "r1",
+    tool_call_id: "tool-1",
+    content: "ok",
+  };
+  const scope = resolveSummaryScope({ history, incremental: [call, result] });
+  assert.deepEqual(scope.sourceMessages, [history[0], call, result]);
+  assert.deepEqual(scope.checkpointMessages, [history[0], call, result]);
+  assert.deepEqual(scope.summaryMessages, [call, result]);
 });
 
 test("checkpoint targets use the completed authoritative scope to select one injection per type", () => {

@@ -47,7 +47,7 @@ export function hasFlowControlRole(value = null, role = "") {
   return resolveToolContextPolicy(value)?.flowControlRole === String(role || "").trim();
 }
 
-export function projectToolCallContextPolicy(call = {}, tool = null) {
-  const contextPolicy = resolveToolContextPolicy(tool) || resolveToolContextPolicy(call);
-  return contextPolicy ? { ...call, contextPolicy } : call;
+export function projectToolContextPolicy(target = {}, source = null) {
+  const contextPolicy = resolveToolContextPolicy(source) || resolveToolContextPolicy(target);
+  return contextPolicy ? { ...target, contextPolicy } : target;
 }

@@ -10,6 +10,7 @@ import {
   resolveContextMessageDialogProcessId,
   resolveContextUserMetaMaterialized,
 } from "@noobot/context-protocol/message/codec";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { emitEvent } from "../../events/index.js";
 import { MessagePersister } from "../session/message-persister.js";
 import { compactTransferEnvelopes } from "../../session/transfer-attachment-refs.js";
@@ -222,6 +223,7 @@ function normalizeSessionTurnInput(input = {}) {
     modelName: valueOrDefault(input.modelName, ""),
     summarized: input.summarized === true,
     toolName: valueOrDefault(input.toolName, ""),
+    contextPolicy: resolveToolContextPolicy(input),
     rawModelContent: valueOrDefault(input.rawModelContent, null),
     modelAdditionalKwargs: valueOrDefault(input.modelAdditionalKwargs, null),
     modelResponseMetadata: valueOrDefault(input.modelResponseMetadata, null),
@@ -279,6 +281,7 @@ function buildFullTurnPayload(input) {
     modelName: stringValue(input.modelName).trim(),
     summarized: input.summarized,
     toolName: stringValue(input.toolName).trim(),
+    ...(input.contextPolicy ? { contextPolicy: input.contextPolicy } : {}),
     rawModelContent: normalizedRawModelContent(input.rawModelContent),
     modelAdditionalKwargs: normalizedOptionalObject(input.modelAdditionalKwargs),
     injectedMessage: input.injectedMessage,
@@ -380,6 +383,7 @@ function buildTurnPayload(input) {
     modelName: input.modelName,
     summarized: input.summarized,
     toolName: input.toolName,
+    ...(input.contextPolicy ? { contextPolicy: input.contextPolicy } : {}),
     rawModelContent: input.rawModelContent,
     modelAdditionalKwargs: input.modelAdditionalKwargs,
     modelResponseMetadata: input.modelResponseMetadata,
@@ -419,6 +423,7 @@ function normalizeAgentMessagesInput(input = {}) {
 }
 
 function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
+  const contextPolicy = resolveToolContextPolicy(messageItem);
   return {
     userId: input.userId,
     sessionId: input.sessionId,
@@ -444,6 +449,7 @@ function buildAgentMessageTurnInput(messageItem, input, includeTurnTiming) {
     taskStatus: firstTruthyValue([messageItem.taskStatus], null),
     tool_calls: arrayValue(messageItem.tool_calls, null),
     tool_call_id: stringValue(messageItem.tool_call_id),
+    ...(contextPolicy ? { contextPolicy } : {}),
     attachments: filterSessionAttachments(resolveMessageAttachments(messageItem)),
     modelAlias: String(messageItem.modelAlias ?? "").trim(),
     modelName: String(messageItem.modelName ?? "").trim(),

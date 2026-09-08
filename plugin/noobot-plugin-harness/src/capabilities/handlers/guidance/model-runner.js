@@ -313,8 +313,6 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       dynamicPolicyPrompt,
       includeWorkflowPolicy: false,
     });
-    setPendingStateWithMeta(state, "summary", false);
-    state.counters.summaryTurns = 0;
   } else if (allowGuidance && state.pending.guidance) {
     purpose = "guidance";
     workflowPurpose = "guidance";
@@ -548,6 +546,8 @@ export async function runGuidanceBySeparateModel(ctx = {}, meta = {}, { action =
       : 0;
     const checkpointStartedAt = Date.now();
     const markedCount = await markGuidanceSummarizedMessages(ctx, meta);
+    setPendingStateWithMeta(state, "summary", false);
+    state.counters.summaryTurns = 0;
     appendCapabilityLog(ctx, {
       domain: CAPABILITY_DOMAIN.GUIDANCE,
       event: "summary_checkpoint_ready",

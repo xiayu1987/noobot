@@ -5,6 +5,7 @@
  */
 import { normalizeDialogProcessId } from "@noobot/session-protocol";
 import { resolveContextMessageDialogProcessId } from "@noobot/context-protocol/message/codec";
+import { resolveToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import { createSessionMessageUid, normalizeMessageEntity } from "../../entities/session-entity.js";
 import { getTransferAttachments } from "../../../transfer-adapter/storage/consumer.js";
 import { dedupeAttachments } from "./attachment-helpers.js";
@@ -41,6 +42,7 @@ function resolveUserName(input) {
 
 function buildTurnEntity(service, session, resolvedParentSessionId, input) {
   const task = resolveTaskFields(session, input);
+  const contextPolicy = resolveToolContextPolicy(input);
   const hasPresentation = typeof input.chatPresentation === "boolean";
   const chatPresentation = hasPresentation
     ? input.chatPresentation
@@ -65,6 +67,7 @@ function buildTurnEntity(service, session, resolvedParentSessionId, input) {
       ...task,
       modelAlias: normalizedString(input.modelAlias),
       modelName: normalizedString(input.modelName),
+      ...(contextPolicy ? { contextPolicy } : {}),
       summarized: input.summarized === true,
       rawModelContent: input.rawModelContent ?? null,
       modelAdditionalKwargs: input.modelAdditionalKwargs ?? null,

@@ -205,6 +205,7 @@ function auditSummaryOwnership({ files, relativePath, lineOf, fail, pass }) {
       includeToken: false,
       excluded: [
         SUMMARY_POLICY_PATH,
+        "context-protocol/src/message/codec.js",
         "context-protocol/src/message/store.js",
         "context-protocol/src/mutation/context.js",
         "context-protocol/src/policy/snapshot.js",
@@ -218,11 +219,13 @@ function auditSummaryOwnership({ files, relativePath, lineOf, fail, pass }) {
       success:
         "summary mutation API is restricted to checkpoint commit and completed-turn finalization",
       pattern:
-        /\b(?:markCurrentTurn(?:Store|Array|ModelMessages)Summarized|markScopedMessagesSummarized|markMessagesSummarizedByIds)\s*\(/g,
+        /\b(?:markContextMessageSummarized|markCurrentTurn(?:Store|Array|ModelMessages)Summarized|markScopedMessagesSummarized|markMessagesSummarizedByIds)\s*\(/g,
       excluded: [
         SUMMARY_POLICY_PATH,
+        "context-protocol/src/message/codec.js",
         "context-protocol/src/message/store.js",
         "context-protocol/src/mutation/context.js",
+        "context-protocol/src/policy/snapshot.js",
         "context-protocol/src/policy/turn-completion.js",
         "agent/src/runtime/turn/turn-result-aggregator.js",
         "agent/src/bot/session/summary-checkpoint-committer.js",

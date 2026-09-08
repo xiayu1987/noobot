@@ -147,7 +147,7 @@ auditSourcePolicies({
 assertFileContains("context-protocol/src/policy/window.js", [
   {
     name: "history excludes system-like roles",
-    pattern: /isSystemLikeMessageRole\(resolveMessageRole\(message\)\)/,
+    pattern: /isContextSystemMessage\(message\)/,
   },
   {
     name: "final order system/history/incremental",
@@ -156,13 +156,13 @@ assertFileContains("context-protocol/src/policy/window.js", [
   {
     name: "cross-block identity requires canonical message id",
     pattern:
-      /const explicitId = resolveMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/,
+      /const explicitId = resolveContextMessageId\(message\);[\s\S]*?return explicitId \? `id:\$\{explicitId\}` : ""/,
   },
 ]);
 const messagePolicyText = assertFileContains("context-protocol/src/policy/message.js", [
   {
     name: "message policy delegates canonical identity to codec",
-    pattern: /return\s+resolveContextMessageId\(message\)/,
+    pattern: /resolveContextMessageId\s+as\s+resolveMessageId/,
   },
   {
     name: "injected marker delegates to canonical flags",
@@ -329,19 +329,19 @@ const guidanceSummaryTrackerText = assertFileContains(
       pattern: /summaryCheckpointMessageIds\s*=\s*messageIds/,
     },
     {
-      name: "guidance checkpoint capture owns incremental only",
-      pattern: /const sourceMessages\s*=\s*blocks\.incremental/,
-    },
-    {
-      name: "guidance checkpoint commit owns incremental only",
-      pattern: /const coveredMessages\s*=\s*blocks\.incremental/,
-    },
-    {
-      name: "guidance checkpoint rejects unclosed history",
-      pattern: /assertSummaryHistoryClosed\(blocks\.history\)/,
+      name: "guidance checkpoint capture delegates scope to protocol",
+      pattern: /resolveSummaryScope\(blocks\)/,
     },
   ],
 );
+if (/assertSummaryHistoryClosed/.test(guidanceSummaryTrackerText)) {
+  fail(
+    "guidance summary redefines protocol history closure",
+    "History closure and summary candidate selection must be owned by context-protocol.",
+  );
+} else {
+  pass("guidance summary has no local history closure gate");
+}
 if (/summaryCheckpointMessageCount/.test(guidanceSummaryTrackerText)) {
   fail(
     "guidance summary checkpoint retains a count-based scope",
@@ -542,8 +542,9 @@ if (!mainIncrementalResolverText) {
     "Latest-only injection selection belongs to summary marking. Model projection must preserve every unsummarized incremental message.",
   );
 } else if (
-  !/return\s+filterForModelContext\(\s*sourceMessages\s*,\s*policyOptions\s*\)\s*;/.test(
-    mainIncrementalResolverText,
+  !/return\s+resolveModelBlockMessages\(options\)\s*;/.test(mainIncrementalResolverText) ||
+  !/function\s+resolveModelBlockMessages[\s\S]*?return\s+filterForModelContext\(\s*sourceMessages\s*,\s*policyOptions\s*\)\s*;/.test(
+    windowReducerText,
   )
 ) {
   fail(

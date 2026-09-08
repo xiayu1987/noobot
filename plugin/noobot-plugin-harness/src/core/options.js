@@ -14,9 +14,7 @@ import { z } from "zod";
 
 export function resolveHarnessDenyToolNames(input = null) {
   if (!Array.isArray(input)) return [];
-  return Array.from(
-    new Set(input.map((item) => String(item || "").trim()).filter(Boolean)),
-  );
+  return Array.from(new Set(input.map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
 export const DEFAULT_HARNESS_DENY_TOOL_NAMES = Object.freeze([
@@ -37,6 +35,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
   promptPriority: 80,
   tracePriority: 20,
   timeoutMs: TIME_THRESHOLDS.harness.hookTimeoutMs,
+  capabilityModelTimeoutMs: TIME_THRESHOLDS.harness.capabilityModelTimeoutMs,
   maxPreviewChars: LENGTH_THRESHOLDS.display.harnessPreviewChars,
   planningGuidanceMode: "separate_model",
   summaryOnToolBurstThreshold: false,
@@ -84,14 +83,24 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
 const HarnessOptionsSchema = z
   .object({
+    timeoutMs: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.timeoutMs),
+    capabilityModelTimeoutMs: z.coerce
+      .number()
+      .finite()
+      .positive()
+      .default(DEFAULT_OPTIONS.capabilityModelTimeoutMs),
     planningGuidanceMode: z.string().trim().min(1).default(DEFAULT_OPTIONS.planningGuidanceMode),
     planRefinementEnabled: z.boolean().optional(),
     enablePlanRefinement: z.boolean().optional(),
     summaryOnToolBurstThreshold: z.boolean().default(DEFAULT_OPTIONS.summaryOnToolBurstThreshold),
     enableToolBurstSummary: z.boolean().optional(),
-    summaryDetailSaveToAttachment: z.boolean().default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
+    summaryDetailSaveToAttachment: z
+      .boolean()
+      .default(DEFAULT_OPTIONS.summaryDetailSaveToAttachment),
     saveSummaryDetailToAttachment: z.boolean().optional(),
-    clipNonMainModelContextMessages: z.boolean().default(DEFAULT_OPTIONS.clipNonMainModelContextMessages),
+    clipNonMainModelContextMessages: z
+      .boolean()
+      .default(DEFAULT_OPTIONS.clipNonMainModelContextMessages),
     clipNonMainModelContext: z.boolean().optional(),
     capabilityModelInvoker: z.any().optional(),
     capabilityModelByPurpose: z.record(z.any()).default({}),
@@ -99,24 +108,58 @@ const HarnessOptionsSchema = z
     guidance: z.record(z.any()).optional(),
     capabilityToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.capabilityToolAllowlist),
     capabilityToolAllowlistByPurpose: z.record(z.any()).default({}),
-    miniRunnerMaxTurns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
+    miniRunnerMaxTurns: z.coerce
+      .number()
+      .finite()
+      .positive()
+      .default(DEFAULT_OPTIONS.miniRunnerMaxTurns),
     miniRunnerToolAllowlist: z.array(z.any()).default(DEFAULT_OPTIONS.miniRunnerToolAllowlist),
     acceptance: z.record(z.any()).optional(),
     review: z.record(z.any()).optional(),
     planning: z.record(z.any()).optional(),
-    pendingTtlHookTurns: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.pendingTtlHookTurns),
-    manifestDebounceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.manifestDebounceMs),
+    pendingTtlHookTurns: z.coerce
+      .number()
+      .int()
+      .finite()
+      .nonnegative()
+      .default(DEFAULT_OPTIONS.pendingTtlHookTurns),
+    manifestDebounceMs: z.coerce
+      .number()
+      .finite()
+      .nonnegative()
+      .default(DEFAULT_OPTIONS.manifestDebounceMs),
     jsonlBatchSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlBatchSize),
-    jsonlFlushIntervalMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
+    jsonlFlushIntervalMs: z.coerce
+      .number()
+      .finite()
+      .nonnegative()
+      .default(DEFAULT_OPTIONS.jsonlFlushIntervalMs),
     flushHookPriority: z.coerce.number().finite().default(DEFAULT_OPTIONS.flushHookPriority),
-    flushHookTimeoutMs: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.flushHookTimeoutMs),
+    flushHookTimeoutMs: z.coerce
+      .number()
+      .finite()
+      .positive()
+      .default(DEFAULT_OPTIONS.flushHookTimeoutMs),
     jsonlFlushStrategy: z
       .object({
-        maxSize: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
-        maxTime: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
+        maxSize: z.coerce
+          .number()
+          .finite()
+          .positive()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxSize),
+        maxTime: z.coerce
+          .number()
+          .finite()
+          .nonnegative()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxTime),
         onTerminal: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onTerminal),
         onError: z.boolean().default(DEFAULT_OPTIONS.jsonlFlushStrategy.onError),
-        maxRetry: z.coerce.number().int().finite().nonnegative().default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
+        maxRetry: z.coerce
+          .number()
+          .int()
+          .finite()
+          .nonnegative()
+          .default(DEFAULT_OPTIONS.jsonlFlushStrategy.maxRetry),
         maxBufferEntries: z.coerce
           .number()
           .int()
@@ -146,7 +189,11 @@ const HarnessOptionsSchema = z
       .default(DEFAULT_OPTIONS.jsonlFlushStrategy),
     maxRuns: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRuns),
     maxRunAgeDays: z.coerce.number().finite().positive().default(DEFAULT_OPTIONS.maxRunAgeDays),
-    cleanupGraceMs: z.coerce.number().finite().nonnegative().default(DEFAULT_OPTIONS.cleanupGraceMs),
+    cleanupGraceMs: z.coerce
+      .number()
+      .finite()
+      .nonnegative()
+      .default(DEFAULT_OPTIONS.cleanupGraceMs),
     fsmEnabled: z.boolean().default(DEFAULT_OPTIONS.fsmEnabled),
     capabilityProfile: z.any().optional(),
     capabilityHandlers: z.any().optional(),
@@ -161,9 +208,7 @@ function normalizeModelByPurpose(...items) {
       const normalizedKey = String(key || "").trim();
       if (!normalizedKey) continue;
       const rawValue =
-        value && typeof value === "object" && !Array.isArray(value)
-          ? value.model
-          : value;
+        value && typeof value === "object" && !Array.isArray(value) ? value.model : value;
       const normalizedValue = String(rawValue || "").trim();
       if (normalizedValue) out[normalizedKey] = normalizedValue;
     }
@@ -201,6 +246,14 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       typeof api.options.harness.jsonlFlushStrategy === "object");
   const parsed = HarnessOptionsSchema.safeParse(merged);
   const safe = parsed.success ? parsed.data : DEFAULT_OPTIONS;
+  if (
+    safe.capabilityModelTimeoutMs + TIME_THRESHOLDS.harness.capabilityModelHookGraceMs >
+    safe.timeoutMs
+  ) {
+    throw new RangeError(
+      "harness capabilityModelTimeoutMs must leave the configured hook completion grace period",
+    );
+  }
 
   const capabilityToolAllowlist = Array.isArray(safe.capabilityToolAllowlist)
     ? safe.capabilityToolAllowlist.map((item) => String(item || "").trim()).filter(Boolean)
@@ -212,7 +265,9 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       ? Object.fromEntries(
           Object.entries(safe.capabilityToolAllowlistByPurpose).map(([purpose, value]) => [
             String(purpose || "").trim(),
-            Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [],
+            Array.isArray(value)
+              ? value.map((item) => String(item || "").trim()).filter(Boolean)
+              : [],
           ]),
         )
       : DEFAULT_OPTIONS.capabilityToolAllowlistByPurpose;
@@ -239,7 +294,8 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       typeof safe.capabilityModelInvoker === "function" ? safe.capabilityModelInvoker : null,
     capabilityModelByPurpose,
     stepModels: capabilityModelByPurpose,
-    guidance: safe.guidance && typeof safe.guidance === "object" ? safe.guidance : DEFAULT_OPTIONS.guidance,
+    guidance:
+      safe.guidance && typeof safe.guidance === "object" ? safe.guidance : DEFAULT_OPTIONS.guidance,
     capabilityToolAllowlist,
     capabilityToolAllowlistByPurpose,
     miniRunnerMaxTurns: safe.miniRunnerMaxTurns,
@@ -259,7 +315,9 @@ export function normalizeOptions(userOptions = {}, api = {}) {
       ...DEFAULT_OPTIONS.jsonlFlushStrategy,
       maxSize: safe.jsonlBatchSize,
       maxTime: safe.jsonlFlushIntervalMs,
-      ...(hasCustomFlushStrategy && safe.jsonlFlushStrategy && typeof safe.jsonlFlushStrategy === "object"
+      ...(hasCustomFlushStrategy &&
+      safe.jsonlFlushStrategy &&
+      typeof safe.jsonlFlushStrategy === "object"
         ? safe.jsonlFlushStrategy
         : {}),
     },

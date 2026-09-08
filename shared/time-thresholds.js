@@ -97,7 +97,7 @@ export const TIME_THRESHOLDS = deepFreeze({
   },
 
   capability: {
-    separateModelMinTimeoutMs: TIME_TIERS.fiveMinutesMs,
+    harnessHookMinTimeoutMs: TIME_TIERS.fiveMinutesMs,
   },
 
   openvscode: {
@@ -153,7 +153,8 @@ export const TIME_THRESHOLDS = deepFreeze({
     maxRunAgeDays: TIME_TIERS.thirtyDays,
     fsmCacheMaxAgeMs: 30 * MINUTE_MS,
     fsmCacheCleanupIntervalMs: TIME_TIERS.fiveMinutesMs,
-    separateModelMinTimeoutMs: TIME_TIERS.threeMinutesMs,
+    capabilityModelTimeoutMs: TIME_TIERS.threeMinutesMs,
+    capabilityModelHookGraceMs: TIME_TIERS.fiveSecondsMs,
   },
 
   workflow: {

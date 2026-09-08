@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { isContextSystemMessage, readDeclaredContextMessageRole } from "../message/codec.js";
 import { resolveModelFinalMessages } from "../policy/window.js";
 import { MODEL_CONTEXT_PROTOCOL_VERSION } from "../agent-context/schema.js";
 
@@ -12,25 +13,15 @@ export const MODEL_CONTEXT_LANE = Object.freeze({
   AUXILIARY: "auxiliary",
 });
 
-function normalizeRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
-  if (role === "developer") return "system";
-  if (role === "human") return "user";
-  if (role === "ai") return "assistant";
-  return role;
-}
-
 function isSystemRole(message = {}) {
-  return normalizeRole(message) === "system";
+  return isContextSystemMessage(message);
 }
 
 function requireMessage(message = {}, label = "message") {
   if (!message || typeof message !== "object" || Array.isArray(message)) {
     throw new TypeError(`${label} must be a message object`);
   }
-  if (!normalizeRole(message)) throw new TypeError(`${label}.role is required`);
+  if (!readDeclaredContextMessageRole(message)) throw new TypeError(`${label}.role is required`);
   return message;
 }
 

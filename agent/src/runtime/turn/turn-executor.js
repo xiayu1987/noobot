@@ -49,7 +49,7 @@ import {
 import { peekMainFlowFinalNoToolsTurnInstruction } from "../main-flow-control.js";
 import { createSessionMessageUid } from "../../context/session/message-uid.js";
 import { consumeSummaryCheckpointCommand } from "../summary-checkpoint-command.js";
-import { projectToolCallContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
 import {
   applyAuthoritativeMessageId,
   beginAssistantMessageEventStream,
@@ -430,7 +430,7 @@ export async function invokeWithToolsTurn({ modelState, loopState, turn }) {
     aiContentText: normalizedAiContentText,
   } = normalizeToolTurnAi(ai);
   const calls = normalizedCalls.map((call) =>
-    projectToolCallContextPolicy(call, toolMap.get(call.name)),
+    projectToolContextPolicy(call, toolMap.get(call.name)),
   );
   ai = applyAuthoritativeMessageId(ai, assistantMessageId);
   await runAgentRuntimeHook({

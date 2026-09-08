@@ -12,7 +12,6 @@ const WARN_COOLDOWN_TURNS = TURN_THRESHOLDS.harness.pendingWarnCooldownTurns;
 const TRACKED_PENDING_KEYS = Object.freeze([
   "guidance",
   "analysis",
-  "summary",
   "planRevision",
   "planRefinement",
   "phaseAcceptance",
@@ -39,13 +38,25 @@ function normalizePendingTtlHookTurns(meta = {}) {
 
 function ensurePendingMeta(state = {}) {
   if (!state || typeof state !== "object") return { pending: {}, flags: {} };
-  if (!state.pendingMeta || typeof state.pendingMeta !== "object" || Array.isArray(state.pendingMeta)) {
+  if (
+    !state.pendingMeta ||
+    typeof state.pendingMeta !== "object" ||
+    Array.isArray(state.pendingMeta)
+  ) {
     state.pendingMeta = {};
   }
-  if (!state.pendingMeta.pending || typeof state.pendingMeta.pending !== "object" || Array.isArray(state.pendingMeta.pending)) {
+  if (
+    !state.pendingMeta.pending ||
+    typeof state.pendingMeta.pending !== "object" ||
+    Array.isArray(state.pendingMeta.pending)
+  ) {
     state.pendingMeta.pending = {};
   }
-  if (!state.pendingMeta.flags || typeof state.pendingMeta.flags !== "object" || Array.isArray(state.pendingMeta.flags)) {
+  if (
+    !state.pendingMeta.flags ||
+    typeof state.pendingMeta.flags !== "object" ||
+    Array.isArray(state.pendingMeta.flags)
+  ) {
     state.pendingMeta.flags = {};
   }
   return state.pendingMeta;
@@ -63,8 +74,10 @@ function isPendingKeyActive(key = "", value = null) {
     key === "planRevision" ||
     key === "planRefinement" ||
     key === "phaseAcceptance"
-  ) return value === true;
-  if (key === "guidance" || key === "acceptanceSemanticValidation") return value !== null && value !== undefined;
+  )
+    return value === true;
+  if (key === "guidance" || key === "acceptanceSemanticValidation")
+    return value !== null && value !== undefined;
   return Boolean(value);
 }
 
@@ -153,11 +166,10 @@ export function cleanupExpiredPendingOnHook(point = "", ctx = {}, meta = {}) {
     setPendingStateWithMeta(
       state,
       key,
-      key === "summary" ||
       key === "analysis" ||
-      key === "planRevision" ||
-      key === "planRefinement" ||
-      key === "phaseAcceptance"
+        key === "planRevision" ||
+        key === "planRefinement" ||
+        key === "phaseAcceptance"
         ? false
         : null,
     );

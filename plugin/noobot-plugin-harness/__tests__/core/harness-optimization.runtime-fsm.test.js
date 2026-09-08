@@ -78,7 +78,7 @@ test("pending states are auto-cleaned by hook turns without timers", async () =>
 
   await runtime.runHook(HOOK_POINT.AGENT.BEFORE_LLM_CALL, ctx, meta);
   assert.equal(ctx.agentContext.payload.harness.state.pending.guidance, null);
-  assert.equal(ctx.agentContext.payload.harness.state.pending.summary, false);
+  assert.equal(ctx.agentContext.payload.harness.state.pending.summary, true);
   assert.equal(ctx.agentContext.payload.harness.state.pending.planRevision, false);
   assert.equal(ctx.agentContext.payload.harness.state.pending.acceptanceSemanticValidation, null);
   assert.equal(ctx.agentContext.payload.harness.state.flags.planUpdateCapturePending, false);

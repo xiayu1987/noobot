@@ -12,6 +12,7 @@ import { HOOK_POINT } from "@noobot/hook-protocol";
 import { applyAgentResolvedModelMessages } from "./model-message-context.js";
 import { isHookRuntimeEventVerboseEnabled } from "@noobot/shared/runtime-events-config";
 import { migrateHarnessBucket } from "./bucket-migration.js";
+import { invokeCapabilityModelWithinDeadline } from "./capability-model-invocation.js";
 
 export const HARNESS_TRACE_POINTS = Object.freeze([
   HOOK_POINT.AGENT.BEFORE_CONTEXT_BUILD,
@@ -88,9 +89,11 @@ export function createRegisterHarnessHooks(deps = {}) {
               const capabilityModelInvoker =
                 typeof options.capabilityModelInvoker === "function"
                   ? (payload = {}) =>
-                      options.capabilityModelInvoker({
-                        ...payload,
-                        signal: invocation.signal || null,
+                      invokeCapabilityModelWithinDeadline({
+                        invoker: options.capabilityModelInvoker,
+                        payload,
+                        parentSignal: invocation.signal || null,
+                        timeoutMs: options.capabilityModelTimeoutMs,
                       })
                   : options.capabilityModelInvoker;
               await capabilityRuntime.runHook(point, ctx, {

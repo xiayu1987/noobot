@@ -5,11 +5,13 @@
  */
 
 import {
+  CONTEXT_MESSAGE_ROLE,
+  isContextSystemMessage,
+  normalizeContextMessageRole,
   readContextMessageField,
-  resolveContextMessageDialogProcessId,
   resolveContextMessageFlags,
-  resolveContextMessageId,
   resolveContextMessageRole,
+  resolveContextMessageSummarized,
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "../message/codec.js";
@@ -19,41 +21,27 @@ function text(value) {
   return String(value || "").trim();
 }
 
-export function readMessageField(message = {}, field = "") {
-  return readContextMessageField(message, field);
-}
-
-export function resolveMessageId(message = {}) {
-  return resolveContextMessageId(message);
-}
-
-export function resolveMessageDialogProcessId(message = {}) {
-  return resolveContextMessageDialogProcessId(message);
-}
-
-export function resolveMessageRole(message = {}) {
-  return resolveContextMessageRole(message);
-}
-
-export function getMessageToolCalls(message = {}) {
-  return resolveContextToolCalls(message);
-}
-
-export function resolveToolCallId(value = {}) {
-  return resolveContextToolCallId(value);
-}
+/*
+ * Policy-layer names for codec accessors. These are alias exports, not a
+ * semantic layer: downstream packages and sibling policy modules import them by
+ * these names, so the aliases stay while the implementations live in the codec.
+ */
+export {
+  readContextMessageField as readMessageField,
+  resolveContextMessageDialogProcessId as resolveMessageDialogProcessId,
+  resolveContextMessageId as resolveMessageId,
+  resolveContextMessageRole as resolveMessageRole,
+  resolveContextMessageSummarized as isMessageSummarized,
+  resolveContextToolCallId as resolveToolCallId,
+  resolveContextToolCalls as getMessageToolCalls,
+} from "../message/codec.js";
 
 export function isSystemLikeMessageRole(role = "") {
-  const normalized = text(role).toLowerCase();
-  return normalized === "system" || normalized === "developer";
-}
-
-export function isMessageSummarized(message = {}) {
-  return resolveContextMessageFlags(message).summarized;
+  return normalizeContextMessageRole(role) === CONTEXT_MESSAGE_ROLE.SYSTEM;
 }
 
 export function isCurrentSystemContextMessage(message = {}) {
-  return readMessageField(message, "noobotInternalMessageType") === "system_context";
+  return readContextMessageField(message, "noobotInternalMessageType") === "system_context";
 }
 
 export function isInjectedMessage(message = {}) {
@@ -63,23 +51,23 @@ export function isInjectedMessage(message = {}) {
 export function resolveInjectedMessageType(message = {}) {
   if (!isInjectedMessage(message)) return "";
   const explicit =
-    readMessageField(message, "injectedMessageType") ||
-    readMessageField(message, "injected_message_type") ||
-    readMessageField(message, "noobotInternalMessageType");
+    readContextMessageField(message, "injectedMessageType") ||
+    readContextMessageField(message, "injected_message_type") ||
+    readContextMessageField(message, "noobotInternalMessageType");
   if (explicit) return explicit;
   const generic = text(message?.type || message?.lc_kwargs?.type);
   if (generic && generic !== "message") return generic;
-  return readMessageField(message, "injectedBy") || "injected_message";
+  return readContextMessageField(message, "injectedBy") || "injected_message";
 }
 
 export function shouldKeepForModelContext(message = {}) {
   if (
-    isMessageSummarized(message) &&
-    isSystemLikeMessageRole(resolveMessageRole(message)) &&
+    resolveContextMessageSummarized(message) &&
+    isContextSystemMessage(message) &&
     isCurrentSystemContextMessage(message)
   )
     return true;
-  return !isMessageSummarized(message);
+  return !resolveContextMessageSummarized(message);
 }
 
 export function filterForModelContext(
@@ -101,23 +89,23 @@ export function filterForModelContext(
   const assistantIds = new Set();
   const resultIds = new Set();
   for (const message of source) {
-    const role = resolveMessageRole(message);
+    const role = resolveContextMessageRole(message);
     if (role === "assistant")
-      getMessageToolCalls(message)
-        .map(resolveToolCallId)
+      resolveContextToolCalls(message)
+        .map(resolveContextToolCallId)
         .filter(Boolean)
         .forEach((id) => assistantIds.add(id));
     if (role === "tool") {
-      const id = resolveToolCallId(message);
+      const id = resolveContextToolCallId(message);
       if (id) resultIds.add(id);
     }
   }
   const validIds = new Set([...assistantIds].filter((id) => resultIds.has(id)));
   const result = [];
   for (const message of source) {
-    const role = resolveMessageRole(message);
+    const role = resolveContextMessageRole(message);
     if (role === "tool") {
-      const id = resolveToolCallId(message);
+      const id = resolveContextToolCallId(message);
       if (id && validIds.has(id)) result.push(message);
       else if (typeof recoverUnpairedToolResult === "function") {
         const recovered = recoverUnpairedToolResult(message);
@@ -129,20 +117,20 @@ export function filterForModelContext(
       result.push(message);
       continue;
     }
-    const calls = getMessageToolCalls(message);
+    const calls = resolveContextToolCalls(message);
     if (!calls.length) {
       result.push(message);
       continue;
     }
-    const ids = calls.map(resolveToolCallId).filter(Boolean);
+    const ids = calls.map(resolveContextToolCallId).filter(Boolean);
     if (ids.length && ids.every((id) => validIds.has(id))) result.push(message);
   }
   return result;
 }
 
 export function shouldMarkCurrentTurnSummarizedByPolicy(message = {}) {
-  const role = resolveMessageRole(message);
-  if (role === "user") return false;
-  if (role === "assistant") return getMessageToolCalls(message).length > 0;
-  return role === "tool" || isSystemLikeMessageRole(role);
+  const role = resolveContextMessageRole(message);
+  if (role === CONTEXT_MESSAGE_ROLE.USER) return false;
+  if (role === CONTEXT_MESSAGE_ROLE.ASSISTANT) return resolveContextToolCalls(message).length > 0;
+  return role === CONTEXT_MESSAGE_ROLE.TOOL || role === CONTEXT_MESSAGE_ROLE.SYSTEM;
 }

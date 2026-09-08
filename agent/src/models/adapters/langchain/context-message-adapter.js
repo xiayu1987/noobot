@@ -4,17 +4,22 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { projectToolContextPolicy } from "@noobot/context-protocol/tool/context-policy";
+
 export function toLangChainToolCalls(toolCalls = []) {
   return (Array.isArray(toolCalls) ? toolCalls : [])
     .map((toolCall) => {
       if (!toolCall || typeof toolCall !== "object") return null;
       if (toolCall.name) {
-        return {
-          id: toolCall.id || "",
-          name: toolCall.name,
-          args: toolCall.args || {},
-          type: "tool_call",
-        };
+        return projectToolContextPolicy(
+          {
+            id: toolCall.id || "",
+            name: toolCall.name,
+            args: toolCall.args || {},
+            type: "tool_call",
+          },
+          toolCall,
+        );
       }
       const fn = toolCall.function || {};
       let args = {};
@@ -25,12 +30,15 @@ export function toLangChainToolCalls(toolCalls = []) {
         args = {};
       }
       if (!fn.name) return null;
-      return {
-        id: toolCall.id || "",
-        name: fn.name,
-        args,
-        type: "tool_call",
-      };
+      return projectToolContextPolicy(
+        {
+          id: toolCall.id || "",
+          name: fn.name,
+          args,
+          type: "tool_call",
+        },
+        toolCall,
+      );
     })
     .filter(Boolean);
 }

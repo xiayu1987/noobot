@@ -12,7 +12,7 @@ import path from "node:path";
 import { SessionExecutionEngine } from "../../../src/bot/session/session-execution-engine.js";
 import {
   AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS,
-  AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS,
+  AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS,
 } from "../../../src/bot/session/run-config-plugin-preparer.js";
 
 function createWorkspaceService(basePath) {
@@ -43,7 +43,7 @@ test("SessionExecutionEngine activates harness by Manifest id", async () => {
   assert.equal(prepared.plugins.harness.mode, "on");
   assert.equal(prepared.plugins.harness.basePath, basePath);
   assert.equal(prepared.plugins.harness.miniRunnerMaxTurns, AGENT_PLUGIN_MINI_RUNNER_MAX_TURNS);
-  assert.equal(prepared.plugins.harness.timeoutMs, AGENT_PLUGIN_SEPARATE_MODEL_MIN_TIMEOUT_MS);
+  assert.equal(prepared.plugins.harness.timeoutMs, AGENT_PLUGIN_HARNESS_HOOK_MIN_TIMEOUT_MS);
   assert.equal(typeof prepared.plugins.harness.capabilityModelInvoker, "function");
   assert.equal(typeof prepared.hookManager.emit, "function");
   assert.equal(Object.hasOwn(prepared.hookManager, "runtime"), false);

@@ -9,7 +9,11 @@ import {
 } from "../assembly/model-runtime.js";
 import {
   deriveContextMessageProjectionId,
+  isContextSystemMessage,
+  markContextMessageSummarized,
   readContextMessageField,
+  resolveContextMessageRole,
+  resolveContextMessageSummarized,
   resolveContextToolCallId,
   resolveContextToolCalls,
 } from "./codec.js";
@@ -57,23 +61,6 @@ function applyActiveTurnIdentity(holder = {}, message = {}) {
   return { ...message, ...active };
 }
 
-function resolveRole(message = {}) {
-  const role = String(message?.role || message?.lc_kwargs?.role || "")
-    .trim()
-    .toLowerCase();
-  if (role) return role;
-  const type = String(
-    message?.type ||
-      message?.lc_kwargs?.type ||
-      (typeof message?._getType === "function" ? message._getType() : ""),
-  )
-    .trim()
-    .toLowerCase();
-  if (type === "ai") return "assistant";
-  if (type === "human") return "user";
-  return type;
-}
-
 function resolveMessageId(message = {}) {
   const canonicalMessageId = readContextMessageField(message, "noobotMessageId");
   const persistedMessageUid = String(message?.messageUid || "").trim();
@@ -113,22 +100,10 @@ function assignMessageId(message = {}, id = "") {
   return normalizedId;
 }
 
-function isSummarized(message = {}) {
-  return (
-    message?.summarized === true ||
-    message?.lc_kwargs?.summarized === true ||
-    message?.additional_kwargs?.summarized === true ||
-    message?.lc_kwargs?.additional_kwargs?.summarized === true
-  );
-}
-
 function mergeMessageState(target = {}, source = {}) {
   if (!target || typeof target !== "object" || !source || typeof source !== "object") return target;
-  if (isSummarized(source)) {
-    target.summarized = true;
-    if (target.lc_kwargs && typeof target.lc_kwargs === "object") {
-      target.lc_kwargs.summarized = true;
-    }
+  if (resolveContextMessageSummarized(source)) {
+    markContextMessageSummarized(target);
   }
   return target;
 }
@@ -144,7 +119,7 @@ function resolveToolCallIds(message = {}) {
 
 function canonicalEntityShape(message = {}) {
   return JSON.stringify({
-    role: resolveRole(message),
+    role: resolveContextMessageRole(message),
     content: resolveMessageContent(message),
     toolCallId: resolveContextToolCallId(message),
     toolCallIds: resolveToolCallIds(message),
@@ -411,11 +386,8 @@ export function markMessagesSummarizedByIds(holder = {}, ids = []) {
   const messages = resolveMessagesByIds(holder, ids);
   let changedCount = 0;
   for (const message of messages) {
-    if (isSummarized(message)) continue;
-    message.summarized = true;
-    if (message.lc_kwargs && typeof message.lc_kwargs === "object") {
-      message.lc_kwargs.summarized = true;
-    }
+    if (resolveContextMessageSummarized(message)) continue;
+    markContextMessageSummarized(message);
     changedCount += 1;
   }
   return changedCount;
@@ -449,9 +421,7 @@ export function replaceMessages(holder = {}, messages = []) {
     }
     for (const message of canonicalMessages) {
       if (assigned.has(message)) continue;
-      const blockName = ["system", "developer"].includes(resolveRole(message))
-        ? "system"
-        : "incremental";
+      const blockName = isContextSystemMessage(message) ? "system" : "incremental";
       blocks[blockName].push(message);
       assigned.add(message);
     }
@@ -480,7 +450,7 @@ export function replaceMessageProjection(holder = {}, messages = []) {
 
 export function pruneSummarizedIncrementalMessages(holder = {}) {
   if (!holder || typeof holder !== "object") return 0;
-  const keepActive = (message = {}) => !isSummarized(message);
+  const keepActive = (message = {}) => !resolveContextMessageSummarized(message);
   const messages = Array.isArray(holder.messages) ? holder.messages : [];
   const blocks =
     holder.messageBlocks &&

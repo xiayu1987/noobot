@@ -137,7 +137,7 @@ test("summary checkpoint requests restored incremental messages missing from the
   assert.equal(state.pending.summaryCheckpointMessageIds, null);
 });
 
-test("summary checkpoint owns incremental messages only", async () => {
+test("summary checkpoint covers persisted history and active incremental messages", async () => {
   const historyUser = {
     role: "user",
     content: "previous task",
@@ -191,16 +191,21 @@ test("summary checkpoint owns incremental messages only", async () => {
   const ids = captureGuidanceSummaryCheckpoint(ctx, state);
   const markedCount = await markGuidanceSummarizedMessages(ctx, {});
 
-  assert.deepEqual(ids, ["incremental-call", "incremental-result"]);
+  assert.deepEqual(ids, [
+    "history-user",
+    "history-answer",
+    "incremental-call",
+    "incremental-result",
+  ]);
   assert.equal(markedCount, 2);
   assert.deepEqual(
     ctx.agentContext.execution.controllers.runtime.systemRuntime.mainFlowControlInstructions[0]
       .summarizedMessageIds,
-    ids,
+    ["incremental-call", "incremental-result"],
   );
 });
 
-test("summary checkpoint rejects compressible messages left in history", () => {
+test("summary checkpoint accepts unsummarized persisted history as part of the protocol scope", () => {
   const historyCall = {
     role: "assistant",
     content: "",
@@ -235,21 +240,10 @@ test("summary checkpoint rejects compressible messages left in history", () => {
     },
   );
 
-  assert.throws(
-    () => captureGuidanceSummaryCheckpoint(ctx, state),
-    (error) => {
-      assert.equal(
-        error.message,
-        "summary checkpoint history contains messages pending summarization",
-      );
-      assert.deepEqual(error.pendingHistoryMessageIds, [
-        "history-call-message",
-        "history-result-message",
-      ]);
-      return true;
-    },
-  );
-  assert.deepEqual(state.pending, {});
+  assert.deepEqual(captureGuidanceSummaryCheckpoint(ctx, state), [
+    "history-call-message",
+    "history-result-message",
+  ]);
 });
 
 test("summary checkpoint keeps one guidance and the newly completed summary injection", async () => {
